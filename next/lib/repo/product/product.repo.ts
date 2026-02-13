@@ -1,56 +1,32 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
-export enum PreOrder {
-  YES = "YES", // Có
-  NO = "NO", // Không
+export enum PropertyTypeEnum {
+  TEXT = "TEXT",
+  SELECT = "SELECT",
+  MULTI_SELECT = "MULTI_SELECT",
+  BOOLEAN = "BOOLEAN",
+  NUMBER = "NUMBER",
+  RADIO = "RADIO",
+  CHECKBOX = "CHECKBOX",
+  SWITCH = "SWITCH",
+  TEXTAREA = "TEXTAREA",
 }
 
-export enum OtherInfoStatus {
-  NEW = "NEW", // MỚI
-  USED = "USED", // Đã sử dụng
+export interface PropertySelectOption {
+  key: string;
+  label: string;
 }
 
-export interface ProductDelivery {
-  weight?: number;
-  width?: number;
-  length?: number;
-  height?: number;
-  price?: number;
-}
-
-export interface ProductOtherInfo {
-  preOrder?: PreOrder;
-  preOrderDay?: number;
-  status?: OtherInfoStatus;
-  sku?: string;
-}
-
-export interface ProductTierOption {
-  code?: string;
-  name: string;
-  imageUrl?: string;
-}
-
-export interface ProductTier {
-  code?: string;
-  name: string;
-  options: ProductTierOption[];
-}
-
-export interface ProductVariant {
-  code?: string;
-  sku: string;
-  price: number;
-  stock: number;
-  optionCodes: string[];
-}
-
-export interface ProductClassification {
-  tiers?: ProductTier[];
-  variants?: ProductVariant[];
-  originalPrice?: number;
-  totalStock?: number;
+export interface Property {
+  type?: PropertyTypeEnum;
+  key?: string;
+  label?: string;
+  placeholder?: string;
+  tooltip?: string;
+  required?: boolean;
+  clearable?: boolean;
+  options?: PropertySelectOption[];
 }
 
 export interface Product extends BaseModel {
@@ -59,16 +35,12 @@ export interface Product extends BaseModel {
   des?: string;
   video?: string;
   coverImg?: string;
-  imgs?: string[];
   categoryId?: string;
   active?: boolean;
   slug?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  categoryProperties?: any;
-  delivery?: ProductDelivery;
-  otherInfo?: ProductOtherInfo;
-  classification?: ProductClassification;
+  price?: string;
+  priority?: number;
+  properties?: Property[];
 }
 
 export class ProductRepository extends CrudRepository<Product> {
@@ -81,6 +53,7 @@ export class ProductRepository extends CrudRepository<Product> {
 
     name
     des
+    video
     coverImg 
     active
   `);
@@ -93,44 +66,22 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    imgs
     categoryId
     active
     slug
-    minPrice
-    maxPrice
-    categoryProperties
-    delivery {
-      weight
-      width
-      length
-      height
-      price
-    }
-    otherInfo {
-      preOrder
-      preOrderDay
-      status
-      sku
-    }
-    classification {
-      originalPrice 
-      totalStock 
-      tiers {     
-        code 
-        name 
-        options {
-          code 
-          name
-          imageUrl
-        }
-      }
-      variants {
-        code
-        sku
-        price
-        stock
-        optionCodes
+    price
+    priority
+    properties {
+      type
+      key
+      label
+      placeholder
+      tooltip
+      required
+      clearable
+      options {
+        key
+        label
       }
     }
   `);
@@ -143,29 +94,22 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    imgs
     categoryId
     active
     slug
-    categoryProperties
-    classification {
-      originalPrice 
-      totalStock 
-      tiers {     
-        code 
-        name 
-        options {
-          code 
-          name
-          imageUrl
-        }
-      }
-      variants {
-        code
-        sku
-        price
-        stock
-        optionCodes
+    price
+    priority
+    properties {
+      type
+      key
+      label
+      placeholder
+      tooltip
+      required
+      clearable
+      options {
+        key
+        label
       }
     }
   `);
@@ -186,11 +130,7 @@ export class ProductRepository extends CrudRepository<Product> {
         name
         coverImg
         slug
-        minPrice
-        maxPrice
-        classification {
-          originalPrice
-        }
+        price
       `),
       apiName: "getActiveProducts",
     });

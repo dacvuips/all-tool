@@ -10,13 +10,13 @@ import { useServer } from "graphql-ws/lib/use/ws";
 import { Server } from "http";
 import _ from "lodash";
 import morgan from "morgan";
+import { Socket } from "net";
 import path from "path";
 import { Server as WebSocketServer } from "ws";
-
 import { walkSyncFiles } from "../helpers/common";
+import logger from "../helpers/logger";
 import { onContext } from "../libs/graphql/context";
 import { DOMAIN, IS_DEBUG } from "../libs/shared";
-import logger from "../helpers/logger";
 
 export default async (app: Express, httpServer: Server) => {
   const typeDefs = [
@@ -157,11 +157,16 @@ export default async (app: Express, httpServer: Server) => {
 
   // Creating the WebSocket server
   const wsServer = new WebSocketServer({
-    // This is the `httpServer` we created in a previous step.
-    server: httpServer,
-    // Pass a different path here if your ApolloServer serves at
-    // a different path.
-    path: "/graphql",
+    noServer: true,
+  });
+
+  httpServer.on("upgrade", (req, socket, head) => {
+    const { pathname } = new URL(req.url, `http://${req.headers.host}`);
+    if (pathname === "/graphql") {
+      wsServer.handleUpgrade(req, socket as Socket, head, (ws) => {
+        wsServer.emit("connection", ws, req);
+      });
+    }
   });
   // Hand in the schema we just created and have the
   // WebSocketServer start listening.

@@ -3,12 +3,11 @@ import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { Product, ProductService } from "../../../../lib/repo";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
-import { ProductForm } from "./components/product-form";
+import { ProductField } from "./components/product-field";
 
 export function ProductPage(props) {
   const { t } = useTranslation();
@@ -16,8 +15,6 @@ export function ProductPage(props) {
   const { userPermission } = useAuth();
   const [filter, setFilter] = useState<any>({});
   const [timeRange, setTimeRange] = useState<any>(null);
-
-  const { PRE_ORDER, OTHER_INFO_STATUS } = useOptionsTranslation();
 
   useEffect(() => {
     setFilter({
@@ -140,8 +137,8 @@ export function ProductPage(props) {
             </>
           )}
         </DataTable.Consumer>
-        <DataTable.Form grid width={900} slideFromBottom="none">
-          <ProductForm />
+        <DataTable.Form grid width={1024} slideFromBottom="none">
+          <ProductField />
         </DataTable.Form>
         <DataTable.Pagination />
       </DataTable>

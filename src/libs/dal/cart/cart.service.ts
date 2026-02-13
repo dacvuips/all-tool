@@ -8,33 +8,18 @@ class CartService extends CRUDService(CartModel) {
   async addToCart(data: Partial<ICart>, customerId?: string) {
     const query: any = {
       productId: data.productId,
-      variantId: data.variantId || null,
       sessionId: data.sessionId,
       customerId: customerId ? new Types.ObjectId(customerId) : null,
     };
 
-    // Get product to check stock
+    if (!data.productId) {
+      throw new Error("Product ID is required");
+    }
+
+    // Get product to check exist
     const product = await ProductModel.findById(data.productId);
     if (!product) {
       throw new Error("Sản phẩm không tồn tại");
-    }
-
-    // Check stock availability
-    let availableStock = 0;
-    if (data.variantId && product.classification?.variants) {
-      // Check variant stock
-      const variant = product.classification.variants.find((v) => v.code === data.variantId);
-      if (!variant) {
-        throw new Error("Biến thể sản phẩm không tồn tại");
-      }
-      availableStock = variant.stock;
-    } else {
-      // Check total stock
-      availableStock = product.classification?.totalStock || 0;
-    }
-
-    if (availableStock <= 0) {
-      throw new Error("Sản phẩm đã hết hàng");
     }
 
     // Check if item already exists in cart
@@ -46,13 +31,6 @@ class CartService extends CRUDService(CartModel) {
       // Calculate new quantity
       const newQuantity = existingItem.quantity + requestedQuantity;
 
-      // Check if new quantity exceeds stock
-      if (newQuantity > availableStock) {
-        throw new Error(
-          `Chỉ còn ${availableStock} sản phẩm trong kho. Bạn đã có ${existingItem.quantity} trong giỏ hàng.`
-        );
-      }
-
       // Update quantity
       existingItem.quantity = newQuantity;
       existingItem.price = data.price;
@@ -62,11 +40,6 @@ class CartService extends CRUDService(CartModel) {
       existingItem.stockCheckedAt = new Date();
       existingItem.priceCheckedAt = new Date();
       return await existingItem.save();
-    }
-
-    // Check if requested quantity exceeds stock for new item
-    if (requestedQuantity > availableStock) {
-      throw new Error(`Chỉ còn ${availableStock} sản phẩm trong kho`);
     }
 
     // Create new cart item
@@ -128,7 +101,6 @@ class CartService extends CRUDService(CartModel) {
       const existingItem = await CartModel.findOne({
         customerId,
         productId: item.productId,
-        variantId: item.variantId || null,
       });
 
       if (existingItem) {

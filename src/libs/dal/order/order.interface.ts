@@ -75,19 +75,12 @@ export interface IPaymentLog {
 }
 
 export interface IOrderItem {
-  variantId?: string;
-  sku?: string;
   productName: string;
-  variantName?: string;
   thumbnail?: string;
   price: number;
   originalPrice?: number;
   quantity: number;
   subtotal: number;
-  weight?: number;
-  width?: number;
-  length?: number;
-  height?: number;
 }
 
 export interface IShippingAddress {

@@ -46,10 +46,7 @@ const schema = gql`
   }
 
   input OrderItemInput {
-    variantId: String
-    sku: String
     productName: String!
-    variantName: String
     thumbnail: String
     price: Float!
     originalPrice: Float
@@ -154,19 +151,12 @@ const schema = gql`
   }
 
   type OrderItem {
-    variantId: String
-    sku: String
     productName: String
-    variantName: String
     thumbnail: String
     price: Float
     originalPrice: Float
     quantity: Int
     subtotal: Float
-    weight: Float
-    width: Float
-    length: Float
-    height: Float
   }
 
   type ShippingAddress {

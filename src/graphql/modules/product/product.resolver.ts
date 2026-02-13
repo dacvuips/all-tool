@@ -5,18 +5,6 @@ import { Scope } from "../../../libs/dal/authority";
 import { ProductModel, productService } from "../../../libs/dal/product";
 import { Context } from "../../../libs/graphql";
 
-const calculatePriceRange = (data: any) => {
-  if (data.classification.variants && data.classification.variants.length > 0) {
-    const prices = data.classification.variants.map((variant: any) => variant.price);
-
-    data.minPrice = Math.min(...prices);
-    data.maxPrice = Math.max(...prices);
-  } else if (data.classification) {
-    data.minPrice = data.classification.originalPrice;
-    data.maxPrice = data.classification.originalPrice;
-  }
-};
-
 const Query = {
   getAllProduct: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["QT-4-1"]]);
@@ -29,7 +17,7 @@ const Query = {
   },
   getActiveProducts: async (root: any, args: any, context: Context) => {
     set(args, "q.filter.active", true);
-   
+
     return productService.fetch(args.q);
   },
   getProductSlug: async (root: any, args: any, context: Context) => {
@@ -51,8 +39,6 @@ const Mutation = {
       }
     }
 
-    calculatePriceRange(data);
-
     return await productService.create(data);
   },
   updateProduct: async (root: any, args: any, context: Context) => {
@@ -70,8 +56,6 @@ const Mutation = {
         data.slug += "-" + random(1000, 9999);
       }
     }
-
-    calculatePriceRange(data);
 
     return await productService.updateOne(id, data);
   },

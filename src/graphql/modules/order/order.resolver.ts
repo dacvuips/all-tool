@@ -134,13 +134,10 @@ const Mutation = {
     );
 
     // Add subtotal and delivery info for each item
+    // Add subtotal for each item
     const items = data.items.map((item: any) => ({
       ...item,
       subtotal: item.price * item.quantity,
-      weight: product?.delivery?.weight,
-      width: product?.delivery?.width,
-      length: product?.delivery?.length,
-      height: product?.delivery?.height,
     }));
 
     // Calculate total
