@@ -1,0 +1,48 @@
+import { FaAsterisk, FaInfoCircle } from "react-icons/fa";
+
+interface PropsType extends ReactProps {
+  text: string;
+  description?: string;
+  htmlFor?: string;
+  tooltip?: string;
+  required?: boolean;
+  error?: string;
+}
+
+export function Label({ ...props }: PropsType) {
+  return (
+    <>
+      <label
+        htmlFor={props.htmlFor}
+        className={`flex items-center text-base w-full font-semibold min-h-6 pl-0.5 mb-1 ${
+          props.className || ""
+        }`}
+      >
+        <span
+          className={`inline-flex items-center ${props.error ? "text-danger" : "text-gray-600"}`}
+        >
+          {props.text}
+          {props.required && (
+            <sup className={`ml-1 text-8 ${props.error ? "text-danger" : "text-primary"}`}>
+              <FaAsterisk />
+            </sup>
+          )}
+          {props.tooltip && (
+            <i
+              className={`text-sm inline-block ml-1.5 ${
+                props.error ? "text-danger" : "text-gray-500"
+              }`}
+              data-tooltip={props.tooltip}
+            >
+              <FaInfoCircle />
+            </i>
+          )}
+        </span>
+        {props.children}
+      </label>
+      {props.description && (
+        <div className="text-sm text-gray-600 pl-1 -mt-0.5 mb-1">{props.description}</div>
+      )}
+    </>
+  );
+}

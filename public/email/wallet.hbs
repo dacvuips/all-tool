@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="Content-Type" />
+    <title>{{ siteTitle }}</title>
+    <meta name="description" content="{{ siteDescription }}">
+    <style type="text/css">
+        a:hover {
+            text-decoration: underline !important;
+        }
+    </style>
+</head>
+
+<body marginheight="0" topmargin="0" marginwidth="0" style="margin: 0px; background-color: #f2f3f8;" leftmargin="0">
+    <!--100% body table-->
+    <table cellspacing="0" border="0" cellpadding="0" width="100%" bgcolor="#f2f3f8"
+        style="@import url(https://fonts.googleapis.com/css?family=Rubik:300,400,500,700|Open+Sans:300,400,600,700); font-family: 'Open Sans', sans-serif;">
+        <tr>
+            <td>
+                <table style="background-color: #f2f3f8; max-width:670px;  margin:0 auto;" width="100%" border="0"
+                    align="center" cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="height:80px;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align:center;">
+                            <a href="{{websiteLink}}" title="logo" target="_blank">
+                                <img width="60" src="{{logoUrl}}" title="logo" alt="logo">
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:20px;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <table width="95%" border="0" align="center" cellpadding="0" cellspacing="0"
+                                style="max-width:670px;background:#fff; border-radius:3px; text-align:center;-webkit-box-shadow:0 6px 18px 0 rgba(0,0,0,.06);-moz-box-shadow:0 6px 18px 0 rgba(0,0,0,.06);box-shadow:0 6px 18px 0 rgba(0,0,0,.06);">
+                                <tr>
+                                    <td style="height:40px;">&nbsp;</td>
+                                </tr>
+                                <tr>
+                                    <td style="padding:0 35px;">
+                                        <h1
+                                            style="color:#1e1e2d; font-weight:500; margin:0;font-size:32px;font-family:'Rubik',sans-serif;">
+                                            Thông báo biến động số dư mPoint</h1>
+                                        <span
+                                            style="display:inline-block; vertical-align:middle; margin:29px 0 26px; border-bottom:1px solid #cecece; width:100px;"></span>
+                                        <p style="color:#455056; font-size:15px;line-height:24px; margin:0;">
+                                            Kính gửi {{ recipientName }},
+                                        </p>
+                                        <p style="color:#455056; font-size:15px;line-height:24px; margin:0;">
+                                            Email này là để thông báo cho bạn về việc thay đổi gần đây trong mPoint của bạn.
+                                            Chi tiết giao dịch như sau:
+                                        </p>
+                                        <table style="width:100%; margin-top:20px;">
+                                            <tr>
+                                                <td style="text-align:left; padding:5px 0;">Mã giao dịch:</td>
+                                                <td style="text-align:right; padding:5px 0;">{{ transactionId }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="text-align:left; padding:5px 0;">Ngày:</td>
+                                                <td style="text-align:right; padding:5px 0;">{{ transactionDate }}</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="text-align:left; padding:5px 0;">Số tiền:</td>
+                                                <td style="text-align:right; padding:5px 0;">{{ transactionAmount }}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="text-align:left; padding:5px 0;">Mô tả:</td>
+                                                <td style="text-align:right; padding:5px 0;">{{ transactionDescription
+                                                    }}</td>
+                                            </tr>
+                                        </table>
+                                        <p style="color:#455056; font-size:15px;line-height:24px; margin-top:20px;">
+                                            Nếu bạn có bất kỳ câu hỏi hoặc vấn đề liên quan đến giao dịch này, vui lòng
+                                            liên hệ đội ngũ hỗ trợ của chúng tôi.
+                                        </p>
+                                        <p style="color:#455056; font-size:15px;line-height:24px; margin-top:20px;">
+                                            Cảm ơn bạn đã sử dụng dịch vụ của chúng tôi.
+                                        </p>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="height:40px;">&nbsp;</td>
+                                </tr>
+                            </table>
+                        </td>
+                    <tr>
+                        <td style="height:20px;">&nbsp;</td>
+                    </tr>
+                    <tr>
+                        <td style="text-align:center;">
+                            <p
+                                style="font-size:14px; color:rgba(69, 80, 86, 0.7411764705882353); line-height:18px; margin:0 0 0;">
+                                &copy; <strong>Đội ngũ Midman</strong></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="height:80px;">&nbsp;</td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+    <!--/100% body table-->
+</body>
+
+</html>

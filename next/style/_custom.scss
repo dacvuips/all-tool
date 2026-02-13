@@ -1,0 +1,40 @@
+// Custom project-specific class here
+:root {
+  --color-primary-light: #eee;
+  --color-primary: #333;
+  --color-primary-dark: #222;
+  --color-accent-light: #eee;
+  --color-accent: #333;
+  --color-accent-dark: #222;
+}
+
+.bg-gradient {
+  @apply bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary-dark;
+  &:not(.loading)[disabled] {
+    background-image: none !important;
+  }
+}
+
+//custom style datetimepicker trang thanh toán
+.Modal-Portal {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.datepicker-modal {
+  right: initial !important;
+  max-width: 32rem !important;
+}
+.datepicker-header {
+  @apply text-primary #{!important};
+}
+.datepicker-navbar-btn {
+  @apply text-primary #{!important};
+}
+.datepicker-wheel {
+  @apply border-primary #{!important};
+}
+
+.tippy-content {
+  white-space: pre-line;
+}

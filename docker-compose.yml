@@ -1,0 +1,34 @@
+version: "3"
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        - MONGO_MAIN
+        - FIREBASE_WEB_CONFIG
+    image: smartloyalty/midman:test
+    env_file:
+      - .env
+    networks:
+      - internal
+    ports:
+      - 5555:5555
+  redis:
+    image: redis:alpine
+    # command: redis-server --requirepass 123456
+    ports:
+      - 6379:6379
+    networks:
+      - internal
+    environment:
+      - REDIS_REPLICATION_MODE=master
+  db:
+    image: mongo:latest
+    ports:
+      - 27017:27017
+networks:
+  internal:
+    driver: bridge
+volumes:
+  mongo_data:

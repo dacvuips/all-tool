@@ -1,0 +1,94 @@
+html,
+body {
+  font-family: "Open Sans", sans-serif;
+  @apply bg-gray-100;
+  @apply text-base;
+  @apply box-border;
+}
+
+a {
+  text-decoration: none;
+}
+
+a:hover,
+a:focus {
+  text-decoration: none;
+}
+
+.main-container {
+  margin-left: auto;
+  margin-right: auto;
+  width: 94%;
+  @screen xs {
+    width: 93%;
+    max-width: none;
+  }
+  @screen sm {
+    width: 92%;
+    max-width: none;
+  }
+  @screen md {
+    width: 90%;
+    max-width: none;
+  }
+  @screen lg {
+    width: 88%;
+    @apply max-w-screen-lg;
+  }
+  @screen xl {
+    width: 86%;
+    @apply max-w-screen-xl;
+  }
+  @screen 2xl {
+    width: 84%;
+    @apply max-w-screen-xl;
+  }
+}
+
+.no-focus:not(.btn) {
+  outline: none;
+}
+
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input:focus {
+  outline: none;
+}
+
+.glass-effect {
+  position: relative;
+  overflow: hidden; /* Để ánh sáng không tràn ra ngoài */
+}
+
+.glass-effect::before {
+  content: "";
+  position: absolute;
+  bottom: 0%; /* Bắt đầu ở dưới cùng */
+  left: -100%; /* Bắt đầu ở góc trái */
+  width: 200%; /* Kích thước dải sáng lớn hơn container */
+  height: 100%;
+  background: linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0) 20%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 255, 255, 0) 80%
+  );
+  opacity: 0.5;
+  transform: translateX(0%) translateY(0%) rotate(45deg);
+  animation: shine-up-diagonal 2s linear infinite;
+  animation-delay: 2s;
+  pointer-events: none; /* Vô hiệu hóa tương tác */
+  z-index: 1;
+}
+
+@keyframes shine-up-diagonal {
+  0% {
+    transform: translateX(-100%) translateY(100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(100%) translateY(-100%) rotate(45deg);
+  }
+}

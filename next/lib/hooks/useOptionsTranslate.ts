@@ -1,0 +1,782 @@
+import { useTranslation } from "next-i18next";
+import { OrderStatus, OtherInfoStatus, PaymentStatus, PreOrder, ShipmentStatusEnum } from "../repo";
+import { BannerActionType } from "../repo/list/banner.repo";
+import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
+import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
+import {
+  AffiliateBoothStatus,
+  AffiliateCategoriesUnit,
+  AffiliateProductApproveStatusEnum,
+  AffiliateProductTypeEnum,
+  BusinessTypeEnum,
+  CustomerStatusEnum,
+  DiscountTypeEnum,
+  GameCadMode,
+  GameCardStatusEnum,
+  GameOrderStatusEnum,
+  GamePropertyEnum,
+  GameTypeEnum,
+  IntroduceCustomerStatusEnum,
+  Locale,
+  MyUtilitesActionEnum,
+  OrderTypeEnum,
+  PartnerGroupStatusEnum,
+  PaymentMethodEnum,
+  PopupNotifyActionType,
+  PopupNotifyStatusEnum,
+  PopupNotifyTypeEnum,
+  ProductBuyStatusEnum,
+  ProductTypeEnum,
+  ReportStatusEnum,
+  ReportTypeEnum,
+  RoleViewEnum,
+  ShopBannerActionTypeEnum,
+  ShopBannerTypeEnum,
+  ShopProductTypeEnum,
+  ShopRegisterStatusEnum,
+  ShopStatusEnum,
+  ShopVoucherTypeEnum,
+  Target,
+  Type,
+  UserGender,
+  UserStatus,
+  UtilityStatusEnum,
+  UtilityTypeEnum,
+  WalletTransactionSideEnum,
+  WalletTransactionTypeEnum,
+  WalletTranscationStatusEnum,
+} from "../repo/types";
+import { WalletDrawStatusEnum } from "../repo/wallet/wallet-draw.repo";
+
+export const useOptionsTranslation = () => {
+  const { t } = useTranslation();
+  const TARGETS: Option<Target>[] = [
+    { value: "ALL", label: t("Tất cả"), color: "bluegray" },
+    { value: "ADMIN", label: t("Quản trị"), color: "info" },
+    { value: "STAFF", label: t("Nhân viên"), color: "accent" },
+  ];
+
+  const TYPE: Option<Type>[] = [
+    { value: "BANNER", label: t("Banner"), color: "info" },
+    { value: "POPUP", label: t("Popup"), color: "accent" },
+  ];
+
+  const ACTIVE_STATUS_OPTIONS = [
+    { value: "true", label: t("Kích hoạt"), color: "success" },
+    { value: "false", label: t("Ngưng kích hoạt"), color: "bluegray" },
+  ];
+
+  const COLOR_OPTIONS: Option[] = [
+    { code: "#29C5FF", display: t("Xanh lơ") },
+    { code: "#0287D0", display: t("Xanh dương") },
+    { code: "#004790", display: t("Xanh biển") },
+    { code: "#fa8072", display: t("Đỏ cá hồi") },
+    { code: "#f24b3a", display: t("Đỏ tươi") },
+    { code: "#B71C0C", display: t("Đỏ lựu") },
+    { code: "#3EDC81", display: t("Xanh lá cây") },
+    { code: "#30b848", display: t("Xanh lục") },
+    { code: "#006C11", display: t("Xanh quân đội") },
+    { code: "#F9BF3B", display: t("Cam cà rốt") },
+    { code: "#F1892D", display: t("Cam đào") },
+    { code: "#C86400", display: t("Cam bí ngô") },
+    { code: "#AB69C6", display: t("Tím nho") },
+    { code: "#7E349D", display: t("Tím hoàng gia") },
+    { code: "#4E046D", display: t("Tím mực") },
+    { code: "#FFA27B", display: t("Da người nhạt") },
+    { code: "#E3724B", display: t("Da người trung") },
+    { code: "#B3421B", display: t("Da người đậm") },
+    { code: "#47EBE0", display: t("Ngọc trời") },
+    { code: "#17BBB0", display: t("Ngọc bích") },
+    { code: "#008B80", display: t("Ngọc lam") },
+    { code: "#FF8CC8", display: t("Hồng phấn") },
+    { code: "#EA4C88", display: t("Hồng tươi") },
+    { code: "#BA1C58", display: t("Hồng nhung") },
+    { code: "#EAB897", display: t("Nâu be") },
+    { code: "#AE7C5B", display: t("Nâu trầm") },
+    { code: "#8E5C3B", display: t("Nâu đất") },
+    { code: "#ACBAC9", display: t("Màu bạc") },
+    { code: "#8C9AA9", display: t("Màu sắt") },
+    { code: "#3C4A59", display: t("Màu bão") },
+  ].map((x) => ({ value: x.code, label: x.display, color: x.code }));
+
+  const PRODUCT_TYPE_OPTIONS = [{ value: ProductTypeEnum.GAME_CARD, label: t("Thẻ game") }];
+
+  const CUSTOMER_STATUS_OPTIONS = [
+    { value: CustomerStatusEnum.ACTIVE, label: t("Kích hoạt"), color: "success" },
+    { value: CustomerStatusEnum.INACTIVE, label: t("Không kích hoạt"), color: "bluegray" },
+    { value: CustomerStatusEnum.BLOCKED, label: t("Bị khóa"), color: "danger" },
+  ];
+
+  const GAME_CARD_STATUS_OPTIONS = [
+    { value: GameCardStatusEnum.ACTIVE, label: t("Kích hoạt"), color: "success" },
+    { value: GameCardStatusEnum.INACTIVE, label: t("Chưa kích hoạt"), color: "bluegray" },
+    { value: GameCardStatusEnum.USED, label: t("Đã sử dụng"), color: "warning" },
+  ];
+
+  const ORDER_TYPE_OPTIONS = [
+    { value: OrderTypeEnum.GAME_CARD, label: t("ATM") },
+    { value: OrderTypeEnum.M_POINT_CARD, label: t("M-Point") },
+  ];
+
+  const PAYMENT_METHOD_OPTIONS = [
+    { value: PaymentMethodEnum.COD, label: t("Thanh toán khi nhận hàng") },
+    { value: PaymentMethodEnum.BANK, label: t("Chuyển khoản ngân hàng") },
+    { value: PaymentMethodEnum.MOMO, label: t("Ví MoMo") },
+    { value: PaymentMethodEnum.ZALO_PAY, label: t("Ví ZaloPay") },
+    { value: PaymentMethodEnum.CREDIT_CARD, label: t("Thẻ tín dụng / thẻ ghi nợ") },
+  ];
+
+  const GAME_CARD_MODE = [
+    { value: GameCadMode.all, label: t("Tất cả thẻ") },
+    { value: GameCadMode.limit, label: t("Số lượng thẻ giới hạn") },
+  ];
+
+  const SHOP_STATUS_OPTIONS: Option[] = [
+    { value: ShopStatusEnum.ACTIVE, label: t("Kích hoạt"), color: "success" },
+    { value: ShopStatusEnum.INACTIVE, label: t("Chưa kích hoạt"), color: "bluegray" },
+  ];
+  const AFFILIATE_BOOTH_STATUS_OPTIONS: Option[] = [
+    { value: AffiliateBoothStatus.ACTIVE, label: t("Kích hoạt"), color: "success" },
+    { value: AffiliateBoothStatus.INACTIVE, label: t("Ngừng hoạt động"), color: "danger" },
+  ];
+  const BUSINESS_TYPE_OPTIONS: Option[] = [
+    { value: BusinessTypeEnum.SERVICE, label: t("Dịch vụ"), color: "pink" },
+    { value: BusinessTypeEnum.ACCOUNT, label: t("Tài khoản"), color: "info" },
+    { value: BusinessTypeEnum.SOFTWARE, label: t("Phần mềm"), color: "cyan" },
+  ];
+
+  const SHOP_REGISTER_STATUS_OPTIONS = [
+    { value: ShopRegisterStatusEnum.PENDING, label: t("Đang chờ duyệt"), color: "bluegray" },
+    { value: ShopRegisterStatusEnum.APPROVED, label: t("Đã duyệt"), color: "success" },
+    { value: ShopRegisterStatusEnum.REJECTED, label: t("Bị từ chối"), color: "danger" },
+  ];
+
+  const SHOP_BANNER_TYPE_OPTIONS = [
+    { value: ShopBannerTypeEnum.IMAGE, label: t("Hình ảnh") },
+    { value: ShopBannerTypeEnum.YOUTUBE, label: t("Youtube") },
+  ];
+
+  const SHOP_BANNER_ACTION_TYPE_OPTIONS = [
+    { value: ShopBannerActionTypeEnum.NONE, label: t("Không") },
+    { value: ShopBannerActionTypeEnum.WEBSITE, label: t("Mở Website") },
+  ];
+
+  const GENDER_OPTIONS = [
+    { value: UserGender.MALE, label: t("Nam"), color: "bluegray" },
+    { value: UserGender.FEMALE, label: t("Nữ"), color: "success" },
+    { value: UserGender.OTHER, label: t("Khác"), color: "danger" },
+  ];
+
+  const USER_STATUS_OPTIONS = [
+    { value: UserStatus.INACTIVE, label: t("Ngưng kích hoạt"), color: "bluegray" },
+    { value: UserStatus.ACTIVE, label: t("Kích hoạt"), color: "success" },
+    { value: UserStatus.BLOCKED, label: t("Bị khóa"), color: "danger" },
+  ];
+
+  const CATEGORY_PROPERTIES_OPTION = [
+    { value: GamePropertyEnum.TEXT, label: t("Chữ") },
+    { value: GamePropertyEnum.NUMBER, label: t("Số") },
+    { value: GamePropertyEnum.BOOLEAN, label: t("Bật/Tắt") },
+
+    { value: GamePropertyEnum.SELECT, label: t("Lựa chọn") },
+    { value: GamePropertyEnum.MULTI_SELECT, label: t("Nhiều lựa chọn") },
+  ];
+
+  const SHOP_PRODUCT_TYPE_OPTION = [
+    { value: ShopProductTypeEnum.SELL, label: t("Bán"), color: "danger" },
+    { value: ShopProductTypeEnum.BUY, label: t("Mua"), color: "success" },
+  ];
+
+  const AFFILIATE_PRODUCT_TYPE_OPTION = [
+    { value: AffiliateProductTypeEnum.SELL, label: t("Bán"), color: "danger" },
+    // { value: AffiliateProductTypeEnum.BUY, label: t("Mua"), color: "success" },
+  ];
+  const SHOP_PRODUCT_ALLOWSALE_OPTION = [
+    { value: true, label: t("Đã gửi phê duyệt"), color: "success" },
+    { value: false, label: t("Chưa gửi phê duyệt"), color: "danger" },
+  ];
+  const BOOLEAN_OPTION = [
+    { value: true, label: t("Kích hoạt"), color: "success" },
+    { value: false, label: t("Chưa kích hoạt"), color: "danger" },
+  ];
+  const GROUP_TRANSACTION_THREAD_OPTION = [
+    { value: "group", label: t("Nhóm giao dịch"), color: "success" },
+    { value: "single", label: t("Tán gẫu riêng"), color: "danger" },
+  ];
+
+  const AFFILIATE_APPROVAL_STATUS_OPTION = [
+    { value: AffiliateProductApproveStatusEnum.DRAFT, label: t("Nháp"), color: "bluegray" },
+    {
+      value: AffiliateProductApproveStatusEnum.PENDING,
+      label: t("Đang chờ duyệt"),
+      color: "warning",
+    },
+    { value: AffiliateProductApproveStatusEnum.APPROVED, label: t("Đã duyệt"), color: "success" },
+    {
+      value: AffiliateProductApproveStatusEnum.REJECTED,
+      label: t("Bị từ chối duyệt"),
+      color: "danger",
+    },
+    { value: AffiliateProductApproveStatusEnum.CANCELED, label: t("Bị hủy"), color: "danger" },
+    { value: AffiliateProductApproveStatusEnum.DELETED, label: t("Đã xóa"), color: "danger" },
+  ];
+
+  const GAME_ORDER_RESULT_OPTION = [
+    { value: "CANCEL", label: t("Hủy giao dịch"), color: "danger" },
+    { value: "SUCCESS", label: t("Thành công"), color: "success" },
+  ];
+
+  const WALLET_TRANSACTION_TYPE_OPTIONS = [
+    { value: WalletTransactionTypeEnum.DEPOSIT, label: t("Nạp mPoint"), color: "success" },
+    { value: WalletTransactionTypeEnum.WITHDRAW, label: t("Rút mPoint"), color: "danger" },
+    { value: WalletTransactionTypeEnum.EXCHANGE_FEE, label: t("Phí giao dịch"), color: "accent" },
+    { value: WalletTransactionTypeEnum.ADJUST_BALANCE, label: t("Cân chỉnh số dư"), color: "info" },
+    { value: WalletTransactionTypeEnum.MANAGE_COST, label: t("Phí quản lý"), color: "warning" },
+    {
+      value: WalletTransactionTypeEnum.MANAGE_COMMISSION,
+      label: t("Hoa hồng quản lý"),
+      color: "orange",
+    },
+    {
+      value: WalletTransactionTypeEnum.BUY_UTILITIES_CUSTOMER,
+      label: t("Khách mua tiện ích"),
+      color: "teal",
+    },
+    {
+      value: WalletTransactionTypeEnum.BUY_UTILITIES_SHOP,
+      label: t("Shop mua tiện ích"),
+      color: "pink",
+    },
+    {
+      value: WalletTransactionTypeEnum.EXCHANGE_GAME_CARD,
+      label: t("Đổi thẻ game"),
+      color: "orange",
+    },
+    {
+      value: WalletTransactionTypeEnum.INTRODUCE,
+      label: t("Giới thiệu"),
+      color: "info",
+    },
+    {
+      value: WalletTransactionTypeEnum.AFFILIATE_ORDER,
+      label: t("Đơn hàng Affiliate"),
+      color: "info",
+    },
+    {
+      value: WalletTransactionTypeEnum.DEPOSIT_WITH_PAYPAL,
+      label: t("Nạp bằng Paypal"),
+      color: "info",
+    },
+  ];
+
+  const WALLET_TRANSACTION_SIDE_OPTIONS = [
+    { value: WalletTransactionSideEnum.IN, label: t("mPoint vào"), color: "warning" },
+    { value: WalletTransactionSideEnum.OUT, label: t("mPoint ra"), color: "purple" },
+  ];
+
+  const WALLET_TRANSACTION_STATUS_OPTIONS = [
+    { value: WalletTranscationStatusEnum.PENDING, label: t("Đang chờ xử lý"), color: "warning" },
+    { value: WalletTranscationStatusEnum.SUCCESS, label: t("Thành công"), color: "success" },
+    { value: WalletTranscationStatusEnum.FAILED, label: t("Thất bại"), color: "danger" },
+  ];
+
+  const ROLES_OPTIONS: Option[] = [
+    { value: "ADMIN", label: t("Quản trị"), color: "primary" },
+    { value: "STAFF", label: t("Nhân viên"), color: "warning" },
+    { value: "PARTNER", label: t("Cộng tác viên"), color: "orange" },
+    { value: "CUSTOMER", label: t("Khách hàng"), color: "bluegray" },
+  ];
+
+  const PRODUCT_BUY_SHOP_PRODUCT_STATUS_OPTIONS = [
+    { value: ProductBuyStatusEnum.PENDING, label: t("Chưa chọn mua"), color: "bluegray" },
+    { value: ProductBuyStatusEnum.SELECTED, label: t("Đã chọn mua"), color: "success" },
+  ];
+
+  const SUBSCRIPTION_PLANS: Option[] = [
+    { value: "FREE", label: t("Miễn phí"), color: "success" },
+    { value: "MONTH", label: t("Gói tháng"), color: "info" },
+    { value: "YEAR", label: t("Gói năm"), color: "danger" },
+    { value: "VIP", label: t("Gói VIP"), color: "danger" },
+  ];
+  const POST_STATUSES: Option[] = [
+    { value: "DRAFT", label: t("Bản nháp"), color: "accent" },
+    { value: "PUBLIC", label: t("Công khai"), color: "success" },
+  ];
+  const POST_CATEGORY: Option[] = [
+    { value: "NEWS", label: t("Tin tức"), color: "accent" },
+    { value: "INSTRUCTIONS", label: t("Hướng dẫn"), color: "success" },
+    { value: "PROMOTION", label: t("Khuyến mãi"), color: "warning" },
+    { value: "EVENT", label: t("Sự kiện"), color: "danger" },
+    { value: "FEATURE", label: t("Tính năng"), color: "primary" },
+  ];
+
+  const ROLE_GROUP: Option[] = [
+    { value: "CUSTOMER", label: t("Khách hàng"), color: "accent" },
+    { value: "SHOP", label: t("Cửa hàng"), color: "pink" },
+    { value: "STAFF", label: t("Nhân viên"), color: "purple" },
+    { value: "PARTNER", label: t("Cộng tác viên"), color: "info" },
+    { value: "ADMIN", label: t("Admin"), color: "danger" },
+    { value: "POPUP", label: t("Thông báo nhỏ"), color: "teal" },
+    { value: "ALL", label: t("Tất cả"), color: "teal" },
+  ];
+
+  const BANK_VERIFIED_ROLE: Option[] = [
+    { value: "CUSTOMER", label: t("Khách hàng"), color: "accent" },
+    { value: "SHOP", label: t("Cửa hàng"), color: "orange" },
+  ];
+
+  const PARTNER_GROUP_STATUS_OPTIONS = [
+    { value: PartnerGroupStatusEnum.ACTIVE, label: t("Đang hoạt động"), color: "success" },
+    { value: PartnerGroupStatusEnum.INACTIVE, label: t("Không hoạt động"), color: "danger" },
+  ];
+
+  const PARTNER_GROUP_MANAGE_COST_RATE = [
+    { value: 0, label: "0%", color: "success" },
+    { value: 5, label: "5%", color: "success" },
+    { value: 10, label: "10%", color: "success" },
+    { value: 15, label: "15%", color: "success" },
+    { value: 20, label: "20%", color: "success" },
+  ];
+
+  const CUSTOMER_CREDIT_POINT_ACTION = [
+    { value: "add", label: t("Tăng điểm") },
+    { value: "sub", label: t("Giảm điểm") },
+  ];
+
+  const POPUP_NOTIFY_TYPE_OPTIONS = [
+    { value: PopupNotifyTypeEnum.IMAGE, label: t("Hình ảnh"), color: "accent" },
+    { value: PopupNotifyTypeEnum.VIDEO, label: t("Video"), color: "orange" },
+    { value: PopupNotifyTypeEnum.HTML, label: t("HTML"), color: "teal" },
+  ];
+
+  const POPUP_NOTIFY_STATUS_OPTIONS = [
+    { value: PopupNotifyStatusEnum.ACTIVE, label: t("Hoạt động"), color: "success" },
+    { value: PopupNotifyStatusEnum.INACTIVE, label: t("Ngừng hoạt động"), color: "danger" },
+  ];
+
+  const POPUP_NOTIFY_ACTION_TYPE_OPTIONS = [
+    { value: PopupNotifyActionType.WEBSITE, label: t("Mở website"), color: "accent" },
+    { value: PopupNotifyActionType.PRODUCT, label: t("Mở sản phẩm"), color: "orange" },
+    { value: PopupNotifyActionType.VOUCHER, label: t("Mở voucher"), color: "teal" },
+    { value: PopupNotifyActionType.SHOP, label: t("Mở cửa hàng"), color: "teal" },
+    { value: PopupNotifyActionType.NORMAL, label: t("Không thao tác"), color: "teal" },
+  ];
+
+  const UTILITY_TYPE_OPTIONS = [
+    { value: UtilityTypeEnum.PACKAGE, label: t("Gói dịch vụ"), color: "info" },
+    { value: UtilityTypeEnum.PRIORITY, label: t("Ưu tiên"), color: "pink" },
+    { value: UtilityTypeEnum.DISCOUNT, label: t("Giảm giá"), color: "orange" },
+    { value: UtilityTypeEnum.TIME, label: t("Thời gian"), color: "primary" },
+    { value: UtilityTypeEnum.REPUTATION, label: t("Uy tín"), color: "purple" },
+    { value: UtilityTypeEnum.QUANTITY, label: t("Số lượng sản phẩm"), color: "teal" },
+  ];
+
+  const MY_UTILITES_ACTION_OPTIONS = [
+    { value: MyUtilitesActionEnum.BUY, label: t("Mua"), color: "info" },
+    { value: MyUtilitesActionEnum.GIFT, label: t("Tặng"), color: "warn" },
+  ];
+  const DISCOUNT_TYPE_OPTIONS = [
+    { value: DiscountTypeEnum.PERCENT, label: t("Phần trăm"), color: "info" },
+    { value: DiscountTypeEnum.FIXED, label: t("Tiền"), color: "warn" },
+  ];
+
+  const AFFILIATE_UNIT_OPTIONS = [
+    { value: AffiliateCategoriesUnit.PERCENT, label: t("Phần trăm"), color: "info" },
+    { value: AffiliateCategoriesUnit.FIXED, label: t("Tiền"), color: "bluegray" },
+  ];
+
+  const UTILITY_STATUS_OPTIONS = [
+    { value: UtilityStatusEnum.ACTIVE, label: t("Hoạt động"), color: "success" },
+    { value: UtilityStatusEnum.INACTIVE, label: t("Không hoạt động"), color: "bluegray" },
+  ];
+
+  const ROLE_VIEW_OPTIONS = [
+    { value: RoleViewEnum.SHOP, label: t("Shop"), color: "success" },
+    { value: RoleViewEnum.CUSTOMER, label: t("Khách hàng"), color: "bluegray" },
+  ];
+
+  const SHOP_VOUCHER_TYPE_OPTIONS = [
+    { value: ShopVoucherTypeEnum.PERCENT, label: t("Phần trăm"), color: "info" },
+    { value: ShopVoucherTypeEnum.FIXED, label: t("Tiền cố định"), color: "warn" },
+  ];
+  const SHOP_VOUCHER_USED_OPTIONS = [
+    { value: true, label: t("Đã dùng"), color: "success" },
+    { value: false, label: t("Chưa dùng"), color: "bluegray" },
+  ];
+  const SHOP_VOUCHER_HAS_OWNER_OPTIONS = [
+    { value: true, label: t("Có chủ sở hữu"), color: "success" },
+    { value: false, label: t("Chưa có chủ sở hữu"), color: "bluegray" },
+  ];
+
+  const INTRODUCE_CUSTOMER_STATUS_OPTIONS = [
+    { value: IntroduceCustomerStatusEnum.PENDING, label: t("Chưa nhận thưởng"), color: "bluegray" },
+    {
+      value: IntroduceCustomerStatusEnum.REWARDED,
+      label: t("Đã nhận thưởng"),
+      color: "success",
+    },
+  ];
+
+  const STAR_RATE_OPTIONS = [
+    { value: 1, label: "⭐", color: "warn" },
+    { value: 2, label: "⭐⭐", color: "warn" },
+    { value: 3, label: "⭐⭐⭐", color: "warn" },
+    { value: 4, label: "⭐⭐⭐⭐", color: "warn" },
+    { value: 5, label: "⭐⭐⭐⭐⭐", color: "warn" },
+  ];
+  const MY_UTILITY_STATUS_OPTIONS = [
+    { value: "EXPIRED", label: t("Hết hạn"), color: "danger" },
+    { value: "STILL_VALID", label: t("Còn hạn"), color: "success" },
+    { value: "USED", label: t("Đã dùng"), color: "danger" },
+    { value: "USE", label: t("Còn sử dụng"), color: "success" },
+  ];
+
+  const GAME_TYPE_OPTIONS = [
+    { value: GameTypeEnum.GAME, label: t("Game"), color: "info" },
+    { value: GameTypeEnum.ACCOUNT, label: t("Tài khoản"), color: "success" },
+    {
+      value: GameTypeEnum.MARKETING,
+      label: t("Marketing"),
+      color: "orange",
+    },
+  ];
+
+  const REPORT_TYPE_OPTIONS = [
+    { value: ReportTypeEnum.PRODUCT, label: t("Sản phẩm"), color: "info" },
+    { value: ReportTypeEnum.THREAD, label: t("Bài viết"), color: "success" },
+  ];
+
+  const REPORT_STATUS_OPTIONS = [
+    { value: ReportStatusEnum.PENDING, label: t("Chờ xử lý"), color: "warning" },
+    { value: ReportStatusEnum.PROCESSING, label: t("Đang xử lý"), color: "info" },
+    { value: ReportStatusEnum.DONE, label: t("Đã xử lý"), color: "success" },
+  ];
+
+  const LOCALES: (Option<Locale> & { language: string; countryCode: string })[] = [
+    {
+      value: "vi",
+      label: t("Tiếng Việt"),
+      language: "vi-VN",
+      image: "/assets/flags/vn.png",
+      color: "primary",
+      countryCode: "+84",
+    },
+    {
+      value: "en",
+      label: t("English"),
+      language: "en-US",
+      image: "/assets/flags/uk.png",
+      color: "accent",
+      countryCode: "+1",
+    },
+    {
+      value: "ja",
+      label: t("Tiếng Nhật"),
+      language: "ja-JP",
+      image: "/assets/flags/ja.png",
+      color: "primary",
+      countryCode: "+81",
+    },
+  ];
+
+  const STREAM_ALLOWPOST_OPTION: Option<boolean>[] = [
+    { value: true, label: t("Đã đăng bán"), color: "success" },
+    { value: false, label: t("Chưa gửi đăng bán"), color: "" },
+  ];
+
+  const USER_ROLES_OPTION: Option[] = [
+    { value: "ADMIN", label: t("Quản trị"), color: "primary" },
+    { value: "STAFF", label: t("Nhân viên"), color: "warning" },
+    { value: "PARTNER", label: t("Cộng tác viên"), color: "orange" },
+  ];
+
+  const SETTINGS_TABS: Option[] = [
+    // { value: "general", label: "Thông tin cơ bản" },
+    { value: "config", label: t("Thiết lập cửa hàng") },
+    { value: "bankverified", label: t("Xác thực ngân hàng") },
+    // { value: "collaborator", label: "Cộng tác viên" },
+    // { value: "reward", label: "Điểm thưởng" },
+    // { value: "delivery", label: "Giao hàng" },
+    // { value: "payment", label: "Thanh toán" },
+    // { value: "support", label: "Hỗ trợ" },
+    // { value: "domain", label: "Tên miền" },
+    // { value: "analytics", label: "Phân tích" },
+    // { value: "bank", label: "Cập nhật ngân hàng" },
+    // { value: "credit", label: "Nạp/Rút mPoint" },
+    { value: "subscription", label: t("Gói dịch vụ") },
+    // { value: "notification", label: "Thông báo" },
+    // { value: "global_log", label: "Lịch sử chung" },
+  ];
+
+  const NOTIFICATION_TYPE: Option[] = [
+    { value: "OTHER", label: t("Khác"), color: "warning" },
+    { value: "ACCOUNT", label: t("Tài khoản"), color: "success" },
+    { value: "TRANSACT", label: t("Giao dịch"), color: "success" },
+    { value: "WALLET", label: t("Ngân hàng"), color: "success" },
+    { value: "PRODUCT", label: t("Sản phẩm"), color: "success" },
+    { value: "CONFIG", label: t("Cấu hình"), color: "success" },
+    { value: "WEBSITE", label: t("Trang web"), color: "success" },
+  ];
+  const BANNER_ACTIONS: Option<BannerActionType>[] = [
+    { value: "NORMAL", label: t("Không có"), color: "info" },
+    { value: "WEBSITE", label: t("Trang web"), color: "primary" },
+  ];
+
+  const PAYMENT_METHOD = [
+    { value: "ATM", label: t("NH nội địa(ATM)"), image: "/assets/img/atmpayment.png" },
+    { value: "MPoint", label: t("mPoint"), image: "/assets/img/mPoint.jpg" },
+    ,
+  ];
+
+  const THREAD_CHANNELS: Option<ThreadChannel>[] = [
+    { value: "customer", label: t("khách hàng") },
+    { value: "staff", label: t("nhân viên") },
+  ];
+
+  const THREAD_STATUS_OPTION: Option<ThreadStatus>[] = [
+    {
+      value: "new",
+      label: t("Mở mới"),
+      color: "accent",
+    },
+    {
+      value: "opening",
+      label: t("Đang tương tác"),
+      color: "success",
+    },
+    {
+      value: "closed",
+      label: t("Đã kết thúc"),
+      color: "danger",
+    },
+  ];
+
+  const SUPTICKET_STATUS: Option[] = [
+    {
+      value: "opening",
+      label: t("Mới tạo"),
+      color: "success",
+    },
+    {
+      value: "pending",
+      label: t("Chờ xử lý"),
+      color: "warning",
+    },
+    {
+      value: "processing",
+      label: t("Đang xử lý"),
+      color: "info",
+    },
+    {
+      value: "closed",
+      label: t("Đã đóng"),
+      color: "bluegray",
+    },
+  ];
+  const SUPTICKET_SUBSTATUS: Option[] = [
+    {
+      value: "new",
+      label: t("Mới tạo"),
+      color: "pink",
+    },
+    {
+      value: "reopening",
+      label: t("Mở lại"),
+      color: "danger",
+    },
+    {
+      value: "pending",
+      label: t("Chờ xử lý"),
+      color: "warning",
+    },
+    {
+      value: "considering",
+      label: t("Đang xem xét"),
+      color: "accent",
+    },
+    {
+      value: "assigning",
+      label: t("Đang bàn giao"),
+      color: "warning",
+    },
+    {
+      value: "request_more_info",
+      label: t("Cần thêm thông tin"),
+      color: "teal",
+    },
+    {
+      value: "info_completed",
+      label: t("Đã đủ thông tin"),
+      color: "warning",
+    },
+    {
+      value: "completed",
+      label: t("Hoàn thành"),
+      color: "success",
+    },
+    {
+      value: "canceled",
+      label: t("Đã hủy"),
+      color: "bluegray",
+    },
+  ];
+
+  const GAME_ORDER_STATUS_OPTION = [
+    { value: GameOrderStatusEnum.PENDING, label: t("Chờ xử lý"), color: "warning" },
+    { value: GameOrderStatusEnum.CONTACTING, label: t("Đang liên hệ"), color: "info" },
+    { value: GameOrderStatusEnum.PROCESSING, label: t("Đang xử lý"), color: "info" },
+    { value: GameOrderStatusEnum.CANCELED, label: t("Bị hủy"), color: "danger" },
+    { value: GameOrderStatusEnum.REPORTED, label: t("Bị báo cáo"), color: "danger" },
+    { value: GameOrderStatusEnum.COMPLETED, label: t("Hoàn thành"), color: "success" },
+  ];
+
+  const WALLET_DRAW_STATUS_OPTIONS = [
+    { value: WalletDrawStatusEnum.PENDING, label: t("Chờ duyệt"), color: "warning" },
+    { value: WalletDrawStatusEnum.PROCESSING, label: t("Đang xử lý"), color: "info" },
+    { value: WalletDrawStatusEnum.COMPLETED, label: t("Đã hoàn thành"), color: "success" },
+    { value: WalletDrawStatusEnum.CANCELED, label: t("Đã hủy"), color: "danger" },
+  ];
+
+  const PRE_ORDER = [
+    { value: PreOrder.NO, label: t("Không"), color: "warning" },
+    { value: PreOrder.YES, label: t("Có"), color: "info" },
+  ];
+  const OTHER_INFO_STATUS = [
+    { value: OtherInfoStatus.NEW, label: t("Mới"), color: "warning" },
+    { value: OtherInfoStatus.USED, label: t("Đã sử dụng"), color: "info" },
+  ];
+
+  const ORDER_STATUS_OPTIONS = [
+    { value: OrderStatus.CREATED, label: t("Tạo đơn hàng"), color: "info" },
+    {
+      value: OrderStatus.STATUS_CHANGED,
+      label: t("Thay đổi trạng thái đơn hàng"),
+      color: "warning",
+    },
+    {
+      value: OrderStatus.PAYMENT_UPDATED,
+      label: t("Cập nhật phương thức thanh toán"),
+      color: "purple",
+    },
+    { value: OrderStatus.PAYMENT_CONFIRMED, label: t("Xác nhận thanh toán"), color: "success" },
+    { value: OrderStatus.SHIPPING_STARTED, label: t("Bắt đầu giao hàng"), color: "orange" },
+    { value: OrderStatus.DELIVERED, label: t("Đã giao hàng"), color: "success" },
+    { value: OrderStatus.CANCELLED, label: t("Hủy đơn hàng"), color: "danger" },
+    { value: OrderStatus.PROCESSING, label: t("Đang xử lý đơn hàng"), color: "info" },
+    { value: OrderStatus.ORDER_UPDATED, label: t("Cập nhật đơn hàng"), color: "warning" },
+  ];
+
+  const PAYMENT_STATUS_OPTIONS = [
+    { value: PaymentStatus.PAYMENT_PENDING, label: t("Chờ xác nhận thanh toán"), color: "warning" },
+    { value: PaymentStatus.PAYMENT_SUCCESS, label: t("Thanh toán thành công"), color: "success" },
+    { value: PaymentStatus.PAYMENT_FAILED, label: t("Thanh toán thất bại"), color: "danger" },
+    { value: PaymentStatus.PAYMENT_CANCELLED, label: t("Hủy thanh toán"), color: "bluegray" },
+    { value: PaymentStatus.PAYMENT_REFUNDED, label: t("Đã hoàn tiền"), color: "purple" },
+    {
+      value: PaymentStatus.PAYMENT_PARTIALLY_REFUNDED,
+      label: t("Hoàn tiền một phần"),
+      color: "orange",
+    },
+    { value: PaymentStatus.PAYMENT_TIMEOUT, label: t("Hết thời gian thanh toán"), color: "danger" },
+  ];
+
+  const SHIPPING_PROVIDER_CODE_OPTIONS = [
+    { value: ShippingProviderCodeEnum.GHN, label: t("Giao hàng nhanh") },
+    { value: ShippingProviderCodeEnum.GHTK, label: t("Giao hàng tiết kiệm") },
+    { value: ShippingProviderCodeEnum.VT_POST, label: t("Viettel Post") },
+    { value: ShippingProviderCodeEnum.SPX, label: t("SPX") },
+    { value: ShippingProviderCodeEnum.JT_EXPRESS, label: t("J&T Express") },
+  ];
+
+  const SHIPMENT_STATUS_OPTIONS = [
+    {value:ShipmentStatusEnum.DRAFT,label:t("Bản nháp"),color:"warning"},
+    {value:ShipmentStatusEnum.CREATED,label:t("Đã tạo"),color:"warning"},
+    {value:ShipmentStatusEnum.PICKED ,label:t("Đã lấy hàng"),color:"warning"},
+    {value:ShipmentStatusEnum.SHIPPING ,label:t("Đang giao hàng"),color:"warning"},
+    {value:ShipmentStatusEnum.DELIVERED ,label:t("Đã giao hàng"),color:"warning"},
+    {value:ShipmentStatusEnum.CANCELLED ,label:t("Đã hủy"),color:"warning"},
+    {value:ShipmentStatusEnum.RETURNED ,label:t("Đã trả lại"),color:"warning"},
+    {value:ShipmentStatusEnum.FAILED ,label:t("Đã thất bại"),color:"warning"},
+    
+     
+     
+  ];
+
+  return {
+    TARGETS,
+    TYPE,
+    ACTIVE_STATUS_OPTIONS,
+    COLOR_OPTIONS,
+    PRODUCT_TYPE_OPTIONS,
+    CUSTOMER_STATUS_OPTIONS,
+    GAME_CARD_STATUS_OPTIONS,
+    ORDER_TYPE_OPTIONS,
+    PAYMENT_METHOD_OPTIONS,
+    GAME_CARD_MODE,
+    SHOP_STATUS_OPTIONS,
+    SHOP_REGISTER_STATUS_OPTIONS,
+    SHOP_BANNER_TYPE_OPTIONS,
+    SHOP_BANNER_ACTION_TYPE_OPTIONS,
+    GENDER_OPTIONS,
+    USER_STATUS_OPTIONS,
+    CATEGORY_PROPERTIES_OPTION,
+    SHOP_PRODUCT_TYPE_OPTION,
+    SHOP_PRODUCT_ALLOWSALE_OPTION,
+    BOOLEAN_OPTION,
+    GROUP_TRANSACTION_THREAD_OPTION,
+    GAME_ORDER_RESULT_OPTION,
+    WALLET_TRANSACTION_TYPE_OPTIONS,
+    WALLET_TRANSACTION_SIDE_OPTIONS,
+    WALLET_TRANSACTION_STATUS_OPTIONS,
+    ROLES_OPTIONS,
+    PRODUCT_BUY_SHOP_PRODUCT_STATUS_OPTIONS,
+    SUBSCRIPTION_PLANS,
+    POST_STATUSES,
+    ROLE_GROUP,
+    BANK_VERIFIED_ROLE,
+    PARTNER_GROUP_STATUS_OPTIONS,
+    PARTNER_GROUP_MANAGE_COST_RATE,
+    CUSTOMER_CREDIT_POINT_ACTION,
+    POPUP_NOTIFY_TYPE_OPTIONS,
+    POPUP_NOTIFY_STATUS_OPTIONS,
+    POPUP_NOTIFY_ACTION_TYPE_OPTIONS,
+    UTILITY_TYPE_OPTIONS,
+    MY_UTILITES_ACTION_OPTIONS,
+    DISCOUNT_TYPE_OPTIONS,
+    UTILITY_STATUS_OPTIONS,
+    ROLE_VIEW_OPTIONS,
+    SHOP_VOUCHER_TYPE_OPTIONS,
+    SHOP_VOUCHER_USED_OPTIONS,
+    SHOP_VOUCHER_HAS_OWNER_OPTIONS,
+    INTRODUCE_CUSTOMER_STATUS_OPTIONS,
+    STAR_RATE_OPTIONS,
+    MY_UTILITY_STATUS_OPTIONS,
+    GAME_TYPE_OPTIONS,
+    REPORT_TYPE_OPTIONS,
+    REPORT_STATUS_OPTIONS,
+    LOCALES,
+    STREAM_ALLOWPOST_OPTION,
+    USER_ROLES_OPTION,
+    SETTINGS_TABS,
+    NOTIFICATION_TYPE,
+    BANNER_ACTIONS,
+    PAYMENT_METHOD,
+    THREAD_STATUS_OPTION,
+    THREAD_CHANNELS,
+    SUPTICKET_STATUS,
+    SUPTICKET_SUBSTATUS,
+    AFFILIATE_BOOTH_STATUS_OPTIONS,
+    BUSINESS_TYPE_OPTIONS,
+    AFFILIATE_UNIT_OPTIONS,
+    AFFILIATE_PRODUCT_TYPE_OPTION,
+    AFFILIATE_APPROVAL_STATUS_OPTION,
+    GAME_ORDER_STATUS_OPTION,
+    WALLET_DRAW_STATUS_OPTIONS,
+    PRE_ORDER,
+    OTHER_INFO_STATUS,
+    ORDER_STATUS_OPTIONS,
+    PAYMENT_STATUS_OPTIONS,
+    SHIPPING_PROVIDER_CODE_OPTIONS,
+    SHIPMENT_STATUS_OPTIONS
+  };
+};

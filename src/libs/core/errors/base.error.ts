@@ -1,0 +1,21 @@
+export enum HttpStatusCode {
+  OK = 200,
+  BAD_REQUEST = 400,
+  AUTH = 401,
+  ERROR_REQUEST = 403,
+  NOT_FOUND = 404,
+  INTERNAL_SERVER = 500,
+}
+
+export class BaseError extends Error {
+  constructor(
+    readonly name: string,
+    readonly description = "internal server error",
+    readonly httpCode: HttpStatusCode = 500,
+    readonly isOperational = true
+  ) {
+    super(description);
+    Object.setPrototypeOf(this, new.target.prototype);
+    Error.captureStackTrace(this);
+  }
+}
