@@ -3,11 +3,13 @@ import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
+import { RiSettings4Line } from "react-icons/ri";
 import { Product, ProductService } from "../../../../lib/repo";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
+import { ProductSettingDialog } from "./components/product-setting/product-setting-dialog";
 
 export function ProductPage(props) {
   const { t } = useTranslation();
@@ -21,6 +23,19 @@ export function ProductPage(props) {
       ...(timeRange ? { createdAt: { $gte: timeRange.startDate, $lte: timeRange.endDate } } : {}),
     });
   }, [timeRange]);
+
+  const [isProductSettingDialogOpen, setIsProductSettingDialogOpen] = useState(false);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+
+  const handleOpenProductSettingDialog = (productId: string) => {
+    setSelectedProductId(productId);
+    setIsProductSettingDialogOpen(true);
+  };
+
+  const handleCloseProductSettingDialog = () => {
+    setIsProductSettingDialogOpen(false);
+    setSelectedProductId(null);
+  };
   return (
     <Card>
       <DataTable<Product> crudService={ProductService} filter={filter} order={{ priority: -1 }}>
@@ -120,6 +135,13 @@ export function ProductPage(props) {
                   render={(item: Product) => (
                     <>
                       <DataTable.CellButton
+                        icon={<RiSettings4Line />}
+                        value={item}
+                        disabled={!userPermission("EDIT_PRODUCT")}
+                        tooltip={t("Cấu hình sản phẩm")}
+                        onClick={() => handleOpenProductSettingDialog(item.id)}
+                      />
+                      <DataTable.CellButton
                         value={item}
                         isEditButton
                         disabled={!userPermission("EDIT_PRODUCT")}
@@ -141,6 +163,18 @@ export function ProductPage(props) {
           <ProductField />
         </DataTable.Form>
         <DataTable.Pagination />
+        <DataTable.Consumer>
+          {({ loadAll }) =>
+            !!isProductSettingDialogOpen && (
+              <ProductSettingDialog
+                isOpen={isProductSettingDialogOpen}
+                onClose={() => setIsProductSettingDialogOpen(false)}
+                productId={selectedProductId}
+                loadAll={loadAll}
+              />
+            )
+          }
+        </DataTable.Consumer>
       </DataTable>
     </Card>
   );

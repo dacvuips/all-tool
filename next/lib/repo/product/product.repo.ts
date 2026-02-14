@@ -2,15 +2,15 @@ import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
 export enum PropertyTypeEnum {
-  TEXT = "TEXT",
-  SELECT = "SELECT",
-  MULTI_SELECT = "MULTI_SELECT",
-  BOOLEAN = "BOOLEAN",
-  NUMBER = "NUMBER",
-  RADIO = "RADIO",
-  CHECKBOX = "CHECKBOX",
-  SWITCH = "SWITCH",
-  TEXTAREA = "TEXTAREA",
+  TEXT = "TEXT", // Text
+  SELECT = "SELECT", // Select
+  MULTI_SELECT = "MULTI_SELECT", // Multi select
+  BOOLEAN = "BOOLEAN", // Boolean
+  NUMBER = "NUMBER", // Number
+  TEXTAREA = "TEXTAREA", // Textarea
+  IMAGE = "IMAGE", // Image
+  MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
+  FILE = "FILE", // File
 }
 
 export interface PropertySelectOption {

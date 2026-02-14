@@ -58,13 +58,7 @@ export enum GameCardStatusEnum {
   INACTIVE = "inactive", // chưa kích hoạt
   USED = "used", // đã sử dụng
 }
-export enum PropertyTypeEnum {
-  TEXT = "TEXT", // Text
-  SELECT = "SELECT", // Select
-  MULTI_SELECT = "MULTI_SELECT", // Multi select
-  BOOLEAN = "BOOLEAN", // Boolean
-  NUMBER = "NUMBER", // Number
-}
+
 export enum OrderTypeEnum {
   GAME_CARD = "GAME_CARD", // Mua thẻ game
   M_POINT_CARD = "M_POINT_CARD", // Mua thẻ M-Point

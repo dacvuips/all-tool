@@ -6,12 +6,9 @@ export enum PropertyTypeEnum {
   MULTI_SELECT = "MULTI_SELECT", // Multi select
   BOOLEAN = "BOOLEAN", // Boolean
   NUMBER = "NUMBER", // Number
-  RADIO = "RADIO", // Radio
-  CHECKBOX = "CHECKBOX", // Checkbox
-  SWITCH = "SWITCH", // Switch
-
   TEXTAREA = "TEXTAREA", // Textarea
   IMAGE = "IMAGE", // Image
+  MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
   FILE = "FILE", // File
 }
 
