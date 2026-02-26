@@ -29,6 +29,44 @@ export interface Property {
   options?: PropertySelectOption[];
 }
 
+export interface NodeConfig {
+  provider?: string;
+  endpoint?: string;
+  method?: string;
+  bodyTemplate?: string;
+}
+
+export interface ProductFlowNodeData {
+  label?: string;
+  properties?: Property[];
+  config?: NodeConfig;
+}
+
+export interface FlowNodePosition {
+  x: number;
+  y: number;
+}
+
+export interface ProductFlowNode {
+  id: string;
+  type?: string;
+  position: FlowNodePosition;
+  data: ProductFlowNodeData;
+}
+
+export interface ProductFlowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
+export interface ProductFlow {
+  nodes: ProductFlowNode[];
+  edges: ProductFlowEdge[];
+}
+
 export interface Product extends BaseModel {
   id?: string;
   name?: string;
@@ -40,7 +78,7 @@ export interface Product extends BaseModel {
   slug?: string;
   price?: string;
   priority?: number;
-  properties?: Property[];
+  flow?: ProductFlow;
 }
 
 export class ProductRepository extends CrudRepository<Product> {
@@ -71,17 +109,37 @@ export class ProductRepository extends CrudRepository<Product> {
     slug
     price
     priority
-    properties {
-      type
-      key
-      label
-      placeholder
-      tooltip
-      required
-      clearable
-      options {
-        key
-        label
+    flow {
+      nodes {
+        id
+        type
+        position { x y }
+        data {
+          label
+          properties {
+            type
+            key
+            label
+            placeholder
+            tooltip
+            required
+            clearable
+            options { key label }
+          }
+          config {
+            provider
+            endpoint
+            method
+            bodyTemplate
+          }
+        }
+      }
+      edges {
+        id
+        source
+        target
+        sourceHandle
+        targetHandle
       }
     }
   `);
@@ -99,17 +157,37 @@ export class ProductRepository extends CrudRepository<Product> {
     slug
     price
     priority
-    properties {
-      type
-      key
-      label
-      placeholder
-      tooltip
-      required
-      clearable
-      options {
-        key
-        label
+    flow {
+      nodes {
+        id
+        type
+        position { x y }
+        data {
+          label
+          properties {
+            type
+            key
+            label
+            placeholder
+            tooltip
+            required
+            clearable
+            options { key label }
+          }
+          config {
+            provider
+            endpoint
+            method
+            bodyTemplate
+          }
+        }
+      }
+      edges {
+        id
+        source
+        target
+        sourceHandle
+        targetHandle
       }
     }
   `);

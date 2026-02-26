@@ -24,9 +24,18 @@ import "reactflow/dist/style.css";
 
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { Product, ProductService } from "../../../../lib/repo";
+import {
+  Product,
+  ProductService,
+  ProductFlowNode,
+  ProductFlowEdge,
+} from "../../../../lib/repo";
 import { ProductEdge } from "./components/product-edge";
-import { ProductNode, ProductNodeData } from "./components/product-node";
+import {
+  ProductNode,
+  ProductNodeData,
+  FlowNodeData,
+} from "./components/product-node";
 import {
   ProductSidebar,
   SidebarMode,
@@ -44,7 +53,34 @@ const GAP_Y = 60;
 const ORIGIN_X = 60;
 const ORIGIN_Y = 60;
 
-function buildNodes(
+/** Chuyển product.flow.nodes sang ReactFlow nodes (cho flow của 1 product) */
+function buildFlowNodes(
+  flowNodes: ProductFlowNode[],
+  productId: string,
+  handlers: {
+    onEditNode: (nodeId: string) => void;
+    onSettingsNode: (nodeId: string) => void;
+    onDeleteNode: (nodeId: string) => void;
+  }
+): Node<ProductNodeData>[] {
+  return flowNodes.map((fn) => ({
+    id: fn.id,
+    type: "productNode",
+    position: fn.position || { x: 0, y: 0 },
+    data: {
+      label: fn.data?.label,
+      properties: fn.data?.properties,
+      config: fn.data?.config,
+      nodeId: fn.id,
+      onEditNode: handlers.onEditNode,
+      onSettingsNode: handlers.onSettingsNode,
+      onDeleteNode: handlers.onDeleteNode,
+    } as FlowNodeData,
+  }));
+}
+
+/** Chuyển products list sang ReactFlow nodes (danh sách sản phẩm) */
+function buildProductCardNodes(
   products: Product[],
   handlers: {
     onEdit: (p: Product) => void;
@@ -103,10 +139,48 @@ function saveEdges(edges: Edge[]) {
   localStorage.setItem(FLOW_EDGES_KEY, JSON.stringify(toStore));
 }
 
+/** Chuyển ReactFlow nodes/edges về product.flow format */
+function flowStateToProductFlow(
+  nodes: Node<ProductNodeData>[],
+  edges: Edge[]
+): { nodes: ProductFlowNode[]; edges: ProductFlowEdge[] } {
+  const flowNodes: ProductFlowNode[] = nodes
+    .filter((n) => n.data && "nodeId" in n.data)
+    .map((n) => {
+      const d = n.data as FlowNodeData;
+      return {
+        id: n.id,
+        type: n.type || "productNode",
+        position: n.position,
+        data: {
+          label: d.label,
+          properties: d.properties,
+          config: d.config,
+        },
+      };
+    });
+  const flowEdges: ProductFlowEdge[] = edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    sourceHandle: e.sourceHandle ?? undefined,
+    targetHandle: e.targetHandle ?? undefined,
+  }));
+  return { nodes: flowNodes, edges: flowEdges };
+}
+
 export interface ProductFlowPageProps {
   initialProductId?: string | null;
   onBack?: () => void;
 }
+
+/** Config mặc định cho node mới */
+const DEFAULT_NODE_CONFIG = {
+  provider: "veo3",
+  endpoint: "/generate-video",
+  method: "POST",
+  bodyTemplate: "{ prompt: {{prompt}}, duration: {{duration}} }",
+};
 
 export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlowPageProps = {}) {
   const { t } = useTranslation();
@@ -114,12 +188,16 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   const { userPermission } = useAuth();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
+
+  const isFlowMode = !!initialProductId;
 
   // Sidebar state
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
   // ReactFlow nodes & edges state
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
@@ -128,6 +206,8 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   // Delete confirm
   const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const saveFlowRef = useRef<(() => void) | null>(null);
 
   const loadProducts = useCallback(async () => {
     setLoading(true);
@@ -147,9 +227,67 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     }
   }, [search]);
 
+  const loadProductFlow = useCallback(async (productId: string) => {
+    setLoading(true);
+    try {
+      const product = await ProductService.getOne({
+        id: productId,
+        cache: false,
+      });
+      setCurrentProduct(product || null);
+      if (product?.flow?.nodes?.length || product?.flow?.edges?.length) {
+        const flowNodeHandlers = {
+          onEditNode: (nodeId: string) => {
+            setEditingNodeId(nodeId);
+            setSidebarMode("settings");
+            setSelectedProduct(product);
+          },
+          onSettingsNode: (nodeId: string) => {
+            setEditingNodeId(nodeId);
+            setSidebarMode("settings");
+            setSelectedProduct(product);
+          },
+          onDeleteNode: (nodeId: string) => {
+            setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+            setEdges((prev) =>
+              prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
+            );
+          },
+        };
+        setNodes(
+          buildFlowNodes(
+            product.flow?.nodes || [],
+            productId,
+            flowNodeHandlers
+          )
+        );
+        setEdges(
+          (product.flow?.edges || []).map((e) => ({
+            ...e,
+            type: "productEdge",
+          }))
+        );
+      } else {
+        setNodes([]);
+        setEdges([]);
+      }
+    } catch (err) {
+      toast.error(t("Tải flow sản phẩm thất bại"));
+      setCurrentProduct(null);
+      setNodes([]);
+      setEdges([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    if (isFlowMode && initialProductId) {
+      loadProductFlow(initialProductId);
+    } else {
+      loadProducts();
+    }
+  }, [isFlowMode, initialProductId, loadProductFlow, loadProducts]);
 
   const handleEdit = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -159,6 +297,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   const handleSettings = useCallback((product: Product) => {
     setSelectedProduct(product);
     setSidebarMode("settings");
+    setEditingNodeId(null);
   }, []);
 
   const handleDeleteClick = useCallback((product: Product) => {
@@ -173,7 +312,11 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       toast.success(t("Xóa sản phẩm thành công"));
       setDeleteConfirm(false);
       setDeletingProduct(null);
-      loadProducts();
+      if (isFlowMode && deletingProduct.id === initialProductId) {
+        if (onBack) onBack();
+      } else {
+        loadProducts();
+      }
     } catch (err: any) {
       toast.error(`${t("Xóa thất bại")}: ${err.message}`);
     }
@@ -187,17 +330,43 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
         setProducts((prev) =>
           prev.map((p) => (p.id === product.id ? { ...p, active: res.active } : p))
         );
+        if (currentProduct?.id === product.id) {
+          setCurrentProduct((p) => (p ? { ...p, active: res.active } : null));
+        }
       } catch {
         toast.error(t("Cập trạng thái thất bại"));
       }
     },
-    []
+    [currentProduct?.id]
   );
 
   const handleAdd = useCallback(() => {
     setSelectedProduct(null);
+    setEditingNodeId(null);
     setSidebarMode("create");
   }, []);
+
+  const flowNodeHandlers = useMemo(
+    () => ({
+      onEditNode: (nodeId: string) => {
+        setEditingNodeId(nodeId);
+        setSidebarMode("settings");
+        if (currentProduct) setSelectedProduct(currentProduct);
+      },
+      onSettingsNode: (nodeId: string) => {
+        setEditingNodeId(nodeId);
+        setSidebarMode("settings");
+        if (currentProduct) setSelectedProduct(currentProduct);
+      },
+      onDeleteNode: (nodeId: string) => {
+        setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+        setEdges((prev) =>
+          prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
+        );
+      },
+    }),
+    [currentProduct]
+  );
 
   const handlers = useMemo(
     () => ({
@@ -210,26 +379,50 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     [handleEdit, handleSettings, handleDeleteClick, handleToggleActive, handleAdd]
   );
 
-  // Sync products → nodes
-  useEffect(() => {
-    setNodes(buildNodes(products, handlers));
-  }, [products, handlers]);
+  const saveFlow = useCallback(async () => {
+    if (!initialProductId || !currentProduct) return;
+    const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(
+      nodes,
+      edges
+    );
+    try {
+      await ProductService.createOrUpdate({
+        id: initialProductId,
+        data: { flow: { nodes: flowNodes, edges: flowEdges } },
+      });
+      setCurrentProduct((p) =>
+        p ? { ...p, flow: { nodes: flowNodes, edges: flowEdges } } : null
+      );
+    } catch (err: any) {
+      toast.error(t("Lưu flow thất bại") + ": " + err.message);
+    }
+  }, [initialProductId, currentProduct, nodes, edges, toast, t]);
 
-  // Load stored edges once when products are first loaded
+  useEffect(() => {
+    if (!isFlowMode) return;
+    saveFlowRef.current = saveFlow;
+  }, [isFlowMode, saveFlow]);
+
+  // List mode: sync products → nodes
+  useEffect(() => {
+    if (!isFlowMode) {
+      setNodes(buildProductCardNodes(products, handlers));
+    }
+  }, [isFlowMode, products, handlers]);
+
   const edgesLoadedRef = useRef(false);
   useEffect(() => {
-    if (products.length > 0 && !edgesLoadedRef.current) {
+    if (!isFlowMode && products.length > 0 && !edgesLoadedRef.current) {
       const ids = new Set(products.map((p) => p.id));
       setEdges(loadStoredEdges(ids));
       edgesLoadedRef.current = true;
     }
     if (products.length === 0) edgesLoadedRef.current = false;
-  }, [products.length]);
+  }, [isFlowMode, products.length]);
 
-  // Persist edges when they change (so delete/add connection is saved)
   useEffect(() => {
-    saveEdges(edges);
-  }, [edges]);
+    if (!isFlowMode) saveEdges(edges);
+  }, [isFlowMode, edges]);
 
   const onConnect = useCallback((params: Connection) => {
     setEdges((prev) => {
@@ -248,6 +441,38 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       ];
     });
   }, []);
+
+  const debouncedSaveFlowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!isFlowMode || !initialProductId) return;
+    if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
+    debouncedSaveFlowRef.current = setTimeout(() => {
+      saveFlowRef.current?.();
+      debouncedSaveFlowRef.current = null;
+    }, 800);
+    return () => {
+      if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
+    };
+  }, [isFlowMode, initialProductId, nodes, edges]);
+
+  const handleAddFlowNode = useCallback(() => {
+    const nodeId = `node-${Date.now()}`;
+    const newNode: Node<ProductNodeData> = {
+      id: nodeId,
+      type: "productNode",
+      position: { x: 80 + (nodes.length % 4) * 280, y: 80 + Math.floor(nodes.length / 4) * 180 },
+      data: {
+        label: t("Node mới"),
+        properties: [],
+        config: { ...DEFAULT_NODE_CONFIG },
+        nodeId,
+        onEditNode: flowNodeHandlers.onEditNode,
+        onSettingsNode: flowNodeHandlers.onSettingsNode,
+        onDeleteNode: flowNodeHandlers.onDeleteNode,
+      } as FlowNodeData,
+    };
+    setNodes((prev) => [...prev, newNode]);
+  }, [nodes.length, flowNodeHandlers, t]);
 
   const deleteEdge = useCallback((edgeId: string) => {
     setEdges((prev) => prev.filter((e) => e.id !== edgeId));
@@ -333,12 +558,14 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
               fontSize: "14px",
             }}
           >
-            📦
+            {isFlowMode ? "⚙️" : "📦"}
           </div>
           <span
             style={{ color: "white", fontWeight: 700, fontSize: "15px" }}
           >
-            {t("Quản lý sản phẩm")}
+            {isFlowMode
+              ? (currentProduct?.name || t("Flow sản phẩm"))
+              : t("Quản lý sản phẩm")}
           </span>
           <span
             style={{
@@ -350,7 +577,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
               fontWeight: 600,
             }}
           >
-            {products.length}
+            {isFlowMode ? nodes.length : products.length}
           </span>
         </div>
 
@@ -409,32 +636,58 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
           />
         </button>
 
-        {/* Add button */}
-        {userPermission("CREATE_PRODUCT") && (
-          <button
-            onClick={() => {
-              setSelectedProduct(null);
-              setSidebarMode("create");
-            }}
-            style={{
-              background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-              border: "none",
-              borderRadius: "8px",
-              color: "white",
-              padding: "8px 16px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "13px",
-              fontWeight: 600,
-              boxShadow: "0 2px 12px rgba(79,70,229,0.4)",
-              transition: "all 0.2s",
-            }}
-          >
-            <HiOutlinePlus style={{ fontSize: "16px" }} />
-            {t("Thêm sản phẩm")}
-          </button>
+        {/* Add: flow mode = Thêm node, list mode = Thêm sản phẩm */}
+        {isFlowMode ? (
+          userPermission("EDIT_PRODUCT") && (
+            <button
+              onClick={handleAddFlowNode}
+              style={{
+                background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+                border: "none",
+                borderRadius: "8px",
+                color: "white",
+                padding: "8px 16px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 2px 12px rgba(79,70,229,0.4)",
+                transition: "all 0.2s",
+              }}
+            >
+              <HiOutlinePlus style={{ fontSize: "16px" }} />
+              {t("Thêm node")}
+            </button>
+          )
+        ) : (
+          userPermission("CREATE_PRODUCT") && (
+            <button
+              onClick={() => {
+                setSelectedProduct(null);
+                setSidebarMode("create");
+              }}
+              style={{
+                background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+                border: "none",
+                borderRadius: "8px",
+                color: "white",
+                padding: "8px 16px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                fontSize: "13px",
+                fontWeight: 600,
+                boxShadow: "0 2px 12px rgba(79,70,229,0.4)",
+                transition: "all 0.2s",
+              }}
+            >
+              <HiOutlinePlus style={{ fontSize: "16px" }} />
+              {t("Thêm sản phẩm")}
+            </button>
+          )
         )}
       </div>
 
@@ -461,7 +714,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
           </div>
         )}
 
-        {!loading && products.length === 0 && (
+        {!loading && !isFlowMode && products.length === 0 && (
           <div
             style={{
               position: "absolute",
@@ -501,6 +754,48 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
               >
                 <HiOutlinePlus />
                 {t("Thêm sản phẩm đầu tiên")}
+              </button>
+            )}
+          </div>
+        )}
+
+        {!loading && isFlowMode && currentProduct && nodes.length === 0 && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 10,
+              color: "#4b5563",
+              gap: "12px",
+            }}
+          >
+            <div style={{ fontSize: "48px" }}>⚙️</div>
+            <div style={{ fontSize: "16px", fontWeight: 600, color: "#6b7280" }}>
+              {t("Chưa có node nào. Thêm node để bắt đầu flow.")}
+            </div>
+            {userPermission("EDIT_PRODUCT") && (
+              <button
+                onClick={handleAddFlowNode}
+                style={{
+                  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  border: "none",
+                  borderRadius: "8px",
+                  color: "white",
+                  padding: "10px 20px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <HiOutlinePlus />
+                {t("Thêm node")}
               </button>
             )}
           </div>
@@ -554,8 +849,34 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
         onClose={() => {
           setSidebarMode(null);
           setSelectedProduct(null);
+          setEditingNodeId(null);
         }}
-        onSuccess={loadProducts}
+        onSuccess={() => {
+          if (isFlowMode) {
+            saveFlowRef.current?.();
+          } else {
+            loadProducts();
+          }
+        }}
+        editingNodeId={editingNodeId}
+        selectedNodeData={
+          editingNodeId
+            ? (nodes.find((n) => n.id === editingNodeId)?.data as FlowNodeData | undefined) ?? null
+            : null
+        }
+        onUpdateNode={
+          isFlowMode
+            ? (nodeId, data) => {
+                setNodes((prev) =>
+                  prev.map((n) =>
+                    n.id === nodeId
+                      ? { ...n, data: { ...(n.data as FlowNodeData), ...data } }
+                      : n
+                  )
+                );
+              }
+            : undefined
+        }
       />
 
       {/* ── DELETE CONFIRM OVERLAY ── */}

@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { HiOutlinePencil, HiOutlinePlus, HiOutlineTrash } from "react-icons/hi";
 import { RiSettings4Line } from "react-icons/ri";
 import { Handle, NodeProps, Position } from "reactflow";
-import { Product } from "../../../../../lib/repo";
+import { NodeConfig, Product, ProductFlowNodeData } from "../../../../../lib/repo";
 
-export type ProductNodeData = {
+/** Data khi node là product card (danh sách sản phẩm) */
+export type ProductCardNodeData = {
   product: Product;
   onEdit: (product: Product) => void;
   onSettings: (product: Product) => void;
@@ -14,13 +15,213 @@ export type ProductNodeData = {
   onAdd?: () => void;
 };
 
+/** Data khi node là flow node (trong flow của 1 product: properties + config) */
+export type FlowNodeData = {
+  /** Thông tin node từ product.flow.nodes[].data */
+  label?: string;
+  properties?: ProductFlowNodeData["properties"];
+  config?: NodeConfig;
+  nodeId: string;
+  onEditNode?: (nodeId: string) => void;
+  onSettingsNode?: (nodeId: string) => void;
+  onDeleteNode?: (nodeId: string) => void;
+};
+
+export type ProductNodeData = ProductCardNodeData | FlowNodeData;
+
+function isFlowNodeData(data: ProductNodeData): data is FlowNodeData {
+  return "nodeId" in data && !("product" in data);
+}
+
 export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
   const { t } = useTranslation();
-  const { product, onEdit, onSettings, onDelete, onToggleActive, onAdd } = data;
+
+  // Flow node: hiển thị theo node data (label, config, properties)
+  if (isFlowNodeData(data)) {
+    const { label, config, properties, nodeId, onEditNode, onSettingsNode, onDeleteNode } = data;
+    const displayLabel = label || t("Node");
+    const provider = config?.provider || "-";
+    const endpoint = config?.endpoint || "-";
+    const method = config?.method || "POST";
+    const fieldsCount = properties?.length ?? 0;
+
+    return (
+      <div
+        className="product-node flow-node"
+        style={{
+          background: "#fff",
+          border: "1.5px solid #4f46e5",
+          borderRadius: "12px",
+          minWidth: "220px",
+          maxWidth: "260px",
+          boxShadow: "0 4px 24px rgba(79,70,229,0.25)",
+          overflow: "hidden",
+          fontFamily: "Inter, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
+            padding: "8px 12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: "8px",
+              background: "rgba(255,255,255,0.2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "18px",
+              color: "white",
+            }}
+          >
+            ⚙️
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <div
+              style={{
+                color: "white",
+                fontWeight: 700,
+                fontSize: "13px",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {displayLabel}
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>
+              {provider} · {method} · {fieldsCount} {t("trường")}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "10px 12px" }}>
+          <div
+            style={{
+              color: "#9ca3af",
+              fontSize: "11px",
+              marginBottom: "8px",
+              wordBreak: "break-all",
+            }}
+          >
+            {endpoint}
+          </div>
+          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+            {onEditNode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditNode(nodeId);
+                }}
+                title={t("Chỉnh sửa")}
+                style={{
+                  flex: 1,
+                  background: "rgba(79,70,229,0.15)",
+                  border: "1px solid rgba(79,70,229,0.4)",
+                  borderRadius: "8px",
+                  color: "#818cf8",
+                  padding: "6px 0",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                }}
+              >
+                <HiOutlinePencil />
+              </button>
+            )}
+            {onSettingsNode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSettingsNode(nodeId);
+                }}
+                title={t("Cấu hình")}
+                style={{
+                  flex: 1,
+                  background: "rgba(124,58,237,0.15)",
+                  border: "1px solid rgba(124,58,237,0.4)",
+                  borderRadius: "8px",
+                  color: "#a78bfa",
+                  padding: "6px 0",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                }}
+              >
+                <RiSettings4Line />
+              </button>
+            )}
+            {onDeleteNode && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteNode(nodeId);
+                }}
+                title={t("Xóa")}
+                style={{
+                  flex: 1,
+                  background: "rgba(239,68,68,0.1)",
+                  border: "1px solid rgba(239,68,68,0.3)",
+                  borderRadius: "8px",
+                  color: "#f87171",
+                  padding: "6px 0",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                }}
+              >
+                <HiOutlineTrash />
+              </button>
+            )}
+          </div>
+        </div>
+
+        <Handle
+          type="target"
+          position={Position.Left}
+          style={{
+            width: "10px",
+            height: "10px",
+            background: "#4f46e5",
+            border: "2px solid #818cf8",
+            left: "-5px",
+          }}
+        />
+        <Handle
+          type="source"
+          position={Position.Right}
+          style={{
+            width: "10px",
+            height: "10px",
+            background: "#4f46e5",
+            border: "2px solid #818cf8",
+            right: "-5px",
+          }}
+        />
+      </div>
+    );
+  }
+
+  // Product card: hiển thị theo product (danh sách sản phẩm)
+  const { product, onEdit, onSettings, onDelete, onToggleActive, onAdd } =
+    data as ProductCardNodeData;
 
   return (
     <div
-      className="product-node"
+      className="product-node product-card"
       style={{
         background: "#1a1a2e",
         border: "1.5px solid #4f46e5",
@@ -32,7 +233,6 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
         fontFamily: "Inter, sans-serif",
       }}
     >
-      {/* Header */}
       <div
         style={{
           background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
@@ -95,9 +295,7 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
         </div>
       </div>
 
-      {/* Body */}
       <div style={{ padding: "10px 12px" }}>
-        {/* Status toggle */}
         <div
           style={{
             display: "flex",
@@ -106,18 +304,14 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
             marginBottom: "10px",
           }}
         >
-          <span style={{ color: "#a0aec0", fontSize: "12px" }}>
-            {t("Trạng thái")}
-          </span>
+          <span style={{ color: "#a0aec0", fontSize: "12px" }}>{t("Trạng thái")}</span>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleActive(product);
             }}
             style={{
-              background: product.active
-                ? "linear-gradient(135deg,#22c55e,#16a34a)"
-                : "#374151",
+              background: product.active ? "linear-gradient(135deg,#22c55e,#16a34a)" : "#374151",
               color: "white",
               border: "none",
               borderRadius: "20px",
@@ -132,7 +326,6 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
           </button>
         </div>
 
-        {/* Action Buttons */}
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
           {onAdd && (
             <button
@@ -232,7 +425,6 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
         </div>
       </div>
 
-      {/* Handles for connecting nodes (drag from source to target) */}
       <Handle
         type="target"
         position={Position.Left}

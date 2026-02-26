@@ -28,7 +28,7 @@ const schema = gql`
     slug: String
     price: Float
     priority: Float
-    properties: [PropertyInput]
+    flow: ProductFlowInput
   }
 
   input UpdateProductInput {
@@ -41,7 +41,45 @@ const schema = gql`
     slug: String
     price: Float
     priority: Float
+    flow: ProductFlowInput
+  }
+
+  input NodeConfigInput {
+    provider: String
+    endpoint: String
+    method: String
+    bodyTemplate: String
+  }
+
+  input FlowNodeDataInput {
+    label: String
     properties: [PropertyInput]
+    config: NodeConfigInput
+  }
+
+  input FlowNodePositionInput {
+    x: Float!
+    y: Float!
+  }
+
+  input FlowNodeInput {
+    id: String!
+    type: String
+    position: FlowNodePositionInput!
+    data: FlowNodeDataInput
+  }
+
+  input FlowEdgeInput {
+    id: String!
+    source: String!
+    target: String!
+    sourceHandle: String
+    targetHandle: String
+  }
+
+  input ProductFlowInput {
+    nodes: [FlowNodeInput]
+    edges: [FlowEdgeInput]
   }
 
   input PropertySelectOptionInput {
@@ -75,7 +113,45 @@ const schema = gql`
     slug: String
     price: Float
     priority: Float
+    flow: ProductFlow
+  }
+
+  type NodeConfig {
+    provider: String
+    endpoint: String
+    method: String
+    bodyTemplate: String
+  }
+
+  type FlowNodeData {
+    label: String
     properties: [Property]
+    config: NodeConfig
+  }
+
+  type FlowNodePosition {
+    x: Float
+    y: Float
+  }
+
+  type ProductFlowNode {
+    id: String
+    type: String
+    position: FlowNodePosition
+    data: FlowNodeData
+  }
+
+  type ProductFlowEdge {
+    id: String
+    source: String
+    target: String
+    sourceHandle: String
+    targetHandle: String
+  }
+
+  type ProductFlow {
+    nodes: [ProductFlowNode]
+    edges: [ProductFlowEdge]
   }
 
   type PropertySelectOption {

@@ -5,6 +5,7 @@ import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Product, ProductService } from "../../../../../lib/repo";
 import { Form } from "../../../../shared/utilities/form/form";
 import { ProductField } from "./product-field";
+import type { FlowNodeData } from "./product-node";
 import { ProductSettingForm } from "./product-setting/product-setting-from";
 import { ProductSettingView } from "./product-setting/product-setting-view";
 
@@ -15,6 +16,17 @@ interface ProductSidebarProps {
   product: Product | null;
   onClose: () => void;
   onSuccess: () => void;
+  /** Khi chỉnh cấu hình 1 node trong flow */
+  editingNodeId?: string | null;
+  selectedNodeData?: FlowNodeData | null;
+  onUpdateNode?: (
+    nodeId: string,
+    data: {
+      label?: string;
+      properties?: FlowNodeData["properties"];
+      config?: FlowNodeData["config"];
+    }
+  ) => void;
 }
 
 export function ProductSidebar({
@@ -22,12 +34,16 @@ export function ProductSidebar({
   product,
   onClose,
   onSuccess,
+  editingNodeId,
+  selectedNodeData,
+  onUpdateNode,
 }: ProductSidebarProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
 
   const isOpen = mode !== null;
+  const isEditingNode = mode === "settings" && !!editingNodeId && !!onUpdateNode;
 
   const handleSubmitCreateEdit = async (data: any) => {
     try {
@@ -36,24 +52,33 @@ export function ProductSidebar({
         data,
       });
       toast.success(
-        mode === "edit"
-          ? t("Cập nhật sản phẩm thành công")
-          : t("Tạo sản phẩm thành công")
+        mode === "edit" ? t("Cập nhật sản phẩm thành công") : t("Tạo sản phẩm thành công")
       );
       onSuccess();
       onClose();
     } catch (err: any) {
-      toast.error(
-        `${mode === "edit" ? t("Cập nhật") : t("Tạo")} ${t("thất bại")}: ${err.message}`
-      );
+      toast.error(`${mode === "edit" ? t("Cập nhật") : t("Tạo")} ${t("thất bại")}: ${err.message}`);
     }
   };
 
   const handleSubmitSettings = async (data: any) => {
+    if (isEditingNode && editingNodeId && onUpdateNode) {
+      onUpdateNode(editingNodeId, {
+        label: data.label,
+        properties: data.properties,
+        config: data.config,
+      });
+      toast.success(t("Cập nhật node thành công"));
+      onSuccess();
+      return;
+    }
     try {
       await ProductService.createOrUpdate({
         id: product?.id,
-        data,
+        data: {
+          ...data,
+          flow: product?.flow,
+        },
       });
       toast.success(t("Cấu hình sản phẩm thành công"));
       onSuccess();
@@ -67,6 +92,8 @@ export function ProductSidebar({
       ? t("Tạo sản phẩm")
       : mode === "edit"
       ? t("Chỉnh sửa sản phẩm")
+      : isEditingNode
+      ? t("Cấu hình node")
       : t("Cấu hình sản phẩm");
 
   return (
@@ -117,9 +144,7 @@ export function ProductSidebar({
           }}
         >
           <div>
-            <div style={{ color: "white", fontWeight: 700, fontSize: "16px" }}>
-              {title}
-            </div>
+            <div style={{ color: "white", fontWeight: 700, fontSize: "16px" }}>{title}</div>
             {product && mode !== "create" && (
               <div
                 style={{
@@ -176,7 +201,19 @@ export function ProductSidebar({
 
           {isOpen && mode === "settings" && (
             <Form
-              defaultValues={product}
+              defaultValues={
+                isEditingNode && selectedNodeData
+                  ? {
+                      label: selectedNodeData.label,
+                      properties: selectedNodeData.properties ?? [],
+                      config: selectedNodeData.config ?? {},
+                    }
+                  : {
+                      ...product,
+                      properties: product?.flow?.nodes?.[0]?.data?.properties ?? [],
+                      config: product?.flow?.nodes?.[0]?.data?.config ?? {},
+                    }
+              }
               onSubmit={handleSubmitSettings}
             >
               <div

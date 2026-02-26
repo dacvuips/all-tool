@@ -28,6 +28,53 @@ export type Property = {
   options?: PropertySelectOption[]; // Danh sách option, [{ id: "1", label: "Kim" }]
 };
 
+/** Cấu hình API cho node (provider, endpoint, method, bodyTemplate) */
+export type NodeConfig = {
+  provider?: string;
+  endpoint?: string;
+  method?: string;
+  bodyTemplate?: string;
+};
+
+/** Data lưu trong mỗi node ReactFlow */
+export type ProductFlowNodeData = {
+  /** Tên hiển thị của node */
+  label?: string;
+  /** Thuộc tính form (inputs) của node */
+  properties?: Property[];
+  /** Cấu hình gọi API */
+  config?: NodeConfig;
+};
+
+/** Vị trí node trên canvas */
+export type FlowNodePosition = {
+  x: number;
+  y: number;
+};
+
+/** Một node trong flow (theo cấu trúc ReactFlow) */
+export type ProductFlowNode = {
+  id: string;
+  type?: string;
+  position: FlowNodePosition;
+  data: ProductFlowNodeData;
+};
+
+/** Một edge trong flow (theo cấu trúc ReactFlow) */
+export type ProductFlowEdge = {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+};
+
+/** Toàn bộ flow (nodes + edges) lưu trong 1 product */
+export type ProductFlow = {
+  nodes: ProductFlowNode[];
+  edges: ProductFlowEdge[];
+};
+
 export type IProduct = TimestampEntity & {
   name?: string;
   des?: string;
@@ -38,5 +85,6 @@ export type IProduct = TimestampEntity & {
   slug?: string;
   price?: number;
   priority?: number; // Độ ưu tiên hiển thị
-  properties?: Property[]; // Thuộc tính danh mục
+  /** ReactFlow: nodes và edges trong 1 product */
+  flow?: ProductFlow;
 };

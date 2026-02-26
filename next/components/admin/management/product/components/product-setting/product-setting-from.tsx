@@ -24,7 +24,33 @@ export const ProductSettingForm = () => {
   const { userPermission } = useAuth();
 
   return (
-    <div className="w-full border p-2 rounded-md">
+    <div className="w-full space-y-4">
+      {/* Label node (khi chỉnh node trong flow) */}
+      <Field label={t("Tên hiển thị node")} name="label" cols={12}>
+        <Input placeholder={t("vd: Generate Video")} />
+      </Field>
+
+      {/* Config API (provider, endpoint, method, bodyTemplate) */}
+      <div className="w-full border p-2 rounded-md bg-gray-50/50">
+        <div className="text-sm font-semibold text-gray-700 mb-2">{t("Cấu hình API")}</div>
+        <div className="grid grid-cols-12 gap-x-2 gap-y-2">
+          <Field label={t("Provider")} name="config.provider" cols={6}>
+            <Input placeholder="vd: veo3" />
+          </Field>
+          <Field label={t("Method")} name="config.method" cols={6}>
+            <Input placeholder="POST" />
+          </Field>
+          <Field label={t("Endpoint")} name="config.endpoint" cols={12}>
+            <Input placeholder="/generate-video" />
+          </Field>
+          <Field label={t("Body template")} name="config.bodyTemplate" cols={12}>
+            <Input placeholder="{ prompt: {{prompt}}, duration: {{duration}} }" />
+          </Field>
+        </div>
+      </div>
+
+      <div className="w-full border p-2 rounded-md">
+        <div className="text-sm font-semibold text-gray-700 mb-2">{t("Thuộc tính (properties)")}</div>
       <div className="col-span-12">
         {(fields as (any & { id: string })[])?.map((item, index) => (
           <div
@@ -143,6 +169,7 @@ export const ProductSettingForm = () => {
             </div>
           </Dialog.Body>
         </Dialog>
+      </div>
       </div>
     </div>
   );
