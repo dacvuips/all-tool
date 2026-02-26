@@ -1,22 +1,13 @@
-import { useFormContext } from "react-hook-form";
-
 import { useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { CategoryService } from "../../../../../lib/repo";
 import { VideoDialog } from "../../../../shared/common/video-dialog";
-import {
-  Field,
-  ImageInput,
-  Input,
-  Label,
-  Select,
-  Textarea,
-} from "../../../../shared/utilities/form";
+import { Editor, Field, ImageInput, Input, Label } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 
-export function ProductInfo() {
+export function ProductField() {
   const { t } = useTranslation();
   const { watch } = useFormContext();
   const xs = useScreen("xs");
@@ -24,7 +15,6 @@ export function ProductInfo() {
   const [videoOpen, setVideoOpen] = useState("");
 
   const videoUrl = watch("video");
-  const coverImg = watch("coverImg");
 
   const getYoutubeVideoId = (url?: string): string | null => {
     if (!url) return null;
@@ -49,22 +39,19 @@ export function ProductInfo() {
     : "https://img.youtube.com/vi/hqdefault.jpg";
 
   return (
-    <div className="grid grid-cols-12 gap-x-5">
-      <Field name="imgs" label={t("Hình ảnh sản phẩm")} cols={12} required>
-        <ImageInput multi ratio169 cover readOnly={!userPermission("EDIT_PRODUCT")} />
+    <>
+      <Field name="name" label={t("Tên sản phẩm")} cols={5} required>
+        <Input placeholder={t("Nhập tên sản phẩm")} />
       </Field>
-      <Field
-        name="coverImg"
-        label={t("Hình ảnh bìa")}
-        description={t("Ảnh bìa sẻ xuất hiện đầu tiên và hiển thị ở các trang tìm kiếm ")}
-        cols={12}
-        required
-        className="w-full"
-      >
+      <Field name="coverImg" label={t("Hình ảnh bìa")} cols={5} required className="w-full">
         <ImageInput
           placeholder={t("Nhập link hoặc tải lên")}
           readOnly={!userPermission("EDIT_PRODUCT")}
         />
+      </Field>
+
+      <Field name="price" label={t("Giá sản phẩm")} cols={2}>
+        <Input number placeholder={t("Nhập giá sản phẩm")} />
       </Field>
       <div className="col-span-full gap-2 mb-2 whitespace-nowrap">
         <Label text={t("Video")} />
@@ -101,31 +88,10 @@ export function ProductInfo() {
         onClose={() => setVideoOpen("")}
         isOpen={!!videoOpen}
       ></VideoDialog>
-      <Field name="name" label={t("Tên sản phẩm")} cols={12} required>
-        <Input />
-      </Field>
-      <Field name="categoryId" label={t("Ngành hàng")} cols={12} required>
-        <Select
-          autocompletePromise={(props) =>
-            CategoryService.getAllAutocompletePromise(props, {
-              fragment: "id name",
-              query: {
-                filter: {
-                  active: true,
-                },
-              },
-              parseOption: (data) => ({
-                value: data.id,
-                label: data.name,
-              }),
-            })
-          }
-        />
-      </Field>
+
       <Field name="des" label={t("Mô tả sản phẩm")} cols={12} required>
-        <Textarea maxRows={10} />
+        <Editor minHeight="200px" noBorder className="border rounded-md" maxWidth="none" />
       </Field>
-      {/* <ActionTypeFields /> */}
-    </div>
+    </>
   );
 }

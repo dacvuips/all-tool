@@ -1,80 +1,90 @@
 import { TimestampEntity } from "../../core";
 
-export enum PreOrder {
-  YES = "YES", // Có
-  NO = "NO", // Không
+export enum PropertyTypeEnum {
+  TEXT = "TEXT", // Text
+  SELECT = "SELECT", // Select
+  MULTI_SELECT = "MULTI_SELECT", // Multi select
+  BOOLEAN = "BOOLEAN", // Boolean
+  NUMBER = "NUMBER", // Number
+  TEXTAREA = "TEXTAREA", // Textarea
+  IMAGE = "IMAGE", // Image
+  MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
+  FILE = "FILE", // File
 }
 
-export enum OtherInfoStatus {
-  NEW = "NEW", // MỚI
-  USED = "USED", // Đã sử dụng
-}
+export type PropertySelectOption = {
+  key: string; // Id option
+  label: string; // Nhãn hiển thị
+};
 
-/**
- * Interface cho một tùy chọn phân loại (Ví dụ: "Xanh", "Đỏ", "S", "M")
- */
-export interface ITierOption {
-  code?: string; // Có thể dùng string UUID từ frontend hoặc ObjectId từ Mongo
-  name: string;
-  imageUrl?: string; // URL ảnh (lưu ý: nên upload ảnh lên S3/Cloudinary lấy URL trước khi lưu vào DB)
-}
+export type Property = {
+  type?: PropertyTypeEnum; // Kiểu thuộc tính, SELECT
+  key?: string; // Tên thuộc tính, "Thuộc tính"
+  label?: string; // Nhãn hiển thị, "Thuộc tính"
+  placeholder?: string; // Placeholder, "Chọn thuộc tính"
+  tooltip?: string; // Tooltip, "Chọn thuộc tính"
+  required?: boolean; // Bắt buộc, true
+  clearable?: boolean; // Cho phép xóa, true
+  options?: PropertySelectOption[]; // Danh sách option, [{ id: "1", label: "Kim" }]
+};
 
-/**
- * Interface cho một nhóm phân loại (Ví dụ: "Màu sắc", "Kích thước")
- */
-export interface ITier {
-  code?: string;
-  name: string;
-  options: ITierOption[];
-}
+/** Cấu hình API cho node (provider, endpoint, method, bodyTemplate) */
+export type NodeConfig = {
+  provider?: string;
+  endpoint?: string;
+  method?: string;
+  bodyTemplate?: string;
+};
 
-/**
- * Interface cho một biến thể cụ thể (SKU)
- * Kết hợp giữa các option. Ví dụ: Màu Xanh + Size S
- */
-export interface IVariant {
-  code?: string;
-  sku: string;
-  price: number;
-  stock: number;
+/** Data lưu trong mỗi node ReactFlow */
+export type ProductFlowNodeData = {
+  /** Tên hiển thị của node */
+  label?: string;
+  /** Thuộc tính form (inputs) của node */
+  properties?: Property[];
+  /** Cấu hình gọi API */
+  config?: NodeConfig;
+};
 
-  /**
-   * Mảng chứa ID của các option tạo nên biến thể này.
-   * Ví dụ: [id_cua_mau_xanh, id_cua_size_s]
-   * Thứ tự trong mảng này khớp với thứ tự của mảng `tiers` bên dưới.
-   */
-  optionCodes: string[];
-}
+/** Vị trí node trên canvas */
+export type FlowNodePosition = {
+  x: number;
+  y: number;
+};
+
+/** Một node trong flow (theo cấu trúc ReactFlow) */
+export type ProductFlowNode = {
+  id: string;
+  type?: string;
+  position: FlowNodePosition;
+  data: ProductFlowNodeData;
+};
+
+/** Một edge trong flow (theo cấu trúc ReactFlow) */
+export type ProductFlowEdge = {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+};
+
+/** Toàn bộ flow (nodes + edges) lưu trong 1 product */
+export type ProductFlow = {
+  nodes: ProductFlowNode[];
+  edges: ProductFlowEdge[];
+};
 
 export type IProduct = TimestampEntity & {
   name?: string;
   des?: string;
   video?: string;
   coverImg?: string;
-  imgs?: string[];
   categoryId?: string;
-  categoryProperties?: any; // Thuộc tính danh mục
   active?: boolean;
   slug?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  delivery?: {
-    weight?: number;
-    width?: number;
-    length?: number;
-    height?: number;
-    price?: number;
-  };
-  otherInfo?: {
-    preOrder?: PreOrder;
-    preOrderDay?: number;
-    status: OtherInfoStatus;
-    sku: string;
-  };
-  classification?: {
-    tiers: ITier[]; // Danh sách các nhóm phân loại
-    variants: IVariant[]; // Danh sách các biến thể đã sinh ra
-    originalPrice?: number;
-    totalStock?: number;
-  };
+  price?: number;
+  priority?: number; // Độ ưu tiên hiển thị
+  /** ReactFlow: nodes và edges trong 1 product */
+  flow?: ProductFlow;
 };

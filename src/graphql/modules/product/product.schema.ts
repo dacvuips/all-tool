@@ -1,5 +1,5 @@
 import { gql } from "apollo-server-express";
-import { OtherInfoStatus, PreOrder } from "../../../libs/dal/product/product.interface";
+import { PropertyTypeEnum } from "../../../libs/dal/product/product.interface";
 
 const schema = gql`
   extend type Query {
@@ -23,14 +23,12 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    imgs: [String]
     categoryId: String
-    active:Boolean
+    active: Boolean
     slug: String
-    delivery: DeliveryInput
-    otherInfo: OtherInfoInput
-    categoryProperties: Mixed
-    classification: ClassificationInput
+    price: Float
+    priority: Float
+    flow: ProductFlowInput
   }
 
   input UpdateProductInput {
@@ -38,60 +36,67 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    imgs: [String]
     categoryId: String
-    active:Boolean
+    active: Boolean
     slug: String
-    delivery: DeliveryInput
-    otherInfo: OtherInfoInput
-    categoryProperties: Mixed
-    classification: ClassificationInput
-  }
- 
- 
-
-  input DeliveryInput {
-    weight: Float
-    width: Float
-    length: Float
-    height: Float
     price: Float
+    priority: Float
+    flow: ProductFlowInput
   }
 
-  input OtherInfoInput {
-    """${Object.values(PreOrder).join("|")}"""
-    preOrder: String
-    preOrderDay: Float
-    """${Object.values(OtherInfoStatus).join("|")}"""
-    status: String
-    sku: String
+  input NodeConfigInput {
+    provider: String
+    endpoint: String
+    method: String
+    bodyTemplate: String
   }
 
-  input ClassificationInput {
-    tiers: [TierInput]
-    variants: [VariantInput]
-    originalPrice: Float
-    totalStock: Float
+  input FlowNodeDataInput {
+    label: String
+    properties: [PropertyInput]
+    config: NodeConfigInput
   }
 
-  input TierInput {
-    code: String
-    name: String
-    options: [TierOptionInput]
+  input FlowNodePositionInput {
+    x: Float!
+    y: Float!
   }
 
-  input TierOptionInput {
-    code: String
-    name: String
-    imageUrl: String
+  input FlowNodeInput {
+    id: String!
+    type: String
+    position: FlowNodePositionInput!
+    data: FlowNodeDataInput
   }
 
-  input VariantInput {
-    code: String
-    sku: String
-    price: Float
-    stock: Float
-    optionCodes: [String]
+  input FlowEdgeInput {
+    id: String!
+    source: String!
+    target: String!
+    sourceHandle: String
+    targetHandle: String
+  }
+
+  input ProductFlowInput {
+    nodes: [FlowNodeInput]
+    edges: [FlowEdgeInput]
+  }
+
+  input PropertySelectOptionInput {
+    key: String
+    label: String
+  }
+
+  input PropertyInput {
+    """${Object.values(PropertyTypeEnum).join("|")}"""
+    type: String
+    key: String
+    label: String
+    placeholder: String
+    tooltip: String
+    required: Boolean
+    clearable: Boolean
+    options: [PropertySelectOptionInput]
   }
 
   type Product {
@@ -103,62 +108,68 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    imgs: [String]
     categoryId: String
-    active:Boolean
+    active: Boolean
     slug: String
-    minPrice: Float
-    maxPrice: Float
-    categoryProperties: Mixed
-    delivery: Delivery
-    otherInfo: OtherInfo
-    classification: Classification
-  }
-
-  type Delivery {
-    weight: Float
-    width: Float
-    length: Float
-    height: Float
     price: Float
+    priority: Float
+    flow: ProductFlow
   }
 
-  type OtherInfo {
-    """${Object.values(PreOrder).join("|")}"""
-    preOrder: String
-    preOrderDay: Float
-    """${Object.values(OtherInfoStatus).join("|")}"""
-    status: String
-    sku: String
+  type NodeConfig {
+    provider: String
+    endpoint: String
+    method: String
+    bodyTemplate: String
   }
 
-  type Classification {
-    tiers: [Tier]
-    variants: [Variant]
-    originalPrice: Float
-    totalStock: Float
+  type FlowNodeData {
+    label: String
+    properties: [Property]
+    config: NodeConfig
   }
 
-  type Tier {
-    code: String
-    name: String
-    options: [TierOption]
+  type FlowNodePosition {
+    x: Float
+    y: Float
   }
 
-  type TierOption {
-    code: String
-    name: String
-    imageUrl: String
+  type ProductFlowNode {
+    id: String
+    type: String
+    position: FlowNodePosition
+    data: FlowNodeData
   }
 
-  type Variant {
-    code: String
-    sku: String
-    price: Float
-    stock: Float
-    optionCodes: [String]
+  type ProductFlowEdge {
+    id: String
+    source: String
+    target: String
+    sourceHandle: String
+    targetHandle: String
   }
- 
+
+  type ProductFlow {
+    nodes: [ProductFlowNode]
+    edges: [ProductFlowEdge]
+  }
+
+  type PropertySelectOption {
+    key: String
+    label: String
+  }
+
+  type Property {
+    """${Object.values(PropertyTypeEnum).join("|")}"""
+    type: String
+    key: String
+    label: String
+    placeholder: String
+    tooltip: String
+    required: Boolean
+    clearable: Boolean
+    options: [PropertySelectOption]
+  }
 
   type ProductPageData {
     data: [Product]

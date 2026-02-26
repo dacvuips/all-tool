@@ -5,19 +5,12 @@ import { BaseModel, CrudRepository, GetAllOptions, GetListData, QueryInput } fro
 import { Product } from "../product";
 
 export interface OrderItem {
-  variantId?: string;
-  sku?: string;
   productName: string;
-  variantName?: string;
   thumbnail?: string;
   price: number;
   originalPrice?: number;
   quantity: number;
   subtotal: number;
-  weight?: number;
-  width?: number;
-  length?: number;
-  height?: number;
 }
 
 export interface ShippingAddress {
@@ -205,19 +198,12 @@ export class OrderRepository extends CrudRepository<Order> {
     orderNumber
     status
     items {
-      variantId
-      sku
       productName
-      variantName
       thumbnail
       price
       originalPrice
       quantity
       subtotal
-      weight
-      width
-      length
-      height
     }
     subtotal
     shippingFee
@@ -274,13 +260,7 @@ export class OrderRepository extends CrudRepository<Order> {
     }
     shipmentIds
     product{
-    slug
-    delivery{
-      weight  
-      width 
-      length  
-      height
-      }
+      slug
     }
   `);
 

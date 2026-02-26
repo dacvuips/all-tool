@@ -6,11 +6,8 @@ export type ICart = TimestampEntity & {
   sessionId?: string;
 
   productId: Types.ObjectId | string;
-  variantId?: string;
-  sku?: string;
 
   productName: string;
-  variantName?: string;
 
   thumbnail?: string;
 
@@ -24,7 +21,6 @@ export type ICart = TimestampEntity & {
   };
 
   quantity: number;
-  maxQuantity?: number;
 
   isSelected: boolean;
   isValid: boolean;

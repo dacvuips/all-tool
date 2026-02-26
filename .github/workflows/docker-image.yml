@@ -46,7 +46,7 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache
         env:
-          IMAGE_NAME: "dacvuips/virtual-try-on"
+          IMAGE_NAME: "dacvuips/all-tool"
           FIREBASE_WEB_CONFIG: '{"apiKey":"AIzaSyDqyI36RhRo9iWjs-7QRLPYmBMCuOq_cUk","authDomain":"virtual-try-on-b43f5.firebaseapp.com","projectId":"virtual-try-on-b43f5","storageBucket":"virtual-try-on-b43f5.firebasestorage.app","messagingSenderId":"136275169192","appId":"1:136275169192:web:2d3757063ff7a50dd1979d","measurementId":"G-WVP1GJGPJJ"}'
       - name: Verify
         run: echo ${{ steps.build.outputs.digest }}

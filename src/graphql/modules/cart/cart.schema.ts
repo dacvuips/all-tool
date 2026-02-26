@@ -21,16 +21,12 @@ const schema = gql`
   input AddToCartInput {
     sessionId: String
     productId: String!
-    variantId: String
-    sku: String
     productName: String!
-    variantName: String
     thumbnail: String
     price: Float!
     originalPrice: Float
     promotion: PromotionInput
     quantity: Int!
-    maxQuantity: Int
   }
 
   input UpdateCartItemInput {
@@ -60,11 +56,8 @@ const schema = gql`
     sessionId: String
 
     productId: String
-    variantId: String
-    sku: String
 
     productName: String
-    variantName: String
 
     thumbnail: String
 
@@ -73,7 +66,6 @@ const schema = gql`
     promotion: Promotion
 
     quantity: Int
-    maxQuantity: Int
 
     isSelected: Boolean
     isValid: Boolean

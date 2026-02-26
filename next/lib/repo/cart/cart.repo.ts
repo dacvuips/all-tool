@@ -14,11 +14,8 @@ export interface Cart extends BaseModel {
   sessionId?: string;
 
   productId: string;
-  variantId?: string;
-  sku?: string;
 
   productName: string;
-  variantName?: string;
 
   thumbnail?: string;
 
@@ -27,7 +24,6 @@ export interface Cart extends BaseModel {
   promotion?: Promotion;
 
   quantity: number;
-  maxQuantity?: number;
 
   isSelected: boolean;
   isValid: boolean;
@@ -41,16 +37,12 @@ export interface Cart extends BaseModel {
 export interface AddToCartInput {
   sessionId?: string;
   productId: string;
-  variantId?: string;
-  sku?: string;
   productName: string;
-  variantName?: string;
   thumbnail?: string;
   price: number;
   originalPrice?: number;
   promotion?: Promotion;
   quantity: number;
-  maxQuantity?: number;
 }
 
 export class CartRepository extends CrudRepository<Cart> {
@@ -59,15 +51,11 @@ export class CartRepository extends CrudRepository<Cart> {
   shortFragment: string = this.parseFragment(`
     id
     productId
-    variantId
-    sku
     productName
-    variantName
     thumbnail
     price
     originalPrice
     quantity
-    maxQuantity
     isSelected
     isValid
   `);
@@ -78,10 +66,7 @@ export class CartRepository extends CrudRepository<Cart> {
     customerId
     sessionId
     productId
-    variantId
-    sku
     productName
-    variantName
     thumbnail
     price
     originalPrice
@@ -92,7 +77,6 @@ export class CartRepository extends CrudRepository<Cart> {
       endTime
     }
     quantity
-    maxQuantity
   
     isSelected
     isValid

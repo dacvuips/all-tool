@@ -1,7 +1,8 @@
 import { useTranslation } from "next-i18next";
-import { OrderStatus, OtherInfoStatus, PaymentStatus, PreOrder, ShipmentStatusEnum } from "../repo";
+import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
+import { PropertyTypeEnum } from "../repo/product/product.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
   AffiliateBoothStatus,
@@ -14,7 +15,6 @@ import {
   GameCadMode,
   GameCardStatusEnum,
   GameOrderStatusEnum,
-  GamePropertyEnum,
   GameTypeEnum,
   IntroduceCustomerStatusEnum,
   Locale,
@@ -173,13 +173,15 @@ export const useOptionsTranslation = () => {
     { value: UserStatus.BLOCKED, label: t("Bị khóa"), color: "danger" },
   ];
 
-  const CATEGORY_PROPERTIES_OPTION = [
-    { value: GamePropertyEnum.TEXT, label: t("Chữ") },
-    { value: GamePropertyEnum.NUMBER, label: t("Số") },
-    { value: GamePropertyEnum.BOOLEAN, label: t("Bật/Tắt") },
-
-    { value: GamePropertyEnum.SELECT, label: t("Lựa chọn") },
-    { value: GamePropertyEnum.MULTI_SELECT, label: t("Nhiều lựa chọn") },
+  const PRODUCT_PROPERTY_TYPE_OPTIONS = [
+    { value: PropertyTypeEnum.TEXT, label: t("Chữ") },
+    { value: PropertyTypeEnum.NUMBER, label: t("Số") },
+    { value: PropertyTypeEnum.BOOLEAN, label: t("Bật/Tắt") },
+    { value: PropertyTypeEnum.SELECT, label: t("Lựa chọn") },
+    { value: PropertyTypeEnum.MULTI_SELECT, label: t("Nhiều lựa chọn") },
+    { value: PropertyTypeEnum.TEXTAREA, label: t("Textarea") },
+    { value: PropertyTypeEnum.IMAGE, label: t("Hình ảnh") },
+    { value: PropertyTypeEnum.MUILTI_IMAGE, label: t("Nhiều ảnh") },
   ];
 
   const SHOP_PRODUCT_TYPE_OPTION = [
@@ -637,15 +639,6 @@ export const useOptionsTranslation = () => {
     { value: WalletDrawStatusEnum.CANCELED, label: t("Đã hủy"), color: "danger" },
   ];
 
-  const PRE_ORDER = [
-    { value: PreOrder.NO, label: t("Không"), color: "warning" },
-    { value: PreOrder.YES, label: t("Có"), color: "info" },
-  ];
-  const OTHER_INFO_STATUS = [
-    { value: OtherInfoStatus.NEW, label: t("Mới"), color: "warning" },
-    { value: OtherInfoStatus.USED, label: t("Đã sử dụng"), color: "info" },
-  ];
-
   const ORDER_STATUS_OPTIONS = [
     { value: OrderStatus.CREATED, label: t("Tạo đơn hàng"), color: "info" },
     {
@@ -689,17 +682,14 @@ export const useOptionsTranslation = () => {
   ];
 
   const SHIPMENT_STATUS_OPTIONS = [
-    {value:ShipmentStatusEnum.DRAFT,label:t("Bản nháp"),color:"warning"},
-    {value:ShipmentStatusEnum.CREATED,label:t("Đã tạo"),color:"warning"},
-    {value:ShipmentStatusEnum.PICKED ,label:t("Đã lấy hàng"),color:"warning"},
-    {value:ShipmentStatusEnum.SHIPPING ,label:t("Đang giao hàng"),color:"warning"},
-    {value:ShipmentStatusEnum.DELIVERED ,label:t("Đã giao hàng"),color:"warning"},
-    {value:ShipmentStatusEnum.CANCELLED ,label:t("Đã hủy"),color:"warning"},
-    {value:ShipmentStatusEnum.RETURNED ,label:t("Đã trả lại"),color:"warning"},
-    {value:ShipmentStatusEnum.FAILED ,label:t("Đã thất bại"),color:"warning"},
-    
-     
-     
+    { value: ShipmentStatusEnum.DRAFT, label: t("Bản nháp"), color: "warning" },
+    { value: ShipmentStatusEnum.CREATED, label: t("Đã tạo"), color: "warning" },
+    { value: ShipmentStatusEnum.PICKED, label: t("Đã lấy hàng"), color: "warning" },
+    { value: ShipmentStatusEnum.SHIPPING, label: t("Đang giao hàng"), color: "warning" },
+    { value: ShipmentStatusEnum.DELIVERED, label: t("Đã giao hàng"), color: "warning" },
+    { value: ShipmentStatusEnum.CANCELLED, label: t("Đã hủy"), color: "warning" },
+    { value: ShipmentStatusEnum.RETURNED, label: t("Đã trả lại"), color: "warning" },
+    { value: ShipmentStatusEnum.FAILED, label: t("Đã thất bại"), color: "warning" },
   ];
 
   return {
@@ -719,7 +709,7 @@ export const useOptionsTranslation = () => {
     SHOP_BANNER_ACTION_TYPE_OPTIONS,
     GENDER_OPTIONS,
     USER_STATUS_OPTIONS,
-    CATEGORY_PROPERTIES_OPTION,
+    PRODUCT_PROPERTY_TYPE_OPTIONS,
     SHOP_PRODUCT_TYPE_OPTION,
     SHOP_PRODUCT_ALLOWSALE_OPTION,
     BOOLEAN_OPTION,
@@ -772,11 +762,10 @@ export const useOptionsTranslation = () => {
     AFFILIATE_APPROVAL_STATUS_OPTION,
     GAME_ORDER_STATUS_OPTION,
     WALLET_DRAW_STATUS_OPTIONS,
-    PRE_ORDER,
-    OTHER_INFO_STATUS,
+
     ORDER_STATUS_OPTIONS,
     PAYMENT_STATUS_OPTIONS,
     SHIPPING_PROVIDER_CODE_OPTIONS,
-    SHIPMENT_STATUS_OPTIONS
+    SHIPMENT_STATUS_OPTIONS,
   };
 };

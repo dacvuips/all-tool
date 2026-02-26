@@ -3,12 +3,13 @@ import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
+import { RiSettings4Line } from "react-icons/ri";
 import { Product, ProductService } from "../../../../lib/repo";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
-import { ProductForm } from "./components/product-form";
+import { ProductField } from "./components/product-field";
+import { ProductFlowPage } from "./product-flow-page";
 
 export function ProductPage(props) {
   const { t } = useTranslation();
@@ -17,13 +18,32 @@ export function ProductPage(props) {
   const [filter, setFilter] = useState<any>({});
   const [timeRange, setTimeRange] = useState<any>(null);
 
-  const { PRE_ORDER, OTHER_INFO_STATUS } = useOptionsTranslation();
-
   useEffect(() => {
     setFilter({
       ...(timeRange ? { createdAt: { $gte: timeRange.startDate, $lte: timeRange.endDate } } : {}),
     });
   }, [timeRange]);
+
+  const [showFlowView, setShowFlowView] = useState(false);
+  const [flowProductId, setFlowProductId] = useState<string | null>(null);
+
+  const handleOpenProductFlow = (productId: string) => {
+    setFlowProductId(productId);
+    setShowFlowView(true);
+  };
+
+  if (showFlowView) {
+    return (
+      <ProductFlowPage
+        initialProductId={flowProductId}
+        onBack={() => {
+          setShowFlowView(false);
+          setFlowProductId(null);
+        }}
+      />
+    );
+  }
+
   return (
     <Card>
       <DataTable<Product> crudService={ProductService} filter={filter} order={{ priority: -1 }}>
@@ -123,6 +143,13 @@ export function ProductPage(props) {
                   render={(item: Product) => (
                     <>
                       <DataTable.CellButton
+                        icon={<RiSettings4Line />}
+                        value={item}
+                        disabled={!userPermission("EDIT_PRODUCT")}
+                        tooltip={t("Cấu hình sản phẩm")}
+                        onClick={() => handleOpenProductFlow(item.id)}
+                      />
+                      <DataTable.CellButton
                         value={item}
                         isEditButton
                         disabled={!userPermission("EDIT_PRODUCT")}
@@ -140,8 +167,8 @@ export function ProductPage(props) {
             </>
           )}
         </DataTable.Consumer>
-        <DataTable.Form grid width={900} slideFromBottom="none">
-          <ProductForm />
+        <DataTable.Form grid width={1024} slideFromBottom="none">
+          <ProductField />
         </DataTable.Form>
         <DataTable.Pagination />
       </DataTable>

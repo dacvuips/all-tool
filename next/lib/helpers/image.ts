@@ -74,18 +74,18 @@ export const compressUploadImage = async (
 export function compressImage(image: string, compress?: number): string {
   if (!image) return image;
   const imageUrl = image.toString().trim();
-  if (image.includes("i.imgur.com")) {
-    if (compress && !image.includes(".png")) {
+  if (imageUrl.includes("i.imgur.com")) {
+    if (compress && !imageUrl.includes(".png")) {
       let suffix = "";
       if (compress < 100) suffix = "s";
       else if (compress < 200) suffix = "t";
       else if (compress < 350) suffix = "m";
       else if (compress < 650) suffix = "l";
       else suffix = "h";
-      const dot = image.lastIndexOf(".");
-      return image.trim().slice(0, dot) + suffix + image.trim().slice(dot);
+      const dot = imageUrl.lastIndexOf(".");
+      return imageUrl.slice(0, dot) + suffix + imageUrl.slice(dot);
     } else {
-      return image.trim();
+      return imageUrl;
     }
   } else {
     return `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl)}${

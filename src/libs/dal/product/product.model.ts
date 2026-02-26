@@ -2,9 +2,81 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { IProduct, OtherInfoStatus, PreOrder } from "./product.interface";
+import { IProduct, PropertyTypeEnum } from "./product.interface";
 
 const Schema = mongoose.Schema;
+
+const propertyOptionSchema = new Schema(
+  { key: { type: String }, label: { type: String } },
+  { _id: false }
+);
+
+const propertySchema = new Schema(
+  {
+    type: { type: String, enum: Object.values(PropertyTypeEnum) },
+    key: { type: String },
+    label: { type: String },
+    placeholder: { type: String },
+    tooltip: { type: String },
+    required: { type: Boolean },
+    clearable: { type: Boolean },
+    options: [propertyOptionSchema],
+  },
+  { _id: false }
+);
+
+const nodeConfigSchema = new Schema(
+  {
+    provider: { type: String },
+    endpoint: { type: String },
+    method: { type: String },
+    bodyTemplate: { type: String },
+  },
+  { _id: false }
+);
+
+const flowNodeDataSchema = new Schema(
+  {
+    label: { type: String },
+    properties: [propertySchema],
+    config: nodeConfigSchema,
+  },
+  { _id: false }
+);
+
+const flowNodePositionSchema = new Schema(
+  { x: { type: Number }, y: { type: Number } },
+  { _id: false }
+);
+
+const flowNodeSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    type: { type: String, default: "productNode" },
+    position: { type: flowNodePositionSchema, required: true },
+    data: { type: flowNodeDataSchema, default: () => ({}) },
+  },
+  { _id: false }
+);
+
+const flowEdgeSchema = new Schema(
+  {
+    id: { type: String, required: true },
+    source: { type: String, required: true },
+    target: { type: String, required: true },
+    sourceHandle: { type: String },
+    targetHandle: { type: String },
+  },
+  { _id: false }
+);
+
+const productFlowSchema = new Schema(
+  {
+    nodes: { type: [flowNodeSchema], default: (): unknown[] => [] },
+    edges: { type: [flowEdgeSchema], default: (): unknown[] => [] },
+  },
+  { _id: false }
+);
 
 const productSchema = new Schema(
   {
@@ -12,60 +84,14 @@ const productSchema = new Schema(
     des: { type: String },
     video: { type: String },
     coverImg: { type: String, require: true },
-    imgs: [{ type: String }],
     categoryId: { type: String, ref: "Category", require: true },
-    categoryProperties: {
-      type: Schema.Types.Mixed,
-    },
     slug: { type: String, require: true },
     active: { type: Boolean, default: false },
-    minPrice: { type: Number, default: 0 },
-    maxPrice: { type: Number, default: 0 },
-    delivery: {
-      type: {
-        weight: { type: Number, require: true },
-        width: { type: Number },
-        length: { type: Number },
-        height: { type: Number },
-        price: { type: Number },
-      },
-    },
-    otherInfo: {
-      type: {
-        preOrder: { type: String, enum: Object.values(PreOrder), default: PreOrder.NO },
-        preOrderDay: { type: Number },
-        status: { type: String, enum: Object.values(OtherInfoStatus), required: true },
-        sku: { type: String },
-      },
-    },
-    classification: {
-      type: {
-        originalPrice: { type: Number, default: 0 },
-        totalStock: { type: Number, default: 0 },
-
-        tiers: [
-          {
-            code: { type: String },
-            name: { type: String },
-            options: [
-              {
-                code: { type: String },
-                name: { type: String },
-                imageUrl: { type: String },
-              },
-            ],
-          },
-        ],
-        variants: [
-          {
-            code: { type: String },
-            sku: { type: String },
-            price: { type: Number, default: 0, require: true },
-            stock: { type: Number, default: 0 },
-            optionCodes: [{ type: String }],
-          },
-        ],
-      },
+    price: { type: Number, default: 0 },
+    priority: { type: Number },
+    flow: {
+      type: productFlowSchema,
+      default: (): { nodes: unknown[]; edges: unknown[] } => ({ nodes: [], edges: [] }),
     },
   },
   { timestamps: true }

@@ -7,19 +7,12 @@ import { IOrder, OrderStatusEnum, PaymentStatus } from "./order.interface";
 const Schema = mongoose.Schema;
 
 const orderItemSchema = new Schema({
-  variantId: { type: String },
-  sku: { type: String },
   productName: { type: String, required: true },
-  variantName: { type: String },
   thumbnail: { type: String },
   price: { type: Number, required: true },
   originalPrice: { type: Number },
   quantity: { type: Number, required: true },
   subtotal: { type: Number, required: true },
-  weight: { type: Number },
-  width: { type: Number },
-  length: { type: Number },
-  height: { type: Number },
 });
 
 const shippingAddressSchema = new Schema({
@@ -150,7 +143,6 @@ orderSchema.index({ orderNumber: 1, createdAt: -1 });
 orderSchema.index({ status: 1 });
 orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ orderNumber: "text" }, { weights: { orderNumber: 2 } } as any);
-
 
 // Generate order number before save
 orderSchema.pre("save", async function (next) {

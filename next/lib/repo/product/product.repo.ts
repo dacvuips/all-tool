@@ -1,56 +1,70 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
-export enum PreOrder {
-  YES = "YES", // Có
-  NO = "NO", // Không
+export enum PropertyTypeEnum {
+  TEXT = "TEXT", // Text
+  SELECT = "SELECT", // Select
+  MULTI_SELECT = "MULTI_SELECT", // Multi select
+  BOOLEAN = "BOOLEAN", // Boolean
+  NUMBER = "NUMBER", // Number
+  TEXTAREA = "TEXTAREA", // Textarea
+  IMAGE = "IMAGE", // Image
+  MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
+  FILE = "FILE", // File
 }
 
-export enum OtherInfoStatus {
-  NEW = "NEW", // MỚI
-  USED = "USED", // Đã sử dụng
+export interface PropertySelectOption {
+  key: string;
+  label: string;
 }
 
-export interface ProductDelivery {
-  weight?: number;
-  width?: number;
-  length?: number;
-  height?: number;
-  price?: number;
+export interface Property {
+  type?: PropertyTypeEnum;
+  key?: string;
+  label?: string;
+  placeholder?: string;
+  tooltip?: string;
+  required?: boolean;
+  clearable?: boolean;
+  options?: PropertySelectOption[];
 }
 
-export interface ProductOtherInfo {
-  preOrder?: PreOrder;
-  preOrderDay?: number;
-  status?: OtherInfoStatus;
-  sku?: string;
+export interface NodeConfig {
+  provider?: string;
+  endpoint?: string;
+  method?: string;
+  bodyTemplate?: string;
 }
 
-export interface ProductTierOption {
-  code?: string;
-  name: string;
-  imageUrl?: string;
+export interface ProductFlowNodeData {
+  label?: string;
+  properties?: Property[];
+  config?: NodeConfig;
 }
 
-export interface ProductTier {
-  code?: string;
-  name: string;
-  options: ProductTierOption[];
+export interface FlowNodePosition {
+  x: number;
+  y: number;
 }
 
-export interface ProductVariant {
-  code?: string;
-  sku: string;
-  price: number;
-  stock: number;
-  optionCodes: string[];
+export interface ProductFlowNode {
+  id: string;
+  type?: string;
+  position: FlowNodePosition;
+  data: ProductFlowNodeData;
 }
 
-export interface ProductClassification {
-  tiers?: ProductTier[];
-  variants?: ProductVariant[];
-  originalPrice?: number;
-  totalStock?: number;
+export interface ProductFlowEdge {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
+export interface ProductFlow {
+  nodes: ProductFlowNode[];
+  edges: ProductFlowEdge[];
 }
 
 export interface Product extends BaseModel {
@@ -59,16 +73,12 @@ export interface Product extends BaseModel {
   des?: string;
   video?: string;
   coverImg?: string;
-  imgs?: string[];
   categoryId?: string;
   active?: boolean;
   slug?: string;
-  minPrice?: number;
-  maxPrice?: number;
-  categoryProperties?: any;
-  delivery?: ProductDelivery;
-  otherInfo?: ProductOtherInfo;
-  classification?: ProductClassification;
+  price?: string;
+  priority?: number;
+  flow?: ProductFlow;
 }
 
 export class ProductRepository extends CrudRepository<Product> {
@@ -81,6 +91,7 @@ export class ProductRepository extends CrudRepository<Product> {
 
     name
     des
+    video
     coverImg 
     active
   `);
@@ -93,44 +104,42 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    imgs
     categoryId
     active
     slug
-    minPrice
-    maxPrice
-    categoryProperties
-    delivery {
-      weight
-      width
-      length
-      height
-      price
-    }
-    otherInfo {
-      preOrder
-      preOrderDay
-      status
-      sku
-    }
-    classification {
-      originalPrice 
-      totalStock 
-      tiers {     
-        code 
-        name 
-        options {
-          code 
-          name
-          imageUrl
+    price
+    priority
+    flow {
+      nodes {
+        id
+        type
+        position { x y }
+        data {
+          label
+          properties {
+            type
+            key
+            label
+            placeholder
+            tooltip
+            required
+            clearable
+            options { key label }
+          }
+          config {
+            provider
+            endpoint
+            method
+            bodyTemplate
+          }
         }
       }
-      variants {
-        code
-        sku
-        price
-        stock
-        optionCodes
+      edges {
+        id
+        source
+        target
+        sourceHandle
+        targetHandle
       }
     }
   `);
@@ -143,29 +152,42 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    imgs
     categoryId
     active
     slug
-    categoryProperties
-    classification {
-      originalPrice 
-      totalStock 
-      tiers {     
-        code 
-        name 
-        options {
-          code 
-          name
-          imageUrl
+    price
+    priority
+    flow {
+      nodes {
+        id
+        type
+        position { x y }
+        data {
+          label
+          properties {
+            type
+            key
+            label
+            placeholder
+            tooltip
+            required
+            clearable
+            options { key label }
+          }
+          config {
+            provider
+            endpoint
+            method
+            bodyTemplate
+          }
         }
       }
-      variants {
-        code
-        sku
-        price
-        stock
-        optionCodes
+      edges {
+        id
+        source
+        target
+        sourceHandle
+        targetHandle
       }
     }
   `);
@@ -186,11 +208,7 @@ export class ProductRepository extends CrudRepository<Product> {
         name
         coverImg
         slug
-        minPrice
-        maxPrice
-        classification {
-          originalPrice
-        }
+        price
       `),
       apiName: "getActiveProducts",
     });

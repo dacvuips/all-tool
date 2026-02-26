@@ -12,11 +12,8 @@ const cartSchema = new Schema(
     sessionId: { type: String },
 
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
-    variantId: { type: String },
-    sku: { type: String },
 
     productName: { type: String, required: true },
-    variantName: { type: String },
 
     thumbnail: { type: String },
 
@@ -30,7 +27,6 @@ const cartSchema = new Schema(
     },
 
     quantity: { type: Number, required: true, default: 1 },
-    maxQuantity: { type: Number },
 
     isSelected: { type: Boolean, default: true },
     isValid: { type: Boolean, default: true },
@@ -41,7 +37,7 @@ const cartSchema = new Schema(
   { timestamps: true }
 );
 
-cartSchema.index({ customerId: 1, productId: 1, variantId: 1 });
+cartSchema.index({ customerId: 1, productId: 1 });
 cartSchema.index({ sessionId: 1 });
 cartSchema.index({ customerId: 1, isSelected: 1 });
 

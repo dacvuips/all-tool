@@ -103,11 +103,11 @@ export namespace CreateShippingOrder {
         if (!order) {
           throw new Error("Đơn hàng không tồn tại");
         }
-        if( order.paymentStatus !== PaymentStatus.PAYMENT_SUCCESS) {
+        if (order.paymentStatus !== PaymentStatus.PAYMENT_SUCCESS) {
           throw new Error("Đơn hàng chưa thanh toán");
         }
         const provider = await ShippingProviderModel.findById(shippingProviderId);
-        
+
         // 2. Kiểm tra xem provider có được hỗ trợ không
         if (!ShippingProviderFactory.isSupportedProvider(provider.code)) {
           throw new Error(`Nhà cung cấp ${provider.name} chưa được hỗ trợ`);
@@ -121,7 +121,7 @@ export namespace CreateShippingOrder {
         const shipmentData = {
           orderId: new Types.ObjectId(orderId),
           provider: provider.code,
-          serviceCode: serviceCode ,
+          serviceCode: serviceCode,
           status: ShipmentStatusEnum.DRAFT,
           codAmount: 0,
           shippingFee: order.shippingFee,
@@ -145,16 +145,6 @@ export namespace CreateShippingOrder {
             ward: order.shippingAddress.ward,
             district: order.shippingAddress.district,
             province: order.shippingAddress.province,
-          },
-
-          // Thông tin gói hàng
-          package: {
-            weight: this.calculateTotalWeight(order.items, totalItemsWeight, packageWeight),
-            length: length || order.items[0].length || 1, // Mặc định, có thể tính toán dựa trên sản phẩm
-            width: width || order.items[0].width || 1,
-            height: height || order.items[0].height || 1,
-            itemsCount: order.items.length,
-            description: order.items.map((item) => item.productName).join(", "),
           },
 
           note: note || order.customerNote || "",
@@ -182,27 +172,16 @@ export namespace CreateShippingOrder {
           toDistrict: shipmentData.receiver.district,
           toProvince: shipmentData.receiver.province,
 
-          weight: shipmentData.package.weight,
-          packageWeight: packageWeight || 0, // Khối lượng thùng đóng gói
-          length: shipmentData.package.length,
-          width: shipmentData.package.width,
-          height: shipmentData.package.height,
-
           codAmount: shipmentData.codAmount,
           insuranceValue: shipmentData.insuranceValue,
           serviceCode: serviceCode,
           serviceTypeId: serviceTypeId || 2, // Mặc định: 2 = Hàng nhẹ
           note: shipmentData.note,
-
-          // Map items từ order sang format chung
-          items: order.items.map((item) => ({
-            name: item.productName,
-            code: item.sku || "",
-            quantity: item.quantity,
-            price: item.price,
-            weight: item.weight, // Mặc định 500g/sản phẩm
-            image_url: item.thumbnail || "",
-          })),
+          weight: totalItemsWeight || 0,
+          packageWeight: packageWeight || 0,
+          length: length || 0,
+          width: width || 0,
+          height: height || 0,
         };
 
         // 7. Gọi API nhà cung cấp
@@ -213,7 +192,7 @@ export namespace CreateShippingOrder {
           // Chuẩn bị dữ liệu cập nhật cơ bản
           const updateData: any = {
             trackingCode: result.trackingCode,
-            providerResponse: result.data,  
+            providerResponse: result.data,
             status: ShipmentStatusEnum.CREATED,
           };
 
@@ -251,9 +230,16 @@ export namespace CreateShippingOrder {
           await OrderModel.findByIdAndUpdate(orderId, {
             $set: {
               shipmentId: shipment.id,
-              status: OrderStatusEnum.SHIPPING_STARTED
+              status: OrderStatusEnum.SHIPPING_STARTED,
             },
-            $push: { shipmentIds: shipment._id,orderLogs: { status: OrderStatusEnum.SHIPPING_STARTED,des:"Cửa hàng đã tạo đơn vận chuyển",createdAt: new Date()}   },
+            $push: {
+              shipmentIds: shipment._id,
+              orderLogs: {
+                status: OrderStatusEnum.SHIPPING_STARTED,
+                des: "Cửa hàng đã tạo đơn vận chuyển",
+                createdAt: new Date(),
+              },
+            },
           });
 
           return {
