@@ -9,7 +9,7 @@ import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
-import { ProductSettingDialog } from "./components/product-setting/product-setting-dialog";
+import { ProductFlowPage } from "./product-node";
 
 export function ProductPage(props) {
   const { t } = useTranslation();
@@ -24,18 +24,26 @@ export function ProductPage(props) {
     });
   }, [timeRange]);
 
-  const [isProductSettingDialogOpen, setIsProductSettingDialogOpen] = useState(false);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [showFlowView, setShowFlowView] = useState(false);
+  const [flowProductId, setFlowProductId] = useState<string | null>(null);
 
-  const handleOpenProductSettingDialog = (productId: string) => {
-    setSelectedProductId(productId);
-    setIsProductSettingDialogOpen(true);
+  const handleOpenProductFlow = (productId: string) => {
+    setFlowProductId(productId);
+    setShowFlowView(true);
   };
 
-  const handleCloseProductSettingDialog = () => {
-    setIsProductSettingDialogOpen(false);
-    setSelectedProductId(null);
-  };
+  if (showFlowView) {
+    return (
+      <ProductFlowPage
+        initialProductId={flowProductId}
+        onBack={() => {
+          setShowFlowView(false);
+          setFlowProductId(null);
+        }}
+      />
+    );
+  }
+
   return (
     <Card>
       <DataTable<Product> crudService={ProductService} filter={filter} order={{ priority: -1 }}>
@@ -139,7 +147,7 @@ export function ProductPage(props) {
                         value={item}
                         disabled={!userPermission("EDIT_PRODUCT")}
                         tooltip={t("Cấu hình sản phẩm")}
-                        onClick={() => handleOpenProductSettingDialog(item.id)}
+                        onClick={() => handleOpenProductFlow(item.id)}
                       />
                       <DataTable.CellButton
                         value={item}
@@ -163,18 +171,6 @@ export function ProductPage(props) {
           <ProductField />
         </DataTable.Form>
         <DataTable.Pagination />
-        <DataTable.Consumer>
-          {({ loadAll }) =>
-            !!isProductSettingDialogOpen && (
-              <ProductSettingDialog
-                isOpen={isProductSettingDialogOpen}
-                onClose={() => setIsProductSettingDialogOpen(false)}
-                productId={selectedProductId}
-                loadAll={loadAll}
-              />
-            )
-          }
-        </DataTable.Consumer>
       </DataTable>
     </Card>
   );

@@ -116,6 +116,7 @@ export const ProductSettingForm = () => {
           slideFromBottom="none"
           isOpen={openFieldDialog}
           onClose={() => setOpenFieldDialog(false)}
+          style={{ zIndex: 1100 }}
         >
           <Dialog.Body>
             <Field label={t("Loại")}>
@@ -226,6 +227,7 @@ function SelectFields({ fieldIndex }) {
         onClose={() => {
           setOpenOptionDialog(undefined);
         }}
+        style={{ zIndex: 1100 }}
       >
         <Dialog.Body>
           <Field label={t("Mã lựa chọn")}>
