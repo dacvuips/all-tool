@@ -1,8 +1,9 @@
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { RiPencilLine } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Product, ProductService } from "../../../../../lib/repo";
-import { Label } from "../../../../shared/utilities/form";
 import { Form } from "../../../../shared/utilities/form/form";
 import type { FlowNodeData } from "./product-node";
 import { ProductSettingForm } from "./product-setting/product-setting-from";
@@ -47,7 +48,6 @@ export function ProductSidebar({
   const handleSubmitSettings = async (data: any) => {
     if (isEditingNode && editingNodeId && onUpdateNode) {
       onUpdateNode(editingNodeId, {
-        label: data.label,
         properties: data.properties,
         config: data.config,
       });
@@ -79,6 +79,32 @@ export function ProductSidebar({
       ? t("Cấu hình node")
       : t("Cấu hình sản phẩm");
 
+  const [isEditingLabel, setIsEditingLabel] = useState(false);
+  const [labelEditValue, setLabelEditValue] = useState("");
+  const labelInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingLabel && labelInputRef.current) {
+      labelInputRef.current.focus();
+      labelInputRef.current.select();
+    }
+  }, [isEditingLabel]);
+
+  const displayName = isEditingNode
+    ? isEditingLabel
+      ? labelEditValue
+      : selectedNodeData?.label ?? ""
+    : product?.name ?? "";
+  const handleSaveLabel = () => {
+    if (!isEditingNode || !editingNodeId || !onUpdateNode) return;
+    const trimmed = labelEditValue.trim();
+    if (trimmed !== (selectedNodeData?.label ?? "")) {
+      onUpdateNode(editingNodeId, { label: trimmed });
+      toast.success(t("Đã cập nhật tên node"));
+    }
+    setIsEditingLabel(false);
+  };
+
   return (
     <>
       {/* Backdrop */}
@@ -97,11 +123,54 @@ export function ProductSidebar({
           overflow: "hidden",
         }}
       >
-        {/* Header */}
+        {/* Header: title + tên sản phẩm hoặc tên node (inline edit khi chỉnh node) */}
         <div className="flex flex-shrink-0 justify-between items-center px-4 py-2 bg-gray-100">
-          <div>
-            <Label className="text-lg" text={title} />
-            <div className="text-gray-800">{product?.name}</div>
+          <div className="min-w-0">
+            {isEditingNode && isEditingLabel ? (
+              <input
+                ref={labelInputRef}
+                type="text"
+                value={labelEditValue}
+                onChange={(e) => setLabelEditValue(e.target.value)}
+                onBlur={handleSaveLabel}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    labelInputRef.current?.blur();
+                  }
+                  if (e.key === "Escape") {
+                    setLabelEditValue(selectedNodeData?.label ?? "");
+                    setIsEditingLabel(false);
+                    labelInputRef.current?.blur();
+                  }
+                }}
+                className="px-2 py-1 font-medium text-gray-800 bg-white rounded border border-gray-300 outline-none focus:ring-2 focus:ring-primary focus:border-primary"
+                placeholder={t("Tên node")}
+              />
+            ) : isEditingNode ? (
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setLabelEditValue(selectedNodeData?.label ?? "");
+                  setIsEditingLabel(true);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    setLabelEditValue(selectedNodeData?.label ?? "");
+                    setIsEditingLabel(true);
+                  }
+                }}
+                className="flex gap-1 items-center px-2 py-1 -mx-2 -my-1 font-medium text-gray-800 rounded border border-transparent cursor-text hover:bg-gray-200 hover:border-gray-300 focus:outline-none focus:bg-gray-200 focus:border-gray-300"
+              >
+                <span className="flex-1 min-w-0 truncate">
+                  {displayName || t("Nhấp để đặt tên node")}
+                </span>
+                <RiPencilLine className="flex-shrink-0 w-4 h-4 text-gray-500" aria-hidden />
+              </div>
+            ) : (
+              <div className="text-gray-800">{displayName}</div>
+            )}
           </div>
         </div>
 
@@ -113,7 +182,6 @@ export function ProductSidebar({
               defaultValues={
                 isEditingNode && selectedNodeData
                   ? {
-                      label: selectedNodeData.label,
                       properties: selectedNodeData.properties ?? [],
                       config: selectedNodeData.config ?? {},
                     }

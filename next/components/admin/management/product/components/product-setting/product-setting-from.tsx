@@ -24,15 +24,134 @@ export const ProductSettingForm = () => {
   const { userPermission } = useAuth();
 
   return (
-    <div className="w-full space-y-4">
-      {/* Label node (khi chỉnh node trong flow) */}
-      <Field label={t("Tên hiển thị node")} name="label" cols={12}>
-        <Input placeholder={t("vd: Generate Video")} />
-      </Field>
+    <div className="space-y-4 w-full">
+      <div className="p-2 w-full rounded-md border">
+        <div className="mb-2 text-sm font-semibold text-gray-700">
+          {t("Thuộc tính (properties)")}
+        </div>
+        <div className="col-span-12">
+          {(fields as (any & { id: string })[])?.map((item, index) => (
+            <div
+              className="p-2 -m-1 mb-3 bg-gray-50 rounded-md border border-gray-200"
+              key={item.id + index}
+            >
+              <div className="grid grid-cols-12 gap-x-2">
+                <TypeField type={item.type} fieldIndex={index} />
+                <Field
+                  label={t("Mã dữ liệu")}
+                  name={`${name}.${index}.key`}
+                  validation={{ code: true }}
+                  required
+                  cols={xl ? 2 : sm ? 3 : 6}
+                >
+                  <Input placeholder={t("Nhập mã dữ liệu")} />
+                </Field>
 
+                <Field
+                  label={t("Tên dữ liệu")}
+                  name={`${name}.${index}.label`}
+                  required
+                  cols={xl ? 2 : sm ? 3 : 6}
+                >
+                  <Input placeholder={t("Nhập tên dữ liệu")} />
+                </Field>
+                <Field
+                  label={t("Nội dung")}
+                  name={`${name}.${index}.placeholder`}
+                  cols={xl ? 2 : sm ? 3 : 6}
+                >
+                  <Input placeholder={t("Nhập nội dung...")} />
+                </Field>
+
+                <Field
+                  label={t("Giải thích")}
+                  name={`${name}.${index}.tooltip`}
+                  cols={xl ? 4 : sm ? 3 : 6}
+                >
+                  <Input placeholder={t("Giải thích trường cần nhập")} />
+                </Field>
+
+                {(item.type == PropertyTypeEnum.SELECT ||
+                  item.type == PropertyTypeEnum.MULTI_SELECT ||
+                  item.type == PropertyTypeEnum.TEXT ||
+                  item.type == PropertyTypeEnum.NUMBER) && (
+                  <Field
+                    label={t("Để trống")}
+                    name={`${name}.${index}.clearable`}
+                    cols={xl ? 1 : sm ? 3 : 6}
+                  >
+                    <Switch defaultValue={item.clearable} />
+                  </Field>
+                )}
+                <Field
+                  label={t("Bắt buộc")}
+                  name={`${name}.${index}.required`}
+                  cols={xl ? 1 : sm ? 3 : 6}
+                >
+                  <Switch defaultValue={item.required} />
+                </Field>
+                <Button
+                  className="mt-7"
+                  icon={<HiOutlineTrash />}
+                  outline
+                  hoverDanger
+                  // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
+                  onClick={() => {
+                    remove(index);
+                  }}
+                />
+              </div>
+              {(item.type == PropertyTypeEnum.SELECT ||
+                item.type == PropertyTypeEnum.MULTI_SELECT) && <SelectFields fieldIndex={index} />}
+            </div>
+          ))}
+          <Button
+            accent
+            text={t("Thêm dữ liệu")}
+            icon={<HiPlus />}
+            disabled={!userPermission("EDIT_CATEGORY")}
+            onClick={() => {
+              setOpenFieldDialog(true);
+            }}
+          />
+          <Dialog
+            width={350}
+            title={t("Loại dữ liệu")}
+            slideFromBottom="none"
+            isOpen={openFieldDialog}
+            onClose={() => setOpenFieldDialog(false)}
+            style={{ zIndex: 1100 }}
+          >
+            <Dialog.Body>
+              <Field label={t("Loại")}>
+                <Select
+                  options={PRODUCT_PROPERTY_TYPE_OPTIONS}
+                  value={type}
+                  onChange={setType}
+                  clearable={false}
+                />
+              </Field>
+              <div className="flex justify-end">
+                <Button text={t("Đóng")} onClick={() => setOpenFieldDialog(false)} />
+                <Button
+                  // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
+                  primary
+                  text={t("Thêm dữ liệu")}
+                  onClick={() => {
+                    append({
+                      type,
+                    });
+                    setOpenFieldDialog(false);
+                  }}
+                />
+              </div>
+            </Dialog.Body>
+          </Dialog>
+        </div>
+      </div>
       {/* Config API (provider, endpoint, method, bodyTemplate) */}
-      <div className="w-full border p-2 rounded-md bg-gray-50/50">
-        <div className="text-sm font-semibold text-gray-700 mb-2">{t("Cấu hình API")}</div>
+      <div className="p-2 w-full rounded-md border bg-gray-50/50">
+        <div className="mb-2 text-sm font-semibold text-gray-700">{t("Cấu hình API")}</div>
         <div className="grid grid-cols-12 gap-x-2 gap-y-2">
           <Field label={t("Provider")} name="config.provider" cols={6}>
             <Input placeholder="vd: veo3" />
@@ -47,129 +166,6 @@ export const ProductSettingForm = () => {
             <Input placeholder="{ prompt: {{prompt}}, duration: {{duration}} }" />
           </Field>
         </div>
-      </div>
-
-      <div className="w-full border p-2 rounded-md">
-        <div className="text-sm font-semibold text-gray-700 mb-2">{t("Thuộc tính (properties)")}</div>
-      <div className="col-span-12">
-        {(fields as (any & { id: string })[])?.map((item, index) => (
-          <div
-            className="p-2 -m-1 mb-3 bg-gray-50 rounded-md border border-gray-200"
-            key={item.id + index}
-          >
-            <div className="grid grid-cols-12 gap-x-2">
-              <TypeField type={item.type} fieldIndex={index} />
-              <Field
-                label={t("Mã dữ liệu")}
-                name={`${name}.${index}.key`}
-                validation={{ code: true }}
-                required
-                cols={xl ? 2 : sm ? 3 : 6}
-              >
-                <Input placeholder={t("Nhập mã dữ liệu")} />
-              </Field>
-
-              <Field
-                label={t("Tên dữ liệu")}
-                name={`${name}.${index}.label`}
-                required
-                cols={xl ? 2 : sm ? 3 : 6}
-              >
-                <Input placeholder={t("Nhập tên dữ liệu")} />
-              </Field>
-              <Field
-                label={t("Nội dung")}
-                name={`${name}.${index}.placeholder`}
-                cols={xl ? 2 : sm ? 3 : 6}
-              >
-                <Input placeholder={t("Nhập nội dung...")} />
-              </Field>
-
-              <Field
-                label={t("Giải thích")}
-                name={`${name}.${index}.tooltip`}
-                cols={xl ? 4 : sm ? 3 : 6}
-              >
-                <Input placeholder={t("Giải thích trường cần nhập")} />
-              </Field>
-
-              {(item.type == PropertyTypeEnum.SELECT ||
-                item.type == PropertyTypeEnum.MULTI_SELECT ||
-                item.type == PropertyTypeEnum.TEXT ||
-                item.type == PropertyTypeEnum.NUMBER) && (
-                <Field
-                  label={t("Để trống")}
-                  name={`${name}.${index}.clearable`}
-                  cols={xl ? 1 : sm ? 3 : 6}
-                >
-                  <Switch defaultValue={item.clearable} />
-                </Field>
-              )}
-              <Field
-                label={t("Bắt buộc")}
-                name={`${name}.${index}.required`}
-                cols={xl ? 1 : sm ? 3 : 6}
-              >
-                <Switch defaultValue={item.required} />
-              </Field>
-              <Button
-                className="mt-7"
-                icon={<HiOutlineTrash />}
-                outline
-                hoverDanger
-                // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
-                onClick={() => {
-                  remove(index);
-                }}
-              />
-            </div>
-            {(item.type == PropertyTypeEnum.SELECT ||
-              item.type == PropertyTypeEnum.MULTI_SELECT) && <SelectFields fieldIndex={index} />}
-          </div>
-        ))}
-        <Button
-          accent
-          text={t("Thêm dữ liệu")}
-          icon={<HiPlus />}
-          disabled={!userPermission("EDIT_CATEGORY")}
-          onClick={() => {
-            setOpenFieldDialog(true);
-          }}
-        />
-        <Dialog
-          width={350}
-          title={t("Loại dữ liệu")}
-          slideFromBottom="none"
-          isOpen={openFieldDialog}
-          onClose={() => setOpenFieldDialog(false)}
-          style={{ zIndex: 1100 }}
-        >
-          <Dialog.Body>
-            <Field label={t("Loại")}>
-              <Select
-                options={PRODUCT_PROPERTY_TYPE_OPTIONS}
-                value={type}
-                onChange={setType}
-                clearable={false}
-              />
-            </Field>
-            <div className="flex justify-end">
-              <Button text={t("Đóng")} onClick={() => setOpenFieldDialog(false)} />
-              <Button
-                // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
-                primary
-                text={t("Thêm dữ liệu")}
-                onClick={() => {
-                  append({
-                    type,
-                  });
-                  setOpenFieldDialog(false);
-                }}
-              />
-            </div>
-          </Dialog.Body>
-        </Dialog>
-      </div>
       </div>
     </div>
   );
