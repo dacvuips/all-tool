@@ -1,10 +1,9 @@
 import { useTranslation } from "react-i18next";
-import { HiX } from "react-icons/hi";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Product, ProductService } from "../../../../../lib/repo";
+import { Label } from "../../../../shared/utilities/form";
 import { Form } from "../../../../shared/utilities/form/form";
-import { ProductField } from "./product-field";
 import type { FlowNodeData } from "./product-node";
 import { ProductSettingForm } from "./product-setting/product-setting-from";
 import { ProductSettingView } from "./product-setting/product-setting-view";
@@ -45,22 +44,6 @@ export function ProductSidebar({
   const isOpen = mode !== null;
   const isEditingNode = mode === "settings" && !!editingNodeId && !!onUpdateNode;
 
-  const handleSubmitCreateEdit = async (data: any) => {
-    try {
-      await ProductService.createOrUpdate({
-        id: mode === "edit" ? product?.id : undefined,
-        data,
-      });
-      toast.success(
-        mode === "edit" ? t("Cập nhật sản phẩm thành công") : t("Tạo sản phẩm thành công")
-      );
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      toast.error(`${mode === "edit" ? t("Cập nhật") : t("Tạo")} ${t("thất bại")}: ${err.message}`);
-    }
-  };
-
   const handleSubmitSettings = async (data: any) => {
     if (isEditingNode && editingNodeId && onUpdateNode) {
       onUpdateNode(editingNodeId, {
@@ -100,107 +83,33 @@ export function ProductSidebar({
     <>
       {/* Backdrop */}
       {isOpen && (
-        <div
-          onClick={onClose}
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.45)",
-            zIndex: 1000,
-            backdropFilter: "blur(2px)",
-          }}
-        />
+        <div onClick={onClose} className="fixed inset-0 bg-black/45 z-1000 backdrop-blur-2px" />
       )}
 
       {/* Sidebar panel */}
       <div
+        className={`flex overflow-hidden fixed right-0 top-14 flex-col w-full h-full bg-white border-l  transition-transform ease-in-out transform z-100 duration-350 ${
+          isOpen ? "translate-x-0" : "translate-x-full"
+        }`}
         style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          height: "100vh",
-          width: mode === "settings" ? "880px" : "520px",
-          maxWidth: "95vw",
-          background: "#111827",
-          borderLeft: "1px solid rgba(79,70,229,0.3)",
-          boxShadow: "-8px 0 40px rgba(0,0,0,0.4)",
-          zIndex: 1001,
-          transform: isOpen ? "translateX(0)" : "translateX(100%)",
-          transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1), width 0.3s",
-          display: "flex",
-          flexDirection: "column",
+          width: "70%",
+          height: "calc(100vh - 57px)",
           overflow: "hidden",
         }}
       >
         {/* Header */}
-        <div
-          style={{
-            padding: "16px 20px",
-            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexShrink: 0,
-          }}
-        >
+        <div className="flex flex-shrink-0 justify-between items-center px-4 py-2 bg-gray-100">
           <div>
-            <div style={{ color: "white", fontWeight: 700, fontSize: "16px" }}>{title}</div>
-            {product && mode !== "create" && (
-              <div
-                style={{
-                  color: "rgba(255,255,255,0.7)",
-                  fontSize: "12px",
-                  marginTop: "2px",
-                }}
-              >
-                {product.name}
-              </div>
-            )}
+            <Label className="text-lg" text={title} />
+            <div className="text-gray-800">{product?.name}</div>
           </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.15)",
-              border: "none",
-              borderRadius: "8px",
-              color: "white",
-              padding: "6px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "18px",
-            }}
-          >
-            <HiX />
-          </button>
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflow: "auto", padding: "20px" }}>
-          {isOpen && (mode === "create" || mode === "edit") && (
+        {/* Content: scrollable form + footer cố định dưới */}
+        <div className="flex flex-col flex-1 min-h-0">
+          {isOpen && (
             <Form
-              grid
-              defaultValues={mode === "edit" ? product : {}}
-              onSubmit={handleSubmitCreateEdit}
-            >
-              <ProductField />
-              <Form.Footer
-                className="pb-0 mt-4"
-                cancelText={t("Hủy")}
-                cancelProps={{ onClick: onClose }}
-                submitProps={{
-                  disabled:
-                    mode === "edit"
-                      ? !userPermission("EDIT_PRODUCT")
-                      : !userPermission("CREATE_PRODUCT"),
-                }}
-              />
-            </Form>
-          )}
-
-          {isOpen && mode === "settings" && (
-            <Form
+              className="flex flex-col flex-1 min-h-0"
               defaultValues={
                 isEditingNode && selectedNodeData
                   ? {
@@ -216,24 +125,21 @@ export function ProductSidebar({
               }
               onSubmit={handleSubmitSettings}
             >
-              <div
-                style={{
-                  display: "flex",
-                  gap: "16px",
-                  alignItems: "flex-start",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <ProductSettingForm />
+              <div className="overflow-auto flex-1 p-4 min-h-0">
+                <div className="flex gap-4 items-start">
+                  <div className="flex-1 min-w-0">
+                    <ProductSettingForm />
+                  </div>
+                  <ProductSettingView />
                 </div>
-                <ProductSettingView />
               </div>
-              <Form.Footer
-                className="pb-0 mt-4"
-                cancelText={t("Hủy")}
-                cancelProps={{ onClick: onClose }}
-                submitProps={{ disabled: !userPermission("EDIT_PRODUCT") }}
-              />
+              <div className="flex-shrink-0 px-2 pt-0 pb-1 border-t border-gray-100">
+                <Form.Footer
+                  cancelText={t("Hủy")}
+                  cancelProps={{ onClick: onClose }}
+                  submitProps={{ disabled: !userPermission("EDIT_PRODUCT") }}
+                />
+              </div>
             </Form>
           )}
         </div>

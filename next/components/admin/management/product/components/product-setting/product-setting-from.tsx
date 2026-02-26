@@ -102,7 +102,7 @@ export const ProductSettingForm = () => {
                   name={`${name}.${index}.clearable`}
                   cols={xl ? 1 : sm ? 3 : 6}
                 >
-                  <Switch />
+                  <Switch defaultValue={item.clearable} />
                 </Field>
               )}
               <Field
@@ -110,7 +110,7 @@ export const ProductSettingForm = () => {
                 name={`${name}.${index}.required`}
                 cols={xl ? 1 : sm ? 3 : 6}
               >
-                <Switch />
+                <Switch defaultValue={item.required} />
               </Field>
               <Button
                 className="mt-7"

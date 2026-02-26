@@ -1,12 +1,7 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  HiOutlineArrowLeft,
-  HiOutlinePlus,
-  HiOutlineRefresh,
-  HiOutlineSearch,
-} from "react-icons/hi";
+import { HiOutlineArrowLeft, HiOutlinePlus, HiOutlineRefresh } from "react-icons/hi";
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -14,6 +9,7 @@ import ReactFlow, {
   Controls,
   Edge,
   EdgeTypes,
+  MarkerType,
   MiniMap,
   Node,
   NodeTypes,
@@ -24,22 +20,13 @@ import "reactflow/dist/style.css";
 
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import {
-  Product,
-  ProductService,
-  ProductFlowNode,
-  ProductFlowEdge,
-} from "../../../../lib/repo";
+import { Product, ProductFlowEdge, ProductFlowNode, ProductService } from "../../../../lib/repo";
+import { Button } from "../../../shared/utilities/form";
+import { Spinner } from "../../../shared/utilities/misc";
 import { ProductEdge } from "./components/product-edge";
-import {
-  ProductNode,
-  ProductNodeData,
-  FlowNodeData,
-} from "./components/product-node";
-import {
-  ProductSidebar,
-  SidebarMode,
-} from "./components/product-sidebar";
+import { ProductFlowArrowMarkers } from "./components/product-flow-arrow-markers";
+import { FlowNodeData, ProductNode, ProductNodeData } from "./components/product-node";
+import { ProductSidebar, SidebarMode } from "./components/product-sidebar";
 
 // Register custom node types outside component to prevent re-registration on every render
 const nodeTypes: NodeTypes = { productNode: ProductNode };
@@ -127,6 +114,7 @@ function loadStoredEdges(productIds: Set<string>): Edge[] {
         source: e.source,
         target: e.target,
         type: "productEdge",
+        markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8 },
       }));
   } catch {
     return [];
@@ -249,22 +237,15 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
           },
           onDeleteNode: (nodeId: string) => {
             setNodes((prev) => prev.filter((n) => n.id !== nodeId));
-            setEdges((prev) =>
-              prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
-            );
+            setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
           },
         };
-        setNodes(
-          buildFlowNodes(
-            product.flow?.nodes || [],
-            productId,
-            flowNodeHandlers
-          )
-        );
+        setNodes(buildFlowNodes(product.flow?.nodes || [], productId, flowNodeHandlers));
         setEdges(
           (product.flow?.edges || []).map((e) => ({
             ...e,
             type: "productEdge",
+            markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8 },
           }))
         );
       } else {
@@ -360,9 +341,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       },
       onDeleteNode: (nodeId: string) => {
         setNodes((prev) => prev.filter((n) => n.id !== nodeId));
-        setEdges((prev) =>
-          prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
-        );
+        setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
       },
     }),
     [currentProduct]
@@ -381,18 +360,13 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   const saveFlow = useCallback(async () => {
     if (!initialProductId || !currentProduct) return;
-    const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(
-      nodes,
-      edges
-    );
+    const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(nodes, edges);
     try {
       await ProductService.createOrUpdate({
         id: initialProductId,
         data: { flow: { nodes: flowNodes, edges: flowEdges } },
       });
-      setCurrentProduct((p) =>
-        p ? { ...p, flow: { nodes: flowNodes, edges: flowEdges } } : null
-      );
+      setCurrentProduct((p) => (p ? { ...p, flow: { nodes: flowNodes, edges: flowEdges } } : null));
     } catch (err: any) {
       toast.error(t("Lưu flow thất bại") + ": " + err.message);
     }
@@ -426,9 +400,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   const onConnect = useCallback((params: Connection) => {
     setEdges((prev) => {
-      const exists = prev.some(
-        (e) => e.source === params.source && e.target === params.target
-      );
+      const exists = prev.some((e) => e.source === params.source && e.target === params.target);
       if (exists) return prev;
       return [
         ...prev,
@@ -437,6 +409,8 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
           source: params.source!,
           target: params.target!,
           type: "productEdge",
+          animated: true,
+          markerEnd: { type: MarkerType.ArrowClosed, width: 8, height: 8 },
         },
       ];
     });
@@ -480,9 +454,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   const edgeTypes: EdgeTypes = useMemo(
     () => ({
-      productEdge: (props) => (
-        <ProductEdge {...props} onDelete={deleteEdge} />
-      ),
+      productEdge: (props) => <ProductEdge {...props} onDelete={deleteEdge} />,
     }),
     [deleteEdge]
   );
@@ -497,310 +469,83 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   return (
     <div
+      className="flex overflow-hidden relative flex-col w-full h-full font-sans bg-gray-900 rounded-md"
       style={{
-        width: "100%",
         height: "calc(100vh - 80px)",
-        background: "#0d0d1a",
-        display: "flex",
-        flexDirection: "column",
-        fontFamily: "Inter, sans-serif",
-        position: "relative",
       }}
     >
       {/* ── TOP TOOLBAR ── */}
-      <div
-        style={{
-          height: "56px",
-          background: "#111827",
-          borderBottom: "1px solid rgba(79,70,229,0.25)",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 20px",
-          gap: "12px",
-          flexShrink: 0,
-        }}
-      >
+      <div className="flex gap-3 justify-between items-center px-4 h-14 bg-gray-800 border-b border-gray-700">
         {/* Back button when opened from table */}
         {onBack && (
-          <button
+          <Button
             onClick={onBack}
-            title={t("Quay lại danh sách")}
-            style={{
-              background: "rgba(255,255,255,0.1)",
-              border: "1px solid rgba(255,255,255,0.2)",
-              borderRadius: "8px",
-              color: "white",
-              padding: "6px 10px",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              fontSize: "13px",
-              marginRight: "8px",
-            }}
-          >
-            <HiOutlineArrowLeft style={{ fontSize: "16px" }} />
-            {t("Quay lại")}
-          </button>
+            outline
+            icon={<HiOutlineArrowLeft className="text-lg" />}
+            className="text-sm text-gray-300"
+            text={t("Quay lại")}
+          />
         )}
 
         {/* Title */}
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: "8px",
-              background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "14px",
-            }}
-          >
-            {isFlowMode ? "⚙️" : "📦"}
-          </div>
-          <span
-            style={{ color: "white", fontWeight: 700, fontSize: "15px" }}
-          >
-            {isFlowMode
-              ? (currentProduct?.name || t("Flow sản phẩm"))
-              : t("Quản lý sản phẩm")}
+          <span className="text-lg font-bold text-gray-300">
+            {isFlowMode ? currentProduct?.name || t("Flow sản phẩm") : t("Quản lý sản phẩm")}
           </span>
-          <span
-            style={{
-              background: "rgba(79,70,229,0.2)",
-              color: "#818cf8",
-              borderRadius: "20px",
-              padding: "2px 10px",
-              fontSize: "12px",
-              fontWeight: 600,
-            }}
-          >
+          <span className="px-2 py-1 text-xs font-bold text-blue-500 bg-gray-700 rounded-md">
             {isFlowMode ? nodes.length : products.length}
           </span>
         </div>
 
         <div style={{ flex: 1 }} />
 
-        {/* Search */}
-        <div
-          style={{ position: "relative", display: "flex", alignItems: "center" }}
-        >
-          <HiOutlineSearch
-            style={{
-              position: "absolute",
-              left: "10px",
-              color: "#6b7280",
-              fontSize: "15px",
-            }}
-          />
-          <input
-            placeholder={t("Tìm kiếm sản phẩm...")}
-            onChange={handleSearchChange}
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              borderRadius: "8px",
-              color: "white",
-              padding: "7px 12px 7px 32px",
-              fontSize: "13px",
-              outline: "none",
-              width: "220px",
-            }}
-          />
-        </div>
-
         {/* Refresh */}
-        <button
+        <Button
           onClick={loadProducts}
           disabled={loading}
-          title={t("Tải lại")}
-          style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            borderRadius: "8px",
-            color: "#9ca3af",
-            padding: "7px 10px",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            fontSize: "16px",
-            transition: "all 0.2s",
-          }}
-        >
-          <HiOutlineRefresh
-            style={{
-              animation: loading ? "spin 1s linear infinite" : "none",
-            }}
-          />
-        </button>
+          text={t("Tải lại")}
+          icon={loading ? <Spinner /> : <HiOutlineRefresh className="text-2xl" />}
+        />
 
         {/* Add: flow mode = Thêm node, list mode = Thêm sản phẩm */}
-        {isFlowMode ? (
-          userPermission("EDIT_PRODUCT") && (
-            <button
-              onClick={handleAddFlowNode}
-              style={{
-                background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-                border: "none",
-                borderRadius: "8px",
-                color: "white",
-                padding: "8px 16px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
-                fontWeight: 600,
-                boxShadow: "0 2px 12px rgba(79,70,229,0.4)",
-                transition: "all 0.2s",
-              }}
-            >
-              <HiOutlinePlus style={{ fontSize: "16px" }} />
-              {t("Thêm node")}
-            </button>
-          )
-        ) : (
-          userPermission("CREATE_PRODUCT") && (
-            <button
-              onClick={() => {
-                setSelectedProduct(null);
-                setSidebarMode("create");
-              }}
-              style={{
-                background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-                border: "none",
-                borderRadius: "8px",
-                color: "white",
-                padding: "8px 16px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                fontSize: "13px",
-                fontWeight: 600,
-                boxShadow: "0 2px 12px rgba(79,70,229,0.4)",
-                transition: "all 0.2s",
-              }}
-            >
-              <HiOutlinePlus style={{ fontSize: "16px" }} />
-              {t("Thêm sản phẩm")}
-            </button>
-          )
-        )}
+        {
+          <Button
+            onClick={handleAddFlowNode}
+            primary
+            icon={<HiOutlinePlus />}
+            text={t("Thêm node")}
+          />
+        }
       </div>
 
       {/* ── REACTFLOW CANVAS ── */}
-      <div style={{ flex: 1, position: "relative" }}>
+      <div className="relative flex-1" style={{ flex: 1, position: "relative" }}>
         {loading && products.length === 0 && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10,
-              color: "#6b7280",
-              fontSize: "15px",
-              gap: "10px",
-            }}
-          >
-            <HiOutlineRefresh
-              style={{ animation: "spin 1s linear infinite", fontSize: "20px" }}
-            />
+          <div className="flex absolute inset-0 z-10 gap-2 justify-center items-center text-sm text-gray-500">
+            <HiOutlineRefresh className="text-2xl animate-spin" />
             {t("Đang tải...")}
           </div>
         )}
 
-        {!loading && !isFlowMode && products.length === 0 && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10,
-              color: "#4b5563",
-              gap: "12px",
-            }}
-          >
-            <div style={{ fontSize: "48px" }}>📦</div>
-            <div style={{ fontSize: "16px", fontWeight: 600, color: "#6b7280" }}>
-              {t("Chưa có sản phẩm nào")}
-            </div>
-            {userPermission("CREATE_PRODUCT") && (
-              <button
-                onClick={() => {
-                  setSelectedProduct(null);
-                  setSidebarMode("create");
-                }}
-                style={{
-                  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-                  border: "none",
-                  borderRadius: "8px",
-                  color: "white",
-                  padding: "10px 20px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <HiOutlinePlus />
-                {t("Thêm sản phẩm đầu tiên")}
-              </button>
-            )}
-          </div>
-        )}
-
         {!loading && isFlowMode && currentProduct && nodes.length === 0 && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 10,
-              color: "#4b5563",
-              gap: "12px",
-            }}
-          >
-            <div style={{ fontSize: "48px" }}>⚙️</div>
-            <div style={{ fontSize: "16px", fontWeight: 600, color: "#6b7280" }}>
+          <div className="flex absolute inset-0 z-10 flex-col gap-2 justify-center items-center text-sm text-gray-500">
+            <div className="text-4xl">⚙️</div>
+            <div className="text-lg font-bold text-center text-white">
               {t("Chưa có node nào. Thêm node để bắt đầu flow.")}
             </div>
             {userPermission("EDIT_PRODUCT") && (
-              <button
+              <Button
                 onClick={handleAddFlowNode}
-                style={{
-                  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
-                  border: "none",
-                  borderRadius: "8px",
-                  color: "white",
-                  padding: "10px 20px",
-                  cursor: "pointer",
-                  fontWeight: 600,
-                  fontSize: "14px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <HiOutlinePlus />
-                {t("Thêm node")}
-              </button>
+                primary
+                icon={<HiOutlinePlus />}
+                className="mt-2"
+                text={t("Thêm node")}
+              />
             )}
           </div>
         )}
 
+        <ProductFlowArrowMarkers />
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -808,36 +553,23 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           edgeTypes={edgeTypes}
+          defaultEdgeOptions={{
+            animated: true,
+            markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+          }}
           deleteKeyCode={["Backspace", "Delete"]}
           nodeTypes={nodeTypes}
           fitView
           fitViewOptions={{ padding: 0.2 }}
           minZoom={0.2}
           maxZoom={2}
-          style={{ background: "#0d0d1a" }}
+          className="bg-gray-900"
         >
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={24}
-            size={1}
-            color="rgba(79,70,229,0.25)"
-          />
-          <Controls
-            style={{
-              background: "#1a1a2e",
-              border: "1px solid rgba(79,70,229,0.3)",
-              borderRadius: "10px",
-              overflow: "hidden",
-            }}
-          />
+          <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#fff" />
+          <Controls className="overflow-hidden bg-gray-800 rounded-lg border border-gray-300" />
           <MiniMap
-            style={{
-              background: "#111827",
-              border: "1px solid rgba(79,70,229,0.3)",
-              borderRadius: "10px",
-            }}
-            nodeColor="#4f46e5"
-            maskColor="rgba(0,0,0,0.5)"
+            className="bg-white rounded-lg border border-gray-300 opacity-80"
+            nodeColor="#F2890D"
           />
         </ReactFlow>
       </div>
@@ -869,9 +601,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
             ? (nodeId, data) => {
                 setNodes((prev) =>
                   prev.map((n) =>
-                    n.id === nodeId
-                      ? { ...n, data: { ...(n.data as FlowNodeData), ...data } }
-                      : n
+                    n.id === nodeId ? { ...n, data: { ...(n.data as FlowNodeData), ...data } } : n
                   )
                 );
               }
@@ -881,98 +611,28 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
       {/* ── DELETE CONFIRM OVERLAY ── */}
       {deleteConfirm && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.6)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
-              background: "#1a1a2e",
-              border: "1px solid rgba(239,68,68,0.4)",
-              borderRadius: "16px",
-              padding: "28px",
-              maxWidth: "400px",
-              width: "90%",
-              boxShadow: "0 8px 40px rgba(0,0,0,0.5)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "20px",
-                marginBottom: "8px",
-                textAlign: "center",
-              }}
-            >
-              🗑️
-            </div>
-            <div
-              style={{
-                color: "white",
-                fontWeight: 700,
-                fontSize: "16px",
-                textAlign: "center",
-                marginBottom: "8px",
-              }}
-            >
-              {t("Xóa sản phẩm")}
-            </div>
-            <div
-              style={{
-                color: "#9ca3af",
-                fontSize: "14px",
-                textAlign: "center",
-                marginBottom: "20px",
-              }}
-            >
+        <div className="flex fixed inset-0 justify-center items-center z-2000">
+          <div className="p-4 w-full max-w-md bg-gray-800 rounded-lg border border-red-400 shadow-lg">
+            <div className="mb-2 text-2xl text-center">🗑️</div>
+            <div className="mb-4 text-lg font-bold text-center text-white">{t("Xóa sản phẩm")}</div>
+            <div className="mb-4 text-sm text-center text-gray-500">
               {t("Bạn có chắc muốn xóa sản phẩm")}{" "}
-              <strong style={{ color: "white" }}>
-                {deletingProduct?.name}
-              </strong>
-              ? {t("Hành động này không thể hoàn tác.")}
+              <strong className="text-white">{deletingProduct?.name}</strong>?{" "}
+              {t("Hành động này không thể hoàn tác.")}
             </div>
-            <div
-              style={{ display: "flex", gap: "10px", justifyContent: "center" }}
-            >
-              <button
+            <div className="flex gap-10 justify-center">
+              <Button
                 onClick={() => {
                   setDeleteConfirm(false);
                   setDeletingProduct(null);
                 }}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(255,255,255,0.2)",
-                  background: "transparent",
-                  color: "#9ca3af",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                }}
+                outline
               >
                 {t("Hủy")}
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                style={{
-                  padding: "8px 20px",
-                  borderRadius: "8px",
-                  border: "none",
-                  background: "linear-gradient(135deg, #ef4444, #b91c1c)",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  fontWeight: 600,
-                  boxShadow: "0 2px 12px rgba(239,68,68,0.4)",
-                }}
-              >
+              </Button>
+              <Button onClick={handleDeleteConfirm} danger outline>
                 {t("Xóa")}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -982,6 +642,9 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        @keyframes product-edge-dash {
+          to { stroke-dashoffset: -12; }
         }
         .react-flow__node { cursor: grab; }
         .react-flow__node:active { cursor: grabbing; }

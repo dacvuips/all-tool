@@ -1,11 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { HiOutlineTrash } from "react-icons/hi";
-import {
-  BaseEdge,
-  EdgeLabelRenderer,
-  EdgeProps,
-  getSmoothStepPath,
-} from "reactflow";
+import { BaseEdge, EdgeLabelRenderer, EdgeProps, getBezierPath } from "reactflow";
+import { Button } from "../../../../shared/utilities/form/button";
 
 interface ProductEdgeProps extends EdgeProps {
   onDelete?: (edgeId: string) => void;
@@ -25,7 +21,7 @@ export function ProductEdge({
 }: ProductEdgeProps) {
   const { t } = useTranslation();
   const onDelete = onDeleteProp ?? (data?.onDelete as ((edgeId: string) => void) | undefined);
-  const [edgePath, labelX, labelY] = getSmoothStepPath({
+  const [edgePath, labelX, labelY] = getBezierPath({
     sourceX,
     sourceY,
     targetX,
@@ -34,13 +30,17 @@ export function ProductEdge({
     targetPosition,
   });
 
+  const strokeColor = selected ? "#F2890D" : "#C26E0B";
+  const markerId = selected ? "product-flow-arrow-selected" : "product-flow-arrow";
+
   return (
     <>
       <BaseEdge
         id={id}
         path={edgePath}
+        markerEnd={`url(#${markerId})`}
         style={{
-          stroke: selected ? "#818cf8" : "#4f46e5",
+          stroke: strokeColor,
           strokeWidth: selected ? 3 : 2,
         }}
       />
@@ -54,27 +54,13 @@ export function ProductEdge({
               pointerEvents: "all",
             }}
           >
-            <button
-              type="button"
+            <Button
+              icon={<HiOutlineTrash />}
               onClick={() => onDelete(id)}
-              title={t("Xóa liên kết")}
-              style={{
-                width: "24px",
-                height: "24px",
-                borderRadius: "50%",
-                border: "none",
-                background: "rgba(239,68,68,0.9)",
-                color: "white",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "12px",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-              }}
-            >
-              <HiOutlineTrash />
-            </button>
+              tooltip={t("Xóa liên kết")}
+              hoverDanger
+              className="w-7 h-7 text-white rounded-full bg-danger"
+            />
           </div>
         </EdgeLabelRenderer>
       )}

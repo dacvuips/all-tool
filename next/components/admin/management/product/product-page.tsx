@@ -9,7 +9,7 @@ import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
-import { ProductFlowPage } from "./product-node";
+import { ProductFlowPage } from "./product-flow-page";
 
 export function ProductPage(props) {
   const { t } = useTranslation();

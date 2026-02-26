@@ -4,6 +4,7 @@ import { HiOutlinePencil, HiOutlinePlus, HiOutlineTrash } from "react-icons/hi";
 import { RiSettings4Line } from "react-icons/ri";
 import { Handle, NodeProps, Position } from "reactflow";
 import { NodeConfig, Product, ProductFlowNodeData } from "../../../../../lib/repo";
+import { Button } from "../../../../shared/utilities/form";
 
 /** Data khi node là product card (danh sách sản phẩm) */
 export type ProductCardNodeData = {
@@ -22,8 +23,7 @@ export type FlowNodeData = {
   properties?: ProductFlowNodeData["properties"];
   config?: NodeConfig;
   nodeId: string;
-  onEditNode?: (nodeId: string) => void;
-  onSettingsNode?: (nodeId: string) => void;
+  onEditNode: (nodeId: string) => void;
   onDeleteNode?: (nodeId: string) => void;
 };
 
@@ -38,7 +38,7 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
 
   // Flow node: hiển thị theo node data (label, config, properties)
   if (isFlowNodeData(data)) {
-    const { label, config, properties, nodeId, onEditNode, onSettingsNode, onDeleteNode } = data;
+    const { label, config, properties, nodeId, onEditNode, onDeleteNode } = data;
     const displayLabel = label || t("Node");
     const provider = config?.provider || "-";
     const endpoint = config?.endpoint || "-";
@@ -59,132 +59,47 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
           fontFamily: "Inter, sans-serif",
         }}
       >
-        <div
-          style={{
-            background: "linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)",
-            padding: "8px 12px",
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "8px",
-              background: "rgba(255,255,255,0.2)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "18px",
-              color: "white",
-            }}
-          >
-            ⚙️
-          </div>
+        <div className="flex flex-row gap-2 items-center p-2 border-b border-gray-200 border-dashed last:border-b-0">
           <div style={{ flex: 1, overflow: "hidden" }}>
-            <div
-              style={{
-                color: "white",
-                fontWeight: 700,
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-            >
+            <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
               {displayLabel}
             </div>
-            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: "11px" }}>
+            <div className="text-xs text-gray-500">
               {provider} · {method} · {fieldsCount} {t("trường")}
             </div>
           </div>
         </div>
 
-        <div style={{ padding: "10px 12px" }}>
-          <div
-            style={{
-              color: "#9ca3af",
-              fontSize: "11px",
-              marginBottom: "8px",
-              wordBreak: "break-all",
-            }}
-          >
-            {endpoint}
-          </div>
-          <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        <div className="p-2">
+          <div className="mb-2 text-xs text-gray-500 word-break-all">{endpoint}</div>
+          <div className="flex flex-row gap-2">
             {onEditNode && (
-              <button
+              <Button
+                icon={<HiOutlinePencil />}
                 onClick={(e) => {
                   e.stopPropagation();
                   onEditNode(nodeId);
                 }}
-                title={t("Chỉnh sửa")}
-                style={{
-                  flex: 1,
-                  background: "rgba(79,70,229,0.15)",
-                  border: "1px solid rgba(79,70,229,0.4)",
-                  borderRadius: "8px",
-                  color: "#818cf8",
-                  padding: "6px 0",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                }}
-              >
-                <HiOutlinePencil />
-              </button>
+                tooltip={t("Chỉnh sửa")}
+                textPrimary
+                outline
+                className="w-full rounded-lg bg-primary-light hover:bg-primary hover:text-white"
+              />
             )}
-            {onSettingsNode && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSettingsNode(nodeId);
-                }}
-                title={t("Cấu hình")}
-                style={{
-                  flex: 1,
-                  background: "rgba(124,58,237,0.15)",
-                  border: "1px solid rgba(124,58,237,0.4)",
-                  borderRadius: "8px",
-                  color: "#a78bfa",
-                  padding: "6px 0",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                }}
-              >
-                <RiSettings4Line />
-              </button>
-            )}
+
             {onDeleteNode && (
-              <button
+              <Button
+                icon={<HiOutlineTrash />}
                 onClick={(e) => {
                   e.stopPropagation();
                   onDeleteNode(nodeId);
                 }}
-                title={t("Xóa")}
-                style={{
-                  flex: 1,
-                  background: "rgba(239,68,68,0.1)",
-                  border: "1px solid rgba(239,68,68,0.3)",
-                  borderRadius: "8px",
-                  color: "#f87171",
-                  padding: "6px 0",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "14px",
-                }}
-              >
-                <HiOutlineTrash />
-              </button>
+                tooltip={t("Xóa")}
+                hoverDanger
+                textDanger
+                outline
+                className="rounded-lg bg-danger-light"
+              />
             )}
           </div>
         </div>
@@ -376,52 +291,23 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
           >
             <HiOutlinePencil />
           </button>
-          <button
+          <Button
             onClick={(e) => {
               e.stopPropagation();
               onSettings(product);
             }}
-            title={t("Cấu hình")}
-            style={{
-              flex: 1,
-              background: "rgba(124,58,237,0.15)",
-              border: "1px solid rgba(124,58,237,0.4)",
-              borderRadius: "8px",
-              color: "#a78bfa",
-              padding: "6px 0",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "14px",
-              transition: "all 0.2s",
-            }}
-          >
-            <RiSettings4Line />
-          </button>
-          <button
+            text={t("Cấu hình")}
+            icon={<RiSettings4Line />}
+          />
+          <Button
+            icon={<HiOutlineTrash />}
+            hoverDanger
             onClick={(e) => {
               e.stopPropagation();
               onDelete(product);
             }}
-            title={t("Xóa")}
-            style={{
-              flex: 1,
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: "8px",
-              color: "#f87171",
-              padding: "6px 0",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "14px",
-              transition: "all 0.2s",
-            }}
-          >
-            <HiOutlineTrash />
-          </button>
+            text={t("Xóa")}
+          />
         </div>
       </div>
 
