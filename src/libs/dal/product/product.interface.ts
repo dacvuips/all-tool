@@ -28,12 +28,33 @@ export type Property = {
   options?: PropertySelectOption[]; // Danh sách option, [{ id: "1", label: "Kim" }]
 };
 
-/** Cấu hình API cho node (provider, endpoint, method, bodyTemplate) */
+/** Loại output từ API (ảnh, video, file) */
+export enum ApiOutputTypeEnum {
+  IMAGE = "IMAGE",
+  VIDEO = "VIDEO",
+  FILE = "FILE",
+  AUDIO = "AUDIO",
+}
+
+export type ApiOutputType = ApiOutputTypeEnum;
+
+/** Cấu hình API cho node - gọi API tạo ảnh/video/file từ các nền tảng AI */
 export type NodeConfig = {
+  /** Loại output: ảnh, video, file, audio */
+  outputType?: ApiOutputType;
+  /** Provider/nền tảng: openai, google, replicate, runway, stability, custom... */
   provider?: string;
+  /** Model: dall-e-3, veo3, flux, ... (phụ thuộc provider + outputType) */
+  model?: string;
+  /** Base URL (optional, override cho custom API) */
+  baseUrl?: string;
   endpoint?: string;
   method?: string;
+  /** Header bổ sung (JSON string hoặc key-value) */
+  headers?: string;
   bodyTemplate?: string;
+  /** Đường dẫn lấy URL kết quả từ response, VD: data.url, result.media[0].url */
+  responsePath?: string;
 };
 
 /** Data lưu trong mỗi node ReactFlow */

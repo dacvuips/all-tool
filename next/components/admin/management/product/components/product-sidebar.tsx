@@ -70,15 +70,6 @@ export function ProductSidebar({
     }
   };
 
-  const title =
-    mode === "create"
-      ? t("Tạo sản phẩm")
-      : mode === "edit"
-      ? t("Chỉnh sửa sản phẩm")
-      : isEditingNode
-      ? t("Cấu hình node")
-      : t("Cấu hình sản phẩm");
-
   const [isEditingLabel, setIsEditingLabel] = useState(false);
   const [labelEditValue, setLabelEditValue] = useState("");
   const labelInputRef = useRef<HTMLInputElement>(null);

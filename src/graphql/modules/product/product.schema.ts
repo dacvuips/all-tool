@@ -45,10 +45,15 @@ const schema = gql`
   }
 
   input NodeConfigInput {
+    outputType: String
     provider: String
+    model: String
+    baseUrl: String
     endpoint: String
     method: String
+    headers: String
     bodyTemplate: String
+    responsePath: String
   }
 
   input FlowNodeDataInput {
@@ -117,10 +122,15 @@ const schema = gql`
   }
 
   type NodeConfig {
+    outputType: String
     provider: String
+    model: String
+    baseUrl: String
     endpoint: String
     method: String
+    headers: String
     bodyTemplate: String
+    responsePath: String
   }
 
   type FlowNodeData {

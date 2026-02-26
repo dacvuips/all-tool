@@ -1,13 +1,19 @@
-import { useEffect, useState } from "react";
-import { useFieldArray, useFormContext } from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
+import {
+  API_OUTPUT_TYPES,
+  API_PROVIDERS,
+  getModelsForProviderAndOutput,
+  type ApiOutputTypeValue,
+} from "../../../../../../lib/constants/api-config.const";
 import { useOptionsTranslation } from "../../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../../lib/providers/auth-provider";
 import { PropertyTypeEnum } from "../../../../../../lib/repo";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
-import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
+import { Button, Field, Input, Select, Switch, Textarea } from "../../../../../shared/utilities/form";
 
 export const ProductSettingForm = () => {
   const { t } = useTranslation();
@@ -149,27 +155,136 @@ export const ProductSettingForm = () => {
           </Dialog>
         </div>
       </div>
-      {/* Config API (provider, endpoint, method, bodyTemplate) */}
-      <div className="p-2 w-full rounded-md border bg-gray-50/50">
-        <div className="mb-2 text-sm font-semibold text-gray-700">{t("Cấu hình API")}</div>
-        <div className="grid grid-cols-12 gap-x-2 gap-y-2">
-          <Field label={t("Provider")} name="config.provider" cols={6}>
-            <Input placeholder="vd: veo3" />
-          </Field>
-          <Field label={t("Method")} name="config.method" cols={6}>
-            <Input placeholder="POST" />
-          </Field>
-          <Field label={t("Endpoint")} name="config.endpoint" cols={12}>
-            <Input placeholder="/generate-video" />
-          </Field>
-          <Field label={t("Body template")} name="config.bodyTemplate" cols={12}>
-            <Input placeholder="{ prompt: {{prompt}}, duration: {{duration}} }" />
-          </Field>
-        </div>
-      </div>
+      {/* Cấu hình API: ảnh, video, file từ các nền tảng AI */}
+      <ApiConfigSection />
     </div>
   );
 };
+
+/** Form cấu hình gọi API tạo ảnh / video / file từ các nền tảng AI (OpenAI, Google, Replicate, Runway, ...) */
+function ApiConfigSection() {
+  const { t } = useTranslation();
+  const { setValue } = useFormContext();
+  const outputType = useWatch({ name: "config.outputType" }) as ApiOutputTypeValue | undefined;
+  const provider = useWatch({ name: "config.provider" }) as string | undefined;
+  const modelValue = useWatch({ name: "config.model" }) as string | undefined;
+
+  const outputTypeOptions = useMemo(
+    () => API_OUTPUT_TYPES.map((x) => ({ value: x.value, label: t(x.label) || x.label })),
+    [t]
+  );
+  const providerOptions = useMemo(
+    () => API_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+    []
+  );
+  const modelOptions = useMemo(() => {
+    if (!provider || !outputType || provider === "custom") return [];
+    return getModelsForProviderAndOutput(provider, outputType as ApiOutputTypeValue).map((m) => ({
+      value: m.value,
+      label: m.label,
+    }));
+  }, [provider, outputType]);
+
+  const selectedProviderMeta = useMemo(
+    () => API_PROVIDERS.find((p) => p.value === provider),
+    [provider]
+  );
+  const selectedModelMeta = useMemo(() => {
+    if (!selectedProviderMeta || !outputType) return null;
+    const list = selectedProviderMeta.models[outputType as ApiOutputTypeValue];
+    return list?.find((m) => m.value === modelValue);
+  }, [selectedProviderMeta, outputType, modelValue]);
+
+  useEffect(() => {
+    if (provider === "custom" || !outputType) return;
+    const models = getModelsForProviderAndOutput(provider, outputType as ApiOutputTypeValue);
+    if (models.length > 0) {
+      const stillValid = modelValue && models.some((m) => m.value === modelValue);
+      if (!stillValid) setValue("config.model", models[0].value, { shouldValidate: false });
+    }
+  }, [provider, outputType, modelValue, setValue]);
+
+  return (
+    <div className="p-4 w-full rounded-lg border border-gray-200 bg-gray-50/50">
+      <div className="mb-3 text-sm font-semibold text-gray-800">{t("Cấu hình API (ảnh / video / file)")}</div>
+      <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+        <Field label={t("Loại output")} name="config.outputType" cols={6} required>
+          <Select
+            options={outputTypeOptions}
+            placeholder={t("Chọn loại: Ảnh, Video, File...")}
+            clearable={false}
+          />
+        </Field>
+        <Field label={t("Provider")} name="config.provider" cols={6}>
+          <Select
+            options={providerOptions}
+            placeholder={t("VD: OpenAI, Google, Replicate...")}
+          />
+        </Field>
+        <Field label={t("Model")} name="config.model" cols={12}>
+          {provider === "custom" ? (
+            <Input placeholder={t("VD: my-custom-model")} />
+          ) : (
+            <Select
+              options={modelOptions}
+              placeholder={
+                modelOptions.length
+                  ? t("Chọn model")
+                  : t("Chọn Provider và Loại output trước")
+              }
+            />
+          )}
+        </Field>
+        <Field label={t("Base URL")} name="config.baseUrl" cols={12}>
+          <Input
+            placeholder={
+              selectedProviderMeta?.baseUrlHint ?? "https://api.example.com/v1"
+            }
+          />
+        </Field>
+        <Field label={t("Method")} name="config.method" cols={4}>
+          <Select
+            options={[
+              { value: "POST", label: "POST" },
+              { value: "GET", label: "GET" },
+              { value: "PUT", label: "PUT" },
+              { value: "PATCH", label: "PATCH" },
+            ]}
+            placeholder="POST"
+          />
+        </Field>
+        <Field label={t("Endpoint")} name="config.endpoint" cols={8}>
+          <Input
+            placeholder={
+              selectedModelMeta?.endpointHint ?? "/generate-image"
+            }
+          />
+        </Field>
+        <Field label={t("Headers (JSON)")} name="config.headers" cols={12}>
+          <Textarea
+            placeholder='{ "Authorization": "Bearer {{apiKey}}", "Content-Type": "application/json" }'
+            rows={2}
+            className="font-mono text-sm"
+          />
+        </Field>
+        <Field label={t("Body template (JSON)")} name="config.bodyTemplate" cols={12}>
+          <Textarea
+            placeholder='{ "prompt": "{{prompt}}", "model": "{{model}}", "size": "1024x1024" }'
+            rows={4}
+            className="font-mono text-sm"
+          />
+        </Field>
+        <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
+          <Input
+            placeholder={
+              selectedModelMeta?.responsePathHint ?? "data[0].url hoặc result.media[0].url"
+            }
+          />
+        </Field>
+      </div>
+    </div>
+  );
+}
 
 function TypeField({ type, fieldIndex }) {
   const { t } = useTranslation();

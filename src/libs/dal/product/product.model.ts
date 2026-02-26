@@ -27,10 +27,15 @@ const propertySchema = new Schema(
 
 const nodeConfigSchema = new Schema(
   {
+    outputType: { type: String },
     provider: { type: String },
+    model: { type: String },
+    baseUrl: { type: String },
     endpoint: { type: String },
     method: { type: String },
+    headers: { type: String },
     bodyTemplate: { type: String },
+    responsePath: { type: String },
   },
   { _id: false }
 );
