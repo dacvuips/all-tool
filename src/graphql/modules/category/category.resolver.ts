@@ -1,3 +1,4 @@
+import _ from "lodash";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { categoryService } from "../../../libs/dal/category";
@@ -13,10 +14,10 @@ const Query = {
     const { id } = args;
     return await categoryService.findOne({ _id: id });
   },
-  // getAllCategoryActive: async (root: any, args: any, context: Context) => {
-  //   _.set(args, "q.filter.active", true);
-  //   return categoryService.fetch(args.q);
-  // },
+  getAllCategoryActive: async (root: any, args: any, context: Context) => {
+    _.set(args, "q.filter.active", true);
+    return categoryService.fetch(args.q);
+  },
 };
 
 const Mutation = {

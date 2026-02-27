@@ -4,6 +4,8 @@ import {
   RiAddLine,
   RiArrowDownSFill,
   RiArrowRightSLine,
+  RiCheckboxCircleFill,
+  RiCloseCircleLine,
   RiDragMove2Line,
   RiEdit2Line,
 } from "react-icons/ri";
@@ -141,6 +143,25 @@ export function CategoryTree({
     [categories, disabled, onRefresh]
   );
 
+  const handleToggleActive = useCallback(
+    async (node: Category) => {
+      if (disabled) return;
+      setUpdating(true);
+      try {
+        await CategoryService.update({
+          id: node.id,
+          data: { active: node.active === true ? false : true },
+        });
+        onRefresh();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setUpdating(false);
+      }
+    },
+    [disabled, onRefresh]
+  );
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex justify-between items-center p-3 bg-gray-50 rounded-t-lg border-b border-gray-200">
@@ -172,9 +193,11 @@ export function CategoryTree({
             draggedId={draggedId}
             dropTargetId={dropTargetId}
             disabled={disabled}
+            updating={updating}
             onToggleExpand={toggleExpand}
             onSelect={onSelect}
             onAddChild={onAddChild}
+            onToggleActive={handleToggleActive}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
             onDragOver={handleDragOver}
@@ -227,9 +250,11 @@ interface CategoryTreeNodesProps {
   draggedId: string | null;
   dropTargetId: string | null;
   disabled?: boolean;
+  updating?: boolean;
   onToggleExpand: (id: string) => void;
   onSelect: (category: Category | null) => void;
   onAddChild: (parent: Category | null) => void;
+  onToggleActive: (node: Category) => void;
   onDragStart: (e: React.DragEvent, node: Category) => void;
   onDragEnd: () => void;
   onDragOver: (e: React.DragEvent, target: Category) => void;
@@ -246,9 +271,11 @@ function CategoryTreeNodes({
   draggedId,
   dropTargetId,
   disabled,
+  updating,
   onToggleExpand,
   onSelect,
   onAddChild,
+  onToggleActive,
   onDragStart,
   onDragEnd,
   onDragOver,
@@ -267,6 +294,7 @@ function CategoryTreeNodes({
         const isDragging = draggedId === node.id;
         const isDropTarget = dropTargetId === node.id;
         const isLast = index === nodes.length - 1;
+        const isActive = node.active !== false;
 
         return (
           <div key={node.id} className="relative select-none">
@@ -304,7 +332,7 @@ function CategoryTreeNodes({
               onDrop={(e) => onDrop(e, node)}
               className={`group flex items-center gap-1 py-1.5 px-2 rounded-lg border transition-colors ${
                 isSelected ? "bg-primary-light border-primary" : "border-transparent"
-              } ${isDragging ? "opacity-50" : ""} ${
+              } ${!isActive ? "opacity-70" : ""} ${isDragging ? "opacity-50" : ""} ${
                 isDropTarget ? "ring-2 ring-primary bg-primary-light" : ""
               }`}
               style={{ paddingLeft: `${12 + level * 20}px` }}
@@ -344,7 +372,32 @@ function CategoryTreeNodes({
                   >
                     {node.name || t("(Chưa đặt tên)")}
                   </button>
+                  <span
+                    className={`flex-shrink-0 text-xs px-1.5 py-0.5 rounded ${
+                      isActive
+                        ? "bg-green-100 text-green-700"
+                        : "bg-gray-200 text-gray-600"
+                    }`}
+                  >
+                    {isActive ? t("Đang kích hoạt") : t("Ngừng kích hoạt")}
+                  </span>
                   <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 flex-shrink-0 px-2 h-8 bg-gray-100 ml-2  rounded-full">
+                    <Button
+                      className="p-1 min-w-0 h-8"
+                      icon={
+                        isActive ? (
+                          <RiCloseCircleLine className="w-4 h-4 text-red-500" />
+                        ) : (
+                          <RiCheckboxCircleFill className="w-4 h-4 text-green-600" />
+                        )
+                      }
+                      tooltip={isActive ? t("Ngừng kích hoạt") : t("Kích hoạt")}
+                      disabled={disabled || updating}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleActive(node);
+                      }}
+                    />
                     <Button
                       className="p-1 min-w-0 h-8"
                       icon={<RiAddLine className="w-4 h-4" />}
@@ -379,9 +432,11 @@ function CategoryTreeNodes({
                   draggedId={draggedId}
                   dropTargetId={dropTargetId}
                   disabled={disabled}
+                  updating={updating}
                   onToggleExpand={onToggleExpand}
                   onSelect={onSelect}
                   onAddChild={onAddChild}
+                  onToggleActive={onToggleActive}
                   onDragStart={onDragStart}
                   onDragEnd={onDragEnd}
                   onDragOver={onDragOver}
