@@ -73,7 +73,7 @@ export interface Product extends BaseModel {
   des?: string;
   video?: string;
   coverImg?: string;
-  categoryId?: string;
+  categoryIds?: string[];
   active?: boolean;
   slug?: string;
   price?: string;
@@ -104,7 +104,7 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    categoryId
+    categoryIds
     active
     slug
     price
@@ -152,7 +152,7 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    categoryId
+    categoryIds
     active
     slug
     price

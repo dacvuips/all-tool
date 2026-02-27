@@ -23,7 +23,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float
@@ -36,7 +36,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float
@@ -113,7 +113,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float

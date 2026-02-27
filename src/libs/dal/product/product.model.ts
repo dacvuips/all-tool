@@ -89,7 +89,7 @@ const productSchema = new Schema(
     des: { type: String },
     video: { type: String },
     coverImg: { type: String, require: true },
-    categoryId: { type: String, ref: "Category", require: true },
+    categoryIds: { type: [String], default: [] },
     slug: { type: String, require: true },
     active: { type: Boolean, default: false },
     price: { type: Number, default: 0 },

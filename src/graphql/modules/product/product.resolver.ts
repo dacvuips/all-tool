@@ -17,7 +17,10 @@ const Query = {
   },
   getActiveProducts: async (root: any, args: any, context: Context) => {
     set(args, "q.filter.active", true);
-
+    if (args.q?.filter?.categoryId) {
+      args.q.filter.categoryIds = args.q.filter.categoryId;
+      delete args.q.filter.categoryId;
+    }
     return productService.fetch(args.q);
   },
   getProductSlug: async (root: any, args: any, context: Context) => {

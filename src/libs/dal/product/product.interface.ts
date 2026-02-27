@@ -101,7 +101,7 @@ export type IProduct = TimestampEntity & {
   des?: string;
   video?: string;
   coverImg?: string;
-  categoryId?: string;
+  categoryIds?: string[]; // Nhiều danh mục để hiển thị (click categoryId bên ngoài)
   active?: boolean;
   slug?: string;
   price?: number;
