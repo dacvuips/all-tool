@@ -10,7 +10,7 @@ export const API_OUTPUT_TYPES = [
   { value: "AUDIO", label: "Audio" },
 ] as const;
 
-export type ApiOutputTypeValue = (typeof API_OUTPUT_TYPES)[number]["value"];
+export type ApiOutputTypeValue = typeof API_OUTPUT_TYPES[number]["value"];
 
 /** Model theo từng provider và outputType */
 export interface ApiModelOption {
@@ -37,12 +37,32 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://api.openai.com/v1",
     models: {
       IMAGE: [
-        { value: "dall-e-3", label: "DALL-E 3", endpointHint: "/images/generations", responsePathHint: "data[0].url" },
-        { value: "dall-e-2", label: "DALL-E 2", endpointHint: "/images/generations", responsePathHint: "data[0].url" },
+        {
+          value: "dall-e-3",
+          label: "DALL-E 3",
+          endpointHint: "/images/generations",
+          responsePathHint: "data[0].url",
+        },
+        {
+          value: "dall-e-2",
+          label: "DALL-E 2",
+          endpointHint: "/images/generations",
+          responsePathHint: "data[0].url",
+        },
       ],
       AUDIO: [
-        { value: "tts-1", label: "TTS-1", endpointHint: "/audio/speech", responsePathHint: "body (stream)" },
-        { value: "tts-1-hd", label: "TTS-1-HD", endpointHint: "/audio/speech", responsePathHint: "body (stream)" },
+        {
+          value: "tts-1",
+          label: "TTS-1",
+          endpointHint: "/audio/speech",
+          responsePathHint: "body (stream)",
+        },
+        {
+          value: "tts-1-hd",
+          label: "TTS-1-HD",
+          endpointHint: "/audio/speech",
+          responsePathHint: "body (stream)",
+        },
       ],
     },
   },
@@ -52,11 +72,26 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://generativelanguage.googleapis.com",
     models: {
       IMAGE: [
-        { value: "imagen-3", label: "Imagen 3", endpointHint: "/v1beta/models/imagen-3:generateImages", responsePathHint: "generatedImages[0].image.bytesBase64Encoded" },
+        {
+          value: "imagen-3",
+          label: "Imagen 3",
+          endpointHint: "/v1beta/models/imagen-3:generateImages",
+          responsePathHint: "generatedImages[0].image.bytesBase64Encoded",
+        },
       ],
       VIDEO: [
-        { value: "veo-3", label: "Veo 3", endpointHint: "/v1beta/models/veo-3:generateVideo", responsePathHint: "generatedSamples[0].video.uri" },
-        { value: "veo-2", label: "Veo 2", endpointHint: "/v1beta/models/veo-2:generateVideo", responsePathHint: "generatedSamples[0].video.uri" },
+        {
+          value: "veo-3",
+          label: "Veo 3",
+          endpointHint: "/v1beta/models/veo-3:generateVideo",
+          responsePathHint: "generatedSamples[0].video.uri",
+        },
+        {
+          value: "veo-2",
+          label: "Veo 2",
+          endpointHint: "/v1beta/models/veo-2:generateVideo",
+          responsePathHint: "generatedSamples[0].video.uri",
+        },
       ],
     },
   },
@@ -66,14 +101,39 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://api.replicate.com/v1",
     models: {
       IMAGE: [
-        { value: "flux-schnell", label: "Flux Schnell", endpointHint: "/predictions", responsePathHint: "outputs[0]" },
-        { value: "flux-dev", label: "Flux Dev", endpointHint: "/predictions", responsePathHint: "outputs[0]" },
+        {
+          value: "flux-schnell",
+          label: "Flux Schnell",
+          endpointHint: "/predictions",
+          responsePathHint: "outputs[0]",
+        },
+        {
+          value: "flux-dev",
+          label: "Flux Dev",
+          endpointHint: "/predictions",
+          responsePathHint: "outputs[0]",
+        },
         { value: "sdxl", label: "SDXL", endpointHint: "/predictions", responsePathHint: "output" },
-        { value: "stable-diffusion", label: "Stable Diffusion", endpointHint: "/predictions", responsePathHint: "output[0]" },
+        {
+          value: "stable-diffusion",
+          label: "Stable Diffusion",
+          endpointHint: "/predictions",
+          responsePathHint: "output[0]",
+        },
       ],
       VIDEO: [
-        { value: "stable-video-diffusion", label: "Stable Video Diffusion", endpointHint: "/predictions", responsePathHint: "output" },
-        { value: "minimax-video", label: "Minimax Video", endpointHint: "/predictions", responsePathHint: "output" },
+        {
+          value: "stable-video-diffusion",
+          label: "Stable Video Diffusion",
+          endpointHint: "/predictions",
+          responsePathHint: "output",
+        },
+        {
+          value: "minimax-video",
+          label: "Minimax Video",
+          endpointHint: "/predictions",
+          responsePathHint: "output",
+        },
       ],
     },
   },
@@ -83,8 +143,18 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://api.stability.ai/v1",
     models: {
       IMAGE: [
-        { value: "stable-diffusion-xl", label: "Stable Diffusion XL", endpointHint: "/generation/stable-diffusion-xl/text-to-image", responsePathHint: "artifacts[0].base64" },
-        { value: "stable-diffusion-v1", label: "Stable Diffusion v1", endpointHint: "/generation/stable-diffusion-v1/text-to-image", responsePathHint: "artifacts[0].base64" },
+        {
+          value: "stable-diffusion-xl",
+          label: "Stable Diffusion XL",
+          endpointHint: "/generation/stable-diffusion-xl/text-to-image",
+          responsePathHint: "artifacts[0].base64",
+        },
+        {
+          value: "stable-diffusion-v1",
+          label: "Stable Diffusion v1",
+          endpointHint: "/generation/stable-diffusion-v1/text-to-image",
+          responsePathHint: "artifacts[0].base64",
+        },
       ],
     },
   },
@@ -94,8 +164,18 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://api.runwayml.com/v1",
     models: {
       VIDEO: [
-        { value: "gen3a-turbo", label: "Gen-3 Alpha Turbo", endpointHint: "/image_to_video", responsePathHint: "output[0]" },
-        { value: "gen3a", label: "Gen-3 Alpha", endpointHint: "/image_to_video", responsePathHint: "output[0]" },
+        {
+          value: "gen3a-turbo",
+          label: "Gen-3 Alpha Turbo",
+          endpointHint: "/image_to_video",
+          responsePathHint: "output[0]",
+        },
+        {
+          value: "gen3a",
+          label: "Gen-3 Alpha",
+          endpointHint: "/image_to_video",
+          responsePathHint: "output[0]",
+        },
       ],
     },
   },
@@ -105,10 +185,20 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://api.anthropic.com/v1",
     models: {
       IMAGE: [
-        { value: "claude-sonnet-4", label: "Claude (Sonnet 4 - with vision)", endpointHint: "/messages", responsePathHint: "content[].image" },
+        {
+          value: "claude-sonnet-4",
+          label: "Claude (Sonnet 4 - with vision)",
+          endpointHint: "/messages",
+          responsePathHint: "content[].image",
+        },
       ],
       FILE: [
-        { value: "claude-sonnet-4", label: "Claude Sonnet 4", endpointHint: "/messages", responsePathHint: "content[].text" },
+        {
+          value: "claude-sonnet-4",
+          label: "Claude Sonnet 4",
+          endpointHint: "/messages",
+          responsePathHint: "content[].text",
+        },
       ],
     },
   },
@@ -118,11 +208,26 @@ export const API_PROVIDERS: ApiProviderOption[] = [
     baseUrlHint: "https://queue.fal.run",
     models: {
       IMAGE: [
-        { value: "fal-ai/flux", label: "Flux", endpointHint: "/fal-ai/flux", responsePathHint: "images[0].url" },
-        { value: "fal-ai/recraft-v3", label: "Recraft v3", endpointHint: "/fal-ai/recraft-v3", responsePathHint: "images[0].url" },
+        {
+          value: "fal-ai/flux",
+          label: "Flux",
+          endpointHint: "/fal-ai/flux",
+          responsePathHint: "images[0].url",
+        },
+        {
+          value: "fal-ai/recraft-v3",
+          label: "Recraft v3",
+          endpointHint: "/fal-ai/recraft-v3",
+          responsePathHint: "images[0].url",
+        },
       ],
       VIDEO: [
-        { value: "fal-ai/minimax-video", label: "Minimax Video", endpointHint: "/fal-ai/minimax-video", responsePathHint: "video.url" },
+        {
+          value: "fal-ai/minimax-video",
+          label: "Minimax Video",
+          endpointHint: "/fal-ai/minimax-video",
+          responsePathHint: "video.url",
+        },
       ],
     },
   },

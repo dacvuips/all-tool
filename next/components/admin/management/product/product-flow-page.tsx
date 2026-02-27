@@ -436,7 +436,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       type: "productNode",
       position: { x: 80 + (nodes.length % 4) * 280, y: 80 + Math.floor(nodes.length / 4) * 180 },
       data: {
-        label: t("Node mới"),
+        label: t("Tác vụ mới"),
         properties: [],
         config: { ...DEFAULT_NODE_CONFIG },
         nodeId,
@@ -458,14 +458,6 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     }),
     [deleteEdge]
   );
-
-  const searchTimeout = useRef<any>(null);
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {
-      setSearch(e.target.value);
-    }, 400);
-  };
 
   return (
     <div
@@ -513,7 +505,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
             onClick={handleAddFlowNode}
             primary
             icon={<HiOutlinePlus />}
-            text={t("Thêm node")}
+            text={t("Thêm tác vụ")}
           />
         }
       </div>
@@ -539,7 +531,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
                 primary
                 icon={<HiOutlinePlus />}
                 className="mt-2"
-                text={t("Thêm node")}
+                text={t("Thêm tác vụ")}
               />
             )}
           </div>

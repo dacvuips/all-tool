@@ -65,13 +65,12 @@ export function Field({
   }, [childProps]);
   const defaultValue = useMemo(() => {
     if (!name) return null;
-    const defaultValue = childProps.defaultValue || child.type?.getDefaultValue(childProps);
+    const baseValue = childProps.defaultValue ?? child.type?.getDefaultValue?.(childProps);
     if (childProps.options?.length) {
-      return childProps.clearable ? defaultValue : defaultValue || childProps.options[0].value;
-    } else {
-      return defaultValue;
+      return childProps.clearable ? baseValue : baseValue ?? childProps.options[0].value;
     }
-  }, [childProps]);
+    return baseValue;
+  }, [childProps, name]);
   const otherLocales = useMemo(
     () => (multiLocales?.length > 1 ? multiLocales.slice(1) : []),
     [multiLocales]

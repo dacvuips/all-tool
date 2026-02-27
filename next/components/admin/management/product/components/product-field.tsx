@@ -90,7 +90,7 @@ export function ProductField() {
       ></VideoDialog>
 
       <Field name="des" label={t("Mô tả sản phẩm")} cols={12} required>
-        <Editor minHeight="200px" noBorder className="border rounded-md" maxWidth="none" />
+        <Editor minHeight="200px" noBorder className="rounded-md border" maxWidth="none" />
       </Field>
     </>
   );

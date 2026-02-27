@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
+import { HiOutlineMenuAlt4, HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
 import {
   API_OUTPUT_TYPES,
   API_PROVIDERS,
@@ -13,7 +13,8 @@ import { useScreen } from "../../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../../lib/providers/auth-provider";
 import { PropertyTypeEnum } from "../../../../../../lib/repo";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
-import { Button, Field, Input, Select, Switch, Textarea } from "../../../../../shared/utilities/form";
+import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
+import { JSONEditor } from "../../../../../shared/utilities/form/json-editor";
 
 export const ProductSettingForm = () => {
   const { t } = useTranslation();
@@ -21,13 +22,38 @@ export const ProductSettingForm = () => {
   const xl = useScreen("xl");
   const { PRODUCT_PROPERTY_TYPE_OPTIONS } = useOptionsTranslation();
 
-  const { append, remove, fields } = useFieldArray({
+  const { append, remove, move, fields } = useFieldArray({
     name: "properties",
   });
   const name = "properties";
   const [openFieldDialog, setOpenFieldDialog] = useState(false);
   const [type, setType] = useState(PRODUCT_PROPERTY_TYPE_OPTIONS[0].value);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const { userPermission } = useAuth();
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    setDragOverIndex(index);
+  };
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+  const handleDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === toIndex) return;
+    move(draggedIndex, toIndex);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <div className="space-y-4 w-full">
@@ -38,10 +64,27 @@ export const ProductSettingForm = () => {
         <div className="col-span-12">
           {(fields as (any & { id: string })[])?.map((item, index) => (
             <div
-              className="p-2 -m-1 mb-3 bg-gray-50 rounded-md border border-gray-200"
-              key={item.id + index}
-            >
-              <div className="grid grid-cols-12 gap-x-2">
+              className={`p-2 -m-1 mb-3 hover:bg-gray-100 hover:border-gray-300  bg-gray-50 rounded-md border transition-colors ${
+                dragOverIndex === index ? "border-primary border-2 bg-primary/5" : "border-gray-200"
+              } ${draggedIndex === index ? "opacity-50" : ""}`}
+              key={item.id}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
+            > 
+            <div className="flex gap-2 justify-between items-center">
+            <div className="flex items-center text-gray-400 cursor-pointer cursor-grab hover:text-gray-600" 
+            draggable
+            onDragStart={() => handleDragStart(index)}
+            onDragEnd={handleDragEnd}
+            onMouseDown={(e) => e.stopPropagation()}
+            data-tooltip={t("Kéo để sắp xếp thứ tự")}
+            data-tooltip-position="top"
+          >
+            <HiOutlineMenuAlt4 className="w-5 h-5" />
+          </div>
+              <div className="grid grid-cols-12 gap-x-2 pl-2 border-l-2 border-gray-200">
+              
                 <TypeField type={item.type} fieldIndex={index} />
                 <Field
                   label={t("Mã dữ liệu")}
@@ -106,7 +149,7 @@ export const ProductSettingForm = () => {
                     remove(index);
                   }}
                 />
-              </div>
+              </div></div> 
               {(item.type == PropertyTypeEnum.SELECT ||
                 item.type == PropertyTypeEnum.MULTI_SELECT) && <SelectFields fieldIndex={index} />}
             </div>
@@ -261,18 +304,10 @@ function ApiConfigSection() {
           />
         </Field>
         <Field label={t("Headers (JSON)")} name="config.headers" cols={12}>
-          <Textarea
-            placeholder='{ "Authorization": "Bearer {{apiKey}}", "Content-Type": "application/json" }'
-            rows={2}
-            className="font-mono text-sm"
-          />
+          <JSONEditor height="120px" placeholder='{ "Authorization": "Bearer {{apiKey}}", "Content-Type": "application/json" }' />
         </Field>
         <Field label={t("Body template (JSON)")} name="config.bodyTemplate" cols={12}>
-          <Textarea
-            placeholder='{ "prompt": "{{prompt}}", "model": "{{model}}", "size": "1024x1024" }'
-            rows={4}
-            className="font-mono text-sm"
-          />
+          <JSONEditor  height="200px" placeholder="{ 'prompt': '{{prompt}}', 'model': '{{model}}', 'size': '1024x1024' }" />
         </Field>
         <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
           <Input

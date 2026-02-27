@@ -17,6 +17,22 @@ export type JSONEditorProps = FormControlProps & {
     | "html"
     | "default";
 };
+function normalizePlaceholder(value: unknown): object | unknown[] {
+  if (value === undefined || value === null) return {};
+  if (typeof value === "object" && (Array.isArray(value) || (value !== null && value.constructor === Object))) {
+    return value as object | unknown[];
+  }
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return typeof parsed === "object" && parsed !== null ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 export function JSONEditor({
   controlClassName = "form-control",
   className = "flex justify-center px-0 bg-gray-100",
@@ -26,10 +42,18 @@ export function JSONEditor({
   ...props
 }: JSONEditorProps) {
   const [value, setValue] = useState<any>(props.value);
-  const onChange = (data) => {
+  const onChange = (data: unknown) => {
     setValue(data);
-    if (props.onChange) props.onChange(data);
+    // Backend/GraphQL often expects JSON as string; stringify object so form stores string
+    const output =
+      typeof data === "object" && data !== null
+        ? JSON.stringify(data)
+        : typeof data === "string"
+          ? data
+          : "";
+    if (props.onChange) props.onChange(output);
   };
+  const placeholder = normalizePlaceholder(value ?? props.value);
 
   return (
     <div
@@ -40,7 +64,7 @@ export function JSONEditor({
     >
       <JSONInput
         id={props.editorId}
-        placeholder={value}
+        placeholder={placeholder}
         locale={locale}
         theme={theme}
         height={height || "300px"}
