@@ -9,14 +9,18 @@ import { Editor, Field, ImageInput, Input, Label, Select } from "../../../../sha
 import { Img } from "../../../../shared/utilities/misc";
 
 function flattenCategoryOptions(
-  tree: { id?: string; name?: string; children?: any[] }[],
+  tree: { id?: string; name?: string; parentId?: string | null; children?: any[] }[],
   level = 0
-): { value: string; label: string }[] {
-  const options: { value: string; label: string }[] = [];
+): { value: string; label: string; isDisabled?: boolean }[] {
+  const options: { value: string; label: string; isDisabled?: boolean }[] = [];
   const prefix = "— ".repeat(level);
   for (const n of tree) {
     if (!n.id) continue;
-    options.push({ value: n.id, label: prefix + (n.name || "(Chưa đặt tên)") });
+    options.push({
+      value: n.id,
+      label: prefix + (n.name || "(Chưa đặt tên)"),
+      isDisabled: !n.parentId,
+    });
     if (n.children?.length) options.push(...flattenCategoryOptions(n.children, level + 1));
   }
   return options;
@@ -28,7 +32,9 @@ export function ProductField() {
   const xs = useScreen("xs");
   const { userPermission } = useAuth();
   const [videoOpen, setVideoOpen] = useState("");
-  const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState<
+    { value: string; label: string; isDisabled?: boolean }[]
+  >([]);
 
   useEffect(() => {
     CategoryService.getCategoryTree().then((tree) => {

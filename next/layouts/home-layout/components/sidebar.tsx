@@ -121,13 +121,6 @@ export function SidebarDesktop({
           <div className="py-3">
             {/* Nhóm Sản phẩm - cây category */}
             <div className="mb-2">
-              {getStorage == "true" && (
-                <div className={`flex px-4 py-2 group`}>
-                  <span className="flex-1 px-2 font-semibold uppercase text-primary-dark">
-                    {t("Danh mục")}
-                  </span>
-                </div>
-              )}
               <Accordion isOpen={true}>
                 {loadingTree ? (
                   <div className="px-4 py-3 text-sm text-gray-500">Đang tải danh mục...</div>
