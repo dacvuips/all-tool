@@ -28,7 +28,7 @@ const propertySchema = new Schema(
 const nodeConfigSchema = new Schema(
   {
     outputType: { type: String },
-    provider: { type: String },
+    providerId: { type: String },
     model: { type: String },
     baseUrl: { type: String },
     endpoint: { type: String },

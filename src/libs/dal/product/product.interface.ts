@@ -43,7 +43,7 @@ export type NodeConfig = {
   /** Loại output: ảnh, video, file, audio */
   outputType?: ApiOutputType;
   /** Provider/nền tảng: openai, google, replicate, runway, stability, custom... */
-  provider?: string;
+  providerId?: string;
   /** Model: dall-e-3, veo3, flux, ... (phụ thuộc provider + outputType) */
   model?: string;
   /** Base URL (optional, override cho custom API) */

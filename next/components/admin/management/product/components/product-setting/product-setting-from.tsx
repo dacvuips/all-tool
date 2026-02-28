@@ -4,14 +4,12 @@ import { useTranslation } from "react-i18next";
 import { HiOutlineMenuAlt4, HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
 import {
   API_OUTPUT_TYPES,
-  API_PROVIDERS,
-  getModelsForProviderAndOutput,
-  type ApiOutputTypeValue,
+  type ApiOutputTypeValue
 } from "../../../../../../lib/constants/api-config.const";
 import { useOptionsTranslation } from "../../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../../lib/providers/auth-provider";
-import { PropertyTypeEnum } from "../../../../../../lib/repo";
+import { AiProviderService, PropertyTypeEnum } from "../../../../../../lib/repo";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
 import { JSONEditor } from "../../../../../shared/utilities/form/json-editor";
@@ -209,43 +207,22 @@ function ApiConfigSection() {
   const { t } = useTranslation();
   const { setValue } = useFormContext();
   const outputType = useWatch({ name: "config.outputType" }) as ApiOutputTypeValue | undefined;
-  const provider = useWatch({ name: "config.provider" }) as string | undefined;
+  const providerId = useWatch({ name: "config.providerId" }) as string | undefined;
   const modelValue = useWatch({ name: "config.model" }) as string | undefined;
 
   const outputTypeOptions = useMemo(
     () => API_OUTPUT_TYPES.map((x) => ({ value: x.value, label: t(x.label) || x.label })),
     [t]
   );
-  const providerOptions = useMemo(
-    () => API_PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
-    []
-  );
-  const modelOptions = useMemo(() => {
-    if (!provider || !outputType || provider === "custom") return [];
-    return getModelsForProviderAndOutput(provider, outputType as ApiOutputTypeValue).map((m) => ({
-      value: m.value,
-      label: m.label,
-    }));
-  }, [provider, outputType]);
+ 
+ 
 
-  const selectedProviderMeta = useMemo(
-    () => API_PROVIDERS.find((p) => p.value === provider),
-    [provider]
-  );
-  const selectedModelMeta = useMemo(() => {
-    if (!selectedProviderMeta || !outputType) return null;
-    const list = selectedProviderMeta.models[outputType as ApiOutputTypeValue];
-    return list?.find((m) => m.value === modelValue);
-  }, [selectedProviderMeta, outputType, modelValue]);
+   
+ 
+ 
 
-  useEffect(() => {
-    if (provider === "custom" || !outputType) return;
-    const models = getModelsForProviderAndOutput(provider, outputType as ApiOutputTypeValue);
-    if (models.length > 0) {
-      const stillValid = modelValue && models.some((m) => m.value === modelValue);
-      if (!stillValid) setValue("config.model", models[0].value, { shouldValidate: false });
-    }
-  }, [provider, outputType, modelValue, setValue]);
+   
+
 
   return (
     <div className="p-4 w-full rounded-lg border border-gray-200 bg-gray-50/50">
@@ -258,25 +235,23 @@ function ApiConfigSection() {
             clearable={false}
           />
         </Field>
-        <Field label={t("Provider")} name="config.provider" cols={6}>
-          <Select
-            options={providerOptions}
-            placeholder={t("VD: OpenAI, Google, Replicate...")}
-          />
+        <Field label={t("Provider")} name="config.providerId" cols={6}>
+        <Select hasImage
+          optionsPromise={() =>
+            AiProviderService.getAiProviderSelect().then((res) => {
+              return res?.map((item) => ({
+                value: item._id,
+                label: item.name,
+                image: item.imgUrl,
+              }));
+            })
+          }
+          value={providerId}
+        />
         </Field>
         <Field label={t("Model")} name="config.model" cols={12}>
-          {provider === "custom" ? (
             <Input placeholder={t("VD: my-custom-model")} />
-          ) : (
-            <Select
-              options={modelOptions}
-              placeholder={
-                modelOptions.length
-                  ? t("Chọn model")
-                  : t("Chọn Provider và Loại output trước")
-              }
-            />
-          )}
+        
         </Field> 
         <Field label={t("Method")} name="config.method" cols={4}>
           <Select
@@ -292,7 +267,7 @@ function ApiConfigSection() {
         <Field label={t("Endpoint")} name="config.endpoint" cols={8}>
           <Input
             placeholder={
-              selectedModelMeta?.endpointHint ?? "/generate-image"
+               "/generate-image"
             }
           />
         </Field>
@@ -305,7 +280,7 @@ function ApiConfigSection() {
         <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
           <Input
             placeholder={
-              selectedModelMeta?.responsePathHint ?? "data[0].url hoặc result.media[0].url"
+               "data[0].url hoặc result.media[0].url"
             }
           />
         </Field>

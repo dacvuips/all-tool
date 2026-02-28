@@ -1,7 +1,9 @@
-import { memo, useCallback, useEffect } from "react";
+import { memo, useCallback, useEffect, useState } from "react";
+import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Handle, NodeProps, Position } from "reactflow";
 import {
+  AiProviderService,
   NodeConfig,
   Product,
   ProductFlowNodeData,
@@ -20,7 +22,6 @@ import {
   Textarea,
 } from "../../../shared/utilities/form";
 import { NotFound } from "../../../shared/utilities/misc";
-import { useFormContext } from "react-hook-form";
 
 /** Data khi node là product card (danh sách sản phẩm) */
 export type ProductCardNodeData = {
@@ -57,89 +58,113 @@ function isFlowNodeData(data: ProductNodeData): data is FlowNodeData {
   return "nodeId" in data && !("product" in data);
 }
 
-export const ProductNodeHome = memo(({ data }: NodeProps<ProductNodeData>) => {
+/** Fetches provider by id and renders flow node content (sync component, async inside) */
+function FlowNodeContent({ data }: { data: FlowNodeData }) {
   const { t } = useTranslation();
+  const [provider, setProvider] = useState<{ name: string; imgUrl?: string } | null>(null);
 
-  if (isFlowNodeData(data)) {
-    const {
-      label,
-      config,
-      properties,
-      nodeId,
-      registerGetValues,
-      onSubmitNode,
-      isRunning,
-      errorNodeId,
-    } = data;
-    const displayLabel = label || t("Node");
-    const provider = config?.provider || "-";
-    const endpoint = config?.endpoint || "-";
-    const method = config?.method || "POST";
-    const fieldsCount = properties?.length ?? 0;
-    const hasError = errorNodeId === nodeId;
+  const providerId = data.config?.providerId;
 
-    return (
-      <div
-        className="product-node flow-node"
-        style={{
-          background: "#fff",
-          border: `1.5px solid ${hasError ? "#dc2626" : "#4f46e5"}`,
-          borderRadius: "12px",
-          minWidth: "375px",
-          maxWidth: "375px",
-          boxShadow: hasError
-            ? "0 4px 24px rgba(220,38,38,0.25)"
-            : "0 4px 24px rgba(79,70,229,0.25)",
-          overflow: "hidden",
-          fontFamily: "Inter, sans-serif",
-        }}
-      >
-        <div className="flex flex-row gap-2 items-center p-2 border-b border-gray-200 border-dashed last:border-b-0">
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
-              {displayLabel}
-            </div>
-            <div className="text-xs text-gray-500">
-              {provider} · {method} · {fieldsCount} {t("trường")}
-            </div>
+  useEffect(() => {
+    if (!providerId) {
+      setProvider({ name: "-" });
+      return;
+    }
+    let cancelled = false;
+    AiProviderService.getAiProviderSelect().then((res) => {
+      if (cancelled) return;
+      const found = res?.find((item) => item._id === providerId);
+      setProvider(found ? { name: found.name ?? "-", imgUrl: found.imgUrl } : { name: "-" });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [providerId]);
+
+  const {
+    label,
+    config,
+    properties,
+    nodeId,
+    registerGetValues,
+    onSubmitNode,
+    isRunning,
+    errorNodeId,
+  } = data;
+  const displayLabel = label || t("Node");
+  const method = config?.method || "POST";
+  const fieldsCount = properties?.length ?? 0;
+  const hasError = errorNodeId === nodeId;
+  const providerName = provider?.name ?? "-";
+
+  return (
+    <div
+      className="product-node flow-node"
+      style={{
+        background: "#fff",
+        border: `1.5px solid ${hasError ? "#dc2626" : "#4f46e5"}`,
+        borderRadius: "12px",
+        minWidth: "375px",
+        maxWidth: "375px",
+        boxShadow: hasError ? "0 4px 24px rgba(220,38,38,0.25)" : "0 4px 24px rgba(79,70,229,0.25)",
+        overflow: "hidden",
+        fontFamily: "Inter, sans-serif",
+      }}
+    >
+      <div className="flex flex-row gap-2 items-center p-2 border-b border-gray-200 border-dashed last:border-b-0">
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
+            {displayLabel}
+          </div>
+          <div className="flex gap-2 items-center text-xs text-gray-500">
+            <img
+              src={provider?.imgUrl}
+              alt={providerName}
+              className="px-1 h-5 rounded-full border"
+            />
           </div>
         </div>
-
-        <PropertyComponent
-          nodeId={nodeId}
-          properties={properties}
-          onSubmitNode={onSubmitNode}
-          config={config}
-          isRunning={isRunning}
-          registerGetValues={registerGetValues}
-        />
-
-        <Handle
-          type="target"
-          position={Position.Left}
-          style={{
-            width: "10px",
-            height: "10px",
-            background: "#4f46e5",
-            border: "2px solid #818cf8",
-            left: "-5px",
-          }}
-        />
-        <Handle
-          type="source"
-          position={Position.Right}
-          style={{
-            width: "10px",
-            height: "10px",
-            background: "#4f46e5",
-            border: "2px solid #818cf8",
-            right: "-5px",
-          }}
-        />
       </div>
-    );
-  }
 
+      <PropertyComponent
+        nodeId={nodeId}
+        properties={properties}
+        onSubmitNode={onSubmitNode}
+        config={config}
+        isRunning={isRunning}
+        registerGetValues={registerGetValues}
+      />
+
+      <Handle
+        type="target"
+        position={Position.Left}
+        style={{
+          width: "10px",
+          height: "10px",
+          background: "#4f46e5",
+          border: "2px solid #818cf8",
+          left: "-5px",
+        }}
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        style={{
+          width: "10px",
+          height: "10px",
+          background: "#4f46e5",
+          border: "2px solid #818cf8",
+          right: "-5px",
+        }}
+      />
+    </div>
+  );
+}
+
+export const ProductNodeHome = memo(function ProductNodeHome({ data }: NodeProps<ProductNodeData>) {
+  if (isFlowNodeData(data)) {
+    return <FlowNodeContent data={data} />;
+  }
   return null;
 });
 
@@ -174,7 +199,9 @@ const PropertyComponent = memo(function PropertyComponent({
       {properties?.length ? (
         <>
           {/* Đăng ký getValues với parent để chạy auto lấy được giá trị form */}
-          {registerGetValues && <NodeFormRegister nodeId={nodeId} registerGetValues={registerGetValues} />}
+          {registerGetValues && (
+            <NodeFormRegister nodeId={nodeId} registerGetValues={registerGetValues} />
+          )}
           {properties.map((field, index) => (
             <Field
               key={field.key || index}
@@ -221,11 +248,7 @@ const PropertyComponent = memo(function PropertyComponent({
           ))}
           {/* Nút submit thủ công: lấy giá trị form và gọi API execute qua parent */}
           {onSubmitNode && config?.endpoint && (
-            <NodeSubmitButton
-              nodeId={nodeId}
-              onSubmitNode={onSubmitNode}
-              isRunning={isRunning}
-            />
+            <NodeSubmitButton nodeId={nodeId} onSubmitNode={onSubmitNode} isRunning={isRunning} />
           )}
         </>
       ) : (
@@ -258,7 +281,7 @@ function NodeSubmitButton({
   }, [nodeId, onSubmitNode, getValues]);
 
   return (
-    <div className="col-span-full flex justify-end pt-2">
+    <div className="flex col-span-full justify-end pt-2">
       <Button
         icon={<GenerateAiIcon />}
         outline

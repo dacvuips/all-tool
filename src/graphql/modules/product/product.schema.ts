@@ -46,7 +46,7 @@ const schema = gql`
 
   input NodeConfigInput {
     outputType: String
-    provider: String
+    providerId: String
     model: String
     baseUrl: String
     endpoint: String
@@ -123,7 +123,7 @@ const schema = gql`
 
   type NodeConfig {
     outputType: String
-    provider: String
+    providerId: String
     model: String
     baseUrl: String
     endpoint: String

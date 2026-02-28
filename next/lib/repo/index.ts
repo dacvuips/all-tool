@@ -1,3 +1,4 @@
+export * from "./ai-provider/ai-provider.repo";
 export * from "./category/category.repo";
 export * from "./credential/credential.repo";
 export * from "./customer/customer.repo";

@@ -30,7 +30,7 @@ export interface Property {
 }
 
 export interface NodeConfig {
-  provider?: string;
+  providerId?: string;
   endpoint?: string;
   method?: string;
   bodyTemplate?: string;
@@ -127,9 +127,11 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            provider
+            providerId
             endpoint
             method
+            model
+            outputType
             bodyTemplate
           }
         }
@@ -175,7 +177,7 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            provider
+            providerId
             endpoint
             method
             bodyTemplate
