@@ -277,14 +277,7 @@ function ApiConfigSection() {
               }
             />
           )}
-        </Field>
-        <Field label={t("Base URL")} name="config.baseUrl" cols={12}>
-          <Input
-            placeholder={
-              selectedProviderMeta?.baseUrlHint ?? "https://api.example.com/v1"
-            }
-          />
-        </Field>
+        </Field> 
         <Field label={t("Method")} name="config.method" cols={4}>
           <Select
             options={[
