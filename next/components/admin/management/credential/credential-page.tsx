@@ -18,7 +18,7 @@ export function CredentialPage() {
     <Card>
       <DataTable<Credential> crudService={credentialService} order={{ createdAt: -1 }}>
         <DataTable.Header>
-          <DataTable.Title />
+          <DataTable.Title>{t("API Key")}</DataTable.Title>
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
             <DataTable.Button primary isAddButton disabled={!userPermission("EDIT_CREDENTIAL")} />

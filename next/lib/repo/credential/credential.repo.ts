@@ -15,7 +15,7 @@ export interface Credential extends BaseModel {
 
 export class CredentialRepository extends CrudRepository<Credential> {
   apiName: string = "Credential";
-  displayName: string = t("chứng chỉ");
+  displayName: string = t("API Key");
   shortFragment: string = this.parseFragment(`
     id
     key
@@ -82,7 +82,7 @@ export const credentialService = new CredentialRepository();
 /** Service dùng cho trang profile customer: getAll/getOne gọi API customer. */
 export class CredentialCustomerRepository extends CrudRepository<Credential> {
   apiName: string = "CredentialCustomer";
-  displayName: string = t("chứng chỉ");
+  displayName: string = t("API Key");
   shortFragment: string = this.parseFragment(`
     id
     key
