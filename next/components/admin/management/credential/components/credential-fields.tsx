@@ -1,20 +1,15 @@
 import { useTranslation } from "react-i18next";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
-import { AiProviderKeyEnum } from "../../../../../lib/repo/ai-provider/ai-provider.repo";
 import { Field, Input, Select } from "../../../../shared/utilities/form";
 import { Switch } from "../../../../shared/utilities/form/switch";
 import { useDataTable } from "../../../../shared/utilities/table/data-table";
-
-const CREDENTIAL_KEY_OPTIONS = Object.values(AiProviderKeyEnum).map((key) => ({
-  value: key,
-  label: key.replace(/_/g, " "),
-}));
 
 export function CredentialFields() {
   const { t } = useTranslation();
   const sm = useScreen("sm");
   const { formItem } = useDataTable();
-
+  const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
   return (
     <>
       <div className="col-span-12">
@@ -22,6 +17,7 @@ export function CredentialFields() {
       </div>
       <Field name="key" label={t("Loại (Key)")} cols={sm ? 6 : 12} required>
         <Select
+          hasImage
           options={CREDENTIAL_KEY_OPTIONS}
           placeholder={t("Chọn loại chứng chỉ")}
           clearable={false}

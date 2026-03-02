@@ -468,7 +468,7 @@ const useHeaderDropDownMenus = () => {
       onclick: () => router.push("/profile/orders-buy"),
     },
     {
-      text: t("Chứng chỉ của tôi"),
+      text: t("API Key"),
       icon: <RiKey2Line />,
       onclick: () => router.push("/profile/credential"),
     },

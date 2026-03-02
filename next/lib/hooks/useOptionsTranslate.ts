@@ -1,5 +1,5 @@
 import { useTranslation } from "next-i18next";
-import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
+import { AiProviderKeyEnum, OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
 import { PropertyTypeEnum } from "../repo/product/product.repo";
@@ -692,6 +692,27 @@ export const useOptionsTranslation = () => {
     { value: ShipmentStatusEnum.FAILED, label: t("Đã thất bại"), color: "warning" },
   ];
 
+  const CREDENTIAL_KEY_OPTIONS = [
+    { value: AiProviderKeyEnum.OPENAI_KEY, label: t("OpenAI"), image: "/assets/img/openai.png" },
+    { value: AiProviderKeyEnum.CLAUDE_KEY, label: t("Claude"), image: "/assets/img/claudeai.png" },
+    {
+      value: AiProviderKeyEnum.DEEP_SEEK_KEY,
+      label: t("DeepSeek"),
+      image: "/assets/img/deepseek.png",
+    },
+    { value: AiProviderKeyEnum.KLING_KEY, label: t("Kling"), image: "/assets/img/kling.png" },
+    {
+      value: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+      label: t("Google Gemini"),
+      image: "/assets/img/google-gemini.png",
+    },
+    {
+      value: AiProviderKeyEnum.SEE_DANCE_KEY,
+      label: t("SeeDance"),
+      image: "/assets/img/see-dance.png",
+    },
+  ];
+
   return {
     TARGETS,
     TYPE,
@@ -767,5 +788,6 @@ export const useOptionsTranslation = () => {
     PAYMENT_STATUS_OPTIONS,
     SHIPPING_PROVIDER_CODE_OPTIONS,
     SHIPMENT_STATUS_OPTIONS,
+    CREDENTIAL_KEY_OPTIONS,
   };
 };

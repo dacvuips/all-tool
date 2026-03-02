@@ -74,6 +74,8 @@ export const compressUploadImage = async (
 export function compressImage(image: string, compress?: number): string {
   if (!image) return image;
   const imageUrl = image.toString().trim();
+  // Relative path (static assets in public/) - return as-is so browser loads from same origin
+  if (imageUrl.startsWith("/")) return imageUrl;
   if (imageUrl.includes("i.imgur.com")) {
     if (compress && !imageUrl.includes(".png")) {
       let suffix = "";

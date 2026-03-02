@@ -102,7 +102,7 @@ const MenuList = () => {
       icon: <RiUser3Line />,
     },
     { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/profile/deposit" },
-    { label: t("Chứng chỉ của tôi"), icon: <RiKey2Line />, href: "/profile/credential" },
+    { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
     {
       label: t("Thông báo"),
       icon: <AiOutlineBell />,

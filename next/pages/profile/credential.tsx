@@ -12,12 +12,12 @@ export default function Page(props) {
   const screenLg = useScreen("lg");
   return (
     <>
-      <NextSeo title={t("Chứng chỉ của tôi")} />
+      <NextSeo title={t("API Key")} />
       {screenLg ? <ProfilePage /> : <ProfileCredential />}
     </>
   );
 }
 
 Page.Layout = HomeLayout;
-Page.LayoutProps = { name: t("Chứng chỉ của tôi") };
+Page.LayoutProps = { name: t("API Key") };
 export const getServerSideProps = getServerSideTranslationsProps();
