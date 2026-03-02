@@ -2,25 +2,20 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
+import { AiProviderKeyEnum } from "../aiProvider/aiProvider.interface";
 import { ICredential } from "./credential.interface";
 
 const Schema = mongoose.Schema;
 
-const credentialFieldSchema = new Schema({
-  value: { type: String },
-  active: { type: Boolean, default: false },
-});
-
 const credentialSchema = new Schema(
   {
-    chatGPT: { type: credentialFieldSchema },
-    googleAIStudio: { type: credentialFieldSchema },
-    ghnToken: { type: credentialFieldSchema },
-
-    giaoHangTietKiem: { type: credentialFieldSchema },
-
-    spx: { type: credentialFieldSchema },
-    jtExpress: { type: credentialFieldSchema },
+    key: { type: String, enum: Object.values(AiProviderKeyEnum) },
+    value: { type: String },
+    active: { type: Boolean, default: true },
+    customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
+    // tôi cần đặt tên để xác định là customer credential hay admin credential
+    isCustomerCredential: { type: Boolean, default: false },
+    isAdminCredential: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

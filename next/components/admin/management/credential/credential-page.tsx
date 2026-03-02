@@ -1,113 +1,131 @@
-import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { Credential, credentialService } from "../../../../lib/repo";
-import { Field, Form, Input, Switch } from "../../../shared/utilities/form";
 import { Card } from "../../../shared/utilities/misc";
+import { DataTable } from "../../../shared/utilities/table/data-table";
+import { Switch } from "../../../shared/utilities/form/switch";
+import { CredentialFields } from "./components/credential-fields";
 
-export const CredentialPage = () => {
+export function CredentialPage() {
   const { t } = useTranslation();
   const { userPermission } = useAuth();
   const toast = useToast();
-  const [loading, setLoading] = useState(false);
-
-  const [credential, setCredential] = useState<Credential | null>(null);
-
-  // Load credential data
-  const loadCredential = async () => {
-    try {
-      setLoading(true);
-      const cred = (await credentialService.getMyCredential()) as Credential;
-      if (cred) {
-        setCredential(cred);
-      }
-    } catch (error) {
-      console.error("Load credential error:", error);
-      toast.error(t("Không thể tải dữ liệu"));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadCredential();
-  }, []);
-
-  const handleSubmit = async (data) => {
-    try {
-      setLoading(true);
-
-      await credentialService.createOrUpdate({
-        id: credential?.id,
-        data,
-      });
-
-      toast.success(t("Cập nhật thành công"));
-      await loadCredential();
-    } catch (error: any) {
-      console.error("Update credential error:", error);
-      toast.error(error.message || t("Không thể cập nhật"));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
-    <div className="container max-w-4xl mx-auto">
-      <Card>
-        <Form grid onSubmit={handleSubmit} defaultValues={credential}>
-          {/* Google AI Studio */}
-          <Field name="googleAIStudio.value" label={t("Google AI Studio Token")} cols={9}>
-            <Input placeholder={t("Nhập Google AI Studio Token")} type="password" />
-          </Field>
-          <Field name="googleAIStudio.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
-          {/* ChatGPT */}
-          <Field name="chatGPT.value" label={t("ChatGPT Token")} cols={9}>
-            <Input placeholder={t("Nhập ChatGPT Token")} type="password" />
-          </Field>
-          <Field name="chatGPT.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
-          {/* GHN Token */}
-          <Field name="ghnToken.value" label={t("GHN Token")} cols={9}>
-            <Input placeholder={t("Nhập GHN Token")} type="password" />
-          </Field>
-          <Field name="ghnToken.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
+    <Card>
+      <DataTable<Credential>
+        crudService={credentialService}
+        order={{ createdAt: -1 }}
+      >
+        <DataTable.Header>
+          <DataTable.Title />
+          <DataTable.Buttons>
+            <DataTable.Button outline isRefreshButton refreshAfterTask />
+            <DataTable.Button
+              primary
+              isAddButton
+              disabled={!userPermission("EDIT_CREDENTIAL")}
+            />
+          </DataTable.Buttons>
+        </DataTable.Header>
 
-          {/* Giao Hang Tiet Kiem */}
-          <Field name="giaoHangTietKiem.value" label={t("Giao Hàng Tiết Kiệm Token")} cols={9}>
-            <Input placeholder={t("Nhập Giao Hàng Tiết Kiệm Token")} type="password" />
-          </Field>
-          <Field name="giaoHangTietKiem.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
-          {/* SPX */}
-          <Field name="spx.value" label={t("SPX Token")} cols={9}>
-            <Input placeholder={t("Nhập SPX Token")} type="password" />
-          </Field>
-          <Field name="spx.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
-          {/* JT Express */}
-          <Field name="jtExpress.value" label={t("JT Express Token")} cols={9}>
-            <Input placeholder={t("Nhập JT Express Token")} type="password" />
-          </Field>
-          <Field name="jtExpress.active" label={t("Kích hoạt")} cols={3}>
-            <Switch />
-          </Field>
+        <DataTable.Divider />
 
-          <Form.Footer
-            isLoading={loading}
-            submitProps={{ disabled: !userPermission("EDIT_CREDENTIAL") }}
-            cancelText=""
-          />
-        </Form>
-      </Card>
-    </div>
+        <DataTable.Toolbar>
+          <DataTable.Search placeholder={t("Tìm theo key")} />
+          <DataTable.Filter />
+        </DataTable.Toolbar>
+
+        <DataTable.Consumer>
+          {({ changeRowData }) => (
+            <>
+              <DataTable.Table className="mt-4">
+                <DataTable.Column
+                  label={t("Key")}
+                  width={220}
+                  render={(item: Credential) => (
+                    <DataTable.CellText
+                      value={item.key?.replace(/_/g, " ") || "-"}
+                      className="font-medium"
+                    />
+                  )}
+                />
+                <DataTable.Column
+                  label={t("Giá trị")}
+                  render={(item: Credential) => (
+                    <DataTable.CellText
+                      value={item.value ? "••••••••" : "-"}
+                      className="text-gray-600"
+                    />
+                  )}
+                />
+                <DataTable.Column
+                  center
+                  label={t("Kích hoạt")}
+                  render={(item: Credential) => (
+                    <DataTable.CellText
+                      className="flex justify-center"
+                      value={
+                        <Switch
+                          dependent
+                          value={item.active}
+                          onChange={async () => {
+                            try {
+                              const res = await credentialService.update({
+                                id: item.id,
+                                data: { active: !item.active },
+                                toast,
+                              });
+                              changeRowData(item, "active", res.active);
+                            } catch {
+                              changeRowData(item, "active", item.active);
+                            }
+                          }}
+                        />
+                      }
+                    />
+                  )}
+                />
+                <DataTable.Column
+                  label={t("Ngày tạo")}
+                  render={(item: Credential) => (
+                    <DataTable.CellDate
+                      value={item.createdAt}
+                      format="dd/MM/yyyy HH:mm"
+                    />
+                  )}
+                />
+                <DataTable.Column
+                  right
+                  className="whitespace-nowrap"
+                  render={(item: Credential) => (
+                    <>
+                      <DataTable.CellButton
+                        value={item}
+                        isEditButton
+                        disabled={!userPermission("EDIT_CREDENTIAL")}
+                      />
+                      <DataTable.CellButton
+                        hoverDanger
+                        value={item}
+                        isDeleteButton
+                        disabled={!userPermission("EDIT_CREDENTIAL")}
+                      />
+                    </>
+                  )}
+                />
+              </DataTable.Table>
+            </>
+          )}
+        </DataTable.Consumer>
+
+        <DataTable.Form grid width={600} slideFromBottom="none">
+          <CredentialFields />
+        </DataTable.Form>
+
+        <DataTable.Pagination />
+      </DataTable>
+    </Card>
   );
-};
+}

@@ -9,6 +9,7 @@ import {
   RiArrowLeftSLine,
   RiBankCardLine,
   RiHandCoinFill,
+  RiKey2Line,
   RiLockPasswordLine,
   RiLogoutBoxLine,
   RiMenu3Line,
@@ -71,10 +72,10 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
       {/* {!isBlockPage && <HomePopupNotify />} */}
       {/* <RewardPointNotifyDialog /> */}
       <HomePageDeactiveDialog isOpen={!!isBlockPage} pageDeactiveDialogValue={isBlockPage?.value} />
-      <header className="fixed top-0 left-0 z-50 flex items-center w-full bg-white shadow h-14">
+      <header className="flex fixed top-0 left-0 z-50 items-center w-full h-14 bg-white shadow">
         <div className="w-full bg-white">
-          <div className="flex flex-row items-center justify-between w-full pl-5 pr-1 h-14">
-            <div className="flex flex-row items-center justify-around">
+          <div className="flex flex-row justify-between items-center pr-1 pl-5 w-full h-14">
+            <div className="flex flex-row justify-around items-center">
               <div className="mr-6 logo min-w-12">
                 <Link href={"/"}>
                   <img
@@ -85,10 +86,10 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                 </Link>
               </div>
             </div>
-            <div className="flex flex-row items-center justify-around">
+            <div className="flex flex-row justify-around items-center">
               <nav className="min-h-15">
-                <div className="flex flex-row items-center justify-between py-3">
-                  <div className="flex flex-row items-center flex-grow-0 flex-shrink-0 gap-2">
+                <div className="flex flex-row justify-between items-center py-3">
+                  <div className="flex flex-row flex-grow-0 flex-shrink-0 gap-2 items-center">
                     <SelectLanguage mode="desktop" />
 
                     <CartDropdown order={order} />
@@ -101,14 +102,14 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                           <Button
                             small
                             text={t("Đăng nhập/Đăng ký")}
-                            className="font-semibold leading-6 rounded-full cursor-pointer whitespace-nowrap"
+                            className="font-semibold leading-6 whitespace-nowrap rounded-full cursor-pointer"
                             onClick={() => setOpenCustomerLoginDialog(true)}
                             primary
                           />
                         </>
                       ) : (
                         <div className="cursor-pointer">
-                          <div className="flex items-center justify-between gap-1">
+                          <div className="flex gap-1 justify-between items-center">
                             <Img
                               src={customer?.avatarUrl}
                               imageClassName="border-primary-dark border hover:border-orange"
@@ -126,9 +127,9 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   <Dropdown reference={userRef} trigger="hover" placement="bottom-start" arrow>
                     <Dropdown.Item
                       onClick={() => router.push("/profile")}
-                      className="border-b h-14"
+                      className="h-14 border-b"
                     >
-                      <div className="flex items-center justify-between gap-1 pb-2 overflow-ellipsis">
+                      <div className="flex gap-1 justify-between items-center pb-2 overflow-ellipsis">
                         <Img
                           imageClassName="border-primary-dark border hover:border-orange"
                           src={customer?.avatarUrl}
@@ -140,11 +141,11 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                             {customer?.name}
                           </div>
                           <div className="flex flex-row items-center font-semibold">
-                            <RiHandCoinFill className="ml-1 mr-2 text-yellow-400" />
+                            <RiHandCoinFill className="mr-2 ml-1 text-yellow-400" />
                             {/* {currencyPrice(wallet?.balance) || 0} {" MPoint"} */}
                           </div>
                           <div className="flex flex-row items-center font-semibold">
-                            <RiUserHeartFill className="ml-1 mr-2 text-yellow-400" />
+                            <RiUserHeartFill className="mr-2 ml-1 text-yellow-400" />
                             {customer?.creditPoint || 0} {`/100 ${t("uy tín")}`}
                           </div>
                         </div>
@@ -219,8 +220,8 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
       )}
 
       <>
-        <div className="fixed top-0 left-0 z-50 flex flex-row items-center w-full bg-white shadow h-14">
-          <div className="flex flex-row justify-between w-full gap-2 px-4">
+        <div className="flex fixed top-0 left-0 z-50 flex-row items-center w-full h-14 bg-white shadow">
+          <div className="flex flex-row gap-2 justify-between px-4 w-full">
             <div className="flex flex-row items-center">
               <Link href="/" className="block">
                 <img
@@ -232,8 +233,8 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
             {isMobileSearchBox && !screenMd ? (
               <SearchInputMobile setIsMobileSearchBox={setIsMobileSearchBox} />
             ) : (
-              <div className="flex flex-row items-center justify-between gap-4">
-                <div className="flex flex-row items-center gap-2">
+              <div className="flex flex-row gap-4 justify-between items-center">
+                <div className="flex flex-row gap-2 items-center">
                   {screenMd ? (
                     <>
                       <SelectLanguage mode="mobile" />
@@ -294,7 +295,7 @@ export const SelectLanguage = ({
               : "h-8 w-8 flex items-center justify-center hover:bg-gray-100 text-xl text-gray-600"
           }`}
         >
-          <Img className="w-4 h-4 leading-3 border rounded-full" src={selectLocale.image} />
+          <Img className="w-4 h-4 leading-3 rounded-full border" src={selectLocale.image} />
         </div>
       ) : (
         <Button
@@ -308,7 +309,7 @@ export const SelectLanguage = ({
               </i>
             </>
           }
-          className="px-1 font-semibold border rounded-full cursor-pointer whitespace-nowrap"
+          className="px-1 font-semibold whitespace-nowrap rounded-full border cursor-pointer"
           icon={<Img className="w-4 h-4 leading-3" src={selectLocale.image} />}
           iconClassName="text-20"
           outline
@@ -326,7 +327,7 @@ export const SelectLanguage = ({
               }}
               className="flex items-center gap-2 p-1.5 cursor-pointer  hover:bg-primary-light rounded-md"
             >
-              <Img className="w-5 h-5 border rounded-full" src={locale.image} />
+              <Img className="w-5 h-5 rounded-full border" src={locale.image} />
               <span>{locale.label}</span>
               {currentLocale === locale.value && (
                 <i className="text-success">
@@ -354,7 +355,7 @@ function SearchInputMobile({
       >
         <HiArrowLeft />
       </i>
-      <div className="w-full my-2"></div>
+      <div className="my-2 w-full"></div>
     </div>
   );
 }
@@ -375,7 +376,7 @@ function CartDropdown({ order }: { order?: Order }) {
           onClick={() => setIsOpen(!isOpen)}
         />
         {badgeCount > 0 && (
-          <div className="absolute top-0 px-1 text-xs font-semibold text-white bg-red-500 rounded-full left-5">
+          <div className="absolute top-0 left-5 px-1 text-xs font-semibold text-white bg-red-500 rounded-full">
             {badgeCount > 99 ? "99+" : badgeCount}
           </div>
         )}
@@ -435,7 +436,7 @@ export function NotifiCationDropdown() {
         innerRef={refNotification}
       />
       {!!notificationCount && (
-        <div className="absolute top-0 px-1 text-xs font-semibold text-white bg-red-500 rounded-full left-5">
+        <div className="absolute top-0 left-5 px-1 text-xs font-semibold text-white bg-red-500 rounded-full">
           {notificationCount >= 9 ? "9+" : notificationCount}
         </div>
       )}
@@ -466,6 +467,11 @@ const useHeaderDropDownMenus = () => {
       icon: <RiShoppingCart2Line />,
       onclick: () => router.push("/profile/orders-buy"),
     },
+    {
+      text: t("Chứng chỉ của tôi"),
+      icon: <RiKey2Line />,
+      onclick: () => router.push("/profile/credential"),
+    },
     // {
     //   text: t("Đơn trung gian bán"),
     //   icon: <RiHandCoinLine />,
@@ -495,7 +501,7 @@ const OrderNotify = ({ order }: { order?: Order }) => {
     <>
       {!!order && (
         <div
-          className="fixed bottom-0 left-0 z-50 flex items-center justify-center w-full h-10 text-sm font-medium text-yellow-800 bg-yellow-100 cursor-pointer"
+          className="flex fixed bottom-0 left-0 z-50 justify-center items-center w-full h-10 text-sm font-medium text-yellow-800 bg-yellow-100 cursor-pointer"
           onClick={() => router.push(`/checkout`)}
         >
           <span>

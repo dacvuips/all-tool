@@ -1,6 +1,8 @@
+import { ForbiddenError } from "apollo-server-express";
+import _ from "lodash";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
-import { credentialService, ICredential } from "../../../libs/dal/credential";
+import { CredentialModel, credentialService, ICredential } from "../../../libs/dal/credential";
 import { Context } from "../../../libs/graphql";
 
 const maskCredentialValue = (value?: string) => {
@@ -8,73 +10,60 @@ const maskCredentialValue = (value?: string) => {
   return "****";
 };
 
-const maskCredential = (credential: ICredential) => {
+const maskCredential = (credential: ICredential | null) => {
   if (!credential) return null;
-
+  const doc = credential as any;
   return {
-    ...credential,
-    id: credential._id,
-    ghnToken: credential.ghnToken
-      ? {
-          ...credential.ghnToken,
-          active: credential.ghnToken.active,
-          value: maskCredentialValue(credential.ghnToken.value),
-        }
-      : undefined,
-    googleAIStudio: credential.googleAIStudio
-      ? {
-          ...credential.googleAIStudio,
-          active: credential.googleAIStudio.active,
-          value: maskCredentialValue(credential.googleAIStudio.value),
-        }
-      : undefined,
-    giaoHangTietKiem: credential.giaoHangTietKiem
-      ? {
-          ...credential.giaoHangTietKiem,
-          active: credential.giaoHangTietKiem.active,
-          value: maskCredentialValue(credential.giaoHangTietKiem.value),
-        }
-      : undefined,
-    chatGPT: credential.chatGPT
-      ? {
-          ...credential.chatGPT,
-          active: credential.chatGPT.active,
-          value: maskCredentialValue(credential.chatGPT.value),
-        }
-      : undefined,
-    spx: credential.spx
-      ? {
-          ...credential.spx,
-          active: credential.spx.active,
-          value: maskCredentialValue(credential.spx.value),
-        }
-      : undefined,
-    jtExpress: credential.jtExpress
-      ? {
-          ...credential.jtExpress,
-          active: credential.jtExpress.active,
-          value: maskCredentialValue(credential.jtExpress.value),
-        }
-      : undefined,
+    id: doc._id,
+    key: doc.key,
+    value: maskCredentialValue(doc.value),
+    active: doc.active,
+    customerId: doc.customerId,
+    isCustomerCredential: doc.isCustomerCredential,
+    isAdminCredential: doc.isAdminCredential,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
   };
 };
 
 const Query = {
   getAllCredential: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-1"]]);
+    _.set(args.q, "filter.isAdminCredential", true);
+
+    const result = await credentialService.fetch(args.q);
+    return {
+      ...result,
+      data: result.data.map((item) => maskCredential(item)),
+    };
   },
   getOneCredential: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-1"]]);
     const { id } = args;
-    const credential = await credentialService.findOne({ _id: id });
+    const credential = await credentialService.findOne({ _id: id, isAdminCredential: true });
     return maskCredential(credential);
   },
-  getMyCredential: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-1"]]);
-    const result = await credentialService.fetch(args.q);
-    // lấy credential đầu tiên
-    const firstCredential = result.data.length > 0 ? result.data[0] : null;
-    return maskCredential(firstCredential);
+  getAllCredentialCustomer: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    _.set(args.q, "filter.isCustomerCredential", true);
+    const result = await credentialService.fetch({ customerId: context.id, ...args.q });
+    return {
+      ...result,
+      data: result.data.map((item) => maskCredential(item)),
+    };
+  },
+  getOneCredentialCustomer: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { id } = args;
+    const credential = await credentialService.findOne({
+      _id: id,
+      customerId: context.id,
+      isCustomerCredential: true,
+    });
+    if (!credential) {
+      throw new ForbiddenError("Credential not found");
+    }
+    return maskCredential(credential);
   },
 };
 
@@ -82,20 +71,109 @@ const Mutation = {
   createCredential: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-2"]]);
     const { data } = args;
-    await credentialService.create(data);
-
-    return { data: "success" };
+    // kiểm tra xem đã tồn tại key với adminId đã tồn tại chưa
+    const existingCredential = await CredentialModel.findOne({
+      key: data.key,
+      isAdminCredential: true,
+    });
+    if (existingCredential) {
+      throw new ForbiddenError("Credential already exists");
+    }
+    data.isAdminCredential = true;
+    const created = await credentialService.create(data);
+    return maskCredential(created);
   },
   updateCredential: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-2"]]);
     const { id, data } = args;
-    await credentialService.updateOne(id, data);
-    return { data: "success" };
+    // kiểm tra xem đã tồn tại key với adminId đã tồn tại chưa
+    //Update phải tìm loại bỏ chính id này
+    const credential = await CredentialModel.findOne({
+      _id: { $ne: id },
+      key: data.key,
+      isAdminCredential: true,
+    });
+    if (credential) {
+      throw new ForbiddenError("Credential already exists");
+    }
+
+    const updated = await credentialService.updateOne(id, data);
+    return maskCredential(updated);
   },
   deleteOneCredential: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["CR-1-2"]]);
     const { id } = args;
-    return await credentialService.deleteOne(id);
+    const deleted = await credentialService.deleteOne(id);
+    return maskCredential(deleted);
+  },
+  createCredentialCustomer: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { data } = args;
+    // kiểm tra xem đã tồn tại key với adminId đã tồn tại chưa
+    const existingCredential = await CredentialModel.findOne({
+      key: data.key,
+      customerId: context.id,
+      isCustomerCredential: true,
+    });
+    if (existingCredential) {
+      throw new ForbiddenError("Credential already exists");
+    }
+    const created = await credentialService.create({
+      key: data.key,
+      value: data.value,
+      active: data.active,
+      customerId: context.id,
+      isCustomerCredential: true,
+      isAdminCredential: false,
+    });
+    if (!created) {
+      throw new ForbiddenError("Failed to create credential");
+    }
+    return maskCredential(created);
+  },
+  updateCredentialCustomer: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { id, data } = args;
+    // kiểm tra xem đã tồn tại key với adminId đã tồn tại chưa
+    //Update phải tìm loại bỏ chính id này
+    const credential = await CredentialModel.findOne({
+      _id: { $ne: id },
+      key: data.key,
+      customerId: context.id,
+      isCustomerCredential: true,
+    });
+    if (credential) {
+      throw new ForbiddenError("Credential already exists");
+    }
+    const credentialUpdated = await CredentialModel.findOneAndUpdate(
+      {
+        _id: id,
+        customerId: context.id,
+        isCustomerCredential: true,
+      },
+      { $set: data },
+      { new: true }
+    );
+    if (!credentialUpdated) {
+      throw new ForbiddenError("Credential not found");
+    }
+    return maskCredential(credentialUpdated);
+  },
+  deleteOneCredentialCustomer: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { id } = args;
+    const credential = await CredentialModel.findOneAndDelete(
+      {
+        _id: id,
+        customerId: context.id,
+        isCustomerCredential: true,
+      },
+      { new: true }
+    );
+    if (!credential) {
+      throw new ForbiddenError("Credential not found");
+    }
+    return maskCredential(credential);
   },
 };
 
