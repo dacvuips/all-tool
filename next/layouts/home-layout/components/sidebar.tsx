@@ -104,9 +104,9 @@ export function SidebarDesktop({
   return (
     <>
       <div
-        className={`${
-          getStorage == "true" ? "w-60" : "w-0"
-        } fixed flex flex-col z-20 bg-white shadow top-14`}
+        className={` fixed bottom-0 z-20 flex flex-col bg-white shadow ${
+          getStorage == "true" ? "w-56" : ""
+        } `}
         style={{ height: "calc(100vh - 56px)" }}
       >
         {getStorage == "true" && (

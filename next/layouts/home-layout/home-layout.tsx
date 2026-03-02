@@ -43,7 +43,6 @@ export function HomeLayout({ ...props }: LayoutProps) {
               className={`flex flex-col flex-1 pl-0 grow ${
                 getToggleSidebar == "true" && "2xl:pl-56 xl:pl-56"
               }  lg:pl-12 md:pl-12 sm:pl-12 xs:pl-12`}
-              // className={`flex flex-col flex-1 pl-0 grow`}
             >
               <div className={`${!xs ? "p-1" : "p-4"}`}>
                 <ErrorCatcher>
