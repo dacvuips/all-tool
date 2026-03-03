@@ -1,8 +1,10 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlinePencil, HiOutlineTrash } from "react-icons/hi";
 import { Handle, NodeProps, Position } from "reactflow";
-import { NodeConfig, Product, ProductFlowNodeData } from "../../../../../lib/repo";
+import { useAlert } from "../../../../../lib/providers/alert-provider";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { NodeConfig, Product, ProductFlowNodeData } from "../../../../../lib/repo/product";
 import { Button } from "../../../../shared/utilities/form";
 
 /** Data khi node là product card (danh sách sản phẩm) */
@@ -34,15 +36,21 @@ function isFlowNodeData(data: ProductNodeData): data is FlowNodeData {
 
 export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
   const { t } = useTranslation();
+  const alert = useAlert();
 
   // Flow node: hiển thị theo node data (label, config, properties)
   if (isFlowNodeData(data)) {
     const { label, config, properties, nodeId, onEditNode, onDeleteNode } = data;
     const displayLabel = label || t("Node");
-    const provider = config?.provider || "-";
+
     const endpoint = config?.endpoint || "-";
     const method = config?.method || "POST";
     const fieldsCount = properties?.length ?? 0;
+    const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
+    const aiProviderKey = useMemo(
+      () => CREDENTIAL_KEY_OPTIONS.find((item) => item.value === config?.aiProviderKey),
+      [config?.aiProviderKey, CREDENTIAL_KEY_OPTIONS]
+    );
 
     return (
       <div
@@ -63,8 +71,13 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
             <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
               {displayLabel}
             </div>
-            <div className="text-xs text-gray-500">
-              {provider} · {method} · {fieldsCount} {t("trường")}
+            <div className="flex gap-1 items-center text-xs text-gray-500">
+              <img
+                src={aiProviderKey?.image ?? "-"}
+                alt={aiProviderKey?.label ?? "-"}
+                className="px-1 h-5 rounded-full border"
+              />
+              {aiProviderKey?.label} · {method} · {fieldsCount} {t("trường")}
             </div>
           </div>
         </div>
@@ -92,7 +105,15 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
                 icon={<HiOutlineTrash />}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onDeleteNode(nodeId);
+                  alert.danger(
+                    t("Xóa node"),
+                    t("Bạn có chắc chắn muốn xóa node này không?"),
+                    t("Xóa"),
+                    async () => {
+                      onDeleteNode(nodeId);
+                      return true;
+                    }
+                  );
                 }}
                 tooltip={t("Xóa")}
                 hoverDanger

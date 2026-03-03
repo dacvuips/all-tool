@@ -21,6 +21,7 @@ import "reactflow/dist/style.css";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
+  AiProviderKeyEnum,
   Product,
   ProductFlowEdge,
   ProductFlowNode,
@@ -169,8 +170,8 @@ export interface ProductFlowPageProps {
 
 /** Config mặc định cho node mới */
 const DEFAULT_NODE_CONFIG = {
-  provider: "veo3",
-  endpoint: "/generate-video",
+  aiProviderKey: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+  endpoint: "",
   method: "POST",
   bodyTemplate: "{ prompt: {{prompt}}, duration: {{duration}} }",
 };
