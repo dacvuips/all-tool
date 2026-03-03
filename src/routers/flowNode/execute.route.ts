@@ -8,9 +8,11 @@ import axios, { AxiosRequestConfig } from "axios";
 import { Request, Response } from "express";
 import { parseBodyAfterReplace, replacePlaceholders } from "../../helpers/flow-node-placeholder";
 import { ForbiddenError } from "../../libs/core/errors";
+import { CredentialModel } from "../../libs/dal/credential";
 import { CustomerModel } from "../../libs/dal/customer";
-import { ProductFlowNodeData, ProductModel } from "../../libs/dal/product";
+import { AiProviderKeyEnum, ProductFlowNodeData, ProductModel } from "../../libs/dal/product";
 import { CustomerStatusEnum } from "../../libs/shared/interfaces/customer.interface";
+import { decryptProviderSecret } from "../../packages/encryption";
 interface ExecuteNodeBody {
   productId: string;
   nodeId: string;
@@ -75,6 +77,23 @@ export default [
         }
         const nodeData = node.data as ProductFlowNodeData;
 
+        // tìm credential của customer
+        const credential = await CredentialModel.findOne({
+          key: nodeData.config.aiProviderKey as AiProviderKeyEnum,
+          customerId,
+          isCustomerCredential: true,
+          active: true,
+        });
+        if (!credential) {
+          return res.status(400).json({
+            success: false,
+            error: "Credential not found",
+          } as ExecuteNodeResponse);
+        }
+        const credentialDecrypted = decryptProviderSecret(credential.value);
+        if (nodeData.config.aiProviderKey) {
+          fieldValues[nodeData.config.aiProviderKey] = credentialDecrypted;
+        }
         const rawTemplate = nodeData.config.bodyTemplate ?? "{}";
         const headers = nodeData.config.headers ?? "{}";
         const replacedTemplate = replacePlaceholders(rawTemplate, fieldValues, context);
@@ -85,16 +104,13 @@ export default [
 
         const method = (nodeData.config.method || "POST").toUpperCase();
 
-        const rawUrl = nodeData.config.endpoint.startsWith("http")
-          ? nodeData.config.endpoint
-          : `${process.env.API_BASE_URL || ""}${nodeData.config.endpoint}`.replace(
-              /([^:])\/\/+/,
-              "$1/"
-            );
+        const rawUrl = nodeData.config.endpoint;
         const url = replacePlaceholders(rawUrl, fieldValues, context);
+        const urlParsed = parseBodyAfterReplace(url);
+
         const axiosConfig: AxiosRequestConfig = {
           method: method as any,
-          url,
+          url: urlParsed as string,
           headers: {
             "Content-Type": "application/json",
             ...(headersObj as Record<string, string>),

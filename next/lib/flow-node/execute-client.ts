@@ -13,6 +13,7 @@ export interface ExecuteNodeConfig {
 export interface ExecuteNodeParams {
   productId: string;
   nodeId: string;
+  customerId: string;
   fieldValues?: Record<string, unknown>;
   context?: Record<string, unknown>;
 }
@@ -34,6 +35,7 @@ export async function executeFlowNode(params: ExecuteNodeParams): Promise<Execut
     body: JSON.stringify({
       productId: params.productId,
       nodeId: params.nodeId,
+      customerId: params.customerId,
       fieldValues: params.fieldValues ?? {},
       context: params.context ?? {},
     }),

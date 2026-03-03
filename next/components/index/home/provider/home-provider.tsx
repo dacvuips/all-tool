@@ -3,7 +3,9 @@ import { useRouter } from "next/router";
 import { createContext, useContext, useEffect, useState } from "react";
 import { ParamName } from "../../../../lib/constants/constants";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
-import { Category, CategoryService, Product, ProductService } from "../../../../lib/repo";
+import { Product, ProductService } from "../../../../lib/repo/product";
+
+import { Category } from "../../../../lib/repo";
 import { Pagination } from "../../../../lib/repo/crud.repo";
 import { SortDirection } from "../../../../lib/repo/types";
 
@@ -122,15 +124,15 @@ export function HomeProvider({ ...props }) {
     }
   };
   const loadCategories = async () => {
-    try {
-      setLoading(true);
-      const res = await CategoryService.getActiveCategories();
-      setCategories(res.data);
-    } catch (error) {
-      console.error("Failed to load categories:", error);
-    } finally {
-      setLoading(false);
-    }
+    // try {
+    //   setLoading(true);
+    //   const res = await CategoryService.getActiveCategories();
+    //   setCategories(res.data);
+    // } catch (error) {
+    //   console.error("Failed to load categories:", error);
+    // } finally {
+    //   setLoading(false);
+    // }
   };
   useEffect(() => {
     const date = new Date().getTime();

@@ -19,8 +19,9 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { executeFlowNode } from "../../../lib/flow-node/execute-client";
+import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
-import type { ProductFlowEdge, ProductFlowNode } from "../../../lib/repo";
+import type { ProductFlowEdge, ProductFlowNode } from "../../../lib/repo/product";
 import { ProductEdge } from "../../admin/management/product/components/product-edge";
 import { ProductFlowArrowMarkers } from "../../admin/management/product/components/product-flow-arrow-markers";
 import { Button } from "../../shared/utilities/form";
@@ -98,6 +99,8 @@ function buildFlowEdges(flowEdges: ProductFlowEdge[]): Edge[] {
 
 export const ProductDetailPage = () => {
   const { t } = useTranslation();
+  const { customer } = useAuth();
+
   const toast = useToast();
   const { product } = useProductDetailContext();
 
@@ -127,6 +130,7 @@ export const ProductDetailPage = () => {
       try {
         const result = await executeFlowNode({
           productId: product?.id,
+          customerId: customer?._id || "",
           nodeId,
           fieldValues,
         });
@@ -160,6 +164,7 @@ export const ProductDetailPage = () => {
       const result = await executeFlowNode({
         productId: product?.id || "",
         nodeId,
+        customerId: customer?._id || "",
         fieldValues,
         context,
       });

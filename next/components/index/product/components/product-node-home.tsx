@@ -87,7 +87,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
 
   return (
     <div
-      className="product-node flow-node"
+      className="product-node flow-node nodrag nopan"
       style={{
         background: "#fff",
         border: `1.5px solid ${hasError ? "#dc2626" : "#4f46e5"}`,
@@ -95,7 +95,6 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
         minWidth: "375px",
         maxWidth: "375px",
         boxShadow: hasError ? "0 4px 24px rgba(220,38,38,0.25)" : "0 4px 24px rgba(79,70,229,0.25)",
-        overflow: "hidden",
         fontFamily: "Inter, sans-serif",
       }}
     >
@@ -213,6 +212,7 @@ const PropertyComponent = memo(function PropertyComponent({
               {(field.type === PropertyTypeEnum.SELECT ||
                 field.type === PropertyTypeEnum.MULTI_SELECT) && (
                 <Select
+                  className="nodrag"
                   clearable={field.clearable}
                   multi={field.type === PropertyTypeEnum.MULTI_SELECT}
                   placeholder={field.placeholder}
