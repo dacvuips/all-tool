@@ -19,7 +19,10 @@ export type JSONEditorProps = FormControlProps & {
 };
 function normalizePlaceholder(value: unknown): object | unknown[] {
   if (value === undefined || value === null) return {};
-  if (typeof value === "object" && (Array.isArray(value) || (value !== null && value.constructor === Object))) {
+  if (
+    typeof value === "object" &&
+    (Array.isArray(value) || (value !== null && value.constructor === Object))
+  ) {
     return value as object | unknown[];
   }
   if (typeof value === "string") {
@@ -49,8 +52,8 @@ export function JSONEditor({
       typeof data === "object" && data !== null
         ? JSON.stringify(data)
         : typeof data === "string"
-          ? data
-          : "";
+        ? data
+        : "";
     if (props.onChange) props.onChange(output);
   };
   const placeholder = normalizePlaceholder(value ?? props.value);
@@ -70,9 +73,11 @@ export function JSONEditor({
         height={height || "300px"}
         viewOnly={props.readOnly}
         onBlur={(event) => {
+          if (event.error) return;
           onChange(event.jsObject);
         }}
         onChange={(event) => {
+          if (event.error) return;
           onChange(event.jsObject);
         }}
       />
