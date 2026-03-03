@@ -26,6 +26,7 @@ export const ParamName = {
   boothId: "boothId",
   categoryId: "categoryId",
   openRegisterShopMallPost: "open-register-shop-mall-post",
+  productId: "productId",
 };
 
 export const CookiesName = {

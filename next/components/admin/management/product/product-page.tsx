@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
 import { RiSettings4Line } from "react-icons/ri";
 
+import { ParamName } from "../../../../lib/constants/constants";
 import { Product, ProductService } from "../../../../lib/repo/product";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -12,37 +14,35 @@ import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
 import { ProductFlowPage } from "./product-flow-page";
 
-export function ProductPage(props) {
+export function ProductPage(props: { initialProductId?: string | null }) {
+  const { initialProductId } = props || {};
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
   const [filter, setFilter] = useState<any>({});
   const [timeRange, setTimeRange] = useState<any>(null);
 
-  useEffect(() => {
-    setFilter({
-      ...(timeRange ? { createdAt: { $gte: timeRange.startDate, $lte: timeRange.endDate } } : {}),
-    });
-  }, [timeRange]);
+  const [queryParams, setQueryParams] = useQueryParams({
+    [ParamName.productId]: "",
+  });
+  const productIdParam = (queryParams[ParamName.productId] as string) || "";
 
-  const [showFlowView, setShowFlowView] = useState(false);
-  const [flowProductId, setFlowProductId] = useState<string | null>(null);
+  useEffect(() => {
+    if (productIdParam) {
+      setQueryParams({ [ParamName.productId]: productIdParam });
+    }
+  }, [productIdParam]);
 
   const handleOpenProductFlow = (productId: string) => {
-    setFlowProductId(productId);
-    setShowFlowView(true);
+    setQueryParams({ [ParamName.productId]: productId });
   };
 
-  if (showFlowView) {
-    return (
-      <ProductFlowPage
-        initialProductId={flowProductId}
-        onBack={() => {
-          setShowFlowView(false);
-          setFlowProductId(null);
-        }}
-      />
-    );
+  const handleBackFromFlow = () => {
+    setQueryParams({ [ParamName.productId]: "" });
+  };
+
+  if (productIdParam) {
+    return <ProductFlowPage productIdParam={productIdParam} onBack={handleBackFromFlow} />;
   }
 
   return (
@@ -171,6 +171,7 @@ export function ProductPage(props) {
         <DataTable.Form grid width={1024} slideFromBottom="none">
           <ProductField />
         </DataTable.Form>
+
         <DataTable.Pagination />
       </DataTable>
     </Card>

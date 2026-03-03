@@ -164,7 +164,7 @@ function flowStateToProductFlow(
 }
 
 export interface ProductFlowPageProps {
-  initialProductId?: string | null;
+  productIdParam?: string | null;
   onBack?: () => void;
 }
 
@@ -176,17 +176,16 @@ const DEFAULT_NODE_CONFIG = {
   bodyTemplate: "{ prompt: {{prompt}}, duration: {{duration}} }",
 };
 
-export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlowPageProps = {}) {
+export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps = {}) {
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
-
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  const isFlowMode = !!initialProductId;
+  const isFlowMode = !!productIdParam;
 
   // Sidebar state
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(null);
@@ -269,12 +268,12 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   }, []);
 
   useEffect(() => {
-    if (isFlowMode && initialProductId) {
-      loadProductFlow(initialProductId);
+    if (isFlowMode && productIdParam) {
+      loadProductFlow(productIdParam);
     } else {
       loadProducts();
     }
-  }, [isFlowMode, initialProductId, loadProductFlow, loadProducts]);
+  }, [isFlowMode, productIdParam, loadProductFlow, loadProducts]);
 
   const handleEdit = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -299,7 +298,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       toast.success(t("Xóa sản phẩm thành công"));
       setDeleteConfirm(false);
       setDeletingProduct(null);
-      if (isFlowMode && deletingProduct.id === initialProductId) {
+      if (isFlowMode && deletingProduct.id === productIdParam) {
         if (onBack) onBack();
       } else {
         loadProducts();
@@ -365,18 +364,18 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   );
 
   const saveFlow = useCallback(async () => {
-    if (!initialProductId || !currentProduct) return;
+    if (!productIdParam || !currentProduct) return;
     const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(nodes, edges);
     try {
       await ProductService.createOrUpdate({
-        id: initialProductId,
+        id: productIdParam,
         data: { flow: { nodes: flowNodes, edges: flowEdges } },
       });
       setCurrentProduct((p) => (p ? { ...p, flow: { nodes: flowNodes, edges: flowEdges } } : null));
     } catch (err: any) {
       toast.error(t("Lưu flow thất bại") + ": " + err.message);
     }
-  }, [initialProductId, currentProduct, nodes, edges, toast, t]);
+  }, [productIdParam, currentProduct, nodes, edges, toast, t]);
 
   useEffect(() => {
     if (!isFlowMode) return;
@@ -424,7 +423,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   const debouncedSaveFlowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!isFlowMode || !initialProductId) return;
+    if (!isFlowMode || !productIdParam) return;
     if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
     debouncedSaveFlowRef.current = setTimeout(() => {
       saveFlowRef.current?.();
@@ -433,7 +432,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     return () => {
       if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
     };
-  }, [isFlowMode, initialProductId, nodes, edges]);
+  }, [isFlowMode, productIdParam, nodes, edges]);
 
   const handleAddFlowNode = useCallback(() => {
     const nodeId = `node-${Date.now()}`;
@@ -469,7 +468,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     <div
       className="flex overflow-hidden relative flex-col w-full h-full font-sans bg-gray-900 rounded-md"
       style={{
-        height: "calc(100vh - 80px)",
+        height: "calc(100vh - 110px)",
       }}
     >
       {/* ── TOP TOOLBAR ── */}
