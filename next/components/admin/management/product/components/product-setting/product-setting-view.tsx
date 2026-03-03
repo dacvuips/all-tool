@@ -2,7 +2,7 @@ import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 
 import { useScreen } from "../../../../../../lib/hooks/useScreen";
-import { PropertyTypeEnum } from "../../../../../../lib/repo";
+import { PropertyTypeEnum } from "../../../../../../lib/repo/product";
 import {
   Field,
   ImageInput,
@@ -22,7 +22,7 @@ export const ProductSettingView = () => {
   return (
     <div
       style={{ width: "375px", minWidth: "375px" }}
-      className="border-2 border-primary rounded-lg p-2 shadow"
+      className="p-2 rounded-lg border-2 shadow border-primary"
     >
       {properties?.length ? (
         <>

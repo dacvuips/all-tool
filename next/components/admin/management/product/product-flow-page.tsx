@@ -20,7 +20,12 @@ import "reactflow/dist/style.css";
 
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { Product, ProductFlowEdge, ProductFlowNode, ProductService } from "../../../../lib/repo";
+import {
+  Product,
+  ProductFlowEdge,
+  ProductFlowNode,
+  ProductService,
+} from "../../../../lib/repo/product";
 import { Button } from "../../../shared/utilities/form";
 import { Spinner } from "../../../shared/utilities/misc";
 import { ProductEdge } from "./components/product-edge";

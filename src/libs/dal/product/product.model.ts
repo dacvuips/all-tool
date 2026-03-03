@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { IProduct, PropertyTypeEnum } from "./product.interface";
+import { AiProviderKeyEnum, IProduct, PropertyTypeEnum } from "./product.interface";
 
 const Schema = mongoose.Schema;
 
@@ -28,7 +28,7 @@ const propertySchema = new Schema(
 const nodeConfigSchema = new Schema(
   {
     outputType: { type: String },
-    providerId: { type: String },
+    aiProviderKey: { type: String, enum: Object.values(AiProviderKeyEnum) },
     model: { type: String },
     baseUrl: { type: String },
     endpoint: { type: String },

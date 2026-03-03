@@ -1,5 +1,5 @@
 import { TimestampEntity } from "../../core";
-import { AiProviderKeyEnum } from "../aiProvider";
+import { AiProviderKeyEnum } from "../product";
 
 export type ICredential = TimestampEntity & {
   key?: AiProviderKeyEnum;

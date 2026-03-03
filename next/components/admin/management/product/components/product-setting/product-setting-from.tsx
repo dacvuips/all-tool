@@ -9,7 +9,7 @@ import {
 import { useOptionsTranslation } from "../../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../../lib/providers/auth-provider";
-import { AiProviderService, PropertyTypeEnum } from "../../../../../../lib/repo";
+import { AiProviderKeyEnum, PropertyTypeEnum } from "../../../../../../lib/repo/product";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
 import { JSONEditor } from "../../../../../shared/utilities/form/json-editor";
@@ -207,22 +207,13 @@ function ApiConfigSection() {
   const { t } = useTranslation();
   const { setValue } = useFormContext();
   const outputType = useWatch({ name: "config.outputType" }) as ApiOutputTypeValue | undefined;
-  const providerId = useWatch({ name: "config.providerId" }) as string | undefined;
+  const aiProviderKey = useWatch({ name: "config.aiProviderKey" }) as AiProviderKeyEnum | undefined;
   const modelValue = useWatch({ name: "config.model" }) as string | undefined;
-
+const {CREDENTIAL_KEY_OPTIONS} = useOptionsTranslation();
   const outputTypeOptions = useMemo(
     () => API_OUTPUT_TYPES.map((x) => ({ value: x.value, label: t(x.label) || x.label })),
     [t]
   );
- 
- 
-
-   
- 
- 
-
-   
-
 
   return (
     <div className="p-4 w-full rounded-lg border border-gray-200 bg-gray-50/50">
@@ -235,18 +226,15 @@ function ApiConfigSection() {
             clearable={false}
           />
         </Field>
-        <Field label={t("Provider")} name="config.providerId" cols={6}>
+        <Field label={t("Provider")} name="config.aiProviderKey" cols={6}>
         <Select hasImage
-          optionsPromise={() =>
-            AiProviderService.getAiProviderSelect().then((res) => {
-              return res?.map((item) => ({
-                value: item._id,
-                label: item.name,
-                image: item.imgUrl,
-              }));
-            })
-          }
-          value={providerId}
+          options={CREDENTIAL_KEY_OPTIONS}
+          placeholder={t("Chọn nền tảng AI")}
+          clearable={false}
+          onChange={(value) => {
+            setValue("config.aiProviderKey", value);
+          }}
+          value={aiProviderKey}
         />
         </Field>
         <Field label={t("Model")} name="config.model" cols={12}>

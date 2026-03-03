@@ -12,6 +12,15 @@ export enum PropertyTypeEnum {
   FILE = "FILE", // File
 }
 
+export enum AiProviderKeyEnum {
+  OPENAI_KEY = "OPENAI_KEY",
+  CLAUDE_KEY = "CLAUDE_KEY",
+  GOOGLE_GEMINI_KEY = "GOOGLE_GEMINI_KEY",
+  DEEP_SEEK_KEY = "DEEP_SEEK_KEY",
+  KLING_KEY = "KLING_KEY",
+  SEE_DANCE_KEY = "SEE_DANCE_KEY",
+}
+
 export type PropertySelectOption = {
   key: string; // Id option
   label: string; // Nhãn hiển thị
@@ -43,7 +52,7 @@ export type NodeConfig = {
   /** Loại output: ảnh, video, file, audio */
   outputType?: ApiOutputType;
   /** Provider/nền tảng: openai, google, replicate, runway, stability, custom... */
-  providerId?: string;
+  aiProviderKey?: AiProviderKeyEnum;
   /** Model: dall-e-3, veo3, flux, ... (phụ thuộc provider + outputType) */
   model?: string;
   /** Base URL (optional, override cho custom API) */

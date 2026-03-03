@@ -63,17 +63,6 @@ const schema = gql`
     isAdminCredential: Boolean
   }
 
-  enum AiProviderKeyEnum {
-    OPENAI_KEY
-    CLAUDE_KEY
-    ANTHROPIC_KEY
-    GOOGLE_GEMINI_KEY
-    DEEP_SEEK_KEY
-    KLING_KEY
-    SORA_KEY
-    SEE_DANCE_KEY
-  }
-
   type CredentialPageData {
     data: [Credential]
     total: Int

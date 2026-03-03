@@ -4,7 +4,8 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
 import { RiSettings4Line } from "react-icons/ri";
-import { Product, ProductService } from "../../../../lib/repo";
+
+import { Product, ProductService } from "../../../../lib/repo/product";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";

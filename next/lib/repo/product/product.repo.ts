@@ -12,7 +12,14 @@ export enum PropertyTypeEnum {
   MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
   FILE = "FILE", // File
 }
-
+export enum AiProviderKeyEnum {
+  OPENAI_KEY = "OPENAI_KEY",
+  CLAUDE_KEY = "CLAUDE_KEY",
+  GOOGLE_GEMINI_KEY = "GOOGLE_GEMINI_KEY",
+  DEEP_SEEK_KEY = "DEEP_SEEK_KEY",
+  KLING_KEY = "KLING_KEY",
+  SEE_DANCE_KEY = "SEE_DANCE_KEY",
+}
 export interface PropertySelectOption {
   key: string;
   label: string;
@@ -30,7 +37,7 @@ export interface Property {
 }
 
 export interface NodeConfig {
-  providerId?: string;
+  aiProviderKey?: AiProviderKeyEnum;
   endpoint?: string;
   method?: string;
   bodyTemplate?: string;
@@ -127,7 +134,7 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            providerId
+            aiProviderKey
             endpoint
             method
             model
@@ -177,7 +184,7 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            providerId
+            aiProviderKey
             endpoint
             method
             bodyTemplate

@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Product, ProductService, ProductTier, ProductVariant } from "../../../../lib/repo";
+import { Product, ProductService } from "../../../../lib/repo/product";
 
 export type ProductMediaItem = {
   type: "video" | "image";
@@ -26,7 +26,7 @@ interface ProductDetailContextValue {
   setQuantity: (value: number) => void;
   selectedOptions: Record<string, string>;
   handleOptionSelect: (tierCode: string, optionCode: string) => void;
-  selectedVariant?: ProductVariant;
+  selectedVariant?: any;
   variantImageUrl?: string | null;
   productMedia: ProductMediaItem[];
   registerScrollToImage: (handler: ScrollToImageHandler) => void;
@@ -162,13 +162,13 @@ export function ProductDetailProvider({ ...props }) {
 
     if (product?.video) addMedia({ type: "video", url: product.video });
 
-    product?.classification?.tiers?.forEach((tier: ProductTier) => {
-      tier.options?.forEach((option) => {
-        if (option.imageUrl) {
-          addMedia({ type: "image", url: option.imageUrl, optionCode: option.code });
-        }
-      });
-    });
+    // product?.classification?.tiers?.forEach((tier: ProductTier) => {
+    //   tier.options?.forEach((option) => {
+    //     if (option.imageUrl) {
+    //       addMedia({ type: "image", url: option.imageUrl, optionCode: option.code });
+    //     }
+    //   });
+    // });
 
     if (variantImageUrl) addMedia({ type: "image", url: variantImageUrl });
 

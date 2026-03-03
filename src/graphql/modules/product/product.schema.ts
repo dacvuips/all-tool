@@ -46,7 +46,7 @@ const schema = gql`
 
   input NodeConfigInput {
     outputType: String
-    providerId: String
+    aiProviderKey: AiProviderKeyEnum
     model: String
     baseUrl: String
     endpoint: String
@@ -123,7 +123,7 @@ const schema = gql`
 
   type NodeConfig {
     outputType: String
-    providerId: String
+    aiProviderKey: AiProviderKeyEnum
     model: String
     baseUrl: String
     endpoint: String
@@ -179,6 +179,14 @@ const schema = gql`
     required: Boolean
     clearable: Boolean
     options: [PropertySelectOption]
+  }
+  enum AiProviderKeyEnum {
+    OPENAI_KEY
+    CLAUDE_KEY
+    GOOGLE_GEMINI_KEY
+    DEEP_SEEK_KEY
+    KLING_KEY
+    SEE_DANCE_KEY
   }
 
   type ProductPageData {

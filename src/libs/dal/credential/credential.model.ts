@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { AiProviderKeyEnum } from "../aiProvider/aiProvider.interface";
+import { AiProviderKeyEnum } from "../product";
 import { ICredential } from "./credential.interface";
 
 const Schema = mongoose.Schema;

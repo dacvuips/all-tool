@@ -1,15 +1,15 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Handle, NodeProps, Position } from "reactflow";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import {
-  AiProviderService,
   NodeConfig,
   Product,
   ProductFlowNodeData,
   Property,
   PropertyTypeEnum,
-} from "../../../../lib/repo";
+} from "../../../../lib/repo/product";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import {
   Button,
@@ -61,25 +61,13 @@ function isFlowNodeData(data: ProductNodeData): data is FlowNodeData {
 /** Fetches provider by id and renders flow node content (sync component, async inside) */
 function FlowNodeContent({ data }: { data: FlowNodeData }) {
   const { t } = useTranslation();
-  const [provider, setProvider] = useState<{ name: string; imgUrl?: string } | null>(null);
 
-  const providerId = data.config?.providerId;
-
-  useEffect(() => {
-    if (!providerId) {
-      setProvider({ name: "-" });
-      return;
-    }
-    let cancelled = false;
-    AiProviderService.getAiProviderSelect().then((res) => {
-      if (cancelled) return;
-      const found = res?.find((item) => item._id === providerId);
-      setProvider(found ? { name: found.name ?? "-", imgUrl: found.imgUrl } : { name: "-" });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [providerId]);
+  const aiProviderKey = data.config?.aiProviderKey;
+  const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
+  const aiProvider = useMemo(
+    () => CREDENTIAL_KEY_OPTIONS.find((item) => item.value === aiProviderKey),
+    [aiProviderKey, CREDENTIAL_KEY_OPTIONS]
+  );
 
   const {
     label,
@@ -92,10 +80,10 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
     errorNodeId,
   } = data;
   const displayLabel = label || t("Node");
-  const method = config?.method || "POST";
-  const fieldsCount = properties?.length ?? 0;
+
   const hasError = errorNodeId === nodeId;
-  const providerName = provider?.name ?? "-";
+  const aiProviderName = aiProvider?.label ?? "-";
+  const aiProviderImage = aiProvider?.image ?? "-";
 
   return (
     <div
@@ -116,12 +104,13 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
           <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
             {displayLabel}
           </div>
-          <div className="flex gap-2 items-center text-xs text-gray-500">
+          <div className="flex gap-1 items-center text-xs text-gray-500">
             <img
-              src={provider?.imgUrl}
-              alt={providerName}
+              src={aiProviderImage}
+              alt={aiProviderName}
               className="px-1 h-5 rounded-full border"
             />
+            {aiProviderName}
           </div>
         </div>
       </div>

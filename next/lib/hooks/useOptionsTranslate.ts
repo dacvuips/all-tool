@@ -1,8 +1,8 @@
 import { useTranslation } from "next-i18next";
-import { AiProviderKeyEnum, OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
+import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
-import { PropertyTypeEnum } from "../repo/product/product.repo";
+import { AiProviderKeyEnum, PropertyTypeEnum } from "../repo/product/product.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
   AffiliateBoothStatus,
