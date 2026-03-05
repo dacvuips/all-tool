@@ -5,10 +5,8 @@
  */
 
 import { Request, Response } from "express";
-import {
-  executeProductCheck,
-  type ExecuteNodeResponse,
-} from "./excute-product-check";
+import { ApiOutputTypeEnum } from "../../libs/dal/product";
+import { executeProductCheck, type ExecuteNodeResponse } from "./excute-product-check";
 import { executeByProvider, ExecuteProviderContext, MethodEnum } from "./execute-provider";
 
 interface ExecuteNodeBody {
@@ -45,7 +43,7 @@ export default [
           fieldValues = {},
           context = {},
         } = req.body as ExecuteNodeBody;
-       // check product, node, customer
+        // check product, node, customer
         const check = await executeProductCheck({
           productId,
           nodeId,
@@ -54,21 +52,21 @@ export default [
         if (check.ok === false) {
           return sendErrorResponse(res, check.statusCode, check.error);
         }
-        const { node, aiProviderKey , credentialDecrypted} = check;
+        const { node, aiProviderKey, credentialDecrypted } = check;
 
         fieldValues[aiProviderKey] = credentialDecrypted;
 
-         
         const providerContext: ExecuteProviderContext = {
           nodeData: node.data,
           credentialDecrypted,
           fieldValues,
-          context, 
+          context,
           convertedImages: [],
           body: "",
           headers: {},
           url: "",
           method: MethodEnum.POST,
+          outputType: ApiOutputTypeEnum.IMAGE,
         };
 
         const data = await executeByProvider(aiProviderKey, providerContext);

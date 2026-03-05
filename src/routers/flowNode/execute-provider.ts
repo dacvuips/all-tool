@@ -4,7 +4,7 @@
  */
 
 import { parseBodyAfterReplace, replacePlaceholders } from "../../helpers/flow-node-placeholder";
-import { AiProviderKeyEnum, ProductFlowNodeData } from "../../libs/dal/product";
+import { AiProviderKeyEnum, ApiOutputTypeEnum, ProductFlowNodeData } from "../../libs/dal/product";
 import { CallProviderGeminiApi } from "./call-provider-api/execute-provider-gemini";
 
 /** Context truyền vào từng executor theo từng AI provider */
@@ -18,6 +18,7 @@ export interface ExecuteProviderContext {
   headers: Record<string, string>;
   url: string;
   method: MethodEnum;
+  outputType: ApiOutputTypeEnum;
 }
 export enum MethodEnum {
   GET = "GET",
@@ -60,6 +61,7 @@ export function executeByProvider(
   const headers = nodeData.config?.headers ?? "{}";
   const rawUrl = nodeData.config?.endpoint ?? "";
   const method = (nodeData.config?.method || MethodEnum.POST) as MethodEnum;
+  const outputType = (nodeData.config?.outputType || ApiOutputTypeEnum.IMAGE) as ApiOutputTypeEnum;
 
   const replacedTemplate = replacePlaceholders(rawTemplate, fieldValues, context);
   const replacedHeaders = replacePlaceholders(headers, fieldValues, context);
@@ -73,6 +75,7 @@ export function executeByProvider(
   ctx.headers = headersObj as Record<string, string>;
   ctx.url = urlParsed as string;
   ctx.method = method;
+  ctx.outputType = outputType;
 
   switch (aiProviderKey) {
     case AiProviderKeyEnum.OPENAI_KEY:
