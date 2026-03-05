@@ -11,7 +11,14 @@ import { useAuth } from "../../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../../lib/providers/toast-provider";
 import { AiProviderKeyEnum, PropertyTypeEnum } from "../../../../../../lib/repo/product";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
-import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
+import {
+  Button,
+  Field,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+} from "../../../../../shared/utilities/form";
 import { JSONEditor } from "../../../../../shared/utilities/form/json-editor";
 
 export const ProductSettingForm = () => {
@@ -263,8 +270,8 @@ function ApiConfigSection() {
         <Field label={t("Headers (JSON)")} name="config.headers" cols={12}>
           <JSONEditor height="120px" />
         </Field>
-        <Field label={t("Body template (JSON)")} name="config.bodyTemplate" cols={12}>
-          <JSONEditor height="200px" />
+        <Field label={t("Body template")} name="config.bodyTemplate" cols={12}>
+          <Textarea rows={15} />
         </Field>
         <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
           <Input placeholder={"data[0].url hoặc result.media[0].url"} />

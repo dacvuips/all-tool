@@ -145,15 +145,8 @@ const Mutation = {
     if (credential) {
       throw new ForbiddenError("Credential already exists");
     }
-    const credentialUpdated = await CredentialModel.findOneAndUpdate(
-      {
-        _id: id,
-        customerId: context.id,
-        isCustomerCredential: true,
-      },
-      { $set: data },
-      { new: true }
-    );
+    const credentialUpdated = await credentialService.updateOneCustomer(id, data, context);
+
     if (!credentialUpdated) {
       throw new ForbiddenError("Credential not found");
     }

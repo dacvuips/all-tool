@@ -1,6 +1,7 @@
 import { t } from "../../functions/i18n";
-import { AiProviderKeyEnum } from "../ai-provider/ai-provider.repo";
+
 import { BaseModel, CrudRepository } from "../crud.repo";
+import { AiProviderKeyEnum } from "../product";
 
 export interface Credential extends BaseModel {
   id?: string;
