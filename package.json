@@ -30,7 +30,7 @@
   "dependencies": {
     "@apollo/client": "^3.8.3",
     "@atomictech/xlsx-write-stream": "^2.0.2",
-    "@ckeditor/ckeditor5-react": "^3.0.2",
+    "@ckeditor/ckeditor5-react": "^3.0.3",
     "@emotion/react": "^11.10.6",
     "@emotion/styled": "^11.10.6",
     "@google/genai": "^1.43.0",
@@ -148,6 +148,7 @@
     "throttle-batch-size": "^1.1.2",
     "tippy.js": "^6.3.1",
     "ts-safe-redis-leader": "0.0.5",
+    "typescript": "^5.9.3",
     "vietguy": "^1.0.3",
     "vietqr": "^1.1.9",
     "webfontloader": "^1.6.28",
@@ -199,8 +200,7 @@
     "postcss": "^8.4.21",
     "prettier": "^2.0.5",
     "smart-search": "^0.2.0",
-    "ts-jest": "^26.1.0",
-    "typescript": "^4.9.5"
+    "ts-jest": "^26.1.0"
   },
   "prettier": {
     "singleQuote": false,

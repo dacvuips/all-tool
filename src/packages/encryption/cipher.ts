@@ -1,5 +1,11 @@
 import config from "config";
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import {
+  type BinaryLike,
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "crypto";
 
 const rawKey = config.get<string>("store.encryptionKey");
 
@@ -18,22 +24,40 @@ const CIPHER_ALGO = "aes-256-cbc";
 
 export function encrypt(text: string) {
   const iv = randomBytes(IV_LENGTH);
-  const cipher = createCipheriv(CIPHER_ALGO, ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text);
-
-  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  const cipher = createCipheriv(
+    CIPHER_ALGO,
+    ENCRYPTION_KEY as unknown as BinaryLike,
+    iv as unknown as BinaryLike
+  );
+  const part1 = cipher.update(text);
+  const part2 = cipher.final();
+  const encrypted = Buffer.concat(
+    [
+      Buffer.isBuffer(part1) ? part1 : Buffer.from(part1 as Buffer),
+      Buffer.isBuffer(part2) ? part2 : Buffer.from(part2 as Buffer),
+    ] as unknown as readonly Uint8Array[]
+  );
 
   return iv.toString("hex") + ":" + encrypted.toString("hex");
 }
 
 export function decrypt(text: string) {
   const textParts = text.split(":");
-  const iv = Buffer.from(textParts.shift(), "hex");
+  const iv = Buffer.from(textParts.shift() ?? "", "hex");
   const encryptedText = Buffer.from(textParts.join(":"), "hex");
-  const decipher = createDecipheriv(CIPHER_ALGO, ENCRYPTION_KEY, iv);
-  let decrypted = decipher.update(encryptedText);
-
-  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  const decipher = createDecipheriv(
+    CIPHER_ALGO,
+    ENCRYPTION_KEY as unknown as BinaryLike,
+    iv as unknown as BinaryLike
+  );
+  const part1 = decipher.update(encryptedText as unknown as NodeJS.ArrayBufferView);
+  const part2 = decipher.final();
+  const decrypted = Buffer.concat(
+    [
+      Buffer.isBuffer(part1) ? part1 : Buffer.from(part1 as Buffer),
+      Buffer.isBuffer(part2) ? part2 : Buffer.from(part2 as Buffer),
+    ] as unknown as readonly Uint8Array[]
+  );
 
   return decrypted.toString();
 }
