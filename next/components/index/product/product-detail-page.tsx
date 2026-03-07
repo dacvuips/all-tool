@@ -1,6 +1,7 @@
 "use client";
 
 import Head from "next/head";
+import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import ReactFlow, {
@@ -18,14 +19,19 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { HiOutlineArrowLeft, HiOutlineBookOpen } from "react-icons/hi";
+import { HiOutlinePlay } from "react-icons/hi2";
 import { executeFlowNode } from "../../../lib/flow-node/execute-client";
+import { parseNumber } from "../../../lib/helpers/parser";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
 import type { ProductFlowEdge, ProductFlowNode } from "../../../lib/repo/product";
 import { ProductEdge } from "../../admin/management/product/components/product-edge";
 import { ProductFlowArrowMarkers } from "../../admin/management/product/components/product-flow-arrow-markers";
+import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Button } from "../../shared/utilities/form";
-import { BreadCrumbs, Spinner } from "../../shared/utilities/misc";
+import { BreadCrumbs, Img, NotFound, Spinner } from "../../shared/utilities/misc";
+import { ProductDescription } from "./components/product-description";
 import type {
   FlowNodeData,
   NodeFieldValues,
@@ -99,6 +105,7 @@ function buildFlowEdges(flowEdges: ProductFlowEdge[]): Edge[] {
 
 export const ProductDetailPage = () => {
   const { t } = useTranslation();
+  const router = useRouter();
   const { customer } = useAuth();
 
   const toast = useToast();
@@ -113,6 +120,7 @@ export const ProductDetailPage = () => {
   const [isRunning, setIsRunning] = useState(false);
   /** Node nào lỗi khi auto-run (highlight đỏ) */
   const [errorNodeId, setErrorNodeId] = useState<string | null>(null);
+  const [openDescriptionDialog, setOpenDescriptionDialog] = useState(false);
 
   const flowNodes = product?.flow?.nodes ?? [];
   const flowEdges = product?.flow?.edges ?? [];
@@ -218,12 +226,17 @@ export const ProductDetailPage = () => {
     []
   );
 
+  const handleViewDescription = useCallback(() => {
+    setOpenDescriptionDialog(true);
+  }, []);
+
   if (!product) return <Spinner />;
 
   const productName = product?.name || t("Sản phẩm");
   const productDescription = product?.des ?? "";
   const productImage = product?.coverImg ?? "";
   const hasFlow = (product?.flow?.nodes?.length ?? 0) > 0;
+  const productPrice = product?.price ?? 0;
 
   return (
     <>
@@ -238,7 +251,7 @@ export const ProductDetailPage = () => {
         <meta property="og:type" content="product" />
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
-      <section className="flex flex-col flex-1 mx-auto w-full max-w-7xl">
+      <section className="flex flex-col flex-1 mx-auto w-full">
         <div className="mb-4 lg:mb-6">
           <BreadCrumbs
             className="relative z-10"
@@ -250,60 +263,104 @@ export const ProductDetailPage = () => {
         </div>
 
         <div className="overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
-          {hasFlow ? (
-            <>
-              {/* Nút chạy auto toàn flow (N8N-style), đặt ngoài flow */}
-              <div className="flex gap-2 justify-end px-4 py-2 bg-gray-50 border-b border-gray-200">
-                <Button
-                  primary
-                  disabled={isRunning}
-                  isLoading={isRunning}
-                  onClick={() => handleRunAuto()}
-                  text={isRunning ? t("Đang chạy...") : t("Chạy auto")}
-                  tooltip={t("Chạy lần lượt tất cả node theo flow; dừng khi gặp lỗi")}
-                />
-              </div>
-              <div
-                className="relative w-full font-sans bg-gray-900 rounded-b-lg"
-                style={{ height: "calc(100vh - 260px)", minHeight: 400 }}
-              >
-                <ProductFlowArrowMarkers />
-                <ReactFlow
-                  nodes={nodes}
-                  edges={edges}
-                  onNodesChange={onNodesChange}
-                  onEdgesChange={onEdgesChange}
-                  edgeTypes={edgeTypes}
-                  defaultEdgeOptions={{
-                    animated: true,
-                    markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
-                  }}
-                  nodeTypes={nodeTypes}
-                  nodesDraggable={false}
-                  nodesConnectable={false}
-                  elementsSelectable={true}
-                  fitView
-                  fitViewOptions={{ padding: 0.2 }}
-                  minZoom={0.2}
-                  maxZoom={2}
-                  className="bg-gray-900"
-                >
-                  <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#fff" />
-                  <Controls className="overflow-hidden bg-gray-800 rounded-lg border border-gray-300" />
-                  <MiniMap
-                    className="bg-white rounded-lg border border-gray-300 opacity-80"
-                    nodeColor="#F2890D"
+          <>
+            {/* Nút chạy auto toàn flow (N8N-style), đặt ngoài flow */}
+            <div className="flex gap-2 justify-end px-4 py-2 bg-gray-50 border-b border-gray-200">
+              <div className="flex flex-wrap gap-2 justify-between items-center w-full">
+                <div className="flex gap-2 items-center">
+                  <Button
+                    className="p-0 pr-2 w-4 rounded-md rounded-l-full border-r shrink-0"
+                    onClick={() => router.back()}
+                    tooltip={t("Quay lại")}
+                    icon={<HiOutlineArrowLeft />}
                   />
-                </ReactFlow>
+                  <div>
+                    <Img showImageOnClick src={productImage} className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <div className="text-lg font-bold text-ellipsis-2">{productName}</div>
+                    <div className="text-sm font-bold text-primary-dark">
+                      {parseNumber(productPrice)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 whitespace-nowrap">
+                  {/* View description button*/}
+                  <Button
+                    info
+                    className="rounded-md"
+                    onClick={() => handleViewDescription()}
+                    text={t("Hướng dẫn")}
+                    tooltip={t("Hướng dẫn sản phẩm")}
+                    icon={<HiOutlineBookOpen />}
+                    disabled={!product?.des}
+                    small
+                  />
+                  <Button
+                    primary
+                    className="rounded-md"
+                    disabled={isRunning}
+                    isLoading={isRunning}
+                    onClick={() => handleRunAuto()}
+                    text={isRunning ? t("Đang chạy...") : t("Chạy auto")}
+                    tooltip={t("Chạy lần lượt tất cả node theo flow; dừng khi gặp lỗi")}
+                    icon={<HiOutlinePlay />}
+                    small
+                  />
+                </div>
               </div>
-            </>
-          ) : (
-            <div className="flex flex-col gap-2 justify-center items-center py-16 text-gray-500">
-              <div className="text-4xl">⚙️</div>
-              <div className="text-lg font-bold text-center">{t("Sản phẩm chưa có flow.")}</div>
             </div>
-          )}
+
+            {hasFlow ? (
+              <>
+                <div
+                  className="relative w-full font-sans bg-gray-900 rounded-b-lg"
+                  style={{ height: "calc(100vh - 260px)", minHeight: 400 }}
+                >
+                  <ProductFlowArrowMarkers />
+                  <ReactFlow
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={onNodesChange}
+                    onEdgesChange={onEdgesChange}
+                    edgeTypes={edgeTypes}
+                    defaultEdgeOptions={{
+                      animated: true,
+                      markerEnd: { type: MarkerType.ArrowClosed, width: 16, height: 16 },
+                    }}
+                    nodeTypes={nodeTypes}
+                    nodesDraggable={false}
+                    nodesConnectable={false}
+                    elementsSelectable={true}
+                    fitView
+                    fitViewOptions={{ padding: 0.2 }}
+                    minZoom={0.2}
+                    maxZoom={2}
+                    className="bg-gray-900"
+                  >
+                    <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#fff" />
+                    <Controls className="overflow-hidden bg-gray-800 rounded-lg border border-gray-300" />
+                    <MiniMap
+                      className="bg-white rounded-lg border border-gray-300 opacity-80"
+                      nodeColor="#F2890D"
+                    />
+                  </ReactFlow>
+                </div>
+              </>
+            ) : (
+              <NotFound text={t("Sản phẩm chưa có hướng dẫn.")} />
+            )}
+          </>
         </div>
+        <Dialog
+          isOpen={openDescriptionDialog}
+          onClose={() => setOpenDescriptionDialog(false)}
+          title={t("Hướng dẫn sản phẩm")}
+        >
+          <Dialog.Body>
+            <ProductDescription />
+          </Dialog.Body>
+        </Dialog>
       </section>
       <style>{`
         .react-flow__node { cursor: default; }

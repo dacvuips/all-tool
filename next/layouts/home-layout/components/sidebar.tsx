@@ -202,7 +202,7 @@ function CategoryTreeItem({
             className={`${buttonClass} ${
               isActive && !isDeepLevel ? "bg-primary-light text-primary  " : ""
             }`}
-            href={{ pathname: "/products", query: { categoryId: node.id } }}
+            href={{ pathname: "/", query: { categoryId: node.id } }}
           >
             {linkContent}
           </Button>
@@ -220,9 +220,7 @@ function CategoryTreeItem({
                 primary={currentCategoryId === child.id}
                 key={child.id}
                 text={child.name}
-                onClick={() =>
-                  router.push({ pathname: "/products", query: { categoryId: child.id } })
-                }
+                onClick={() => router.push({ pathname: "/", query: { categoryId: child.id } })}
               />
             );
           })}
@@ -261,7 +259,7 @@ function CategoryTreeItem({
       <Button
         primary={currentCategoryId === node.id && !isDeepLevel}
         className={`${buttonClass} ${isActive ? "bg-primary-light text-primary" : ""}`}
-        href={{ pathname: "/products", query: { categoryId: node.id } }}
+        href={{ pathname: "/", query: { categoryId: node.id } }}
       >
         {linkContent}
       </Button>

@@ -89,7 +89,7 @@ export function HomeProvider({ ...props }) {
       await ProductService.getActiveProducts({
         filter: {
           ...(parseData.length > 0 && { $or: parseData }),
-          ...(categoryId && { categoryId }),
+          ...(categoryId && { categoryIds: { $in: [categoryId] } }),
           ...(type && { type }),
           ...(minPrice || maxPrice
             ? {

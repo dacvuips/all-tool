@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useProductDetailContext } from "../provider/product-detail-provider";
 import { HiChevronDown, HiChevronUp } from "react-icons/hi";
+import { useProductDetailContext } from "../provider/product-detail-provider";
 
 export function ProductDescription() {
   const { t } = useTranslation();
@@ -12,19 +12,21 @@ export function ProductDescription() {
 
   const description = product.des;
   const shouldTruncate = description.length > 200;
-  const displayText = isExpanded || !shouldTruncate ? description : `${description.slice(0, 200)}...`;
+  const displayText =
+    isExpanded || !shouldTruncate ? description : `${description.slice(0, 200)}...`;
 
   return (
     <div className="py-4 border-b">
-      <h3 className="text-lg font-semibold text-gray-800 mb-3">{t("Mô tả sản phẩm")}</h3>
-      <div className="text-gray-700 whitespace-pre-wrap leading-relaxed">
-        {displayText}
-      </div>
+      <h3 className="mb-3 text-lg font-semibold text-gray-800">{t("Mô tả sản phẩm")}</h3>
+      <div
+        className="leading-relaxed text-gray-700 whitespace-pre-wrap"
+        dangerouslySetInnerHTML={{ __html: displayText }}
+      ></div>
       {shouldTruncate && (
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex items-center gap-1 mt-2 text-primary hover:text-primary-dark transition-colors"
+          className="flex gap-1 items-center mt-2 transition-colors text-primary hover:text-primary-dark"
         >
           {isExpanded ? (
             <>
@@ -42,4 +44,3 @@ export function ProductDescription() {
     </div>
   );
 }
-
