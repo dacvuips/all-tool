@@ -252,7 +252,7 @@ export const ProductDetailPage = () => {
         <meta name="twitter:card" content="summary_large_image" />
       </Head>
       <section className="flex flex-col flex-1 mx-auto w-full">
-        <div className="mb-4 lg:mb-6">
+        <div className="px-2 py-1 mb-4 bg-white rounded-lg border border-gray-200 lg:mb-3">
           <BreadCrumbs
             className="relative z-10"
             breadcrumbs={[

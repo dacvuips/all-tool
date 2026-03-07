@@ -185,14 +185,12 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
   const screenXs = useScreen("xs");
 
   const { customer } = useAuth();
-  const [openMenu, setOpenMenu] = useState(false);
-
   const [isMobileSearchBox, setIsMobileSearchBox] = useState(false);
   const isBlockPage = useSettingPublic("pa-b-page");
 
   const isMainPage = !name;
 
-  const { setOpenCustomerLoginDialog, postPopup } = useGlobalContext();
+  const { setOpenCustomerLoginDialog, postPopup, openCardMenu, setOpenCardMenu } = useGlobalContext();
 
   return (
     <>
@@ -254,7 +252,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                   {customer && <NotifiCationDropdown />}
                   <Button
                     className="px-2"
-                    onClick={() => setOpenMenu(true)}
+                    onClick={() => setOpenCardMenu?.(true)}
                     icon={<RiMenu3Line />}
                     iconClassName="text-xl"
                   />
@@ -265,7 +263,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
         </div>
       </>
 
-      <CardMenu isOpen={openMenu} onClose={() => setOpenMenu(false)} />
+      <CardMenu isOpen={!!openCardMenu} onClose={() => setOpenCardMenu?.(false)} />
       <OrderNotify order={order} />
     </>
   );

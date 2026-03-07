@@ -70,15 +70,14 @@ export const ProductPrice = () => {
       <div>
         <div
           ref={productPriceRef}
-          className={`p-1 border  text-center flex items-center hover:border-primary-dark hover:bg-gray-100 rounded-full cursor-pointer ${
-            hasFilter ? " border-primary bg-primary-light" : "border-gray-400"
+          className={`px-1 border  text-center flex items-center hover:border-primary-dark hover:bg-gray-100 rounded-full cursor-pointer ${
+            hasFilter ? "border-primary bg-primary-light" : "border-gray-400"
           }`}
         >
           {hasFilter ? (
             <div
               className={`flex items-center justify-between w-full pl-1 ${
-                hasFilter ? " text-primary font-semibold" : ""
-              }`}
+                hasFilter ? "font-semibold text-primary" : ""}`}
               style={{ height: "30px" }}
             >
               <span className="whitespace-nowrap">{filterValue}</span>
@@ -93,7 +92,7 @@ export const ProductPrice = () => {
             </div>
           ) : (
             <div
-              className="flex items-center justify-between w-full pl-2"
+              className="flex justify-between items-center pl-2 w-full"
               style={{ height: "30px" }}
             >
               <span className="text-gray-500 whitespace-nowrap">{t("Chọn giá")}</span>
@@ -130,13 +129,13 @@ export const ProductPrice = () => {
               textValue={""}
             />
           </div>
-          <div className="flex justify-center gap-2 pt-2 mt-3 border-t">
+          <div className="flex gap-2 justify-center pt-2 mt-3 border-t">
             <Button
               text={t("Áp dụng")}
               onClick={() => handleApplyFilter()}
               primary
               disabled={!range.min && !range.max}
-              className="h-8 px-4 text-12"
+              className="px-4 h-8 text-12"
             />
           </div>
         </Popover>
