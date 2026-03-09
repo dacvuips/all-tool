@@ -13,6 +13,8 @@ import { IS_DEBUG } from "../libs/shared";
 type QueueOptions = QueueSettings & {
   uniqueWorker?: boolean;
   defaultQueues?: string[];
+  /** Thời gian (ms) job ở trạng thái active trước khi coi là stalled và đưa lại vào queue. Mặc định 60s; với job lâu (AI ảnh/video) nên đặt 10–15 phút. */
+  stallIntervalMs?: number;
 };
 
 export abstract class BaseQueue extends EventEmitter {
@@ -46,6 +48,30 @@ export abstract class BaseQueue extends EventEmitter {
       }
     }
     return this.queue();
+  }
+
+  /** Lấy instance queue chỉ khi đã được khởi tạo (không tạo mới). Dùng để kiểm tra trạng thái. */
+  getQueueIfExists(id?: string): Queue | undefined {
+    if (!id) {
+      id = IS_DEBUG ? "dev" : "prod";
+    }
+    return this._queues[id];
+  }
+
+  /** Trạng thái queue: running = worker đã start và queue phản hồi, active/waiting từ Redis. */
+  async getQueueStatus(
+    id?: string
+  ): Promise<{ running: boolean; active: number; waiting: number; newestJob?: string }> {
+    const q = this.getQueueIfExists(id);
+    if (!q) {
+      return { running: false, active: 0, waiting: 0 };
+    }
+    try {
+      const health = await q.checkHealth();
+      return { running: true, ...health };
+    } catch {
+      return { running: false, active: 0, waiting: 0 };
+    }
   }
 
   queue(id?: string) {
@@ -128,7 +154,8 @@ export abstract class BaseQueue extends EventEmitter {
 
   private checkStalledJob(id: string) {
     if (this._queues[id]) {
-      this._queues[id].checkStalledJobs(60000, (err, stalled) => {
+      const stallIntervalMs = this.options.stallIntervalMs ?? 60000;
+      this._queues[id].checkStalledJobs(stallIntervalMs, (err, stalled) => {
         if (err) {
           this.logger.error("Error when check stalled job", err);
         }

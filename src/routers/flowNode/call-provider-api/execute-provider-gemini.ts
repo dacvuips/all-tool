@@ -83,6 +83,7 @@ async function callGeminiVideoGenerationApi(
     numberOfVideos: (bodyObj.numberOfVideos as number) ?? (bodyObj.sampleCount as number) ?? 1,
   };
 
+  // Gemini generateVideos: "source" và "prompt/image/video" loại trừ lẫn nhau — chỉ dùng một.
   const params: {
     model: string;
     prompt?: string;
@@ -90,7 +91,6 @@ async function callGeminiVideoGenerationApi(
     config?: { numberOfVideos?: number };
   } = {
     model,
-    prompt,
     config,
   };
 
@@ -102,6 +102,8 @@ async function callGeminiVideoGenerationApi(
         mimeType: convertedImages[0].mimeType,
       },
     };
+  } else {
+    params.prompt = prompt;
   }
 
   const operation = await ai.models.generateVideos(params);

@@ -1,13 +1,13 @@
 /**
  * API dùng chung: Execute Flow Node (src/routers).
- * Nhận config (endpoint, method, bodyTemplate), fieldValues, context;
- * thay placeholder trong bodyTemplate rồi gọi API ngoài.
+ * Tạo AiGenerationRun, đẩy job vào queue, trả về runId để client poll hoặc xem lịch sử.
  */
 
 import { Request, Response } from "express";
 import { ApiOutputTypeEnum } from "../../libs/dal/product";
+import { AiGenerationRunStatusEnum, aiGenerationRunService } from "../../libs/dal/aiGenerationRun";
+import { addAiGenerationJob } from "../../queues/ai-generation.queue";
 import { executeProductCheck, type ExecuteNodeResponse } from "./excute-product-check";
-import { executeByProvider, ExecuteProviderContext, MethodEnum } from "./execute-provider";
 
 interface ExecuteNodeBody {
   productId: string;
@@ -16,6 +16,7 @@ interface ExecuteNodeBody {
   fieldValues?: Record<string, unknown>;
   context?: Record<string, unknown>;
 }
+
 export function sendErrorResponse(
   res: Response,
   statusCode: number,
@@ -43,7 +44,7 @@ export default [
           fieldValues = {},
           context = {},
         } = req.body as ExecuteNodeBody;
-        // check product, node, customer
+
         const check = await executeProductCheck({
           productId,
           nodeId,
@@ -52,29 +53,33 @@ export default [
         if (check.ok === false) {
           return sendErrorResponse(res, check.statusCode, check.error);
         }
-        const { node, aiProviderKey, credentialDecrypted } = check;
 
-        fieldValues[aiProviderKey] = credentialDecrypted;
+        const { node, aiProviderKey } = check;
+        const outputType =
+          (node.data?.config?.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE;
 
-        const providerContext: ExecuteProviderContext = {
-          nodeData: node.data,
-          credentialDecrypted,
-          fieldValues,
-          context,
-          convertedImages: [],
-          body: "",
-          headers: {},
-          url: "",
-          method: MethodEnum.POST,
-          outputType: ApiOutputTypeEnum.IMAGE,
-        };
+        const run = await aiGenerationRunService.create({
+          customerId,
+          productId,
+          nodeId,
+          provider: aiProviderKey,
+          outputType,
+          status: AiGenerationRunStatusEnum.PENDING,
+          requestSnapshot: { fieldValues, context },
+        });
 
-        const data = await executeByProvider(aiProviderKey, providerContext);
+        const runId = (run as any)._id?.toString();
+        if (!runId) {
+          return sendErrorResponse(res, 500, "Tạo run thất bại");
+        }
 
-        return res.status(200).json({
+        await addAiGenerationJob(runId);
+
+        return res.status(202).json({
           success: true,
-          data,
-        } as ExecuteNodeResponse);
+          runId,
+          message: "Đã đưa vào queue, vui lòng poll GET /api/flow-node/run/:runId để lấy kết quả.",
+        } as ExecuteNodeResponse & { runId: string; message?: string });
       } catch (err: any) {
         const message = err?.response?.data?.message ?? err?.message ?? String(err);
         return sendErrorResponse(res, 200, message, {

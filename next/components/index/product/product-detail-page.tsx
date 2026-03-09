@@ -19,9 +19,14 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
-import { HiOutlineArrowLeft, HiOutlineBookOpen } from "react-icons/hi";
+import { HiOutlineArrowLeft, HiOutlineBookOpen, HiOutlineClock } from "react-icons/hi";
 import { HiOutlinePlay } from "react-icons/hi2";
-import { executeFlowNode } from "../../../lib/flow-node/execute-client";
+import {
+  executeFlowNode,
+  pollFlowNodeRun,
+  getFlowNodeRuns,
+  type FlowNodeRun,
+} from "../../../lib/flow-node/execute-client";
 import { parseNumber } from "../../../lib/helpers/parser";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
@@ -121,6 +126,9 @@ export const ProductDetailPage = () => {
   /** Node nào lỗi khi auto-run (highlight đỏ) */
   const [errorNodeId, setErrorNodeId] = useState<string | null>(null);
   const [openDescriptionDialog, setOpenDescriptionDialog] = useState(false);
+  const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
+  const [historyRuns, setHistoryRuns] = useState<FlowNodeRun[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const flowNodes = product?.flow?.nodes ?? [];
   const flowEdges = product?.flow?.edges ?? [];
@@ -129,7 +137,7 @@ export const ProductDetailPage = () => {
     nodeGetValuesRef.current[nodeId] = getValues;
   }, []);
 
-  /** Submit thủ công 1 node: gọi API execute với config của node + fieldValues */
+  /** Submit thủ công 1 node: gọi API execute (queue), poll runId đến khi xong, báo toast. */
   const handleSubmitNode = useCallback(
     async (nodeId: string, fieldValues: NodeFieldValues) => {
       const fn = flowNodes.find((n) => n.id === nodeId);
@@ -142,17 +150,36 @@ export const ProductDetailPage = () => {
           nodeId,
           fieldValues,
         });
-        if (result.success) toast.success(t("Node chạy thành công."));
-        else toast.error(result.error || t("Node chạy lỗi."));
+        if (!result.success) {
+          toast.error(result.error || t("Node chạy lỗi."));
+          return;
+        }
+        if (!result.runId) {
+          toast.error(t("Không nhận được runId."));
+          return;
+        }
+        toast.success(t("Đang xử lý... Vui lòng đợi."));
+        const pollResult = await pollFlowNodeRun(result.runId);
+        if (pollResult.success && pollResult.run) {
+          const count = pollResult.run.resultRefs?.length ?? 0;
+          toast.success(
+            count > 0
+              ? t("Node chạy thành công. Đã tạo {{count}} kết quả.", { count })
+              : t("Node chạy thành công.")
+          );
+        } else {
+          toast.error(pollResult.error || t("Node chạy lỗi."));
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : t("Node chạy lỗi."));
       }
     },
-    [flowNodes, toast, t]
+    [flowNodes, product?.id, customer?._id, toast, t]
   );
 
   /**
    * Chạy auto toàn bộ flow: chạy lần lượt theo thứ tự topological.
+   * Mỗi node: execute → nhận runId → poll đến COMPLETED/FAILED → gán context[nodeId] = run.
    * Dừng ngay khi 1 node lỗi, set errorNodeId để highlight.
    */
   const handleRunAuto = useCallback(async () => {
@@ -183,13 +210,29 @@ export const ProductDetailPage = () => {
         toast.error(t("Dừng tại node") + ` "${fn?.data?.label || nodeId}": ${result.error || ""}`);
         return;
       }
-      context[nodeId] = result.data;
+      if (!result.runId) {
+        setErrorNodeId(nodeId);
+        setIsRunning(false);
+        toast.error(t("Không nhận được runId."));
+        return;
+      }
+
+      const pollResult = await pollFlowNodeRun(result.runId);
+      if (!pollResult.success || !pollResult.run) {
+        setErrorNodeId(nodeId);
+        setIsRunning(false);
+        toast.error(
+          t("Dừng tại node") + ` "${fn?.data?.label || nodeId}": ${pollResult.error || ""}`
+        );
+        return;
+      }
+      context[nodeId] = pollResult.run;
     }
 
     setErrorNodeId(null);
     setIsRunning(false);
     toast.success(t("Đã chạy xong toàn bộ flow."));
-  }, [flowNodes, flowEdges, toast, t]);
+  }, [flowNodes, flowEdges, product?.id, customer?._id, toast, t]);
 
   useEffect(() => {
     if (product?.flow?.nodes?.length) {
@@ -229,6 +272,26 @@ export const ProductDetailPage = () => {
   const handleViewDescription = useCallback(() => {
     setOpenDescriptionDialog(true);
   }, []);
+
+  /** Mở dialog lịch sử và load danh sách run theo customer + product */
+  const handleOpenHistory = useCallback(async () => {
+    setOpenHistoryDialog(true);
+    if (!customer?._id || !product?.id) return;
+    setHistoryLoading(true);
+    try {
+      const res = await getFlowNodeRuns({
+        customerId: customer._id,
+        productId: product.id,
+        limit: 30,
+      });
+      if (res.success && res.data) setHistoryRuns(res.data);
+      else setHistoryRuns([]);
+    } catch {
+      setHistoryRuns([]);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, [customer?._id, product?.id]);
 
   if (!product) return <Spinner />;
 
@@ -297,6 +360,14 @@ export const ProductDetailPage = () => {
                     small
                   />
                   <Button
+                    className="rounded-md"
+                    onClick={() => handleOpenHistory()}
+                    text={t("Lịch sử")}
+                    tooltip={t("Xem lịch sử tạo ảnh/video")}
+                    icon={<HiOutlineClock />}
+                    small
+                  />
+                  <Button
                     primary
                     className="rounded-md"
                     disabled={isRunning}
@@ -359,6 +430,76 @@ export const ProductDetailPage = () => {
         >
           <Dialog.Body>
             <ProductDescription />
+          </Dialog.Body>
+        </Dialog>
+        <Dialog
+          isOpen={openHistoryDialog}
+          onClose={() => setOpenHistoryDialog(false)}
+          title={t("Lịch sử tạo ảnh/video")}
+        >
+          <Dialog.Body>
+            {historyLoading ? (
+              <Spinner />
+            ) : historyRuns.length === 0 ? (
+              <p className="text-gray-500 text-sm py-4">{t("Chưa có lịch sử.")}</p>
+            ) : (
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                {historyRuns.map((run) => (
+                  <div
+                    key={run._id}
+                    className="p-3 rounded-lg border border-gray-200 bg-gray-50"
+                  >
+                    <div className="flex justify-between items-center text-xs text-gray-600 mb-2">
+                      <span>
+                        {run.nodeId} · {run.status} ·{" "}
+                        {run.completedAt
+                          ? new Date(run.completedAt).toLocaleString()
+                          : run.createdAt
+                            ? new Date(run.createdAt).toLocaleString()
+                            : "-"}
+                      </span>
+                    </div>
+                    {run.resultRefs && run.resultRefs.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {run.resultRefs
+                          .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+                          .map((ref, idx) => (
+                            <div key={idx} className="flex flex-col items-center">
+                              {ref.type === "image" && ref.url && (
+                                <a
+                                  href={ref.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <Img
+                                    src={ref.url}
+                                    alt=""
+                                    className="w-24 h-24 object-cover rounded border"
+                                  />
+                                </a>
+                              )}
+                              {ref.type === "video" && ref.url && (
+                                <a
+                                  href={ref.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-primary text-xs mt-1"
+                                >
+                                  {t("Xem video")}
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                    {run.status === "FAILED" && run.errorMessage && (
+                      <p className="text-red-600 text-xs mt-1">{run.errorMessage}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Dialog.Body>
         </Dialog>
       </section>
