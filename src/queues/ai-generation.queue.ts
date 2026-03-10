@@ -2,8 +2,11 @@
  * Queue xử lý AI generation: nhận runId, gọi executeByProvider, chuẩn hóa response,
  * upload ảnh/video lên MinIO, cập nhật AiGenerationRun (resultRefs, status).
  * Khi xong bắn socket (pubsub) để client cập nhật node realtime.
+ *
+ * Job retention 72h (jobRetentionMs): cleanup mọi job (failed, succeeded, waiting, delayed, active) quá 72h.
+ * - Ưu điểm: Giảm dùng bộ nhớ Redis; tránh tích tụ job lâu ngày; dễ kiểm soát dung lượng.
+ * - Nhược điểm: Sau 72h không còn xem/retry job trên Redis (kết quả vẫn nằm ở AiGenerationRun trong MongoDB).
  */
-
 import { Job } from "bee-queue";
 import { BaseQueue } from "../base/baseQueue";
 import { CONSTANTS } from "../constants/constant.const";
@@ -33,7 +36,9 @@ export interface AiGenerationJobPayload {
  * Load run → lấy credential → gọi API → chuẩn hóa + upload → cập nhật run.
  */
 /** Thời gian tối đa (ms) job active trước khi coi là stalled. AI ảnh/video thường 2–10+ phút nên dùng 15 phút. */
-const AI_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000; // 15 phút
+const AI_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000; // 20 phút
+/** Mọi job (failed, succeeded, waiting, delayed, active) tồn tại trong Redis tối đa 72h, sau đó bị cleanup. */
+const AI_GENERATION_JOB_RETENTION_MS = 72 * 60 * 60 * 1000; // 72 giờ
 
 class AiGenerationQueue extends BaseQueue {
   constructor() {
@@ -41,6 +46,7 @@ class AiGenerationQueue extends BaseQueue {
       removeOnSuccess: true,
       removeOnFailure: false,
       stallIntervalMs: AI_GENERATION_STALL_INTERVAL_MS,
+      jobRetentionMs: AI_GENERATION_JOB_RETENTION_MS,
     });
   }
 
