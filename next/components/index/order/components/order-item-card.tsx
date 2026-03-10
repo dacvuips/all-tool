@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { Product } from "../../../../lib/repo";
+import { Product } from "../../../../lib/repo/product/product.repo";
 import { Img } from "../../../shared/utilities/misc";
 
 interface OrderItemCardProps {
@@ -27,7 +27,7 @@ export function OrderItemCard({ item, product }: OrderItemCardProps) {
   };
 
   return (
-    <div className="flex gap-4 p-2 transition-colors border border-dashed rounded-lg bg-gray-50 hover:bg-gray-100">
+    <div className="flex gap-4 p-2 bg-gray-50 rounded-lg border border-dashed transition-colors hover:bg-gray-100">
       <div className="flex-shrink-0">
         <Img
           showImageOnClick
@@ -47,7 +47,7 @@ export function OrderItemCard({ item, product }: OrderItemCardProps) {
           {item.productName}
         </h5>
 
-        <div className="flex-col items-center justify-between sm:flex-row sm:flex">
+        <div className="flex-col justify-between items-center sm:flex-row sm:flex">
           {item.variantName && (
             <div className="mb-1 text-sm text-gray-600">
               {t("Phân loại")}: {item.variantName} {`(${t("Số lượng")}: ${item.quantity})`}

@@ -30,7 +30,7 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
               <tr key={idx} className="hover:bg-gray-50">
                 <td className="px-3 py-3">{idx + 1}</td>
                 <td className="px-3 py-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex gap-3 items-center">
                     {item.thumbnail && (
                       <img
                         src={item.thumbnail}
@@ -38,13 +38,13 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
                         className="object-cover w-12 h-12 rounded"
                       />
                     )}
-                    <div>
+                    {/* <div>
                       <div className="font-medium">{item.productName}</div>
                       {item.sku && <div className="text-xs text-gray-500">SKU: {item.sku}</div>}
-                    </div>
+                    </div> */}
                   </div>
                 </td>
-                <td className="px-3 py-3 text-center">{item.variantName?.split("/")[0] || "-"}</td>
+                {/* <td className="px-3 py-3 text-center">{item.variantName?.split("/")[0] || "-"}</td> */}
 
                 <td className="px-3 py-3 text-center">{item.quantity}</td>
                 <td className="px-3 py-3 text-right">
@@ -67,7 +67,7 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
       {/* Mobile Card View */}
       <div className="space-y-3 md:hidden">
         {order?.items?.map((item, idx) => (
-          <div key={idx} className="p-3 border rounded bg-gray-50">
+          <div key={idx} className="p-3 bg-gray-50 rounded border">
             <div className="flex gap-3">
               {item.thumbnail && (
                 <img
@@ -78,11 +78,11 @@ export function OrderItemsList({ order }: OrderItemsListProps) {
               )}
               <div className="flex-1 min-w-0">
                 <div className="font-medium truncate">{item.productName}</div>
-                <div className="text-xs text-gray-600">
+                {/* <div className="text-xs text-gray-600">
                   {item.variantName && <span>{item.variantName}</span>}
                   {item.sku && <span className="ml-2">SKU: {item.sku}</span>}
-                </div>
-                <div className="flex items-center justify-between mt-2">
+                </div> */}
+                <div className="flex justify-between items-center mt-2">
                   <div className="text-sm text-gray-600">x {item.quantity}</div>
                   <div className="text-right">
                     <div className="font-semibold text-primary">

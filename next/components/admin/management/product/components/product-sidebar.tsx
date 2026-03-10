@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { RiPencilLine } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { Product, ProductService } from "../../../../../lib/repo";
+import { Product, ProductService } from "../../../../../lib/repo/product";
 import { Form } from "../../../../shared/utilities/form/form";
 import type { FlowNodeData } from "./product-node";
 import { ProductSettingForm } from "./product-setting/product-setting-from";

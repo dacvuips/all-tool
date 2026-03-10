@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { random } from "lodash";
-import { Product } from "../../../../lib/repo/product";
+import { Product } from "../../../../lib/repo/product/product.repo";
 import { FbIcon, IconViber, QRIcon, TgIcon } from "../../../../public/assets/svg/svg";
 import { PostGroupDialog } from "../../../shared/common/post-group-dialog";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";

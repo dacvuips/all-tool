@@ -62,7 +62,7 @@ export function Table({ className = "", style = {}, ...props }: TableProps) {
     setChildren(children);
   }, [props.children]);
 
-  const columns = ([
+  const columns = [
     ...(multiSelection
       ? [
           {
@@ -73,8 +73,8 @@ export function Table({ className = "", style = {}, ...props }: TableProps) {
           } as ColumnProps,
         ]
       : []),
-    ...columnComponents?.map((col) => col.child.props),
-  ] || []) as ColumnProps[];
+    ...(columnComponents?.map((col) => col.child.props) ?? []),
+  ] as ColumnProps[];
 
   useEffect(() => {
     setTableItems(props.items ?? items);

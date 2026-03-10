@@ -4,7 +4,8 @@ import { FaChevronDown, FaTimes } from "react-icons/fa";
 
 import { mapValues } from "lodash";
 import { ParamName } from "../../../../../lib/constants/constants";
-import { PropertyTypeEnum } from "../../../../../lib/repo/types";
+
+import { PropertyTypeEnum } from "../../../../../lib/repo/product";
 import { Field, Form, Input, Select, Switch } from "../../../../shared/utilities/form";
 import { Popover } from "../../../../shared/utilities/popover/popover";
 import { useHomeContext } from "../../provider/home-provider";
@@ -65,13 +66,13 @@ export const ProductProperty = () => {
         <div
           ref={productGameOptionsRef}
           className={`p-1 border text-center flex items-center hover:border-primary-dark hover:bg-gray-100 rounded-full cursor-pointer ${
-            badgeCount ? " border-primary bg-primary-light" : "border-gray-400"
+            badgeCount ? "border-primary bg-primary-light" : "border-gray-400"
           }`}
         >
           {badgeCount ? (
             <div
               className={`flex items-center justify-between pl-1 ${
-                badgeCount ? " text-primary font-semibold" : ""
+                badgeCount ? "font-semibold text-primary" : ""
               }`}
               style={{ height: "30px" }}
             >
@@ -84,7 +85,7 @@ export const ProductProperty = () => {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-between pl-2" style={{ height: "30px" }}>
+            <div className="flex justify-between items-center pl-2" style={{ height: "30px" }}>
               <span className="text-gray-500 whitespace-nowrap">{t("Thêm lọc")}</span>
               <div className="px-2 text-gray-500 text-14">
                 <FaChevronDown />
@@ -104,7 +105,7 @@ export const ProductProperty = () => {
           {!!categoryId ? (
             <div>
               <Form
-                className={`grid gap-2 grid-cols-12 2xs:w-80 w-64`}
+                className={`grid grid-cols-12 gap-2 w-64 2xs:w-80`}
                 onSubmit={(data) => {
                   onSubmit(data);
                 }}

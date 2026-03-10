@@ -3,13 +3,13 @@ import { createContext, ReactNode, useContext, useEffect, useState } from "react
 import { CookiesName } from "../../../../lib/constants/constants";
 import { CartCookieHelper } from "../../../../lib/helpers/cart-cookie.helper";
 import { useAuth } from "../../../../lib/providers/auth-provider";
-import { Product } from "../../../../lib/repo";
 import {
   Order,
   OrderChangeEventEnum,
   orderService,
   PaymentMethod,
 } from "../../../../lib/repo/order/order.repo";
+import { Product } from "../../../../lib/repo/product/product.repo";
 import { CheckoutStep } from "../../../../lib/repo/types";
 import { OrderPaymentChangedDialog } from "../dialogs/order-payment-changed-dialog";
 

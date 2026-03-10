@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Product } from "../../../../lib/repo";
+import { Product } from "../../../../lib/repo/product/product.repo";
 import { Button } from "../../../shared/utilities/form";
 import { OrderItemCard } from "./order-item-card";
 
