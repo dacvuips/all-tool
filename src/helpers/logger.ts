@@ -1,8 +1,8 @@
+import config from "config";
+import beautify from "json-beautify";
 import _ from "lodash";
 import moment from "moment-timezone";
 import winston from "winston";
-import beautify from "json-beautify";
-import config from "config";
 
 const logger = winston.createLogger({
   transports: [
@@ -26,7 +26,7 @@ const logger = winston.createLogger({
       if (!_.isEmpty(metadata)) {
         msg += `\n${beautify(metadata, null, 2, 120)}`;
       }
-      if (stack && typeof stack === "string") {
+      if (stack) {
         msg += `\n${_.take(stack.split("\n"), 4).join("\n")}`;
       }
       return msg;

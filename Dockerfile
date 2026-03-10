@@ -1,4 +1,4 @@
-FROM node:16-alpine AS base
+FROM node:20-alpine AS base
 
 ######## Prepare package.json and pnpm-lock.yaml
 FROM base AS package
@@ -7,7 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm version --allow-same-version 1.0.0
 
 ######## Preperation
-FROM node:14-alpine AS deps
+FROM base AS deps
 
 COPY --from=package package.json package-lock.json ./
 RUN npm install
