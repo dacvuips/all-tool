@@ -13,6 +13,7 @@ import { BackToTop } from "./components/back-to-top";
 import { Footer } from "./components/footer";
 import { PopupNotifyDialog } from "./components/popup-notify-dialog";
 import { SelectCategoryGlobalDialog } from "./components/select-category-global-dialog";
+import { Sidebar } from "./components/sidebar";
 import { UpdatePhoneNumberDialog } from "./components/update-phone-number-dialog";
 import { HomeLayoutProvider } from "./provider/home-layout-provider";
 
@@ -29,8 +30,8 @@ export function HomeLayout({ ...props }: LayoutProps) {
       <HomeLayoutProvider>
         <DefaultHead shopCode="" shopLogo="" />
         <GlobalProvider>
-          <div className="w-full min-h-screen pt-14">
-            {/* <Sidebar setGetToggleSidebar={setGetToggleSidebar} /> */}
+          <div className="pt-14 w-full min-h-screen">
+            <Sidebar setGetToggleSidebar={setGetToggleSidebar} />
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
             {customer && (
@@ -39,10 +40,9 @@ export function HomeLayout({ ...props }: LayoutProps) {
               </ChatProvider>
             )}
             <div
-              // className={`flex flex-col flex-1 pl-0 grow ${
-              //   getToggleSidebar == "true" && "2xl:pl-56 xl:pl-56"
-              // }  lg:pl-12 md:pl-12 sm:pl-12 xs:pl-12`}
-              className={`flex flex-col flex-1 pl-0 grow`}
+              className={`flex flex-col flex-1 pl-0 grow ${
+                getToggleSidebar == "true" && "2xl:pl-56 xl:pl-56"
+              }`}
             >
               <div className={`${!xs ? "p-1" : "p-4"}`}>
                 <ErrorCatcher>
@@ -61,8 +61,8 @@ export function HomeLayout({ ...props }: LayoutProps) {
 export function HomeLayoutContent({ children, ...props }: LayoutProps) {
   return (
     <>
-      <div className="relative flex flex-col bg-gray-100">
-        <div className="w-full mx-auto">
+      <div className="flex relative flex-col bg-gray-100">
+        <div className="mx-auto w-full">
           <div
             className={`flex flex-col w-full text-accent`}
             style={{

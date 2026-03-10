@@ -6,6 +6,7 @@ import { walkSyncFiles } from "./helpers/common";
 import path from "path";
 import startExpressApp from "./express";
 import { MigrationLoader } from "./migrations";
+import { startQueues } from "./queues/start-queues";
 
 function executeSeedings() {
   const seedingFiles = walkSyncFiles(path.join(__dirname)).filter((f) =>
@@ -20,6 +21,7 @@ function executeSeedings() {
 (async function () {
   moment.tz.setDefault(config.get("tz"));
   await executeSeedings();
+  startQueues();
   const port = config.get<number>("port");
   const app = startExpressApp();
   const server = app.listen(port, "0.0.0.0", () => {

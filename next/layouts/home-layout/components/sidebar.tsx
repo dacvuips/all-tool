@@ -1,30 +1,29 @@
-import { Player } from "@lottiefiles/react-lottie-player";
 import { useRouter } from "next/router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Scrollbars from "react-custom-scrollbars";
 import { useTranslation } from "react-i18next";
-import { HiOutlineShare } from "react-icons/hi";
+import { HiOutlineX } from "react-icons/hi";
 import {
+  RiArrowDownSLine,
   RiArrowRightSFill,
-  RiArrowUpLine,
+  RiArrowRightSLine,
   RiEdit2Line,
-  RiGamepadLine,
   RiMagicLine,
   RiShoppingBag3Line,
   RiStore2Line,
-  RiUserAddLine,
 } from "react-icons/ri";
-import { SidebarToggleButton } from "../../../components/shared/common/sidebar-toggle-button";
 import { Dialog } from "../../../components/shared/utilities/dialog/dialog";
+import { Slideout } from "../../../components/shared/utilities/dialog/slideout";
 import { Button } from "../../../components/shared/utilities/form/button";
-import { Popover } from "../../../components/shared/utilities/popover/popover";
+import { Accordion } from "../../../components/shared/utilities/misc";
+import { Dropdown } from "../../../components/shared/utilities/popover/dropdown";
 import { useScreen } from "../../../lib/hooks/useScreen";
-import { useAuth } from "../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../lib/providers/global-provider";
-import { GameTypeEnum } from "../../../lib/repo/types";
-import { Category } from "./category";
+import {
+  CategoryService,
+  Category as CategoryType,
+} from "../../../lib/repo/category/category.repo";
 import { PostPopup } from "./post-popup";
-
 interface PropsType extends ReactProps {
   getStorage?: string;
   setToggleSidebar?: (value: boolean) => any;
@@ -73,11 +72,6 @@ export function Sidebar({
       />
     );
 }
-interface GameListType {
-  type: GameTypeEnum;
-  title: string;
-  component: React.ReactNode;
-}
 
 export function SidebarDesktop({
   getStorage,
@@ -86,32 +80,201 @@ export function SidebarDesktop({
   ...props
 }: PropsType) {
   const { t } = useTranslation();
-  const { customer } = useAuth();
-  const { setOpenCustomerLoginDialog, setOpenRegisShopDialog } = useGlobalContext();
   const [openTrainingDialog, setOpenTrainingDialog] = useState<boolean>(false);
+  const [categoryTree, setCategoryTree] = useState<CategoryType[]>([]);
+  const [loadingTree, setLoadingTree] = useState(true);
   const router = useRouter();
+
+  useEffect(() => {
+    setLoadingTree(true);
+    CategoryService.getActiveCategoryTreeForSidebar()
+      .then((tree) => setCategoryTree(tree))
+      .finally(() => setLoadingTree(false));
+  }, []);
 
   return (
     <>
       <div
-        className={` fixed bottom-0 z-20 flex flex-col bg-white shadow ${
-          getStorage == "true" ? "w-56" : ""
-        } `}
+        className={`flex fixed bottom-0 z-20 flex-col w-56 bg-white shadow`}
         style={{ height: "calc(100vh - 56px)" }}
       >
-        <div className="v-scrollbar">
-          {getStorage == "true" && (
-            <SidebarToggleButton
-              setToggleSidebar={setToggleSidebar}
-              toggleSidebar={toggleSidebar}
-            />
-          )}
-
-          {/* <Footer /> */}
-          <PostPopup />
-        </div>
+        {/* {getStorage == "true" && (
+          <SidebarToggleButton setToggleSidebar={setToggleSidebar} toggleSidebar={toggleSidebar} />
+        )} */}
+        <Scrollbars
+          hideTracksWhenNotNeeded={true}
+          autoHideTimeout={0}
+          autoHideDuration={300}
+          autoHide
+        >
+          <div className="py-3">
+            {/* Nhóm Sản phẩm - cây category */}
+            <div className="mb-2">
+              <Accordion isOpen={true}>
+                {loadingTree ? (
+                  <div className="px-4 py-3 text-sm text-gray-500">Đang tải danh mục...</div>
+                ) : (
+                  <CategoryTreeItems
+                    nodes={categoryTree}
+                    depth={0}
+                    currentCategoryId={router.query.categoryId as string}
+                  />
+                )}
+              </Accordion>
+            </div>
+            <PostPopup />
+          </div>
+        </Scrollbars>
       </div>
       <TrainingDialog isOpen={openTrainingDialog} onClose={() => setOpenTrainingDialog(false)} />
+    </>
+  );
+}
+
+/** Render một item danh mục: root (!parentId) luôn hiển thị, click để mở/đóng con; cấp con có con thì dùng Dropdown. */
+function CategoryTreeItem({
+  node,
+  depth,
+  currentCategoryId,
+}: {
+  node: CategoryType;
+  depth: number;
+  currentCategoryId?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const isRoot = !node.parentId;
+  const isDeepLevel = depth >= 2;
+  const plMap = ["pl-3", "pl-4", "pl-8", "pl-10", "pl-12"] as const;
+  const plClass = plMap[Math.min(depth, plMap.length - 1)] || "pl-12";
+  const hasChildren = node.children && node.children.length > 0;
+  const isSubCategory = depth >= 1;
+  /** Chỉ danh mục con (depth >= 1) và có con thì mới hiện dropdown menu */
+  const showDropdown = isSubCategory && hasChildren;
+  /** Root có con: click item để mở/đóng danh sách con */
+  const [accordionOpen, setAccordionOpen] = useState(false);
+
+  /** Node đang active nếu chính nó hoặc bất kỳ con nào trùng với categoryId trên URL */
+  const isActive =
+    currentCategoryId === node.id ||
+    (hasChildren && node.children!.some((c) => c.id === currentCategoryId));
+
+  const buttonClass = `justify-start w-full font-normal rounded-r-none rounded-l-xl  ${plClass} pr-3 py-2 ${
+    isDeepLevel
+      ? "bg-green-600 text-white hover:bg-green-700 border-0"
+      : isActive
+      ? ""
+      : "hover:bg-gray-100"
+  }`;
+
+  const linkContent = (
+    <div className="flex flex-1 gap-2 justify-between items-center w-full min-w-0">
+      <span className={`truncate ${depth === 0 ? "font-semibold" : ""}`}>
+        {depth !== 0 && <RiArrowRightSFill className="text-gray-500 text-18" />}
+        {node.name}
+      </span>
+      {hasChildren &&
+        (accordionOpen ? (
+          <RiArrowDownSLine className="text-gray-500 text-20" />
+        ) : (
+          <RiArrowRightSLine className="text-gray-500 text-20" />
+        ))}
+    </div>
+  );
+
+  if (showDropdown) {
+    return (
+      <div key={node.id} className="relative">
+        <div ref={ref} className="w-full">
+          <Button
+            primary={isActive && !isDeepLevel}
+            className={`${buttonClass} ${
+              isActive && !isDeepLevel ? "bg-primary-light text-primary  " : ""
+            }`}
+            href={{ pathname: "/", query: { categoryId: node.id } }}
+          >
+            {linkContent}
+          </Button>
+        </div>
+        <Dropdown
+          reference={ref}
+          trigger="hover"
+          placement="right-start"
+          arrow
+          theme="light-border"
+        >
+          {node.children!.map((child) => {
+            return (
+              <Dropdown.Item
+                primary={currentCategoryId === child.id}
+                key={child.id}
+                text={child.name}
+                onClick={() => router.push({ pathname: "/", query: { categoryId: child.id } })}
+              />
+            );
+          })}
+        </Dropdown>
+      </div>
+    );
+  }
+
+  /** Root có con: luôn hiển thị item, click để toggle hiện/ẩn danh sách con */
+  if (isRoot && hasChildren) {
+    return (
+      <div key={node.id}>
+        <Button
+          primary={isActive}
+          className={buttonClass}
+          onClick={() => setAccordionOpen((prev) => !prev)}
+        >
+          {linkContent}
+        </Button>
+        <Accordion isOpen={accordionOpen}>
+          <div className="my-0.5 pl-2 ">
+            <CategoryTreeItems
+              nodes={node.children!}
+              depth={depth + 1}
+              currentCategoryId={currentCategoryId}
+            />
+          </div>
+        </Accordion>
+      </div>
+    );
+  }
+
+  /** Root không con hoặc item con: link bình thường */
+  return (
+    <div key={node.id}>
+      <Button
+        primary={currentCategoryId === node.id && !isDeepLevel}
+        className={`${buttonClass} ${isActive ? "bg-primary-light text-primary" : ""}`}
+        href={{ pathname: "/", query: { categoryId: node.id } }}
+      >
+        {linkContent}
+      </Button>
+    </div>
+  );
+}
+
+/** Render cây category: root (!parentId) luôn hiển thị, click để mở/đóng con; cấp con có con thì Dropdown. */
+function CategoryTreeItems({
+  nodes,
+  depth,
+  currentCategoryId,
+}: {
+  nodes: CategoryType[];
+  depth: number;
+  currentCategoryId?: string;
+}) {
+  if (!nodes?.length) return null;
+
+  return (
+    <>
+      {nodes.map((node) => (
+        <div key={node.id}>
+          <CategoryTreeItem node={node} depth={depth} currentCategoryId={currentCategoryId} />
+        </div>
+      ))}
     </>
   );
 }
@@ -154,8 +317,8 @@ const TrainingDialog = ({ ...props }) => {
       <Dialog.Body>
         <div className="grid grid-cols-12 gap-x-2">
           {Trainings.map((item, index) => (
-            <div key={index} className="flex items-start col-span-3">
-              <div className="flex flex-col items-center gap-2 text-center">
+            <div key={index} className="flex col-span-3 items-start">
+              <div className="flex flex-col gap-2 items-center text-center">
                 <i className="text-28 text-primary">{item.icon}</i>
                 <div className="flex items-center">
                   <div className="font-semibold text-20">{`${index + 1}. ${item.title}`}</div>
@@ -183,110 +346,64 @@ export function SidebarMobile({
   ...props
 }: PropsType) {
   const { t } = useTranslation();
-  const screenxs = useScreen("xs");
-  const shareRef = useRef();
-  const registerCustomerRef = useRef();
-  const registerShopRef = useRef();
-  const gamesRef = useRef();
   const router = useRouter();
-  const { customer } = useAuth();
-  const { setOpenCustomerLoginDialog, setOpenRegisShopDialog } = useGlobalContext();
+  const { openSidebarSlideout, setOpenSidebarSlideout } = useGlobalContext();
+  const [categoryTree, setCategoryTree] = useState<CategoryType[]>([]);
+  const [loadingTree, setLoadingTree] = useState(true);
 
-  const checkShowSidebar = useMemo(() => {
-    if (screenxs == true && getStorage == "true") {
-      return true;
+  useEffect(() => {
+    if (openSidebarSlideout) {
+      setLoadingTree(true);
+      CategoryService.getActiveCategoryTreeForSidebar()
+        .then((tree) => setCategoryTree(tree))
+        .finally(() => setLoadingTree(false));
     }
-    if (screenxs == true && getStorage == "false") {
-      return true;
-    }
-  }, [screenxs, getStorage]);
+  }, [openSidebarSlideout]);
+
+  useEffect(() => {
+    setOpenSidebarSlideout?.(false);
+  }, [router.pathname]);
 
   return (
     <>
-      <div
-        className={`fixed flex flex-col z-20 bg-white shadow ${
-          checkShowSidebar ? "w-12" : "w-0"
-        } top-14 `}
-        style={{ height: "calc(100vh - 56px)" }}
+      <Slideout
+        isOpen={!!openSidebarSlideout}
+        onClose={() => setOpenSidebarSlideout?.(false)}
+        width="85vw"
+        maxWidth={320}
+        placement="left"
+        hasCloseButton={false}
       >
-        {checkShowSidebar && (
-          <SidebarToggleButton setToggleSidebar={setToggleSidebar} toggleSidebar={toggleSidebar} />
-        )}
-        <Scrollbars universal={true}>
-          <div className="py-3 mb-2">
-            <div className="text-center">
-              <div ref={registerCustomerRef} className="p-3 cursor-pointer hover:bg-gray-200">
-                <RiUserAddLine className="text-xl" />
-              </div>
-
-              <div ref={shareRef} className="p-3 cursor-pointer hover:bg-gray-200">
-                <HiOutlineShare className="text-xl" />
-              </div>
-              <div ref={gamesRef} className="p-3 cursor-pointer hover:bg-gray-200">
-                <RiGamepadLine className="text-xl" />
-              </div>
+        <div
+          className="flex justify-between items-center pl-5 h-12 border-b border-gray-200"
+          onClick={() => setOpenSidebarSlideout?.(false)}
+        >
+          <div className="font-bold text-accent">{t("Danh mục")}</div>
+          <Button
+            textAccent
+            icon={<HiOutlineX />}
+            onClick={() => setOpenSidebarSlideout?.(false)}
+          />
+        </div>
+        <Scrollbars style={{ height: "calc(100vh - 52px)" }} hideTracksWhenNotNeeded autoHide>
+          <div className="px-2 py-3">
+            <div className="mb-2">
+              <Accordion isOpen={true}>
+                {loadingTree ? (
+                  <div className="px-4 py-3 text-sm text-gray-500">Đang tải danh mục...</div>
+                ) : (
+                  <CategoryTreeItems
+                    nodes={categoryTree}
+                    depth={0}
+                    currentCategoryId={router.query.categoryId as string}
+                  />
+                )}
+              </Accordion>
             </div>
-            <Popover
-              theme="light-border"
-              reference={registerCustomerRef}
-              trigger="click"
-              placement="right-start"
-              arrow
-            >
-              <div className="flex flex-col items-center w-full p-2 cursor-pointer">
-                <Player
-                  className=""
-                  autoplay
-                  loop
-                  src={`/assets/lottie/regis-customer.json`}
-                  style={{ height: "100px", width: "100px" }}
-                ></Player>
-                <Button
-                  icon={<RiUserAddLine />}
-                  text={t("Đăng ký khách hàng")}
-                  onClick={() => setOpenCustomerLoginDialog(true)}
-                  className="px-2 border border-gray-600 border-dashed rounded-full"
-                />
-              </div>
-            </Popover>
-
-            <Popover
-              theme="light-border"
-              reference={shareRef}
-              trigger="click"
-              placement="right-start"
-              arrow
-            >
-              <div
-                onClick={() => {
-                  router.push("/post/solution-group");
-                }}
-                className="flex flex-col items-center w-full p-2 cursor-pointer"
-              >
-                {" "}
-                <img className="mb-2 w-44" src="/assets/img/logo-solution.png" />
-                <Button
-                  icon={<RiArrowUpLine />}
-                  text={t("Nhóm của sàn")}
-                  className="px-2 border border-gray-600 rounded-full"
-                />
-              </div>
-            </Popover>
-            <Popover
-              theme="light-border"
-              reference={gamesRef}
-              trigger="click"
-              placement="right-start"
-              arrow
-            >
-              <Category />
-            </Popover>
+            <PostPopup />
           </div>
         </Scrollbars>
-        {/* <PostPopup /> */}
-
-        {/* <Footer /> */}
-      </div>
+      </Slideout>
     </>
   );
 }

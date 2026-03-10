@@ -20,7 +20,13 @@ import "reactflow/dist/style.css";
 
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { Product, ProductFlowEdge, ProductFlowNode, ProductService } from "../../../../lib/repo";
+import {
+  AiProviderKeyEnum,
+  Product,
+  ProductFlowEdge,
+  ProductFlowNode,
+  ProductService,
+} from "../../../../lib/repo/product";
 import { Button } from "../../../shared/utilities/form";
 import { Spinner } from "../../../shared/utilities/misc";
 import { ProductEdge } from "./components/product-edge";
@@ -158,29 +164,28 @@ function flowStateToProductFlow(
 }
 
 export interface ProductFlowPageProps {
-  initialProductId?: string | null;
+  productIdParam?: string | null;
   onBack?: () => void;
 }
 
 /** Config mặc định cho node mới */
 const DEFAULT_NODE_CONFIG = {
-  provider: "veo3",
-  endpoint: "/generate-video",
+  aiProviderKey: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+  endpoint: "",
   method: "POST",
   bodyTemplate: "{ prompt: {{prompt}}, duration: {{duration}} }",
 };
 
-export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlowPageProps = {}) {
+export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps = {}) {
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
-
   const [products, setProducts] = useState<Product[]>([]);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
-  const isFlowMode = !!initialProductId;
+  const isFlowMode = !!productIdParam;
 
   // Sidebar state
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(null);
@@ -263,12 +268,12 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   }, []);
 
   useEffect(() => {
-    if (isFlowMode && initialProductId) {
-      loadProductFlow(initialProductId);
+    if (isFlowMode && productIdParam) {
+      loadProductFlow(productIdParam);
     } else {
       loadProducts();
     }
-  }, [isFlowMode, initialProductId, loadProductFlow, loadProducts]);
+  }, [isFlowMode, productIdParam, loadProductFlow, loadProducts]);
 
   const handleEdit = useCallback((product: Product) => {
     setSelectedProduct(product);
@@ -293,7 +298,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       toast.success(t("Xóa sản phẩm thành công"));
       setDeleteConfirm(false);
       setDeletingProduct(null);
-      if (isFlowMode && deletingProduct.id === initialProductId) {
+      if (isFlowMode && deletingProduct.id === productIdParam) {
         if (onBack) onBack();
       } else {
         loadProducts();
@@ -359,18 +364,18 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
   );
 
   const saveFlow = useCallback(async () => {
-    if (!initialProductId || !currentProduct) return;
+    if (!productIdParam || !currentProduct) return;
     const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(nodes, edges);
     try {
       await ProductService.createOrUpdate({
-        id: initialProductId,
+        id: productIdParam,
         data: { flow: { nodes: flowNodes, edges: flowEdges } },
       });
       setCurrentProduct((p) => (p ? { ...p, flow: { nodes: flowNodes, edges: flowEdges } } : null));
     } catch (err: any) {
       toast.error(t("Lưu flow thất bại") + ": " + err.message);
     }
-  }, [initialProductId, currentProduct, nodes, edges, toast, t]);
+  }, [productIdParam, currentProduct, nodes, edges, toast, t]);
 
   useEffect(() => {
     if (!isFlowMode) return;
@@ -418,7 +423,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
 
   const debouncedSaveFlowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!isFlowMode || !initialProductId) return;
+    if (!isFlowMode || !productIdParam) return;
     if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
     debouncedSaveFlowRef.current = setTimeout(() => {
       saveFlowRef.current?.();
@@ -427,7 +432,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     return () => {
       if (debouncedSaveFlowRef.current) clearTimeout(debouncedSaveFlowRef.current);
     };
-  }, [isFlowMode, initialProductId, nodes, edges]);
+  }, [isFlowMode, productIdParam, nodes, edges]);
 
   const handleAddFlowNode = useCallback(() => {
     const nodeId = `node-${Date.now()}`;
@@ -436,7 +441,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
       type: "productNode",
       position: { x: 80 + (nodes.length % 4) * 280, y: 80 + Math.floor(nodes.length / 4) * 180 },
       data: {
-        label: t("Node mới"),
+        label: t("Tác vụ mới"),
         properties: [],
         config: { ...DEFAULT_NODE_CONFIG },
         nodeId,
@@ -459,19 +464,11 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
     [deleteEdge]
   );
 
-  const searchTimeout = useRef<any>(null);
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    clearTimeout(searchTimeout.current);
-    searchTimeout.current = setTimeout(() => {
-      setSearch(e.target.value);
-    }, 400);
-  };
-
   return (
     <div
       className="flex overflow-hidden relative flex-col w-full h-full font-sans bg-gray-900 rounded-md"
       style={{
-        height: "calc(100vh - 80px)",
+        height: "calc(100vh - 110px)",
       }}
     >
       {/* ── TOP TOOLBAR ── */}
@@ -513,7 +510,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
             onClick={handleAddFlowNode}
             primary
             icon={<HiOutlinePlus />}
-            text={t("Thêm node")}
+            text={t("Thêm tác vụ")}
           />
         }
       </div>
@@ -539,7 +536,7 @@ export function ProductFlowPage({ initialProductId = null, onBack }: ProductFlow
                 primary
                 icon={<HiOutlinePlus />}
                 className="mt-2"
-                text={t("Thêm node")}
+                text={t("Thêm tác vụ")}
               />
             )}
           </div>

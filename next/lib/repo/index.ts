@@ -4,4 +4,3 @@ export * from "./customer/customer.repo";
 export * from "./general";
 export * from "./list";
 export * from "./order/order.repo";
-export * from "./product";

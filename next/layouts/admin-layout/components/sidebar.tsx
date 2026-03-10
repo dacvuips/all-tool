@@ -10,6 +10,7 @@ import { HiOutlineLocationMarker } from "react-icons/hi";
 import {
   RiBankLine,
   RiBarChartLine,
+  RiCpuLine,
   RiFileList3Line,
   RiKey2Line,
   RiLayoutGridLine,
@@ -453,10 +454,16 @@ const useSidebarMenuConstants = () => {
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
         {
+          title: t("Nhà cung cấp AI"),
+          path: "/admin/management/ai-provider",
+          icon: <RiCpuLine />,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Địa chỉ cửa hàng  "),
           path: "/admin/management/shop-address",
           icon: <HiOutlineLocationMarker />,
-          scope: SCOPES.VIEW_ORDER,
+          scope: SCOPES.VIEW_PRODUCT,
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
       ],

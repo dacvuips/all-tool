@@ -117,7 +117,18 @@ export function parseNumber(
   // priceText = priceText.concat(currency ? (typeof currency == "boolean" ? "đ" : currency) : "");
   // return priceText;
 
-  if (isNaN(Number(value))) return "0";
+  // Chuẩn hóa chuỗi số kiểu VN/EU: "30.000" = 30000 (dấu chấm = hàng nghìn)
+  let normalized = value;
+  if (typeof value === "string") {
+    const trimmed = String(value).trim();
+    // Có ít nhất một nhóm .XXX (3 chữ số) → coi dấu chấm là phân cách hàng nghìn
+    if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(trimmed)) {
+      normalized = trimmed.replace(/\./g, "").replace(",", ".");
+    }
+  }
+
+  const numValue = Number(normalized);
+  if (isNaN(numValue)) return "0";
   let number = new Intl.NumberFormat("vi-VN", {
     notation: compact ? "compact" : "standard",
     compactDisplay: "short",
@@ -127,7 +138,7 @@ export function parseNumber(
     signDisplay,
     minimumFractionDigits,
     maximumFractionDigits,
-  }).format(value);
+  }).format(numValue);
   return number;
 }
 

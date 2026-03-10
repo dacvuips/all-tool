@@ -1,5 +1,16 @@
 import { t } from "../../functions/i18n";
+import type { FlowNodeRun } from "../../flow-node/execute-client";
 import { BaseModel, CrudRepository } from "../crud.repo";
+
+/** Payload từ subscription flowNodeRunChanged (socket khi run completed/failed) */
+export type FlowNodeRunChangeEvent = {
+  runId: string;
+  nodeId: string;
+  customerId: string;
+  productId: string;
+  event: "completed" | "failed";
+  data: FlowNodeRun;
+};
 
 export enum PropertyTypeEnum {
   TEXT = "TEXT", // Text
@@ -12,7 +23,14 @@ export enum PropertyTypeEnum {
   MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
   FILE = "FILE", // File
 }
-
+export enum AiProviderKeyEnum {
+  OPENAI_KEY = "OPENAI_KEY",
+  CLAUDE_KEY = "CLAUDE_KEY",
+  GOOGLE_GEMINI_KEY = "GOOGLE_GEMINI_KEY",
+  DEEP_SEEK_KEY = "DEEP_SEEK_KEY",
+  KLING_KEY = "KLING_KEY",
+  SEE_DANCE_KEY = "SEE_DANCE_KEY",
+}
 export interface PropertySelectOption {
   key: string;
   label: string;
@@ -30,7 +48,7 @@ export interface Property {
 }
 
 export interface NodeConfig {
-  provider?: string;
+  aiProviderKey?: AiProviderKeyEnum;
   endpoint?: string;
   method?: string;
   bodyTemplate?: string;
@@ -73,7 +91,7 @@ export interface Product extends BaseModel {
   des?: string;
   video?: string;
   coverImg?: string;
-  categoryId?: string;
+  categoryIds?: string[];
   active?: boolean;
   slug?: string;
   price?: string;
@@ -104,7 +122,7 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    categoryId
+    categoryIds
     active
     slug
     price
@@ -127,9 +145,11 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            provider
+            aiProviderKey
             endpoint
             method
+            model
+            outputType
             bodyTemplate
           }
         }
@@ -152,7 +172,7 @@ export class ProductRepository extends CrudRepository<Product> {
     des
     video
     coverImg
-    categoryId
+    categoryIds
     active
     slug
     price
@@ -175,7 +195,7 @@ export class ProductRepository extends CrudRepository<Product> {
             options { key label }
           }
           config {
-            provider
+            aiProviderKey
             endpoint
             method
             bodyTemplate
@@ -220,6 +240,16 @@ export class ProductRepository extends CrudRepository<Product> {
         ${this.shortFragment}
       }`,
     }).then((res) => res.data.g0);
+  }
+
+  /** Subscribe socket flowNodeRunChanged – khi run completed/failed backend bắn event, cập nhật node realtime */
+  subscribeFlowNodeRunChanged(params: { customerId: string; productId?: string }) {
+    const { customerId, productId } = params;
+    return this.subscribe({
+      query: `flowNodeRunChanged(customerId: $customerId, productId: $productId) { runId nodeId customerId productId event data }`,
+      variablesParams: "($customerId: String!, $productId: String)",
+      options: { variables: { customerId, productId: productId ?? null } },
+    }).map((res) => res.data.g0 as FlowNodeRunChangeEvent);
   }
 }
 

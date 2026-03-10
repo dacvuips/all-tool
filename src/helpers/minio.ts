@@ -173,6 +173,45 @@ class Minio {
       .then(() => `${this.endpoint}/${this.bucket}/${fileName}`);
   }
 
+  /**
+   * Upload buffer lên MinIO (dùng cho AI generation: ảnh/video từ API trả về).
+   * Trả về etag, path, size, mimetype, link.
+   */
+  async uploadBuffer(
+    fileName: string,
+    buffer: Buffer,
+    mimetype: string,
+    options: MinioUploadOptions = {}
+  ): Promise<MinioUploadResult> {
+    const headers: Record<string, string> = {
+      "Content-Type": mimetype,
+    };
+    if (options.isPublic) {
+      headers["x-amz-acl"] = "public-read";
+      headers["x-goog-acl"] = "public-read";
+    }
+    return new Promise((resolve, reject) => {
+      this.client.putObject(
+        this.bucket,
+        fileName,
+        buffer,
+        buffer.length,
+        headers,
+        (err: Error, etag: string) => {
+          if (err) return reject(err);
+          resolve({
+            etag,
+            name: fileName,
+            size: buffer.length,
+            mimetype,
+            bucket: this.bucket,
+            link: `${this.endpoint}/${this.bucket}/${fileName}`,
+          });
+        }
+      );
+    });
+  }
+
   getListObjects(prefix?: string, recursive?: boolean) {
     return new Promise((resolve, reject) => {
       var stream = this.client.listObjects(this.bucket, prefix, recursive);

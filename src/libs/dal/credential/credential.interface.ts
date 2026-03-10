@@ -1,15 +1,11 @@
 import { TimestampEntity } from "../../core";
-
-export type CredentialField = {
-  value?: string;
-  active?: boolean;
-};
+import { AiProviderKeyEnum } from "../product";
 
 export type ICredential = TimestampEntity & {
-  ghnToken?: CredentialField;
-  googleAIStudio?: CredentialField;
-  chatGPT?: CredentialField;
-  spx?: CredentialField;
-  jtExpress?: CredentialField;
-  giaoHangTietKiem?: CredentialField;
+  key?: AiProviderKeyEnum;
+  value?: string;
+  active?: boolean;
+  customerId?: string;
+  isCustomerCredential?: boolean;
+  isAdminCredential?: boolean;
 };

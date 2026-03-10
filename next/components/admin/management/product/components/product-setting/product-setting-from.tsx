@@ -1,13 +1,25 @@
-import { useEffect, useState } from "react";
-import { useFieldArray, useFormContext } from "react-hook-form";
+import copy from "copy-to-clipboard";
+import { nanoid } from "nanoid";
+import { useEffect, useMemo, useState } from "react";
+import { useFieldArray, useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
+import { HiOutlineClipboard, HiOutlineMenuAlt4, HiOutlineTrash, HiPlus, HiX } from "react-icons/hi";
+import { API_OUTPUT_TYPES } from "../../../../../../lib/constants/api-config.const";
 import { useOptionsTranslation } from "../../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../../lib/providers/auth-provider";
-import { PropertyTypeEnum } from "../../../../../../lib/repo";
+import { useToast } from "../../../../../../lib/providers/toast-provider";
+import { AiProviderKeyEnum, PropertyTypeEnum } from "../../../../../../lib/repo/product";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
-import { Button, Field, Input, Select, Switch } from "../../../../../shared/utilities/form";
+import {
+  Button,
+  Field,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+} from "../../../../../shared/utilities/form";
+import { JSONEditor } from "../../../../../shared/utilities/form/json-editor";
 
 export const ProductSettingForm = () => {
   const { t } = useTranslation();
@@ -15,13 +27,38 @@ export const ProductSettingForm = () => {
   const xl = useScreen("xl");
   const { PRODUCT_PROPERTY_TYPE_OPTIONS } = useOptionsTranslation();
 
-  const { append, remove, fields } = useFieldArray({
+  const { append, remove, move, fields } = useFieldArray({
     name: "properties",
   });
   const name = "properties";
   const [openFieldDialog, setOpenFieldDialog] = useState(false);
   const [type, setType] = useState(PRODUCT_PROPERTY_TYPE_OPTIONS[0].value);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const { userPermission } = useAuth();
+
+  const handleDragStart = (index: number) => {
+    setDraggedIndex(index);
+  };
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedIndex === null) return;
+    setDragOverIndex(index);
+  };
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+  const handleDrop = (e: React.DragEvent, toIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === toIndex) return;
+    move(draggedIndex, toIndex);
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+  };
 
   return (
     <div className="space-y-4 w-full">
@@ -32,74 +69,93 @@ export const ProductSettingForm = () => {
         <div className="col-span-12">
           {(fields as (any & { id: string })[])?.map((item, index) => (
             <div
-              className="p-2 -m-1 mb-3 bg-gray-50 rounded-md border border-gray-200"
-              key={item.id + index}
+              className={`p-2 -m-1 mb-3 relative hover:bg-gray-100 hover:border-gray-300 border-dashed bg-gray-50 rounded-md border transition-colors ${
+                dragOverIndex === index ? "border-primary border-2 bg-primary/5" : "border-gray-200"
+              } ${draggedIndex === index ? "opacity-50" : ""}`}
+              key={item.id}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, index)}
             >
-              <div className="grid grid-cols-12 gap-x-2">
-                <TypeField type={item.type} fieldIndex={index} />
-                <Field
-                  label={t("Mã dữ liệu")}
-                  name={`${name}.${index}.key`}
-                  validation={{ code: true }}
-                  required
-                  cols={xl ? 2 : sm ? 3 : 6}
+              <div className="flex gap-2 justify-between items-center">
+                <div
+                  className="flex items-center text-gray-400 cursor-pointer cursor-grab hover:text-gray-600"
+                  draggable
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnd={handleDragEnd}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  data-tooltip={t("Kéo để sắp xếp thứ tự")}
+                  data-tooltip-position="top"
                 >
-                  <Input placeholder={t("Nhập mã dữ liệu")} />
-                </Field>
-
-                <Field
-                  label={t("Tên dữ liệu")}
-                  name={`${name}.${index}.label`}
-                  required
-                  cols={xl ? 2 : sm ? 3 : 6}
-                >
-                  <Input placeholder={t("Nhập tên dữ liệu")} />
-                </Field>
-                <Field
-                  label={t("Nội dung")}
-                  name={`${name}.${index}.placeholder`}
-                  cols={xl ? 2 : sm ? 3 : 6}
-                >
-                  <Input placeholder={t("Nhập nội dung...")} />
-                </Field>
-
-                <Field
-                  label={t("Giải thích")}
-                  name={`${name}.${index}.tooltip`}
-                  cols={xl ? 4 : sm ? 3 : 6}
-                >
-                  <Input placeholder={t("Giải thích trường cần nhập")} />
-                </Field>
-
-                {(item.type == PropertyTypeEnum.SELECT ||
-                  item.type == PropertyTypeEnum.MULTI_SELECT ||
-                  item.type == PropertyTypeEnum.TEXT ||
-                  item.type == PropertyTypeEnum.NUMBER) && (
+                  <HiOutlineMenuAlt4 className="w-5 h-5" />
+                </div>
+                <div className="grid grid-cols-12 gap-x-2 pl-2 border-l-2 border-gray-200">
+                  <TypeField type={item.type} fieldIndex={index} />
                   <Field
-                    label={t("Để trống")}
-                    name={`${name}.${index}.clearable`}
-                    cols={xl ? 1 : sm ? 3 : 6}
+                    label={t("Mã dữ liệu")}
+                    name={`${name}.${index}.key`}
+                    validation={{ code: true }}
+                    required
+                    cols={xl ? 2 : sm ? 3 : 6}
                   >
-                    <Switch defaultValue={item.clearable} />
+                    <Input placeholder={t("Nhập mã dữ liệu")} />
                   </Field>
-                )}
-                <Field
-                  label={t("Bắt buộc")}
-                  name={`${name}.${index}.required`}
-                  cols={xl ? 1 : sm ? 3 : 6}
-                >
-                  <Switch defaultValue={item.required} />
-                </Field>
-                <Button
-                  className="mt-7"
-                  icon={<HiOutlineTrash />}
-                  outline
-                  hoverDanger
-                  // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
-                  onClick={() => {
-                    remove(index);
-                  }}
-                />
+
+                  <Field
+                    label={t("Tên dữ liệu")}
+                    name={`${name}.${index}.label`}
+                    required
+                    cols={xl ? 2 : sm ? 3 : 6}
+                  >
+                    <Input placeholder={t("Nhập tên dữ liệu")} />
+                  </Field>
+                  <Field
+                    label={t("Nội dung")}
+                    name={`${name}.${index}.placeholder`}
+                    cols={xl ? 2 : sm ? 3 : 6}
+                  >
+                    <Input placeholder={t("Nhập nội dung...")} />
+                  </Field>
+
+                  <Field
+                    label={t("Giải thích")}
+                    name={`${name}.${index}.tooltip`}
+                    cols={xl ? 4 : sm ? 3 : 6}
+                  >
+                    <Input placeholder={t("Giải thích trường cần nhập")} />
+                  </Field>
+
+                  {(item.type == PropertyTypeEnum.SELECT ||
+                    item.type == PropertyTypeEnum.MULTI_SELECT ||
+                    item.type == PropertyTypeEnum.TEXT ||
+                    item.type == PropertyTypeEnum.NUMBER) && (
+                    <Field
+                      label={t("Để trống")}
+                      name={`${name}.${index}.clearable`}
+                      cols={xl ? 2 : sm ? 3 : 6}
+                    >
+                      <Switch defaultValue={item.clearable} />
+                    </Field>
+                  )}
+                  <Field
+                    label={t("Bắt buộc")}
+                    name={`${name}.${index}.required`}
+                    cols={xl ? 2 : sm ? 3 : 6}
+                  >
+                    <Switch defaultValue={item.required} />
+                  </Field>
+                  <Button
+                    className="absolute top-1 left-2 p-0.5  h-6"
+                    icon={<HiOutlineTrash />}
+                    hoverDanger
+                    tooltip={t("Xóa")}
+                    outline
+                    // disabled={!userPermission("SAVE_GENERAL_CONFIG")}
+                    onClick={() => {
+                      remove(index);
+                    }}
+                  />
+                </div>
               </div>
               {(item.type == PropertyTypeEnum.SELECT ||
                 item.type == PropertyTypeEnum.MULTI_SELECT) && <SelectFields fieldIndex={index} />}
@@ -149,24 +205,124 @@ export const ProductSettingForm = () => {
           </Dialog>
         </div>
       </div>
-      {/* Config API (provider, endpoint, method, bodyTemplate) */}
-      <div className="p-2 w-full rounded-md border bg-gray-50/50">
-        <div className="mb-2 text-sm font-semibold text-gray-700">{t("Cấu hình API")}</div>
-        <div className="grid grid-cols-12 gap-x-2 gap-y-2">
-          <Field label={t("Provider")} name="config.provider" cols={6}>
-            <Input placeholder="vd: veo3" />
-          </Field>
-          <Field label={t("Method")} name="config.method" cols={6}>
-            <Input placeholder="POST" />
-          </Field>
-          <Field label={t("Endpoint")} name="config.endpoint" cols={12}>
-            <Input placeholder="/generate-video" />
-          </Field>
-          <Field label={t("Body template")} name="config.bodyTemplate" cols={12}>
-            <Input placeholder="{ prompt: {{prompt}}, duration: {{duration}} }" />
-          </Field>
-        </div>
+      {/* Cấu hình API: ảnh, video, file từ các nền tảng AI */}
+      <ApiConfigSection />
+    </div>
+  );
+};
+
+/** Form cấu hình gọi API tạo ảnh / video / file từ các nền tảng AI (OpenAI, Google, Replicate, Runway, ...) */
+function ApiConfigSection() {
+  const { t } = useTranslation();
+  const { setValue } = useFormContext();
+
+  const aiProviderKey = useWatch({ name: "config.aiProviderKey" }) as AiProviderKeyEnum | undefined;
+
+  const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
+  const outputTypeOptions = useMemo(
+    () => API_OUTPUT_TYPES.map((x) => ({ value: x.value, label: t(x.label) || x.label })),
+    [t]
+  );
+
+  return (
+    <div className="p-4 w-full rounded-lg border border-gray-200 bg-gray-50/50">
+      <div className="mb-3 text-sm font-semibold text-gray-800">
+        {t("Cấu hình API (ảnh / video / file)")}
       </div>
+      <div className="grid grid-cols-12 gap-x-3 gap-y-3">
+        <Field label={t("Loại output")} name="config.outputType" cols={6} required>
+          <Select
+            options={outputTypeOptions}
+            placeholder={t("Chọn loại: Ảnh, Video, File...")}
+            clearable={false}
+          />
+        </Field>
+        <Field label={t("Provider")} name="config.aiProviderKey" cols={6}>
+          <Select
+            hasImage
+            options={CREDENTIAL_KEY_OPTIONS}
+            placeholder={t("Chọn nền tảng AI")}
+            clearable={false}
+            onChange={(value) => {
+              setValue("config.aiProviderKey", value);
+            }}
+            value={aiProviderKey}
+          />
+        </Field>
+        <Field label={t("Model")} name="config.model" cols={12}>
+          <Input placeholder={t("VD: my-custom-model")} />
+        </Field>
+        <Field label={t("Method")} name="config.method" cols={4}>
+          <Select
+            options={[
+              { value: "POST", label: "POST" },
+              { value: "GET", label: "GET" },
+              { value: "PUT", label: "PUT" },
+              { value: "PATCH", label: "PATCH" },
+            ]}
+            placeholder="POST"
+          />
+        </Field>
+        <Field label={t("Endpoint")} name="config.endpoint" cols={8}>
+          <Input placeholder={"/generate-image"} />
+        </Field>
+        <PlaceholderLabel />
+        <Field label={t("Headers (JSON)")} name="config.headers" cols={12}>
+          <JSONEditor height="120px" />
+        </Field>
+        <Field label={t("Body template")} name="config.bodyTemplate" cols={12}>
+          <Textarea rows={15} />
+        </Field>
+        <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
+          <Input placeholder={"data[0].url hoặc result.media[0].url"} />
+        </Field>
+      </div>
+    </div>
+  );
+}
+
+const PlaceholderLabel = () => {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const { watch } = useFormContext();
+  const aiProviderKey = watch("config.aiProviderKey");
+  const properties = watch("properties");
+  function copyToClipboard(text) {
+    copy(text);
+    toast.success(t("Đã sao chép"));
+  }
+  return (
+    <div
+      key={aiProviderKey}
+      className="flex flex-row flex-wrap col-span-12 gap-x-3 p-3 rounded-md border border-gray-200 border-dashed"
+    >
+      <div className="flex gap-1 items-center whitespace-nowrap">
+        <span>{t("API key")}: </span>{" "}
+        <span className="text-gray-500">{`'{{${aiProviderKey}}}'`}</span>{" "}
+        <Button
+          className="p-0 border-0"
+          icon={<HiOutlineClipboard />}
+          tooltip={t("Sao chép")}
+          onClick={() => copyToClipboard(`'{{${aiProviderKey}}}'`)}
+        />
+      </div>
+      {properties.map(
+        (property: any) =>
+          !!property.key && (
+            <div key={nanoid()} className="flex flex-col gap-1">
+              <div className="flex gap-1 items-center whitespace-nowrap">
+                <span>{property.label}: </span>{" "}
+                <span className="text-gray-500">{`'{{${property.key}}}'`}</span>{" "}
+                <Button
+                  className="p-0 border-0"
+                  icon={<HiOutlineClipboard />}
+                  tooltip={t("Sao chép")}
+                  onClick={() => copyToClipboard(`'{{${property.key}}}'`)}
+                />
+              </div>
+            </div>
+          )
+      )}
     </div>
   );
 };
@@ -200,7 +356,7 @@ function SelectFields({ fieldIndex }) {
   register(`properties.${fieldIndex}.options`);
 
   return (
-    <div className="mb-3">
+    <div className="mt-2">
       <div className="flex flex-wrap gap-2">
         {(
           fields as {
@@ -233,7 +389,7 @@ function SelectFields({ fieldIndex }) {
           </div>
         ))}
         <Button
-          className="h-9 rounded-full"
+          className="h-9 bg-white rounded-full"
           outline
           text={t("Thêm lựa chọn")}
           onClick={() => {

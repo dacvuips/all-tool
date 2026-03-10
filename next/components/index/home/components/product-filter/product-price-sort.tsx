@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaChevronDown, FaTimes } from "react-icons/fa";
 import { ParamName } from "../../../../../lib/constants/constants";
-import { ProductService } from "../../../../../lib/repo";
+import { ProductService } from "../../../../../lib/repo/product";
 import { SortDirection } from "../../../../../lib/repo/types";
 import { Button } from "../../../../shared/utilities/form";
 import { Popover } from "../../../../shared/utilities/popover/popover";
@@ -59,15 +59,14 @@ export const ProductPriceSort = () => {
       <div>
         <div
           ref={productPriceRef}
-          className={`p-1 border  text-center flex items-center hover:border-primary-dark hover:bg-gray-100 rounded-full cursor-pointer ${
-            sort ? " border-primary bg-primary-light" : "border-gray-400"
+          className={`px-1 border  text-center flex items-center hover:border-primary-dark hover:bg-gray-100 rounded-full cursor-pointer ${
+            sort ? "border-primary bg-primary-light" : "border-gray-400"
           }`}
         >
           {sort ? (
             <div
               className={`flex items-center justify-between w-full pl-1 ${
-                sort ? " text-primary font-semibold" : ""
-              }`}
+                sort ? "font-semibold text-primary" : ""}`}
               style={{ height: "30px" }}
             >
               <span className="whitespace-nowrap">{filterValue}</span>
@@ -82,7 +81,7 @@ export const ProductPriceSort = () => {
             </div>
           ) : (
             <div
-              className="flex items-center justify-between w-full pl-1"
+              className="flex justify-between items-center pl-1 w-full"
               style={{ height: "30px" }}
             >
               <span className="text-gray-500 whitespace-nowrap">{t("Sắp xếp giá")}</span>
@@ -101,7 +100,7 @@ export const ProductPriceSort = () => {
           placement="bottom-start"
           arrow={false}
         >
-          <div className="flex flex-col items-center gap-y-1">
+          <div className="flex flex-col gap-y-1 items-center">
             {priceSortButtonMap.map((button, index) => (
               <Button
                 key={index}

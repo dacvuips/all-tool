@@ -1,11 +1,30 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { CategoryService } from "../../../../../lib/repo";
 import { VideoDialog } from "../../../../shared/common/video-dialog";
-import { Editor, Field, ImageInput, Input, Label } from "../../../../shared/utilities/form";
+import { Editor, Field, ImageInput, Input, Label, Select } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
+
+function flattenCategoryOptions(
+  tree: { id?: string; name?: string; parentId?: string | null; children?: any[] }[],
+  level = 0
+): { value: string; label: string; isDisabled?: boolean }[] {
+  const options: { value: string; label: string; isDisabled?: boolean }[] = [];
+  const prefix = "— ".repeat(level);
+  for (const n of tree) {
+    if (!n.id) continue;
+    options.push({
+      value: n.id,
+      label: prefix + (n.name || "(Chưa đặt tên)"),
+      isDisabled: !n.parentId,
+    });
+    if (n.children?.length) options.push(...flattenCategoryOptions(n.children, level + 1));
+  }
+  return options;
+}
 
 export function ProductField() {
   const { t } = useTranslation();
@@ -13,6 +32,15 @@ export function ProductField() {
   const xs = useScreen("xs");
   const { userPermission } = useAuth();
   const [videoOpen, setVideoOpen] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<
+    { value: string; label: string; isDisabled?: boolean }[]
+  >([]);
+
+  useEffect(() => {
+    CategoryService.getCategoryTree().then((tree) => {
+      setCategoryOptions(flattenCategoryOptions(tree));
+    }).catch(() => setCategoryOptions([]));
+  }, []);
 
   const videoUrl = watch("video");
 
@@ -53,6 +81,16 @@ export function ProductField() {
       <Field name="price" label={t("Giá sản phẩm")} cols={2}>
         <Input number placeholder={t("Nhập giá sản phẩm")} />
       </Field>
+
+      <Field name="categoryIds" label={t("Danh mục hiển thị")} cols={12}>
+        <Select
+          multi
+          options={categoryOptions}
+          placeholder={t("Chọn danh mục (có thể chọn nhiều)")}
+          clearable
+        />
+      </Field>
+
       <div className="col-span-full gap-2 mb-2 whitespace-nowrap">
         <Label text={t("Video")} />
         <div className={`flex ${xs ? "flex-row gap-2" : "flex-col"}`}>
@@ -90,7 +128,7 @@ export function ProductField() {
       ></VideoDialog>
 
       <Field name="des" label={t("Mô tả sản phẩm")} cols={12} required>
-        <Editor minHeight="200px" noBorder className="border rounded-md" maxWidth="none" />
+        <Editor minHeight="200px" noBorder className="rounded-md border" maxWidth="none" />
       </Field>
     </>
   );

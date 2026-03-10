@@ -23,7 +23,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float
@@ -36,7 +36,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float
@@ -45,10 +45,15 @@ const schema = gql`
   }
 
   input NodeConfigInput {
-    provider: String
+    outputType: String
+    aiProviderKey: AiProviderKeyEnum
+    model: String
+    baseUrl: String
     endpoint: String
     method: String
+    headers: String
     bodyTemplate: String
+    responsePath: String
   }
 
   input FlowNodeDataInput {
@@ -108,7 +113,7 @@ const schema = gql`
     des: String
     video: String
     coverImg: String
-    categoryId: String
+    categoryIds: [String]
     active: Boolean
     slug: String
     price: Float
@@ -117,10 +122,15 @@ const schema = gql`
   }
 
   type NodeConfig {
-    provider: String
+    outputType: String
+    aiProviderKey: AiProviderKeyEnum
+    model: String
+    baseUrl: String
     endpoint: String
     method: String
+    headers: String
     bodyTemplate: String
+    responsePath: String
   }
 
   type FlowNodeData {
@@ -169,6 +179,14 @@ const schema = gql`
     required: Boolean
     clearable: Boolean
     options: [PropertySelectOption]
+  }
+  enum AiProviderKeyEnum {
+    OPENAI_KEY
+    CLAUDE_KEY
+    GOOGLE_GEMINI_KEY
+    DEEP_SEEK_KEY
+    KLING_KEY
+    SEE_DANCE_KEY
   }
 
   type ProductPageData {

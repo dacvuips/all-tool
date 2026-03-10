@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { random } from "lodash";
-import { Product } from "../../../../lib/repo";
+import { Product } from "../../../../lib/repo/product";
 import { FbIcon, IconViber, QRIcon, TgIcon } from "../../../../public/assets/svg/svg";
 import { PostGroupDialog } from "../../../shared/common/post-group-dialog";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
@@ -30,7 +30,7 @@ type Props = {};
 export function ProductInfo({}: Props) {
   const randomReviewCount = random(1, 10000);
   return (
-    <div className="relative flex flex-col">
+    <div className="flex relative flex-col">
       <ButtonShare />
       <ProductTitle />
       {/* <ProductRating averageRate={5} reviewCount={randomReviewCount} soldCount={0} /> */}
@@ -146,21 +146,21 @@ export function Share({ link, ...props }: { link: string }) {
   return (
     <div className="px-4 py-4">
       <span className="font-medium">{`${t("Link giới thiệu")}:`}</span>
-      <div className="flex w-full mt-1 mb-4 border-b rounded-md min-h-12">
+      <div className="flex mt-1 mb-4 w-full rounded-md border-b min-h-12">
         <span className="flex-1 my-auto text-sm font-light whitespace-nowrap text-ellipsis-2 sm:text-base">
           {link}
         </span>
         {/* {showShareType ? ( */}
         {/* <Button
           icon={<AiOutlineClose />}
-          className="w-10 h-12 pl-2 pr-0 ml-auto mr-0"
+          className="pr-0 pl-2 mr-0 ml-auto w-10 h-12"
           iconClassName="text-28"
           onClick={() => setShowShareType(false)}
         /> */}
         {/* ) : ( */}
         <Button
           icon={<FaShareAlt />}
-          className="w-10 h-12 pl-2 pr-0 ml-auto mr-0"
+          className="pr-0 pl-2 mr-0 ml-auto w-10 h-12"
           iconClassName="text-28"
           onClick={() => setShowShareType(true)}
         />
@@ -215,7 +215,7 @@ export function Share({ link, ...props }: { link: string }) {
       </div>
       {/* )} */}
       <Dialog isOpen={showQRcode} onClose={() => setShowQRcode(false)} slideFromBottom="none">
-        <div className="flex flex-col items-center w-full p-3">
+        <div className="flex flex-col items-center p-3 w-full">
           <QRCode value={link} size={screenSm ? 300 : 230} />
         </div>
       </Dialog>

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { IProduct, PropertyTypeEnum } from "./product.interface";
+import { AiProviderKeyEnum, IProduct, PropertyTypeEnum } from "./product.interface";
 
 const Schema = mongoose.Schema;
 
@@ -27,10 +27,15 @@ const propertySchema = new Schema(
 
 const nodeConfigSchema = new Schema(
   {
-    provider: { type: String },
+    outputType: { type: String },
+    aiProviderKey: { type: String, enum: Object.values(AiProviderKeyEnum) },
+    model: { type: String },
+    baseUrl: { type: String },
     endpoint: { type: String },
     method: { type: String },
+    headers: { type: String },
     bodyTemplate: { type: String },
+    responsePath: { type: String },
   },
   { _id: false }
 );
@@ -84,7 +89,7 @@ const productSchema = new Schema(
     des: { type: String },
     video: { type: String },
     coverImg: { type: String, require: true },
-    categoryId: { type: String, ref: "Category", require: true },
+    categoryIds: { type: [String], default: [] },
     slug: { type: String, require: true },
     active: { type: Boolean, default: false },
     price: { type: Number, default: 0 },

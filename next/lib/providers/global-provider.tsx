@@ -35,6 +35,10 @@ export const GlobalContext = createContext<
     setPostPopup: (value: Post) => void;
     notificationCount: number;
     setNotificationCount: (value: number) => void;
+    openCardMenu: boolean;
+    setOpenCardMenu: (value: boolean) => void;
+    openSidebarSlideout: boolean;
+    setOpenSidebarSlideout: (value: boolean) => void;
   }>
 >({});
 
@@ -55,6 +59,8 @@ export function GlobalProvider(props) {
   const [openRegisShopDialog, setOpenRegisShopDialog] = useState<boolean>(false);
   const [notificationCount, setNotificationCount] = useState<number>();
   const [postPopup, setPostPopup] = useState<Post>();
+  const [openCardMenu, setOpenCardMenu] = useState(false);
+  const [openSidebarSlideout, setOpenSidebarSlideout] = useState(false);
   const loginQuery: string = useQuery("login");
 
   // Thời hạn 3 Giờ
@@ -111,6 +117,10 @@ export function GlobalProvider(props) {
         setPostPopup,
         notificationCount,
         setNotificationCount,
+        openCardMenu,
+        setOpenCardMenu,
+        openSidebarSlideout,
+        setOpenSidebarSlideout,
       }}
     >
       {props.children}

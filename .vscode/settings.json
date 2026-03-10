@@ -7,13 +7,16 @@
     "source.organizeImports": "explicit",
     "source.sortMembers": "explicit"
   },
+
   "eslint.validate": ["javascript", "typescript"],
-  "editor.formatOnSave": true,
+
   "[javascript]": {
-    "editor.formatOnSave": false
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[typescript]": {
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "[markdown]": {
     "editor.formatOnSave": false
