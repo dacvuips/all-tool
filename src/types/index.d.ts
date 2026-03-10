@@ -9,3 +9,4 @@ declare module "@atomictech/xlsx-write-stream";
 declare module "pixl-cache";
 declare module "cookie-parser";
 declare module "vietqr";
+declare module "bson";

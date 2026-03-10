@@ -26,7 +26,7 @@ const logger = winston.createLogger({
       if (!_.isEmpty(metadata)) {
         msg += `\n${beautify(metadata, null, 2, 120)}`;
       }
-      if (stack) {
+      if (stack && typeof stack === "string") {
         msg += `\n${_.take(stack.split("\n"), 4).join("\n")}`;
       }
       return msg;

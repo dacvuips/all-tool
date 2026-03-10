@@ -197,8 +197,10 @@ class Minio {
         buffer,
         buffer.length,
         headers,
-        (err: Error, etag: string) => {
+        (((err: Error, result: unknown) => {
           if (err) return reject(err);
+          const etag =
+            typeof result === "string" ? result : (result as { etag?: string })?.etag ?? "";
           resolve({
             etag,
             name: fileName,
@@ -207,7 +209,7 @@ class Minio {
             bucket: this.bucket,
             link: `${this.endpoint}/${this.bucket}/${fileName}`,
           });
-        }
+        }) as (err: Error, result: unknown) => void)
       );
     });
   }
