@@ -1,6 +1,7 @@
 /**
  * Client helper: gọi API execute flow node (queue-based), poll run theo runId.
  * API: POST /api/flow-node/execute (trả runId), GET /api/flow-node/run/:runId, GET /api/flow-node/runs.
+ * Subscription flowNodeRunChanged: dùng ProductService.subscribeFlowNodeRunChanged() hoặc hook useFlowNodeRunChanged().
  */
 
 export interface ExecuteNodeParams {

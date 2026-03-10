@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { Handle, NodeProps, Position } from "reactflow";
+import type { FlowNodeRun, GenerationOutputRef } from "../../../../lib/flow-node/execute-client";
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import {
   NodeConfig,
@@ -21,7 +22,7 @@ import {
   Switch,
   Textarea,
 } from "../../../shared/utilities/form";
-import { NotFound } from "../../../shared/utilities/misc";
+import { Img, NotFound } from "../../../shared/utilities/misc";
 
 /** Data khi node là product card (danh sách sản phẩm) */
 export type ProductCardNodeData = {
@@ -50,6 +51,8 @@ export type FlowNodeData = {
   isRunning?: boolean;
   /** Node nào đang lỗi (highlight) */
   errorNodeId?: string | null;
+  /** Kết quả run mới nhất (ảnh/video) sau khi job trả về – dùng để hiển thị trong node */
+  latestRun?: FlowNodeRun | null;
 };
 
 export type ProductNodeData = ProductCardNodeData | FlowNodeData;
@@ -78,6 +81,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
     onSubmitNode,
     isRunning,
     errorNodeId,
+    latestRun,
   } = data;
   const displayLabel = label || t("Node");
 
@@ -121,6 +125,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
         config={config}
         isRunning={isRunning}
         registerGetValues={registerGetValues}
+        latestRun={latestRun}
       />
 
       <Handle
@@ -164,6 +169,7 @@ interface PropertyComponentProps {
   config?: NodeConfig;
   isRunning?: boolean;
   registerGetValues?: (nodeId: string, getValues: () => NodeFieldValues) => void;
+  latestRun?: FlowNodeRun | null;
 }
 
 /**
@@ -179,8 +185,11 @@ const PropertyComponent = memo(function PropertyComponent({
   config,
   isRunning,
   registerGetValues,
+  latestRun,
 }: PropertyComponentProps) {
   const { t } = useTranslation();
+  const resultRefs = latestRun?.resultRefs;
+  const hasResults = resultRefs && resultRefs.length > 0;
 
   return (
     <Form grid className="px-4 py-2">
@@ -239,6 +248,11 @@ const PropertyComponent = memo(function PropertyComponent({
           {onSubmitNode && config?.endpoint && (
             <NodeSubmitButton nodeId={nodeId} onSubmitNode={onSubmitNode} isRunning={isRunning} />
           )}
+          {/* Kết quả run (ảnh/video) hiển thị ngay trong node khi job đã xong */}
+          {hasResults && <NodeResultOutput resultRefs={resultRefs} runStatus={latestRun?.status} />}
+          {latestRun?.status === "FAILED" && latestRun?.errorMessage && (
+            <p className="col-span-full mt-1 text-xs text-red-600">{latestRun.errorMessage}</p>
+          )}
         </>
       ) : (
         <NotFound text={t("Chưa chọn trường")} />
@@ -246,6 +260,62 @@ const PropertyComponent = memo(function PropertyComponent({
     </Form>
   );
 });
+
+/**
+ * Hiển thị kết quả run (ảnh/video) ngay trong node khi job đã COMPLETED.
+ */
+function NodeResultOutput({
+  resultRefs,
+  runStatus,
+}: {
+  resultRefs: GenerationOutputRef[];
+  runStatus?: string;
+}) {
+  const { t } = useTranslation();
+  const sorted = [...resultRefs].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+  return (
+    <div className="col-span-full pt-2 mt-2 border-t border-gray-200 border-dashed">
+      <div className="text-xs font-medium text-gray-500 mb-1.5">{t("Kết quả")}</div>
+      <div className="flex flex-wrap gap-2">
+        {sorted.map((ref, idx) => (
+          <div key={idx} className="flex flex-col items-center">
+            {ref.type === "image" && ref.url && (
+              <a
+                href={ref.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block overflow-hidden rounded border border-gray-200"
+              >
+                <Img src={ref.url} alt="" className="object-cover w-16 h-16" />
+              </a>
+            )}
+            {ref.type === "video" && ref.url && (
+              <a
+                href={ref.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-primary"
+              >
+                {t("Xem video")}
+              </a>
+            )}
+            {(ref.type === "file" || ref.type === "audio") && ref.url && (
+              <a
+                href={ref.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-primary"
+              >
+                {ref.type === "audio" ? t("Nghe") : t("Tải file")}
+              </a>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Nút Submit trong form node: getValues() từ react-hook-form rồi gọi onSubmitNode.

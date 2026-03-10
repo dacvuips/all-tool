@@ -27,6 +27,7 @@ import {
   getFlowNodeRuns,
   type FlowNodeRun,
 } from "../../../lib/flow-node/execute-client";
+import { useFlowNodeRunChanged } from "../../../lib/hooks/useFlowNodeRunChanged";
 import { parseNumber } from "../../../lib/helpers/parser";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
@@ -80,7 +81,8 @@ function buildFlowNodes(
   registerGetValues: (nodeId: string, getValues: () => NodeFieldValues) => void,
   onSubmitNode: (nodeId: string, fieldValues: NodeFieldValues) => void | Promise<void>,
   isRunning: boolean,
-  errorNodeId: string | null
+  errorNodeId: string | null,
+  latestRunByNodeId: Record<string, FlowNodeRun | null>
 ): Node<ProductNodeData>[] {
   return flowNodes.map((fn) => ({
     id: fn.id,
@@ -95,6 +97,7 @@ function buildFlowNodes(
       onSubmitNode,
       isRunning,
       errorNodeId,
+      latestRun: latestRunByNodeId[fn.id] ?? null,
     } as FlowNodeData,
   }));
 }
@@ -125,6 +128,8 @@ export const ProductDetailPage = () => {
   const [isRunning, setIsRunning] = useState(false);
   /** Node nào lỗi khi auto-run (highlight đỏ) */
   const [errorNodeId, setErrorNodeId] = useState<string | null>(null);
+  /** Kết quả run mới nhất theo nodeId (để node hiển thị ảnh/video sau khi job xong) */
+  const [latestRunByNodeId, setLatestRunByNodeId] = useState<Record<string, FlowNodeRun | null>>({});
   const [openDescriptionDialog, setOpenDescriptionDialog] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [historyRuns, setHistoryRuns] = useState<FlowNodeRun[]>([]);
@@ -161,6 +166,7 @@ export const ProductDetailPage = () => {
         toast.success(t("Đang xử lý... Vui lòng đợi."));
         const pollResult = await pollFlowNodeRun(result.runId);
         if (pollResult.success && pollResult.run) {
+          setLatestRunByNodeId((prev) => ({ ...prev, [nodeId]: pollResult.run! }));
           const count = pollResult.run.resultRefs?.length ?? 0;
           toast.success(
             count > 0
@@ -227,6 +233,7 @@ export const ProductDetailPage = () => {
         return;
       }
       context[nodeId] = pollResult.run;
+      setLatestRunByNodeId((prev) => ({ ...prev, [nodeId]: pollResult.run! }));
     }
 
     setErrorNodeId(null);
@@ -250,7 +257,8 @@ export const ProductDetailPage = () => {
       registerGetValues,
       handleSubmitNode,
       isRunning,
-      errorNodeId
+      errorNodeId,
+      latestRunByNodeId
     );
     setNodes(nextNodes);
   }, [
@@ -260,6 +268,7 @@ export const ProductDetailPage = () => {
     handleSubmitNode,
     isRunning,
     errorNodeId,
+    latestRunByNodeId,
   ]);
 
   const edgeTypes: EdgeTypes = useMemo(
@@ -292,6 +301,26 @@ export const ProductDetailPage = () => {
       setHistoryLoading(false);
     }
   }, [customer?._id, product?.id]);
+
+  /** Socket: nhận event run completed/failed từ useFlowNodeRunChanged → cập nhật node realtime */
+  const flowNodeRunChanged = useFlowNodeRunChanged(customer?._id, product?.id);
+  useEffect(() => {
+    if (!flowNodeRunChanged?.nodeId || !flowNodeRunChanged?.data) return;
+    setLatestRunByNodeId((prev) => ({
+      ...prev,
+      [flowNodeRunChanged.nodeId]: flowNodeRunChanged.data as FlowNodeRun,
+    }));
+    if (flowNodeRunChanged.event === "completed") {
+      const count = flowNodeRunChanged.data.resultRefs?.length ?? 0;
+      toast.success(
+        count > 0
+          ? t("Node chạy xong. Đã tạo {{count}} kết quả.", { count })
+          : t("Node chạy xong.")
+      );
+    } else if (flowNodeRunChanged.event === "failed") {
+      toast.error(flowNodeRunChanged.data.errorMessage || t("Node chạy lỗi."));
+    }
+  }, [flowNodeRunChanged, toast, t]);
 
   if (!product) return <Spinner />;
 

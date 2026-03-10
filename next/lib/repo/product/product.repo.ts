@@ -1,5 +1,16 @@
 import { t } from "../../functions/i18n";
+import type { FlowNodeRun } from "../../flow-node/execute-client";
 import { BaseModel, CrudRepository } from "../crud.repo";
+
+/** Payload từ subscription flowNodeRunChanged (socket khi run completed/failed) */
+export type FlowNodeRunChangeEvent = {
+  runId: string;
+  nodeId: string;
+  customerId: string;
+  productId: string;
+  event: "completed" | "failed";
+  data: FlowNodeRun;
+};
 
 export enum PropertyTypeEnum {
   TEXT = "TEXT", // Text
@@ -229,6 +240,16 @@ export class ProductRepository extends CrudRepository<Product> {
         ${this.shortFragment}
       }`,
     }).then((res) => res.data.g0);
+  }
+
+  /** Subscribe socket flowNodeRunChanged – khi run completed/failed backend bắn event, cập nhật node realtime */
+  subscribeFlowNodeRunChanged(params: { customerId: string; productId?: string }) {
+    const { customerId, productId } = params;
+    return this.subscribe({
+      query: `flowNodeRunChanged(customerId: $customerId, productId: $productId) { runId nodeId customerId productId event data }`,
+      variablesParams: "($customerId: String!, $productId: String)",
+      options: { variables: { customerId, productId: productId ?? null } },
+    }).map((res) => res.data.g0 as FlowNodeRunChangeEvent);
   }
 }
 

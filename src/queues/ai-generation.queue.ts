@@ -1,12 +1,21 @@
 /**
  * Queue xử lý AI generation: nhận runId, gọi executeByProvider, chuẩn hóa response,
  * upload ảnh/video lên MinIO, cập nhật AiGenerationRun (resultRefs, status).
+ * Khi xong bắn socket (pubsub) để client cập nhật node realtime.
  */
 
 import { Job } from "bee-queue";
 import { BaseQueue } from "../base/baseQueue";
+import { CONSTANTS } from "../constants/constant.const";
+import {
+  FlowNodeRunChangeEventEnum,
+  type FlowNodeRunChangePayload,
+} from "../graphql/modules/flowNodeRun/flowNodeRunChangeStream.graphql";
+import logger from "../helpers/logger";
 import { aiGenerationRunService, AiGenerationRunStatusEnum } from "../libs/dal/aiGenerationRun";
+import { customerGenerationMediaService } from "../libs/dal/customerGenerationMedia";
 import { ApiOutputTypeEnum } from "../libs/dal/product";
+import { pubsub } from "../libs/graphql/pub-sub";
 import { executeProductCheck } from "../routers/flowNode/excute-product-check";
 import {
   executeByProvider,
@@ -97,6 +106,28 @@ class AiGenerationQueue extends BaseQueue {
         responseSummary,
         completedAt: new Date(),
       });
+
+      // Lưu từng output vào CustomerGenerationMedia để query nhanh theo customer
+      if (resultRefs?.length) {
+        await Promise.all(
+          resultRefs.map((ref, index) =>
+            customerGenerationMediaService.create({
+              customerId,
+              productId,
+              nodeId,
+              runId,
+              type: ref.type,
+              attachmentId: ref.attachmentId,
+              url: ref.url,
+              mimeType: ref.mimeType,
+              size: ref.size,
+              order: ref.order ?? index + 1,
+            })
+          )
+        );
+      }
+      // Bắn socket để client (product flow node) cập nhật kết quả run realtime
+      await publishFlowNodeRunChanged(runId, FlowNodeRunChangeEventEnum.COMPLETED);
     } catch (err: any) {
       const message = err?.response?.data?.message ?? err?.message ?? String(err);
       this.logger.error(`AiGenerationRun ${runId} failed: ${message}`, err);
@@ -105,8 +136,34 @@ class AiGenerationQueue extends BaseQueue {
         errorMessage: message,
         completedAt: new Date(),
       });
+      // Bắn socket để client (product flow node) cập nhật kết quả run realtime
+      await publishFlowNodeRunChanged(runId, FlowNodeRunChangeEventEnum.FAILED);
       throw err;
     }
+  }
+}
+
+/** Bắn socket để client (product flow node) cập nhật kết quả run realtime */
+async function publishFlowNodeRunChanged(
+  runId: string,
+  event: FlowNodeRunChangeEventEnum
+): Promise<void> {
+  try {
+    const run = await aiGenerationRunService.findOne({ _id: runId });
+    if (!run) return;
+    const doc = run as any;
+    const data = doc.toObject ? doc.toObject() : { ...doc };
+    const payload: FlowNodeRunChangePayload = {
+      runId: String(doc._id),
+      nodeId: doc.nodeId,
+      customerId: doc.customerId,
+      productId: doc.productId,
+      event,
+      data,
+    };
+    await pubsub.publish(CONSTANTS.SOCKET_EVENT_NAME.FLOW_NODE_RUN, payload);
+  } catch (e) {
+    logger.error("publishFlowNodeRunChanged error", e);
   }
 }
 
