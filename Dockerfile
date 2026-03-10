@@ -10,6 +10,8 @@ RUN npm version --allow-same-version 1.0.0
 FROM base AS deps
 
 COPY --from=package package.json package-lock.json ./
+# Disable husky (prepare script) in Docker - no .git / git hooks needed
+ENV HUSKY=0
 RUN npm install
 
 ######## Building
