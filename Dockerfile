@@ -10,9 +10,9 @@ RUN npm version --allow-same-version 1.0.0
 FROM base AS deps
 
 COPY --from=package package.json package-lock.json ./
-# Disable husky (prepare script) in Docker - no .git / git hooks needed
-ENV HUSKY=0
-RUN npm install
+
+# Resolve peer dependency conflicts (e.g. @ckeditor/ckeditor5-react expects React 16/17, we use 18)
+RUN npm install --legacy-peer-deps
 
 ######## Building
 FROM base AS build
