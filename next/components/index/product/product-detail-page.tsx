@@ -23,12 +23,12 @@ import { HiOutlineArrowLeft, HiOutlineBookOpen, HiOutlineClock } from "react-ico
 import { HiOutlinePlay } from "react-icons/hi2";
 import {
   executeFlowNode,
-  pollFlowNodeRun,
   getFlowNodeRuns,
+  pollFlowNodeRun,
   type FlowNodeRun,
 } from "../../../lib/flow-node/execute-client";
-import { useFlowNodeRunChanged } from "../../../lib/hooks/useFlowNodeRunChanged";
 import { parseNumber } from "../../../lib/helpers/parser";
+import { useFlowNodeRunChanged } from "../../../lib/hooks/useFlowNodeRunChanged";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
 import type { ProductFlowEdge, ProductFlowNode } from "../../../lib/repo/product";
@@ -380,25 +380,25 @@ export const ProductDetailPage = () => {
                   {/* View description button*/}
                   <Button
                     info
-                    className="rounded-md"
+                    className="rounded-md" iconClassName="text-lg"
                     onClick={() => handleViewDescription()}
-                    text={t("Hướng dẫn")}
                     tooltip={t("Hướng dẫn sản phẩm")}
                     icon={<HiOutlineBookOpen />}
                     disabled={!product?.des}
                     small
                   />
                   <Button
-                    className="rounded-md"
+                    outline
+                    className="rounded-md" iconClassName="text-lg"
                     onClick={() => handleOpenHistory()}
-                    text={t("Lịch sử")}
                     tooltip={t("Xem lịch sử tạo ảnh/video")}
                     icon={<HiOutlineClock />}
                     small
                   />
-                  <Button
+                  <Button 
                     primary
                     className="rounded-md"
+                    iconClassName="text-lg"
                     disabled={isRunning}
                     isLoading={isRunning}
                     onClick={() => handleRunAuto()}
@@ -470,15 +470,15 @@ export const ProductDetailPage = () => {
             {historyLoading ? (
               <Spinner />
             ) : historyRuns.length === 0 ? (
-              <p className="text-gray-500 text-sm py-4">{t("Chưa có lịch sử.")}</p>
+              <p className="py-4 text-sm text-gray-500">{t("Chưa có lịch sử.")}</p>
             ) : (
               <div className="space-y-4 max-h-[70vh] overflow-y-auto">
                 {historyRuns.map((run) => (
                   <div
                     key={run._id}
-                    className="p-3 rounded-lg border border-gray-200 bg-gray-50"
+                    className="p-3 bg-gray-50 rounded-lg border border-gray-200"
                   >
-                    <div className="flex justify-between items-center text-xs text-gray-600 mb-2">
+                    <div className="flex justify-between items-center mb-2 text-xs text-gray-600">
                       <span>
                         {run.nodeId} · {run.status} ·{" "}
                         {run.completedAt
@@ -504,7 +504,7 @@ export const ProductDetailPage = () => {
                                   <Img
                                     src={ref.url}
                                     alt=""
-                                    className="w-24 h-24 object-cover rounded border"
+                                    className="object-cover w-24 h-24 rounded border"
                                   />
                                 </a>
                               )}
@@ -513,7 +513,7 @@ export const ProductDetailPage = () => {
                                   href={ref.url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-primary text-xs mt-1"
+                                  className="mt-1 text-xs text-primary"
                                 >
                                   {t("Xem video")}
                                 </a>
@@ -523,7 +523,7 @@ export const ProductDetailPage = () => {
                       </div>
                     )}
                     {run.status === "FAILED" && run.errorMessage && (
-                      <p className="text-red-600 text-xs mt-1">{run.errorMessage}</p>
+                      <p className="mt-1 text-xs text-red-600">{run.errorMessage}</p>
                     )}
                   </div>
                 ))}
