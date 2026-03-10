@@ -451,8 +451,9 @@ export const ProductDetailPage = () => {
                     <Background variant={BackgroundVariant.Dots} gap={24} size={1} color="#fff" />
                     <Controls className="overflow-hidden bg-gray-800 rounded-lg border border-gray-300" />
                     <MiniMap
-                      className="bg-white rounded-lg border border-gray-300 opacity-80"
+                      className="overflow-hidden bg-white rounded-md border border-gray-300 opacity-80"
                       nodeColor="#F2890D"
+                      style={{ width: 60, height: 40 }}
                     />
                   </ReactFlow>
                 </div>
