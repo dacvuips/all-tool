@@ -30,6 +30,7 @@ import {
 import { parseNumber } from "../../../lib/helpers/parser";
 import { useFlowNodeRunChanged } from "../../../lib/hooks/useFlowNodeRunChanged";
 import { useAuth } from "../../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../../lib/providers/global-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
 import type { ProductFlowEdge, ProductFlowNode } from "../../../lib/repo/product";
 import { ProductEdge } from "../../admin/management/product/components/product-edge";
@@ -115,6 +116,7 @@ export const ProductDetailPage = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
 
   const toast = useToast();
   const { product } = useProductDetailContext();
@@ -145,6 +147,10 @@ export const ProductDetailPage = () => {
   /** Submit thủ công 1 node: gọi API execute (queue), poll runId đến khi xong, báo toast. */
   const handleSubmitNode = useCallback(
     async (nodeId: string, fieldValues: NodeFieldValues) => {
+      if(!customer?._id) {
+        setOpenCustomerLoginDialog(true);
+        return;
+      }
       const fn = flowNodes.find((n) => n.id === nodeId);
       const config = fn?.data?.config;
       if (!config?.endpoint) return;
@@ -189,6 +195,10 @@ export const ProductDetailPage = () => {
    * Dừng ngay khi 1 node lỗi, set errorNodeId để highlight.
    */
   const handleRunAuto = useCallback(async () => {
+    if(!customer?._id) {
+      setOpenCustomerLoginDialog(true);
+      return;
+    }
     if (!flowNodes.length) return;
     setIsRunning(true);
     setErrorNodeId(null);
@@ -402,7 +412,7 @@ export const ProductDetailPage = () => {
                     disabled={isRunning}
                     isLoading={isRunning}
                     onClick={() => handleRunAuto()}
-                    text={isRunning ? t("Đang chạy...") : t("Chạy auto")}
+                    text={isRunning ? t("Đang chạy...") : t("Chạy tất cả")}
                     tooltip={t("Chạy lần lượt tất cả node theo flow; dừng khi gặp lỗi")}
                     icon={<HiOutlinePlay />}
                     small
