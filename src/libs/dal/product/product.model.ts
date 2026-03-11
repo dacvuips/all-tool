@@ -36,6 +36,8 @@ const nodeConfigSchema = new Schema(
     headers: { type: String },
     bodyTemplate: { type: String },
     responsePath: { type: String },
+    creditCost: { type: Number, default: 0 },
+    creditCostLabel: { type: String },
   },
   { _id: false }
 );

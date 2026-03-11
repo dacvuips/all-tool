@@ -50,6 +50,9 @@ const aiGenerationRunSchema = new Schema(
     errorMessage: { type: String },
     startedAt: { type: Date },
     completedAt: { type: Date },
+    creditCost: { type: Number, default: 0 },
+    creditChargedAt: { type: Date },
+    creditRefundedAt: { type: Date },
   },
   { timestamps: true }
 );

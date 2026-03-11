@@ -57,6 +57,7 @@ export default [
         const { node, aiProviderKey } = check;
         const outputType =
           (node.data?.config?.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE;
+        const creditCost = Math.max(0, Number(node.data?.config?.creditCost) || 0);
 
         const run = await aiGenerationRunService.create({
           customerId,
@@ -66,6 +67,7 @@ export default [
           outputType,
           status: AiGenerationRunStatusEnum.PENDING,
           requestSnapshot: { fieldValues, context },
+          creditCost,
         });
 
         const runId = (run as any)._id?.toString();

@@ -16,9 +16,15 @@ import {
 } from "../graphql/modules/flowNodeRun/flowNodeRunChangeStream.graphql";
 import logger from "../helpers/logger";
 import { aiGenerationRunService, AiGenerationRunStatusEnum } from "../libs/dal/aiGenerationRun";
+import {
+  creditTransactionService,
+  CreditTransactionTypeEnum,
+} from "../libs/dal/creditTransaction";
 import { customerGenerationMediaService } from "../libs/dal/customerGenerationMedia";
 import { ApiOutputTypeEnum } from "../libs/dal/product";
 import { pubsub } from "../libs/graphql/pub-sub";
+import { ChargeNodeRunCredit } from "../libs/usecases/credit/charge-node-run-credit.usecase";
+import { RefundNodeRunCredit } from "../libs/usecases/credit/refund-node-run-credit.usecase";
 import { executeProductCheck } from "../routers/flowNode/excute-product-check";
 import {
   executeByProvider,
@@ -66,6 +72,8 @@ class AiGenerationQueue extends BaseQueue {
     const fieldValues = requestSnapshot.fieldValues || {};
     const context = requestSnapshot.context || {};
 
+    const creditCost = Math.max(0, Number(runDoc.creditCost) || 0);
+
     await aiGenerationRunService.updateOne(runId, {
       status: AiGenerationRunStatusEnum.PROCESSING,
       startedAt: new Date(),
@@ -84,6 +92,32 @@ class AiGenerationQueue extends BaseQueue {
 
       const { node, aiProviderKey, credentialDecrypted } = check;
       fieldValues[aiProviderKey] = credentialDecrypted;
+
+      // Trừ credit khi bắt đầu xử lý (reserve). Nếu creditCost = 0 thì bỏ qua.
+      if (creditCost > 0) {
+        try {
+          await ChargeNodeRunCredit.usecase.execute(
+            ChargeNodeRunCredit.Command.create({
+              customerId,
+              runId: String(runDoc._id),
+              productId,
+              nodeId,
+              amount: creditCost,
+            })
+          );
+        } catch (chargeErr: any) {
+          const msg =
+            chargeErr?.message || "Số dư credit không đủ. Vui lòng nạp thêm credit để chạy node.";
+          await aiGenerationRunService.updateOne(runId, {
+            status: AiGenerationRunStatusEnum.FAILED,
+            errorMessage: msg,
+            completedAt: new Date(),
+          });
+          await publishFlowNodeRunChanged(runId, FlowNodeRunChangeEventEnum.FAILED);
+          return;
+        }
+        await aiGenerationRunService.updateOne(runId, { creditChargedAt: new Date() });
+      }
 
       const providerContext: ExecuteProviderContext = {
         nodeData: node.data,
@@ -137,10 +171,35 @@ class AiGenerationQueue extends BaseQueue {
     } catch (err: any) {
       const message = err?.response?.data?.message ?? err?.message ?? String(err);
       this.logger.error(`AiGenerationRun ${runId} failed: ${message}`, err);
+      // Hoàn credit nếu đã trừ (run FAILED)
+      const runAfterFail = await aiGenerationRunService.findOne({ _id: runId });
+      const doc = runAfterFail as any;
+      const shouldRefund =
+        doc?.creditChargedAt != null &&
+        doc?.creditRefundedAt == null &&
+        (doc?.creditCost ?? 0) > 0;
+      if (shouldRefund) {
+        const chargeTx = await creditTransactionService.findOne({
+          runId: String(doc._id),
+          type: CreditTransactionTypeEnum.NODE_RUN_CHARGE,
+        });
+        const refTransactionId = chargeTx ? String((chargeTx as any)._id) : undefined;
+        await RefundNodeRunCredit.usecase.execute(
+          RefundNodeRunCredit.Command.create({
+            customerId: doc.customerId,
+            runId: String(doc._id),
+            productId: doc.productId,
+            nodeId: doc.nodeId,
+            amount: Number(doc.creditCost) || 0,
+            refTransactionId,
+          })
+        );
+      }
       await aiGenerationRunService.updateOne(runId, {
         status: AiGenerationRunStatusEnum.FAILED,
         errorMessage: message,
         completedAt: new Date(),
+        ...(shouldRefund ? { creditRefundedAt: new Date() } : {}),
       });
       // Bắn socket để client (product flow node) cập nhật kết quả run realtime
       await publishFlowNodeRunChanged(runId, FlowNodeRunChangeEventEnum.FAILED);

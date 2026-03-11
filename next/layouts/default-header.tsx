@@ -35,9 +35,11 @@ import { NOTIFY_FRAGMENT, NotificationService } from "../lib/repo/notification/n
 
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
+import { parseNumber } from "../lib/helpers/parser";
 import { Order } from "../lib/repo";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
+import { useHomeLayoutContext } from "./home-layout/provider/home-layout-provider";
 
 export interface HeaderProps extends ReactProps {
   shopCode?: string;
@@ -63,6 +65,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
   const isBlockPage = useSettingPublic("pa-b-page");
   const [openTrainingByVideoDialog, setOpenTrainingByVideoDialog] = useState<string>(null);
   const { customer } = useAuth();
+  const { wallet } = useHomeLayoutContext();
 
   const { HEADER_DROPDOWN_MENUS } = useHeaderDropDownMenus();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
@@ -142,11 +145,11 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                           </div>
                           <div className="flex flex-row items-center font-semibold">
                             <RiHandCoinFill className="mr-2 ml-1 text-yellow-400" />
-                            {/* {currencyPrice(wallet?.balance) || 0} {" MPoint"} */}
+                            {parseNumber(wallet?.balance) || 0} {" MPoint"}
                           </div>
                           <div className="flex flex-row items-center font-semibold">
                             <RiUserHeartFill className="mr-2 ml-1 text-yellow-400" />
-                            {customer?.creditPoint || 0} {`/100 ${t("uy tín")}`}
+                            {parseNumber(customer?.creditPoint) || 0} {t("Credit")}
                           </div>
                         </div>
                       </div>
@@ -190,7 +193,8 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
 
   const isMainPage = !name;
 
-  const { setOpenCustomerLoginDialog, postPopup, openCardMenu, setOpenCardMenu } = useGlobalContext();
+  const { setOpenCustomerLoginDialog, postPopup, openCardMenu, setOpenCardMenu } =
+    useGlobalContext();
 
   return (
     <>

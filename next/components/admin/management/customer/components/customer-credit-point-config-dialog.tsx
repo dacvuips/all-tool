@@ -40,7 +40,7 @@ export function CustomerCreditPointConfigDialog({ customer, ...props }) {
     >
       <div className="col-span-12 mb-5">
         <span>
-          {`${t("Điểm tín dụng hiện tại")}:`} <b>{customer.creditPoint + `/100 ${t("điểm")}`}</b>
+          {`${t("Điểm tín dụng hiện tại")}:`} <b>{customer.creditPoint + t("điểm")}</b>
         </span>
       </div>
       <Field

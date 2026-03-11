@@ -54,6 +54,10 @@ const schema = gql`
     headers: String
     bodyTemplate: String
     responsePath: String
+    "Số credit trừ mỗi lần chạy node (0 = miễn phí). Hoàn nếu run FAILED."
+    creditCost: Float
+    "Nhãn hiển thị (vd: 2 credits/lần)"
+    creditCostLabel: String
   }
 
   input FlowNodeDataInput {
@@ -131,6 +135,8 @@ const schema = gql`
     headers: String
     bodyTemplate: String
     responsePath: String
+    creditCost: Float
+    creditCostLabel: String
   }
 
   type FlowNodeData {

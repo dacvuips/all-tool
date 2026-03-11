@@ -67,4 +67,10 @@ export type IAiGenerationRun = TimestampEntity & {
   startedAt?: Date;
   /** Thời điểm xong hoặc lỗi */
   completedAt?: Date;
+  /** Số credit áp dụng cho run (copy từ node config lúc tạo run) */
+  creditCost?: number;
+  /** Thời điểm đã trừ credit (null nếu chưa trừ) */
+  creditChargedAt?: Date;
+  /** Thời điểm đã hoàn credit khi run FAILED (null nếu chưa hoàn) */
+  creditRefundedAt?: Date;
 };

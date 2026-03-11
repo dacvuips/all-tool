@@ -52,6 +52,9 @@ export interface NodeConfig {
   endpoint?: string;
   method?: string;
   bodyTemplate?: string;
+  /** Số credit trừ mỗi lần chạy node (0 = miễn phí). Hoàn nếu run FAILED. */
+  creditCost?: number;
+  creditCostLabel?: string;
 }
 
 export interface ProductFlowNodeData {

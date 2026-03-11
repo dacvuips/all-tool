@@ -34,7 +34,7 @@ const customerSchema = new Schema(
       },
     },
     rewardPoint: { type: Number, default: 0 },
-    creditPoint: { type: Number, default: 100 },
+    creditBalance: { type: Number, default: 0 },
     bankVerifiedId: { type: String },
     hasReward: { type: Boolean, default: false },
     intro: {

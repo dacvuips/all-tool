@@ -15,7 +15,7 @@ export interface Customer extends BaseModel {
   times?: CustomerTimes; // Lần mua hàng
   rewardPoint?: number; //Điểm thưởng
   bankVerifiedId?: string; // Ngân hàng đã xác thực
-  creditPoint?: number; //Điểm uy tín / Điểm tín dụng
+  creditBalance?: number; //Điểm uy tín / Điểm tín dụng
   hasReward?: boolean; // Có thưởng
   intro?: CustomerIntro; // giới thiệu
   province?: string;
@@ -68,7 +68,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
-    creditPoint
+    creditBalance
     hasReward
     province: String
     district: String

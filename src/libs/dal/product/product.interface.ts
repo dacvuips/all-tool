@@ -64,6 +64,10 @@ export type NodeConfig = {
   bodyTemplate?: string;
   /** Đường dẫn lấy URL kết quả từ response, VD: data.url, result.media[0].url */
   responsePath?: string;
+  /** Số credit trừ cho mỗi lần chạy node (0 = miễn phí). Trừ khi run chuyển PROCESSING, hoàn nếu FAILED. */
+  creditCost?: number;
+  /** Nhãn hiển thị cho credit (vd: "2 credits/lần") */
+  creditCostLabel?: string;
 };
 
 /** Data lưu trong mỗi node ReactFlow */
