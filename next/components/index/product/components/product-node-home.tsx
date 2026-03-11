@@ -1,9 +1,11 @@
 import { memo, useCallback, useEffect, useMemo } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { BsCashCoin } from "react-icons/bs";
 import { Handle, NodeProps, Position } from "reactflow";
 import type { FlowNodeRun, GenerationOutputRef } from "../../../../lib/flow-node/execute-client";
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import {
   NodeConfig,
   Product,
@@ -64,6 +66,7 @@ function isFlowNodeData(data: ProductNodeData): data is FlowNodeData {
 /** Fetches provider by id and renders flow node content (sync component, async inside) */
 function FlowNodeContent({ data }: { data: FlowNodeData }) {
   const { t } = useTranslation();
+  const { customer } = useAuth();
 
   const aiProviderKey = data.config?.aiProviderKey;
   const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
@@ -71,6 +74,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
     () => CREDENTIAL_KEY_OPTIONS.find((item) => item.value === aiProviderKey),
     [aiProviderKey, CREDENTIAL_KEY_OPTIONS]
   );
+  const creditBalance = customer?.creditBalance;
 
   const {
     label,
@@ -107,13 +111,16 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
           <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
             {displayLabel}
           </div>
-          <div className="flex gap-1 items-center text-xs text-gray-500">
-            <img
-              src={aiProviderImage}
-              alt={aiProviderName}
-              className="px-1 h-5 rounded-full border"
-            />
-            {aiProviderName}
+          <div className="flex flex-row gap-2 justify-between items-center">
+            <div className="flex gap-1 items-center text-xs text-gray-500">
+              <img src={aiProviderImage} alt={aiProviderName} className="px-1 h-5 rounded-full" />
+              {aiProviderName}
+            </div>
+
+            <div className="flex gap-1 items-center text-xs text-primary">
+              <BsCashCoin />
+              {config?.creditCost > 0 ? config?.creditCost + " " + t("Credit") : t("Miễn phí")}
+            </div>
           </div>
         </div>
       </div>
@@ -340,17 +347,17 @@ function NodeSubmitButton({
   }, [nodeId, onSubmitNode, getValues]);
 
   return (
-    <div className="flex col-span-full justify-end pt-2">
+    <div className="flex col-span-full gap-2 justify-end items-center pt-2">
       <Button
         icon={<GenerateAiIcon />}
         outline
-        disabled={!!isRunning}
         onClick={(e) => {
           e.stopPropagation();
           handleSubmit();
         }}
         tooltip={t("Gửi thủ công node này (gọi API đã cấu hình)")}
-        text={t("Submit")}
+        text={t("Generate AI ")}
+        disabled={!!isRunning}
       />
     </div>
   );

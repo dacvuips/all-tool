@@ -276,6 +276,12 @@ function ApiConfigSection() {
         <Field label={t("Response path (URL kết quả)")} name="config.responsePath" cols={12}>
           <Input placeholder={"data[0].url hoặc result.media[0].url"} />
         </Field>
+        <Field label={t("Credit cost")} name="config.creditCost" cols={6}>
+          <Input type="number" placeholder={t("0 = miễn phí")} />
+        </Field>
+        <Field label={t("Credit cost label")} name="config.creditCostLabel" cols={6}>
+          <Input placeholder={t("VD: 1 lần tạo ảnh")} />
+        </Field>
       </div>
     </div>
   );

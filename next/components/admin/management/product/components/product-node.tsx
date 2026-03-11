@@ -1,9 +1,10 @@
 import { memo, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { BsCashCoin } from "react-icons/bs";
 import { HiOutlinePencil, HiOutlineTrash } from "react-icons/hi";
 import { Handle, NodeProps, Position } from "reactflow";
-import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { NodeConfig, Product, ProductFlowNodeData } from "../../../../../lib/repo/product";
 import { Button } from "../../../../shared/utilities/form";
 
@@ -47,10 +48,13 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
     const method = config?.method || "POST";
     const fieldsCount = properties?.length ?? 0;
     const { CREDENTIAL_KEY_OPTIONS } = useOptionsTranslation();
-    const aiProviderKey = useMemo(
+    const aiProvider = useMemo(
       () => CREDENTIAL_KEY_OPTIONS.find((item) => item.value === config?.aiProviderKey),
       [config?.aiProviderKey, CREDENTIAL_KEY_OPTIONS]
     );
+
+    const aiProviderName = aiProvider?.label ?? "-";
+    const aiProviderImage = aiProvider?.image ?? "-";
 
     return (
       <div
@@ -71,13 +75,20 @@ export const ProductNode = memo(({ data }: NodeProps<ProductNodeData>) => {
             <div className="overflow-hidden text-sm font-bold whitespace-nowrap text-ellipsis">
               {displayLabel}
             </div>
-            <div className="flex gap-1 items-center text-xs text-gray-500">
-              <img
-                src={aiProviderKey?.image ?? "-"}
-                alt={aiProviderKey?.label ?? "-"}
-                className="px-1 h-5 rounded-full border"
-              />
-              {aiProviderKey?.label} · {method} · {fieldsCount} {t("trường")}
+            <div className="flex flex-row gap-2 justify-between items-center">
+              <div className="flex gap-1 items-center text-xs text-gray-500">
+                <img
+                  src={aiProviderImage}
+                  alt={aiProviderName}
+                  className="px-1 h-5 rounded-full"
+                />
+                {aiProviderName}
+              </div>
+
+              <div className="flex gap-1 items-center text-xs text-primary">
+                <BsCashCoin />
+                {config?.creditCost > 0 ? config?.creditCost + " " + t("Credit") : t("Miễn phí")}
+              </div>
             </div>
           </div>
         </div>

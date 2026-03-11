@@ -154,6 +154,8 @@ export class ProductRepository extends CrudRepository<Product> {
             model
             outputType
             bodyTemplate
+            creditCost
+            creditCostLabel
           }
         }
       }
@@ -202,6 +204,8 @@ export class ProductRepository extends CrudRepository<Product> {
             endpoint
             method
             bodyTemplate
+            creditCost
+            creditCostLabel
           }
         }
       }
