@@ -37,9 +37,11 @@ export function ProductField() {
   >([]);
 
   useEffect(() => {
-    CategoryService.getCategoryTree().then((tree) => {
-      setCategoryOptions(flattenCategoryOptions(tree));
-    }).catch(() => setCategoryOptions([]));
+    CategoryService.getCategoryTree()
+      .then((tree) => {
+        setCategoryOptions(flattenCategoryOptions(tree));
+      })
+      .catch(() => setCategoryOptions([]));
   }, []);
 
   const videoUrl = watch("video");
@@ -68,7 +70,7 @@ export function ProductField() {
 
   return (
     <>
-      <Field name="name" label={t("Tên sản phẩm")} cols={5} required>
+      <Field name="name" label={t("Tên sản phẩm")} cols={7} required>
         <Input placeholder={t("Nhập tên sản phẩm")} />
       </Field>
       <Field name="coverImg" label={t("Hình ảnh bìa")} cols={5} required className="w-full">
@@ -77,11 +79,6 @@ export function ProductField() {
           readOnly={!userPermission("EDIT_PRODUCT")}
         />
       </Field>
-
-      <Field name="price" label={t("Giá sản phẩm")} cols={2}>
-        <Input number placeholder={t("Nhập giá sản phẩm")} />
-      </Field>
-
       <Field name="categoryIds" label={t("Danh mục hiển thị")} cols={12}>
         <Select
           multi

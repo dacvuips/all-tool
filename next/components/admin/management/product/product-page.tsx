@@ -105,6 +105,10 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                   label={t("Tiêu đề")}
                   render={(item: Product) => <DataTable.CellText value={item.name} />}
                 />
+                <DataTable.Column
+                  label={t("Credit")}
+                  render={(item: Product) => <DataTable.CellText value={item.creditCostTotal} />}
+                />
 
                 <DataTable.Column
                   label={t("Ngày đăng")}

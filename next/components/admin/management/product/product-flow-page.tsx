@@ -18,6 +18,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { BsCashCoin } from "react-icons/bs";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
@@ -481,6 +482,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
             icon={<HiOutlineArrowLeft className="text-lg" />}
             className="text-sm text-gray-300"
             text={t("Quay lại")}
+            small
           />
         )}
 
@@ -489,11 +491,13 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
           <span className="text-lg font-bold text-gray-300">
             {isFlowMode ? currentProduct?.name || t("Flow sản phẩm") : t("Quản lý sản phẩm")}
           </span>
-          <span className="px-2 py-1 text-xs font-bold text-blue-500 bg-gray-700 rounded-md">
-            {isFlowMode ? nodes.length : products.length}
-          </span>
         </div>
-
+        <div className="flex gap-1 items-center text-xs text-primary">
+          <BsCashCoin />
+          {currentProduct?.creditCostTotal > 0
+            ? currentProduct?.creditCostTotal + " " + t("Credit")
+            : t("Miễn phí")}
+        </div>
         <div style={{ flex: 1 }} />
 
         {/* Refresh */}

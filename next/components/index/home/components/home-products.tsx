@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
+import { BsCashCoin } from "react-icons/bs";
 import { HiChevronDown } from "react-icons/hi";
-import { parseNumber } from "../../../../lib/helpers/parser";
 import { Button } from "../../../shared/utilities/form";
 import { Img, Spinner } from "../../../shared/utilities/misc";
 import { useHomeContext } from "../provider/home-provider";
@@ -9,10 +9,6 @@ import { useHomeContext } from "../provider/home-provider";
 export function HomeProducts() {
   const { t } = useTranslation();
   const { products, loading, loadingMore, loadMore } = useHomeContext();
-
-  const formatPrice = (price: string | number) => {
-    return <span>{parseNumber(price, true)}</span>;
-  };
 
   if (loading) {
     return (
@@ -38,8 +34,7 @@ export function HomeProducts() {
     <div className="p-3 w-full bg-white rounded-lg sm:p-4">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 sm:gap-3">
         {products.map((product) => {
-          const price = parseNumber(product.price) || 0;
-
+          const creditCostTotal = product.creditCostTotal || 0;
           return (
             <Link
               key={product.id}
@@ -84,9 +79,10 @@ export function HomeProducts() {
                 {/* Price Section */}
                 <div className="flex flex-col gap-0.5 sm:gap-1 mt-auto">
                   <div className="flex gap-1 items-baseline sm:gap-2">
-                    <span className="text-sm font-bold text-red-500 sm:text-lg">
-                      {formatPrice(price)}
-                    </span>
+                    <div className="flex gap-1 items-center text-xs text-primary">
+                      <BsCashCoin />
+                      {creditCostTotal > 0 ? creditCostTotal + " " + t("Credit") : t("Miễn phí")}
+                    </div>
                   </div>
 
                   {/* Original Price */}

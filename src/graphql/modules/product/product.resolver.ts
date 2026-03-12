@@ -3,7 +3,17 @@ import { random, set } from "lodash";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { ProductModel, productService } from "../../../libs/dal/product";
+import type { ProductFlow } from "../../../libs/dal/product/product.interface";
 import { Context } from "../../../libs/graphql";
+
+/** Tính tổng creditCost của tất cả node trong flow */
+function calcCreditCostTotal(flow?: ProductFlow | null): number {
+  if (!flow?.nodes?.length) return 0;
+  return flow.nodes.reduce((sum, node) => {
+    const cost = node?.data?.config?.creditCost;
+    return sum + (typeof cost === "number" && !Number.isNaN(cost) ? cost : 0);
+  }, 0);
+}
 
 const Query = {
   getAllProduct: async (root: any, args: any, context: Context) => {
@@ -39,6 +49,7 @@ const Mutation = {
       }
     }
 
+    data.creditCostTotal = calcCreditCostTotal(data.flow);
     return await productService.create(data);
   },
   updateProduct: async (root: any, args: any, context: Context) => {
@@ -57,6 +68,10 @@ const Mutation = {
       }
     }
 
+    // Cập nhật creditCostTotal từ flow (nếu có flow trong data; nếu không có thì giữ nguyên giá trị cũ)
+    if (data.flow !== undefined) {
+      data.creditCostTotal = calcCreditCostTotal(data.flow);
+    }
     return await productService.updateOne(id, data);
   },
   deleteOneProduct: async (root: any, args: any, context: Context) => {

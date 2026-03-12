@@ -123,6 +123,7 @@ const schema = gql`
     price: Float
     priority: Float
     flow: ProductFlow
+    creditCostTotal: Float
   }
 
   type NodeConfig {

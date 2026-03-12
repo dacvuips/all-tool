@@ -121,4 +121,5 @@ export type IProduct = TimestampEntity & {
   priority?: number; // Độ ưu tiên hiển thị
   /** ReactFlow: nodes và edges trong 1 product */
   flow?: ProductFlow;
+  creditCostTotal?: number;
 };

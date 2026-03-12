@@ -19,6 +19,7 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { BsCashCoin } from "react-icons/bs";
 import { HiOutlineArrowLeft, HiOutlineBookOpen, HiOutlineClock } from "react-icons/hi";
 import { HiOutlinePlay } from "react-icons/hi2";
 import {
@@ -27,7 +28,6 @@ import {
   pollFlowNodeRun,
   type FlowNodeRun,
 } from "../../../lib/flow-node/execute-client";
-import { parseNumber } from "../../../lib/helpers/parser";
 import { useFlowNodeRunChanged } from "../../../lib/hooks/useFlowNodeRunChanged";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../lib/providers/global-provider";
@@ -338,7 +338,7 @@ export const ProductDetailPage = () => {
   const productDescription = product?.des ?? "";
   const productImage = product?.coverImg ?? "";
   const hasFlow = (product?.flow?.nodes?.length ?? 0) > 0;
-  const productPrice = product?.price ?? 0;
+  const creditCostTotal = product?.creditCostTotal ?? 0;
 
   return (
     <>
@@ -381,9 +381,10 @@ export const ProductDetailPage = () => {
                   </div>
                   <div>
                     <div className="text-lg font-bold text-ellipsis-2">{productName}</div>
-                    <div className="text-sm font-bold text-primary-dark">
-                      {parseNumber(productPrice)}
-                    </div>
+                    <div className="flex gap-1 items-center text-xs text-primary">
+              <BsCashCoin />
+              {creditCostTotal > 0 ? creditCostTotal + " " + t("Credit") : t("Miễn phí")}
+                     </div>
                   </div>
                 </div>
                 <div className="flex gap-2 whitespace-nowrap">

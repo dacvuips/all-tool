@@ -1,5 +1,5 @@
-import { t } from "../../functions/i18n";
 import type { FlowNodeRun } from "../../flow-node/execute-client";
+import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
 /** Payload từ subscription flowNodeRunChanged (socket khi run completed/failed) */
@@ -100,6 +100,7 @@ export interface Product extends BaseModel {
   price?: string;
   priority?: number;
   flow?: ProductFlow;
+  creditCostTotal?: number;
 }
 
 export class ProductRepository extends CrudRepository<Product> {
@@ -115,6 +116,7 @@ export class ProductRepository extends CrudRepository<Product> {
     video
     coverImg 
     active
+    creditCostTotal
   `);
   fullFragment: string = this.parseFragment(`
     id
@@ -130,6 +132,7 @@ export class ProductRepository extends CrudRepository<Product> {
     slug
     price
     priority
+    creditCostTotal
     flow {
       nodes {
         id
@@ -182,6 +185,7 @@ export class ProductRepository extends CrudRepository<Product> {
     slug
     price
     priority
+    creditCostTotal
     flow {
       nodes {
         id
@@ -234,8 +238,8 @@ export class ProductRepository extends CrudRepository<Product> {
         id
         name
         coverImg
-        slug
-        price
+        slug 
+        creditCostTotal
       `),
       apiName: "getActiveProducts",
     });

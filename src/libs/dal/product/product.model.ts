@@ -96,6 +96,7 @@ const productSchema = new Schema(
     active: { type: Boolean, default: false },
     price: { type: Number, default: 0 },
     priority: { type: Number },
+    creditCostTotal: { type: Number, default: 0 },
     flow: {
       type: productFlowSchema,
       default: (): { nodes: unknown[]; edges: unknown[] } => ({ nodes: [], edges: [] }),
