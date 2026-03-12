@@ -30,7 +30,7 @@ export namespace CustomerCreditPoint {
       const customerNotify = new NotificationBuilder(
         "Cập nhật điểm uy tín khách hàng",
         `Bạn đã cập nhật điểm uy tín khách hàng thành công, giá trị cũ:[ ${
-          customer.creditPoint
+          customer.creditBalance
         } ] | giá trị đổi: [${action === "add" ? "+" : "-"} ${point} ] [=${calculate}]`
       )
         .sendTo(NotificationTarget.CUSTOMER, cmd.updaterId)
@@ -38,14 +38,14 @@ export namespace CustomerCreditPoint {
         .build();
       InsertNotification([customerNotify]);
       if (action === "add") {
-        customer.creditPoint += point;
-        if (customer.creditPoint > 100) {
-          customer.creditPoint = 100;
+        customer.creditBalance += point;
+        if (customer.creditBalance > 100) {
+          customer.creditBalance = 100;
         }
       } else {
-        customer.creditPoint -= point;
-        if (customer.creditPoint < 0) {
-          customer.creditPoint = 0;
+        customer.creditBalance -= point;
+        if (customer.creditBalance < 0) {
+          customer.creditBalance = 0;
         }
       }
 
@@ -61,7 +61,7 @@ export namespace CustomerCreditPoint {
       customer: ICustomer;
       point: number;
     }) {
-      let creditPoint = customer.creditPoint;
+      let creditPoint = customer.creditBalance;
       if (action === "add") {
         creditPoint += point;
         if (creditPoint > 100) {

@@ -17,6 +17,7 @@ import { VideoDialog } from "../../shared/common/video-dialog";
 import { Button } from "../../shared/utilities/form";
 import { Spinner } from "../../shared/utilities/misc";
 import { CheckoutPayment } from "./components/checkout-payment";
+import { CheckoutPaymentForm } from "./components/checkout-payment-form";
 
 export function CheckoutPage() {
   return (
@@ -30,8 +31,6 @@ export function CheckoutPage() {
 
 function CheckoutComponent() {
   const { t } = useTranslation();
-  const toast = useToast();
-  const router = useRouter();
   const { order } = useCheckoutContext();
 
   const { customer } = useAuth();
@@ -44,18 +43,7 @@ function CheckoutComponent() {
       }, 3000);
   }, [customer]);
 
-  useEffect(() => {
-    if (order === null) {
-      toast.error(
-        t("Không tìm thấy đơn hàng, hoặc đơn hàng đã hết hạn thanh toán, hãy tạo đơn hàng mới")
-      );
-      router.replace("/");
-
-      return;
-    }
-  }, [order]);
-
-  if (!order) return <Spinner />;
+  if (!order) return <CheckoutPaymentForm />;
 
   return (
     <>
@@ -110,7 +98,7 @@ function CheckoutPaymentPay() {
       // nếu quá thời gian thì dừng và chạy hàm cancel order
       if (diff <= 0) {
         cancelOrder().then(() => {
-          router.replace("/");
+          // router.replace("/");
         });
       }
     }, 1000);
@@ -164,19 +152,19 @@ function CheckoutPaymentPay() {
   };
 
   return (
-    <div className="flex-1 p-4 bg-white rounded-md ">
-      <div className="flex flex-col gap-1 ">
-        <div className="w-full p-2 border rounded-md">
+    <div className="flex-1 p-4 bg-white rounded-md">
+      <div className="flex flex-col gap-1">
+        <div className="p-2 w-full rounded-md border">
           <ImageQRBank />
         </div>
-        {/* <div className="flex-1 p-2 border rounded-md">
+        {/* <div className="flex-1 p-2 rounded-md border">
           <p className="font-semibold text-14 md:text-16">
             {`${t("Cách 2")}: ${t("CHUYỂN KHOẢN THEO THÔNG TIN")}`}
           </p>
           <PaymentMethodInfo />
         </div> */}
       </div>
-      <div className={`flex flex-row items-start w-full mt-2 p-2 rounded-lg bg-yellow-100 `}>
+      <div className={`flex flex-row items-start p-2 mt-2 w-full bg-yellow-100 rounded-lg`}>
         <i className="mr-1 text-yellow-800 text-20">
           <HiOutlineInformationCircle />
         </i>
@@ -185,23 +173,23 @@ function CheckoutPaymentPay() {
         </span>
       </div>
 
-      <div className="flex flex-col items-center justify-center py-4">
+      <div className="flex flex-col justify-center items-center py-4">
         <span className="pb-2 text-center text-gray-500 lg:text-16 text-14">
           {t("Thời gian còn lại để xác nhận thanh toán")}
         </span>
         <div className="flex flex-row gap-4">
-          <div className="flex flex-col items-center justify-center p-3 bg-green-100 rounded-md">
+          <div className="flex flex-col justify-center items-center p-3 bg-green-100 rounded-md">
             <div className="font-bold text-green-800 text-24">{timeRemaining.minutes}</div>
             <div className="text-green-800">{t("Phút")}</div>
           </div>
-          <div className="flex flex-col items-center justify-center p-3 bg-green-100 rounded-md">
+          <div className="flex flex-col justify-center items-center p-3 bg-green-100 rounded-md">
             <div className="font-bold text-green-800 text-24">{timeRemaining.seconds}</div>
             <div className="text-green-800">{t("Giây")}</div>
           </div>
         </div>
       </div>
 
-      <div className={`flex flex-row items-start w-full p-2 rounded-lg bg-blue-100 mt-4`}>
+      <div className={`flex flex-row items-start p-2 mt-4 w-full bg-blue-100 rounded-lg`}>
         <i className="mr-1 text-blue-800 text-20">
           <HiOutlineInformationCircle />
         </i>
@@ -272,7 +260,7 @@ export function ImageQRBank() {
   const ImageQRBank = () =>
     hasImage ? (
       <img
-        className="mx-auto "
+        className="mx-auto"
         width={300}
         src={`https://api.vietqr.io/image/${order?.paymentInfo?.bin}-${order?.paymentInfo?.accountNumber}-8bNuIQ0.jpg?accountName=${order?.paymentInfo?.accountName}&amount=${order?.totalAmount}&addInfo=${order?.orderNumber}
       `}
@@ -281,8 +269,8 @@ export function ImageQRBank() {
       />
     ) : (
       <>
-        <p style={{ paddingTop: "270px" }} className="font-semibold ">
-          <Spinner className="absolute z-10 transform -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2" />
+        <p style={{ paddingTop: "270px" }} className="font-semibold">
+          <Spinner className="absolute top-1/2 left-1/2 z-10 transform -translate-x-1/2 -translate-y-1/2" />
           {`${t("Vui lòng tải lại trang để thấy mã QR")}...`}
         </p>
       </>
@@ -298,7 +286,7 @@ export function ImageQRBank() {
         <ImageQRBank />
 
         <Player
-          className="absolute z-10 transform -translate-x-1/2 top-8 left-1/2"
+          className="absolute top-8 left-1/2 z-10 transform -translate-x-1/2"
           autoplay
           loop
           src={`/assets/lottie/qr.json`}
@@ -320,7 +308,7 @@ function PaymentMethodInfo() {
   if (!order) return <Spinner />;
   return (
     <div
-      className="mt-2 bg-white border border-gray-200 rounded-xl"
+      className="mt-2 bg-white rounded-xl border border-gray-200"
       style={{
         backgroundImage: `url(https://i.imgur.com/sggzEJd.jpg)`,
         backgroundRepeat: "no-repeat",
@@ -329,8 +317,8 @@ function PaymentMethodInfo() {
       }}
     >
       <div className="p-4">
-        <div className="flex flex-row items-center justify-between pb-5">
-          <span className=" whitespace-nowrap">{t("Phương thức thanh toán")}</span>
+        <div className="flex flex-row justify-between items-center pb-5">
+          <span className="whitespace-nowrap">{t("Phương thức thanh toán")}</span>
           <span className="font-bold uppercase text-primary">
             {PaymentMethod[order?.paymentInfo?.method]}
           </span>
@@ -349,7 +337,7 @@ function PaymentMethodInfo() {
                 {order?.paymentInfo.accountName}
               </span>
             </div>
-            <div className="flex flex-row items-center justify-between pb-5 text-14 lg:text-16">
+            <div className="flex flex-row justify-between items-center pb-5 text-14 lg:text-16">
               <div>
                 <span className="mr-2 whitespace-nowrap">{t("Số tài khoản")}</span>
                 <span className="font-bold text-primary">{order?.paymentInfo.accountNumber}</span>
@@ -364,10 +352,10 @@ function PaymentMethodInfo() {
                 <RiFileCopy2Line />
               </i>
             </div>
-            <div className="flex flex-row items-center justify-between pb-5 text-14 lg:text-16">
+            <div className="flex flex-row justify-between items-center pb-5 text-14 lg:text-16">
               <div>
                 <span className="mr-2 whitespace-nowrap">{`${t("Tổng tiền chuyển")}: `} </span>
-                <span className="font-bold text-primary ">
+                <span className="font-bold text-primary">
                   {parseNumber(order?.totalAmount) + "đ"}
                 </span>
               </div>
@@ -381,7 +369,7 @@ function PaymentMethodInfo() {
                 <RiFileCopy2Line />
               </i>
             </div>
-            <div className="flex flex-row items-center justify-between pb-5 text-14 lg:text-16">
+            <div className="flex flex-row justify-between items-center pb-5 text-14 lg:text-16">
               <div>
                 <span className="mr-2 whitespace-nowrap">{t("Nội dung chuyển khoản")}</span>
                 <span className="font-bold uppercase text-primary">{order?.orderNumber}</span>

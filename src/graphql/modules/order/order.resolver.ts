@@ -1,10 +1,8 @@
 import { set } from "lodash";
 import moment from "moment-timezone";
-import { CONSTANTS } from "../../../constants/constant.const";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { BankModel, PaymentMethodEnum } from "../../../libs/dal/bank";
-import { cartService } from "../../../libs/dal/cart";
 import { OrderStatusEnum, PaymentStatus } from "../../../libs/dal/order/order.interface";
 import { OrderModel } from "../../../libs/dal/order/order.model";
 import orderService from "../../../libs/dal/order/order.service";
@@ -103,14 +101,13 @@ const Query = {
 const Mutation = {
   createOrder: async (root: any, args: any, context: Context) => {
     const { data } = args;
-    const customerId = context.isCustomer ? context.customerId : null;
-    const sessionId = data.sessionId || context.req.cookies?.cartSessionId;
+    const customerId = context.customerId;
 
     // Mặc định lấy đơn hàng từ thời điểm hiện tại đến 30 phút trước
     const now = new Date();
     const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
     const existingOrder = await orderService.findOne({
-      ...(customerId ? { customerId } : { sessionId }),
+      customerId,
 
       status: { $in: [OrderStatusEnum.CREATED, OrderStatusEnum.CONFIRMED] },
       paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING] },
@@ -124,41 +121,14 @@ const Mutation = {
         "Bạn có đơn hàng đang chờ thanh toán. Vui lòng hoàn tất hoặc hủy đơn hàng trước khi tạo đơn mới."
       );
     }
-    // Load product to get delivery information
-    const product = await ProductLoader.load(data.productId);
-
-    // Calculate subtotal from items
-    const subtotal = data.items.reduce(
-      (sum: number, item: any) => sum + item.price * item.quantity,
-      0
-    );
-
-    // Add subtotal and delivery info for each item
-    // Add subtotal for each item
-    const items = data.items.map((item: any) => ({
-      ...item,
-      subtotal: item.price * item.quantity,
-    }));
-
-    // Calculate total
-    const shippingFee = data.shippingFee || 0;
-    const tax = data.tax || 0;
-    const discount = data.discount || 0;
-    const totalAmount = subtotal + shippingFee + tax - discount;
-
-    // Get IP address
-    const ipAddress =
-      context.req.headers["x-forwarded-for"] || context.req.connection.remoteAddress || "127.0.0.1";
 
     // Generate order number
 
     const orderNumber = OrderCode.generate();
     const defaultBank = await BankModel.findOne({ status: true });
     // Map ATM to BANK since ATM is no longer a valid enum value
-    let paymentMethod: any = defaultBank?.method || PaymentMethodEnum.BANK;
-    if (paymentMethod === "ATM") {
-      paymentMethod = PaymentMethodEnum.BANK;
-    }
+    let paymentMethod = defaultBank?.method || PaymentMethodEnum.BANK;
+
     const paymentInfo = {
       method: paymentMethod,
       bankImage: defaultBank?.bankImage || "",
@@ -171,106 +141,33 @@ const Mutation = {
     // Create order
     const orderData = {
       customerId,
-      sessionId,
-      productId: data.productId,
-      items,
-      subtotal,
-      shippingFee,
-      tax,
-      discount,
-      totalAmount,
-      shippingAddress: data.shippingAddress,
       paymentMethod: data.paymentMethod,
       paymentInfo,
       orderNumber,
-      paymentStatus:
-        data.paymentMethod === PaymentMethodEnum.COD
-          ? PaymentStatus.PAYMENT_UNPAID
-          : PaymentStatus.PAYMENT_PENDING,
-      status:
-        data.paymentMethod === PaymentMethodEnum.COD
-          ? OrderStatusEnum.CONFIRMED
-          : OrderStatusEnum.CREATED,
+      paymentStatus: PaymentStatus.PAYMENT_PENDING,
+      status: OrderStatusEnum.CREATED,
       customerNote: data.customerNote,
-      ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
-      userAgent: context.req.headers["user-agent"],
+      totalAmount: data.totalAmount,
+      creditAmount: data.creditAmount,
       orderLogs: [
         {
-          status:
-            data.paymentMethod === PaymentMethodEnum.COD
-              ? OrderStatusEnum.CONFIRMED
-              : OrderStatusEnum.CREATED,
-          des:
-            data.paymentMethod === PaymentMethodEnum.COD
-              ? "Đơn hàng đã được tạo (COD)"
-              : "Chờ xác nhận",
+          status: OrderStatusEnum.CREATED,
+          des: "Đơn hàng đã được tạo",
           createdAt: new Date(),
           creatorId: customerId,
         },
       ],
       paymentLogs: [
         {
-          status:
-            data.paymentMethod === PaymentMethodEnum.COD
-              ? PaymentStatus.PAYMENT_UNPAID
-              : PaymentStatus.PAYMENT_PENDING,
-          des:
-            data.paymentMethod === PaymentMethodEnum.COD
-              ? "Thanh toán khi nhận hàng (COD)"
-              : "Chờ thanh toán",
+          status: PaymentStatus.PAYMENT_PENDING,
+          des: "Chờ thanh toán",
           createdAt: new Date(),
         },
       ],
     };
-    const maxAge = 30 * 24 * 60 * 60 * 1000;
+
     const order = await orderService.create(orderData);
-    // set cookie phone and email for guest checkout
-    if (!customerId && data.shippingAddress) {
-      if (order.shippingAddress?.phone) {
-        context.res.cookie(CONSTANTS.CookiesName.guestPhone, order.shippingAddress.phone, {
-          maxAge,
-        });
-      }
-      if (order.shippingAddress?.email) {
-        context.res.cookie(CONSTANTS.CookiesName.guestEmail, order.shippingAddress.email, {
-          maxAge,
-        });
-      }
-      if (order.shippingAddress?.address) {
-        context.res.cookie(CONSTANTS.CookiesName.guestAddress, order.shippingAddress.address, {
-          maxAge,
-        });
-        context.res.cookie(
-          CONSTANTS.CookiesName.guestProvince,
-          order.shippingAddress.province || "",
-          {
-            maxAge,
-          }
-        );
-        context.res.cookie(
-          CONSTANTS.CookiesName.guestDistrict,
-          order.shippingAddress.district || "",
-          {
-            maxAge,
-          }
-        );
-        context.res.cookie(CONSTANTS.CookiesName.guestWard, order.shippingAddress.ward || "", {
-          maxAge,
-        });
-      }
-      if (order.shippingAddress?.recipientName) {
-        context.res.cookie(CONSTANTS.CookiesName.guestName, order.shippingAddress.recipientName, {
-          maxAge,
-        });
-      }
-    }
-    // Clear cart items if cartIds provided
-    if (data.cartIds && data.cartIds.length > 0) {
-      await cartService.model.deleteMany({
-        _id: { $in: data.cartIds },
-        ...(customerId ? { customerId } : { sessionId }),
-      });
-    }
+
     // set Agenda job to process expired order
     const timeoutAt = moment().add(30, "minutes").toDate(); // 30 minutes from now
     await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();

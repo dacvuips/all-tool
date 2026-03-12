@@ -14,44 +14,24 @@ export type IOrder = TimestampEntity & {
   status: OrderStatusEnum;
 
   productId: string;
-  // Items
-  items: IOrderItem[];
 
   // Pricing
-  subtotal: number;
-  shippingFee: number;
-  tax: number;
-  discount: number;
+  creditAmount: number;
   totalAmount: number;
-
-  // Shipping address
-  shippingAddress: IShippingAddress;
 
   // Payment
   paymentMethod: PaymentMethodEnum;
   paymentStatus: PaymentStatus;
   paymentInfo?: IPaymentInfo;
+  paidAt?: Date;
+  cancelledAt?: Date;
+  adminNote?: string;
+  orderLogs: IOrderLog[];
+  paymentLogs: IPaymentLog[];
 
   // Timestamps
-  paidAt?: Date;
-  shippedAt?: Date;
-  deliveredAt?: Date;
-  cancelledAt?: Date;
-
-  // Notes
-  customerNote?: string;
-  adminNote?: string;
-
-  // Logs
-  logs?: IOrderLog[];
-  paymentLogs?: IPaymentLog[];
-
-  // Shipments (đơn vận chuyển)
-  shipmentIds?: Types.ObjectId[]; // Danh sách ID của các shipment
-
-  // Metadata
-  ipAddress?: string;
-  userAgent?: string;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 export interface IOrderLog {
@@ -62,7 +42,6 @@ export interface IOrderLog {
   createdAt: Date;
   creatorId?: string;
 }
-
 export interface IPaymentLog {
   status: PaymentStatus;
   des?: string; // Description with detailed information
@@ -72,39 +51,6 @@ export interface IPaymentLog {
   creatorId?: string;
   amount?: number; // Amount related to this payment action
   transactionId?: string; // Transaction ID from payment gateway
-}
-
-export interface IOrderItem {
-  productName: string;
-  thumbnail?: string;
-  price: number;
-  originalPrice?: number;
-  quantity: number;
-  subtotal: number;
-}
-
-export interface IShippingAddress {
-  recipientName: string;
-  phone: string;
-  email?: string;
-  address: string;
-  ward?: string;
-  district?: string;
-  province?: string;
-  country?: string;
-  postalCode?: string;
-  note?: string;
-}
-export interface IShopAddress {
-  name: string;
-  phone: string;
-  email?: string;
-  address: string;
-  ward?: string;
-  district?: string;
-  province?: string;
-  country?: string;
-  postalCode?: string;
 }
 
 export interface IPaymentInfo {
@@ -132,14 +78,15 @@ export enum OrderStatusEnum {
 }
 
 export enum PaymentStatus {
-  PAYMENT_PENDING = "PAYMENT_PENDING",
+  PAYMENT_INITIATED = "PAYMENT_INITIATED", // Thanh toán đã được khởi tạo
+  PAYMENT_PENDING = "PAYMENT_PENDING", // Thanh toán đang chờ xử lý
   PAYMENT_SUCCESS = "PAYMENT_SUCCESS",
-  PAYMENT_FAILED = "PAYMENT_FAILED",
-  PAYMENT_CANCELLED = "PAYMENT_CANCELLED",
-  PAYMENT_REFUNDED = "PAYMENT_REFUNDED",
-  PAYMENT_PARTIALLY_REFUNDED = "PAYMENT_PARTIALLY_REFUNDED",
-  PAYMENT_TIMEOUT = "PAYMENT_TIMEOUT",
-  PAYMENT_UNPAID = "PAYMENT_UNPAID",
+  PAYMENT_FAILED = "PAYMENT_FAILED", // Thanh toán thất bại
+  PAYMENT_CANCELLED = "PAYMENT_CANCELLED", // Thanh toán đã bị hủy
+  PAYMENT_REFUNDED = "PAYMENT_REFUNDED", // Thanh toán đã được hoàn tiền
+  PAYMENT_PARTIALLY_REFUNDED = "PAYMENT_PARTIALLY_REFUNDED", // Thanh toán đã hoàn tiền một phần
+  PAYMENT_TIMEOUT = "PAYMENT_TIMEOUT", // Thanh toán đã hết thời gian thanh toán
+  PAYMENT_UNPAID = "PAYMENT_UNPAID", // Thanh toán chưa được thanh toán
 }
 
 export const ORDER_STATUS_OPTIONS = [

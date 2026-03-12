@@ -95,14 +95,8 @@ const orderSchema = new Schema(
     productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     items: [orderItemSchema],
 
-    subtotal: { type: Number, required: true },
-    shippingFee: { type: Number, default: 0 },
-    tax: { type: Number, default: 0 },
-    discount: { type: Number, default: 0 },
+    creditAmount: { type: Number, required: true },
     totalAmount: { type: Number, required: true },
-
-    shippingAddress: { type: shippingAddressSchema, required: true },
-    shopAddress: { type: shopAddressSchema },
 
     paymentMethod: {
       type: String,
@@ -115,23 +109,12 @@ const orderSchema = new Schema(
       default: PaymentStatus.PAYMENT_PENDING,
     },
     paymentInfo: { type: paymentInfoSchema },
-
     paidAt: { type: Date },
-    shippedAt: { type: Date },
-    deliveredAt: { type: Date },
     cancelledAt: { type: Date },
-
-    customerNote: { type: String },
     adminNote: { type: String },
 
     orderLogs: [orderLogSchema],
     paymentLogs: [paymentLogSchema],
-
-    // Shipments (đơn vận chuyển)
-    shipmentIds: [{ type: Schema.Types.ObjectId, ref: "Shipment" }],
-
-    ipAddress: { type: String },
-    userAgent: { type: String },
   },
   { timestamps: true }
 );

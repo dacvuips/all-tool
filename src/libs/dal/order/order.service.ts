@@ -1,4 +1,3 @@
-import { isEqual } from "lodash";
 import { CrudService } from "../../../base/crudService";
 import { IOrder, ORDER_STATUS_OPTIONS, OrderStatusEnum, PaymentStatus } from "./order.interface";
 import { OrderModel } from "./order.model";
@@ -175,26 +174,6 @@ class OrderService extends CrudService<IOrder> {
 
     if (data.totalAmount !== undefined && data.totalAmount !== order.totalAmount) {
       changes.push(`Tổng tiền: ${data.totalAmount.toLocaleString()} đ`);
-    }
-
-    if (data.shippingFee !== undefined && data.shippingFee !== order.shippingFee) {
-      changes.push(`Phí vận chuyển: ${data.shippingFee.toLocaleString()} đ`);
-    }
-
-    if (data.discount !== undefined && data.discount !== order.discount) {
-      changes.push(`Giảm giá: ${data.discount.toLocaleString()} đ`);
-    }
-
-    if (data.customerNote && data.customerNote !== order.customerNote) {
-      changes.push("Ghi chú khách hàng");
-    }
-
-    if (data.adminNote && data.adminNote !== order.adminNote) {
-      changes.push("Ghi chú admin");
-    }
-
-    if (data.shippingAddress && !isEqual(data.shippingAddress, order.shippingAddress)) {
-      changes.push("Địa chỉ giao hàng");
     }
 
     // Chỉ thêm log nếu có thay đổi
