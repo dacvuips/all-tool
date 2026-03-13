@@ -6,6 +6,8 @@ export enum CreditTransactionTypeEnum {
   NODE_RUN_CHARGE = "NODE_RUN_CHARGE",
   /** Hoàn credit khi run FAILED */
   NODE_RUN_REFUND = "NODE_RUN_REFUND",
+  /** Cộng credit khi đơn hàng nạp credit được thanh toán */
+  ORDER_TOPUP = "ORDER_TOPUP",
 }
 
 export type ICreditTransaction = TimestampEntity & {
@@ -17,12 +19,14 @@ export type ICreditTransaction = TimestampEntity & {
   amount: number;
   /** Số dư credit của customer sau giao dịch */
   balanceAfter: number;
-  /** Id run (AiGenerationRun) */
-  runId: string;
-  /** Id product (để báo cáo) */
-  productId: string;
-  /** Id node (để báo cáo) */
-  nodeId: string;
+  /** Id run (AiGenerationRun), chỉ dùng cho NODE_RUN_* */
+  runId?: string;
+  /** Id product (để báo cáo), chỉ dùng cho NODE_RUN_* */
+  productId?: string;
+  /** Id node (để báo cáo), chỉ dùng cho NODE_RUN_* */
+  nodeId?: string;
+  /** Id order dùng cho nạp credit */
+  orderId?: string;
   /** Mô tả giao dịch */
   description: string;
   /** Id giao dịch CHARGE gốc (chỉ có khi type = NODE_RUN_REFUND) */

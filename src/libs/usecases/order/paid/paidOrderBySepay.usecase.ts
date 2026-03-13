@@ -9,6 +9,11 @@ import { MainConnection } from "../../../../helpers/mongo";
 import { OrderCode } from "../../../../packages/order-code";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
+import {
+  CreditTransactionTypeEnum,
+  creditTransactionService,
+} from "../../../dal/creditTransaction";
+import { CustomerModel } from "../../../dal/customer";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
 import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
@@ -122,6 +127,28 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
       },
       { new: true }
     );
+
+    if (!!order.customerId && order.creditAmount > 0) {
+      const customer = await CustomerModel.findByIdAndUpdate(
+        order.customerId,
+        { $inc: { creditBalance: order.creditAmount } },
+        { new: true }
+      );
+
+      if (!customer) {
+        throw new ForbiddenError(t("Không tìm thấy khách hàng để cập nhật credit"));
+      }
+
+      const balanceAfter = (customer as any).creditBalance ?? 0;
+      await creditTransactionService.create({
+        customerId: order.customerId.toString(),
+        type: CreditTransactionTypeEnum.ORDER_TOPUP,
+        amount: order.creditAmount,
+        balanceAfter,
+        orderId: order._id.toString(),
+        description: `Cộng ${order.creditAmount} credit từ thanh toán đơn hàng ${order.orderNumber}`,
+      });
+    }
 
     if (!!order.customerId) {
       // Tạo thông báo
