@@ -1,10 +1,60 @@
+import { Types } from "mongoose";
 import { CrudService } from "../../../base/crudService";
+import { ObjectId } from "../../../packages/object-id";
+import { OrderCode } from "../../../packages/order-code";
+import { BankModel, PaymentMethodEnum } from "../bank";
 import { IOrder, ORDER_STATUS_OPTIONS, OrderStatusEnum, PaymentStatus } from "./order.interface";
 import { OrderModel } from "./order.model";
 
 class OrderService extends CrudService<IOrder> {
   constructor() {
     super(OrderModel);
+  }
+
+  /** Tìm đơn pending/initiated của customer, không có thì tạo mới. Trả về { order, created }. */
+  async findOrCreatePendingOrder(customerId: string): Promise<{ order: IOrder | null }> {
+    if (!customerId) {
+      return { order: null };
+    }
+    const existing = await OrderModel.findOne({
+      customerId: new Types.ObjectId(customerId),
+      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING, PaymentStatus.PAYMENT_INITIATED] },
+    });
+
+    if (!!existing) {
+      return { order: existing };
+    } else {
+      const orderNumber = OrderCode.generate();
+      const defaultBank = await BankModel.findOne({ status: true });
+
+      const paymentInfo = {
+        method: PaymentMethodEnum.BANK,
+        bankImage: defaultBank?.bankImage || "",
+        bankCode: defaultBank?.bankCode || "",
+        bankName: defaultBank?.bankName || "",
+        accountNumber: defaultBank?.accountNumber || "",
+        accountName: defaultBank?.accountName || "",
+        bin: defaultBank?.bin || "",
+      };
+      const orderData = {
+        customerId: ObjectId(customerId),
+        paymentMethod: PaymentMethodEnum.BANK,
+        paymentInfo,
+        orderNumber,
+        paymentStatus: PaymentStatus.PAYMENT_INITIATED,
+        status: OrderStatusEnum.CREATED,
+        customerNote: "",
+        totalAmount: 0,
+        creditAmount: 0,
+      };
+
+      const order = await this.create(orderData as any);
+
+      // const timeoutAt = moment().add(30, "minutes").toDate();
+      // await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
+
+      return { order: order as IOrder };
+    }
   }
 
   async getOrderByNumber(orderNumber: string): Promise<IOrder | null> {
@@ -125,6 +175,7 @@ class OrderService extends CrudService<IOrder> {
         status: OrderStatusEnum.CANCELLED,
         cancelledAt: new Date(),
         adminNote: reason,
+        paymentStatus: PaymentStatus.PAYMENT_CANCELLED,
         $push: { logs: logEntry },
       },
       { new: true }

@@ -27,6 +27,7 @@ export const ParamName = {
   categoryId: "categoryId",
   openRegisterShopMallPost: "open-register-shop-mall-post",
   productId: "productId",
+  creditAmount: "creditAmount", // số tiền credit để thanh toán
 };
 
 export const CookiesName = {

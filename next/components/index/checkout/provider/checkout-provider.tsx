@@ -1,7 +1,5 @@
 import { useRouter } from "next/router";
 import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { CookiesName } from "../../../../lib/constants/constants";
-import { CartCookieHelper } from "../../../../lib/helpers/cart-cookie.helper";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import {
   Order,
@@ -37,15 +35,6 @@ export interface CheckoutContextType {
   discount: number;
   isGuest: boolean;
 
-  // Guest customer info
-  guestCustomerName: string;
-  guestCustomerPhone: string;
-  guestCustomerEmail: string;
-  guestCustomerAddress: string;
-  guestCustomerProvince: string;
-  guestCustomerDistrict: string;
-  guestCustomerWard: string;
-
   // Setters
 
   setSelectProduct: (product: Product | null) => void;
@@ -58,16 +47,10 @@ export interface CheckoutContextType {
   setProcessOrder: (value: boolean) => void;
   setOpenPopupNotify: (value: boolean) => void;
   setDiscount: (value: number) => void;
-  setGuestCustomerName: (name: string) => void;
-  setGuestCustomerPhone: (phone: string) => void;
-  setGuestCustomerEmail: (email: string) => void;
-  setGuestCustomerAddress: (address: string) => void;
-  setGuestCustomerProvince: (province: string) => void;
-  setGuestCustomerDistrict: (district: string) => void;
-  setGuestCustomerWard: (ward: string) => void;
+
   currentOrder: Order | null;
   loading: boolean;
-  createOrder: (data: Order) => Promise<Order>;
+  createOrder: (creditAmount: number, orderId: string) => Promise<{ order: Order }>;
   cancelOrder: (orderId: string, reason?: string) => Promise<Order>;
   getOneOrderByGuest: () => Promise<Order | null>;
 }
@@ -97,34 +80,12 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
   const [openPopupNotify, setOpenPopupNotify] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
-  // Guest customer info default from cookies or empty
-  const [guestCustomerName, setGuestCustomerName] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestName)
-  );
-  const [guestCustomerPhone, setGuestCustomerPhone] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestPhone)
-  );
-  const [guestCustomerEmail, setGuestCustomerEmail] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestEmail)
-  );
-  const [guestCustomerAddress, setGuestCustomerAddress] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestAddress)
-  );
-  const [guestCustomerProvince, setGuestCustomerProvince] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestProvince)
-  );
-  const [guestCustomerDistrict, setGuestCustomerDistrict] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestDistrict)
-  );
-  const [guestCustomerWard, setGuestCustomerWard] = useState<string>(
-    CartCookieHelper.getCookie(CookiesName.guestWard)
-  );
 
   // Determine if user is guest
   const isGuest = !customer;
   useEffect(() => {
-    getOneOrderByGuest();
-  }, [router.pathname === "/checkout"]);
+    !!customer && getOneOrderByGuest();
+  }, [router.pathname === "/checkout", customer]);
 
   useEffect(() => {
     if (!order) return;
@@ -160,11 +121,12 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
     }
   }, [selectPayment]);
 
-  const createOrder = async (data: Order): Promise<Order> => {
+  const createOrder = async (creditAmount: number, orderId: string): Promise<{ order: Order }> => {
     setLoading(true);
     try {
-      const result = await orderService.createOrder(data);
+      const result = await orderService.createOrder(creditAmount, orderId);
       setCurrentOrder(result.order);
+      setOrder(result.order as unknown as Order | null);
       return result;
     } finally {
       setLoading(false);
@@ -209,13 +171,6 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
         openPopupNotify,
         discount,
         isGuest,
-        guestCustomerName,
-        guestCustomerPhone,
-        guestCustomerEmail,
-        guestCustomerAddress,
-        guestCustomerProvince,
-        guestCustomerDistrict,
-        guestCustomerWard,
 
         setSelectProduct,
         setQuality,
@@ -226,13 +181,6 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
         setProcessOrder,
         setOpenPopupNotify,
         setDiscount,
-        setGuestCustomerName,
-        setGuestCustomerPhone,
-        setGuestCustomerEmail,
-        setGuestCustomerAddress,
-        setGuestCustomerProvince,
-        setGuestCustomerDistrict,
-        setGuestCustomerWard,
         currentOrder,
         loading,
         createOrder,

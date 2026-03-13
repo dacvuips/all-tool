@@ -36,7 +36,7 @@ import { NOTIFY_FRAGMENT, NotificationService } from "../lib/repo/notification/n
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { parseNumber } from "../lib/helpers/parser";
-import { Order } from "../lib/repo";
+import { Order, PaymentStatus } from "../lib/repo";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
 import { useHomeLayoutContext } from "./home-layout/provider/home-layout-provider";
@@ -501,7 +501,7 @@ const OrderNotify = ({ order }: { order?: Order }) => {
   const router = useRouter();
   return (
     <>
-      {!!order && (
+      {!!order && order.paymentStatus !== PaymentStatus.PAYMENT_INITIATED && (
         <div
           className="flex fixed bottom-0 left-0 z-50 justify-center items-center w-full h-10 text-sm font-medium text-yellow-800 bg-yellow-100 cursor-pointer"
           onClick={() => router.push(`/checkout`)}

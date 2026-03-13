@@ -1,12 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
+import { ParamName } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
+import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
+import { SettingService } from "../../../../lib/repo";
 import { NotifyText } from "../../../shared/common/notify-text";
-import { Label } from "../../../shared/utilities/form";
+import { Input, Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
+import { Spinner } from "../../../shared/utilities/misc";
+import { useCheckoutContext } from "../provider/checkout-provider";
 
-const QUICK_AMOUNTS = [10000, 50000, 100000, 500000];
+const QUICK_AMOUNTS = [10, 100, 1000, 10000];
 const MAX_SUGGESTED = 10_000_000;
 
 /** Tạo các đề xuất "thêm số 0" từ số đã nhập: ví dụ 5 → [50, 500, 5000, 50000] */
@@ -23,18 +28,48 @@ function getSuggestedAmounts(base: number): number[] {
 
 export function CheckoutPaymentForm() {
   const { t } = useTranslation();
-  const [amount, setAmount] = useState<number>(0);
-
-  const suggestedAmounts = amount > 0 ? getSuggestedAmounts(amount) : [];
+  const [queryParams] = useQueryParams({
+    [ParamName.creditAmount]: "",
+  });
+  const amountFromParam = Number(queryParams[ParamName.creditAmount]) || 0;
+  const [amount, setAmount] = useState<number>(amountFromParam);
+  const [creditAmount, setCreditAmount] = useState<number>(amountFromParam);
+  const { order, loading, createOrder } = useCheckoutContext();
+  const [creditAmountSetting, setCreditAmountSetting] = useState<number>(0);
+  const suggestedAmounts = creditAmount > 0 ? getSuggestedAmounts(creditAmount) : [];
   const showQuickAmounts = suggestedAmounts.length > 0 ? suggestedAmounts : QUICK_AMOUNTS;
 
   const handleQuickAmount = (value: number) => {
-    setAmount((prev) => (prev === value ? 0 : value));
+    setCreditAmount((prev) => (prev === value ? 0 : value));
+    calculateCreditAmount(Number(value) || 0);
+  };
+  // get setting creditAmount from setting service
+  useEffect(() => {
+    getCreditAmount();
+  }, []);
+  const getCreditAmount = async () => {
+    const creditAmount = await SettingService.getSettingByKey(
+      "wa-mpoint-change-credit-balance",
+      "value"
+    );
+    setCreditAmountSetting(creditAmount.value);
   };
 
-  const handlePayNow = () => {
-    // TODO: tích hợp flow thanh toán thực tế
+  const handleCreateOrder = async () => {
+    await createOrder(creditAmount, order?.id as string);
   };
+  const calculateCreditAmount = (amount: number) => {
+    setAmount(amount * (creditAmountSetting as number));
+  };
+
+  if (loading && !order) {
+    return (
+      <div className="flex flex-col min-h-[60vh] justify-center items-center pb-10 bg-gray-100">
+        <Spinner />
+        <p className="mt-2 text-sm text-gray-500">{t("Đang tạo đơn thanh toán...")}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
@@ -47,61 +82,70 @@ export function CheckoutPaymentForm() {
             </div>
             <div className="ml-3">
               <h1 className="text-xl font-bold text-gray-800">{t("Thanh toán")}</h1>
-              <p className="mt-0.5 text-sm text-gray-500">
-                INV_{new Date().toISOString().slice(0, 10).replace(/-/g, "")}_DEMO
-              </p>
+              <p className="mt-0.5 text-sm font-medium text-primary">{order?.orderNumber}</p>
             </div>
           </div>
 
           {/* Warning - Sandbox */}
           <NotifyText
-            text={t(
-              "Đây là mô phỏng thanh toán (sandbox). Bạn có thể thử thao tác như thanh toán thật, nhưng không mất tiền thật."
-            )}
+            text={t(`Hệ số chuyển đổi: 1 credit = ${parseNumber(creditAmountSetting, true)}`)}
           />
 
           {/* Amount input */}
-          <div className="pb-4">
-            <Label text={t("Nhập số credit cần nạp")} />
-            <div className="flex overflow-hidden items-center w-full bg-white rounded-xl border border-gray-300 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary">
-              <span className="flex flex-shrink-0 justify-center items-center pl-4 text-gray-400">
-                <HiOutlineCreditCard />
-              </span>
-              <input
-                type="number"
-                min={0}
-                step={1000}
-                placeholder={t("Nhập số credit...")}
-                value={amount > 0 ? amount : ""}
-                onChange={(e) => setAmount(Number(e.target.value) || 0)}
+          <div className="">
+            <Label text={t("Số credit")} />
+            <div className="flex overflow-hidden items-center w-full bg-white rounded-xl border border-gray-300 focus-within:border-primary">
+              <Input
+                number
+                numberLength={10}
+                placeholder={t("Nhập số credit cần nạp...")}
+                value={creditAmount === 0 ? "" : creditAmount}
+                showZeroDefaultValue
+                onChange={(e) => {
+                  const raw = e;
+                  if (raw === "") {
+                    setCreditAmount(0);
+                    calculateCreditAmount(0);
+                  } else {
+                    const num = Number(raw);
+                    if (!Number.isNaN(num) && num >= 0) {
+                      setCreditAmount(num);
+                      calculateCreditAmount(num);
+                    }
+                  }
+                }}
+                controlClassName=""
                 className="flex-1 py-3 pr-2 pl-3 placeholder-gray-400 text-gray-800 border-0 focus:ring-0 focus:outline-none"
+                prefix={<HiOutlineCreditCard />}
+                suffix={
+                  <span className="flex-shrink-0 pr-4 text-sm text-gray-500">{t("credit")}</span>
+                }
               />
-              <span className="flex-shrink-0 pr-4 text-sm text-gray-500">{t("credit")}</span>
             </div>
-            <p className="mt-2 text-sm text-gray-500">
-              {parseNumber(amount)}
-              {"VND"}
-            </p>
           </div>
 
           {/* Quick amount buttons: mặc định hoặc đề xuất "thêm số 0" theo số đã nhập */}
-          <div className="flex flex-wrap gap-2 pb-4">
+          <div className="flex flex-wrap gap-2">
             {showQuickAmounts.map((value) => (
-              <button
+              <Button
                 key={value}
-                type="button"
                 onClick={() => handleQuickAmount(value)}
                 className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                   amount === value
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-gray-300 bg-white text-gray-700 hover:border-primary"
+                    : "border-gray-300 bg-gray-50 bg-white text-gray-700 hover:border-primary"
                 }`}
               >
                 {parseNumber(value)}
-              </button>
+              </Button>
             ))}
           </div>
-
+          <div className="flex gap-x-2 items-center mt-2 w-full text-lg font-bold text-right text-red-700">
+            <span className="text-sm text-gray-600">{`${t("Tổng thanh toán")}:`}</span>
+            <span className="text-lg font-bold text-right text-red-700">
+              {parseNumber(amount, true)}
+            </span>
+          </div>
           {/* CTA */}
           <div className="pt-0">
             <Button
@@ -113,7 +157,8 @@ export function CheckoutPaymentForm() {
                   <span className="inline-block ml-1">›</span>
                 </>
               }
-              onClick={handlePayNow}
+              onClick={handleCreateOrder}
+              disabled={loading || !order}
             />
           </div>
         </div>

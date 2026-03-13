@@ -6,13 +6,13 @@ import { CheckoutProvider, useCheckoutContext } from "./provider/checkout-provid
 
 import { Player } from "@lottiefiles/react-lottie-player";
 import copy from "copy-to-clipboard";
-import { useRouter } from "next/router";
+import router, { useRouter } from "next/router";
 import { HiOutlineInformationCircle } from "react-icons/hi";
 import { RiFileCopy2Line } from "react-icons/ri";
 import { parseNumber } from "../../../lib/helpers/parser";
 import { useAlert } from "../../../lib/providers/alert-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
-import { orderService, PaymentMethod } from "../../../lib/repo/order/order.repo";
+import { orderService, PaymentMethod, PaymentStatus } from "../../../lib/repo/order/order.repo";
 import { VideoDialog } from "../../shared/common/video-dialog";
 import { Button } from "../../shared/utilities/form";
 import { Spinner } from "../../shared/utilities/misc";
@@ -30,20 +30,20 @@ export function CheckoutPage() {
 }
 
 function CheckoutComponent() {
-  const { t } = useTranslation();
   const { order } = useCheckoutContext();
-
   const { customer } = useAuth();
-  const [openIntroCheckout, setOpenIntroCheckout] = useState<boolean>(false);
-
+  const toast = useToast();
+  const { t } = useTranslation();
   useEffect(() => {
-    customer &&
-      setTimeout(() => {
-        setOpenIntroCheckout(true);
-      }, 3000);
+    if (customer === null) {
+      toast.error(t("Vui lòng đăng nhập để tiếp tục"));
+      router.replace("/");
+    }
   }, [customer]);
 
-  if (!order) return <CheckoutPaymentForm />;
+  if (!customer) return <Spinner />;
+  if (!order || order.paymentStatus == PaymentStatus.PAYMENT_INITIATED)
+    return <CheckoutPaymentForm />;
 
   return (
     <>
@@ -81,7 +81,7 @@ function CheckoutPaymentPay() {
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
-      const createdTime = new Date(order.createdAt).getTime();
+      const createdTime = new Date(order.updatedAt).getTime();
       const expiry = createdTime + 30 * 60 * 1000; // Thêm 30 phút từ lúc tạo đơn
       const diff = expiry - now;
 

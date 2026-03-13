@@ -92,7 +92,7 @@ const orderSchema = new Schema(
       enum: Object.values(OrderStatusEnum),
       default: OrderStatusEnum.CREATED,
     },
-    productId: { type: Schema.Types.ObjectId, ref: "Product", required: true },
+    productId: { type: Schema.Types.ObjectId, ref: "Product" },
     items: [orderItemSchema],
 
     creditAmount: { type: Number, required: true },

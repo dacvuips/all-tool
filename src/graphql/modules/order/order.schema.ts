@@ -12,7 +12,7 @@ const schema = gql`
   }
 
   extend type Mutation {
-    createOrder(data: CreateOrderInput!): CreateOrderResult
+    createOrder(creditAmount: Float!, orderId: ID!): CreateOrderResult
     updateOrder(orderId: ID!, data: UpdateOrderInput!): Order
     updateOrderStatus(orderId: ID!, status: OrderStatus!): Order
     cancelOrder(orderId: ID!, reason: String): Order
@@ -21,20 +21,7 @@ const schema = gql`
   }
 
   input CreateOrderInput {
-    sessionId: String
-    productId: ID!
-    items: [OrderItemInput!]!
-    shippingAddress: ShippingAddressInput!
-
-    paymentMethod: PaymentMethod!
-
-    shippingFee: Float
-    tax: Float
-    discount: Float
-
-    customerNote: String
-
-    cartIds: [String!]
+    customerId: ID
   }
 
   input UpdateOrderInput {
@@ -112,16 +99,12 @@ const schema = gql`
 
     orderNumber: String
     status: OrderStatus
-    productId: ID
-    items: [OrderItem]
 
     subtotal: Float
-    shippingFee: Float
     tax: Float
     discount: Float
     totalAmount: Float
-
-    shippingAddress: ShippingAddress
+    creditAmount: Float
 
     paymentMethod: String
     paymentStatus: PaymentStatus
@@ -138,7 +121,6 @@ const schema = gql`
     orderLogs: [OrderLog]
     paymentLogs: [PaymentLog]
     product: Product
-    shipmentIds: [String]
   }
 
   type OrderLog {
@@ -195,8 +177,6 @@ const schema = gql`
 
   type CreateOrderResult {
     order: Order
-    paymentUrl: String
-    message: String
   }
 
   type CheckoutOrder {

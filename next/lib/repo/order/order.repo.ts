@@ -174,55 +174,35 @@ export class OrderRepository extends CrudRepository<Order> {
     status
     paymentStatus
     totalAmount
+    creditAmount
     customerId  
-    shippingAddress {
-      recipientName
-      phone
-      email
-      address
-      ward
-      district
-      province
-      country
-      postalCode
-      note
-    } 
+     paymentInfo {
+      method 
+      bankImage 
+      bankCode 
+      bankName
+      accountNumber
+      accountName
+      bin
+      metadata
+    }
     createdAt
+    updatedAt
   `);
   fullFragment: string = this.parseFragment(`
     id
     createdAt
     updatedAt
     customerId
-    sessionId
-    productId
+    sessionId 
     orderNumber
     status
-    items {
-      productName
-      thumbnail
-      price
-      originalPrice
-      quantity
-      subtotal
-    }
-    subtotal
-    shippingFee
+    
+    subtotal 
     tax
     discount
     totalAmount
-    shippingAddress {
-      recipientName
-      phone
-      email
-      address
-      ward
-      district
-      province
-      country
-      postalCode
-      note
-    }
+    
     paymentMethod
     paymentStatus
     paymentInfo {
@@ -259,7 +239,7 @@ export class OrderRepository extends CrudRepository<Order> {
       amount
       transactionId
     }
-    shipmentIds
+    
     product{
       slug
     }
@@ -318,23 +298,21 @@ export class OrderRepository extends CrudRepository<Order> {
       .then((res) => res.data.getMyOrderStats as OrderStats);
   }
 
-  async createOrder(data: Order): Promise<Order> {
+  async createOrder(creditAmount: number, orderId: string): Promise<{ order: Order }> {
     return this.apollo
       .mutate({
         mutation: gql`
-          mutation CreateOrder($data: CreateOrderInput!) {
-            createOrder(data: $data) {
+          mutation CreateOrder($creditAmount: Float!, $orderId: ID!) {
+            createOrder(creditAmount: $creditAmount, orderId: $orderId) {
               order {
-                ${this.fullFragment}
+                ${this.shortFragment}
               }
-              paymentUrl
-              message
             }
           }
         `,
-        variables: { data },
+        variables: { creditAmount, orderId },
       })
-      .then((res) => res.data.createOrder);
+      .then((res) => res.data.createOrder as { order: Order } | null);
   }
 
   async cancelOrder(orderId: string, reason?: string): Promise<Order> {

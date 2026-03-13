@@ -4,12 +4,10 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { BankModel, PaymentMethodEnum } from "../../../libs/dal/bank";
 import { OrderStatusEnum, PaymentStatus } from "../../../libs/dal/order/order.interface";
-import { OrderModel } from "../../../libs/dal/order/order.model";
 import orderService from "../../../libs/dal/order/order.service";
-import { ProductLoader } from "../../../libs/dal/product";
+import { settingService } from "../../../libs/dal/setting";
 import { Context } from "../../../libs/graphql";
 import { ObjectId } from "../../../packages/object-id";
-import { OrderCode } from "../../../packages/order-code";
 import ProcessExpiredOrderJob from "../../../scheduler/jobs/processExpiredOrder.job";
 
 const Query = {
@@ -63,26 +61,8 @@ const Query = {
   },
   // lấy 1 đơn hàng với param lọc theo shippingAddress phone, email , trạng thái đơn hàng status pending, confirmed, và trạng thái thanh toán paymentStatus unpaid và theo khoảng thời gian từ dateFrom đến dateTo
   getOneOrderByGuest: async (root: any, args: any, context: Context) => {
-    // Mặc định lấy đơn hàng từ thời điểm hiện tại đến 30 phút trước
-    const now = new Date();
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-    const customerId = context.isCustomer ? context.customerId : null;
-    const sessionId = context.isCustomer
-      ? undefined
-      : context.req.cookies?.cartSessionId || undefined;
-
-    const filter: any = {
-      ...(customerId ? { customerId: ObjectId(customerId) } : sessionId ? { sessionId } : {}),
-      status: { $in: [OrderStatusEnum.CONFIRMED, OrderStatusEnum.CREATED] },
-      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING] },
-      createdAt: {
-        $gte: thirtyMinutesAgo,
-        $lte: now,
-      },
-    };
-    return await OrderModel.findOne(filter).select(
-      "orderNumber status paymentStatus totalAmount createdAt shippingAddress paymentMethod subtotal shippingFee tax discount paymentInfo"
-    );
+    const result = await orderService.findOrCreatePendingOrder(context.customerId);
+    return result?.order ?? null;
   },
   // Lấy danh sách đơn hàng của khách vãng lai với param lọc theo shippingAddress phone, email.
   getOrdersByGuest: async (root: any, args: any, context: Context) => {
@@ -100,35 +80,36 @@ const Query = {
 
 const Mutation = {
   createOrder: async (root: any, args: any, context: Context) => {
-    const { data } = args;
     const customerId = context.customerId;
+    const { creditAmount, orderId } = args;
 
-    // Mặc định lấy đơn hàng từ thời điểm hiện tại đến 30 phút trước
     const now = new Date();
-    const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-    const existingOrder = await orderService.findOne({
-      customerId,
-
-      status: { $in: [OrderStatusEnum.CREATED, OrderStatusEnum.CONFIRMED] },
-      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING] },
-      createdAt: {
-        $gte: thirtyMinutesAgo,
-        $lte: now,
-      },
-    });
-    if (existingOrder) {
-      throw new Error(
-        "Bạn có đơn hàng đang chờ thanh toán. Vui lòng hoàn tất hoặc hủy đơn hàng trước khi tạo đơn mới."
-      );
+    // const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
+    const filterExisting: any = {
+      _id: ObjectId(orderId),
+      customerId: ObjectId(customerId),
+      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING, PaymentStatus.PAYMENT_INITIATED] },
+      // createdAt: { $gte: thirtyMinutesAgo, $lte: now },
+    };
+    if (!creditAmount) {
+      throw new Error("Số tiền credit không hợp lệ");
     }
 
-    // Generate order number
-
-    const orderNumber = OrderCode.generate();
+    const existingOrder = await orderService.findOne(filterExisting);
+    if (!existingOrder || existingOrder.paymentStatus !== PaymentStatus.PAYMENT_INITIATED) {
+      throw new Error("Đơn hàng không khả dụng");
+    }
     const defaultBank = await BankModel.findOne({ status: true });
+    if (!defaultBank) {
+      throw new Error("Hệ thống không tìm thấy ngân hàng");
+    }
+
+    const creditAmountSetting = await settingService.findOne({
+      key: "wa-mpoint-change-credit-balance",
+    });
     // Map ATM to BANK since ATM is no longer a valid enum value
     let paymentMethod = defaultBank?.method || PaymentMethodEnum.BANK;
-
+    const totalAmount = creditAmountSetting.value * creditAmount;
     const paymentInfo = {
       method: paymentMethod,
       bankImage: defaultBank?.bankImage || "",
@@ -138,17 +119,13 @@ const Mutation = {
       accountName: defaultBank?.accountName || "",
       bin: defaultBank?.bin || "",
     };
+
     // Create order
     const orderData = {
-      customerId,
-      paymentMethod: data.paymentMethod,
       paymentInfo,
-      orderNumber,
       paymentStatus: PaymentStatus.PAYMENT_PENDING,
-      status: OrderStatusEnum.CREATED,
-      customerNote: data.customerNote,
-      totalAmount: data.totalAmount,
-      creditAmount: data.creditAmount,
+      totalAmount,
+      creditAmount,
       orderLogs: [
         {
           status: OrderStatusEnum.CREATED,
@@ -159,22 +136,18 @@ const Mutation = {
       ],
       paymentLogs: [
         {
-          status: PaymentStatus.PAYMENT_PENDING,
-          des: "Chờ thanh toán",
+          status: PaymentStatus.PAYMENT_INITIATED,
+          des: "Đơn hàng đã được tạo",
           createdAt: new Date(),
+          creatorId: customerId,
         },
       ],
     };
 
-    const order = await orderService.create(orderData);
-
-    // set Agenda job to process expired order
-    const timeoutAt = moment().add(30, "minutes").toDate(); // 30 minutes from now
+    const order = await orderService.updateOne(orderId, orderData);
+    const timeoutAt = moment().add(30, "minutes").toDate();
     await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
-
-    return {
-      order,
-    };
+    return { order };
   },
 
   updateOrder: async (root: any, args: any, context: Context) => {
@@ -236,11 +209,7 @@ const Mutation = {
   },
 };
 
-const Order = {
-  product: async (root: any, args: any, context: Context) => {
-    return await ProductLoader.load(root.productId);
-  },
-};
+const Order = {};
 
 export default {
   Query,
