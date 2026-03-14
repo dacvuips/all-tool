@@ -260,16 +260,17 @@ export function AuthProvider(props) {
 
       const userCredential = await _firebase.auth().signInWithEmailAndPassword(email, password);
 
-      const { customer } = await CustomerService.customerLoginWithEmail({
+      await CustomerService.customerLoginWithEmail({
         accessToken: await userCredential.user.getIdToken(),
         pw: password,
+      }).then(async (res) => {
+        await CustomerService.clearStore();
+        setCustomer(res.customer);
       });
 
-      setCustomer(customer);
-
-      setTimeout(() => {
-        router.reload();
-      }, 300);
+      // setTimeout(() => {
+      //   router.reload();
+      // }, 300);
     } catch (err) {
       console.error(err);
       ClearCustomerToken();

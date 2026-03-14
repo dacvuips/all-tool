@@ -127,7 +127,7 @@ export const CustomerLoginEmailTab = ({ ...props }: Props) => {
             }`}
             onClose={props.onClose}
           />
-          <div className="flex flex-col items-center w-full pb-5 lg:pb-2">
+          <div className="flex flex-col items-center pb-5 w-full lg:pb-2">
             <CustomerLoginFields
               isWaitingOTPDelay={isWaitingOTPDelay}
               setOTPDelay={setOTPDelay}
@@ -374,7 +374,7 @@ function CustomerLoginFields({
         </Field>
       )}
       {(forgotPassQuery || mode != loginModeEnum.regis) && (
-        <div className="flex justify-end w-full mb-2">
+        <div className="flex justify-end mb-2 w-full">
           <Button
             unfocusable
             text={mode != loginModeEnum.regis ? t("Quên mật khẩu") : t("Quay lại")}
@@ -385,14 +385,14 @@ function CustomerLoginFields({
         </div>
       )}
       {!forgotPassQuery && (
-        <div className="flex flex-col items-center w-full gap-2">
-          <div className="flex flex-col items-center w-full gap-2">
+        <div className="flex flex-col gap-2 items-center w-full">
+          <div className="flex flex-col gap-2 items-center w-full">
             <Button
               text={mode != loginModeEnum.regis ? t("Đăng nhập") : t("Đăng ký")}
               primary
               isLoading={isSubmitting}
               submit
-              className="w-full px-5 rounded-full shadow h-11 whitespace-nowrap sm:mt-2 sm:px-12"
+              className="px-5 w-full h-11 whitespace-nowrap rounded-full shadow sm:mt-2 sm:px-12"
             />
             <div className="text-sm text-gray-600">
               {mode == loginModeEnum.regis ? (
@@ -420,7 +420,7 @@ function CustomerLoginFields({
           </div>
           <div className="text-center">
             <div className="my-2">{`-- ${t("hoặc")} --`}</div>
-            <div className="flex items-center gap-1 cursor-pointer">
+            <div className="flex gap-1 items-center cursor-pointer">
               <Button
                 outline
                 icon={<FcGoogle />}

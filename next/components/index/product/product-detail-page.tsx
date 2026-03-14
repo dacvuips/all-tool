@@ -22,6 +22,8 @@ import "reactflow/dist/style.css";
 import { BsCashCoin } from "react-icons/bs";
 import { HiOutlineArrowLeft, HiOutlineBookOpen, HiOutlineClock } from "react-icons/hi";
 import { HiOutlinePlay } from "react-icons/hi2";
+import { MdOutlineAddCard } from "react-icons/md";
+import { ParamName } from "../../../lib/constants/constants";
 import {
   executeFlowNode,
   getFlowNodeRuns,
@@ -312,6 +314,14 @@ export const ProductDetailPage = () => {
     }
   }, [customer?._id, product?.id]);
 
+  const handleDepositCredit = useCallback(async () => {
+    if(!customer?._id) {
+      setOpenCustomerLoginDialog(true);
+      return;
+    }
+   router.push(`/checkout?${ParamName.creditAmount}=${product?.creditCostTotal}`);
+  }, [customer?._id, product?.creditCostTotal]);
+
   /** Socket: nhận event run completed/failed từ useFlowNodeRunChanged → cập nhật node realtime */
   const flowNodeRunChanged = useFlowNodeRunChanged(customer?._id, product?.id);
   useEffect(() => {
@@ -381,12 +391,25 @@ export const ProductDetailPage = () => {
                   </div>
                   <div>
                     <div className="text-lg font-bold text-ellipsis-2">{productName}</div>
-                    <div className="flex gap-1 items-center text-xs text-primary">
+                    <div className="flex gap-1 items-center text-xs divide-x-2 text-primary">
               <BsCashCoin />
               {creditCostTotal > 0 ? creditCostTotal + " " + t("Credit") : t("Miễn phí")}
+              <div>
+              <Button
+                     
+                    className="px-1 h-4 rounded-md"
+                    iconClassName="text-lg"
+                    onClick={() => handleDepositCredit()}
+                    tooltip={t("Nạp thêm credit")}
+                    icon={<MdOutlineAddCard />}
+                    text={t("Nạp")}
+                    
+                  />
+                  </div>
                      </div>
                   </div>
                 </div>
+                 
                 <div className="flex gap-2 whitespace-nowrap">
                   {/* View description button*/}
                   <Button
