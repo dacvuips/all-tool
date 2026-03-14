@@ -62,7 +62,10 @@ class OrderService extends CrudService<IOrder> {
   }
 
   async getCustomerOrders(customerId: string, limit: number = 20): Promise<IOrder[]> {
-    return await this.model.find({ customerId }).sort({ createdAt: -1 }).limit(limit);
+    return await this.model
+      .find({ customerId, paymentStatus: { $nin: [PaymentStatus.PAYMENT_INITIATED] } })
+      .sort({ createdAt: -1 })
+      .limit(limit);
   }
 
   async updateOrderStatus(

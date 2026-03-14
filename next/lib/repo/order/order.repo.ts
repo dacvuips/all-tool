@@ -173,7 +173,7 @@ export class OrderRepository extends CrudRepository<Order> {
     orderNumber
     status
     paymentStatus
-    totalAmount
+    totalAmount 
     creditAmount
     customerId  
      paymentInfo {
@@ -202,7 +202,7 @@ export class OrderRepository extends CrudRepository<Order> {
     tax
     discount
     totalAmount
-    
+    creditAmount
     paymentMethod
     paymentStatus
     paymentInfo {
