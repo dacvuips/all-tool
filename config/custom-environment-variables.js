@@ -116,6 +116,15 @@ module.exports = {
   sepay: {
     secret: "SEPAY_SECRET",
   },
+  // Biến môi trường cho SePay Payment Gateway (cổng thanh toán)
+  sepayPG: {
+    merchantId: "SEPAY_PG_MERCHANT_ID",
+    secretKey: "SEPAY_PG_SECRET_KEY",
+    sandboxMode: {
+      __name: "SEPAY_PG_SANDBOX_MODE",
+      __format: "boolean",
+    },
+  },
  
  
 };

@@ -7,7 +7,7 @@ import { CheckoutProvider, useCheckoutContext } from "./provider/checkout-provid
 import { Player } from "@lottiefiles/react-lottie-player";
 import copy from "copy-to-clipboard";
 import router, { useRouter } from "next/router";
-import { HiOutlineInformationCircle } from "react-icons/hi";
+import { HiOutlineCheckCircle, HiOutlineInformationCircle, HiOutlineXCircle } from "react-icons/hi";
 import { RiFileCopy2Line } from "react-icons/ri";
 import { parseNumber } from "../../../lib/helpers/parser";
 import { useAlert } from "../../../lib/providers/alert-provider";
@@ -29,11 +29,24 @@ export function CheckoutPage() {
   );
 }
 
+/**
+ * Component chính của trang checkout.
+ * Xử lý 3 trạng thái:
+ * 1. Chưa đặt đơn / đơn mới tạo → Hiển thị form chọn credit + phương thức
+ * 2. Đơn đang chờ thanh toán ngân hàng → Hiển thị QR và thông tin CK
+ * 3. Đang xử lý / đã thanh toán qua SePay PG → Hiển thị trạng thái SePay PG
+ */
 function CheckoutComponent() {
   const { order } = useCheckoutContext();
   const { customer } = useAuth();
   const toast = useToast();
   const { t } = useTranslation();
+  const routerHook = useRouter();
+
+  // Lấy thông tin payment callback từ URL (sau khi redirect về từ SePay PG)
+  const paymentStatus = routerHook.query.payment as string; // success | error | cancel
+  const orderNumberFromUrl = routerHook.query.orderNumber as string;
+
   useEffect(() => {
     if (customer === null) {
       toast.error(t("Vui lòng đăng nhập để tiếp tục"));
@@ -42,9 +55,17 @@ function CheckoutComponent() {
   }, [customer]);
 
   if (!customer) return <Spinner />;
-  if (!order || order.paymentStatus == PaymentStatus.PAYMENT_INITIATED)
+
+  // Nếu redirect về từ SePay PG (có query param ?payment=...)
+  if (paymentStatus && orderNumberFromUrl) {
+    return <SePayPGCallbackView paymentStatus={paymentStatus} orderNumber={orderNumberFromUrl} />;
+  }
+
+  // Nếu chưa có đơn hoặc đơn mới khởi tạo → hiển thị form chọn credit
+  if (!order || order.paymentStatus === PaymentStatus.PAYMENT_INITIATED)
     return <CheckoutPaymentForm />;
 
+  // Có đơn đang chờ thanh toán → hiển thị màn hình thanh toán
   return (
     <>
       <div className="flex flex-col pb-10 bg-gray-100">
@@ -54,7 +75,12 @@ function CheckoutComponent() {
               <CheckoutPayment />
             </div>
             <div className="col-span-full md:col-span-7 lg:col-span-8">
-              <CheckoutPaymentPay />
+              {/* Phân nhánh hiển thị theo phương thức thanh toán */}
+              {order.paymentMethod === PaymentMethod.SEPAY_PG ? (
+                <SePayPGWaitingView />
+              ) : (
+                <CheckoutPaymentPay />
+              )}
             </div>
           </div>
         </div>
@@ -63,69 +89,241 @@ function CheckoutComponent() {
   );
 }
 
+/**
+ * View hiển thị khi đang chờ SePay PG xử lý (ngay sau khi submit form)
+ * Thường không hiển thị lâu vì browser sẽ redirect sang SePay ngay
+ */
+function SePayPGWaitingView() {
+  const { t } = useTranslation();
+  return (
+    <div className="flex flex-col justify-center items-center p-8 min-h-[300px] bg-white rounded-md">
+      <Spinner />
+      <p className="mt-4 font-semibold text-gray-700">{t("Đang chuyển hướng đến SePay...")}</p>
+      <p className="mt-1 text-sm text-gray-500">
+        {t("Vui lòng không đóng trang trong khi đang xử lý")}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * View hiển thị sau khi redirect về từ SePay PG
+ * Xử lý 3 trạng thái: success, error, cancel
+ */
+function SePayPGCallbackView({
+  paymentStatus,
+  orderNumber,
+}: {
+  paymentStatus: string;
+  orderNumber: string;
+}) {
+  const { t } = useTranslation();
+  const routerHook = useRouter();
+  const [checkingStatus, setCheckingStatus] = useState(paymentStatus === "success");
+  const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">(
+    paymentStatus === "success" ? "success" : paymentStatus === "cancel" ? "cancel" : "error"
+  );
+
+  // Khi thanh toán success, chờ xác nhận thêm từ IPN
+  useEffect(() => {
+    if (paymentStatus !== "success") {
+      setCheckingStatus(false);
+      return;
+    }
+
+    // Kiểm tra trạng thái đơn hàng từ server (IPN có thể xử lý trước hoặc sau redirect)
+    const checkOrder = async () => {
+      try {
+        const order = await orderService.getOrderByNumber(orderNumber);
+        if (order?.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
+          setFinalStatus("success");
+          setCheckingStatus(false);
+        }
+      } catch {
+        setCheckingStatus(false);
+      }
+    };
+
+    // Polling mỗi 2 giây, tối đa 10 lần
+    let attempts = 0;
+    const interval = setInterval(async () => {
+      attempts++;
+      await checkOrder();
+      if (attempts >= 10) {
+        clearInterval(interval);
+        setCheckingStatus(false);
+      }
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [paymentStatus, orderNumber]);
+
+  if (checkingStatus) {
+    return (
+      <div className="flex flex-col justify-center items-center py-20 bg-gray-100 min-h-[60vh]">
+        <Spinner />
+        <p className="mt-4 text-gray-600">{t("Đang xác nhận thanh toán...")}</p>
+      </div>
+    );
+  }
+
+  // Cấu hình hiển thị theo từng trạng thái
+  const statusConfig = {
+    success: {
+      icon: <HiOutlineCheckCircle className="text-6xl text-green-500" />,
+      lottie: "/assets/lottie/payment-success.json",
+      title: t("Thanh toán thành công!"),
+      message: t(
+        "Đơn hàng của bạn đã được thanh toán thành công qua cổng SePay. Hệ thống đang xử lý đơn hàng."
+      ),
+      buttonText: t("Xem đơn hàng"),
+      buttonAction: () => routerHook.push("/orders"),
+      bgColor: "bg-green-50",
+      borderColor: "border-green-200",
+    },
+    error: {
+      icon: <HiOutlineXCircle className="text-6xl text-red-500" />,
+      lottie: "/assets/lottie/cancel-transaction.json",
+      title: t("Thanh toán thất bại"),
+      message: t(
+        "Thanh toán không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
+      ),
+      buttonText: t("Thử lại"),
+      buttonAction: () => routerHook.replace("/checkout"),
+      bgColor: "bg-red-50",
+      borderColor: "border-red-200",
+    },
+    cancel: {
+      icon: <HiOutlineInformationCircle className="text-6xl text-yellow-500" />,
+      lottie: null,
+      title: t("Đã hủy thanh toán"),
+      message: t("Bạn đã hủy thanh toán. Đơn hàng vẫn được giữ lại, bạn có thể thanh toán lại."),
+      buttonText: t("Thanh toán lại"),
+      buttonAction: () => routerHook.replace("/checkout"),
+      bgColor: "bg-yellow-50",
+      borderColor: "border-yellow-200",
+    },
+  };
+
+  const cfg = statusConfig[finalStatus];
+
+  return (
+    <div className="flex flex-col justify-center items-center min-h-[60vh] pb-10 bg-gray-100">
+      <div
+        className={`flex flex-col items-center gap-4 p-6 w-full max-w-md ${cfg.bgColor} rounded-2xl border ${cfg.borderColor} shadow-sm`}
+      >
+        {/* Animation Lottie hoặc icon */}
+        {cfg.lottie ? (
+          <Player
+            autoplay
+            loop={false}
+            keepLastFrame
+            src={cfg.lottie}
+            style={{ height: "150px", width: "150px" }}
+          />
+        ) : (
+          cfg.icon
+        )}
+
+        <h2 className="text-xl font-bold text-gray-800">{cfg.title}</h2>
+        <p className="text-sm text-center text-gray-600">{cfg.message}</p>
+
+        {/* Hiển thị mã đơn hàng */}
+        {orderNumber && (
+          <div className="px-4 py-2 bg-white rounded-lg border border-gray-200">
+            <span className="text-xs text-gray-500">{t("Mã đơn hàng")}: </span>
+            <span className="text-sm font-semibold text-gray-800">{orderNumber}</span>
+          </div>
+        )}
+
+        {/* Nút hành động chính */}
+        <Button
+          primary
+          text={cfg.buttonText}
+          onClick={cfg.buttonAction}
+          className="w-full rounded-xl"
+        />
+
+        {/* Nút phụ - về trang chủ */}
+        <Button
+          text={t("Về trang chủ")}
+          onClick={() => routerHook.push("/")}
+          className="w-full rounded-xl border border-gray-300"
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Màn hình thanh toán bằng chuyển khoản ngân hàng (QR + timer + thông tin bank)
+ */
 function CheckoutPaymentPay() {
   const { t } = useTranslation();
   const toast = useToast();
   const alert = useAlert();
-  const router = useRouter();
+  const routerHook = useRouter();
   const { order } = useCheckoutContext();
   const [openVideo, setOpenVideo] = useState<string>(null);
   const checkingPaymentRef = useRef(null);
   const { customer } = useAuth();
 
-  // Calculate time remaining based on order expiration
+  // Đồng hồ đếm ngược 30 phút
   const [timeRemaining, setTimeRemaining] = useState({ minutes: 30, seconds: 0, expired: false });
 
+  // Đếm ngược thời gian thanh toán
   useEffect(() => {
     if (!order) return;
 
     const interval = setInterval(() => {
       const now = new Date().getTime();
       const createdTime = new Date(order.updatedAt).getTime();
-      const expiry = createdTime + 30 * 60 * 1000; // Thêm 30 phút từ lúc tạo đơn
+      const expiry = createdTime + 30 * 60 * 1000;
       const diff = expiry - now;
 
       if (diff <= 0) {
         setTimeRemaining({ minutes: 0, seconds: 0, expired: true });
-        // setCancelOrder(true);
         clearInterval(checkingPaymentRef.current);
         clearInterval(interval);
+        cancelOrder().then(() => {});
       } else {
         const minutes = Math.floor(diff / 60000);
         const seconds = Math.floor((diff % 60000) / 1000);
         setTimeRemaining({ minutes, seconds, expired: false });
-      }
-      // nếu quá thời gian thì dừng và chạy hàm cancel order
-      if (diff <= 0) {
-        cancelOrder().then(() => {
-          // router.replace("/");
-        });
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [order]);
 
+  // Polling kiểm tra trạng thái thanh toán mỗi 3 giây
   useEffect(() => {
     checkingPaymentRef.current = setInterval(async () => {
-      await CheckPayment();
+      await checkPayment();
     }, 3000);
     return () => {
       clearInterval(checkingPaymentRef.current);
     };
   }, [customer]);
 
-  const CheckPayment = async () => {
-    // await OrderService?.getOne({ id: order?.id, cache: false }).then((res: any) => {
-    //   if (
-    //     res.status === CheckoutOrderStatus.PROCESSING ||
-    //     res.status === CheckoutOrderStatus.COMPLETED
-    //   ) {
-    //     setProcessOrder(true);
-    //     clearInterval(checkingPaymentRef.current);
-    //   }
-    // });
+  /**
+   * Kiểm tra trạng thái thanh toán của đơn hàng
+   * Nếu đã thanh toán thành công → điều hướng sang trang đơn hàng
+   */
+  const checkPayment = async () => {
+    if (!order?.orderNumber) return;
+    try {
+      const latestOrder = await orderService.getOrderByNumber(order.orderNumber);
+      if (latestOrder?.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
+        clearInterval(checkingPaymentRef.current);
+        // Điều hướng về trang callback success để hiển thị thông báo
+        routerHook.replace(`/checkout?payment=success&orderNumber=${order.orderNumber}`);
+      }
+    } catch {
+      // Bỏ qua lỗi khi kiểm tra
+    }
   };
+
   const cancelOrder = async () => {
     await orderService.cancelOrder(order.id);
   };
@@ -138,10 +336,9 @@ function CheckoutPaymentPay() {
       async () => {
         await cancelOrder()
           .then(async () => {
-            // await setCancelOrder(true);
             await clearInterval(checkingPaymentRef.current);
             toast.success(t("Hủy đơn thành công"));
-            router.replace("/");
+            routerHook.replace("/");
           })
           .catch((err) => {
             toast.error(`${t("Hủy đơn thất bại")}, ${err}`);
@@ -157,13 +354,9 @@ function CheckoutPaymentPay() {
         <div className="p-2 w-full rounded-md border">
           <ImageQRBank />
         </div>
-        {/* <div className="flex-1 p-2 rounded-md border">
-          <p className="font-semibold text-14 md:text-16">
-            {`${t("Cách 2")}: ${t("CHUYỂN KHOẢN THEO THÔNG TIN")}`}
-          </p>
-          <PaymentMethodInfo />
-        </div> */}
       </div>
+
+      {/* Cảnh báo chuyển khoản đúng nội dung */}
       <div className={`flex flex-row items-start p-2 mt-2 w-full bg-yellow-100 rounded-lg`}>
         <i className="mr-1 text-yellow-800 text-20">
           <HiOutlineInformationCircle />
@@ -173,6 +366,7 @@ function CheckoutPaymentPay() {
         </span>
       </div>
 
+      {/* Đồng hồ đếm ngược */}
       <div className="flex flex-col justify-center items-center py-4">
         <span className="pb-2 text-center text-gray-500 lg:text-16 text-14">
           {t("Thời gian còn lại để xác nhận thanh toán")}
@@ -189,6 +383,7 @@ function CheckoutPaymentPay() {
         </div>
       </div>
 
+      {/* Thông báo hệ thống tự xác nhận */}
       <div className={`flex flex-row items-start p-2 mt-4 w-full bg-blue-100 rounded-lg`}>
         <i className="mr-1 text-blue-800 text-20">
           <HiOutlineInformationCircle />
@@ -200,13 +395,14 @@ function CheckoutPaymentPay() {
         </span>
       </div>
 
+      {/* Các nút hành động */}
       <div className="flex flex-col gap-2 mt-4">
         <Button
           outline
           text={t("Đã thanh toán - Kiểm tra ngay")}
           className="w-full"
           onClick={async () => {
-            await CheckPayment();
+            await checkPayment();
           }}
         />
         <Button
@@ -217,6 +413,7 @@ function CheckoutPaymentPay() {
         />
       </div>
 
+      {/* Link hỗ trợ */}
       <div className="flex justify-center pt-4 lg:text-16 text-14">
         <span>
           {t("Gặp khó khăn khi thanh toán?.")}
@@ -243,21 +440,19 @@ function CheckoutPaymentPay() {
   );
 }
 
+/**
+ * Component hiển thị mã QR VietQR để chuyển khoản ngân hàng
+ */
 export function ImageQRBank() {
   const { t } = useTranslation();
   const { order } = useCheckoutContext();
 
   const [hasImage, setHasImage] = useState(true);
-  const handleImageError = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // Code to handle the error here
-    setHasImage(false);
-  };
-  const handleImageSuccess = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
-    // Code to handle the error here
-    setHasImage(true);
-  };
 
-  const ImageQRBank = () =>
+  const handleImageError = () => setHasImage(false);
+  const handleImageSuccess = () => setHasImage(true);
+
+  const QRImage = () =>
     hasImage ? (
       <img
         className="mx-auto"
@@ -283,8 +478,7 @@ export function ImageQRBank() {
         {t("Quét mã qua ứng dụng Ngân hàng/ Ví điện tử của bạn để chuyển khoản nhanh chóng")}
       </p>
       <div style={{ width: "300px", height: "300px" }} className="relative z-0 mx-auto">
-        <ImageQRBank />
-
+        <QRImage />
         <Player
           className="absolute top-8 left-1/2 z-10 transform -translate-x-1/2"
           autoplay
@@ -297,15 +491,22 @@ export function ImageQRBank() {
   );
 }
 
-function PaymentMethodInfo() {
+/**
+ * Component hiển thị thông tin chuyển khoản ngân hàng chi tiết
+ * (tên ngân hàng, số tài khoản, nội dung chuyển khoản v.v.)
+ */
+export function PaymentMethodInfo() {
   const { t } = useTranslation();
   const { order } = useCheckoutContext();
   const toast = useToast();
-  function copyToClipboard(text) {
+
+  function copyToClipboard(text: string) {
     copy(text);
     toast.success(t("Đã sao chép"));
   }
+
   if (!order) return <Spinner />;
+
   return (
     <div
       className="mt-2 bg-white rounded-xl border border-gray-200"
@@ -345,9 +546,7 @@ function PaymentMethodInfo() {
               <i
                 data-tooltip={t("Sao chép")}
                 className="pl-20 text-gray-500 cursor-pointer text-24 hover:text-primary"
-                onClick={() => {
-                  copyToClipboard(order?.paymentInfo.accountNumber);
-                }}
+                onClick={() => copyToClipboard(order?.paymentInfo.accountNumber)}
               >
                 <RiFileCopy2Line />
               </i>
@@ -362,9 +561,7 @@ function PaymentMethodInfo() {
               <i
                 data-tooltip={t("Sao chép")}
                 className="pl-12 text-gray-500 cursor-pointer text-24 hover:text-primary"
-                onClick={() => {
-                  copyToClipboard(order?.amount);
-                }}
+                onClick={() => copyToClipboard(String(order?.totalAmount))}
               >
                 <RiFileCopy2Line />
               </i>
@@ -377,9 +574,7 @@ function PaymentMethodInfo() {
               <i
                 data-tooltip={t("Sao chép")}
                 className="text-gray-500 cursor-pointer text-24 hover:text-primary"
-                onClick={() => {
-                  copyToClipboard(order?.code);
-                }}
+                onClick={() => copyToClipboard(order?.orderNumber)}
               >
                 <RiFileCopy2Line />
               </i>

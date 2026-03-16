@@ -18,6 +18,8 @@ const schema = gql`
     cancelOrder(orderId: ID!, reason: String): Order
     createShopeExpressShipping(orderId: ID!): ShippingResult
     createGiaoHangNhanhShipping(orderId: ID!): ShippingResult
+    # Tạo form thanh toán qua cổng SePay PG, trả về dữ liệu để frontend auto-submit form
+    createSePayPGCheckout(creditAmount: Float!, orderId: ID!): SePayPGCheckoutData
   }
 
   input CreateOrderInput {
@@ -73,6 +75,7 @@ const schema = gql`
     MOMO
     ZALO_PAY
     CREDIT_CARD
+    SEPAY_PG
   }
 
   enum PaymentStatus {
@@ -226,6 +229,25 @@ const schema = gql`
     creatorId: ID
     amount: Float
     transactionId: String
+  }
+
+  """
+  Dữ liệu form thanh toán SePay PG - frontend dùng để auto-submit form POST tới SePay
+  """
+  type SePayPGCheckoutData {
+    merchant: String!
+    currency: String!
+    orderAmount: String!
+    operation: String!
+    orderDescription: String!
+    orderInvoiceNumber: String!
+    customerId: String
+    paymentMethod: String
+    successUrl: String!
+    errorUrl: String!
+    cancelUrl: String!
+    signature: String!
+    checkoutUrl: String!
   }
 `;
 

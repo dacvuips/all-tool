@@ -94,6 +94,12 @@ module.exports = {
     "clientSecret":null,
     "apiUrl": process.env.NODE_ENV === 'production' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com'
   },
+  // Cấu hình SePay Payment Gateway (cổng thanh toán)
+  "sepayPG": {
+    "merchantId": null,   // Merchant ID từ my.sepay.vn
+    "secretKey": null,    // Secret Key từ my.sepay.vn
+    "sandboxMode": true,  // true = Sandbox, false = Production
+  },
   "upload": {
     "uploadImageApiLink": null,
   },

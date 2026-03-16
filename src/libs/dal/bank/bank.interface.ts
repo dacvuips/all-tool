@@ -16,4 +16,6 @@ export enum PaymentMethodEnum {
   MOMO = "MOMO",
   ZALO_PAY = "ZALO_PAY",
   CREDIT_CARD = "CREDIT_CARD",
+  // Cổng thanh toán SePay PG (chuyển khoản QR, thẻ, v.v.)
+  SEPAY_PG = "SEPAY_PG",
 }

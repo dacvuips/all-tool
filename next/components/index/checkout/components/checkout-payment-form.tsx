@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
 import { ParamName } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { SettingService } from "../../../../lib/repo";
+import { orderService, SePayPGCheckoutData } from "../../../../lib/repo/order/order.repo";
 import { NotifyText } from "../../../shared/common/notify-text";
 import { Input, Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
@@ -13,6 +14,34 @@ import { useCheckoutContext } from "../provider/checkout-provider";
 
 const QUICK_AMOUNTS = [10, 100, 1000, 10000];
 const MAX_SUGGESTED = 10_000_000;
+
+/**
+ * Các phương thức thanh toán được hỗ trợ
+ */
+type PaymentType = "BANK_TRANSFER" | "SEPAY_PG";
+
+/**
+ * Thông tin hiển thị cho từng phương thức thanh toán
+ */
+const PAYMENT_METHOD_OPTIONS: {
+  value: PaymentType;
+  label: string;
+  description: string;
+  icon: string;
+}[] = [
+  {
+    value: "BANK_TRANSFER",
+    label: "Chuyển khoản ngân hàng",
+    description: "Quét mã QR hoặc chuyển khoản theo thông tin ngân hàng",
+    icon: "🏦",
+  },
+  {
+    value: "SEPAY_PG",
+    label: "Cổng thanh toán SePay",
+    description: "Thanh toán nhanh qua thẻ ngân hàng, QR NAPAS, Internet Banking",
+    icon: "💳",
+  },
+];
 
 /** Tạo các đề xuất "thêm số 0" từ số đã nhập: ví dụ 5 → [50, 500, 5000, 50000] */
 function getSuggestedAmounts(base: number): number[] {
@@ -32,37 +61,89 @@ export function CheckoutPaymentForm() {
     [ParamName.creditAmount]: "",
   });
   const amountFromParam = Number(queryParams[ParamName.creditAmount]) || 0;
+
   const [amount, setAmount] = useState<number>(amountFromParam);
   const [creditAmount, setCreditAmount] = useState<number>(amountFromParam);
-  const { order, loading, createOrder } = useCheckoutContext();
   const [creditAmountSetting, setCreditAmountSetting] = useState<number>(0);
+
+  // Phương thức thanh toán đang được chọn
+  const [selectedPaymentType, setSelectedPaymentType] = useState<PaymentType>("BANK_TRANSFER");
+
+  // Dữ liệu form SePay PG sau khi nhận từ backend (dùng để auto-submit)
+  const [sePayCheckoutData, setSePayCheckoutData] = useState<SePayPGCheckoutData | null>(null);
+
+  // Loading riêng cho SePay PG để tránh nhầm với loading tạo đơn chuyển khoản
+  const [sePayLoading, setSePayLoading] = useState(false);
+
+  // Ref tới hidden form SePay PG để auto-submit
+  const sePayFormRef = useRef<HTMLFormElement>(null);
+
+  const { order, loading, createOrder } = useCheckoutContext();
   const suggestedAmounts = creditAmount > 0 ? getSuggestedAmounts(creditAmount) : [];
   const showQuickAmounts = suggestedAmounts.length > 0 ? suggestedAmounts : QUICK_AMOUNTS;
+
+  // Lấy hệ số quy đổi credit → VND từ setting
+  useEffect(() => {
+    getCreditAmount();
+  }, []);
+
+  // Khi có dữ liệu SePay PG, tự động submit form để redirect sang trang thanh toán
+  useEffect(() => {
+    if (sePayCheckoutData && sePayFormRef.current) {
+      sePayFormRef.current.submit();
+    }
+  }, [sePayCheckoutData]);
+
+  const getCreditAmount = async () => {
+    const setting = await SettingService.getSettingByKey(
+      "wa-mpoint-change-credit-balance",
+      "value"
+    );
+    setCreditAmountSetting(setting.value);
+  };
 
   const handleQuickAmount = (value: number) => {
     setCreditAmount((prev) => (prev === value ? 0 : value));
     calculateCreditAmount(Number(value) || 0);
   };
-  // get setting creditAmount from setting service
-  useEffect(() => {
-    getCreditAmount();
-  }, []);
-  const getCreditAmount = async () => {
-    const creditAmount = await SettingService.getSettingByKey(
-      "wa-mpoint-change-credit-balance",
-      "value"
-    );
-    setCreditAmountSetting(creditAmount.value);
+
+  const calculateCreditAmount = (value: number) => {
+    setAmount(value * (creditAmountSetting as number));
   };
 
-  const handleCreateOrder = async () => {
+  /** Thanh toán qua chuyển khoản ngân hàng (luồng cũ) */
+  const handleBankTransferCheckout = async () => {
     await createOrder(creditAmount, order?.id as string);
   };
-  const calculateCreditAmount = (amount: number) => {
-    setAmount(amount * (creditAmountSetting as number));
+
+  /** Thanh toán qua cổng SePay PG */
+  const handleSePayPGCheckout = async () => {
+    if (!order?.id || creditAmount <= 0) return;
+    setSePayLoading(true);
+    try {
+      // Gọi mutation lấy form data + chữ ký từ backend
+      const data = await orderService.createSePayPGCheckout(creditAmount, order.id);
+      // Lưu vào state → useEffect sẽ tự động submit form
+      setSePayCheckoutData(data);
+    } catch (err) {
+      console.error("Lỗi tạo SePay PG checkout:", err);
+    } finally {
+      setSePayLoading(false);
+    }
   };
 
-  if (loading && !order) {
+  /** Xử lý khi click nút thanh toán */
+  const handleCheckout = async () => {
+    if (selectedPaymentType === "SEPAY_PG") {
+      await handleSePayPGCheckout();
+    } else {
+      await handleBankTransferCheckout();
+    }
+  };
+
+  const isLoading = loading || sePayLoading;
+
+  if (isLoading && !order) {
     return (
       <div className="flex flex-col min-h-[60vh] justify-center items-center pb-10 bg-gray-100">
         <Spinner />
@@ -73,8 +154,47 @@ export function CheckoutPaymentForm() {
 
   return (
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
+      {/*
+       * Hidden form SePay PG - tự động submit khi sePayCheckoutData được set
+       * QUAN TRỌNG: Thứ tự input phải đúng theo tài liệu SePay để chữ ký hợp lệ
+       */}
+      {sePayCheckoutData && (
+        <form
+          ref={sePayFormRef}
+          action={sePayCheckoutData.checkoutUrl}
+          method="POST"
+          style={{ display: "none" }}
+        >
+          <input type="hidden" name="merchant" value={sePayCheckoutData.merchant} />
+          <input type="hidden" name="currency" value={sePayCheckoutData.currency} />
+          <input type="hidden" name="order_amount" value={sePayCheckoutData.orderAmount} />
+          <input type="hidden" name="operation" value={sePayCheckoutData.operation} />
+          <input
+            type="hidden"
+            name="order_description"
+            value={sePayCheckoutData.orderDescription}
+          />
+          <input
+            type="hidden"
+            name="order_invoice_number"
+            value={sePayCheckoutData.orderInvoiceNumber}
+          />
+          {sePayCheckoutData.customerId && (
+            <input type="hidden" name="customer_id" value={sePayCheckoutData.customerId} />
+          )}
+          {sePayCheckoutData.paymentMethod && (
+            <input type="hidden" name="payment_method" value={sePayCheckoutData.paymentMethod} />
+          )}
+          <input type="hidden" name="success_url" value={sePayCheckoutData.successUrl} />
+          <input type="hidden" name="error_url" value={sePayCheckoutData.errorUrl} />
+          <input type="hidden" name="cancel_url" value={sePayCheckoutData.cancelUrl} />
+          <input type="hidden" name="signature" value={sePayCheckoutData.signature} />
+          <button type="submit">Submit</button>
+        </form>
+      )}
+
       <div className="container flex flex-col flex-1 justify-center items-center mx-auto">
-        <div className="flex overflow-hidden flex-col gap-y-2 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
+        <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
           {/* Header */}
           <div className="flex flex-row items-start">
             <div className="flex flex-shrink-0 justify-center items-center w-12 h-12 rounded-full bg-primary/10">
@@ -86,13 +206,13 @@ export function CheckoutPaymentForm() {
             </div>
           </div>
 
-          {/* Warning - Sandbox */}
+          {/* Thông báo hệ số quy đổi */}
           <NotifyText
             text={t(`Hệ số chuyển đổi: 1 credit = ${parseNumber(creditAmountSetting, true)}`)}
           />
 
-          {/* Amount input */}
-          <div className="">
+          {/* Nhập số credit */}
+          <div>
             <Label text={t("Số credit")} />
             <div className="flex overflow-hidden items-center w-full bg-white rounded-xl border border-gray-300 focus-within:border-primary">
               <Input
@@ -124,42 +244,99 @@ export function CheckoutPaymentForm() {
             </div>
           </div>
 
-          {/* Quick amount buttons: mặc định hoặc đề xuất "thêm số 0" theo số đã nhập */}
+          {/* Gợi ý số lượng credit nhanh */}
           <div className="flex flex-wrap gap-2">
             {showQuickAmounts.map((value) => (
               <Button
                 key={value}
                 onClick={() => handleQuickAmount(value)}
                 className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  amount === value
+                  creditAmount === value
                     ? "border-primary bg-primary/10 text-primary"
-                    : "border-gray-300 bg-gray-50 bg-white text-gray-700 hover:border-primary"
+                    : "border-gray-300 bg-gray-50 text-gray-700 hover:border-primary"
                 }`}
               >
                 {parseNumber(value)}
               </Button>
             ))}
           </div>
-          <div className="flex gap-x-2 items-center mt-2 w-full text-lg font-bold text-right text-red-700">
+
+          {/* Hiển thị tổng tiền */}
+          <div className="flex gap-x-2 items-center w-full text-lg font-bold text-right text-red-700">
             <span className="text-sm text-gray-600">{`${t("Tổng thanh toán")}:`}</span>
             <span className="text-lg font-bold text-right text-red-700">
               {parseNumber(amount, true)}
             </span>
           </div>
-          {/* CTA */}
-          <div className="pt-0">
-            <Button
-              primary
-              className="py-3 w-full font-semibold rounded-xl"
-              text={
-                <>
-                  {t("Thanh toán ngay")}
-                  <span className="inline-block ml-1">›</span>
-                </>
-              }
-              onClick={handleCreateOrder}
-              disabled={loading || !order}
-            />
+
+          {/* Chọn phương thức thanh toán */}
+          <div>
+            <Label text={t("Phương thức thanh toán")} />
+            <div className="flex flex-col gap-2">
+              {PAYMENT_METHOD_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSelectedPaymentType(option.value)}
+                  className={`flex items-start gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                    selectedPaymentType === option.value
+                      ? "border-primary bg-primary/5"
+                      : "border-gray-200 bg-white hover:border-gray-300"
+                  }`}
+                >
+                  {/* Radio indicator */}
+                  <div
+                    className={`flex-shrink-0 mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                      selectedPaymentType === option.value ? "border-primary" : "border-gray-400"
+                    }`}
+                  >
+                    {selectedPaymentType === option.value && (
+                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    )}
+                  </div>
+                  {/* Icon và nhãn */}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-base">{option.icon}</span>
+                      <span
+                        className={`text-sm font-semibold ${
+                          selectedPaymentType === option.value ? "text-primary" : "text-gray-800"
+                        }`}
+                      >
+                        {t(option.label)}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">{t(option.description)}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Nút hành động */}
+          <div className="pt-1">
+            {selectedPaymentType === "SEPAY_PG" && sePayLoading ? (
+              // Hiển thị thông báo đang chuyển hướng khi xử lý SePay PG
+              <div className="flex gap-2 justify-center items-center py-3 w-full font-semibold text-center rounded-xl bg-primary/10 text-primary">
+                <Spinner className="!w-5 !h-5" />
+                <span>{t("Đang chuyển đến SePay...")}</span>
+              </div>
+            ) : (
+              <Button
+                primary
+                className="py-3 w-full font-semibold rounded-xl"
+                text={
+                  <>
+                    {selectedPaymentType === "SEPAY_PG"
+                      ? t("Thanh toán qua SePay")
+                      : t("Thanh toán ngay")}
+                    <span className="inline-block ml-1">›</span>
+                  </>
+                }
+                onClick={handleCheckout}
+                disabled={isLoading || !order || creditAmount <= 0}
+              />
+            )}
           </div>
         </div>
       </div>

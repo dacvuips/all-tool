@@ -53,6 +53,8 @@ export enum PaymentMethod {
   MOMO = "MOMO",
   ZALO_PAY = "ZALO_PAY",
   CREDIT_CARD = "CREDIT_CARD",
+  // Cổng thanh toán SePay PG
+  SEPAY_PG = "SEPAY_PG",
 }
 
 export interface PaymentTimeRemaining {
@@ -315,6 +317,40 @@ export class OrderRepository extends CrudRepository<Order> {
       .then((res) => res.data.createOrder as { order: Order } | null);
   }
 
+  /**
+   * Tạo form thanh toán qua cổng SePay PG
+   * Trả về dữ liệu gồm các hidden field và chữ ký để frontend auto-submit form tới SePay
+   */
+  async createSePayPGCheckout(
+    creditAmount: number,
+    orderId: string
+  ): Promise<SePayPGCheckoutData> {
+    return this.apollo
+      .mutate({
+        mutation: gql`
+          mutation CreateSePayPGCheckout($creditAmount: Float!, $orderId: ID!) {
+            createSePayPGCheckout(creditAmount: $creditAmount, orderId: $orderId) {
+              merchant
+              currency
+              orderAmount
+              operation
+              orderDescription
+              orderInvoiceNumber
+              customerId
+              paymentMethod
+              successUrl
+              errorUrl
+              cancelUrl
+              signature
+              checkoutUrl
+            }
+          }
+        `,
+        variables: { creditAmount, orderId },
+      })
+      .then((res) => res.data.createSePayPGCheckout as SePayPGCheckoutData);
+  }
+
   async cancelOrder(orderId: string, reason?: string): Promise<Order> {
     return this.apollo
       .mutate({
@@ -507,6 +543,26 @@ export class OrderRepository extends CrudRepository<Order> {
       },
     }).then((res) => res.data["g0"]);
   }
+}
+
+/**
+ * Dữ liệu form thanh toán SePay PG trả về từ backend
+ * Frontend sẽ dùng dữ liệu này để render hidden form và auto-submit tới SePay
+ */
+export interface SePayPGCheckoutData {
+  merchant: string;
+  currency: string;
+  orderAmount: string;
+  operation: string;
+  orderDescription: string;
+  orderInvoiceNumber: string;
+  customerId?: string;
+  paymentMethod?: string;
+  successUrl: string;
+  errorUrl: string;
+  cancelUrl: string;
+  signature: string;
+  checkoutUrl: string;
 }
 
 export interface CreateShippingOrderResponse {
