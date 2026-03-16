@@ -1,6 +1,8 @@
 import { TimestampEntity } from "../../core";
+import { Owner } from "../../shared/interfaces/owner.interface";
 
 export type IAttachment = TimestampEntity & {
+  owner?: Owner; // Người tạo file
   bucket?: string; // Thư mục
   name?: string; // Tên file
   mimetype?: string; // Loại file

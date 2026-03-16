@@ -7,6 +7,7 @@ import {
   Field,
   ImageInput,
   Input,
+  MediaInput,
   Select,
   Switch,
   Textarea,
@@ -70,6 +71,9 @@ export const ProductSettingView = () => {
                     multi={field.type == PropertyTypeEnum.MUILTI_IMAGE}
                     placeholder={field.placeholder}
                   />
+                )}
+                {field.type == PropertyTypeEnum.MEDIA && (
+                  <MediaInput placeholder={field.placeholder} />
                 )}
               </Field>
             );

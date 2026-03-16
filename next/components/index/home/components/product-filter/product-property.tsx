@@ -6,7 +6,7 @@ import { mapValues } from "lodash";
 import { ParamName } from "../../../../../lib/constants/constants";
 
 import { PropertyTypeEnum } from "../../../../../lib/repo/product";
-import { Field, Form, Input, Select, Switch } from "../../../../shared/utilities/form";
+import { Field, Form, Input, MediaInput, Select, Switch } from "../../../../shared/utilities/form";
 import { Popover } from "../../../../shared/utilities/popover/popover";
 import { useHomeContext } from "../../provider/home-provider";
 
@@ -72,8 +72,7 @@ export const ProductProperty = () => {
           {badgeCount ? (
             <div
               className={`flex items-center justify-between pl-1 ${
-                badgeCount ? "font-semibold text-primary" : ""
-              }`}
+                badgeCount ? "font-semibold text-primary" : ""}`}
               style={{ height: "30px" }}
             >
               <div className="flex items-center">
@@ -142,6 +141,9 @@ export const ProductProperty = () => {
                               label: x.label,
                             }))}
                           />
+                        )}
+                        {field.type == PropertyTypeEnum.MEDIA && (
+                          <MediaInput placeholder={field.placeholder} />
                         )}
                       </Field>
                     );

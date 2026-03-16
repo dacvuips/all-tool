@@ -27,7 +27,11 @@ const Mutation = {
 const Attachment = {
   downloadUrl: async (root: Doc<IAttachment>, args: any, context: Context) => {
     try {
-      return await attachmentService.getDownloadUrl(root.path);
+      const baseUrl = context?.req ? `${context.req.protocol}://${context.req.get("host")}` : "";
+      return attachmentService.getPermanentDownloadUrl(
+        { _id: root._id, name: root.name },
+        baseUrl
+      );
     } catch (err) {
       logger.error(`Error when get download url for attachment ${root._id}`);
       return "";

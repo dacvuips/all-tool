@@ -10,6 +10,7 @@ export enum PropertyTypeEnum {
   IMAGE = "IMAGE", // Image
   MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
   FILE = "FILE", // File
+  MEDIA = "MEDIA", // Media
 }
 
 export enum AiProviderKeyEnum {

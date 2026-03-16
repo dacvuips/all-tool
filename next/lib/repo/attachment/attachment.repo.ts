@@ -1,4 +1,5 @@
 import axios from "axios";
+import getConfig from "next/config";
 import { t } from "../../functions/i18n";
 import { GetUserToken } from "../../graphql";
 import { BaseModel, CrudRepository } from "../crud.repo";
@@ -13,6 +14,11 @@ export interface Attachment extends BaseModel {
   bucket: string;
   processing?: boolean;
 }
+
+const {
+  publicRuntimeConfig: { upload = {} },
+} = getConfig();
+const DEFAULT_UPLOAD_ENDPOINT = "/api/file/upload";
 
 export class AttachmentRepository extends CrudRepository<Attachment> {
   apiName: string = "Attachment";
@@ -37,11 +43,13 @@ export class AttachmentRepository extends CrudRepository<Attachment> {
     path: String
     downloadUrl: String
   `);
-  async uploadFile(files: File) {
+  async uploadFile(files: File, type: "image" | "video" | "file" = "file") {
+    const uploadEndpoint = DEFAULT_UPLOAD_ENDPOINT;
+    const uploadFieldName = type === "image" ? "image" : type === "video" ? "video" : "file";
     const formData = new FormData();
-    formData.append("file", files);
+    formData.append(uploadFieldName, files);
     return (
-      await axios.post("/api/file/upload", formData, {
+      await axios.post(uploadEndpoint, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
           "x-token": GetUserToken(),

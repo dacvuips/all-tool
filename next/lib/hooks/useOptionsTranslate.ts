@@ -182,6 +182,7 @@ export const useOptionsTranslation = () => {
     { value: PropertyTypeEnum.TEXTAREA, label: t("Textarea") },
     { value: PropertyTypeEnum.IMAGE, label: t("Hình ảnh") },
     { value: PropertyTypeEnum.MUILTI_IMAGE, label: t("Nhiều ảnh") },
+    { value: PropertyTypeEnum.MEDIA, label: t("Media") },
   ];
 
   const SHOP_PRODUCT_TYPE_OPTION = [

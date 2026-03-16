@@ -15,7 +15,8 @@ const schema = gql`
     id: String
     createdAt: DateTime
     updatedAt: DateTime
-
+    "Người tạo file"
+    owner: Owner
     "Thư mục"
     bucket: String
     "Tên file"

@@ -1,7 +1,4 @@
-import { Types } from "mongoose";
-import slugify from "slugify";
 import { CRUDService } from "../../../base/crudService";
-import cache from "../../../helpers/cache";
 import logger from "../../../helpers/logger";
 import minio from "../../../helpers/minio";
 import { Doc } from "../../core";
@@ -32,11 +29,23 @@ class AttachmentService extends CRUDService(AttachmentModel) {
     }
   }
 
+  async getSignedDownloadUrl(path: string) {
+    return await minio.client.presignedGetObject(minio.bucket, path, 60 * 60);
+  }
+
+  getPermanentDownloadUrl(
+    attachment: Pick<IAttachment, "name"> & { _id: string | { toString(): string } },
+    baseUrl?: string
+  ) {
+    const attachmentId = attachment?._id?.toString?.();
+    const fileName = encodeURIComponent(attachment?.name || "file");
+    const normalizedBaseUrl = baseUrl?.replace(/\/+$/g, "") || "";
+    return `${normalizedBaseUrl}/api/file/download/${attachmentId}/${fileName}`;
+  }
+
   async getDownloadUrl(path: string) {
-    const fileUrl = await minio.client.presignedGetObject(minio.bucket, path, 60);
-    const token = new Types.ObjectId().toHexString();
-    await cache.set("minio-tmp-file-url:" + token, fileUrl, 60 * 5);
-    return `/api/file/download/${token}/${slugify(path.split("/").reverse()[0])}`;
+    // Backward-compatible alias for old callers.
+    return this.getSignedDownloadUrl(path);
   }
 }
 

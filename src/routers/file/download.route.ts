@@ -1,21 +1,22 @@
 import Axios from "axios";
 import { Request, Response } from "express";
-
-import cache from "../../helpers/cache";
+import { attachmentService } from "../../libs/dal/attachment";
 
 export default [
   {
     method: "get",
-    path: "/api/file/download/:token/:fileName",
+    path: "/api/file/download/:attachmentId/:fileName",
     midd: [],
     action: async (req: Request, res: Response) => {
-      const token = req.params.token;
-      const fileUrl = await cache.get("minio-tmp-file-url:" + token);
+      const { attachmentId, fileName } = req.params;
+      const attachment = await attachmentService.findOne({ _id: attachmentId });
 
-      if (!fileUrl) {
+      if (!attachment?.path) {
         res.status(404).send("File not found");
         return;
       }
+
+      const fileUrl = await attachmentService.getSignedDownloadUrl(attachment.path);
       return Axios({
         method: "get",
         url: fileUrl,
@@ -25,6 +26,16 @@ export default [
         //been downloaded entirely.
 
         return new Promise((resolve, reject) => {
+          const contentType = response.headers["content-type"];
+          if (contentType) {
+            res.setHeader("Content-Type", contentType);
+          }
+          if (fileName) {
+            res.setHeader(
+              "Content-Disposition",
+              `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`
+            );
+          }
           response.data.pipe(res);
           let error: any;
           res.on("error", (err) => {

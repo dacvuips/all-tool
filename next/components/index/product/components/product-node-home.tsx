@@ -20,6 +20,7 @@ import {
   Form,
   ImageInput,
   Input,
+  MediaInput,
   Select,
   Switch,
   Textarea,
@@ -249,6 +250,9 @@ const PropertyComponent = memo(function PropertyComponent({
                   placeholder={field.placeholder}
                 />
               )}
+              {field.type === PropertyTypeEnum.MEDIA && (
+                <MediaInput placeholder={field.placeholder} />
+              )}
             </Field>
           ))}
           {/* Nút submit thủ công: lấy giá trị form và gọi API execute qua parent */}
@@ -262,7 +266,7 @@ const PropertyComponent = memo(function PropertyComponent({
           )}
         </>
       ) : (
-        <NotFound text={t("Chưa chọn trường")} />
+        <NotFound text={t("Chưa   chọn trường")} />
       )}
     </Form>
   );

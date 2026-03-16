@@ -8,6 +8,7 @@ const Schema = mongoose.Schema;
 
 const attachmentSchema = new Schema(
   {
+    ownerId: { type: Schema.Types.ObjectId, ref: "Owner" },
     bucket: { type: String, required: true },
     name: { type: String, required: true },
     mimetype: { type: String },
