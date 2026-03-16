@@ -342,13 +342,15 @@ function NodeSubmitButton({
   isRunning?: boolean;
 }) {
   const { t } = useTranslation();
-  const { getValues } = useFormContext() || {};
+  const { getValues, trigger } = useFormContext() || {};
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!getValues || !onSubmitNode) return;
+    const isValid = trigger ? await trigger() : true;
+    if (!isValid) return;
     const values = getValues() as NodeFieldValues;
     onSubmitNode(nodeId, values);
-  }, [nodeId, onSubmitNode, getValues]);
+  }, [nodeId, onSubmitNode, getValues, trigger]);
 
   return (
     <div className="flex col-span-full gap-2 justify-end items-center pt-2">
@@ -357,7 +359,7 @@ function NodeSubmitButton({
         outline
         onClick={(e) => {
           e.stopPropagation();
-          handleSubmit();
+          void handleSubmit();
         }}
         tooltip={t("Gửi thủ công node này (gọi API đã cấu hình)")}
         text={t("Generate AI ")}
