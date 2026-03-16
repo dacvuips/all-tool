@@ -232,7 +232,7 @@ const schema = gql`
   }
 
   """
-  Dữ liệu form thanh toán SePay PG - frontend dùng để auto-submit form POST tới SePay
+  Dữ liệu form thanh toán SePay PG
   """
   type SePayPGCheckoutData {
     merchant: String!
@@ -248,6 +248,8 @@ const schema = gql`
     cancelUrl: String!
     signature: String!
     checkoutUrl: String!
+    """URL GET redirect — frontend chỉ cần window.location.href = redirectUrl"""
+    redirectUrl: String!
   }
 `;
 

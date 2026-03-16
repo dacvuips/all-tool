@@ -343,6 +343,7 @@ export class OrderRepository extends CrudRepository<Order> {
               cancelUrl
               signature
               checkoutUrl
+              redirectUrl
             }
           }
         `,
@@ -563,6 +564,8 @@ export interface SePayPGCheckoutData {
   cancelUrl: string;
   signature: string;
   checkoutUrl: string;
+  /** URL GET redirect — chỉ cần window.location.href = redirectUrl */
+  redirectUrl: string;
 }
 
 export interface CreateShippingOrderResponse {

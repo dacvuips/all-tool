@@ -28,6 +28,8 @@ export interface SePayPGCheckoutFormData {
   cancelUrl: string;
   signature: string;
   checkoutUrl: string;
+  /** URL GET redirect — frontend chỉ cần window.location.href = redirectUrl */
+  redirectUrl: string;
 }
 
 /**
@@ -76,7 +78,12 @@ export interface CreateCheckoutParams {
   orderAmount: number;
   orderDescription: string;
   customerId?: string;
+  /** Phương thức thanh toán: BANK_TRANSFER, NAPAS_BANK_TRANSFER, CREDIT_CARD, v.v. */
   paymentMethod?: string;
+  /** Chọn tab phương thức mặc định hiển thị trên trang checkout: 1=VietQR, 2=Napas, 3=Card */
+  choosePaymentMethod?: number;
+  branchCode?: string;
+  branchTerminalCode?: string;
   successUrl: string;
   errorUrl: string;
   cancelUrl: string;
@@ -131,6 +138,17 @@ class SePayPGService {
   }
 
   /**
+   * Base URL cho GET redirect (không có /init)
+   * Sandbox: https://pay-sandbox.sepay.vn/v1/checkout
+   * Production: https://pay.sepay.vn/v1/checkout
+   */
+  get checkoutRedirectBaseUrl(): string {
+    return this.cfg.sandboxMode
+      ? "https://pay-sandbox.sepay.vn/v1/checkout"
+      : "https://pay.sepay.vn/v1/checkout";
+  }
+
+  /**
    * Base URL gọi REST API của SePay PG
    * Sandbox: https://pgapi-sandbox.sepay.vn
    * Production: https://pgapi.sepay.vn (TODO: xác nhận URL production)
@@ -166,11 +184,23 @@ class SePayPGService {
   }
 
   /**
+   * Sinh trace_id duy nhất cho mỗi giao dịch
+   * Format: {merchantId}-{16 ký tự hex ngẫu nhiên viết hoa}
+   */
+  private generateTraceId(): string {
+    const { merchantId } = this.cfg;
+    const random = crypto.randomBytes(8).toString("hex").toUpperCase();
+    return `${merchantId}-${random}`;
+  }
+
+  /**
    * Tạo toàn bộ dữ liệu cần thiết để render và submit form thanh toán
    * Trả về object chứa tất cả các hidden field và URL checkout
    */
   createCheckoutFormData(params: CreateCheckoutParams): SePayPGCheckoutFormData {
     const { merchantId } = this.cfg;
+    const timestamp = Math.floor(Date.now() / 1000);
+    const traceId = this.generateTraceId();
 
     // Chuẩn bị object field để ký (key theo chuẩn snake_case của SePay)
     const fields: Record<string, string> = {
@@ -195,6 +225,32 @@ class SePayPGService {
 
     const signature = this.generateSignature(fields);
 
+    // Xây dựng GET redirect URL: tất cả params + signature dưới dạng query string
+    const queryParams: Record<string, string> = {
+      merchant: merchantId,
+      operation: "PURCHASE",
+      order_description: params.orderDescription,
+      order_amount: fields.order_amount,
+      currency: "VND",
+      order_invoice_number: params.orderInvoiceNumber,
+      success_url: params.successUrl,
+      error_url: params.errorUrl,
+      cancel_url: params.cancelUrl,
+      trace_id: traceId,
+      branch_code: params.branchCode ?? "001",
+      branch_terminal_code: params.branchTerminalCode ?? "01",
+      timestamp: String(timestamp),
+      signature,
+    };
+    if (params.customerId) queryParams.customer_id = params.customerId;
+    if (params.paymentMethod) queryParams.payment_method = params.paymentMethod;
+    if (params.choosePaymentMethod != null) {
+      queryParams.choose_payment_method = String(params.choosePaymentMethod);
+    }
+
+    const redirectUrl =
+      this.checkoutRedirectBaseUrl + "?" + new URLSearchParams(queryParams).toString();
+
     return {
       merchant: merchantId,
       currency: "VND",
@@ -209,6 +265,7 @@ class SePayPGService {
       cancelUrl: params.cancelUrl,
       signature,
       checkoutUrl: this.checkoutUrl,
+      redirectUrl,
     };
   }
 

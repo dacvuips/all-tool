@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
 import { ParamName } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
+import { useToast } from "../../../../lib/providers/toast-provider";
 import { SettingService } from "../../../../lib/repo";
-import { orderService, SePayPGCheckoutData } from "../../../../lib/repo/order/order.repo";
+import { orderService } from "../../../../lib/repo/order/order.repo";
 import { NotifyText } from "../../../shared/common/notify-text";
 import { Input, Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
@@ -69,15 +70,10 @@ export function CheckoutPaymentForm() {
   // Phương thức thanh toán đang được chọn
   const [selectedPaymentType, setSelectedPaymentType] = useState<PaymentType>("BANK_TRANSFER");
 
-  // Dữ liệu form SePay PG sau khi nhận từ backend (dùng để auto-submit)
-  const [sePayCheckoutData, setSePayCheckoutData] = useState<SePayPGCheckoutData | null>(null);
-
   // Loading riêng cho SePay PG để tránh nhầm với loading tạo đơn chuyển khoản
   const [sePayLoading, setSePayLoading] = useState(false);
 
-  // Ref tới hidden form SePay PG để auto-submit
-  const sePayFormRef = useRef<HTMLFormElement>(null);
-
+  const toast = useToast();
   const { order, loading, createOrder } = useCheckoutContext();
   const suggestedAmounts = creditAmount > 0 ? getSuggestedAmounts(creditAmount) : [];
   const showQuickAmounts = suggestedAmounts.length > 0 ? suggestedAmounts : QUICK_AMOUNTS;
@@ -86,13 +82,6 @@ export function CheckoutPaymentForm() {
   useEffect(() => {
     getCreditAmount();
   }, []);
-
-  // Khi có dữ liệu SePay PG, tự động submit form để redirect sang trang thanh toán
-  useEffect(() => {
-    if (sePayCheckoutData && sePayFormRef.current) {
-      sePayFormRef.current.submit();
-    }
-  }, [sePayCheckoutData]);
 
   const getCreditAmount = async () => {
     const setting = await SettingService.getSettingByKey(
@@ -121,13 +110,12 @@ export function CheckoutPaymentForm() {
     if (!order?.id || creditAmount <= 0) return;
     setSePayLoading(true);
     try {
-      // Gọi mutation lấy form data + chữ ký từ backend
       const data = await orderService.createSePayPGCheckout(creditAmount, order.id);
-      // Lưu vào state → useEffect sẽ tự động submit form
-      setSePayCheckoutData(data);
+      // Redirect thẳng bằng GET URL — đơn giản, không cần hidden form
+      window.location.href = data.redirectUrl;
     } catch (err) {
       console.error("Lỗi tạo SePay PG checkout:", err);
-    } finally {
+      toast.error("Không thể kết nối cổng thanh toán SePay. Vui lòng thử lại.");
       setSePayLoading(false);
     }
   };
@@ -154,45 +142,6 @@ export function CheckoutPaymentForm() {
 
   return (
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
-      {/*
-       * Hidden form SePay PG - tự động submit khi sePayCheckoutData được set
-       * QUAN TRỌNG: Thứ tự input phải đúng theo tài liệu SePay để chữ ký hợp lệ
-       */}
-      {sePayCheckoutData && (
-        <form
-          ref={sePayFormRef}
-          action={sePayCheckoutData.checkoutUrl}
-          method="POST"
-          style={{ display: "none" }}
-        >
-          <input type="hidden" name="merchant" value={sePayCheckoutData.merchant} />
-          <input type="hidden" name="currency" value={sePayCheckoutData.currency} />
-          <input type="hidden" name="order_amount" value={sePayCheckoutData.orderAmount} />
-          <input type="hidden" name="operation" value={sePayCheckoutData.operation} />
-          <input
-            type="hidden"
-            name="order_description"
-            value={sePayCheckoutData.orderDescription}
-          />
-          <input
-            type="hidden"
-            name="order_invoice_number"
-            value={sePayCheckoutData.orderInvoiceNumber}
-          />
-          {sePayCheckoutData.customerId && (
-            <input type="hidden" name="customer_id" value={sePayCheckoutData.customerId} />
-          )}
-          {sePayCheckoutData.paymentMethod && (
-            <input type="hidden" name="payment_method" value={sePayCheckoutData.paymentMethod} />
-          )}
-          <input type="hidden" name="success_url" value={sePayCheckoutData.successUrl} />
-          <input type="hidden" name="error_url" value={sePayCheckoutData.errorUrl} />
-          <input type="hidden" name="cancel_url" value={sePayCheckoutData.cancelUrl} />
-          <input type="hidden" name="signature" value={sePayCheckoutData.signature} />
-          <button type="submit">Submit</button>
-        </form>
-      )}
-
       <div className="container flex flex-col flex-1 justify-center items-center mx-auto">
         <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
           {/* Header */}
