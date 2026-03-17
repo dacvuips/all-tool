@@ -111,7 +111,7 @@ class SePayPGService {
 
     const formFields = client.checkout.initOneTimePaymentFields({
       operation: "PURCHASE",
-      payment_method: params.paymentMethod ?? SePayPGPaymentMethod.BANK_TRANSFER,
+      ...(params.paymentMethod ? { payment_method: params.paymentMethod } : {}),
       order_invoice_number: params.orderInvoiceNumber,
       order_amount: Math.round(params.orderAmount),
       currency: "VND",
