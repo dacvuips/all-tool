@@ -6,7 +6,10 @@ import {
   PaidOrderBySePayPGCommand,
   paidOrderBySePayPGUsecase,
 } from "../../libs/usecases/order/paid/paidOrderBySePayPG.usecase";
-import { SePayPGIPNPayload } from "../../services/sepayPG/sepayPG.service";
+import {
+  SePayPGIPNPayload,
+  SePayPGNotificationType,
+} from "../../services/sepayPG/sepayPG.service";
 /**
  * Lấy domain của frontend từ config (dùng để redirect sau thanh toán)
  */
@@ -54,7 +57,7 @@ export default [
         return res.status(200).json({ success: false, message: "Missing timestamp" });
       }
 
-      const VALID_NOTIFICATION_TYPES = ["ORDER_PAID", "TRANSACTION_VOID"];
+      const VALID_NOTIFICATION_TYPES = Object.values(SePayPGNotificationType);
       if (!payload.notification_type || !VALID_NOTIFICATION_TYPES.includes(payload.notification_type)) {
         logger.warn("SePay PG IPN: notification_type không hợp lệ", {
           notification_type: payload.notification_type,

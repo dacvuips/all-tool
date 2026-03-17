@@ -1,16 +1,32 @@
 import config from "config";
 import { SePayPgClient } from "sepay-pg-node";
 
+export enum SePayPGNotificationType {
+  ORDER_PAID = "ORDER_PAID",
+  TRANSACTION_VOID = "TRANSACTION_VOID",
+}
+
+export enum SePayPGOrderStatus {
+  CAPTURED = "CAPTURED",
+  CANCELLED = "CANCELLED",
+  AUTHENTICATION_NOT_NEEDED = "AUTHENTICATION_NOT_NEEDED",
+}
+
+export enum SePayPGPaymentMethod {
+  BANK_TRANSFER = "BANK_TRANSFER",
+  NAPAS_BANK_TRANSFER = "NAPAS_BANK_TRANSFER",
+}
+
 /**
  * Payload IPN gửi từ SePay PG tới server của chúng ta
  */
 export interface SePayPGIPNPayload {
   timestamp: number;
-  notification_type: "ORDER_PAID" | "TRANSACTION_VOID";
+  notification_type: SePayPGNotificationType;
   order: {
     id: string;
     order_id: string;
-    order_status: "CAPTURED" | "CANCELLED" | "AUTHENTICATION_NOT_NEEDED";
+    order_status: SePayPGOrderStatus;
     order_currency: string;
     order_amount: string;
     order_invoice_number: string;
@@ -47,8 +63,7 @@ export interface CreateCheckoutParams {
   orderAmount: number;
   orderDescription: string;
   customerId?: string;
-  /** BANK_TRANSFER | NAPAS_BANK_TRANSFER */
-  paymentMethod?: "BANK_TRANSFER" | "NAPAS_BANK_TRANSFER";
+  paymentMethod?: SePayPGPaymentMethod;
   successUrl: string;
   errorUrl: string;
   cancelUrl: string;
@@ -96,7 +111,7 @@ class SePayPGService {
 
     const formFields = client.checkout.initOneTimePaymentFields({
       operation: "PURCHASE",
-      payment_method: params.paymentMethod ?? "BANK_TRANSFER",
+      payment_method: params.paymentMethod ?? SePayPGPaymentMethod.BANK_TRANSFER,
       order_invoice_number: params.orderInvoiceNumber,
       order_amount: Math.round(params.orderAmount),
       currency: "VND",

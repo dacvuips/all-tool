@@ -14,7 +14,11 @@ import { InsertNotification, NotificationTarget } from "../../../dal/notificatio
 import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
 import { pubsub } from "../../../graphql/pub-sub";
-import { SePayPGIPNPayload } from "../../../../services/sepayPG/sepayPG.service";
+import {
+  SePayPGIPNPayload,
+  SePayPGNotificationType,
+  SePayPGOrderStatus,
+} from "../../../../services/sepayPG/sepayPG.service";
 
 /**
  * Command chứa payload IPN từ SePay PG
@@ -24,7 +28,7 @@ export class PaidOrderBySePayPGCommand extends BaseCommand {
   timestamp: number; // Unix timestamp khi SePay gửi thông báo
 
   @IsNotEmpty()
-  notification_type: string; // Loại thông báo: ORDER_PAID | TRANSACTION_VOID
+  notification_type: SePayPGNotificationType;
 
   @IsNotEmpty()
   order: SePayPGIPNPayload["order"]; // Thông tin đơn hàng từ SePay
@@ -56,11 +60,11 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
 
     const { notification_type } = command;
 
-    if (notification_type === "ORDER_PAID") {
+    if (notification_type === SePayPGNotificationType.ORDER_PAID) {
       return this._handleOrderPaid(command);
     }
 
-    if (notification_type === "TRANSACTION_VOID") {
+    if (notification_type === SePayPGNotificationType.TRANSACTION_VOID) {
       return this._handleTransactionVoid(command);
     }
 
@@ -76,7 +80,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const { transaction_id, transaction_amount, payment_method } = command.transaction;
 
     // Validate: SePay phải báo trạng thái CAPTURED
-    if (order_status !== "CAPTURED") {
+    if (order_status !== SePayPGOrderStatus.CAPTURED) {
       throw new ForbiddenError(t(`ORDER_PAID nhưng order_status không phải CAPTURED: ${order_status}`));
     }
 
