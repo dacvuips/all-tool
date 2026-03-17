@@ -1,8 +1,6 @@
 import { Types } from "mongoose";
 import { CrudService } from "../../../base/crudService";
 import { ObjectId } from "../../../packages/object-id";
-import { OrderCode } from "../../../packages/order-code";
-import { BankModel, PaymentMethodEnum } from "../bank";
 import { IOrder, ORDER_STATUS_OPTIONS, OrderStatusEnum, PaymentStatus } from "./order.interface";
 import { OrderModel } from "./order.model";
 
@@ -11,50 +9,14 @@ class OrderService extends CrudService<IOrder> {
     super(OrderModel);
   }
 
-  /** Tìm đơn pending/initiated của customer, không có thì tạo mới. Trả về { order, created }. */
-  async findOrCreatePendingOrder(customerId: string): Promise<{ order: IOrder | null }> {
-    if (!customerId) {
-      return { order: null };
-    }
+  /** Tìm đơn PAYMENT_PENDING đang chờ thanh toán của customer. Không tạo mới. */
+  async findPendingOrder(customerId: string): Promise<{ order: IOrder | null }> {
+    if (!customerId) return { order: null };
     const existing = await OrderModel.findOne({
       customerId: new Types.ObjectId(customerId),
-      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING, PaymentStatus.PAYMENT_INITIATED] },
+      paymentStatus: PaymentStatus.PAYMENT_PENDING,
     });
-
-    if (!!existing) {
-      return { order: existing };
-    } else {
-      const orderNumber = OrderCode.generate();
-      const defaultBank = await BankModel.findOne({ status: true });
-
-      const paymentInfo = {
-        method: PaymentMethodEnum.BANK,
-        bankImage: defaultBank?.bankImage || "",
-        bankCode: defaultBank?.bankCode || "",
-        bankName: defaultBank?.bankName || "",
-        accountNumber: defaultBank?.accountNumber || "",
-        accountName: defaultBank?.accountName || "",
-        bin: defaultBank?.bin || "",
-      };
-      const orderData = {
-        customerId: ObjectId(customerId),
-        paymentMethod: PaymentMethodEnum.BANK,
-        paymentInfo,
-        orderNumber,
-        paymentStatus: PaymentStatus.PAYMENT_INITIATED,
-        status: OrderStatusEnum.CREATED,
-        customerNote: "",
-        totalAmount: 0,
-        creditAmount: 0,
-      };
-
-      const order = await this.create(orderData as any);
-
-      // const timeoutAt = moment().add(30, "minutes").toDate();
-      // await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
-
-      return { order: order as IOrder };
-    }
+    return { order: existing || null };
   }
 
   async getOrderByNumber(orderNumber: string): Promise<IOrder | null> {

@@ -61,9 +61,8 @@ const Query = {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
     return orderService.getOrderStats(context.customerId);
   },
-  // lấy 1 đơn hàng với param lọc theo shippingAddress phone, email , trạng thái đơn hàng status pending, confirmed, và trạng thái thanh toán paymentStatus unpaid và theo khoảng thời gian từ dateFrom đến dateTo
   getOneOrderByGuest: async (root: any, args: any, context: Context) => {
-    const result = await orderService.findOrCreatePendingOrder(context.customerId);
+    const result = await orderService.findPendingOrder(context.customerId);
     return result?.order ?? null;
   },
   // Lấy danh sách đơn hàng của khách vãng lai với param lọc theo shippingAddress phone, email.
@@ -82,25 +81,14 @@ const Query = {
 
 const Mutation = {
   createOrder: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
     const customerId = context.customerId;
-    const { creditAmount, orderId } = args;
+    const { creditAmount } = args;
 
-    const now = new Date();
-    // const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000);
-    const filterExisting: any = {
-      _id: ObjectId(orderId),
-      customerId: ObjectId(customerId),
-      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING, PaymentStatus.PAYMENT_INITIATED] },
-      // createdAt: { $gte: thirtyMinutesAgo, $lte: now },
-    };
-    if (!creditAmount) {
+    if (!creditAmount || creditAmount <= 0) {
       throw new Error("Số tiền credit không hợp lệ");
     }
 
-    const existingOrder = await orderService.findOne(filterExisting);
-    if (!existingOrder || existingOrder.paymentStatus !== PaymentStatus.PAYMENT_INITIATED) {
-      throw new Error("Đơn hàng không khả dụng");
-    }
     const defaultBank = await BankModel.findOne({ status: true });
     if (!defaultBank) {
       throw new Error("Hệ thống không tìm thấy ngân hàng");
@@ -109,23 +97,23 @@ const Mutation = {
     const creditAmountSetting = await settingService.findOne({
       key: "wa-mpoint-change-credit-balance",
     });
-    // Map ATM to BANK since ATM is no longer a valid enum value
-    let paymentMethod = defaultBank?.method || PaymentMethodEnum.BANK;
     const totalAmount = creditAmountSetting.value * creditAmount;
     const paymentInfo = {
-      method: paymentMethod,
-      bankImage: defaultBank?.bankImage || "",
-      bankCode: defaultBank?.bankCode || "",
-      bankName: defaultBank?.bankName || "",
-      accountNumber: defaultBank?.accountNumber || "",
-      accountName: defaultBank?.accountName || "",
-      bin: defaultBank?.bin || "",
+      method: defaultBank.method || PaymentMethodEnum.BANK,
+      bankImage: defaultBank.bankImage || "",
+      bankCode: defaultBank.bankCode || "",
+      bankName: defaultBank.bankName || "",
+      accountNumber: defaultBank.accountNumber || "",
+      accountName: defaultBank.accountName || "",
+      bin: defaultBank.bin || "",
     };
 
-    // Create order
-    const orderData = {
+    const order = await orderService.create({
+      customerId: ObjectId(customerId),
+      paymentMethod: paymentInfo.method,
       paymentInfo,
       paymentStatus: PaymentStatus.PAYMENT_PENDING,
+      status: OrderStatusEnum.CREATED,
       totalAmount,
       creditAmount,
       orderLogs: [
@@ -138,15 +126,14 @@ const Mutation = {
       ],
       paymentLogs: [
         {
-          status: PaymentStatus.PAYMENT_INITIATED,
-          des: "Đơn hàng đã được tạo",
+          status: PaymentStatus.PAYMENT_PENDING,
+          des: "Chờ thanh toán qua chuyển khoản ngân hàng",
           createdAt: new Date(),
           creatorId: customerId,
         },
       ],
-    };
+    } as any);
 
-    const order = await orderService.updateOne(orderId, orderData);
     const timeoutAt = moment().add(30, "minutes").toDate();
     await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
     return { order };
@@ -179,10 +166,9 @@ const Mutation = {
   },
 
   /**
-   * Tạo form thanh toán qua cổng SePay PG
-   * 1. Xác thực và cập nhật đơn hàng với số tiền và phương thức SEPAY_PG
-   * 2. Sinh chữ ký HMAC-SHA256 cho form
-   * 3. Trả về dữ liệu để frontend auto-submit form POST tới SePay
+   * Tạo form thanh toán qua cổng SePay PG.
+   * - Không truyền orderId → CREATE đơn mới + sinh form
+   * - Truyền orderId (đơn PAYMENT_PENDING+SEPAY_PG) → chỉ tái tạo form (retry)
    */
   createSePayPGCheckout: async (root: any, args: any, context: Context) => {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
@@ -193,65 +179,68 @@ const Mutation = {
       throw new Error("Số credit không hợp lệ");
     }
 
-    // Kiểm tra đơn hàng hợp lệ và thuộc khách hàng hiện tại
-    const filterExisting: any = {
-      _id: ObjectId(orderId),
-      customerId: ObjectId(customerId),
-      paymentStatus: { $in: [PaymentStatus.PAYMENT_PENDING, PaymentStatus.PAYMENT_INITIATED] },
-    };
-
-    const existingOrder = await orderService.findOne(filterExisting);
-    if (!existingOrder || existingOrder.paymentStatus !== PaymentStatus.PAYMENT_INITIATED) {
-      throw new Error("Đơn hàng không khả dụng");
-    }
-
-    // Lấy hệ số quy đổi credit → VND
     const creditAmountSetting = await settingService.findOne({
       key: "wa-mpoint-change-credit-balance",
     });
     const totalAmount = creditAmountSetting.value * creditAmount;
 
-    // Cập nhật đơn hàng với phương thức SEPAY_PG
-    const order = await orderService.updateOne(orderId, {
-      paymentInfo: { method: PaymentMethodEnum.SEPAY_PG },
-      paymentStatus: PaymentStatus.PAYMENT_PENDING,
-      totalAmount,
-      creditAmount,
-      orderLogs: [
-        {
-          status: OrderStatusEnum.CREATED,
-          des: "Đơn hàng được tạo với phương thức SePay PG",
-          createdAt: new Date(),
-          creatorId: customerId,
-        },
-      ],
-      paymentLogs: [
-        {
-          status: PaymentStatus.PAYMENT_PENDING,
-          des: "Chờ thanh toán qua cổng SePay PG",
-          createdAt: new Date(),
-          creatorId: customerId,
-        },
-      ],
-    });
+    let order: any;
 
-    // Tạo job hủy đơn tự động sau 30 phút nếu chưa thanh toán
-    const timeoutAt = moment().add(30, "minutes").toDate();
-    await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
+    if (orderId) {
+      // Retry: tái tạo form cho đơn PAYMENT_PENDING+SEPAY_PG đã có
+      const existing = await orderService.findOne({
+        _id: ObjectId(orderId),
+        customerId: ObjectId(customerId),
+        paymentStatus: PaymentStatus.PAYMENT_PENDING,
+        "paymentInfo.method": PaymentMethodEnum.SEPAY_PG,
+      });
+      if (!existing) throw new Error("Đơn hàng không khả dụng để retry");
+      order = existing;
+    } else {
+      // CREATE đơn mới với phương thức SEPAY_PG
+      order = await orderService.create({
+        customerId: ObjectId(customerId),
+        paymentMethod: PaymentMethodEnum.SEPAY_PG,
+        paymentInfo: { method: PaymentMethodEnum.SEPAY_PG },
+        paymentStatus: PaymentStatus.PAYMENT_PENDING,
+        status: OrderStatusEnum.CREATED,
+        totalAmount,
+        creditAmount,
+        orderLogs: [
+          {
+            status: OrderStatusEnum.CREATED,
+            des: "Don hang duoc tao qua cong SePay PG",
+            createdAt: new Date(),
+            creatorId: customerId,
+          },
+        ],
+        paymentLogs: [
+          {
+            status: PaymentStatus.PAYMENT_PENDING,
+            des: "Cho thanh toan qua cong SePay PG",
+            createdAt: new Date(),
+            creatorId: customerId,
+          },
+        ],
+      } as any);
 
-    // Lấy domain từ config để tạo callback URL
+      const timeoutAt = moment().add(30, "minutes").toDate();
+      await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
+    }
+
     const domain = config.get<string>("domain");
     const orderNumber = order.orderNumber;
+    // Dùng totalAmount của đơn thực tế (đặc biệt quan trọng khi retry)
+    const finalAmount: number = order.totalAmount ?? totalAmount;
 
-    // Sinh dữ liệu form thanh toán SePay PG với chữ ký
     const checkoutData = sePayPGService.createCheckoutFormData({
       orderInvoiceNumber: orderNumber,
-      orderAmount: totalAmount,
-      orderDescription: `Thanh toán đơn hàng ${orderNumber}`,
+      orderAmount: finalAmount,
+      orderDescription: `Thanh toan don hang ${orderNumber}`,
       customerId: customerId,
-      successUrl: `${domain}/api/payment/sepay-pg/success?order_invoice_number=${orderNumber}`,
-      errorUrl: `${domain}/api/payment/sepay-pg/error?order_invoice_number=${orderNumber}`,
-      cancelUrl: `${domain}/api/payment/sepay-pg/cancel?order_invoice_number=${orderNumber}`,
+      successUrl: `${domain}/api/payment/sepay-pg/success/${orderNumber}`,
+      errorUrl: `${domain}/api/payment/sepay-pg/error/${orderNumber}`,
+      cancelUrl: `${domain}/api/payment/sepay-pg/cancel/${orderNumber}`,
     });
 
     return checkoutData;

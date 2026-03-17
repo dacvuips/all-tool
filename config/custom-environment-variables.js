@@ -119,7 +119,8 @@ module.exports = {
   // Biến môi trường cho SePay Payment Gateway (cổng thanh toán)
   sepayPG: {
     merchantId: "SEPAY_PG_MERCHANT_ID",
-    secretKey: "SEPAY_PG_SECRET_KEY",
+    secretKey: "SEPAY_PG_SECRET_KEY",           // Dùng cho SDK gọi API SePay PG
+    ipnSecretKey: "SEPAY_PG_IPN_SECRET_KEY",    // Dùng để xác thực header X-Secret-Key từ IPN
     sandboxMode: {
       __name: "SEPAY_PG_SANDBOX_MODE",
       __format: "boolean",

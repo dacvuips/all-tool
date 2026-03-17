@@ -96,9 +96,10 @@ module.exports = {
   },
   // Cấu hình SePay Payment Gateway (cổng thanh toán)
   "sepayPG": {
-    "merchantId": null,   // Merchant ID từ my.sepay.vn
-    "secretKey": null,    // Secret Key từ my.sepay.vn
-    "sandboxMode": true,  // true = Sandbox, false = Production
+    "merchantId": null,      // Merchant ID từ my.sepay.vn
+    "secretKey": null,       // Secret Key dùng để gọi API SePay PG (SDK)
+    "ipnSecretKey": null,    // Secret Key riêng cho IPN webhook (Cổng thanh toán → Cấu hình → IPN)
+    "sandboxMode": true,     // true = Sandbox, false = Production
   },
   "upload": {
     "uploadImageApiLink": null,

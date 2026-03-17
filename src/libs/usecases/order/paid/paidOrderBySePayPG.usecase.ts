@@ -40,46 +40,72 @@ type PaidOrderBySePayPGResponse = {
 };
 
 /**
- * UseCase xử lý IPN (Instant Payment Notification) từ SePay Payment Gateway
- * Được gọi khi SePay gửi thông báo giao dịch thành công về server
+ * UseCase xử lý IPN (Instant Payment Notification) từ SePay Payment Gateway.
+ *
+ * Hỗ trợ 2 loại thông báo:
+ *  - ORDER_PAID       : Thanh toán thành công → cập nhật đơn + cộng credit
+ *  - TRANSACTION_VOID : Huỷ giao dịch        → cập nhật đơn + thu hồi credit nếu đã cộng
  */
 class PaidOrderBySePayPGUsecase extends BaseUsecase {
   async execute(command: PaidOrderBySePayPGCommand): Promise<PaidOrderBySePayPGResponse> {
-    // Lưu bản ghi IPN vào database để audit
+    // ── Audit log ────────────────────────────────────────────────────────
     await MainConnection.collection("sepay_pg_transactions").insertOne({
       ...command,
       processedAt: new Date(),
     });
 
-    // Chỉ xử lý thông báo thanh toán thành công
-    if (command.notification_type !== "ORDER_PAID") {
+    const { notification_type } = command;
+
+    if (notification_type === "ORDER_PAID") {
+      return this._handleOrderPaid(command);
+    }
+
+    if (notification_type === "TRANSACTION_VOID") {
+      return this._handleTransactionVoid(command);
+    }
+
+    // Loại thông báo không xử lý → bỏ qua, trả về 200 để SePay không retry
+    return { success: true };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // ORDER_PAID: Thanh toán thành công
+  // ─────────────────────────────────────────────────────────────────────────
+  private async _handleOrderPaid(command: PaidOrderBySePayPGCommand): Promise<PaidOrderBySePayPGResponse> {
+    const { order_invoice_number, order_status } = command.order;
+    const { transaction_id, transaction_amount, payment_method } = command.transaction;
+
+    // Validate: SePay phải báo trạng thái CAPTURED
+    if (order_status !== "CAPTURED") {
+      throw new ForbiddenError(t(`ORDER_PAID nhưng order_status không phải CAPTURED: ${order_status}`));
+    }
+
+    // Tìm đơn hàng theo orderNumber (= order_invoice_number)
+    const order = await OrderModel.findOne({ orderNumber: order_invoice_number }).orFail(
+      new ForbiddenError(t(`Không tìm thấy đơn hàng với invoice number: ${order_invoice_number}`))
+    );
+
+    // Idempotency: đã thanh toán thành công trước đó → bỏ qua, không xử lý lại
+    if (order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
       return { success: true };
     }
 
-    const { order_invoice_number, order_amount, order_status } = command.order;
-
-    // Kiểm tra trạng thái đơn từ SePay phải là CAPTURED (đã thanh toán)
-    if (order_status !== "CAPTURED") {
-      throw new ForbiddenError(t("Đơn hàng chưa được thanh toán trên SePay PG"));
-    }
-
-    // Tìm đơn hàng trong hệ thống theo orderNumber (chính là order_invoice_number)
-    const order = await OrderModel.findOne({ orderNumber: order_invoice_number }).orFail(
-      new ForbiddenError(t("Không tìm thấy đơn hàng"))
-    );
-
-    // Kiểm tra trạng thái thanh toán đơn hàng phải đang ở PAYMENT_PENDING
+    // Validate: đơn phải đang ở trạng thái chờ thanh toán
     if (order.paymentStatus !== PaymentStatus.PAYMENT_PENDING) {
-      throw new ForbiddenError(t("Đơn hàng không ở trạng thái chờ thanh toán"));
+      throw new ForbiddenError(
+        t(`Đơn hàng không ở trạng thái PAYMENT_PENDING (hiện tại: ${order.paymentStatus})`)
+      );
     }
 
-    // Kiểm tra số tiền thanh toán phải >= tổng đơn hàng
-    const sePayAmount = Number(command.transaction.transaction_amount);
+    // Validate: số tiền thanh toán phải >= tổng đơn hàng
+    const sePayAmount = Number(transaction_amount);
     if (sePayAmount < order.totalAmount) {
-      throw new ForbiddenError(t("Số tiền thanh toán không đủ so với đơn hàng"));
+      throw new ForbiddenError(
+        t(`Số tiền thanh toán (${sePayAmount}) không đủ so với đơn hàng (${order.totalAmount})`)
+      );
     }
 
-    // Cập nhật trạng thái đơn hàng: thanh toán thành công
+    // ── Cập nhật đơn hàng: thanh toán thành công ─────────────────────────
     const orderUpdated = await OrderModel.findOneAndUpdate(
       { _id: order._id },
       {
@@ -87,16 +113,15 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
           status: OrderStatusEnum.PAYMENT_UPDATED,
           paymentStatus: PaymentStatus.PAYMENT_SUCCESS,
           paidAt: new Date(),
-          // Lưu metadata giao dịch từ SePay PG để tra cứu sau
           "paymentInfo.metaData": {
             sePayOrderId: command.order.order_id,
             orderInvoiceNumber: order_invoice_number,
             orderStatus: order_status,
-            transactionId: command.transaction.transaction_id,
+            transactionId: transaction_id,
             transactionDate: command.transaction.transaction_date,
             transactionStatus: command.transaction.transaction_status,
-            transactionAmount: command.transaction.transaction_amount,
-            paymentMethod: command.transaction.payment_method,
+            transactionAmount: transaction_amount,
+            paymentMethod: payment_method,
             cardNumber: command.transaction.card_number,
             cardHolderName: command.transaction.card_holder_name,
             cardBrand: command.transaction.card_brand,
@@ -111,9 +136,9 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
           } as any,
           paymentLogs: {
             status: PaymentStatus.PAYMENT_SUCCESS,
-            des: `Thanh toán thành công qua SePay PG - ${command.transaction.payment_method}`,
+            des: `Thanh toán thành công qua SePay PG - ${payment_method}`,
             amount: sePayAmount,
-            transactionId: command.transaction.transaction_id,
+            transactionId: transaction_id,
             createdAt: new Date(),
           } as any,
         },
@@ -121,7 +146,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       { new: true }
     );
 
-    // Chuyển trạng thái đơn sang PROCESSING (đang xử lý)
+    // Chuyển trạng thái đơn sang PROCESSING
     await OrderModel.findOneAndUpdate(
       { _id: order._id },
       {
@@ -137,8 +162,8 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       { new: true }
     );
 
-    // Nếu đơn có credit, cộng credit cho khách hàng
-    if (!!order.customerId && order.creditAmount > 0) {
+    // ── Cộng credit cho khách hàng ────────────────────────────────────────
+    if (order.customerId && order.creditAmount > 0) {
       const customer = await CustomerModel.findByIdAndUpdate(
         order.customerId,
         { $inc: { creditBalance: order.creditAmount } },
@@ -160,8 +185,8 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       });
     }
 
-    // Gửi thông báo đến khách hàng nếu có
-    if (!!order.customerId) {
+    // ── Thông báo & real-time event ───────────────────────────────────────
+    if (order.customerId) {
       const customerNotify = new NotificationBuilder(
         "Thanh toán thành công",
         `Hệ thống đã nhận được thanh toán qua SePay PG cho đơn hàng ${order.orderNumber}`
@@ -173,11 +198,107 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       await increaseCustomerTryOnLimit(order.customerId.toString(), 15);
     }
 
-    // Phát sự kiện socket để frontend cập nhật real-time
     pubsub.publish(CONSTANTS.SOCKET_EVENT_NAME.ORDER, {
       event: OrderChangeEventEnum.PAYMENT_CHANGED,
       orderId: order._id,
       data: { paymentStatus: orderUpdated?.paymentStatus },
+    });
+
+    return { success: true };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // TRANSACTION_VOID: Huỷ giao dịch
+  // ─────────────────────────────────────────────────────────────────────────
+  private async _handleTransactionVoid(command: PaidOrderBySePayPGCommand): Promise<PaidOrderBySePayPGResponse> {
+    const { order_invoice_number } = command.order;
+    const { transaction_id } = command.transaction;
+
+    // Tìm đơn hàng
+    const order = await OrderModel.findOne({ orderNumber: order_invoice_number });
+    if (!order) {
+      // Không tìm thấy đơn → bỏ qua (có thể đơn chưa sync hoặc đã xoá)
+      return { success: true };
+    }
+
+    // Idempotency: đơn đã bị huỷ trước đó → bỏ qua
+    if (
+      order.paymentStatus === PaymentStatus.PAYMENT_CANCELLED ||
+      order.status === OrderStatusEnum.CANCELLED
+    ) {
+      return { success: true };
+    }
+
+    // Ghi nhớ xem đơn đã được thanh toán thành công chưa (để thu hồi credit)
+    const wasAlreadyPaid = order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS;
+
+    // ── Cập nhật đơn hàng: huỷ giao dịch ────────────────────────────────
+    await OrderModel.findOneAndUpdate(
+      { _id: order._id },
+      {
+        $set: {
+          status: OrderStatusEnum.CANCELLED,
+          paymentStatus: PaymentStatus.PAYMENT_CANCELLED,
+          cancelledAt: new Date(),
+          "paymentInfo.metaData.voidTransactionId": transaction_id,
+          "paymentInfo.metaData.voidedAt": new Date(),
+          "paymentInfo.metaData.voidIpnTimestamp": command.timestamp,
+        },
+        $push: {
+          orderLogs: {
+            status: OrderStatusEnum.CANCELLED,
+            des: "Giao dịch SePay PG bị huỷ (TRANSACTION_VOID)",
+            meta: { transactionId: transaction_id },
+            createdAt: new Date(),
+          } as any,
+          paymentLogs: {
+            status: PaymentStatus.PAYMENT_CANCELLED,
+            des: `Giao dịch bị huỷ qua SePay PG - ${command.transaction.payment_method}`,
+            transactionId: transaction_id,
+            createdAt: new Date(),
+          } as any,
+        },
+      },
+      { new: true }
+    );
+
+    // ── Thu hồi credit nếu đơn đã được cộng credit trước đó ──────────────
+    if (wasAlreadyPaid && order.customerId && order.creditAmount > 0) {
+      const customer = await CustomerModel.findByIdAndUpdate(
+        order.customerId,
+        { $inc: { creditBalance: -order.creditAmount } },
+        { new: true }
+      );
+
+      if (customer) {
+        const balanceAfter = (customer as any).creditBalance ?? 0;
+        await creditTransactionService.create({
+          customerId: order.customerId.toString(),
+          type: CreditTransactionTypeEnum.ORDER_VOID,
+          amount: order.creditAmount,
+          balanceAfter,
+          orderId: order._id.toString(),
+          description: `Thu hồi ${order.creditAmount} credit từ đơn hàng ${order.orderNumber} do giao dịch SePay PG bị void`,
+        });
+      }
+    }
+
+    // ── Thông báo & real-time event ───────────────────────────────────────
+    if (order.customerId) {
+      const customerNotify = new NotificationBuilder(
+        "Giao dịch bị huỷ",
+        `Giao dịch SePay PG cho đơn hàng ${order.orderNumber} đã bị huỷ`
+      )
+        .sendTo(NotificationTarget.CUSTOMER, order.customerId.toString())
+        .order(order._id.toString())
+        .build();
+      InsertNotification([customerNotify]);
+    }
+
+    pubsub.publish(CONSTANTS.SOCKET_EVENT_NAME.ORDER, {
+      event: OrderChangeEventEnum.PAYMENT_CHANGED,
+      orderId: order._id,
+      data: { paymentStatus: PaymentStatus.PAYMENT_CANCELLED },
     });
 
     return { success: true };

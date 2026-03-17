@@ -61,9 +61,8 @@ function CheckoutComponent() {
     return <SePayPGCallbackView paymentStatus={paymentStatus} orderNumber={orderNumberFromUrl} />;
   }
 
-  // Nếu chưa có đơn hoặc đơn mới khởi tạo → hiển thị form chọn credit
-  if (!order || order.paymentStatus === PaymentStatus.PAYMENT_INITIATED)
-    return <CheckoutPaymentForm />;
+  // Chưa có đơn PAYMENT_PENDING → hiển thị form chọn credit + phương thức
+  if (!order) return <CheckoutPaymentForm />;
 
   // Có đơn đang chờ thanh toán → hiển thị màn hình thanh toán
   return (
@@ -90,18 +89,152 @@ function CheckoutComponent() {
 }
 
 /**
- * View hiển thị khi đang chờ SePay PG xử lý (ngay sau khi submit form)
- * Thường không hiển thị lâu vì browser sẽ redirect sang SePay ngay
+ * View hiển thị khi đơn đang chờ thanh toán qua SePay PG.
+ * Xử lý cả 2 trường hợp:
+ *  - Vừa submit form → đang chuyển hướng (retrying = false)
+ *  - Khách quay lại trang sau khi bỏ SePay / refresh → cho phép thử lại hoặc hủy đơn
  */
 function SePayPGWaitingView() {
   const { t } = useTranslation();
+  const { order } = useCheckoutContext();
+  const routerHook = useRouter();
+  const toast = useToast();
+  const alert = useAlert();
+
+  const [retrying, setRetrying] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState({ minutes: 30, seconds: 0, expired: false });
+
+  // Đồng hồ đếm ngược dựa trên thời điểm order được cập nhật
+  useEffect(() => {
+    if (!order) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const base = new Date(order.updatedAt).getTime();
+      const expiry = base + 30 * 60 * 1000;
+      const diff = expiry - now;
+      if (diff <= 0) {
+        setTimeRemaining({ minutes: 0, seconds: 0, expired: true });
+        clearInterval(interval);
+      } else {
+        setTimeRemaining({
+          minutes: Math.floor(diff / 60000),
+          seconds: Math.floor((diff % 60000) / 1000),
+          expired: false,
+        });
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [order]);
+
+  // Tái tạo form và submit lại tới SePay
+  const handleRetry = async () => {
+    if (!order?.id) return;
+    setRetrying(true);
+    try {
+      const data = await orderService.createSePayPGCheckout(order.creditAmount, order.id);
+      const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.checkoutUrl;
+      Object.entries(formFields).forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = String(value);
+        form.appendChild(input);
+      });
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      console.error("Lỗi tái tạo SePay checkout:", err);
+      toast.error(t("Không thể kết nối cổng SePay. Vui lòng thử lại."));
+      setRetrying(false);
+    }
+  };
+
+  const handleCancel = () => {
+    alert.warn(
+      t("XÁC NHẬN HỦY ĐƠN?"),
+      t("Bạn có chắc chắn muốn hủy đơn hàng này không?"),
+      t("Có, hủy đơn"),
+      async () => {
+        await orderService
+          .cancelOrder(order.id)
+          .then(() => {
+            toast.success(t("Hủy đơn thành công"));
+            routerHook.replace("/checkout");
+          })
+          .catch(() => toast.error(t("Hủy đơn thất bại")));
+        return true;
+      }
+    );
+  };
+
+  if (retrying) {
+    return (
+      <div className="flex flex-col justify-center items-center p-8 min-h-[300px] bg-white rounded-md">
+        <Spinner />
+        <p className="mt-4 font-semibold text-gray-700">{t("Đang chuyển đến SePay...")}</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col justify-center items-center p-8 min-h-[300px] bg-white rounded-md">
-      <Spinner />
-      <p className="mt-4 font-semibold text-gray-700">{t("Đang chuyển hướng đến SePay...")}</p>
-      <p className="mt-1 text-sm text-gray-500">
-        {t("Vui lòng không đóng trang trong khi đang xử lý")}
-      </p>
+    <div className="flex flex-col gap-4 p-6 bg-white rounded-md min-h-[300px]">
+      {/* Tiêu đề */}
+      <div className="flex gap-3 items-center pb-2 border-b border-gray-100">
+        <div className="flex flex-shrink-0 justify-center items-center w-10 h-10 bg-blue-100 rounded-full">
+          <HiOutlineInformationCircle className="text-xl text-blue-600" />
+        </div>
+        <div>
+          <h3 className="font-bold text-gray-800">{t("Đơn hàng đang chờ thanh toán SePay")}</h3>
+          <p className="text-sm text-gray-500">{order?.orderNumber}</p>
+        </div>
+      </div>
+
+      {/* Đồng hồ đếm ngược */}
+      {timeRemaining.expired ? (
+        <div className="p-3 text-sm font-medium text-center text-red-700 bg-red-50 rounded-lg">
+          {t("Đơn hàng đã hết hạn thanh toán. Vui lòng hủy và tạo đơn mới.")}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2 items-center">
+          <p className="text-sm text-gray-500">{t("Thời gian còn lại")}</p>
+          <div className="flex gap-3">
+            <div className="flex flex-col justify-center items-center p-3 bg-blue-50 rounded-lg min-w-[64px]">
+              <span className="text-2xl font-bold text-blue-700">{timeRemaining.minutes}</span>
+              <span className="text-xs text-blue-600">{t("Phút")}</span>
+            </div>
+            <div className="flex flex-col justify-center items-center p-3 bg-blue-50 rounded-lg min-w-[64px]">
+              <span className="text-2xl font-bold text-blue-700">{timeRemaining.seconds}</span>
+              <span className="text-xs text-blue-600">{t("Giây")}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Thông báo */}
+      <div className="p-3 text-sm text-yellow-800 bg-yellow-50 rounded-lg">
+        {t(
+          "Nếu bạn đã rời khỏi trang SePay hoặc chưa hoàn tất thanh toán, hãy nhấn 'Quay lại SePay' để tiếp tục."
+        )}
+      </div>
+
+      {/* Nút hành động */}
+      <div className="flex flex-col gap-2 mt-auto">
+        <Button
+          primary
+          className="py-3 w-full font-semibold rounded-xl"
+          text={t("Quay lại SePay để thanh toán")}
+          onClick={handleRetry}
+          disabled={timeRemaining.expired}
+        />
+        <Button
+          className="py-3 w-full text-red-600 rounded-xl border border-red-300 hover:bg-red-50"
+          text={t("Hủy đơn hàng")}
+          onClick={handleCancel}
+        />
+      </div>
     </div>
   );
 }
@@ -177,7 +310,7 @@ function SePayPGCallbackView({
         "Đơn hàng của bạn đã được thanh toán thành công qua cổng SePay. Hệ thống đang xử lý đơn hàng."
       ),
       buttonText: t("Xem đơn hàng"),
-      buttonAction: () => routerHook.push("/orders"),
+      buttonAction: () => routerHook.push("/profile/orders-buy"),
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
     },
@@ -196,9 +329,9 @@ function SePayPGCallbackView({
     cancel: {
       icon: <HiOutlineInformationCircle className="text-6xl text-yellow-500" />,
       lottie: null,
-      title: t("Đã hủy thanh toán"),
-      message: t("Bạn đã hủy thanh toán. Đơn hàng vẫn được giữ lại, bạn có thể thanh toán lại."),
-      buttonText: t("Thanh toán lại"),
+      title: t("Đã hủy đơn hàng"),
+      message: t("Bạn đã hủy thanh toán. Đơn hàng đã được hủy, bạn có thể tạo đơn hàng mới."),
+      buttonText: t("Tạo đơn mới"),
       buttonAction: () => routerHook.replace("/checkout"),
       bgColor: "bg-yellow-50",
       borderColor: "border-yellow-200",

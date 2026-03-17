@@ -31,12 +31,6 @@ const PAYMENT_METHOD_OPTIONS: {
   icon: string;
 }[] = [
   {
-    value: "BANK_TRANSFER",
-    label: "Chuyển khoản ngân hàng",
-    description: "Quét mã QR hoặc chuyển khoản theo thông tin ngân hàng",
-    icon: "🏦",
-  },
-  {
     value: "SEPAY_PG",
     label: "Cổng thanh toán SePay",
     description: "Thanh toán nhanh qua thẻ ngân hàng, QR NAPAS, Internet Banking",
@@ -100,19 +94,34 @@ export function CheckoutPaymentForm() {
     setAmount(value * (creditAmountSetting as number));
   };
 
-  /** Thanh toán qua chuyển khoản ngân hàng (luồng cũ) */
+  /** Thanh toán qua chuyển khoản ngân hàng */
   const handleBankTransferCheckout = async () => {
-    await createOrder(creditAmount, order?.id as string);
+    await createOrder(creditAmount);
   };
 
-  /** Thanh toán qua cổng SePay PG */
+  /** Thanh toán qua cổng SePay PG — tạo hidden form rồi auto-submit (POST) */
   const handleSePayPGCheckout = async () => {
-    if (!order?.id || creditAmount <= 0) return;
+    if (creditAmount <= 0) return;
     setSePayLoading(true);
     try {
-      const data = await orderService.createSePayPGCheckout(creditAmount, order.id);
-      // Redirect thẳng bằng GET URL — đơn giản, không cần hidden form
-      window.location.href = data.redirectUrl;
+      const data = await orderService.createSePayPGCheckout(creditAmount);
+
+      const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = data.checkoutUrl;
+
+      Object.entries(formFields).forEach(([name, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = name;
+        input.value = String(value);
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
     } catch (err) {
       console.error("Lỗi tạo SePay PG checkout:", err);
       toast.error("Không thể kết nối cổng thanh toán SePay. Vui lòng thử lại.");
@@ -146,12 +155,11 @@ export function CheckoutPaymentForm() {
         <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
           {/* Header */}
           <div className="flex flex-row items-start">
-            <div className="flex flex-shrink-0 justify-center items-center w-12 h-12 rounded-full bg-primary/10">
+            <div className="flex flex-shrink-0 justify-center items-center w-6 h-6 rounded-full bg-primary/10">
               <HiOutlineShieldExclamation className="text-2xl text-green-500" />
             </div>
             <div className="ml-3">
               <h1 className="text-xl font-bold text-gray-800">{t("Thanh toán")}</h1>
-              <p className="mt-0.5 text-sm font-medium text-primary">{order?.orderNumber}</p>
             </div>
           </div>
 
@@ -283,7 +291,7 @@ export function CheckoutPaymentForm() {
                   </>
                 }
                 onClick={handleCheckout}
-                disabled={isLoading || !order || creditAmount <= 0}
+                disabled={isLoading || creditAmount <= 0}
               />
             )}
           </div>

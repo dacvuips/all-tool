@@ -1,36 +1,5 @@
 import config from "config";
-import crypto from "crypto";
-import axios from "axios";
-
-/**
- * Cấu hình SePay Payment Gateway
- */
-interface SePayPGConfig {
-  merchantId: string;
-  secretKey: string;
-  sandboxMode: boolean;
-}
-
-/**
- * Dữ liệu trả về khi tạo form thanh toán
- */
-export interface SePayPGCheckoutFormData {
-  merchant: string;
-  currency: string;
-  orderAmount: string;
-  operation: string;
-  orderDescription: string;
-  orderInvoiceNumber: string;
-  customerId?: string;
-  paymentMethod?: string;
-  successUrl: string;
-  errorUrl: string;
-  cancelUrl: string;
-  signature: string;
-  checkoutUrl: string;
-  /** URL GET redirect — frontend chỉ cần window.location.href = redirectUrl */
-  redirectUrl: string;
-}
+import { SePayPgClient } from "sepay-pg-node";
 
 /**
  * Payload IPN gửi từ SePay PG tới server của chúng ta
@@ -78,271 +47,126 @@ export interface CreateCheckoutParams {
   orderAmount: number;
   orderDescription: string;
   customerId?: string;
-  /** Phương thức thanh toán: BANK_TRANSFER, NAPAS_BANK_TRANSFER, CREDIT_CARD, v.v. */
-  paymentMethod?: string;
-  /** Chọn tab phương thức mặc định hiển thị trên trang checkout: 1=VietQR, 2=Napas, 3=Card */
-  choosePaymentMethod?: number;
-  branchCode?: string;
-  branchTerminalCode?: string;
+  /** BANK_TRANSFER | NAPAS_BANK_TRANSFER */
+  paymentMethod?: "BANK_TRANSFER" | "NAPAS_BANK_TRANSFER";
   successUrl: string;
   errorUrl: string;
   cancelUrl: string;
 }
 
 /**
- * Danh sách field cần ký theo đúng thứ tự quy định của SePay PG
- * QUAN TRỌNG: Không thay đổi thứ tự này, sẽ dẫn đến sai chữ ký
+ * Dữ liệu trả về khi tạo form thanh toán.
+ * Frontend dùng checkoutUrl làm form action (POST),
+ * parse formFieldsJson thành object rồi render hidden inputs.
  */
-const SIGNED_FIELDS_ORDER = [
-  "merchant",
-  "operation",
-  "payment_method",
-  "order_amount",
-  "currency",
-  "order_invoice_number",
-  "order_description",
-  "customer_id",
-  "success_url",
-  "error_url",
-  "cancel_url",
-];
+export interface SePayPGCheckoutFormData {
+  /** URL dùng làm action của form POST */
+  checkoutUrl: string;
+  /** JSON string chứa tất cả hidden field (key-value) đã có chữ ký */
+  formFieldsJson: string;
+}
 
 /**
  * SePay Payment Gateway Service
- * Cung cấp các chức năng:
- * - Tạo chữ ký HMAC-SHA256 cho form thanh toán
- * - Tạo dữ liệu form checkout
- * - Gọi API SePay PG (lấy danh sách đơn, chi tiết đơn, hủy đơn)
+ * Sử dụng SDK chính thức `sepay-pg-node`.
+ *
+ * Tài liệu: https://developer.sepay.vn/vi/cong-thanh-toan/sdk/nodejs
  */
 class SePayPGService {
   /**
-   * Lấy cấu hình SePay PG từ node-config
+   * Khởi tạo SePayPgClient với config từ node-config.
+   * Tạo mới mỗi lần gọi để đảm bảo luôn dùng config mới nhất.
    */
-  private get cfg(): SePayPGConfig {
-    return {
-      merchantId: config.get<string>("sepayPG.merchantId"),
-      secretKey: config.get<string>("sepayPG.secretKey"),
-      sandboxMode: config.get<boolean>("sepayPG.sandboxMode"),
-    };
+  private getClient(): SePayPgClient {
+    return new SePayPgClient({
+      env: config.get<boolean>("sepayPG.sandboxMode") ? "sandbox" : "production",
+      merchant_id: config.get<string>("sepayPG.merchantId"),
+      secret_key: config.get<string>("sepayPG.secretKey"),
+    });
   }
 
   /**
-   * URL submit form checkout (POST)
-   * Sandbox: https://pay-sandbox.sepay.vn/v1/checkout/init
-   * Production: https://pay.sepay.vn/v1/checkout/init
-   */
-  get checkoutUrl(): string {
-    return this.cfg.sandboxMode
-      ? "https://pay-sandbox.sepay.vn/v1/checkout/init"
-      : "https://pay.sepay.vn/v1/checkout/init";
-  }
-
-  /**
-   * Base URL cho GET redirect (không có /init)
-   * Sandbox: https://pay-sandbox.sepay.vn/v1/checkout
-   * Production: https://pay.sepay.vn/v1/checkout
-   */
-  get checkoutRedirectBaseUrl(): string {
-    return this.cfg.sandboxMode
-      ? "https://pay-sandbox.sepay.vn/v1/checkout"
-      : "https://pay.sepay.vn/v1/checkout";
-  }
-
-  /**
-   * Base URL gọi REST API của SePay PG
-   * Sandbox: https://pgapi-sandbox.sepay.vn
-   * Production: https://pgapi.sepay.vn (TODO: xác nhận URL production)
-   */
-  get apiBaseUrl(): string {
-    return this.cfg.sandboxMode
-      ? "https://pgapi-sandbox.sepay.vn"
-      : "https://pgapi.sepay.vn";
-  }
-
-  /**
-   * Tạo chữ ký HMAC-SHA256 theo quy tắc SePay PG:
-   * 1. Lọc các field có giá trị theo đúng thứ tự SIGNED_FIELDS_ORDER
-   * 2. Ghép thành chuỗi: "field1=value1,field2=value2,..."
-   * 3. HMAC-SHA256(chuỗi, secretKey) → binary → base64
-   */
-  generateSignature(fields: Record<string, string>): string {
-    const { secretKey } = this.cfg;
-
-    // Xây dựng chuỗi ký theo đúng thứ tự, chỉ lấy field có giá trị
-    const signedParts: string[] = [];
-    for (const fieldName of SIGNED_FIELDS_ORDER) {
-      const value = fields[fieldName];
-      if (value !== undefined && value !== null && value !== "") {
-        signedParts.push(`${fieldName}=${value}`);
-      }
-    }
-
-    const signedString = signedParts.join(",");
-
-    // Tính HMAC-SHA256 dạng binary rồi encode base64
-    return crypto.createHmac("sha256", secretKey).update(signedString).digest("base64");
-  }
-
-  /**
-   * Sinh trace_id duy nhất cho mỗi giao dịch
-   * Format: {merchantId}-{16 ký tự hex ngẫu nhiên viết hoa}
-   */
-  private generateTraceId(): string {
-    const { merchantId } = this.cfg;
-    const random = crypto.randomBytes(8).toString("hex").toUpperCase();
-    return `${merchantId}-${random}`;
-  }
-
-  /**
-   * Tạo toàn bộ dữ liệu cần thiết để render và submit form thanh toán
-   * Trả về object chứa tất cả các hidden field và URL checkout
+   * Tạo dữ liệu form thanh toán SePay PG.
+   * SDK tự động:
+   *   - Sinh chữ ký HMAC-SHA256 theo đúng thứ tự field
+   *   - Tạo URL checkout đúng cho từng môi trường (sandbox/production)
    */
   createCheckoutFormData(params: CreateCheckoutParams): SePayPGCheckoutFormData {
-    const { merchantId } = this.cfg;
-    const timestamp = Math.floor(Date.now() / 1000);
-    const traceId = this.generateTraceId();
+    const client = this.getClient();
 
-    // Chuẩn bị object field để ký (key theo chuẩn snake_case của SePay)
-    const fields: Record<string, string> = {
-      merchant: merchantId,
-      currency: "VND",
-      order_amount: String(Math.round(params.orderAmount)),
+    const formFields = client.checkout.initOneTimePaymentFields({
       operation: "PURCHASE",
-      order_description: params.orderDescription,
+      payment_method: params.paymentMethod ?? "BANK_TRANSFER",
       order_invoice_number: params.orderInvoiceNumber,
+      order_amount: Math.round(params.orderAmount),
+      currency: "VND",
+      order_description: params.orderDescription,
+      customer_id: params.customerId,
       success_url: params.successUrl,
       error_url: params.errorUrl,
       cancel_url: params.cancelUrl,
-    };
+    });
 
-    // Thêm các field tuỳ chọn nếu được cung cấp
-    if (params.customerId) {
-      fields.customer_id = params.customerId;
-    }
-    if (params.paymentMethod) {
-      fields.payment_method = params.paymentMethod;
-    }
-
-    const signature = this.generateSignature(fields);
-
-    // Xây dựng GET redirect URL: tất cả params + signature dưới dạng query string
-    const queryParams: Record<string, string> = {
-      merchant: merchantId,
-      operation: "PURCHASE",
-      order_description: params.orderDescription,
-      order_amount: fields.order_amount,
-      currency: "VND",
-      order_invoice_number: params.orderInvoiceNumber,
-      success_url: params.successUrl,
-      error_url: params.errorUrl,
-      cancel_url: params.cancelUrl,
-      trace_id: traceId,
-      branch_code: params.branchCode ?? "001",
-      branch_terminal_code: params.branchTerminalCode ?? "01",
-      timestamp: String(timestamp),
-      signature,
-    };
-    if (params.customerId) queryParams.customer_id = params.customerId;
-    if (params.paymentMethod) queryParams.payment_method = params.paymentMethod;
-    if (params.choosePaymentMethod != null) {
-      queryParams.choose_payment_method = String(params.choosePaymentMethod);
-    }
-
-    const redirectUrl =
-      this.checkoutRedirectBaseUrl + "?" + new URLSearchParams(queryParams).toString();
+    const checkoutUrl = client.checkout.initCheckoutUrl();
 
     return {
-      merchant: merchantId,
-      currency: "VND",
-      orderAmount: fields.order_amount,
-      operation: "PURCHASE",
-      orderDescription: params.orderDescription,
-      orderInvoiceNumber: params.orderInvoiceNumber,
-      customerId: params.customerId,
-      paymentMethod: params.paymentMethod,
-      successUrl: params.successUrl,
-      errorUrl: params.errorUrl,
-      cancelUrl: params.cancelUrl,
-      signature,
-      checkoutUrl: this.checkoutUrl,
-      redirectUrl,
+      checkoutUrl,
+      formFieldsJson: JSON.stringify(formFields),
     };
   }
 
   /**
-   * Tạo Authorization header để gọi REST API của SePay PG
-   * Format: Basic base64(merchantId:secretKey)
+   * Lấy chi tiết đơn hàng từ SePay PG theo order_invoice_number
    */
-  private getAuthHeader(): string {
-    const { merchantId, secretKey } = this.cfg;
-    const credentials = Buffer.from(`${merchantId}:${secretKey}`).toString("base64");
-    return `Basic ${credentials}`;
+  async getOrderDetail(orderInvoiceNumber: string): Promise<any> {
+    const client = this.getClient();
+    const res = await client.order.retrieve(orderInvoiceNumber);
+    return res.data;
   }
 
   /**
-   * Lấy chi tiết một đơn hàng từ SePay PG theo orderId (ID của SePay, ví dụ SEPAY-68BA83CE637C1)
-   */
-  async getOrderDetail(sePayOrderId: string): Promise<any> {
-    const response = await axios.get(`${this.apiBaseUrl}/v1/order/detail/${sePayOrderId}`, {
-      headers: {
-        Authorization: this.getAuthHeader(),
-        "Content-Type": "application/json",
-      },
-    });
-    return response.data;
-  }
-
-  /**
-   * Lấy danh sách đơn hàng từ SePay PG với các bộ lọc tùy chọn
+   * Lấy danh sách đơn hàng từ SePay PG
    */
   async getOrders(filters?: {
-    page?: number;
     perPage?: number;
     q?: string;
-    orderStatus?: "CAPTURED" | "CANCELLED" | "AUTHENTICATION_NOT_NEEDED";
+    orderStatus?: string;
     customerId?: string;
     createdAt?: string;
     fromCreatedAt?: string;
-    endCreatedAt?: string;
-    sort?: string;
+    toCreatedAt?: string;
+    sort?: { created_at?: string };
   }): Promise<any> {
-    const params: Record<string, any> = {};
-    if (filters?.page) params.page = filters.page;
-    if (filters?.perPage) params.per_page = filters.perPage;
-    if (filters?.q) params.q = filters.q;
-    if (filters?.orderStatus) params.order_status = filters.orderStatus;
-    if (filters?.customerId) params.customer_id = filters.customerId;
-    if (filters?.createdAt) params.created_at = filters.createdAt;
-    if (filters?.fromCreatedAt) params.from_created_at = filters.fromCreatedAt;
-    if (filters?.endCreatedAt) params.end_created_at = filters.endCreatedAt;
-    if (filters?.sort) params.sort = filters.sort;
-
-    const response = await axios.get(`${this.apiBaseUrl}/v1/order`, {
-      headers: {
-        Authorization: this.getAuthHeader(),
-        "Content-Type": "application/json",
-      },
-      params,
+    const client = this.getClient();
+    const res = await client.order.all({
+      per_page: filters?.perPage,
+      q: filters?.q,
+      order_status: filters?.orderStatus,
+      customer_id: filters?.customerId ?? null,
+      created_at: filters?.createdAt,
+      from_created_at: filters?.fromCreatedAt,
+      to_created_at: filters?.toCreatedAt,
+      sort: filters?.sort,
     });
-    return response.data;
+    return res.data;
   }
 
   /**
-   * Hủy đơn hàng trên SePay PG
-   * Lưu ý: Chỉ áp dụng cho BANK_TRANSFER/NAPAS_BANK_TRANSFER và khi chưa CAPTURED/CANCELED
+   * Hủy đơn hàng trên SePay PG (dành cho thanh toán bằng quét mã QR)
    */
   async cancelOrder(orderInvoiceNumber: string): Promise<any> {
-    const response = await axios.post(
-      `${this.apiBaseUrl}/v1/order/cancel`,
-      { order_invoice_number: orderInvoiceNumber },
-      {
-        headers: {
-          Authorization: this.getAuthHeader(),
-          "Content-Type": "application/json",
-        },
-      }
-    );
-    return response.data;
+    const client = this.getClient();
+    const res = await client.order.cancel(orderInvoiceNumber);
+    return res.data;
+  }
+
+  /**
+   * Hủy giao dịch (dành cho thanh toán bằng thẻ tín dụng)
+   */
+  async voidTransaction(orderInvoiceNumber: string): Promise<any> {
+    const client = this.getClient();
+    const res = await client.order.voidTransaction(orderInvoiceNumber);
+    return res.data;
   }
 }
 

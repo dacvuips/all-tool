@@ -300,50 +300,39 @@ export class OrderRepository extends CrudRepository<Order> {
       .then((res) => res.data.getMyOrderStats as OrderStats);
   }
 
-  async createOrder(creditAmount: number, orderId: string): Promise<{ order: Order }> {
+  async createOrder(creditAmount: number): Promise<{ order: Order }> {
     return this.apollo
       .mutate({
         mutation: gql`
-          mutation CreateOrder($creditAmount: Float!, $orderId: ID!) {
-            createOrder(creditAmount: $creditAmount, orderId: $orderId) {
+          mutation CreateOrder($creditAmount: Float!) {
+            createOrder(creditAmount: $creditAmount) {
               order {
                 ${this.shortFragment}
               }
             }
           }
         `,
-        variables: { creditAmount, orderId },
+        variables: { creditAmount },
       })
       .then((res) => res.data.createOrder as { order: Order } | null);
   }
 
   /**
-   * Tạo form thanh toán qua cổng SePay PG
-   * Trả về dữ liệu gồm các hidden field và chữ ký để frontend auto-submit form tới SePay
+   * Tạo form thanh toán qua cổng SePay PG.
+   * Frontend dùng checkoutUrl làm form action (POST) và parse formFieldsJson
+   * để render các hidden input rồi auto-submit form.
    */
   async createSePayPGCheckout(
     creditAmount: number,
-    orderId: string
+    orderId?: string
   ): Promise<SePayPGCheckoutData> {
     return this.apollo
       .mutate({
         mutation: gql`
-          mutation CreateSePayPGCheckout($creditAmount: Float!, $orderId: ID!) {
+          mutation CreateSePayPGCheckout($creditAmount: Float!, $orderId: ID) {
             createSePayPGCheckout(creditAmount: $creditAmount, orderId: $orderId) {
-              merchant
-              currency
-              orderAmount
-              operation
-              orderDescription
-              orderInvoiceNumber
-              customerId
-              paymentMethod
-              successUrl
-              errorUrl
-              cancelUrl
-              signature
               checkoutUrl
-              redirectUrl
+              formFieldsJson
             }
           }
         `,
@@ -464,6 +453,7 @@ export class OrderRepository extends CrudRepository<Order> {
     tax
     discount
     totalAmount
+    creditAmount
     shippingAddress {
       recipientName
       phone
@@ -547,25 +537,14 @@ export class OrderRepository extends CrudRepository<Order> {
 }
 
 /**
- * Dữ liệu form thanh toán SePay PG trả về từ backend
- * Frontend sẽ dùng dữ liệu này để render hidden form và auto-submit tới SePay
+ * Dữ liệu form thanh toán SePay PG trả về từ backend.
+ * Frontend POST form tới checkoutUrl với các hidden field từ formFieldsJson.
  */
 export interface SePayPGCheckoutData {
-  merchant: string;
-  currency: string;
-  orderAmount: string;
-  operation: string;
-  orderDescription: string;
-  orderInvoiceNumber: string;
-  customerId?: string;
-  paymentMethod?: string;
-  successUrl: string;
-  errorUrl: string;
-  cancelUrl: string;
-  signature: string;
+  /** URL dùng làm action của form POST tới cổng SePay */
   checkoutUrl: string;
-  /** URL GET redirect — chỉ cần window.location.href = redirectUrl */
-  redirectUrl: string;
+  /** JSON string chứa tất cả hidden field đã ký (merchant, operation, payment_method, order_invoice_number, order_amount, currency, ..., signature) */
+  formFieldsJson: string;
 }
 
 export interface CreateShippingOrderResponse {

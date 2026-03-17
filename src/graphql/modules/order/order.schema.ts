@@ -12,14 +12,15 @@ const schema = gql`
   }
 
   extend type Mutation {
-    createOrder(creditAmount: Float!, orderId: ID!): CreateOrderResult
+    createOrder(creditAmount: Float!): CreateOrderResult
     updateOrder(orderId: ID!, data: UpdateOrderInput!): Order
     updateOrderStatus(orderId: ID!, status: OrderStatus!): Order
     cancelOrder(orderId: ID!, reason: String): Order
     createShopeExpressShipping(orderId: ID!): ShippingResult
     createGiaoHangNhanhShipping(orderId: ID!): ShippingResult
     # Tạo form thanh toán qua cổng SePay PG, trả về dữ liệu để frontend auto-submit form
-    createSePayPGCheckout(creditAmount: Float!, orderId: ID!): SePayPGCheckoutData
+    # orderId: truyền khi muốn retry đơn PAYMENT_PENDING+SEPAY_PG đã có
+    createSePayPGCheckout(creditAmount: Float!, orderId: ID): SePayPGCheckoutData
   }
 
   input CreateOrderInput {
@@ -198,6 +199,7 @@ const schema = gql`
     tax: Float
     discount: Float
     totalAmount: Float
+    creditAmount: Float
 
     shippingAddress: ShippingAddress
 
@@ -232,24 +234,15 @@ const schema = gql`
   }
 
   """
-  Dữ liệu form thanh toán SePay PG
+  Dữ liệu form thanh toán SePay PG.
+  Frontend dùng checkoutUrl làm form action (POST) và parse formFieldsJson
+  thành object để render các hidden input rồi auto-submit form.
   """
   type SePayPGCheckoutData {
-    merchant: String!
-    currency: String!
-    orderAmount: String!
-    operation: String!
-    orderDescription: String!
-    orderInvoiceNumber: String!
-    customerId: String
-    paymentMethod: String
-    successUrl: String!
-    errorUrl: String!
-    cancelUrl: String!
-    signature: String!
+    """URL dùng làm action của form POST tới cổng SePay"""
     checkoutUrl: String!
-    """URL GET redirect — frontend chỉ cần window.location.href = redirectUrl"""
-    redirectUrl: String!
+    """JSON string chứa tất cả hidden field đã ký (merchant, operation, payment_method, order_invoice_number, order_amount, currency, order_description, customer_id, success_url, error_url, cancel_url, signature)"""
+    formFieldsJson: String!
   }
 `;
 

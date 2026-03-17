@@ -8,6 +8,8 @@ export enum CreditTransactionTypeEnum {
   NODE_RUN_REFUND = "NODE_RUN_REFUND",
   /** Cộng credit khi đơn hàng nạp credit được thanh toán */
   ORDER_TOPUP = "ORDER_TOPUP",
+  /** Trừ credit (hoàn lại) khi giao dịch bị void/huỷ sau khi đã cộng credit */
+  ORDER_VOID = "ORDER_VOID",
 }
 
 export type ICreditTransaction = TimestampEntity & {
