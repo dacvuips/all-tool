@@ -6,7 +6,7 @@ import { CheckoutProvider, useCheckoutContext } from "./provider/checkout-provid
 
 import { Player } from "@lottiefiles/react-lottie-player";
 import copy from "copy-to-clipboard";
-import router, { useRouter } from "next/router";
+import { useRouter } from "next/router";
 import { HiOutlineCheckCircle, HiOutlineInformationCircle, HiOutlineXCircle } from "react-icons/hi";
 import { RiFileCopy2Line } from "react-icons/ri";
 import { parseNumber } from "../../../lib/helpers/parser";
@@ -41,11 +41,11 @@ function CheckoutComponent() {
   const { customer } = useAuth();
   const toast = useToast();
   const { t } = useTranslation();
-  const routerHook = useRouter();
+  const router = useRouter();
 
   // Lấy thông tin payment callback từ URL (sau khi redirect về từ SePay PG)
-  const paymentStatus = routerHook.query.payment as string; // success | error | cancel
-  const orderNumberFromUrl = routerHook.query.orderNumber as string;
+  const paymentStatus = router.query.payment as string; // success | error | cancel
+  const orderNumberFromUrl = router.query.orderNumber as string;
 
   useEffect(() => {
     if (customer === null) {
@@ -97,7 +97,7 @@ function CheckoutComponent() {
 function SePayPGWaitingView() {
   const { t } = useTranslation();
   const { order } = useCheckoutContext();
-  const routerHook = useRouter();
+  const router = useRouter();
   const toast = useToast();
   const alert = useAlert();
 
@@ -162,7 +162,7 @@ function SePayPGWaitingView() {
           .cancelOrder(order.id)
           .then(() => {
             toast.success(t("Hủy đơn thành công"));
-            routerHook.replace("/checkout");
+            router.reload();
           })
           .catch(() => toast.error(t("Hủy đơn thất bại")));
         return true;
@@ -242,6 +242,10 @@ function SePayPGWaitingView() {
 /**
  * View hiển thị sau khi redirect về từ SePay PG
  * Xử lý 3 trạng thái: success, error, cancel
+ *
+ * Luôn xác minh trạng thái đơn hàng từ server trước khi hiển thị kết quả.
+ * Poll liên tục mỗi 2 giây cho đến khi server trả về trạng thái cuối cùng.
+ * Không bao giờ fallback sang URL param — chỉ dừng khi có status thực từ DB.
  */
 function SePayPGCallbackView({
   paymentStatus,
@@ -251,51 +255,59 @@ function SePayPGCallbackView({
   orderNumber: string;
 }) {
   const { t } = useTranslation();
-  const routerHook = useRouter();
-  const [checkingStatus, setCheckingStatus] = useState(paymentStatus === "success");
-  const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">(
-    paymentStatus === "success" ? "success" : paymentStatus === "cancel" ? "cancel" : "error"
-  );
+  const router = useRouter();
 
-  // Khi thanh toán success, chờ xác nhận thêm từ IPN
+  const [verifying, setVerifying] = useState(true);
+  const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">("success");
+
   useEffect(() => {
-    if (paymentStatus !== "success") {
-      setCheckingStatus(false);
-      return;
-    }
+    let cancelled = false;
 
-    // Kiểm tra trạng thái đơn hàng từ server (IPN có thể xử lý trước hoặc sau redirect)
-    const checkOrder = async () => {
-      try {
-        const order = await orderService.getOrderByNumber(orderNumber);
-        if (order?.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
-          setFinalStatus("success");
-          setCheckingStatus(false);
-        }
-      } catch {
-        setCheckingStatus(false);
-      }
+    const resolveFromOrder = (order: {
+      paymentStatus?: string;
+    }): "success" | "error" | "cancel" | null => {
+      if (order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) return "success";
+      if (order.paymentStatus === PaymentStatus.PAYMENT_CANCELLED) return "cancel";
+      if (
+        order.paymentStatus === PaymentStatus.PAYMENT_FAILED ||
+        order.paymentStatus === PaymentStatus.PAYMENT_TIMEOUT
+      )
+        return "error";
+      // PAYMENT_PENDING / PAYMENT_INITIATED / PAYMENT_UNPAID → IPN chưa về, tiếp tục polling
+      return null;
     };
 
-    // Polling mỗi 2 giây, tối đa 10 lần
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      await checkOrder();
-      if (attempts >= 10) {
-        clearInterval(interval);
-        setCheckingStatus(false);
+    const poll = setInterval(async () => {
+      if (cancelled) return;
+      try {
+        const order = await orderService.getOrderByNumber(orderNumber);
+        const resolved = order ? resolveFromOrder(order) : null;
+        if (resolved) {
+          clearInterval(poll);
+          if (!cancelled) {
+            setFinalStatus(resolved);
+            setVerifying(false);
+          }
+        }
+      } catch {
+        // bỏ qua lỗi mạng, tiếp tục polling
       }
     }, 2000);
 
-    return () => clearInterval(interval);
+    return () => {
+      cancelled = true;
+      clearInterval(poll);
+    };
   }, [paymentStatus, orderNumber]);
 
-  if (checkingStatus) {
+  if (verifying) {
     return (
       <div className="flex flex-col justify-center items-center py-20 bg-gray-100 min-h-[60vh]">
         <Spinner />
-        <p className="mt-4 text-gray-600">{t("Đang xác nhận thanh toán...")}</p>
+        <p className="mt-5 text-base font-semibold text-gray-700">
+          {t("Đang xác nhận đơn hàng...")}
+        </p>
+        <p className="mt-2 text-sm text-gray-400">{t("Vui lòng không đóng trang này")}</p>
       </div>
     );
   }
@@ -310,7 +322,7 @@ function SePayPGCallbackView({
         "Đơn hàng của bạn đã được thanh toán thành công qua cổng SePay. Hệ thống đang xử lý đơn hàng."
       ),
       buttonText: t("Xem đơn hàng"),
-      buttonAction: () => routerHook.push("/profile/orders-buy"),
+      buttonAction: () => router.push("/profile/orders-buy"),
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
     },
@@ -322,7 +334,7 @@ function SePayPGCallbackView({
         "Thanh toán không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
       ),
       buttonText: t("Thử lại"),
-      buttonAction: () => routerHook.replace("/checkout"),
+      buttonAction: () => router.replace("/checkout"),
       bgColor: "bg-red-50",
       borderColor: "border-red-200",
     },
@@ -332,7 +344,7 @@ function SePayPGCallbackView({
       title: t("Đã hủy đơn hàng"),
       message: t("Bạn đã hủy thanh toán. Đơn hàng đã được hủy, bạn có thể tạo đơn hàng mới."),
       buttonText: t("Tạo đơn mới"),
-      buttonAction: () => routerHook.replace("/checkout"),
+      buttonAction: () => router.replace("/checkout"),
       bgColor: "bg-yellow-50",
       borderColor: "border-yellow-200",
     },
@@ -380,7 +392,7 @@ function SePayPGCallbackView({
         {/* Nút phụ - về trang chủ */}
         <Button
           text={t("Về trang chủ")}
-          onClick={() => routerHook.push("/")}
+          onClick={() => router.push("/")}
           className="w-full rounded-xl border border-gray-300"
         />
       </div>
@@ -395,7 +407,7 @@ function CheckoutPaymentPay() {
   const { t } = useTranslation();
   const toast = useToast();
   const alert = useAlert();
-  const routerHook = useRouter();
+  const router = useRouter();
   const { order } = useCheckoutContext();
   const [openVideo, setOpenVideo] = useState<string>(null);
   const checkingPaymentRef = useRef(null);
@@ -450,7 +462,7 @@ function CheckoutPaymentPay() {
       if (latestOrder?.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
         clearInterval(checkingPaymentRef.current);
         // Điều hướng về trang callback success để hiển thị thông báo
-        routerHook.replace(`/checkout?payment=success&orderNumber=${order.orderNumber}`);
+        router.replace(`/checkout?payment=success&orderNumber=${order.orderNumber}`);
       }
     } catch {
       // Bỏ qua lỗi khi kiểm tra
@@ -471,7 +483,7 @@ function CheckoutPaymentPay() {
           .then(async () => {
             await clearInterval(checkingPaymentRef.current);
             toast.success(t("Hủy đơn thành công"));
-            routerHook.replace("/");
+            router.replace("/");
           })
           .catch((err) => {
             toast.error(`${t("Hủy đơn thất bại")}, ${err}`);

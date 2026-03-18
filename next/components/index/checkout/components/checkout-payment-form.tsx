@@ -6,7 +6,7 @@ import { parseNumber } from "../../../../lib/helpers/parser";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SettingService } from "../../../../lib/repo";
-import { orderService } from "../../../../lib/repo/order/order.repo";
+import { orderService, PaymentMethod } from "../../../../lib/repo/order/order.repo";
 import { NotifyText } from "../../../shared/common/notify-text";
 import { Input, Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
@@ -15,24 +15,10 @@ import { useCheckoutContext } from "../provider/checkout-provider";
 /**
  * Các phương thức thanh toán được hỗ trợ
  */
-type PaymentType = "BANK_TRANSFER" | "SEPAY_PG";
 
 /**
  * Thông tin hiển thị cho từng phương thức thanh toán
  */
-const PAYMENT_METHOD_OPTIONS: {
-  value: PaymentType;
-  label: string;
-  description: string;
-  icon: string;
-}[] = [
-  {
-    value: "SEPAY_PG",
-    label: "Cổng thanh toán SePay",
-    description: "Thanh toán nhanh qua thẻ ngân hàng, QR NAPAS, Internet Banking",
-    icon: "💳",
-  },
-];
 
 /** Tạo các đề xuất "thêm số 0" từ số đã nhập: ví dụ 5 → [50, 500, 5000, 50000] */
 function getSuggestedAmounts(base: number): number[] {
@@ -53,12 +39,28 @@ export function CheckoutPaymentForm() {
   });
   const amountFromParam = Number(queryParams[ParamName.creditAmount]) || 0;
 
+  const PAYMENT_METHOD_OPTIONS: {
+    value: PaymentMethod;
+    label: string;
+    description: string;
+    icon: string;
+  }[] = [
+    {
+      value: PaymentMethod.SEPAY_PG,
+      label: t("Cổng thanh toán SePay"),
+      description: t("Thanh toán nhanh qua thẻ ngân hàng, QR NAPAS, Internet Banking"),
+      icon: "💳",
+    },
+  ];
+
   const [amount, setAmount] = useState<number>(amountFromParam);
   const [creditAmount, setCreditAmount] = useState<number>(amountFromParam);
   const [creditAmountSetting, setCreditAmountSetting] = useState<number>(0);
 
   // Phương thức thanh toán đang được chọn
-  const [selectedPaymentType, setSelectedPaymentType] = useState<PaymentType>("BANK_TRANSFER");
+  const [selectedPaymentType, setSelectedPaymentType] = useState<PaymentMethod>(
+    PaymentMethod.SEPAY_PG
+  );
 
   // Loading riêng cho SePay PG để tránh nhầm với loading tạo đơn chuyển khoản
   const [sePayLoading, setSePayLoading] = useState(false);
@@ -136,7 +138,7 @@ export function CheckoutPaymentForm() {
     return (
       <div className="flex flex-col min-h-[60vh] justify-center items-center pb-10 bg-gray-100">
         <Spinner />
-        <p className="mt-2 text-sm text-gray-500">{t("Đang tạo đơn thanh toán...")}</p>
+        <p className="mt-2 text-sm text-gray-500">{`${t("Đang tạo đơn thanh toán")}...`}</p>
       </div>
     );
   }
