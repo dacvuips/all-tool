@@ -128,14 +128,14 @@ export default [
     method: "get",
     path: "/api/payment/sepay-pg/success/:orderNumber?",
     midd: [],
-    action: (req: Request, res: Response) => {
+    action: async (req: Request, res: Response) => {
       const domain = getFrontendDomain();
       const orderNumber = (req.params.orderNumber || req.query.order_invoice_number || "") as string;
 
       logger.info("SePay PG: Thanh toán thành công", { orderNumber, query: req.query });
 
       const redirectUrl = `${domain}/checkout?payment=success&orderNumber=${orderNumber}`;
-      return res.redirect(redirectUrl);
+      res.redirect(redirectUrl);
     },
   },
 
@@ -148,14 +148,14 @@ export default [
     method: "get",
     path: "/api/payment/sepay-pg/error/:orderNumber?",
     midd: [],
-    action: (req: Request, res: Response) => {
+    action: async (req: Request, res: Response) => {
       const domain = getFrontendDomain();
       const orderNumber = (req.params.orderNumber || req.query.order_invoice_number || "") as string;
 
       logger.info("SePay PG: Thanh toán thất bại", { orderNumber, query: req.query });
 
       const redirectUrl = `${domain}/checkout?payment=error&orderNumber=${orderNumber}`;
-      return res.redirect(redirectUrl);
+      res.redirect(redirectUrl);
     },
   },
 
@@ -171,14 +171,14 @@ export default [
     method: "get",
     path: "/api/payment/sepay-pg/cancel/:orderNumber?",
     midd: [],
-    action: (req: Request, res: Response) => {
+    action: async (req: Request, res: Response) => {
       const domain = getFrontendDomain();
       const orderNumber = (req.params.orderNumber || req.query.order_invoice_number || "") as string;
 
       logger.info("SePay PG: Khách hàng hủy hoặc nhấn Trở về từ cổng thanh toán", { orderNumber, query: req.query });
 
       const redirectUrl = `${domain}/checkout?payment=cancel&orderNumber=${orderNumber}`;
-      return res.redirect(redirectUrl);
+      res.redirect(redirectUrl);
     },
   },
 ];
