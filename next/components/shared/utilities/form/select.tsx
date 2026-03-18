@@ -107,7 +107,9 @@ export function Select({
               setAllOptions(newAllOptions);
               if (multi) {
                 setValue(
-                  newAllOptions.filter((x) => (props.value ? props.value.includes(x.value) : false))
+                  newAllOptions.filter((x) =>
+                    props.value ? [].concat(props.value).includes(x.value) : false
+                  )
                 );
               } else {
                 setValue(newAllOptions.find((x) => x.value == props.value) || null);
@@ -115,7 +117,9 @@ export function Select({
             } else {
               if (multi) {
                 setValue(
-                  options.filter((x) => (props.value ? props.value.includes(x.value) : false))
+                  options.filter((x) =>
+                    props.value ? [].concat(props.value).includes(x.value) : false
+                  )
                 );
               } else {
                 setValue(options.find((x) => x.value == props.value) || null);

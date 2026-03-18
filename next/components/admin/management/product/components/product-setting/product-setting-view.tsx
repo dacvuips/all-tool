@@ -37,7 +37,6 @@ export const ProductSettingView = () => {
                 cols={xs2 ? 6 : 12}
                 required={field.required}
                 tooltip={field.tooltip}
-                readOnly
               >
                 {field.type == PropertyTypeEnum.TEXT && (
                   <Input clearable={field.clearable} placeholder={field.placeholder} />

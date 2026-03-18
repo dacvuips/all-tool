@@ -15,7 +15,6 @@ import {
   Button,
   Field,
   Input,
-  MediaInput,
   Select,
   Switch,
   Textarea,
@@ -238,9 +237,7 @@ function ApiConfigSection() {
             clearable={false}
           />
         </Field>
-        <Field label={t("Loại output")} name="config.videoURL" cols={6} required>
-          <MediaInput placeholder={t("Nhập link video")} />
-        </Field>
+
         <Field label={t("Provider")} name="config.aiProviderKey" cols={6}>
           <Select
             hasImage
