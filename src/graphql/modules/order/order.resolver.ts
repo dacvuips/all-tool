@@ -236,7 +236,7 @@ const Mutation = {
     const checkoutData = sePayPGService.createCheckoutFormData({
       orderInvoiceNumber: orderNumber,
       orderAmount: finalAmount,
-      orderDescription: `Thanh toan don hang ${orderNumber}`,
+      orderDescription: `${orderNumber}`,
       customerId: customerId,
       successUrl: `${domain}/api/payment/sepay-pg/success/${orderNumber}`,
       errorUrl: `${domain}/api/payment/sepay-pg/error/${orderNumber}`,
