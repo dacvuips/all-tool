@@ -121,6 +121,11 @@ function useHelmet(app: express.Application) {
               "https://upload-image-cyan.vercel.app/api/file/upload-image",
               authDomainFirebase,
             ],
+            formAction: [
+              "'self'",
+              "https://pay-sandbox.sepay.vn",
+              "https://pay.sepay.vn",
+            ],
           },
         },
         noSniff: false,
