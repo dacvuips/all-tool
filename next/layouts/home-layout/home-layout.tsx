@@ -44,11 +44,7 @@ export function HomeLayout({ ...props }: LayoutProps) {
                 <ChatWidget senderRole="CUSTOMER" senderId={customer?._id} />
               </ChatProvider>
             )}
-            <div
-              className={`flex flex-col flex-1 pl-0 grow ${
-                getToggleSidebar == "true" && "2xl:pl-56 xl:pl-56"
-              }`}
-            >
+            <div className={`flex flex-col flex-1 grow ${isHomePage ? "xl:pl-56" : "pl-0"}`}>
               <div className={`${!xs ? "p-1" : "p-4"}`}>
                 <ErrorCatcher>
                   <HomeLayoutContent {...props} />

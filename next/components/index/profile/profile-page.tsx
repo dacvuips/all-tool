@@ -7,10 +7,11 @@ import { BreadCrumbs, Spinner } from "../../shared/utilities/misc";
 import { ProfileAccount } from "./components/account/profile-account";
 
 import { useTranslation } from "react-i18next";
-import { RiBankCardLine, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
+import { RiBankCardLine, RiImageLine, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 
 import { ProfileCredential } from "./components/credential/profile-credential";
+import { ProfileMediaGallery } from "./components/media-gallery/profile-media-gallery";
 import { ProfileNotificationPage } from "./components/notification/profile-notification-page";
 import { ProfileOrderBuyPage } from "./components/order-buy/order-buy-page";
 import { ProfileTrainingPage } from "./components/training/training-page";
@@ -77,6 +78,7 @@ export function ProfilePage({ ...props }) {
                       "/profile/trainings": <ProfileTrainingPage />,
                       "/profile/credential": <ProfileCredential />,
                       "/profile/orders-buy": <ProfileOrderBuyPage />,
+                      "/profile/media-gallery": <ProfileMediaGallery />,
                     }[selectedMenu.href]
                   }
                 </>
@@ -96,6 +98,7 @@ export const ProfileMenuList = () => {
   return [
     { label: t("Hồ sơ của tôi"), icon: <AiOutlineUser />, href: "/profile/account" },
     { label: t("Đơn mua"), icon: <RiShoppingCart2Line />, href: "/profile/orders-buy" },
+    { label: t("Thư viện Media"), icon: <RiImageLine />, href: "/profile/media-gallery" },
     { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/checkout" },
     // { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
     {

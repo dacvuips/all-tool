@@ -4,7 +4,13 @@ import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineBell } from "react-icons/ai";
 import { BiExit } from "react-icons/bi";
-import { RiArrowRightSLine, RiBankCardLine, RiQuestionLine, RiUser3Line } from "react-icons/ri";
+import {
+  RiArrowRightSLine,
+  RiBankCardLine,
+  RiImageLine,
+  RiQuestionLine,
+  RiUser3Line,
+} from "react-icons/ri";
 import { useAlert } from "../../../lib/providers/alert-provider";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
@@ -94,6 +100,11 @@ const MenuList = () => {
       href: "/profile/account",
       label: t("Hồ sơ của tôi"),
       icon: <RiUser3Line />,
+    },
+    {
+      href: "/profile/media-gallery",
+      label: t("Thư viện Media"),
+      icon: <RiImageLine />,
     },
     { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/checkout" },
     // { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
