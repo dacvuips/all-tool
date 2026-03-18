@@ -483,7 +483,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   [PaymentMethod.MOMO]: "Ví MoMo",
   [PaymentMethod.ZALO_PAY]: "Ví ZaloPay",
   [PaymentMethod.CREDIT_CARD]: "Thẻ tín dụng / thẻ ghi nợ",
-  [PaymentMethod.SEPAY_PG]: "Thanh toán qua SePay PG",
+  [PaymentMethod.SEPAY_PG]: "Thanh toán qua cổng thanh toán",
 };
 
 // Labels hiển thị cho trạng thái đơn hàng

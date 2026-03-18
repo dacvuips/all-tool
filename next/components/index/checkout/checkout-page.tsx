@@ -146,8 +146,8 @@ function SePayPGWaitingView() {
       document.body.appendChild(form);
       form.submit();
     } catch (err) {
-      console.error("Lỗi tái tạo SePay checkout:", err);
-      toast.error(t("Không thể kết nối cổng SePay. Vui lòng thử lại."));
+      console.error("Lỗi tái tạo checkout:", err);
+      toast.error(t("Không thể kết nối cổng. Vui lòng thử lại."));
       setRetrying(false);
     }
   };
@@ -174,7 +174,9 @@ function SePayPGWaitingView() {
     return (
       <div className="flex flex-col justify-center items-center p-8 min-h-[300px] bg-white rounded-md">
         <Spinner />
-        <p className="mt-4 font-semibold text-gray-700">{t("Đang chuyển đến SePay...")}</p>
+        <p className="mt-4 font-semibold text-gray-700">
+          {t("Đang chuyển đến cổng thanh toán...")}
+        </p>
       </div>
     );
   }
@@ -187,7 +189,7 @@ function SePayPGWaitingView() {
           <HiOutlineInformationCircle className="text-xl text-blue-600" />
         </div>
         <div>
-          <h3 className="font-bold text-gray-800">{t("Đơn hàng đang chờ thanh toán SePay")}</h3>
+          <h3 className="font-bold text-gray-800">{t("Đơn hàng đang chờ thanh toán")}</h3>
           <p className="text-sm text-gray-500">{order?.orderNumber}</p>
         </div>
       </div>
@@ -216,7 +218,7 @@ function SePayPGWaitingView() {
       {/* Thông báo */}
       <div className="p-3 text-sm text-yellow-800 bg-yellow-50 rounded-lg">
         {t(
-          "Nếu bạn đã rời khỏi trang SePay hoặc chưa hoàn tất thanh toán, hãy nhấn 'Quay lại SePay' để tiếp tục."
+          "Nếu bạn đã rời khỏi trang cổng thanh toán hoặc chưa hoàn tất thanh toán, hãy nhấn 'Quay lại cổng thanh toán' để tiếp tục."
         )}
       </div>
 
@@ -225,13 +227,13 @@ function SePayPGWaitingView() {
         <Button
           primary
           className="py-3 w-full font-semibold rounded-xl"
-          text={t("Quay lại SePay để thanh toán")}
+          text={t("Quay lại cổng thanh toán để thanh toán")}
           onClick={handleRetry}
           disabled={timeRemaining.expired}
         />
         <Button
           className="py-3 w-full text-red-600 rounded-xl border border-red-300 hover:bg-red-50"
-          text={t("Hủy đơn hàng")}
+          text={t("Hủy đơn")}
           onClick={handleCancel}
         />
       </div>
@@ -318,9 +320,7 @@ function SePayPGCallbackView({
       icon: <HiOutlineCheckCircle className="text-6xl text-green-500" />,
       lottie: "/assets/lottie/payment-success.json",
       title: t("Thanh toán thành công!"),
-      message: t(
-        "Đơn hàng của bạn đã được thanh toán thành công qua cổng SePay. Hệ thống đang xử lý đơn hàng."
-      ),
+      message: t("Đơn hàng của bạn đã được thanh toán thành công. Hệ thống đang xử lý đơn hàng."),
       buttonText: t("Xem đơn hàng"),
       buttonAction: () => router.push("/profile/orders-buy"),
       bgColor: "bg-green-50",

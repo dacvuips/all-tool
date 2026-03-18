@@ -47,7 +47,7 @@ export function CheckoutPaymentForm() {
   }[] = [
     {
       value: PaymentMethod.SEPAY_PG,
-      label: t("Cổng thanh toán SePay"),
+      label: t("Cổng thanh toán"),
       description: t("Thanh toán nhanh qua thẻ ngân hàng, QR NAPAS, Internet Banking"),
       icon: "💳",
     },
@@ -121,8 +121,8 @@ export function CheckoutPaymentForm() {
       document.body.appendChild(form);
       form.submit();
     } catch (err) {
-      console.error("Lỗi tạo SePay PG checkout:", err);
-      toast.error("Không thể kết nối cổng thanh toán SePay. Vui lòng thử lại.");
+      console.error("Lỗi tạo checkout:", err);
+      toast.error("Không thể kết nối cổng thanh toán. Vui lòng thử lại.");
       setSePayLoading(false);
     }
   };
@@ -270,7 +270,7 @@ export function CheckoutPaymentForm() {
               // Hiển thị thông báo đang chuyển hướng khi xử lý SePay PG
               <div className="flex gap-2 justify-center items-center py-3 w-full font-semibold text-center rounded-xl bg-primary/10 text-primary">
                 <Spinner className="!w-5 !h-5" />
-                <span>{t("Đang chuyển đến SePay...")}</span>
+                <span>{t("Đang chuyển đến cổng thanh toán...")}</span>
               </div>
             ) : (
               <Button
@@ -279,7 +279,7 @@ export function CheckoutPaymentForm() {
                 text={
                   <>
                     {selectedPaymentType === "SEPAY_PG"
-                      ? t("Thanh toán qua SePay")
+                      ? t("Thanh toán ngay")
                       : t("Thanh toán ngay")}
                     <span className="inline-block ml-1">›</span>
                   </>
