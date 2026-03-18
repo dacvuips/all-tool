@@ -26,7 +26,7 @@ const CartComponent = () => {
   const toast = useToast();
   const { customer } = useAuth();
   const { cartItems, loading, updateQuantity, toggleSelection, removeItem } = useCart();
-  const { createOrder, loading: orderLoading } = useCheckoutContext();
+  const { loading: orderLoading } = useCheckoutContext();
 
   const [updating, setUpdating] = useState<string | null>(null);
   const [showGuestForm, setShowGuestForm] = useState(false);
