@@ -7,6 +7,8 @@ import { Product, ProductService } from "../../../../lib/repo/product";
 
 import { Category } from "../../../../lib/repo";
 import { Pagination } from "../../../../lib/repo/crud.repo";
+import { OrderChangeEventEnum, orderService } from "../../../../lib/repo/order/order.repo";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { SortDirection } from "../../../../lib/repo/types";
 
 export const HomeContext = createContext<
@@ -28,6 +30,7 @@ export const HomeContext = createContext<
 
 export function HomeProvider({ ...props }) {
   const router = useRouter();
+  const { customer, loadCustomer } = useAuth();
   const [openHomePopupNotify, setOpenHomePopupNotify] = useState<boolean>(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,6 +144,25 @@ export function HomeProvider({ ...props }) {
       setOpenHomePopupNotify(true);
     }
   }, []);
+
+  useEffect(() => {
+    if (!customer?.id) return;
+
+    const subscription = orderService.subscribeOrderChanged().subscribe({
+      next: (res) => {
+        if (res.event === OrderChangeEventEnum.PAYMENT_CHANGED) {
+          loadCustomer();
+        }
+      },
+      error: (err) => {
+        console.error("❌ Home order subscription error:", err);
+      },
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [customer?.id]);
 
   const handleValue = (value: string) => {
     const numberValue = +value;
