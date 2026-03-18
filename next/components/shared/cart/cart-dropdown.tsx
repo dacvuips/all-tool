@@ -102,14 +102,14 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
         >
           <TabGroup.Tab label={t("Giỏ hàng") + (totalItems > 0 ? ` (${totalItems})` : "")}>
             {/* Cart Tab Content */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               {loading ? (
-                <div className="flex items-center justify-center h-40">
+                <div className="flex justify-center items-center h-40">
                   <Spinner />
                 </div>
               ) : cartItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <HiShoppingCart className="w-16 h-16 mb-2" />
+                <div className="flex flex-col justify-center items-center h-40 text-gray-400">
+                  <HiShoppingCart className="mb-2 w-16 h-16" />
                   <p>{t("Giỏ hàng trống")}</p>
                 </div>
               ) : (
@@ -124,7 +124,7 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
                       <div className="flex gap-3">
                         <Img
                           src={item.thumbnail}
-                          className="flex-shrink-0 object-cover w-16 h-16 rounded"
+                          className="object-cover flex-shrink-0 w-16 h-16 rounded"
                           alt={item.productName}
                         />
                         <div className="flex-1 min-w-0">
@@ -134,7 +134,7 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
                           {item.variantName && (
                             <p className="text-xs text-gray-500 truncate">{item.variantName}</p>
                           )}
-                          <div className="flex items-center justify-between mt-2">
+                          <div className="flex justify-between items-center mt-2">
                             <span className="font-semibold text-primary">
                               {item.price.toLocaleString()}đ
                             </span>
@@ -163,7 +163,7 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
             {/* Cart Footer */}
             {cartItems.length > 0 && (
               <div className="p-4 space-y-3 border-t">
-                <div className="flex items-center justify-between">
+                <div className="flex justify-between items-center">
                   <span className="text-gray-600">{t("Tổng cộng")}:</span>
                   <span className="text-lg font-bold text-primary">
                     {totalAmount.toLocaleString()}đ
@@ -188,14 +188,14 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Đơn hàng") + (totalOrder > 0 ? ` (${totalOrder})` : "")}>
             {/* Order Tab Content - To be implemented next */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               {orderLoading ? (
-                <div className="flex items-center justify-center h-40">
+                <div className="flex justify-center items-center h-40">
                   <Spinner />
                 </div>
               ) : !order ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-400">
-                  <HiShoppingCart className="w-16 h-16 mb-2" />
+                <div className="flex flex-col justify-center items-center h-40 text-gray-400">
+                  <HiShoppingCart className="mb-2 w-16 h-16" />
                   <p>{t("Không có đơn hàng nào đang lên đơn")}</p>
                 </div>
               ) : (
@@ -215,20 +215,19 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
                     <div className="mt-3 border-t">
                       {/* Thêm mã QR chuyển khoản */}
                       <div className="mt-4">
-                        <ImageQRBank />
                         {/* Hiển thị thời gian còn lại giống checkout-page */}
-                        <div className="flex flex-col items-center justify-center mt-4">
+                        <div className="flex flex-col justify-center items-center mt-4">
                           <span className="pb-2 text-sm text-center text-gray-500">
                             {t("Thời gian còn lại để xác nhận thanh toán")}
                           </span>
                           <div className="flex flex-row gap-4">
-                            <div className="flex flex-col items-center justify-center p-2 bg-green-100 rounded-md">
+                            <div className="flex flex-col justify-center items-center p-2 bg-green-100 rounded-md">
                               <div className="text-lg font-bold text-green-800">
                                 {timeRemaining.minutes}
                               </div>
                               <div className="text-green-800">{t("Phút")}</div>
                             </div>
-                            <div className="flex flex-col items-center justify-center p-2 bg-green-100 rounded-md">
+                            <div className="flex flex-col justify-center items-center p-2 bg-green-100 rounded-md">
                               <div className="text-lg font-bold text-green-800">
                                 {timeRemaining.seconds}
                               </div>
@@ -247,7 +246,7 @@ export function CartDropdown({ isOpen, onClose, anchorRef }: CartDropdownProps) 
                   text={t("Xem tất cả đơn")}
                   onClick={() => {
                     onClose();
-                    router.push("/orders");
+                    router.push("/profile/orders-buy");
                   }}
                   iconPosition="start"
                   iconClassName="text-xl"

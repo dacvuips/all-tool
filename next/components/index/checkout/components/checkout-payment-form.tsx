@@ -1,6 +1,7 @@
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
+import { HiArrowLeft, HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
 import { MAX_SUGGESTED, ParamName, QUICK_AMOUNTS } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
@@ -34,6 +35,7 @@ function getSuggestedAmounts(base: number): number[] {
 
 export function CheckoutPaymentForm() {
   const { t } = useTranslation();
+  const router = useRouter();
   const [queryParams] = useQueryParams({
     [ParamName.creditAmount]: "",
   });
@@ -81,6 +83,9 @@ export function CheckoutPaymentForm() {
       "value"
     );
     setCreditAmountSetting(setting.value);
+    if (amountFromParam > 0) {
+      setAmount(amountFromParam * setting.value);
+    }
   };
 
   const handleQuickAmount = (value: number) => {
@@ -148,13 +153,22 @@ export function CheckoutPaymentForm() {
       <div className="container flex flex-col flex-1 justify-center items-center mx-auto">
         <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
           {/* Header */}
-          <div className="flex flex-row items-start">
-            <div className="flex flex-shrink-0 justify-center items-center w-6 h-6 rounded-full bg-primary/10">
-              <HiOutlineShieldExclamation className="text-2xl text-green-500" />
+          <div className="flex flex-row justify-between items-center">
+            <div className="flex flex-row items-center">
+              <div className="flex flex-shrink-0 justify-center items-center w-6 h-6 rounded-full bg-primary/10">
+                <HiOutlineShieldExclamation className="text-2xl text-green-500" />
+              </div>
+              <div className="ml-3">
+                <h1 className="text-xl font-bold text-gray-800">{t("Thanh toán")}</h1>
+              </div>
             </div>
-            <div className="ml-3">
-              <h1 className="text-xl font-bold text-gray-800">{t("Thanh toán")}</h1>
-            </div>
+            <button
+              onClick={() => router.back()}
+              className="flex gap-1 items-center text-sm text-gray-500 transition-colors hover:text-primary"
+            >
+              <HiArrowLeft className="text-base" />
+              <span>{t("Trở về")}</span>
+            </button>
           </div>
 
           {/* Thông báo hệ số quy đổi */}
@@ -185,7 +199,9 @@ export function CheckoutPaymentForm() {
                     }
                   }
                 }}
+                clearable
                 controlClassName=""
+                inputClassName="w-full"
                 className="flex-1 py-3 pr-2 pl-3 placeholder-gray-400 text-gray-800 border-0 focus:ring-0 focus:outline-none"
                 prefix={<HiOutlineCreditCard />}
                 suffix={
@@ -197,7 +213,7 @@ export function CheckoutPaymentForm() {
 
           {/* Gợi ý số lượng credit nhanh */}
           <div className="flex flex-wrap gap-2">
-            {showQuickAmounts.map((value) => (
+            {showQuickAmounts.slice(0, 4).map((value) => (
               <Button
                 key={value}
                 onClick={() => handleQuickAmount(value)}

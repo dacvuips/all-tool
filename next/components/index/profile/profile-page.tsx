@@ -7,7 +7,7 @@ import { BreadCrumbs, Spinner } from "../../shared/utilities/misc";
 import { ProfileAccount } from "./components/account/profile-account";
 
 import { useTranslation } from "react-i18next";
-import { RiBankCardLine, RiKey2Line, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
+import { RiBankCardLine, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 
 import { ProfileCredential } from "./components/credential/profile-credential";
@@ -96,8 +96,8 @@ export const ProfileMenuList = () => {
   return [
     { label: t("Hồ sơ của tôi"), icon: <AiOutlineUser />, href: "/profile/account" },
     { label: t("Đơn mua"), icon: <RiShoppingCart2Line />, href: "/profile/orders-buy" },
-    { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/profile/deposit" },
-    { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
+    { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/checkout" },
+    // { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
     {
       label: t("Thông báo"),
       icon: <AiOutlineBell />,

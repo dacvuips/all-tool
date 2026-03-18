@@ -1,3 +1,4 @@
+import { useRouter } from "next/router";
 import { useState } from "react";
 import { CheckoutProvider } from "../../components/index/checkout/provider/checkout-provider";
 import { HomeProvider } from "../../components/index/home/provider/home-provider";
@@ -24,6 +25,10 @@ export function HomeLayout({ ...props }: LayoutProps) {
   const [getToggleSidebar, setGetToggleSidebar] = useState<string>();
   const xs = useScreen("xs");
   const { customer } = useAuth();
+  const router = useRouter();
+  const isHomePage = !["/profile", "/checkout", "/post"].some((path) =>
+    router.pathname.startsWith(path)
+  );
 
   return (
     <>
@@ -31,7 +36,7 @@ export function HomeLayout({ ...props }: LayoutProps) {
         <DefaultHead shopCode="" shopLogo="" />
         <GlobalProvider>
           <div className="pt-14 w-full min-h-screen">
-            <Sidebar setGetToggleSidebar={setGetToggleSidebar} />
+            {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />}
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
             {customer && (

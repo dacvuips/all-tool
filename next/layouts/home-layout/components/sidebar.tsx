@@ -386,7 +386,7 @@ export function SidebarMobile({
           />
         </div>
         <Scrollbars style={{ height: "calc(100vh - 52px)" }} hideTracksWhenNotNeeded autoHide>
-          <div className="px-2 py-3">
+          <div className="py-3 pl-2">
             <div className="mb-2">
               <Accordion isOpen={true}>
                 {loadingTree ? (

@@ -231,11 +231,21 @@ function SePayPGWaitingView() {
           onClick={handleRetry}
           disabled={timeRemaining.expired}
         />
-        <Button
-          className="py-3 w-full text-red-600 rounded-xl border border-red-300 hover:bg-red-50"
-          text={t("Hủy đơn")}
-          onClick={handleCancel}
-        />
+        {timeRemaining.expired && (
+          <Button
+            primary
+            className="py-3 w-full rounded-xl"
+            text={t("Tạo đơn mới")}
+            onClick={() => router.reload()}
+          />
+        )}
+        {!timeRemaining.expired && (
+          <Button
+            className="py-3 w-full text-red-600 rounded-xl border border-red-300 hover:bg-red-50"
+            text={t("Hủy đơn")}
+            onClick={handleCancel}
+          />
+        )}
       </div>
     </div>
   );

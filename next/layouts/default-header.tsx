@@ -9,7 +9,6 @@ import {
   RiArrowLeftSLine,
   RiBankCardLine,
   RiHandCoinFill,
-  RiKey2Line,
   RiLockPasswordLine,
   RiLogoutBoxLine,
   RiMenu3Line,
@@ -68,7 +67,9 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
   const { wallet } = useHomeLayoutContext();
 
   const { HEADER_DROPDOWN_MENUS } = useHeaderDropDownMenus();
-  const { setOpenCustomerLoginDialog } = useGlobalContext();
+  const { setOpenCustomerLoginDialog, setOpenSidebarSlideout } = useGlobalContext();
+  const screenXl = useScreen("xl");
+  const isHomePage = router.pathname === "/";
 
   return (
     <>
@@ -79,6 +80,18 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
         <div className="w-full bg-white">
           <div className="flex flex-row justify-between items-center pr-1 pl-5 w-full h-14">
             <div className="flex flex-row justify-around items-center">
+              {!screenXl && isHomePage && (
+                <div className="pr-3 mr-1">
+                  <Button
+                    outline
+                    tooltip={t("Danh mục")}
+                    small
+                    icon={<RiMenu3Line />}
+                    className="p-0 w-8 h-8 text-xl rounded-md text-primary"
+                    onClick={() => setOpenSidebarSlideout?.(true)}
+                  />
+                </div>
+              )}
               <div className="mr-6 logo min-w-12">
                 <Link href={"/"}>
                   <img
@@ -192,9 +205,15 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
   const isBlockPage = useSettingPublic("pa-b-page");
 
   const isMainPage = !name;
+  const isHomePage = router.pathname === "/";
 
-  const { setOpenCustomerLoginDialog, postPopup, openCardMenu, setOpenCardMenu } =
-    useGlobalContext();
+  const {
+    setOpenCustomerLoginDialog,
+    postPopup,
+    openCardMenu,
+    setOpenCardMenu,
+    setOpenSidebarSlideout,
+  } = useGlobalContext();
 
   return (
     <>
@@ -224,7 +243,19 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
       <>
         <div className="flex fixed top-0 left-0 z-50 flex-row items-center w-full h-14 bg-white shadow">
           <div className="flex flex-row gap-2 justify-between px-4 w-full">
-            <div className="flex flex-row items-center">
+            <div className="flex flex-row gap-2 items-center">
+              {isHomePage && (
+                <div className="pr-2">
+                  <Button
+                    outline
+                    tooltip={t("Danh mục")}
+                    small
+                    icon={<RiMenu3Line />}
+                    className="p-0 w-8 h-8 text-xl rounded-md text-primary"
+                    onClick={() => setOpenSidebarSlideout?.(true)}
+                  />
+                </div>
+              )}
               <Link href="/" className="block">
                 <img
                   src={`${screenXs ? "/assets/img/logo-new.png" : "/assets/img/logo-vuong.png"}`}
@@ -462,18 +493,18 @@ const useHeaderDropDownMenus = () => {
     {
       text: t("Nạp ví"),
       icon: <RiBankCardLine />,
-      onclick: () => router.push("/profile/deposit"),
+      onclick: () => router.push("/checkout"),
     },
     {
       text: t("Đơn mua"),
       icon: <RiShoppingCart2Line />,
       onclick: () => router.push("/profile/orders-buy"),
     },
-    {
-      text: t("API Key"),
-      icon: <RiKey2Line />,
-      onclick: () => router.push("/profile/credential"),
-    },
+    // {
+    //   text: t("API Key"),
+    //   icon: <RiKey2Line />,
+    //   onclick: () => router.push("/profile/credential"),
+    // },
     // {
     //   text: t("Đơn trung gian bán"),
     //   icon: <RiHandCoinLine />,

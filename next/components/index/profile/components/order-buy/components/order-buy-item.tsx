@@ -32,7 +32,7 @@ const PAYMENT_STATUS_CLASS: Record<string, string> = {
   [PaymentStatus.PAYMENT_PENDING]: "bg-yellow-50 text-yellow-700 border-yellow-200",
   [PaymentStatus.PAYMENT_CANCELLED]: "bg-red-50 text-red-700 border-red-200",
   [PaymentStatus.PAYMENT_FAILED]: "bg-red-50 text-red-700 border-red-200",
-  [PaymentStatus.PAYMENT_TIMEOUT]: "bg-orange-50 text-orange-700 border-orange-200",
+  [PaymentStatus.PAYMENT_TIMEOUT]: "bg-red-50 text-red-700 border-red-200",
 };
 
 export function OrderBuyItem({ order, loadAll }: Props) {
@@ -65,7 +65,7 @@ export function OrderBuyItem({ order, loadAll }: Props) {
         </div>
         <div className="flex gap-2 items-center">
           <span
-            className={`px-2.5 py-1 text-12 border rounded-full ${
+            className={`px-2.5 py-1 text-12 border rounded-md ${
               PAYMENT_STATUS_CLASS[order.paymentStatus] ||
               "bg-gray-50 text-gray-600 border-gray-200"
             }`}
