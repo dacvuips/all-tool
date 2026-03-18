@@ -50,7 +50,7 @@ export interface CheckoutContextType {
 
   currentOrder: Order | null;
   loading: boolean;
-  createOrder: (creditAmount: number) => Promise<{ order: Order }>;
+  // createOrder: (creditAmount: number) => Promise<{ order: Order }>;
   cancelOrder: (orderId: string, reason?: string) => Promise<Order>;
   getOneOrderByGuest: () => Promise<Order | null>;
 }
@@ -121,17 +121,17 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
     }
   }, [selectPayment]);
 
-  const createOrder = async (creditAmount: number): Promise<{ order: Order }> => {
-    setLoading(true);
-    try {
-      const result = await orderService.createOrder(creditAmount);
-      setCurrentOrder(result.order);
-      setOrder(result.order as unknown as Order | null);
-      return result;
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const createOrder = async (creditAmount: number): Promise<{ order: Order }> => {
+  //   setLoading(true);
+  //   try {
+  //     const result = await orderService.createOrder(creditAmount);
+  //     setCurrentOrder(result.order);
+  //     setOrder(result.order as unknown as Order | null);
+  //     return result;
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const cancelOrder = async (orderId: string, reason?: string): Promise<Order> => {
     setLoading(true);
@@ -183,7 +183,7 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
         setDiscount,
         currentOrder,
         loading,
-        createOrder,
+        // createOrder,
         cancelOrder,
         getOneOrderByGuest,
       }}

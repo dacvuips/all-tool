@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlineCreditCard, HiOutlineShieldExclamation } from "react-icons/hi";
-import { ParamName } from "../../../../lib/constants/constants";
+import { MAX_SUGGESTED, ParamName, QUICK_AMOUNTS } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useToast } from "../../../../lib/providers/toast-provider";
@@ -12,10 +12,6 @@ import { Input, Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
 import { useCheckoutContext } from "../provider/checkout-provider";
-
-const QUICK_AMOUNTS = [10, 100, 1000, 10000];
-const MAX_SUGGESTED = 10_000_000;
-
 /**
  * Các phương thức thanh toán được hỗ trợ
  */
@@ -68,7 +64,7 @@ export function CheckoutPaymentForm() {
   const [sePayLoading, setSePayLoading] = useState(false);
 
   const toast = useToast();
-  const { order, loading, createOrder } = useCheckoutContext();
+  const { order, loading } = useCheckoutContext();
   const suggestedAmounts = creditAmount > 0 ? getSuggestedAmounts(creditAmount) : [];
   const showQuickAmounts = suggestedAmounts.length > 0 ? suggestedAmounts : QUICK_AMOUNTS;
 
@@ -94,10 +90,10 @@ export function CheckoutPaymentForm() {
     setAmount(value * (creditAmountSetting as number));
   };
 
-  /** Thanh toán qua chuyển khoản ngân hàng */
-  const handleBankTransferCheckout = async () => {
-    await createOrder(creditAmount);
-  };
+  // /** Thanh toán qua chuyển khoản ngân hàng */
+  // const handleBankTransferCheckout = async () => {
+  //   await createOrder(creditAmount);
+  // };
 
   /** Thanh toán qua cổng SePay PG — tạo hidden form rồi auto-submit (POST) */
   const handleSePayPGCheckout = async () => {
@@ -131,11 +127,7 @@ export function CheckoutPaymentForm() {
 
   /** Xử lý khi click nút thanh toán */
   const handleCheckout = async () => {
-    if (selectedPaymentType === "SEPAY_PG") {
-      await handleSePayPGCheckout();
-    } else {
-      await handleBankTransferCheckout();
-    }
+    handleSePayPGCheckout();
   };
 
   const isLoading = loading || sePayLoading;

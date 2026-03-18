@@ -30,6 +30,9 @@ export const ParamName = {
   creditAmount: "creditAmount", // số tiền credit để thanh toán
 };
 
+export const QUICK_AMOUNTS = [10, 100, 1000, 10000];
+export const MAX_SUGGESTED = 10_000_000;
+
 export const CookiesName = {
   cartSessionId: "cartSessionId",
   guestName: "guestName",

@@ -300,22 +300,22 @@ export class OrderRepository extends CrudRepository<Order> {
       .then((res) => res.data.getMyOrderStats as OrderStats);
   }
 
-  async createOrder(creditAmount: number): Promise<{ order: Order }> {
-    return this.apollo
-      .mutate({
-        mutation: gql`
-          mutation CreateOrder($creditAmount: Float!) {
-            createOrder(creditAmount: $creditAmount) {
-              order {
-                ${this.shortFragment}
-              }
-            }
-          }
-        `,
-        variables: { creditAmount },
-      })
-      .then((res) => res.data.createOrder as { order: Order } | null);
-  }
+  // async createOrder(creditAmount: number): Promise<{ order: Order }> {
+  //   return this.apollo
+  //     .mutate({
+  //       mutation: gql`
+  //         mutation CreateOrder($creditAmount: Float!) {
+  //           createOrder(creditAmount: $creditAmount) {
+  //             order {
+  //               ${this.shortFragment}
+  //             }
+  //           }
+  //         }
+  //       `,
+  //       variables: { creditAmount },
+  //     })
+  //     .then((res) => res.data.createOrder as { order: Order } | null);
+  // }
 
   /**
    * Tạo form thanh toán qua cổng SePay PG.
