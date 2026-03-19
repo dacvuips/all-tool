@@ -1,11 +1,14 @@
 /**
- * Executor gọi API theo từng AI provider (OpenAI, Claude, Gemini, DeepSeek, Kling, SeeDance).
+ * Executor gọi API theo từng AI provider.
  * Mỗi provider có function riêng, có thể tùy biến request/response sau.
+ *
+ * - GOOGLE_GEMINI_KEY  → @google/genai SDK (API key) hoặc Vertex AI REST (OAuth2 Bearer token)
  */
 
 import { parseBodyAfterReplace, replacePlaceholders } from "../../helpers/flow-node-placeholder";
 import { AiProviderKeyEnum, ApiOutputTypeEnum, ProductFlowNodeData } from "../../libs/dal/product";
 import { CallProviderGeminiApi } from "./call-provider-api/execute-provider-gemini";
+import { CallProviderGeminiVertexApi } from "./call-provider-api/execute-provider-gemini-vertex";
 
 /** Context truyền vào từng executor theo từng AI provider */
 export interface ExecuteProviderContext {
@@ -37,6 +40,13 @@ export async function executeClaudeKey(ctx: ExecuteProviderContext): Promise<unk
 }
 
 export async function executeGoogleGeminiKey(ctx: ExecuteProviderContext): Promise<unknown> {
+  const cred = ctx.credentialDecrypted?.trim();
+  if (cred && cred.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(cred);
+      if (parsed.accessToken) return CallProviderGeminiVertexApi(ctx);
+    } catch { /* fallthrough to SDK */ }
+  }
   return CallProviderGeminiApi(ctx);
 }
 
