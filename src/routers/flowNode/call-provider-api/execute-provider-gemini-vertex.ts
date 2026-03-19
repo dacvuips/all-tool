@@ -1,7 +1,9 @@
 /**
  * Google Vertex AI REST API – gọi trực tiếp endpoint Vertex AI bằng fetch.
  * Hỗ trợ Imagen (tạo ảnh) và Veo (tạo video):
- *   1. Text → Image (Imagen)
+ *   1. Text → Image (Imagen generate)
+ *   1b. Image → Image edit (Imagen edit, 1 ảnh input)
+ *   1c. Multi-image → Image (Imagen edit, 1 ảnh base + N reference images)
  *   2. Text → Video (Veo)
  *   3. Image → Video (1 ảnh làm frame đầu)
  *   4. Start + End image → Video (2 ảnh: đầu + cuối)
@@ -100,6 +102,11 @@ export async function CallProviderGeminiVertexApi(ctx: ExecuteProviderContext): 
 /* ═══════════════════════════════════════════════════════════════════════════
  * IMAGE – Imagen predict API
  * Response: { predictions: [{ bytesBase64Encoded, mimeType }] }
+ *
+ * Auto-detect media từ fieldValues:
+ *   - Không có ảnh  → Text→Image       (imagen-3.0-generate-002)
+ *   - 1 ảnh         → Image→Image edit (imagen-3.0-edit-002)
+ *   - 2+ ảnh        → ảnh đầu = base, còn lại = referenceImages (imagen-3.0-edit-002)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 async function callVertexImagenApi(
@@ -107,22 +114,66 @@ async function callVertexImagenApi(
   ctx: ExecuteProviderContext
 ): Promise<unknown> {
   const bodyObj = extractBodyObj(ctx.body);
-  const model = getModel(ctx, "imagen-3.0-generate-002");
   const prompt = extractPrompt(bodyObj, ctx.body);
+  const { imageUrls } = collectMediaFromFieldValues(ctx.fieldValues);
+
+  const hasImages = imageUrls.length > 0;
+  const defaultModel = hasImages ? "imagen-3.0-edit-002" : "imagen-3.0-generate-002";
+  const model = getModel(ctx, defaultModel);
 
   const endpoint = buildVertexEndpoint(cred, model);
+  const instance = buildImagenInstance(prompt, imageUrls, bodyObj);
 
-  const requestBody = {
-    instances: [{ prompt }],
-    parameters: {
-      sampleCount: (bodyObj.sampleCount as number) ?? (bodyObj.numberOfImages as number) ?? 1,
-      ...(bodyObj.aspectRatio ? { aspectRatio: bodyObj.aspectRatio } : {}),
-      ...(bodyObj.personGeneration ? { personGeneration: bodyObj.personGeneration } : {}),
-    },
+  const parameters: Record<string, unknown> = {
+    sampleCount: (bodyObj.sampleCount as number) ?? (bodyObj.numberOfImages as number) ?? 1,
   };
+  if (bodyObj.aspectRatio) parameters.aspectRatio = bodyObj.aspectRatio;
+  if (bodyObj.personGeneration) parameters.personGeneration = bodyObj.personGeneration;
+
+  const requestBody = { instances: [instance], parameters };
 
   const data = await vertexPredict(endpoint, cred.accessToken, requestBody);
   return { ...data, _vertexProvider: true };
+}
+
+/**
+ * Xây instance cho Imagen – auto-detect media từ fieldValues.
+ *
+ * 0 ảnh  → { prompt }
+ * 1 ảnh  → { prompt, image: { uri } }
+ * 2+ ảnh → { prompt, image: { uri: first }, referenceImages: [{ uri }, ...] }
+ */
+function buildImagenInstance(
+  prompt: string,
+  imageUrls: string[],
+  bodyObj: Record<string, unknown>
+): Record<string, unknown> {
+  const instance: Record<string, unknown> = { prompt };
+
+  const explicitImage = bodyObj.image as Record<string, unknown> | string | undefined;
+  const explicitRefs = bodyObj.referenceImages as unknown[] | undefined;
+
+  if (explicitImage || explicitRefs) {
+    if (explicitImage) {
+      instance.image = typeof explicitImage === "string" ? { uri: explicitImage } : explicitImage;
+    }
+    if (Array.isArray(explicitRefs) && explicitRefs.length > 0) {
+      instance.referenceImages = explicitRefs.map((r) =>
+        typeof r === "string" ? { uri: r } : r
+      );
+    }
+    return instance;
+  }
+
+  if (imageUrls.length === 0) return instance;
+
+  instance.image = { uri: imageUrls[0] };
+
+  if (imageUrls.length >= 2) {
+    instance.referenceImages = imageUrls.slice(1).map((uri) => ({ uri }));
+  }
+
+  return instance;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
