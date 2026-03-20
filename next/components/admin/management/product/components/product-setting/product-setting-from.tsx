@@ -265,7 +265,7 @@ function ApiConfigSection() {
           />
         </Field>
         <Field label={t("Endpoint")} name="config.endpoint" cols={8}>
-          <Input placeholder={"/generate-image"} />
+          <Input stringLength={300} placeholder={"/generate-image"} />
         </Field>
         <PlaceholderLabel />
         <Field label={t("Headers (JSON)")} name="config.headers" cols={12}>

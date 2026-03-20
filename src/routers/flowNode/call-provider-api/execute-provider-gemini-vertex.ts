@@ -103,8 +103,15 @@ async function callVertexGeminiApi(
     requestBody.generationConfig = bodyObj.generationConfig;
   }
 
-  const data = await vertexPost(ctx.url, accessToken, requestBody);
-  return { ...data, _vertexProvider: true };
+  try {
+    const data = await vertexPost(ctx.url, accessToken, requestBody);
+    return { ...data, _vertexProvider: true };
+  } catch (err: any) {
+    logger.error(
+      `[Vertex AI] callVertexGeminiApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+    );
+    throw err;
+  }
 }
 
 function guessMimeType(url: string): string {
@@ -145,8 +152,15 @@ async function callVertexImagenApi(
 
   const requestBody = { instances: [instance], parameters };
 
-  const data = await vertexPost(ctx.url, accessToken, requestBody);
-  return { ...data, _vertexProvider: true };
+  try {
+    const data = await vertexPost(ctx.url, accessToken, requestBody);
+    return { ...data, _vertexProvider: true };
+  } catch (err: any) {
+    logger.error(
+      `[Vertex AI] callVertexImagenApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+    );
+    throw err;
+  }
 }
 
 /**
@@ -216,8 +230,15 @@ async function callVertexVeoApi(
   const instance = buildVeoInstance(prompt, fieldValues, durationSeconds);
   const requestBody = { instances: [instance], parameters };
 
-  const data = await vertexPost(ctx.url, accessToken, requestBody);
-  return { ...data, _vertexProvider: true };
+  try {
+    const data = await vertexPost(ctx.url, accessToken, requestBody);
+    return { ...data, _vertexProvider: true };
+  } catch (err: any) {
+    logger.error(
+      `[Vertex AI] callVertexVeoApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+    );
+    throw err;
+  }
 }
 
 /**
@@ -282,15 +303,47 @@ async function vertexPost(
 ): Promise<Record<string, unknown>> {
   logger.info(`[Vertex AI] POST ${endpoint}`);
 
-  const response = await axios.post(endpoint, body, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    timeout: 300_000,
-  });
+  try {
+    const response = await axios.post(endpoint, body, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      timeout: 300_000,
+    });
 
-  return response.data as Record<string, unknown>;
+    return response.data as Record<string, unknown>;
+  } catch (err: any) {
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+
+    const message = (() => {
+      if (data == null) return "";
+      try {
+        // Vertex AI errors often have shape: { error: { message: string, ... } }
+        if (typeof data === "object") {
+          const maybeError = (data as any).error;
+          const maybeMessage = maybeError?.message;
+          if (typeof maybeMessage === "string") return maybeMessage;
+        }
+
+        const asString = typeof data === "string" ? data : JSON.stringify(data);
+        return asString.length > 2000 ? asString.slice(0, 2000) + "...(truncated)" : asString;
+      } catch {
+        return String(data);
+      }
+    })();
+
+    logger.error(`[Vertex AI] POST failed status=${status} message=${message}`);
+
+    // Safe rethrow so upstream doesn't print huge axios request bodies.
+    const safeError = new Error(
+      `Vertex AI POST failed (status=${status}). ${message ? `Details: ${message}` : ""}`.trim(),
+    );
+    (safeError as any).vertexStatus = status;
+    (safeError as any).vertexResponseMessage = message;
+    throw safeError;
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
