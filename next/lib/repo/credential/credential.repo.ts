@@ -12,6 +12,9 @@ export interface Credential extends BaseModel {
   customerId?: string;
   isCustomerCredential?: boolean;
   isAdminCredential?: boolean;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
+  oauthRefreshToken?: string;
 }
 
 export class CredentialRepository extends CrudRepository<Credential> {
@@ -25,6 +28,9 @@ export class CredentialRepository extends CrudRepository<Credential> {
     customerId
     isCustomerCredential
     isAdminCredential
+    oauthClientId
+    oauthClientSecret
+    oauthRefreshToken
     createdAt
     updatedAt
   `);
@@ -37,6 +43,9 @@ export class CredentialRepository extends CrudRepository<Credential> {
     customerId
     isCustomerCredential
     isAdminCredential
+    oauthClientId
+    oauthClientSecret
+    oauthRefreshToken
     createdAt
     updatedAt
   `);

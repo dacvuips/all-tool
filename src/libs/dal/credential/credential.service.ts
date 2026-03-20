@@ -21,6 +21,21 @@ class CredentialService extends CRUDService(CredentialModel) {
         ? encryptProviderSecret(data.value)
         : credential?.value;
     }
+    if (data.oauthClientId !== undefined) {
+      encryptedData.oauthClientId = shouldEncryptValue(data.oauthClientId)
+        ? encryptProviderSecret(data.oauthClientId)
+        : credential?.oauthClientId;
+    }
+    if (data.oauthClientSecret !== undefined) {
+      encryptedData.oauthClientSecret = shouldEncryptValue(data.oauthClientSecret)
+        ? encryptProviderSecret(data.oauthClientSecret)
+        : credential?.oauthClientSecret;
+    }
+    if (data.oauthRefreshToken !== undefined) {
+      encryptedData.oauthRefreshToken = shouldEncryptValue(data.oauthRefreshToken)
+        ? encryptProviderSecret(data.oauthRefreshToken)
+        : credential?.oauthRefreshToken;
+    }
 
     return await super.updateOne(id, encryptedData);
   }
@@ -45,6 +60,15 @@ class CredentialService extends CRUDService(CredentialModel) {
 
     if (data.value) {
       encryptedData.value = encryptProviderSecret(data.value);
+    }
+    if (data.oauthClientId) {
+      encryptedData.oauthClientId = encryptProviderSecret(data.oauthClientId);
+    }
+    if (data.oauthClientSecret) {
+      encryptedData.oauthClientSecret = encryptProviderSecret(data.oauthClientSecret);
+    }
+    if (data.oauthRefreshToken) {
+      encryptedData.oauthRefreshToken = encryptProviderSecret(data.oauthRefreshToken);
     }
 
     return await super.create(encryptedData);

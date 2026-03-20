@@ -70,20 +70,16 @@ async function resolveGoogleGeminiCredential(
     const refreshToken = decryptProviderSecret(credential.oauthRefreshToken);
 
     if (!clientId || !clientSecret || !refreshToken) {
-      throw new Error("Failed to decrypt Google OAuth credentials (clientId/clientSecret/refreshToken).");
+      throw new Error(
+        "Failed to decrypt Google OAuth credentials (clientId/clientSecret/refreshToken)."
+      );
     }
-
-    const projectId = credential.vertexProjectId;
-    if (!projectId) {
-      throw new Error("Missing vertexProjectId in Google Gemini credential.");
-    }
-    const region = credential.vertexRegion || "us-central1";
 
     const accessToken = await getVertexAccessToken({ clientId, clientSecret, refreshToken });
     if (!accessToken) {
       throw new Error("Failed to obtain Vertex AI access token. Check OAuth credentials.");
     }
-    return JSON.stringify({ accessToken, projectId, region });
+    return JSON.stringify({ accessToken });
   }
   return resolveSimpleCredential(credential);
 }
@@ -110,7 +106,9 @@ export async function executeGoogleGeminiKey(ctx: ExecuteProviderContext): Promi
     try {
       const parsed = JSON.parse(cred);
       if (parsed.accessToken) return CallProviderGeminiVertexApi(ctx);
-    } catch { /* fallthrough to SDK */ }
+    } catch {
+      /* fallthrough to SDK */
+    }
   }
   return CallProviderGeminiApi(ctx);
 }
@@ -151,7 +149,9 @@ export function executeByProvider(
   const { nodeData, fieldValues, context } = ctx;
   const config = nodeData.config;
   if (!config) {
-    return Promise.reject(new Error("Node config is missing. Please configure the node before executing."));
+    return Promise.reject(
+      new Error("Node config is missing. Please configure the node before executing.")
+    );
   }
 
   const rawTemplate = config.bodyTemplate ?? "{}";
@@ -161,7 +161,9 @@ export function executeByProvider(
   const outputType = (config.outputType || ApiOutputTypeEnum.IMAGE) as ApiOutputTypeEnum;
 
   if (!rawUrl) {
-    return Promise.reject(new Error("Node config is missing 'endpoint'. Please set the API endpoint."));
+    return Promise.reject(
+      new Error("Node config is missing 'endpoint'. Please set the API endpoint.")
+    );
   }
 
   const replacedTemplate = replacePlaceholders(rawTemplate, fieldValues, context);
@@ -173,7 +175,9 @@ export function executeByProvider(
   const urlParsed = parseBodyAfterReplace(url) as string;
 
   if (!urlParsed) {
-    return Promise.reject(new Error("API endpoint resolved to empty string after placeholder replacement."));
+    return Promise.reject(
+      new Error("API endpoint resolved to empty string after placeholder replacement.")
+    );
   }
 
   ctx.body = body as string;

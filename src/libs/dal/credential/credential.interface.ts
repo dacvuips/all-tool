@@ -12,6 +12,4 @@ export type ICredential = TimestampEntity & {
   oauthClientId?: string;
   oauthClientSecret?: string;
   oauthRefreshToken?: string;
-  vertexProjectId?: string;
-  vertexRegion?: string;
 };

@@ -21,6 +21,9 @@ const maskCredential = (credential: ICredential | null) => {
     customerId: doc.customerId,
     isCustomerCredential: doc.isCustomerCredential,
     isAdminCredential: doc.isAdminCredential,
+    oauthClientId: maskCredentialValue(doc.oauthClientId),
+    oauthClientSecret: maskCredentialValue(doc.oauthClientSecret),
+    oauthRefreshToken: maskCredentialValue(doc.oauthRefreshToken),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

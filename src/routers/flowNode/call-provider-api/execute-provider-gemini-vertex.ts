@@ -1,6 +1,7 @@
 /**
  * Google Vertex AI REST API – gọi trực tiếp endpoint Vertex AI bằng fetch.
- * Hỗ trợ Imagen (tạo ảnh) và Veo (tạo video):
+ * Hỗ trợ Gemini (text/chat), Imagen (tạo ảnh), và Veo (tạo video):
+ *   0. Text/Chat (Gemini generateContent)
  *   1. Text → Image (Imagen generate)
  *   1b. Image → Image edit (Imagen edit, 1 ảnh input)
  *   1c. Multi-image → Image (Imagen edit, 1 ảnh base + N reference images)
@@ -12,10 +13,11 @@
  *   7. Start + End video → Video (2+ video: đầu + cuối)
  *
  * Auth: Bearer token (OAuth2 / Service Account).
- * Credential format (JSON string): { accessToken, projectId, region }
+ * Credential format (JSON string): { accessToken }
  *
- * Endpoint:
- *   POST https://{region}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{region}/publishers/google/models/{model}:predict
+ * Endpoint lấy trực tiếp từ nodeData.config.endpoint (ctx.url), ví dụ:
+ *   Gemini:       https://{region}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{region}/publishers/google/models/{model}:generateContent
+ *   Imagen / Veo: https://{region}-aiplatform.googleapis.com/v1/projects/{projectId}/locations/{region}/publishers/google/models/{model}:predict
  */
 
 import axios from "axios";
@@ -27,53 +29,23 @@ import { ExecuteProviderContext } from "../execute-provider";
  * Credential parsing
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-export interface VertexCredential {
-  accessToken: string;
-  projectId: string;
-  region: string;
-}
-
 /**
- * Parse credential từ ctx.credentialDecrypted.
- * Hỗ trợ JSON string `{ accessToken, projectId, region }` hoặc plain access token
- * (khi projectId/region nằm trong body hoặc nodeData config).
+ * Trích accessToken từ credentialDecrypted.
+ * Hỗ trợ JSON string `{ accessToken, ... }` hoặc plain access token string.
  */
-function parseVertexCredential(
-  credentialDecrypted: string,
-  body: unknown,
-  nodeData: Record<string, unknown> | undefined
-): VertexCredential {
+function parseAccessToken(credentialDecrypted: string): string {
   const trimmed = credentialDecrypted.trim();
 
   if (trimmed.startsWith("{")) {
     try {
       const parsed = JSON.parse(trimmed) as Record<string, unknown>;
-      return {
-        accessToken: String(parsed.accessToken || "").trim(),
-        projectId: String(parsed.projectId || "").trim(),
-        region: String(parsed.region || "us-central1").trim(),
-      };
+      return String(parsed.accessToken || "").trim();
     } catch {
       // fallthrough
     }
   }
 
-  const bodyObj = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
-  const config = (nodeData as any)?.config as Record<string, unknown> | undefined;
-
-  return {
-    accessToken: trimmed,
-    projectId: String(bodyObj.projectId || config?.vertexProjectId || "").trim(),
-    region: String(bodyObj.region || config?.vertexRegion || "us-central1").trim(),
-  };
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
- * Endpoint builder
- * ═══════════════════════════════════════════════════════════════════════════ */
-
-function buildVertexEndpoint(cred: VertexCredential, model: string): string {
-  return `https://${cred.region}-aiplatform.googleapis.com/v1/projects/${cred.projectId}/locations/${cred.region}/publishers/google/models/${model}:predict`;
+  return trimmed;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -81,22 +53,68 @@ function buildVertexEndpoint(cred: VertexCredential, model: string): string {
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 export async function CallProviderGeminiVertexApi(ctx: ExecuteProviderContext): Promise<unknown> {
-  const { credentialDecrypted, body, nodeData } = ctx;
+  const { credentialDecrypted } = ctx;
   if (!credentialDecrypted?.trim()) {
     throw new Error("Vertex AI credential is required (credentialDecrypted).");
   }
 
-  const cred = parseVertexCredential(credentialDecrypted, body, nodeData as any);
-  if (!cred.accessToken) throw new Error("Vertex AI: accessToken is required.");
-  if (!cred.projectId) throw new Error("Vertex AI: projectId is required.");
+  const accessToken = parseAccessToken(credentialDecrypted);
+  if (!accessToken) throw new Error("Vertex AI: accessToken is required.");
+  if (!ctx.url?.trim()) throw new Error("Vertex AI: endpoint URL is required (nodeData.config.endpoint).");
 
   if (ctx.outputType === ApiOutputTypeEnum.IMAGE) {
-    return callVertexImagenApi(cred, ctx);
+    return callVertexImagenApi(accessToken, ctx);
   }
   if (ctx.outputType === ApiOutputTypeEnum.VIDEO) {
-    return callVertexVeoApi(cred, ctx);
+    return callVertexVeoApi(accessToken, ctx);
   }
-  return callVertexImagenApi(cred, ctx);
+  return callVertexGeminiApi(accessToken, ctx);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * TEXT / CHAT – Gemini generateContent API
+ * Endpoint: .../{model}:generateContent
+ * Body: { contents: [{ parts: [{ text }] }], generationConfig?: { ... } }
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+async function callVertexGeminiApi(
+  accessToken: string,
+  ctx: ExecuteProviderContext
+): Promise<unknown> {
+  const bodyObj = extractBodyObj(ctx.body);
+
+  let requestBody: Record<string, unknown>;
+
+  if (bodyObj.contents) {
+    requestBody = bodyObj;
+  } else {
+    const prompt = extractPrompt(bodyObj, ctx.body);
+    const parts: Array<Record<string, unknown>> = [{ text: prompt }];
+
+    const { imageUrls } = collectMediaFromFieldValues(ctx.fieldValues);
+    for (const url of imageUrls) {
+      parts.push({ fileData: { fileUri: url, mimeType: guessMimeType(url) } });
+    }
+
+    requestBody = { contents: [{ parts }] };
+  }
+
+  if (bodyObj.generationConfig) {
+    requestBody.generationConfig = bodyObj.generationConfig;
+  }
+
+  const data = await vertexPost(ctx.url, accessToken, requestBody);
+  return { ...data, _vertexProvider: true };
+}
+
+function guessMimeType(url: string): string {
+  const ext = url.split(/[?#]/)[0].split(".").pop()?.toLowerCase();
+  const map: Record<string, string> = {
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+    gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
+    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+  };
+  return map[ext || ""] || "application/octet-stream";
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -110,18 +128,13 @@ export async function CallProviderGeminiVertexApi(ctx: ExecuteProviderContext): 
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 async function callVertexImagenApi(
-  cred: VertexCredential,
+  accessToken: string,
   ctx: ExecuteProviderContext
 ): Promise<unknown> {
   const bodyObj = extractBodyObj(ctx.body);
   const prompt = extractPrompt(bodyObj, ctx.body);
   const { imageUrls } = collectMediaFromFieldValues(ctx.fieldValues);
 
-  const hasImages = imageUrls.length > 0;
-  const defaultModel = hasImages ? "imagen-3.0-edit-002" : "imagen-3.0-generate-002";
-  const model = getModel(ctx, defaultModel);
-
-  const endpoint = buildVertexEndpoint(cred, model);
   const instance = buildImagenInstance(prompt, imageUrls, bodyObj);
 
   const parameters: Record<string, unknown> = {
@@ -132,7 +145,7 @@ async function callVertexImagenApi(
 
   const requestBody = { instances: [instance], parameters };
 
-  const data = await vertexPredict(endpoint, cred.accessToken, requestBody);
+  const data = await vertexPost(ctx.url, accessToken, requestBody);
   return { ...data, _vertexProvider: true };
 }
 
@@ -186,15 +199,12 @@ function buildImagenInstance(
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 async function callVertexVeoApi(
-  cred: VertexCredential,
+  accessToken: string,
   ctx: ExecuteProviderContext
 ): Promise<unknown> {
   const bodyObj = extractBodyObj(ctx.body);
-  const model = getModel(ctx, "veo-3");
   const prompt = extractPrompt(bodyObj, ctx.body);
   const fieldValues = ctx.fieldValues;
-
-  const endpoint = buildVertexEndpoint(cred, model);
 
   const parameters: Record<string, unknown> = {};
   if (bodyObj.durationSeconds) parameters.durationSeconds = bodyObj.durationSeconds;
@@ -206,7 +216,7 @@ async function callVertexVeoApi(
   const instance = buildVeoInstance(prompt, fieldValues, durationSeconds);
   const requestBody = { instances: [instance], parameters };
 
-  const data = await vertexPredict(endpoint, cred.accessToken, requestBody);
+  const data = await vertexPost(ctx.url, accessToken, requestBody);
   return { ...data, _vertexProvider: true };
 }
 
@@ -262,10 +272,10 @@ function buildVeoInstance(
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * HTTP helper – gọi Vertex AI predict endpoint
+ * HTTP helper – gọi Vertex AI endpoint (predict / generateContent)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
-async function vertexPredict(
+async function vertexPost(
   endpoint: string,
   accessToken: string,
   body: Record<string, unknown>
@@ -298,12 +308,6 @@ function extractBodyObj(body: unknown): Record<string, unknown> {
   }
   if (typeof body === "object" && body !== null) return body as Record<string, unknown>;
   return {};
-}
-
-function getModel(ctx: ExecuteProviderContext, defaultModel: string): string {
-  const configModel = ctx.nodeData?.config?.model;
-  if (typeof configModel === "string" && configModel.trim()) return configModel.trim();
-  return defaultModel;
 }
 
 function extractPrompt(bodyObj: Record<string, unknown>, rawBody: unknown): string {

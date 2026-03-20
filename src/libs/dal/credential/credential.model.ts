@@ -19,8 +19,6 @@ const credentialSchema = new Schema(
     oauthClientId: { type: String },
     oauthClientSecret: { type: String },
     oauthRefreshToken: { type: String },
-    vertexProjectId: { type: String },
-    vertexRegion: { type: String, default: "us-central1" },
   },
   { timestamps: true }
 );
