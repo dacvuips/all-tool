@@ -13,9 +13,14 @@ const credentialSchema = new Schema(
     value: { type: String },
     active: { type: Boolean, default: true },
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
-    // tôi cần đặt tên để xác định là customer credential hay admin credential
     isCustomerCredential: { type: Boolean, default: false },
     isAdminCredential: { type: Boolean, default: false },
+    /** Vertex AI OAuth2 – encrypted via encryptProviderSecret */
+    oauthClientId: { type: String },
+    oauthClientSecret: { type: String },
+    oauthRefreshToken: { type: String },
+    vertexProjectId: { type: String },
+    vertexRegion: { type: String, default: "us-central1" },
   },
   { timestamps: true }
 );

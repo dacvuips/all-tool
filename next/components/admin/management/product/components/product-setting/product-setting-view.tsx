@@ -32,7 +32,6 @@ export const ProductSettingView = () => {
               <Field
                 namePrefix="categoryProperties"
                 key={field.key || index}
-                name={field.key}
                 label={field.label}
                 cols={xs2 ? 6 : 12}
                 required={field.required}

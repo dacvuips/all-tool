@@ -68,6 +68,17 @@ class AiGenerationQueue extends BaseQueue {
     const customerId = runDoc.customerId;
     const productId = runDoc.productId;
     const nodeId = runDoc.nodeId;
+
+    if (!customerId) {
+      throw new Error(`AiGenerationRun ${runId} is missing customerId.`);
+    }
+    if (!productId) {
+      throw new Error(`AiGenerationRun ${runId} is missing productId.`);
+    }
+    if (!nodeId) {
+      throw new Error(`AiGenerationRun ${runId} is missing nodeId.`);
+    }
+
     const requestSnapshot = runDoc.requestSnapshot || {};
     const fieldValues = requestSnapshot.fieldValues || {};
     const context = requestSnapshot.context || {};
@@ -90,8 +101,17 @@ class AiGenerationQueue extends BaseQueue {
         return;
       }
 
-      const { node, aiProviderKey, credentialDecrypted } = check;
-      fieldValues[aiProviderKey] = credentialDecrypted;
+      const { node, aiProviderKey, credential } = check;
+
+      if (!node?.data) {
+        throw new Error(`Node ${nodeId} is missing 'data'. Cannot execute provider.`);
+      }
+      if (!aiProviderKey) {
+        throw new Error(`Node ${nodeId} is missing aiProviderKey in config.`);
+      }
+      if (!credential) {
+        throw new Error(`Credential not found for provider ${aiProviderKey} (customer: ${customerId}).`);
+      }
 
       // Trừ credit khi bắt đầu xử lý (reserve). Nếu creditCost = 0 thì bỏ qua.
       if (creditCost > 0) {
@@ -121,7 +141,8 @@ class AiGenerationQueue extends BaseQueue {
 
       const providerContext: ExecuteProviderContext = {
         nodeData: node.data,
-        credentialDecrypted,
+        credential,
+        credentialDecrypted: "",
         fieldValues,
         context,
         convertedImages: [],
@@ -133,10 +154,15 @@ class AiGenerationQueue extends BaseQueue {
       };
 
       const data = await executeByProvider(aiProviderKey, providerContext);
+      if (data == null) {
+        throw new Error(`Provider ${aiProviderKey} returned empty response for run ${runId}.`);
+      }
+
+      const outputType = (runDoc.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE;
       const { resultRefs, responseSummary } = await normalizeAiResponse(
         runId,
         aiProviderKey,
-        runDoc.outputType as ApiOutputTypeEnum,
+        outputType,
         data
       );
 

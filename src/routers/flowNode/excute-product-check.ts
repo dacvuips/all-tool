@@ -1,12 +1,11 @@
 import type { HydratedDocument } from "mongoose";
 import { ForbiddenError } from "../../libs/core/errors";
-import { CredentialModel } from "../../libs/dal/credential";
+import { CredentialModel, type ICredential } from "../../libs/dal/credential";
 import type { ICustomer } from "../../libs/dal/customer";
 import { CustomerModel } from "../../libs/dal/customer";
 import type { AiProviderKeyEnum, IProduct, ProductFlowNode } from "../../libs/dal/product";
 import { ProductModel } from "../../libs/dal/product";
 import { CustomerStatusEnum } from "../../libs/shared/interfaces/customer.interface";
-import { decryptProviderSecret } from "../../packages/encryption";
 
 export interface ExecuteNodeResponse {
   success: boolean;
@@ -14,8 +13,6 @@ export interface ExecuteNodeResponse {
   error?: string;
   status?: number;
 }
-
-/** Helper trả về response lỗi thống nhất cho execute flow node. */
 
 export type ExecuteProductCheckParams = {
   productId: string;
@@ -29,7 +26,7 @@ export type ExecuteProductCheckSuccess = {
   product: HydratedDocument<IProduct>;
   node: ProductFlowNode;
   aiProviderKey: AiProviderKeyEnum;
-  credentialDecrypted: string;
+  credential: HydratedDocument<ICredential>;
 };
 
 export type ExecuteProductCheckError = {
@@ -88,7 +85,6 @@ export async function executeProductCheck(
   if (!aiProviderKey) {
     return createExecuteCheckError(400, "Missing aiProviderKey in node config");
   }
-  // tìm credential của customer
   const credential = await CredentialModel.findOne({
     key: aiProviderKey,
     customerId,
@@ -98,7 +94,6 @@ export async function executeProductCheck(
   if (!credential) {
     return createExecuteCheckError(400, "Credential not found");
   }
-  const credentialDecrypted = decryptProviderSecret(credential.value);
 
   return {
     ok: true,
@@ -106,6 +101,6 @@ export async function executeProductCheck(
     product,
     node,
     aiProviderKey,
-    credentialDecrypted,
+    credential,
   };
 }
