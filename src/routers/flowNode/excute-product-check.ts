@@ -87,8 +87,7 @@ export async function executeProductCheck(
   }
   const credential = await CredentialModel.findOne({
     key: aiProviderKey,
-    customerId,
-    isCustomerCredential: true,
+    isAdminCredential: true,
     active: true,
   });
   if (!credential) {
