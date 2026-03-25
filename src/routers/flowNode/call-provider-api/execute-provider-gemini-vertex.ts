@@ -60,7 +60,8 @@ export async function CallProviderGeminiVertexApi(ctx: ExecuteProviderContext): 
 
   const accessToken = parseAccessToken(credentialDecrypted);
   if (!accessToken) throw new Error("Vertex AI: accessToken is required.");
-  if (!ctx.url?.trim()) throw new Error("Vertex AI: endpoint URL is required (nodeData.config.endpoint).");
+  if (!ctx.url?.trim())
+    throw new Error("Vertex AI: endpoint URL is required (nodeData.config.endpoint).");
 
   if (ctx.outputType === ApiOutputTypeEnum.IMAGE) {
     return callVertexImagenApi(accessToken, ctx);
@@ -108,7 +109,9 @@ async function callVertexGeminiApi(
     return { ...data, _vertexProvider: true };
   } catch (err: any) {
     logger.error(
-      `[Vertex AI] callVertexGeminiApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+      `[Vertex AI] callVertexGeminiApi failed url=${ctx.url} status=${
+        err?.vertexStatus ?? err?.response?.status
+      }`
     );
     throw err;
   }
@@ -117,9 +120,15 @@ async function callVertexGeminiApi(
 function guessMimeType(url: string): string {
   const ext = url.split(/[?#]/)[0].split(".").pop()?.toLowerCase();
   const map: Record<string, string> = {
-    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-    gif: "image/gif", webp: "image/webp", bmp: "image/bmp",
-    mp4: "video/mp4", webm: "video/webm", mov: "video/quicktime",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    mp4: "video/mp4",
+    webm: "video/webm",
+    mov: "video/quicktime",
   };
   return map[ext || ""] || "application/octet-stream";
 }
@@ -142,7 +151,7 @@ async function callVertexImagenApi(
   const prompt = extractPrompt(bodyObj, ctx.body);
   const { imageUrls } = collectMediaFromFieldValues(ctx.fieldValues);
 
-  const instance = buildImagenInstance(prompt, imageUrls, bodyObj);
+  const instance = await buildImagenInstance(prompt, imageUrls, bodyObj);
 
   const parameters: Record<string, unknown> = {
     sampleCount: (bodyObj.sampleCount as number) ?? (bodyObj.numberOfImages as number) ?? 1,
@@ -157,7 +166,9 @@ async function callVertexImagenApi(
     return { ...data, _vertexProvider: true };
   } catch (err: any) {
     logger.error(
-      `[Vertex AI] callVertexImagenApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+      `[Vertex AI] callVertexImagenApi failed url=${ctx.url} status=${
+        err?.vertexStatus ?? err?.response?.status
+      }`
     );
     throw err;
   }
@@ -166,27 +177,39 @@ async function callVertexImagenApi(
 /**
  * Xây instance cho Imagen – auto-detect media từ fieldValues.
  *
+ * Vertex chỉ nhận ảnh qua GCS (`gs://...` → `uri`) hoặc bytes base64 — không nhận `https://` trong `uri`.
+ * URL http(s) được tải và gửi dạng `bytesBase64Encoded` + `mimeType`.
+ *
  * 0 ảnh  → { prompt }
- * 1 ảnh  → { prompt, image: { uri } }
- * 2+ ảnh → { prompt, image: { uri: first }, referenceImages: [{ uri }, ...] }
+ * 1 ảnh  → { prompt, image: { ... } }
+ * 2+ ảnh → { prompt, image: first, referenceImages: [ typed entries … ] }
+ *
+ * referenceImages (Vertex): mỗi phần tử cần referenceType + referenceId + referenceImage { … }
+ * (không gửi blob phẳng). Mặc định bọc ảnh phụ bằng REFERENCE_TYPE_STYLE + styleImageConfig.
  */
-function buildImagenInstance(
+async function buildImagenInstance(
   prompt: string,
   imageUrls: string[],
   bodyObj: Record<string, unknown>
-): Record<string, unknown> {
+): Promise<Record<string, unknown>> {
   const instance: Record<string, unknown> = { prompt };
 
   const explicitImage = bodyObj.image as Record<string, unknown> | string | undefined;
   const explicitRefs = bodyObj.referenceImages as unknown[] | undefined;
 
-  if (explicitImage || explicitRefs) {
-    if (explicitImage) {
-      instance.image = typeof explicitImage === "string" ? { uri: explicitImage } : explicitImage;
+  const explicitImageEmpty =
+    typeof explicitImage === "object" &&
+    explicitImage !== null &&
+    !Array.isArray(explicitImage) &&
+    Object.keys(explicitImage).length === 0;
+
+  if ((explicitImage && !explicitImageEmpty) || explicitRefs) {
+    if (explicitImage && !explicitImageEmpty) {
+      instance.image = await normalizeVertexImagePart(explicitImage);
     }
     if (Array.isArray(explicitRefs) && explicitRefs.length > 0) {
-      instance.referenceImages = explicitRefs.map((r) =>
-        typeof r === "string" ? { uri: r } : r
+      instance.referenceImages = await Promise.all(
+        explicitRefs.map((r, i) => normalizeVertexReferenceListItem(r, i))
       );
     }
     return instance;
@@ -194,13 +217,143 @@ function buildImagenInstance(
 
   if (imageUrls.length === 0) return instance;
 
-  instance.image = { uri: imageUrls[0] };
+  instance.image = await normalizeVertexImagePart(imageUrls[0]);
 
   if (imageUrls.length >= 2) {
-    instance.referenceImages = imageUrls.slice(1).map((uri) => ({ uri }));
+    instance.referenceImages = await Promise.all(
+      imageUrls.slice(1).map((url, i) => normalizeVertexReferenceListItem(url, i))
+    );
   }
 
   return instance;
+}
+
+function isVertexTypedReferenceImage(obj: unknown): boolean {
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj)) return false;
+  const o = obj as Record<string, unknown>;
+  return typeof o.referenceType === "string" && o.referenceImage != null;
+}
+
+/** Chỉ các field hợp lệ bên trong referenceImage (Image). */
+function pickImagenReferenceImageBlob(inner: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (typeof inner.bytesBase64Encoded === "string")
+    out.bytesBase64Encoded = inner.bytesBase64Encoded;
+  if (typeof inner.mimeType === "string") out.mimeType = inner.mimeType;
+  if (typeof inner.uri === "string") out.uri = inner.uri;
+  if (typeof inner.gcsUri === "string") out.gcsUri = inner.gcsUri;
+  return out;
+}
+
+function wrapImagenTypedStyleReference(
+  inner: Record<string, unknown>,
+  referenceId: number
+): Record<string, unknown> {
+  return {
+    referenceType: "REFERENCE_TYPE_STYLE",
+    referenceId,
+    referenceImage: pickImagenReferenceImageBlob(inner),
+    styleImageConfig: {
+      styleDescription: "reference image",
+    },
+  };
+}
+
+/**
+ * Một phần tử referenceImages: nếu đã có referenceType + referenceImage (đúng Vertex) thì chỉ chuẩn hóa blob;
+ * nếu là URL/blob phẳng thì bọc REFERENCE_TYPE_STYLE.
+ */
+async function normalizeVertexReferenceListItem(
+  item: unknown,
+  index: number
+): Promise<Record<string, unknown>> {
+  if (isVertexTypedReferenceImage(item)) {
+    const o = { ...(item as Record<string, unknown>) };
+    const refImg = o.referenceImage;
+    let blob: Record<string, unknown>;
+    if (typeof refImg === "string") {
+      blob = await normalizeVertexImagePart(refImg);
+    } else if (refImg && typeof refImg === "object" && !Array.isArray(refImg)) {
+      blob = await normalizeVertexImagePart(refImg);
+    } else {
+      throw new Error("Vertex Imagen: referenceImage must be a URL string or image object.");
+    }
+    o.referenceImage = pickImagenReferenceImageBlob(blob);
+    return o;
+  }
+  const inner = await normalizeVertexImagePart(item);
+  return wrapImagenTypedStyleReference(inner, index + 1);
+}
+
+/** Chuẩn hóa ảnh cho Imagen predict: gs:// → uri; http(s) → bytes; object có sẵn b64/uri được xử lý tương ứng. */
+async function normalizeVertexImagePart(value: unknown): Promise<Record<string, unknown>> {
+  if (value == null) {
+    throw new Error("Vertex Imagen: image value is null or undefined.");
+  }
+  if (typeof value === "string") {
+    return vertexImageFromUrlString(value);
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Vertex Imagen: image must be a string URL or an object.");
+  }
+  const o = value as Record<string, unknown>;
+  const b64 =
+    (typeof o.bytesBase64Encoded === "string" && o.bytesBase64Encoded.trim()
+      ? o.bytesBase64Encoded
+      : null) ??
+    (typeof o.bytes_base64_encoded === "string" && o.bytes_base64_encoded.trim()
+      ? o.bytes_base64_encoded
+      : null);
+  if (b64) {
+    const out: Record<string, unknown> = { bytesBase64Encoded: b64.trim() };
+    const mt =
+      (typeof o.mimeType === "string" && o.mimeType.trim() ? o.mimeType : null) ??
+      (typeof o.mime_type === "string" && o.mime_type.trim() ? o.mime_type : null);
+    if (mt) out.mimeType = mt.trim();
+    return out;
+  }
+  const uriRaw = o.uri ?? o.gcsUri ?? o.gcs_uri;
+  if (typeof uriRaw === "string" && uriRaw.trim()) {
+    return vertexImageFromUrlString(uriRaw.trim());
+  }
+  throw new Error(
+    "Vertex Imagen: image object needs bytesBase64Encoded, or uri / gcsUri (gs:// or http(s)://)."
+  );
+}
+
+async function vertexImageFromUrlString(url: string): Promise<Record<string, unknown>> {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error("Vertex Imagen: empty image URL.");
+  }
+  if (/^gs:\/\//i.test(trimmed)) {
+    return { uri: trimmed };
+  }
+  if (!/^https?:\/\//i.test(trimmed)) {
+    throw new Error(
+      `Vertex Imagen: unsupported image reference (use gs:// or http(s) URL): ${trimmed.slice(
+        0,
+        120
+      )}`
+    );
+  }
+  try {
+    const response = await axios.get(trimmed, {
+      responseType: "arraybuffer",
+      timeout: 120_000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+      },
+    });
+    const bytesBase64Encoded = Buffer.from(response.data as ArrayBuffer).toString("base64");
+    const mimeType = String(response.headers["content-type"] || "image/jpeg")
+      .split(";")[0]
+      .trim();
+    return { bytesBase64Encoded, mimeType };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`Vertex Imagen: failed to load image from URL: ${message}`);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -235,7 +388,9 @@ async function callVertexVeoApi(
     return { ...data, _vertexProvider: true };
   } catch (err: any) {
     logger.error(
-      `[Vertex AI] callVertexVeoApi failed url=${ctx.url} status=${err?.vertexStatus ?? err?.response?.status}`,
+      `[Vertex AI] callVertexVeoApi failed url=${ctx.url} status=${
+        err?.vertexStatus ?? err?.response?.status
+      }`
     );
     throw err;
   }
@@ -338,7 +493,7 @@ async function vertexPost(
 
     // Safe rethrow so upstream doesn't print huge axios request bodies.
     const safeError = new Error(
-      `Vertex AI POST failed (status=${status}). ${message ? `Details: ${message}` : ""}`.trim(),
+      `Vertex AI POST failed (status=${status}). ${message ? `Details: ${message}` : ""}`.trim()
     );
     (safeError as any).vertexStatus = status;
     (safeError as any).vertexResponseMessage = message;
@@ -378,9 +533,10 @@ function isMediaUrl(value: unknown): value is string {
 
 const VIDEO_EXT_RE = /\.(mp4|webm|mov|avi|mkv|flv|wmv|m4v|3gp)(\?|#|$)/i;
 
-function collectMediaFromFieldValues(
-  fieldValues: Record<string, unknown>
-): { imageUrls: string[]; videoUrls: string[] } {
+function collectMediaFromFieldValues(fieldValues: Record<string, unknown>): {
+  imageUrls: string[];
+  videoUrls: string[];
+} {
   const imageUrls: string[] = [];
   const videoUrls: string[] = [];
 

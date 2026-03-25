@@ -84,7 +84,7 @@ class AiGenerationQueue extends BaseQueue {
     const context = requestSnapshot.context || {};
 
     const creditCost = Math.max(0, Number(runDoc.creditCost) || 0);
-
+ 
     await aiGenerationRunService.updateOne(runId, {
       status: AiGenerationRunStatusEnum.PROCESSING,
       startedAt: new Date(),

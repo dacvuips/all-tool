@@ -162,7 +162,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                           </div>
                           <div className="flex flex-row items-center font-semibold">
                             <RiUserHeartFill className="mr-2 ml-1 text-yellow-400" />
-                            {parseNumber(customer?.creditPoint) || 0} {t("Credit")}
+                            {parseNumber(customer?.creditBalance) || 0} {t("Credit")}
                           </div>
                         </div>
                       </div>

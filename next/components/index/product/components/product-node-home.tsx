@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsCashCoin } from "react-icons/bs";
@@ -52,6 +52,8 @@ export type FlowNodeData = {
   onSubmitNode?: (nodeId: string, fieldValues: NodeFieldValues) => void | Promise<void>;
   /** Đang chạy auto (disable nút Submit trong node) */
   isRunning?: boolean;
+  /** Submit thủ công: khóa nút Generate; runId khác null → hiện thanh tiến trình ảo */
+  manualSubmit?: { nodeId: string; runId: string | null } | null;
   /** Node nào đang lỗi (highlight) */
   errorNodeId?: string | null;
   /** Kết quả run mới nhất (ảnh/video) sau khi job trả về – dùng để hiển thị trong node */
@@ -85,6 +87,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
     registerGetValues,
     onSubmitNode,
     isRunning,
+    manualSubmit,
     errorNodeId,
     latestRun,
   } = data;
@@ -132,6 +135,7 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
         onSubmitNode={onSubmitNode}
         config={config}
         isRunning={isRunning}
+        manualSubmit={manualSubmit}
         registerGetValues={registerGetValues}
         latestRun={latestRun}
       />
@@ -162,12 +166,16 @@ function FlowNodeContent({ data }: { data: FlowNodeData }) {
   );
 }
 
-export const ProductNodeHome = memo(function ProductNodeHome({ data }: NodeProps<ProductNodeData>) {
+/**
+ * Không bọc memo: React Flow có thể tái dùng reference `data` trong store;
+ * memo shallow sẽ chặn re-render khi chỉ `manualSubmit` / `latestRun` đổi → thanh progress không hiện.
+ */
+export function ProductNodeHome({ data }: NodeProps<ProductNodeData>) {
   if (isFlowNodeData(data)) {
     return <FlowNodeContent data={data} />;
   }
   return null;
-});
+}
 
 /** Props cho form + nút submit của từng node */
 interface PropertyComponentProps {
@@ -176,6 +184,7 @@ interface PropertyComponentProps {
   onSubmitNode?: (nodeId: string, fieldValues: NodeFieldValues) => void | Promise<void>;
   config?: NodeConfig;
   isRunning?: boolean;
+  manualSubmit?: { nodeId: string; runId: string | null } | null;
   registerGetValues?: (nodeId: string, getValues: () => NodeFieldValues) => void;
   latestRun?: FlowNodeRun | null;
 }
@@ -192,6 +201,7 @@ const PropertyComponent = memo(function PropertyComponent({
   onSubmitNode,
   config,
   isRunning,
+  manualSubmit,
   registerGetValues,
   latestRun,
 }: PropertyComponentProps) {
@@ -257,7 +267,13 @@ const PropertyComponent = memo(function PropertyComponent({
           ))}
           {/* Nút submit thủ công: lấy giá trị form và gọi API execute qua parent */}
           {onSubmitNode && config?.endpoint && (
-            <NodeSubmitButton nodeId={nodeId} onSubmitNode={onSubmitNode} isRunning={isRunning} />
+            <NodeSubmitButton
+              nodeId={nodeId}
+              onSubmitNode={onSubmitNode}
+              isRunning={isRunning}
+              manualSubmit={manualSubmit}
+              latestRun={latestRun}
+            />
           )}
           {/* Kết quả run (ảnh/video) hiển thị ngay trong node khi job đã xong */}
           {hasResults && <NodeResultOutput resultRefs={resultRefs} runStatus={latestRun?.status} />}
@@ -332,14 +348,21 @@ function NodeResultOutput({
  * Nút Submit trong form node: getValues() từ react-hook-form rồi gọi onSubmitNode.
  * Phải nằm trong Form để dùng useFormContext.
  */
+/** ~10 phút để tiến trình ảo đạt 99% (trước khi có kết quả thật) */
+const VIRTUAL_PROGRESS_MS = 2 * 60 * 1000;
+
 function NodeSubmitButton({
   nodeId,
   onSubmitNode,
   isRunning,
+  manualSubmit,
+  latestRun,
 }: {
   nodeId: string;
   onSubmitNode: (nodeId: string, fieldValues: NodeFieldValues) => void | Promise<void>;
   isRunning?: boolean;
+  manualSubmit?: { nodeId: string; runId: string | null } | null;
+  latestRun?: FlowNodeRun | null;
 }) {
   const { t } = useTranslation();
   const { getValues, trigger } = useFormContext() || {};
@@ -352,19 +375,115 @@ function NodeSubmitButton({
     onSubmitNode(nodeId, values);
   }, [nodeId, onSubmitNode, getValues, trigger]);
 
+  const isThisNodeBusy = !!isRunning || manualSubmit?.nodeId === nodeId;
+  const showProgressBar = manualSubmit?.nodeId === nodeId && manualSubmit != null;
+  const trackedRunId = showProgressBar ? manualSubmit.runId : null;
+
   return (
-    <div className="flex col-span-full gap-2 justify-end items-center pt-2">
-      <Button
-        icon={<GenerateAiIcon />}
-        outline
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleSubmit();
-        }}
-        tooltip={t("Gửi thủ công node này (gọi API đã cấu hình)")}
-        text={t("Generate AI ")}
-        disabled={!!isRunning}
-      />
+    <div className="flex flex-col col-span-full gap-2 items-stretch pt-2">
+      {showProgressBar && (
+        <NodeVirtualProgressBar
+          key={trackedRunId ?? `${nodeId}-pending`}
+          trackedRunId={trackedRunId}
+          latestRun={latestRun}
+        />
+      )}
+      <div className="flex gap-2 justify-end items-center">
+        <Button
+          icon={<GenerateAiIcon />}
+          outline
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleSubmit();
+          }}
+          tooltip={t("Gửi thủ công node này (gọi API đã cấu hình)")}
+          text={t("Generate AI ")}
+          disabled={isThisNodeBusy}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Thanh pill: đoạn cam đào + san hô, % trắng; tiến 0→99% trong ~10 phút; 100% khi run COMPLETED.
+ * trackedRunId null = đang chờ POST execute (chưa có run): vẫn hiện thanh + shimmer.
+ * Lớp phủ gradient trắng (animate-progress-shimmer) báo hiệu đang xử lý.
+ */
+function NodeVirtualProgressBar({
+  trackedRunId,
+  latestRun,
+}: {
+  trackedRunId: string | null;
+  latestRun?: FlowNodeRun | null;
+}) {
+  const { t } = useTranslation();
+  const [virtualPct, setVirtualPct] = useState(0);
+
+  const pending = !trackedRunId;
+  const isCompleted =
+    !!trackedRunId && latestRun?._id === trackedRunId && latestRun.status === "COMPLETED";
+  const displayPct = isCompleted ? 100 : virtualPct;
+
+  useEffect(() => {
+    if (pending || !trackedRunId) {
+      setVirtualPct(0);
+      return;
+    }
+    if (isCompleted) {
+      setVirtualPct(100);
+      return;
+    }
+    const started = Date.now();
+    const id = window.setInterval(() => {
+      const elapsed = Date.now() - started;
+      const next = Math.min(99, (elapsed / VIRTUAL_PROGRESS_MS) * 99);
+      setVirtualPct(next);
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [trackedRunId, pending, isCompleted]);
+
+  return (
+    <div className="w-full min-w-0">
+      <div className="mb-1 font-medium text-gray-500 text-10">
+        {pending ? t("Đang tạo job...") : t("Đang xử lý")}
+      </div>
+      <div className="relative h-5 w-full min-w-[200px] overflow-hidden rounded-full bg-gray-200/90 shadow-inner">
+        {pending ? (
+          <>
+            <div className="overflow-hidden absolute inset-0 rounded-full">
+              <div className="absolute inset-y-0 w-[38%] rounded-full bg-gradient-to-r from-[#ffcba4] to-[#f05252] opacity-90 animate-progress-shimmer" />
+            </div>
+            <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-full">
+              <div className="absolute inset-y-0 left-0 w-[40%] animate-progress-shimmer bg-gradient-to-r from-transparent via-white/55 to-transparent opacity-80" />
+            </div>
+          </>
+        ) : (
+          <>
+            <div
+              className="absolute inset-y-0 left-0 flex overflow-hidden rounded-full transition-[width] duration-300 ease-out"
+              style={{ width: `${Math.max(displayPct, 0.5)}%` }}
+            >
+              <div
+                className="h-full shrink-0 bg-[#ffcba4]"
+                style={{ width: "min(28%, 2.25rem)" }}
+              />
+              <div className="h-full min-w-0 flex-1 bg-[#f05252]" />
+            </div>
+            <div
+              className="pointer-events-none absolute inset-y-0 left-2 z-[1] flex items-center"
+              style={{ maxWidth: "calc(100% - 8px)" }}
+            >
+              <span className="font-semibold tabular-nums text-white drop-shadow-sm text-10">
+                {Math.round(displayPct)}%
+              </span>
+            </div>
+            <div className="pointer-events-none absolute inset-0 z-[2] overflow-hidden rounded-full">
+              <div className="absolute inset-y-0 left-0 w-[40%] animate-progress-shimmer bg-gradient-to-r from-transparent via-white/55 to-transparent opacity-80" />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

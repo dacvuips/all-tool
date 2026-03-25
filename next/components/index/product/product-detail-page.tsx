@@ -85,7 +85,8 @@ function buildFlowNodes(
   onSubmitNode: (nodeId: string, fieldValues: NodeFieldValues) => void | Promise<void>,
   isRunning: boolean,
   errorNodeId: string | null,
-  latestRunByNodeId: Record<string, FlowNodeRun | null>
+  latestRunByNodeId: Record<string, FlowNodeRun | null>,
+  manualSubmit: { nodeId: string; runId: string | null } | null
 ): Node<ProductNodeData>[] {
   return flowNodes.map((fn) => ({
     id: fn.id,
@@ -101,6 +102,7 @@ function buildFlowNodes(
       isRunning,
       errorNodeId,
       latestRun: latestRunByNodeId[fn.id] ?? null,
+      manualSubmit,
     } as FlowNodeData,
   }));
 }
@@ -134,6 +136,14 @@ export const ProductDetailPage = () => {
   const [errorNodeId, setErrorNodeId] = useState<string | null>(null);
   /** Kết quả run mới nhất theo nodeId (để node hiển thị ảnh/video sau khi job xong) */
   const [latestRunByNodeId, setLatestRunByNodeId] = useState<Record<string, FlowNodeRun | null>>({});
+  /**
+   * Submit thủ công 1 node: disable nút Generate + (khi đã có runId) thanh tiến trình ảo.
+   * runId null = đang chờ POST execute; có runId = đang poll / chờ kết quả.
+   */
+  const [manualSubmit, setManualSubmit] = useState<{
+    nodeId: string;
+    runId: string | null;
+  } | null>(null);
   const [openDescriptionDialog, setOpenDescriptionDialog] = useState(false);
   const [openHistoryDialog, setOpenHistoryDialog] = useState(false);
   const [historyRuns, setHistoryRuns] = useState<FlowNodeRun[]>([]);
@@ -157,6 +167,7 @@ export const ProductDetailPage = () => {
       const config = fn?.data?.config;
       if (!config?.endpoint) return;
       try {
+        setManualSubmit({ nodeId, runId: null });
         const result = await executeFlowNode({
           productId: product?.id,
           customerId: customer?._id || "",
@@ -165,12 +176,15 @@ export const ProductDetailPage = () => {
         });
         if (!result.success) {
           toast.error(result.error || t("Node chạy lỗi."));
+          setManualSubmit(null);
           return;
         }
         if (!result.runId) {
           toast.error(t("Không nhận được runId."));
+          setManualSubmit(null);
           return;
         }
+        setManualSubmit({ nodeId, runId: result.runId });
         toast.success(t("Đang xử lý... Vui lòng đợi."));
         const pollResult = await pollFlowNodeRun(result.runId);
         if (pollResult.success && pollResult.run) {
@@ -181,15 +195,27 @@ export const ProductDetailPage = () => {
               ? t("Node chạy thành công. Đã tạo {{count}} kết quả.", { count })
               : t("Node chạy thành công.")
           );
+          window.setTimeout(() => setManualSubmit(null), 1200);
         } else {
           toast.error(pollResult.error || t("Node chạy lỗi."));
+          setManualSubmit(null);
         }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : t("Node chạy lỗi."));
+        setManualSubmit(null);
       }
     },
     [flowNodes, product?.id, customer?._id, toast, t]
   );
+
+  /** Socket / lỗi run: ẩn thanh + mở nút nếu run đang theo dõi thất bại */
+  useEffect(() => {
+    if (!manualSubmit?.runId) return;
+    const run = latestRunByNodeId[manualSubmit.nodeId];
+    if (run?._id === manualSubmit.runId && run.status === "FAILED") {
+      setManualSubmit(null);
+    }
+  }, [latestRunByNodeId, manualSubmit?.nodeId, manualSubmit?.runId]);
 
   /**
    * Chạy auto toàn bộ flow: chạy lần lượt theo thứ tự topological.
@@ -270,7 +296,8 @@ export const ProductDetailPage = () => {
       handleSubmitNode,
       isRunning,
       errorNodeId,
-      latestRunByNodeId
+      latestRunByNodeId,
+      manualSubmit
     );
     setNodes(nextNodes);
   }, [
@@ -281,6 +308,7 @@ export const ProductDetailPage = () => {
     isRunning,
     errorNodeId,
     latestRunByNodeId,
+    manualSubmit,
   ]);
 
   const edgeTypes: EdgeTypes = useMemo(
