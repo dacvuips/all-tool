@@ -2,7 +2,7 @@ import { useTranslation } from "next-i18next";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
-import { AiProviderKeyEnum, PropertyTypeEnum } from "../repo/product/productApp.repo";
+import { AiProviderKeyEnum, } from "../repo/product/productApp.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
   AffiliateBoothStatus,
@@ -172,19 +172,7 @@ export const useOptionsTranslation = () => {
     { value: UserStatus.ACTIVE, label: t("Kích hoạt"), color: "success" },
     { value: UserStatus.BLOCKED, label: t("Bị khóa"), color: "danger" },
   ];
-
-  const PRODUCT_PROPERTY_TYPE_OPTIONS = [
-    { value: PropertyTypeEnum.TEXT, label: t("Chữ") },
-    { value: PropertyTypeEnum.NUMBER, label: t("Số") },
-    { value: PropertyTypeEnum.BOOLEAN, label: t("Bật/Tắt") },
-    { value: PropertyTypeEnum.SELECT, label: t("Lựa chọn") },
-    { value: PropertyTypeEnum.MULTI_SELECT, label: t("Nhiều lựa chọn") },
-    { value: PropertyTypeEnum.TEXTAREA, label: t("Textarea") },
-    { value: PropertyTypeEnum.IMAGE, label: t("Hình ảnh") },
-    { value: PropertyTypeEnum.MUILTI_IMAGE, label: t("Nhiều ảnh") },
-    { value: PropertyTypeEnum.MEDIA, label: t("Media") },
-  ];
-
+ 
   const SHOP_PRODUCT_TYPE_OPTION = [
     { value: ShopProductTypeEnum.SELL, label: t("Bán"), color: "danger" },
     { value: ShopProductTypeEnum.BUY, label: t("Mua"), color: "success" },
@@ -731,7 +719,6 @@ export const useOptionsTranslation = () => {
     SHOP_BANNER_ACTION_TYPE_OPTIONS,
     GENDER_OPTIONS,
     USER_STATUS_OPTIONS,
-    PRODUCT_PROPERTY_TYPE_OPTIONS,
     SHOP_PRODUCT_TYPE_OPTION,
     SHOP_PRODUCT_ALLOWSALE_OPTION,
     BOOLEAN_OPTION,

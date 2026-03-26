@@ -2,7 +2,7 @@ import gql from "graphql-tag";
 
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository, GetAllOptions, GetListData, QueryInput } from "../crud.repo";
-import { Product } from "../product";
+import { ProductApp } from "../product/productApp.repo";
 
 export interface OrderItem {
   productName: string;
@@ -147,7 +147,7 @@ export interface Order extends BaseModel {
   orderLogs?: OrderLog[];
   paymentLogs?: PaymentLog[];
   shipmentIds?: string[]; // Danh sách ID của các shipment
-  product?: Product;
+  product?: ProductApp;
 }
 
 export interface OrderStats {

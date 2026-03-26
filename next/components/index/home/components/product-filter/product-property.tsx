@@ -5,9 +5,7 @@ import { FaChevronDown, FaTimes } from "react-icons/fa";
 import { mapValues } from "lodash";
 import { ParamName } from "../../../../../lib/constants/constants";
 
-import { PropertyTypeEnum } from "../../../../../lib/repo/product";
-import { Field, Form, Input, MediaInput, Select, Switch } from "../../../../shared/utilities/form";
-import { Popover } from "../../../../shared/utilities/popover/popover";
+ 
 import { useHomeContext } from "../../provider/home-provider";
 
 export const ProductProperty = () => {
@@ -92,7 +90,7 @@ export const ProductProperty = () => {
             </div>
           )}
         </div>
-
+{/* 
         <Popover
           theme="light-border"
           visible={visible}
@@ -163,7 +161,7 @@ export const ProductProperty = () => {
           ) : (
             <span className="py-2">{t("Chọn danh mục")}</span>
           )}
-        </Popover>
+        </Popover> */}
       </div>
     </>
   );

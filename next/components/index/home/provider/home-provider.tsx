@@ -5,10 +5,10 @@ import { ParamName } from "../../../../lib/constants/constants";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { ProductApp, ProductAppService } from "../../../../lib/repo/product/productApp.repo";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Category } from "../../../../lib/repo";
 import { Pagination } from "../../../../lib/repo/crud.repo";
 import { OrderChangeEventEnum, orderService } from "../../../../lib/repo/order/order.repo";
-import { useAuth } from "../../../../lib/providers/auth-provider";
 import { SortDirection } from "../../../../lib/repo/types";
 
 export const HomeContext = createContext<
@@ -89,7 +89,7 @@ export function HomeProvider({ ...props }) {
 
       const page = isLoadMore ? pagination.page + 1 : 1;
 
-      await ProductAppService.getActiveProducts({
+      await ProductAppService.getActiveProductApps({
         filter: {
           ...(parseData.length > 0 && { $or: parseData }),
           ...(categoryId && { categoryIds: { $in: [categoryId] } }),

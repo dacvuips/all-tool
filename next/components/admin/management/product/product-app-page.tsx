@@ -13,7 +13,6 @@ import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
-import { ProductFlowPage } from "./product-flow-page";
 
 /** Lấy danh sách slug từ pages/app/ qua API route */
 async function fetchAppPageSlugs(): Promise<{ slug: string; filename: string }[]> {
@@ -23,7 +22,7 @@ async function fetchAppPageSlugs(): Promise<{ slug: string; filename: string }[]
   return data.slugs ?? [];
 }
 
-export function ProductPage(props: { initialProductId?: string | null }) {
+export function ProductAppPage(props: { initialProductId?: string | null }) {
   const { initialProductId } = props || {};
   const { t } = useTranslation();
   const toast = useToast();
@@ -88,15 +87,13 @@ export function ProductPage(props: { initialProductId?: string | null }) {
               slug: s.slug,
               name: s.slug,
               active: true,
-              creditCostTotal: 0,
+              creditCost: 0,
             },
           })
         )
       );
 
-      toast.success(
-        t(`Đã tạo {{count}} product mới từ pages/app`, { count: newSlugs.length })
-      );
+      toast.success(t(`Đã tạo {{count}} product mới từ pages/app`, { count: newSlugs.length }));
       loadAll();
     } catch (err: any) {
       toast.error(`${t("Đồng bộ thất bại")}: ${err.message}`);
@@ -105,13 +102,13 @@ export function ProductPage(props: { initialProductId?: string | null }) {
     }
   };
 
-  if (productIdParam) {
-    return <ProductFlowPage productIdParam={productIdParam} onBack={handleBackFromFlow} />;
-  }
-
   return (
     <Card>
-      <DataTable<ProductApp> crudService={ProductAppService} filter={filter} order={{ priority: -1 }}>
+      <DataTable<ProductApp>
+        crudService={ProductAppService}
+        filter={filter}
+        order={{ priority: -1 }}
+      >
         <DataTable.Header>
           <DataTable.Title />
           <DataTable.Buttons>

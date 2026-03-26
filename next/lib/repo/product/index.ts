@@ -1,1 +1,2 @@
-export * from "./product.repo";
+export * from "./productApp.repo";
+

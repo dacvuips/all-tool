@@ -1,8 +1,9 @@
-import { useTranslation } from "react-i18next";
 import { useFormContext, useWatch } from "react-hook-form";
+import { useTranslation } from "react-i18next";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
-import { AiProviderKeyEnum } from "../../../../../lib/repo/product";
+ 
+import { AiProviderKeyEnum } from "../../../../../lib/repo/product/productApp.repo";
 import { Field, Input, Select } from "../../../../shared/utilities/form";
 import { Switch } from "../../../../shared/utilities/form/switch";
 import { useDataTable } from "../../../../shared/utilities/table/data-table";
