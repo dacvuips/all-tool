@@ -115,8 +115,9 @@ export class ProductRepository extends CrudRepository<Product> {
     name
     des
     video
-    coverImg 
+    coverImg
     active
+    slug
     creditCostTotal
   `);
   fullFragment: string = this.parseFragment(`

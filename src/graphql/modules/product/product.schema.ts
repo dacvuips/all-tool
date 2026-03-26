@@ -28,6 +28,7 @@ const schema = gql`
     slug: String
     price: Float
     priority: Float
+    creditCostTotal: Float
     flow: ProductFlowInput
   }
 
@@ -41,6 +42,7 @@ const schema = gql`
     slug: String
     price: Float
     priority: Float
+    creditCostTotal: Float
     flow: ProductFlowInput
   }
 
@@ -113,7 +115,7 @@ const schema = gql`
     createdAt: DateTime
     updatedAt: DateTime
 
-    name: String
+    name: String  
     des: String
     video: String
     coverImg: String

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { HiOutlineRefresh } from "react-icons/hi";
+import { RiSettings4Line } from "react-icons/ri";
+
+import { ParamName } from "../../../../lib/constants/constants";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
-import { useTranslation } from "react-i18next";
-import { RiSettings4Line } from "react-icons/ri";
-
-import { ParamName } from "../../../../lib/constants/constants";
 import { Product, ProductService } from "../../../../lib/repo/product";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -14,13 +15,21 @@ import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
 import { ProductFlowPage } from "./product-flow-page";
 
+/** Lấy danh sách slug từ pages/app/ qua API route */
+async function fetchAppPageSlugs(): Promise<{ slug: string; filename: string }[]> {
+  const res = await fetch("/api/app-pages");
+  if (!res.ok) throw new Error("Không thể đọc danh sách pages/app");
+  const data = await res.json();
+  return data.slugs ?? [];
+}
+
 export function ProductPage(props: { initialProductId?: string | null }) {
   const { initialProductId } = props || {};
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
   const [filter, setFilter] = useState<any>({});
-  const [timeRange, setTimeRange] = useState<any>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const [queryParams, setQueryParams] = useQueryParams({
     [ParamName.productId]: "",
@@ -41,6 +50,61 @@ export function ProductPage(props: { initialProductId?: string | null }) {
     setQueryParams({ [ParamName.productId]: "" });
   };
 
+  /**
+   * Đồng bộ slug từ pages/app/ → tự động tạo product mới nếu slug chưa tồn tại
+   * Data tạo: { slug, name: slug, active: true, creditCostTotal: 0 }
+   */
+  const handleSyncFromPages = async (loadAll: () => void) => {
+    setSyncing(true);
+    try {
+      // 1. Lấy danh sách slug từ filesystem
+      const appSlugs = await fetchAppPageSlugs();
+      if (!appSlugs.length) {
+        toast.success(t("Không tìm thấy page nào trong pages/app/"));
+        return;
+      }
+
+      // 2. Lấy tất cả product hiện có để so sánh slug
+      const existing = await ProductService.getAll({
+        query: { limit: 500 },
+        fragment: ProductService.parseFragment(`id slug`),
+        cache: false,
+      });
+      const existingSlugs = new Set(
+        (existing.data || []).map((p: Product) => p.slug).filter(Boolean)
+      );
+
+      // 3. Tạo product mới cho các slug chưa có
+      const newSlugs = appSlugs.filter((s) => !existingSlugs.has(s.slug));
+      if (!newSlugs.length) {
+        toast.success(t("Tất cả pages đã được đồng bộ"));
+        return;
+      }
+
+      await Promise.all(
+        newSlugs.map((s) =>
+          ProductService.createOrUpdate({
+            data: {
+              slug: s.slug,
+              name: s.slug,
+              active: true,
+              creditCostTotal: 0,
+            },
+          })
+        )
+      );
+
+      toast.success(
+        t(`Đã tạo {{count}} product mới từ pages/app`, { count: newSlugs.length })
+      );
+      loadAll();
+    } catch (err: any) {
+      toast.error(`${t("Đồng bộ thất bại")}: ${err.message}`);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   if (productIdParam) {
     return <ProductFlowPage productIdParam={productIdParam} onBack={handleBackFromFlow} />;
   }
@@ -52,6 +116,18 @@ export function ProductPage(props: { initialProductId?: string | null }) {
           <DataTable.Title />
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
+            <DataTable.Consumer>
+              {({ loadAll }) => (
+                <DataTable.Button
+                  outline
+                  icon={<HiOutlineRefresh className={syncing ? "animate-spin" : ""} />}
+                  text={t("Đồng bộ Pages")}
+                  disabled={syncing || !userPermission("CREATE_PRODUCT")}
+                  onClick={() => handleSyncFromPages(loadAll)}
+                  tooltip={t("Tự động tạo product từ các page trong pages/app/")}
+                />
+              )}
+            </DataTable.Consumer>
             <DataTable.Button primary isAddButton disabled={!userPermission("CREATE_PRODUCT")} />
           </DataTable.Buttons>
         </DataTable.Header>
@@ -60,27 +136,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
         <DataTable.Toolbar>
           <DataTable.Search />
-          <DataTable.Filter>
-            {/* <Field noError>
-              <DatePicker
-                className="w-40"
-                value={timeRange}
-                onChange={setTimeRange}
-                selectsRange
-                fullHeader
-                placeholder={t("Lọc thời gian")}
-                clearable
-              />
-            </Field>
-            <Field name="isPublic" noError>
-              <Select
-                className="w-48"
-                clearable
-                placeholder={t("Lọc trạng thái")}
-                options={OTHER_INFO_STATUS}
-              />
-            </Field> */}
-          </DataTable.Filter>
+          <DataTable.Filter />
         </DataTable.Toolbar>
 
         <DataTable.Consumer>
@@ -105,17 +161,45 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                   label={t("Tiêu đề")}
                   render={(item: Product) => <DataTable.CellText value={item.name} />}
                 />
+
+                {/* Cột Slug: hiển thị slug page tương ứng trong pages/app/ */}
                 <DataTable.Column
-                  label={t("Credit")}
-                  render={(item: Product) => <DataTable.CellText value={item.creditCostTotal} />}
+                  label={t("Slug / App")}
+                  render={(item: Product) => (
+                    <DataTable.CellText
+                      value={
+                        item.slug ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-mono font-semibold bg-indigo-50 text-indigo-700 rounded border border-indigo-200">
+                            {item.slug}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400 italic">{t("Chưa có slug")}</span>
+                        )
+                      }
+                    />
+                  )}
                 />
 
                 <DataTable.Column
-                  label={t("Ngày đăng")}
+                  label={t("Credit")}
                   render={(item: Product) => (
-                    <DataTable.CellDate value={item.createdAt} format="dd/MM/yyyy" />
+                    <DataTable.CellText
+                      value={
+                        <span className="font-semibold text-primary">
+                          {item.creditCostTotal ?? 0}
+                        </span>
+                      }
+                    />
                   )}
                 />
+
+                <DataTable.Column
+                  label={t("Ngày cập nhật")}
+                  render={(item: Product) => (
+                    <DataTable.CellDate value={item.updatedAt} format="dd/MM/yyyy" />
+                  )}
+                />
+
                 <DataTable.Column
                   right
                   label={t("Kích hoạt")}
@@ -142,6 +226,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                     />
                   )}
                 />
+
                 <DataTable.Column
                   right
                   className="whitespace-nowrap"
@@ -172,6 +257,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
             </>
           )}
         </DataTable.Consumer>
+
         <DataTable.Form grid width={1024} slideFromBottom="none">
           <ProductField />
         </DataTable.Form>
