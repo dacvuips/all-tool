@@ -494,8 +494,8 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
         </div>
         <div className="flex gap-1 items-center text-xs text-primary">
           <BsCashCoin />
-          {currentProduct?.creditCostTotal > 0
-            ? currentProduct?.creditCostTotal + " " + t("Credit")
+          {currentProduct?.creditCost > 0
+            ? currentProduct?.creditCost + " " + t("Credit")
             : t("Miễn phí")}
         </div>
         <div style={{ flex: 1 }} />

@@ -13,6 +13,7 @@ import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
 import { ProductField } from "./components/product-field";
+import { ProductFlowPage } from "./product-flow-page";
 
 /** Lấy danh sách slug từ pages/app/ qua API route */
 async function fetchAppPageSlugs(): Promise<{ slug: string; filename: string }[]> {
@@ -22,16 +23,36 @@ async function fetchAppPageSlugs(): Promise<{ slug: string; filename: string }[]
   return data.slugs ?? [];
 }
 
-export function ProductPage() {
+export function ProductPage(props: { initialProductId?: string | null }) {
+  const { initialProductId } = props || {};
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
   const [filter, setFilter] = useState<any>({});
   const [syncing, setSyncing] = useState(false);
 
+  const [queryParams, setQueryParams] = useQueryParams({
+    [ParamName.productId]: "",
+  });
+  const productIdParam = (queryParams[ParamName.productId] as string) || "";
+
+  useEffect(() => {
+    if (productIdParam) {
+      setQueryParams({ [ParamName.productId]: productIdParam });
+    }
+  }, [productIdParam]);
+
+  const handleOpenProductFlow = (productId: string) => {
+    setQueryParams({ [ParamName.productId]: productId });
+  };
+
+  const handleBackFromFlow = () => {
+    setQueryParams({ [ParamName.productId]: "" });
+  };
+
   /**
    * Đồng bộ slug từ pages/app/ → tự động tạo product mới nếu slug chưa tồn tại
-   * Data tạo: { slug, name: slug, active: true, creditCost: 0 }
+   * Data tạo: { slug, name: slug, active: true, creditCostTotal: 0 }
    */
   const handleSyncFromPages = async (loadAll: () => void) => {
     setSyncing(true);
@@ -67,7 +88,7 @@ export function ProductPage() {
               slug: s.slug,
               name: s.slug,
               active: true,
-              creditCost: 0,
+              creditCostTotal: 0,
             },
           })
         )
@@ -83,6 +104,10 @@ export function ProductPage() {
       setSyncing(false);
     }
   };
+
+  if (productIdParam) {
+    return <ProductFlowPage productIdParam={productIdParam} onBack={handleBackFromFlow} />;
+  }
 
   return (
     <Card>
@@ -161,7 +186,7 @@ export function ProductPage() {
                     <DataTable.CellText
                       value={
                         <span className="font-semibold text-primary">
-                          {item.creditCost ?? 0}
+                          {item.creditCostTotal ?? 0}
                         </span>
                       }
                     />
@@ -207,6 +232,13 @@ export function ProductPage() {
                   className="whitespace-nowrap"
                   render={(item: ProductApp) => (
                     <>
+                      <DataTable.CellButton
+                        icon={<RiSettings4Line />}
+                        value={item}
+                        disabled={!userPermission("EDIT_PRODUCT")}
+                        tooltip={t("Cấu hình sản phẩm")}
+                        onClick={() => handleOpenProductFlow(item.id)}
+                      />
                       <DataTable.CellButton
                         value={item}
                         isEditButton

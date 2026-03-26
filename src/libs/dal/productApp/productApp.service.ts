@@ -1,7 +1,7 @@
 import { CRUDService } from "../../../base/crudService";
-import { ProductModel } from "./productApp.model";
+import { ProductAppModel } from "./productApp.model";
 
-class ProductAppService extends CRUDService(ProductModel) {}
+class ProductAppService extends CRUDService(ProductAppModel) {}
 
 const productAppService = new ProductAppService();
 export { productAppService };

@@ -298,6 +298,13 @@ const useSidebarMenuConstants = () => {
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
         {
+          title: t("Ứng dụng"),
+          path: "/admin/management/products-app",
+          icon: <RiCpuLine />,
+          scope: SCOPES.VIEW_PRODUCT,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Ngành hàng"),
           path: "/admin/management/categories",
           icon: <RiLayoutGridLine />,

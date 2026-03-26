@@ -2,6 +2,8 @@ import type { FlowNodeRun } from "../../flow-node/execute-client";
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
+// ─── Flow types (dùng bởi product-flow-page và useFlowNodeRunChanged) ─────────
+
 /** Payload từ subscription flowNodeRunChanged (socket khi run completed/failed) */
 export type FlowNodeRunChangeEvent = {
   runId: string;
@@ -13,17 +15,18 @@ export type FlowNodeRunChangeEvent = {
 };
 
 export enum PropertyTypeEnum {
-  TEXT = "TEXT", // Text
-  SELECT = "SELECT", // Select
-  MULTI_SELECT = "MULTI_SELECT", // Multi select
-  BOOLEAN = "BOOLEAN", // Boolean
-  NUMBER = "NUMBER", // Number
-  TEXTAREA = "TEXTAREA", // Textarea
-  IMAGE = "IMAGE", // Image
-  MUILTI_IMAGE = "MUILTI_IMAGE", // nhiều ảnh
-  FILE = "FILE", // File
-  MEDIA = "MEDIA", // Media
+  TEXT = "TEXT",
+  SELECT = "SELECT",
+  MULTI_SELECT = "MULTI_SELECT",  
+  BOOLEAN = "BOOLEAN",
+  NUMBER = "NUMBER",
+  TEXTAREA = "TEXTAREA",
+  IMAGE = "IMAGE",
+  MUILTI_IMAGE = "MUILTI_IMAGE",
+  FILE = "FILE",
+  MEDIA = "MEDIA",
 }
+
 export enum AiProviderKeyEnum {
   OPENAI_KEY = "OPENAI_KEY",
   CLAUDE_KEY = "CLAUDE_KEY",
@@ -32,6 +35,7 @@ export enum AiProviderKeyEnum {
   KLING_KEY = "KLING_KEY",
   SEE_DANCE_KEY = "SEE_DANCE_KEY",
 }
+
 export interface PropertySelectOption {
   key: string;
   label: string;
@@ -50,10 +54,14 @@ export interface Property {
 
 export interface NodeConfig {
   aiProviderKey?: AiProviderKeyEnum;
+  outputType?: string;
+  model?: string;
+  baseUrl?: string;
   endpoint?: string;
   method?: string;
+  headers?: string;
   bodyTemplate?: string;
-  /** Số credit trừ mỗi lần chạy node (0 = miễn phí). Hoàn nếu run FAILED. */
+  responsePath?: string;
   creditCost?: number;
   creditCostLabel?: string;
 }
@@ -89,24 +97,29 @@ export interface ProductAppFlow {
   edges: ProductAppFlowEdge[];
 }
 
+// ─── ProductApp model (simplified – theo productApp.interface.ts) ─────────────
+
 export interface ProductApp extends BaseModel {
   id?: string;
   name?: string;
   des?: string;
-  video?: string;
   coverImg?: string;
   categoryIds?: string[];
   active?: boolean;
   slug?: string;
-  price?: string;
   priority?: number;
+  creditCost?: number;
+  /** flow vẫn giữ để product-flow-page có thể đọc/ghi */
   flow?: ProductAppFlow;
+  /** credit tổng toàn bộ node trong flow */
   creditCostTotal?: number;
 }
 
+// ─── Repository ───────────────────────────────────────────────────────────────
+
 export class ProductAppRepository extends CrudRepository<ProductApp> {
-  apiName: string = "Product";
-  displayName: string = t("sản phẩm");
+  apiName: string = "ProductApp";
+  displayName: string = t("sản phẩm app");
   shortFragment: string = this.parseFragment(`
     id
     createdAt
@@ -114,11 +127,10 @@ export class ProductAppRepository extends CrudRepository<ProductApp> {
 
     name
     des
-    video
     coverImg
     active
     slug
-    creditCostTotal
+    creditCost
   `);
   fullFragment: string = this.parseFragment(`
     id
@@ -127,51 +139,12 @@ export class ProductAppRepository extends CrudRepository<ProductApp> {
 
     name
     des
-    video
     coverImg
     categoryIds
     active
     slug
-    price
     priority
-    creditCostTotal
-    flow {
-      nodes {
-        id
-        type
-        position { x y }
-        data {
-          label
-          properties {
-            type
-            key
-            label
-            placeholder
-            tooltip
-            required
-            clearable
-            options { key label }
-          }
-          config {
-            aiProviderKey
-            endpoint
-            method
-            model
-            outputType
-            bodyTemplate
-            creditCost
-            creditCostLabel
-          }
-        }
-      }
-      edges {
-        id
-        source
-        target
-        sourceHandle
-        targetHandle
-      }
-    }
+    creditCost
   `);
   getDetailFragment: string = this.parseFragment(`
     id
@@ -180,82 +153,46 @@ export class ProductAppRepository extends CrudRepository<ProductApp> {
 
     name
     des
-    video
     coverImg
     categoryIds
     active
     slug
-    price
     priority
-    creditCostTotal
-    flow {
-      nodes {
-        id
-        type
-        position { x y }
-        data {
-          label
-          properties {
-            type
-            key
-            label
-            placeholder
-            tooltip
-            required
-            clearable
-            options { key label }
-          }
-          config {
-            aiProviderKey
-            endpoint
-            method
-            bodyTemplate
-            creditCost
-            creditCostLabel
-          }
-        }
-      }
-      edges {
-        id
-        source
-        target
-        sourceHandle
-        targetHandle
-      }
-    }
+    creditCost
   `);
-  async getProductSlug(slug: string) {
+
+  async getProductAppSlug(slug: string) {
     return await this.query({
-      query: `getProductSlug(slug:"${slug}"){
+      query: `getProductAppSlug(slug:"${slug}"){
         ${this.getDetailFragment}
       }`,
       options: { fetchPolicy: "no-cache" },
     }).then((res) => res.data.g0);
   }
 
-  async getActiveProducts(options?: any) {
+  async getActiveProductApps(options?: any) {
     return await this.getAll({
       query: options || { limit: 20 },
       fragment: this.parseFragment(`
         id
         name
         coverImg
-        slug 
-        creditCostTotal
+        slug
+        creditCost
       `),
-      apiName: "getActiveProducts",
+      apiName: "getActiveProductApps",
     });
   }
 
   async toggleActive(id: string) {
     return await this.mutate({
-      mutation: `toggleActiveProduct(id: "${id}") {
+      mutation: `toggleActiveProductApp(id: "${id}") {
         ${this.shortFragment}
       }`,
     }).then((res) => res.data.g0);
   }
 
-  /** Subscribe socket flowNodeRunChanged – khi run completed/failed backend bắn event, cập nhật node realtime */
+  /** Subscribe socket flowNodeRunChanged – khi run completed/failed backend bắn event */
   subscribeFlowNodeRunChanged(params: { customerId: string; productId?: string }) {
     const { customerId, productId } = params;
     return this.subscribe({

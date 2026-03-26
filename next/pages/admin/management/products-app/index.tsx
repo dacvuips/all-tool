@@ -1,6 +1,6 @@
 import { NextSeo } from "next-seo";
 import { useTranslation } from "react-i18next";
-import { ProductPage } from "../../../../components/admin/management/product/product-app-page";
+import { ProductPage } from "../../../../components/admin/management/product/product-page";
 import { AdminLayout } from "../../../../layouts/admin-layout/admin-layout";
 import { getServerSideTranslationsProps } from "../../../../lib/functions/locale";
 
@@ -9,7 +9,7 @@ export default function Page() {
 
   return (
     <>
-      <NextSeo title={t("Sản phẩm")} />
+      <NextSeo title={t("Ứng dụng")} />
       <ProductPage />
     </>
   );

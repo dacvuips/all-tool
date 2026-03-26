@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
-import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useScreen } from "../../../../../lib/hooks/useScreen";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { CategoryService } from "../../../../../lib/repo";
-import { VideoDialog } from "../../../../shared/common/video-dialog";
-import { Editor, Field, ImageInput, Input, Label, Select } from "../../../../shared/utilities/form";
-import { Img } from "../../../../shared/utilities/misc";
+import { Field, ImageInput, Input, Select } from "../../../../shared/utilities/form";
 
 function flattenCategoryOptions(
   tree: { id?: string; name?: string; parentId?: string | null; children?: any[] }[],
@@ -43,10 +39,7 @@ async function fetchAppPageSlugs(): Promise<{ value: string; label: string }[]> 
 
 export function ProductField() {
   const { t } = useTranslation();
-  const { watch } = useFormContext();
-  const xs = useScreen("xs");
   const { userPermission } = useAuth();
-  const [videoOpen, setVideoOpen] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<
     { value: string; label: string; isDisabled?: boolean }[]
   >([]);
@@ -62,30 +55,6 @@ export function ProductField() {
     // Load slug options từ pages/app/
     fetchAppPageSlugs().then(setSlugOptions);
   }, []);
-
-  const videoUrl = watch("video");
-
-  const getYoutubeVideoId = (url?: string): string | null => {
-    if (!url) return null;
-    try {
-      const parsed = new URL(url);
-      if (parsed.hostname.includes("youtube")) {
-        return parsed.searchParams.get("v");
-      }
-      if (parsed.hostname === "youtu.be") {
-        return parsed.pathname.replace("/", "");
-      }
-    } catch {
-      const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
-      if (shortMatch) return shortMatch[1];
-    }
-    return null;
-  };
-
-  const youtubeId = getYoutubeVideoId(videoUrl);
-  const thumbnailSrc = youtubeId
-    ? `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`
-    : "https://img.youtube.com/vi/hqdefault.jpg";
 
   return (
     <>
@@ -117,7 +86,11 @@ export function ProductField() {
         )}
       </Field>
 
-      <Field name="categoryIds" label={t("Danh mục hiển thị")} cols={6}>
+      <Field name="creditCost" label={t("Credit (mỗi lần dùng)")} cols={6}>
+        <Input type="number" placeholder="0" />
+      </Field>
+
+      <Field name="categoryIds" label={t("Danh mục hiển thị")} cols={12}>
         <Select
           multi
           options={categoryOptions}
@@ -126,44 +99,8 @@ export function ProductField() {
         />
       </Field>
 
-      <div className="col-span-full gap-2 mb-2 whitespace-nowrap">
-        <Label text={t("Video")} />
-        <div className={`flex ${xs ? "flex-row gap-2" : "flex-col"}`}>
-          {videoUrl ? (
-            <div
-              onClick={() => {
-                if (youtubeId) {
-                  setVideoOpen(videoUrl);
-                }
-              }}
-              className={`cursor-pointer ${xs ? "w-36" : "w-full"}`}
-            >
-              <Img src={thumbnailSrc} ratio169 />
-            </div>
-          ) : (
-            <div className={`cursor-pointer ${xs ? "w-36" : "w-full"}`}>
-              <Img ratio169 className="border border-dashed" />
-            </div>
-          )}
-
-          <div className="w-full">
-            <Field name="video" noError>
-              <Input placeholder={`${t("Link video Youtube")}`} />
-            </Field>
-            <span className="block w-full whitespace-normal break-words text-gray-6 00 text-14">
-              {`${t("Link video dạng")}: https://www.youtube.com/watch?v=XXXX`}
-            </span>
-          </div>
-        </div>
-      </div>
-      <VideoDialog
-        videoUrl={videoOpen}
-        onClose={() => setVideoOpen("")}
-        isOpen={!!videoOpen}
-      ></VideoDialog>
-
-      <Field name="des" label={t("Mô tả sản phẩm")} cols={12} required>
-        <Editor minHeight="200px" noBorder className="rounded-md border" maxWidth="none" />
+      <Field name="des" label={t("Mô tả sản phẩm")} cols={12}>
+        <Input placeholder={t("Nhập mô tả ngắn")} />
       </Field>
     </>
   );
