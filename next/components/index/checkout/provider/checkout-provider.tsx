@@ -7,7 +7,7 @@ import {
   orderService,
   PaymentMethod,
 } from "../../../../lib/repo/order/order.repo";
-import { Product } from "../../../../lib/repo/product/product.repo";
+import { ProductApp } from "../../../../lib/repo/product/productApp.repo";
 import { CheckoutStep } from "../../../../lib/repo/types";
 import { OrderPaymentChangedDialog } from "../dialogs/order-payment-changed-dialog";
 
@@ -22,7 +22,7 @@ export interface PaymentMethodOption {
 export interface CheckoutContextType {
   // Selected items
 
-  selectProduct: Product | null;
+  selectProduct: ProductApp | null;
   quality: number;
   selectPayment: PaymentMethodOption | null;
 
@@ -37,7 +37,7 @@ export interface CheckoutContextType {
 
   // Setters
 
-  setSelectProduct: (product: Product | null) => void;
+  setSelectProduct: (product: ProductApp | null) => void;
   setQuality: (quality: number) => void;
   setStep: (step: CheckoutStep) => void;
   setOrder: (order: Order | null) => void;
@@ -68,7 +68,7 @@ export function CheckoutProvider({ children }: CheckoutProviderProps) {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const [selectProduct, setSelectProduct] = useState<Product | null>(null);
+  const [selectProduct, setSelectProduct] = useState<ProductApp | null>(null);
   const [quality, setQuality] = useState<number>(1);
   const [selectPayment, setSelectPayment] = useState<PaymentMethodOption | null>(null);
 

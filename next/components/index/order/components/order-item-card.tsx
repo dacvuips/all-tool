@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { Product } from "../../../../lib/repo/product/product.repo";
+import { ProductApp } from "../../../../lib/repo/product/productApp.repo";
 import { Img } from "../../../shared/utilities/misc";
 
 interface OrderItemCardProps {
@@ -13,7 +13,7 @@ interface OrderItemCardProps {
     originalPrice?: number;
     subtotal: number;
   };
-  product: Product;
+  product: ProductApp;
 }
 
 export function OrderItemCard({ item, product }: OrderItemCardProps) {

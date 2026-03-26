@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Product } from "../../../../lib/repo/product/product.repo";
+import { ProductApp } from "../../../../lib/repo/product/productApp.repo";
 import { Button } from "../../../shared/utilities/form";
 import { OrderItemCard } from "./order-item-card";
 
 interface OrderProductsListProps {
   items: any[];
-  product?: Product;
+  product?: ProductApp;
 }
 
 export function OrderProductsList({ items, product }: OrderProductsListProps) {

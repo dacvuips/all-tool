@@ -23,11 +23,11 @@ import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AiProviderKeyEnum,
-  Product,
-  ProductFlowEdge,
-  ProductFlowNode,
-  ProductService,
-} from "../../../../lib/repo/product";
+  ProductApp,
+  ProductAppFlowEdge,
+  ProductAppFlowNode,
+  ProductAppService,
+} from "../../../../lib/repo/product/productApp.repo";
 import { Button } from "../../../shared/utilities/form";
 import { Spinner } from "../../../shared/utilities/misc";
 import { ProductEdge } from "./components/product-edge";
@@ -49,7 +49,7 @@ const ORIGIN_Y = 60;
 
 /** Chuyển product.flow.nodes sang ReactFlow nodes (cho flow của 1 product) */
 function buildFlowNodes(
-  flowNodes: ProductFlowNode[],
+  flowNodes: ProductAppFlowNode[],
   productId: string,
   handlers: {
     onEditNode: (nodeId: string) => void;
@@ -75,12 +75,12 @@ function buildFlowNodes(
 
 /** Chuyển products list sang ReactFlow nodes (danh sách sản phẩm) */
 function buildProductCardNodes(
-  products: Product[],
+  products: ProductApp[],
   handlers: {
-    onEdit: (p: Product) => void;
-    onSettings: (p: Product) => void;
-    onDelete: (p: Product) => void;
-    onToggleActive: (p: Product) => void;
+    onEdit: (p: ProductApp) => void;
+    onSettings: (p: ProductApp) => void;
+    onDelete: (p: ProductApp) => void;
+    onToggleActive: (p: ProductApp) => void;
     onAdd: () => void;
   }
 ): Node<ProductNodeData>[] {
@@ -138,8 +138,8 @@ function saveEdges(edges: Edge[]) {
 function flowStateToProductFlow(
   nodes: Node<ProductNodeData>[],
   edges: Edge[]
-): { nodes: ProductFlowNode[]; edges: ProductFlowEdge[] } {
-  const flowNodes: ProductFlowNode[] = nodes
+): { nodes: ProductAppFlowNode[]; edges: ProductAppFlowEdge[] } {
+  const flowNodes: ProductAppFlowNode[] = nodes
     .filter((n) => n.data && "nodeId" in n.data)
     .map((n) => {
       const d = n.data as FlowNodeData;
@@ -154,7 +154,7 @@ function flowStateToProductFlow(
         },
       };
     });
-  const flowEdges: ProductFlowEdge[] = edges.map((e) => ({
+  const flowEdges: ProductAppFlowEdge[] = edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
@@ -181,8 +181,8 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
+  const [products, setProducts] = useState<ProductApp[]>([]);
+  const [currentProduct, setCurrentProduct] = useState<ProductApp | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -190,7 +190,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
 
   // Sidebar state
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(null);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductApp | null>(null);
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
 
   // ReactFlow nodes & edges state
@@ -198,7 +198,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
   // Delete confirm
-  const [deletingProduct, setDeletingProduct] = useState<Product | null>(null);
+  const [deletingProduct, setDeletingProduct] = useState<ProductApp | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   const saveFlowRef = useRef<(() => void) | null>(null);
@@ -206,7 +206,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   const loadProducts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await ProductService.getAll({
+      const res = await ProductAppService.getAll({
         query: {
           limit: 200,
           search: search || undefined,
@@ -224,7 +224,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   const loadProductFlow = useCallback(async (productId: string) => {
     setLoading(true);
     try {
-      const product = await ProductService.getOne({
+      const product = await ProductAppService.getOne({
         id: productId,
         cache: false,
       });
@@ -276,18 +276,18 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
     }
   }, [isFlowMode, productIdParam, loadProductFlow, loadProducts]);
 
-  const handleEdit = useCallback((product: Product) => {
+  const handleEdit = useCallback((product: ProductApp) => {
     setSelectedProduct(product);
     setSidebarMode("edit");
   }, []);
 
-  const handleSettings = useCallback((product: Product) => {
+  const handleSettings = useCallback((product: ProductApp) => {
     setSelectedProduct(product);
     setSidebarMode("settings");
     setEditingNodeId(null);
   }, []);
 
-  const handleDeleteClick = useCallback((product: Product) => {
+  const handleDeleteClick = useCallback((product: ProductApp) => {
     setDeletingProduct(product);
     setDeleteConfirm(true);
   }, []);
@@ -295,7 +295,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   const handleDeleteConfirm = async () => {
     if (!deletingProduct) return;
     try {
-      await ProductService.delete({ id: deletingProduct.id });
+      await ProductAppService.delete({ id: deletingProduct.id });
       toast.success(t("Xóa sản phẩm thành công"));
       setDeleteConfirm(false);
       setDeletingProduct(null);
@@ -310,9 +310,9 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
   };
 
   const handleToggleActive = useCallback(
-    async (product: Product) => {
+    async (product: ProductApp) => {
       try {
-        const res = await ProductService.toggleActive(product.id);
+        const res = await ProductAppService.toggleActive(product.id);
         toast.success(t("Cập trạng thái thành công"));
         setProducts((prev) =>
           prev.map((p) => (p.id === product.id ? { ...p, active: res.active } : p))
@@ -368,7 +368,7 @@ export function ProductFlowPage({ productIdParam, onBack }: ProductFlowPageProps
     if (!productIdParam || !currentProduct) return;
     const { nodes: flowNodes, edges: flowEdges } = flowStateToProductFlow(nodes, edges);
     try {
-      await ProductService.createOrUpdate({
+      await ProductAppService.createOrUpdate({
         id: productIdParam,
         data: { flow: { nodes: flowNodes, edges: flowEdges } },
       });

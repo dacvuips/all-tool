@@ -2,7 +2,7 @@ import { useTranslation } from "next-i18next";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
-import { AiProviderKeyEnum, PropertyTypeEnum } from "../repo/product/product.repo";
+import { AiProviderKeyEnum, PropertyTypeEnum } from "../repo/product/productApp.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
   AffiliateBoothStatus,

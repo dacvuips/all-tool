@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaChevronDown, FaTimes } from "react-icons/fa";
 import { ParamName } from "../../../../../lib/constants/constants";
-import { ProductService } from "../../../../../lib/repo/product";
+import { ProductAppService } from "../../../../../lib/repo/product/productApp.repo";
 import { SortDirection } from "../../../../../lib/repo/types";
 import { Button } from "../../../../shared/utilities/form";
 import { Popover } from "../../../../shared/utilities/popover/popover";
@@ -36,7 +36,7 @@ export const ProductPriceSort = () => {
 
   const handleResetFilter = async () => {
     hideSelect();
-    await ProductService.clearStore();
+    await ProductAppService.clearStore();
     setPagination({ page: 1 });
     setQueryParam({
       ...queryParam,
@@ -46,7 +46,7 @@ export const ProductPriceSort = () => {
 
   const handleApplyFilter = async (value: string) => {
     hideSelect();
-    await ProductService.clearStore();
+    await ProductAppService.clearStore();
     setPagination({ page: 1 });
     setQueryParam({
       ...queryParam,

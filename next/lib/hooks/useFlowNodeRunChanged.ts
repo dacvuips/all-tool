@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
   FlowNodeRunChangeEvent,
-  ProductService,
-} from "../repo/product/product.repo";
+  ProductAppService,
+} from "../repo/product/productApp.repo";
 
 export function useFlowNodeRunChanged(customerId?: string, productId?: string) {
   const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
@@ -16,7 +16,7 @@ export function useFlowNodeRunChanged(customerId?: string, productId?: string) {
       subscriptionRef.current.unsubscribe();
     }
 
-    subscriptionRef.current = ProductService.subscribeFlowNodeRunChanged({
+    subscriptionRef.current = ProductAppService.subscribeFlowNodeRunChanged({
       customerId,
       productId,
     }).subscribe((res) => {

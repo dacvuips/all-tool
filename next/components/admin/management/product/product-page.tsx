@@ -8,7 +8,7 @@ import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
-import { Product, ProductService } from "../../../../lib/repo/product";
+import { ProductApp, ProductAppService } from "../../../../lib/repo/product/productApp.repo";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
@@ -65,13 +65,13 @@ export function ProductPage(props: { initialProductId?: string | null }) {
       }
 
       // 2. Lấy tất cả product hiện có để so sánh slug
-      const existing = await ProductService.getAll({
+      const existing = await ProductAppService.getAll({
         query: { limit: 500 },
-        fragment: ProductService.parseFragment(`id slug`),
+        fragment: ProductAppService.parseFragment(`id slug`),
         cache: false,
       });
       const existingSlugs = new Set(
-        (existing.data || []).map((p: Product) => p.slug).filter(Boolean)
+        (existing.data || []).map((p: ProductApp) => p.slug).filter(Boolean)
       );
 
       // 3. Tạo product mới cho các slug chưa có
@@ -83,7 +83,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
       await Promise.all(
         newSlugs.map((s) =>
-          ProductService.createOrUpdate({
+          ProductAppService.createOrUpdate({
             data: {
               slug: s.slug,
               name: s.slug,
@@ -111,7 +111,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
   return (
     <Card>
-      <DataTable<Product> crudService={ProductService} filter={filter} order={{ priority: -1 }}>
+      <DataTable<ProductApp> crudService={ProductAppService} filter={filter} order={{ priority: -1 }}>
         <DataTable.Header>
           <DataTable.Title />
           <DataTable.Buttons>
@@ -146,7 +146,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                 <DataTable.Column
                   label="Ảnh bìa"
                   width={120}
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <DataTable.CellText
                       ratio169
                       imageClassName="w-28"
@@ -159,13 +159,13 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
                 <DataTable.Column
                   label={t("Tiêu đề")}
-                  render={(item: Product) => <DataTable.CellText value={item.name} />}
+                  render={(item: ProductApp) => <DataTable.CellText value={item.name} />}
                 />
 
                 {/* Cột Slug: hiển thị slug page tương ứng trong pages/app/ */}
                 <DataTable.Column
                   label={t("Slug / App")}
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <DataTable.CellText
                       value={
                         item.slug ? (
@@ -182,7 +182,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
                 <DataTable.Column
                   label={t("Credit")}
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <DataTable.CellText
                       value={
                         <span className="font-semibold text-primary">
@@ -195,7 +195,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
 
                 <DataTable.Column
                   label={t("Ngày cập nhật")}
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <DataTable.CellDate value={item.updatedAt} format="dd/MM/yyyy" />
                   )}
                 />
@@ -203,7 +203,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                 <DataTable.Column
                   right
                   label={t("Kích hoạt")}
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <DataTable.CellText
                       className="flex justify-end"
                       value={
@@ -213,7 +213,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                           value={item.active}
                           onChange={async () => {
                             try {
-                              const res = await ProductService.toggleActive(item.id);
+                              const res = await ProductAppService.toggleActive(item.id);
                               changeRowData(item, "active", res.active);
                               toast.success(t("Cập trạng thái thành công"));
                             } catch (err) {
@@ -230,7 +230,7 @@ export function ProductPage(props: { initialProductId?: string | null }) {
                 <DataTable.Column
                   right
                   className="whitespace-nowrap"
-                  render={(item: Product) => (
+                  render={(item: ProductApp) => (
                     <>
                       <DataTable.CellButton
                         icon={<RiSettings4Line />}

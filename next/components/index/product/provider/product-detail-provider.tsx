@@ -1,6 +1,6 @@
 import { useRouter } from "next/router";
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Product, ProductService } from "../../../../lib/repo/product";
+import { ProductApp, ProductAppService } from "../../../../lib/repo/product/productApp.repo";
 
 export type ProductMediaItem = {
   type: "video" | "image";
@@ -20,7 +20,7 @@ type ProductPricing = {
 };
 
 interface ProductDetailContextValue {
-  product?: Product;
+  product?: ProductApp;
   loading: boolean;
   quantity: number;
   setQuantity: (value: number) => void;
@@ -66,7 +66,7 @@ export function ProductDetailProvider({ ...props }) {
   const router = useRouter();
   const scrollToImageRef = useRef<ScrollToImageHandler>();
 
-  const [product, setProduct] = useState<Product>(undefined);
+  const [product, setProduct] = useState<ProductApp>(undefined);
   const [loading, setLoading] = useState<boolean>(true);
   const [quantity, setQuantity] = useState<number>(1);
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({});
@@ -79,7 +79,7 @@ export function ProductDetailProvider({ ...props }) {
 
   const GetOneProductSlug = async () => {
     setLoading(true);
-    await ProductService.getProductSlug(slug)
+    await ProductAppService.getProductSlug(slug)
       .then((res) => {
         setProduct(res);
       })

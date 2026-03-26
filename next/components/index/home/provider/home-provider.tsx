@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { createContext, useContext, useEffect, useState } from "react";
 import { ParamName } from "../../../../lib/constants/constants";
 import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
-import { Product, ProductService } from "../../../../lib/repo/product";
+import { ProductApp, ProductAppService } from "../../../../lib/repo/product/productApp.repo";
 
 import { Category } from "../../../../lib/repo";
 import { Pagination } from "../../../../lib/repo/crud.repo";
@@ -19,7 +19,7 @@ export const HomeContext = createContext<
     setQueryParam: (value: Record<string, any>) => void;
     loading: boolean;
     loadingMore: boolean;
-    products: Product[];
+    products: ProductApp[];
     categories?: Category;
     setPagination: (value: Pagination) => void;
     selectCategory?: Category;
@@ -32,7 +32,7 @@ export function HomeProvider({ ...props }) {
   const router = useRouter();
   const { customer, loadCustomer } = useAuth();
   const [openHomePopupNotify, setOpenHomePopupNotify] = useState<boolean>(false);
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<ProductApp[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -89,7 +89,7 @@ export function HomeProvider({ ...props }) {
 
       const page = isLoadMore ? pagination.page + 1 : 1;
 
-      await ProductService.getActiveProducts({
+      await ProductAppService.getActiveProducts({
         filter: {
           ...(parseData.length > 0 && { $or: parseData }),
           ...(categoryId && { categoryIds: { $in: [categoryId] } }),
