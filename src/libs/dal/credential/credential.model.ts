@@ -15,10 +15,6 @@ const credentialSchema = new Schema(
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
     isCustomerCredential: { type: Boolean, default: false },
     isAdminCredential: { type: Boolean, default: false },
-    /** Vertex AI OAuth2 – encrypted via encryptProviderSecret */
-    oauthClientId: { type: String },
-    oauthClientSecret: { type: String },
-    oauthRefreshToken: { type: String },
   },
   { timestamps: true }
 );

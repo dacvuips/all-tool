@@ -27,9 +27,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
 
   input UpdateCredentialInput {
@@ -39,9 +36,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
   input CreateCredentialCustomerInput {
     key: AiProviderKeyEnum
@@ -67,9 +61,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
 
   type CredentialPageData {

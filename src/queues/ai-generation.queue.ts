@@ -20,18 +20,10 @@ import {
   creditTransactionService,
   CreditTransactionTypeEnum,
 } from "../libs/dal/creditTransaction";
-import { customerGenerationMediaService } from "../libs/dal/customerGenerationMedia";
-import { ApiOutputTypeEnum } from "../libs/dal/product";
 import { pubsub } from "../libs/graphql/pub-sub";
 import { ChargeNodeRunCredit } from "../libs/usecases/credit/charge-node-run-credit.usecase";
 import { RefundNodeRunCredit } from "../libs/usecases/credit/refund-node-run-credit.usecase";
-import { executeProductCheck } from "../routers/flowNode/excute-product-check";
-import {
-  executeByProvider,
-  ExecuteProviderContext,
-  MethodEnum,
-} from "../routers/flowNode/execute-provider";
-import { normalizeAiResponse } from "../routers/flowNode/helpers/normalize-ai-response";
+ 
 
 export interface AiGenerationJobPayload {
   runId: string;
@@ -91,27 +83,27 @@ class AiGenerationQueue extends BaseQueue {
     });
 
     try {
-      const check = await executeProductCheck({ productId, nodeId, customerId });
-      if (check.ok === false) {
-        await aiGenerationRunService.updateOne(runId, {
-          status: AiGenerationRunStatusEnum.FAILED,
-          errorMessage: check.error,
-          completedAt: new Date(),
-        });
-        return;
-      }
+      // const check = await executeProductCheck({ productId, nodeId, customerId });
+      // if (check.ok === false) {
+      //   await aiGenerationRunService.updateOne(runId, {
+      //     status: AiGenerationRunStatusEnum.FAILED,
+      //     errorMessage: check.error,
+      //     completedAt: new Date(),
+      //   });
+      //   return;
+      // }
 
-      const { node, aiProviderKey, credential } = check;
+      // const { node, aiProviderKey, credential } = check;
 
-      if (!node?.data) {
-        throw new Error(`Node ${nodeId} is missing 'data'. Cannot execute provider.`);
-      }
-      if (!aiProviderKey) {
-        throw new Error(`Node ${nodeId} is missing aiProviderKey in config.`);
-      }
-      if (!credential) {
-        throw new Error(`Credential not found for provider ${aiProviderKey} (customer: ${customerId}).`);
-      }
+      // if (!node?.data) {
+      //   throw new Error(`Node ${nodeId} is missing 'data'. Cannot execute provider.`);
+      // }
+      // if (!aiProviderKey) {
+      //   throw new Error(`Node ${nodeId} is missing aiProviderKey in config.`);
+      // }
+      // if (!credential) {
+      //   throw new Error(`Credential not found for provider ${aiProviderKey} (customer: ${customerId}).`);
+      // }
 
       // Trừ credit khi bắt đầu xử lý (reserve). Nếu creditCost = 0 thì bỏ qua.
       if (creditCost > 0) {
@@ -139,59 +131,59 @@ class AiGenerationQueue extends BaseQueue {
         await aiGenerationRunService.updateOne(runId, { creditChargedAt: new Date() });
       }
 
-      const providerContext: ExecuteProviderContext = {
-        nodeData: node.data,
-        credential,
-        credentialDecrypted: "",
-        fieldValues,
-        context,
-        convertedImages: [],
-        body: "",
-        headers: {},
-        url: "",
-        method: MethodEnum.POST,
-        outputType: (runDoc.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE,
-      };
+      // const providerContext: ExecuteProviderContext = {
+      //   nodeData: node.data,
+      //   credential,
+      //   credentialDecrypted: "",
+      //   fieldValues,
+      //   context,
+      //   convertedImages: [],
+      //   body: "",
+      //   headers: {},
+      //   url: "",
+      //   method: MethodEnum.POST,
+      //   outputType: (runDoc.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE,
+      // };
 
-      const data = await executeByProvider(aiProviderKey, providerContext);
-      if (data == null) {
-        throw new Error(`Provider ${aiProviderKey} returned empty response for run ${runId}.`);
-      }
+      // const data = await executeByProvider(aiProviderKey, providerContext);
+      // if (data == null) {
+      //   throw new Error(`Provider ${aiProviderKey} returned empty response for run ${runId}.`);
+      // }
 
-      const outputType = (runDoc.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE;
-      const { resultRefs, responseSummary } = await normalizeAiResponse(
-        runId,
-        aiProviderKey,
-        outputType,
-        data
-      );
+      // const outputType = (runDoc.outputType as ApiOutputTypeEnum) || ApiOutputTypeEnum.IMAGE;
+      // const { resultRefs, responseSummary } = await normalizeAiResponse(
+      //   runId,
+      //   aiProviderKey,
+      //   outputType,
+      //   data
+      // );
 
-      await aiGenerationRunService.updateOne(runId, {
-        status: AiGenerationRunStatusEnum.COMPLETED,
-        resultRefs,
-        responseSummary,
-        completedAt: new Date(),
-      });
+      // await aiGenerationRunService.updateOne(runId, {
+      //   status: AiGenerationRunStatusEnum.COMPLETED,
+      //   resultRefs,
+      //   responseSummary,
+      //   completedAt: new Date(),
+      // });
 
-      // Lưu từng output vào CustomerGenerationMedia để query nhanh theo customer
-      if (resultRefs?.length) {
-        await Promise.all(
-          resultRefs.map((ref, index) =>
-            customerGenerationMediaService.create({
-              customerId,
-              productId,
-              nodeId,
-              runId,
-              type: ref.type,
-              attachmentId: ref.attachmentId,
-              url: ref.url,
-              mimeType: ref.mimeType,
-              size: ref.size,
-              order: ref.order ?? index + 1,
-            })
-          )
-        );
-      }
+      // // Lưu từng output vào CustomerGenerationMedia để query nhanh theo customer
+      // if (resultRefs?.length) {
+      //   await Promise.all(
+      //     resultRefs.map((ref, index) =>
+      //       customerGenerationMediaService.create({
+      //         customerId,
+      //         productId,
+      //         nodeId,
+      //         runId,
+      //         type: ref.type,
+      //         attachmentId: ref.attachmentId,
+      //         url: ref.url,
+      //         mimeType: ref.mimeType,
+      //         size: ref.size,
+      //         order: ref.order ?? index + 1,
+      //       })
+      //     )
+      //   );
+      // }
       // Bắn socket để client (product flow node) cập nhật kết quả run realtime
       await publishFlowNodeRunChanged(runId, FlowNodeRunChangeEventEnum.COMPLETED);
     } catch (err: any) {
