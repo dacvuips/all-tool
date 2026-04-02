@@ -12,9 +12,6 @@ export interface Credential extends BaseModel {
   customerId?: string;
   isCustomerCredential?: boolean;
   isAdminCredential?: boolean;
-  oauthClientId?: string;
-  oauthClientSecret?: string;
-  oauthRefreshToken?: string;
 }
 
 export class CredentialRepository extends CrudRepository<Credential> {
@@ -84,6 +81,20 @@ export class CredentialRepository extends CrudRepository<Credential> {
       ${this.fullFragmentCustomer}
     }`,
     }).then((res) => res.data["getOneCredentialCustomer"]);
+  }
+  async getCredentialByCustomerAndKey(key: string): Promise<Credential | null> {
+    return await this.query({
+      query: `getCredentialByCustomerAndKey(key: $key) {
+      ${this.fullFragmentCustomer}
+    }`,
+    }).then((res) => res.data["getCredentialByCustomerAndKey"]);
+  }
+  async checkCredentialExist(key: string): Promise<boolean> {
+    return await this.query({
+      query: `checkCredentialExist(key: $key) {
+      ${this.fullFragmentCustomer}
+    }`,
+    }).then((res) => res.data["checkCredentialExist"]);
   }
 }
 

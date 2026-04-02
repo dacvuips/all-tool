@@ -25,11 +25,9 @@ export default function AffiliateVideo() {
   const { showAiModal, setShowAiModal, zoomSrc, setZoomSrc, videoConfig, patchConfig } =
     useAffiliateVideoContext();
 
-  const saveSettings = (k: string, m: string) => {
+  const saveSettings = (k: string) => {
     setApiKey(k);
-    patchConfig({ model: m });
     localStorage.setItem("avid-api-key", k);
-    localStorage.setItem("avid-model", m);
   };
 
   const processPrompt = useCallback(async () => {
@@ -87,7 +85,6 @@ export default function AffiliateVideo() {
       {showSettings && (
         <SettingsModal
           apiKey={apiKey}
-          model={videoConfig.model}
           onSave={saveSettings}
           onClose={() => setShowSettings(false)}
         />

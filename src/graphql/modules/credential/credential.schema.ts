@@ -8,6 +8,7 @@ const schema = gql`
     getAllCredentialCustomer(q: QueryGetListInput): CredentialPageData
     getOneCredentialCustomer(id: ID!): Credential
     # Add Query
+    getCredentialByCustomerAndKey(key: String!): Credential
   }
 
   extend type Mutation {
@@ -18,6 +19,7 @@ const schema = gql`
     updateCredentialCustomer(id: ID!, data: UpdateCredentialCustomerInput!): Credential
     deleteOneCredentialCustomer(id: ID!): Credential
     # Add Mutation
+    checkCredentialExist(key: String!): Boolean
   }
 
   input CreateCredentialInput {

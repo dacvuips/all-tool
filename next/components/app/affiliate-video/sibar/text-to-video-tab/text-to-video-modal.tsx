@@ -16,7 +16,6 @@ import {
   PromptItem,
   STYLE_GALLERY,
   uid,
-  VIDEO_MODELS,
   VideoConfig,
   VoiceConfig,
 } from "../../constants";
@@ -120,17 +119,14 @@ export function ZoomModal({ src, mediaType = "image", onClose }: ZoomModalProps)
 /* ═══════════════════════════════════════════════════════════ SettingsModal */
 export function SettingsModal({
   apiKey,
-  model,
   onSave,
   onClose,
 }: {
   apiKey: string;
-  model: string;
-  onSave: (k: string, m: string) => void;
+  onSave: (k: string) => void;
   onClose: () => void;
 }) {
   const [keyVal, setKeyVal] = useState(apiKey);
-  const [modelVal, setModelVal] = useState(model || VIDEO_MODELS[0].value);
   return (
     <div
       className="fixed inset-0 z-500 flex items-center justify-center bg-black bg-opacity-70 backdrop-filter backdrop-blur-sm"
@@ -156,7 +152,7 @@ export function SettingsModal({
               value={keyVal}
               onChange={(e) => setKeyVal(e.target.value)}
               placeholder="sk-... hoặc AIza..."
-              onKeyDown={(e) => e.key === "Enter" && (onSave(keyVal, modelVal), onClose())}
+              onKeyDown={(e) => e.key === "Enter" && (onSave(keyVal), onClose())}
               className="w-full rounded-xl bg-white bg-opacity-5 border border-white border-opacity-10 text-blue-100 text-13 px-4 py-2 outline-none focus:border-indigo-500 transition-colors"
             />
             <p className="text-10 text-blue-500 mt-2">
@@ -180,26 +176,11 @@ export function SettingsModal({
               </a>
             </p>
           </div>
-          <div>
-            <label className="block text-11 font-semibold text-blue-400 uppercase tracking-wider mb-2">
-              Model Video
-            </label>
-            <select
-              value={modelVal}
-              onChange={(e) => setModelVal(e.target.value)}
-              className="w-full rounded-xl bg-white bg-opacity-5 border border-white border-opacity-10 text-blue-100 text-13 px-4 py-2 outline-none focus:border-indigo-500 transition-colors"
-            >
-              {VIDEO_MODELS.map((m) => (
-                <option key={m.value} value={m.value} style={{ background: "#1a1a2e" }}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
+
           <div className="flex gap-3 pt-2">
             <button
               onClick={() => {
-                onSave(keyVal, modelVal);
+                onSave(keyVal);
                 onClose();
               }}
               className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-14 border-0 cursor-pointer transition-all"
@@ -348,7 +329,6 @@ export function PromptResultCard({
           apiKey,
           mainPrompt: item.promptText,
           config: {
-            model: defaultVideoConfig.model,
             duration: defaultVideoConfig.duration,
             aspectRatio: defaultVideoConfig.aspectRatio,
             numberOfOutputs: 1,
@@ -509,7 +489,6 @@ export function BatchActionBar({
             apiKey,
             mainPrompt: item.promptText,
             config: {
-              model: videoConfig.model,
               duration: videoConfig.duration,
               aspectRatio: videoConfig.aspectRatio,
               numberOfOutputs: 1,

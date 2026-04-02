@@ -68,7 +68,6 @@ export interface VoiceConfig {
 
 /** Full video generation configuration */
 export interface VideoConfig {
-  model: string;
   duration: number; // seconds, default 8
   aspectRatio: AspectRatio;
   quality: Quality;
@@ -245,12 +244,7 @@ export interface PromptTemplate {
 }
 
 // ── Model Options ──────────────────────────────────────────────────────────
-export const VIDEO_MODELS = [
-  { value: "veo-2.0-generate-001", label: "🎥 Veo 2.0 (ổn định nhất)" },
-  { value: "veo-3.1-generate-preview", label: "🎬 Veo 3.1 Preview (mới, miễn phí với Ultral)" },
-] as const;
 
-// ── Aspect Ratio Options ───────────────────────────────────────────────────
 export const ASPECT_RATIOS: { value: AspectRatio; label: string; icon: string }[] = [
   { value: "16:9", label: "16:9 Landscape", icon: "🖥" },
   { value: "9:16", label: "9:16 Portrait", icon: "📱" },
@@ -372,7 +366,6 @@ export const PROMPT_TEMPLATES: PromptTemplate[] = [
 
 // ── Default Configs ────────────────────────────────────────────────────────
 export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
-  model: VIDEO_MODELS[0].value,
   duration: 8,
   aspectRatio: "16:9",
   quality: "high",
