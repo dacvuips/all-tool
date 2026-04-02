@@ -40,17 +40,25 @@ export type ResponseSummary = {
   /** Tên model đã dùng */
   model?: string;
 };
+export enum AiGenerationRunTypeEnum {
+  TEXT_TO_VIDEO = "TEXT_TO_VIDEO",
+  IMAGE_TO_VIDEO = "IMAGE_TO_VIDEO",
+  TEXT_TO_IMAGE = "TEXT_TO_IMAGE",
+  IMAGE_TO_IMAGE = "IMAGE_TO_IMAGE",
+  TEXT_TO_AUDIO = "TEXT_TO_AUDIO",
+  START_END_TO_VIDEO = "START_END_TO_VIDEO",
+  FACE_SYNC = "FACE_SYNC",
+}
 
 /** Bản ghi mỗi lần chạy node AI: lưu trạng thái, tham chiếu kết quả, lịch sử */
 export type IAiGenerationRun = TimestampEntity & {
   /** Người dùng (customer) */
   customerId: string;
-  /** Product chứa flow */
-  productId: string;
-  /** Id node trong flow */
-  nodeId: string;
+  prompt: string;
+  voicePrompt: string;
   /** Provider: OPENAI_KEY, GOOGLE_GEMINI_KEY, ... */
   provider: AiProviderKeyEnum;
+  type: AiGenerationRunTypeEnum;
   /** Loại output: IMAGE, VIDEO, FILE, AUDIO */
   outputType: ApiOutputTypeEnum;
   /** Trạng thái run */
@@ -73,4 +81,6 @@ export type IAiGenerationRun = TimestampEntity & {
   creditChargedAt?: Date;
   /** Thời điểm đã hoàn credit khi run FAILED (null nếu chưa hoàn) */
   creditRefundedAt?: Date;
+  /** Các field config */
+  metadata?: any;
 };
