@@ -35,6 +35,7 @@ export type ItemRole = "input" | "keyframe" | "output";
 export type AspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
 export type Quality = "standard" | "high";
 export type OutputFormat = "mp4" | "webm";
+export type SpeedMode = "fast" | "relaxed" | "quality";
 
 /** A single media item (image or video) in the generation pipeline */
 export interface MediaItem {
@@ -75,7 +76,7 @@ export interface VideoConfig {
   numberOfOutputs: number;
   generateSubtitles: boolean;
   personGeneration: "allow_adult" | "dont_allow";
-  speed?: "fast" | "relaxed" | "quality";
+  speed: SpeedMode | string;
 }
 
 // ── Mock Video Data (demo UI) ──────────────────────────────────────────────
@@ -94,14 +95,112 @@ export interface MockVideo {
 }
 
 export const MOCK_VIDEOS: MockVideo[] = [
-  { id: "m1", thumbnail: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", quality: "1080p", description: "Phòng ngủ phong cách Scandinavian ấm cúng với tường kem, sàn gỗ sáng màu, giường bọc nệm vải be, cửa sổ kính lớn chiếm gần trọn bức tường...", model: "fast_ultra_relaxed", seed: "528414", timeInfo: "15:53", status: "generating" },
-  { id: "m2", thumbnail: "https://images.unsplash.com/photo-1618221118493-9cfa1a1c00da?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ hiện đại sang trọng với nội thất gỗ óc chó, ga giường trắng ngà, thảm lông mềm, cửa sổ kính lớn nhìn ra thành phố về đêm đang...", model: "fast_ultra_relaxed", seed: "886026", timeInfo: "15:55", status: "generating" },
-  { id: "m3", thumbnail: "https://images.unsplash.com/photo-1600210491892-03d54079f2b4?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ phong cách bãi biển nhiệt đới với nội thất mây tre, chăn ga màu cát, cửa sổ kính nhìn ra bãi biển vàng đang mưa, sóng biển nhẹ và...", model: "fast_ultra_relaxed", seed: "179785", timeInfo: "15:55", status: "generating" },
-  { id: "m4", thumbnail: "https://images.unsplash.com/photo-1617098474202-0d0d7c5a4a8e?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ cổ điển châu Âu với tường màu xanh xám, giường đầu cao bọc nhung, bàn gỗ cổ, cửa sổ kính nhìn ra khu phố lát đá cổ kính...", model: "fast_ultra_relaxed", seed: "561736", timeInfo: "15:55", status: "generating" },
-  { id: "m5", thumbnail: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ phong cách boho với ga giường họa tiết nhẹ, thảm dệt thủ công, cây xanh trong nhà, cửa sổ kính nhìn ra cánh đồng hoa oải hương...", model: "fast_ultra_relaxed", seed: "419841", timeInfo: "15:55", status: "generating" },
-  { id: "m6", thumbnail: "https://images.unsplash.com/photo-1560448205-4d9b3e6bb6db?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ tối giản hiện đại với gam màu xám ấm, giường lớn gọn gàng, tường bê tông mịn, cửa sổ kính lớn nhìn ra cây cầu dát bạc qua đồng...", model: "fast_ultra_relaxed", seed: "399767", timeInfo: "15:55", status: "generating" },
-  { id: "m7", thumbnail: "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", quality: "1080p", description: "Phòng ngủ vintage sang trọng với đèn chùm pha lê, rèm nhung đỏ đô, giường canopy gỗ cổ điển, sàn gỗ parquet bóng loáng...", model: "fast_ultra_relaxed", seed: "781234", timeInfo: "15:55", status: "done" },
-  { id: "m8", thumbnail: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&q=80&fit=crop", label: "TEXT TO VIDEO", aspectRatio: "16:9", styleTag: "relaxed", description: "Phòng ngủ penthouse tối giản với tường kính toàn cảnh thành phố ban ngày, ánh sáng chan hòa, giường king-size trắng tinh...", model: "fast_ultra_relaxed", seed: "643218", timeInfo: "15:55", status: "done" },
+  {
+    id: "m1",
+    thumbnail: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    quality: "1080p",
+    description:
+      "Phòng ngủ phong cách Scandinavian ấm cúng với tường kem, sàn gỗ sáng màu, giường bọc nệm vải be, cửa sổ kính lớn chiếm gần trọn bức tường...",
+    model: "fast_ultra_relaxed",
+    seed: "528414",
+    timeInfo: "15:53",
+    status: "generating",
+  },
+  {
+    id: "m2",
+    thumbnail: "https://images.unsplash.com/photo-1618221118493-9cfa1a1c00da?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ hiện đại sang trọng với nội thất gỗ óc chó, ga giường trắng ngà, thảm lông mềm, cửa sổ kính lớn nhìn ra thành phố về đêm đang...",
+    model: "fast_ultra_relaxed",
+    seed: "886026",
+    timeInfo: "15:55",
+    status: "generating",
+  },
+  {
+    id: "m3",
+    thumbnail: "https://images.unsplash.com/photo-1600210491892-03d54079f2b4?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ phong cách bãi biển nhiệt đới với nội thất mây tre, chăn ga màu cát, cửa sổ kính nhìn ra bãi biển vàng đang mưa, sóng biển nhẹ và...",
+    model: "fast_ultra_relaxed",
+    seed: "179785",
+    timeInfo: "15:55",
+    status: "generating",
+  },
+  {
+    id: "m4",
+    thumbnail: "https://images.unsplash.com/photo-1617098474202-0d0d7c5a4a8e?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ cổ điển châu Âu với tường màu xanh xám, giường đầu cao bọc nhung, bàn gỗ cổ, cửa sổ kính nhìn ra khu phố lát đá cổ kính...",
+    model: "fast_ultra_relaxed",
+    seed: "561736",
+    timeInfo: "15:55",
+    status: "generating",
+  },
+  {
+    id: "m5",
+    thumbnail: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ phong cách boho với ga giường họa tiết nhẹ, thảm dệt thủ công, cây xanh trong nhà, cửa sổ kính nhìn ra cánh đồng hoa oải hương...",
+    model: "fast_ultra_relaxed",
+    seed: "419841",
+    timeInfo: "15:55",
+    status: "generating",
+  },
+  {
+    id: "m6",
+    thumbnail: "https://images.unsplash.com/photo-1560448205-4d9b3e6bb6db?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ tối giản hiện đại với gam màu xám ấm, giường lớn gọn gàng, tường bê tông mịn, cửa sổ kính lớn nhìn ra cây cầu dát bạc qua đồng...",
+    model: "fast_ultra_relaxed",
+    seed: "399767",
+    timeInfo: "15:55",
+    status: "generating",
+  },
+  {
+    id: "m7",
+    thumbnail: "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    quality: "1080p",
+    description:
+      "Phòng ngủ vintage sang trọng với đèn chùm pha lê, rèm nhung đỏ đô, giường canopy gỗ cổ điển, sàn gỗ parquet bóng loáng...",
+    model: "fast_ultra_relaxed",
+    seed: "781234",
+    timeInfo: "15:55",
+    status: "done",
+  },
+  {
+    id: "m8",
+    thumbnail: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&q=80&fit=crop",
+    label: "TEXT TO VIDEO",
+    aspectRatio: "16:9",
+    styleTag: "relaxed",
+    description:
+      "Phòng ngủ penthouse tối giản với tường kính toàn cảnh thành phố ban ngày, ánh sáng chan hòa, giường king-size trắng tinh...",
+    model: "fast_ultra_relaxed",
+    seed: "643218",
+    timeInfo: "15:55",
+    status: "done",
+  },
 ];
 
 /** A generation job (pending / running / done / error) */
@@ -281,6 +380,7 @@ export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
   numberOfOutputs: 1,
   generateSubtitles: false,
   personGeneration: "allow_adult",
+  speed: "relaxed",
 };
 
 export const DEFAULT_VOICE_CONFIG: VoiceConfig = {

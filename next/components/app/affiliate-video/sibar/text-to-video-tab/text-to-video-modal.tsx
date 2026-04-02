@@ -19,7 +19,7 @@ import {
   VIDEO_MODELS,
   VideoConfig,
   VoiceConfig,
-} from "./constants";
+} from "../../constants";
 
 /* ═══════════════════════════════════════════════════════════ ZoomModal */
 interface ZoomModalProps {
@@ -61,7 +61,9 @@ export function ZoomModal({ src, mediaType = "image", onClose }: ZoomModalProps)
         }));
         lastPos.current = { x: e.clientX, y: e.clientY };
       }}
-      onMouseUp={() => { dragging.current = false; }}
+      onMouseUp={() => {
+        dragging.current = false;
+      }}
       onWheel={onWheel}
     >
       {mediaType === "video" ? (
@@ -70,7 +72,11 @@ export function ZoomModal({ src, mediaType = "image", onClose }: ZoomModalProps)
           controls
           autoPlay
           className="rounded-2xl"
-          style={{ maxWidth: "88vw", maxHeight: "88vh", transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})` }}
+          style={{
+            maxWidth: "88vw",
+            maxHeight: "88vh",
+            transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})`,
+          }}
         />
       ) : (
         <img
@@ -78,14 +84,24 @@ export function ZoomModal({ src, mediaType = "image", onClose }: ZoomModalProps)
           draggable={false}
           alt=""
           className="rounded-2xl select-none"
-          style={{ maxWidth: "88vw", maxHeight: "88vh", transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})` }}
+          style={{
+            maxWidth: "88vw",
+            maxHeight: "88vh",
+            transform: `translate(${offset.x}px,${offset.y}px) scale(${scale})`,
+          }}
         />
       )}
       <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
         {[
           { l: "🔍+", fn: () => setScale((s) => Math.min(8, s + 0.4)) },
           { l: "🔍−", fn: () => setScale((s) => Math.max(0.3, s - 0.4)) },
-          { l: "↺", fn: () => { setScale(1); setOffset({ x: 0, y: 0 }); } },
+          {
+            l: "↺",
+            fn: () => {
+              setScale(1);
+              setOffset({ x: 0, y: 0 });
+            },
+          },
           { l: "✕", fn: onClose },
         ].map((b) => (
           <button
@@ -120,14 +136,21 @@ export function SettingsModal({
       className="fixed inset-0 z-500 flex items-center justify-center bg-black bg-opacity-70 backdrop-filter backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-md rounded-2xl border border-indigo-500 border-opacity-30 shadow-2xl overflow-hidden" style={{ background: "#0e0c1e" }}>
+      <div
+        className="w-full max-w-md rounded-2xl border border-indigo-500 border-opacity-30 shadow-2xl overflow-hidden"
+        style={{ background: "#0e0c1e" }}
+      >
         <div className="px-6 py-5 border-b border-white border-opacity-10">
           <h2 className="text-16 font-bold text-white mb-1">⚙️ Cài đặt API</h2>
-          <p className="text-12 text-blue-400">Cài đặt lưu trong trình duyệt, không gửi lên server.</p>
+          <p className="text-12 text-blue-400">
+            Cài đặt lưu trong trình duyệt, không gửi lên server.
+          </p>
         </div>
         <div className="p-6 space-y-4">
           <div>
-            <label className="block text-11 font-semibold text-blue-400 uppercase tracking-wider mb-2">API Key (OpenAI hoặc Gemini)</label>
+            <label className="block text-11 font-semibold text-blue-400 uppercase tracking-wider mb-2">
+              API Key (OpenAI hoặc Gemini)
+            </label>
             <input
               type="password"
               value={keyVal}
@@ -138,17 +161,29 @@ export function SettingsModal({
             />
             <p className="text-10 text-blue-500 mt-2">
               🔹 OpenAI{" "}
-              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline">
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-400 underline"
+              >
                 platform.openai.com
               </a>
               {" · "}🔹 Gemini{" "}
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-400 underline">
+              <a
+                href="https://aistudio.google.com/app/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-indigo-400 underline"
+              >
                 aistudio.google.com
               </a>
             </p>
           </div>
           <div>
-            <label className="block text-11 font-semibold text-blue-400 uppercase tracking-wider mb-2">Model Video</label>
+            <label className="block text-11 font-semibold text-blue-400 uppercase tracking-wider mb-2">
+              Model Video
+            </label>
             <select
               value={modelVal}
               onChange={(e) => setModelVal(e.target.value)}
@@ -163,7 +198,10 @@ export function SettingsModal({
           </div>
           <div className="flex gap-3 pt-2">
             <button
-              onClick={() => { onSave(keyVal, modelVal); onClose(); }}
+              onClick={() => {
+                onSave(keyVal, modelVal);
+                onClose();
+              }}
               className="flex-1 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-14 border-0 cursor-pointer transition-all"
             >
               💾 Lưu
@@ -715,7 +753,10 @@ export function MediaCard({
           }
         }}
         onDrop={handleDrop}
-        onDragOver={(e) => { e.preventDefault(); setDraggingOver(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDraggingOver(true);
+        }}
         onDragLeave={() => setDraggingOver(false)}
         onClick={() => !hasMedia && fileRef.current?.click()}
         className={`relative flex items-center justify-center rounded-xl overflow-hidden transition-all ${
@@ -746,19 +787,28 @@ export function MediaCard({
         {hasMedia && (
           <div className="absolute top-1 right-1 flex gap-1">
             <button
-              onClick={(e) => { e.stopPropagation(); item.src && onZoom(item.src, item.mediaType); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                item.src && onZoom(item.src, item.mediaType);
+              }}
               className="w-6 h-6 rounded-lg bg-black bg-opacity-60 text-white text-10 flex items-center justify-center border-0 cursor-pointer hover:bg-opacity-80 transition-all"
             >
               🔍
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); fileRef.current?.click(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                fileRef.current?.click();
+              }}
               className="w-6 h-6 rounded-lg bg-black bg-opacity-60 text-white text-10 flex items-center justify-center border-0 cursor-pointer hover:bg-opacity-80 transition-all"
             >
               📁
             </button>
             <button
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemove();
+              }}
               className="w-6 h-6 rounded-lg bg-black bg-opacity-60 text-red-400 text-10 flex items-center justify-center border-0 cursor-pointer hover:bg-red-900 hover:bg-opacity-80 transition-all"
             >
               ✕
@@ -817,7 +867,9 @@ export function StyleGallery({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-11 font-semibold text-blue-400 uppercase tracking-wider">🎨 Phong cách tham khảo</p>
+      <p className="text-11 font-semibold text-blue-400 uppercase tracking-wider">
+        🎨 Phong cách tham khảo
+      </p>
       <div className="flex gap-2 flex-wrap">
         {STYLE_GALLERY.map((item) => (
           <div
@@ -911,7 +963,9 @@ export function KeyframeTimeline({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="text-11 font-semibold text-blue-300">🎞 Keyframes ({keyframes.length})</span>
+        <span className="text-11 font-semibold text-blue-300">
+          🎞 Keyframes ({keyframes.length})
+        </span>
         <button
           onClick={() => onChange([...keyframes, makeMediaItem("keyframe")])}
           className="text-10 font-semibold px-2 py-1 rounded-lg bg-white bg-opacity-5 hover:bg-opacity-10 text-blue-400 border-0 cursor-pointer transition-all"
@@ -921,7 +975,10 @@ export function KeyframeTimeline({
       </div>
       <div
         onDrop={(e) => handleExternalFileDrop(e)}
-        onDragOver={(e) => { e.preventDefault(); setZoneOver(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setZoneOver(true);
+        }}
         onDragLeave={() => setZoneOver(false)}
         className={`flex gap-2 flex-wrap p-2 rounded-xl min-h-12 transition-all border ${
           zoneOver
@@ -938,8 +995,13 @@ export function KeyframeTimeline({
           <div
             key={kf.id}
             draggable
-            onDragStart={() => { dragIndex.current = idx; }}
-            onDragOver={(e) => { e.preventDefault(); setDraggingOver(idx); }}
+            onDragStart={() => {
+              dragIndex.current = idx;
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDraggingOver(idx);
+            }}
             onDragLeave={() => setDraggingOver(null)}
             onDrop={(e) => {
               e.stopPropagation();
@@ -953,7 +1015,9 @@ export function KeyframeTimeline({
             } bg-white bg-opacity-5`}
             style={{ width: 80, height: 56 }}
           >
-            <div className="absolute top-0 left-0 text-8 font-bold text-blue-500 bg-black bg-opacity-50 px-1 rounded-br">K{idx + 1}</div>
+            <div className="absolute top-0 left-0 text-8 font-bold text-blue-500 bg-black bg-opacity-50 px-1 rounded-br">
+              K{idx + 1}
+            </div>
             <div
               className="w-full h-full flex items-center justify-center cursor-pointer"
               onClick={() => kf.src && onZoom(kf.src, kf.mediaType)}
@@ -982,7 +1046,12 @@ export function KeyframeTimeline({
                     const r = new FileReader();
                     r.onload = (ev) => {
                       const next = [...keyframes];
-                      next[idx] = { ...kf, src: ev.target?.result as string, mediaType: mt, name: f.name };
+                      next[idx] = {
+                        ...kf,
+                        src: ev.target?.result as string,
+                        mediaType: mt,
+                        name: f.name,
+                      };
                       onChange(next);
                     };
                     r.readAsDataURL(f);
@@ -1118,9 +1187,17 @@ export function VideoCard({
       }}
     >
       {/* Thumbnail area */}
-      <div className="relative overflow-hidden" style={{ aspectRatio: "16/9", background: "#0a0a1a" }}>
+      <div
+        className="relative overflow-hidden"
+        style={{ aspectRatio: "16/9", background: "#0a0a1a" }}
+      >
         {thumbnail ? (
-          <img src={thumbnail} alt="" className="w-full h-full object-cover" onClick={() => onZoom?.(thumbnail)} />
+          <img
+            src={thumbnail}
+            alt=""
+            className="w-full h-full object-cover"
+            onClick={() => onZoom?.(thumbnail)}
+          />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center">
             {isGenerating ? (
@@ -1136,17 +1213,33 @@ export function VideoCard({
 
         {/* Top badges overlay */}
         <div className="absolute top-0 left-0 right-0 flex items-center gap-1 p-2 flex-wrap">
-          <span className="text-8 font-bold px-1 rounded bg-indigo-900 bg-opacity-80 text-indigo-300">📄 {label}</span>
-          <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-blue-400">{aspectRatio}</span>
-          <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-cyan-400">{styleTag}</span>
-          {quality && <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-yellow-400">{quality}</span>}
+          <span className="text-8 font-bold px-1 rounded bg-indigo-900 bg-opacity-80 text-indigo-300">
+            📄 {label}
+          </span>
+          <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-blue-400">
+            {aspectRatio}
+          </span>
+          <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-cyan-400">
+            {styleTag}
+          </span>
+          {quality && (
+            <span className="text-8 font-semibold px-1 rounded bg-black bg-opacity-60 text-yellow-400">
+              {quality}
+            </span>
+          )}
           <div className="ml-auto">
             {isGenerating ? (
-              <span className="text-8 font-bold px-1 rounded bg-yellow-900 bg-opacity-80 text-yellow-400">ĐANG XỬ LÝ</span>
+              <span className="text-8 font-bold px-1 rounded bg-yellow-900 bg-opacity-80 text-yellow-400">
+                ĐANG XỬ LÝ
+              </span>
             ) : status === "done" ? (
-              <span className="text-8 font-bold px-1 rounded bg-green-900 bg-opacity-80 text-green-400">DONE</span>
+              <span className="text-8 font-bold px-1 rounded bg-green-900 bg-opacity-80 text-green-400">
+                DONE
+              </span>
             ) : (
-              <span className="text-8 font-bold px-1 rounded bg-black bg-opacity-60 text-blue-500">HÀNG ĐỢI</span>
+              <span className="text-8 font-bold px-1 rounded bg-black bg-opacity-60 text-blue-500">
+                HÀNG ĐỢI
+              </span>
             )}
           </div>
         </div>
@@ -1179,9 +1272,7 @@ export function VideoCard({
           SEED <span className="text-blue-400">{seed}</span>
         </span>
         <span className="text-8 text-blue-700">·</span>
-        <span className="text-8 text-blue-600 font-mono">
-          {timeInfo}
-        </span>
+        <span className="text-8 text-blue-600 font-mono">{timeInfo}</span>
       </div>
     </div>
   );
