@@ -1,5 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { CSS } from "./constants";
+import { credentialCustomerService } from "../../../lib/repo";
+import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
 
 /* ───────────────────────────── ZoomModal ───────────────────────────── */
 export function ZoomModal({ src, onClose }: { src: string; onClose: () => void }) {
@@ -77,34 +79,133 @@ export const GEMINI_MODELS = [
 
 /* ────────────────────────── SettingsModal ────────────────────────── */
 interface SettingsModalProps {
-  apiKey: string;
+  credentialId: string | null;
+  credentialActive: boolean;
   model: string;
-  onSave: (apiKey: string, model: string) => void;
+  onSave: (model: string) => void;
   onClose: () => void;
+  onCredentialChange: () => void;
 }
-export function SettingsModal({ apiKey, model, onSave, onClose }: SettingsModalProps) {
-  const [keyVal, setKeyVal] = useState(apiKey);
+
+export function SettingsModal({
+  credentialId,
+  credentialActive,
+  model,
+  onSave,
+  onClose,
+  onCredentialChange,
+}: SettingsModalProps) {
+  const [keyVal, setKeyVal] = useState("");
   const [modelVal, setModelVal] = useState(model || GEMINI_MODELS[0].value);
+  const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+
+  const hasCredential = !!credentialId;
+
+  const handleSaveKey = async () => {
+    if (!keyVal.trim()) return;
+    setSaving(true);
+    try {
+      if (hasCredential) {
+        await credentialCustomerService.update({
+          id: credentialId!,
+          data: { value: keyVal.trim(), key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY },
+        });
+      } else {
+        await credentialCustomerService.create({
+          data: {
+            key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+            value: keyVal.trim(),
+            active: true,
+          },
+        });
+      }
+      setKeyVal("");
+      setEditMode(false);
+      onCredentialChange();
+    } catch (e: any) {
+      alert("Lỗi: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 8888, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center" }}
-      onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", border: CSS.borderAccent, borderRadius: 20, padding: 32, width: 500, boxShadow: "0 0 60px rgba(139,92,246,0.3)" }}>
-        <h2 style={{ color: "#fff", margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>⚙️ Cài đặt API</h2>
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 8888, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: "linear-gradient(135deg,#1a1a2e,#16213e)", border: CSS.borderAccent, borderRadius: 20, padding: 32, width: 520, boxShadow: "0 0 60px rgba(139,92,246,0.3)" }}>
+        <h2 style={{ color: "#fff", margin: "0 0 8px", fontSize: 20, fontWeight: 700 }}>⚙️ Cài đặt Gemini API</h2>
         <p style={{ color: CSS.textSecondary, fontSize: 13, margin: "0 0 20px" }}>
-          Cài đặt được lưu vào trình duyệt và chỉ dùng cho ứng dụng này.
+          API Key được lưu trên server, bảo mật hơn lưu vào trình duyệt.
         </p>
 
-        {/* API Key */}
+        {/* Credential Section */}
         <label style={{ color: "#cbd5e1", fontSize: 13, fontWeight: 600 }}>Gemini API Key</label>
-        <input type="password" value={keyVal} onChange={(e) => setKeyVal(e.target.value)} placeholder="AIza..."
-          onKeyDown={(e) => e.key === "Enter" && (onSave(keyVal, modelVal), onClose())}
-          style={{ display: "block", width: "100%", boxSizing: "border-box", marginTop: 8, padding: "12px 16px", background: "rgba(255,255,255,0.07)", border: CSS.borderAccent, borderRadius: 10, color: "#fff", fontSize: 14, outline: "none" }} />
-        <p style={{ color: CSS.textMuted, fontSize: 11, marginTop: 6 }}>
-          Lấy key tại: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: CSS.accent }}>Google AI Studio</a>
-        </p>
+
+        {hasCredential && !editMode ? (
+          /* Đã tồn tại credential → hiển thị masked + status */
+          <div style={{ marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", background: "rgba(255,255,255,0.05)", border: CSS.borderAccent, borderRadius: 10 }}>
+              <span style={{ flex: 1, color: "#94a3b8", fontSize: 14, letterSpacing: 3 }}>••••••••••••••••</span>
+              <span style={{
+                padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                background: credentialActive ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
+                color: credentialActive ? "#10b981" : "#ef4444",
+                border: `1px solid ${credentialActive ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.4)"}`,
+              }}>
+                {credentialActive ? "✓ Active" : "✗ Inactive"}
+              </span>
+            </div>
+            <button
+              onClick={() => setEditMode(true)}
+              style={{ marginTop: 8, padding: "8px 16px", borderRadius: 8, border: CSS.borderAccent, background: "rgba(139,92,246,0.15)", color: CSS.accent, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              ✏️ Cập nhật key
+            </button>
+          </div>
+        ) : (
+          /* Chưa tồn tại hoặc đang cập nhật → form nhập key */
+          <div style={{ marginTop: 8 }}>
+            {hasCredential && (
+              <p style={{ fontSize: 12, color: CSS.textMuted, marginBottom: 8 }}>
+                Nhập key mới để cập nhật (để trống nếu muốn giữ key cũ)
+              </p>
+            )}
+            <input
+              type="password"
+              value={keyVal}
+              onChange={(e) => setKeyVal(e.target.value)}
+              placeholder="AIza..."
+              onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
+              style={{ display: "block", width: "100%", boxSizing: "border-box", padding: "12px 16px", background: "rgba(255,255,255,0.07)", border: CSS.borderAccent, borderRadius: 10, color: "#fff", fontSize: 14, outline: "none" }}
+            />
+            <p style={{ color: CSS.textMuted, fontSize: 11, marginTop: 6 }}>
+              Lấy key tại: <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" style={{ color: CSS.accent }}>Google AI Studio</a>
+            </p>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button
+                onClick={handleSaveKey}
+                disabled={saving || !keyVal.trim()}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", background: saving ? "rgba(139,92,246,0.4)" : CSS.gradAccent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: saving ? "not-allowed" : "pointer", opacity: !keyVal.trim() ? 0.5 : 1 }}
+              >
+                {saving ? "⏳ Đang lưu..." : hasCredential ? "💾 Cập nhật key" : "💾 Lưu key"}
+              </button>
+              {hasCredential && (
+                <button
+                  onClick={() => { setEditMode(false); setKeyVal(""); }}
+                  style={{ padding: "10px 18px", borderRadius: 10, border: CSS.border, background: "transparent", color: CSS.textSecondary, fontSize: 14, cursor: "pointer" }}
+                >
+                  Hủy
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Model Selector */}
-        <label style={{ color: "#cbd5e1", fontSize: 13, fontWeight: 600, display: "block", marginTop: 18 }}>Gemini Model</label>
+        <label style={{ color: "#cbd5e1", fontSize: 13, fontWeight: 600, display: "block", marginTop: 20 }}>Gemini Model</label>
         <select value={modelVal} onChange={(e) => setModelVal(e.target.value)} style={{
           display: "block", width: "100%", boxSizing: "border-box", marginTop: 8, padding: "12px 16px",
           background: "rgba(255,255,255,0.07)", border: CSS.borderAccent, borderRadius: 10,
@@ -115,8 +216,8 @@ export function SettingsModal({ apiKey, model, onSave, onClose }: SettingsModalP
         <p style={{ color: CSS.textMuted, fontSize: 11, marginTop: 6 }}>Chọn model hỗ trợ tạo ảnh (image generation)</p>
 
         <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-          <button onClick={() => { onSave(keyVal, modelVal); onClose(); }} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: CSS.gradAccent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-            💾 Lưu
+          <button onClick={() => { onSave(modelVal); onClose(); }} style={{ flex: 1, padding: "12px 0", borderRadius: 10, border: "none", background: CSS.gradAccent, color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+            ✓ Đóng & Lưu model
           </button>
           <button onClick={onClose} style={{ padding: "12px 24px", borderRadius: 10, border: CSS.border, background: "transparent", color: CSS.textSecondary, fontSize: 14, cursor: "pointer" }}>
             Hủy

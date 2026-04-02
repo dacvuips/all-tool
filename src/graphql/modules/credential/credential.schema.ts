@@ -18,8 +18,6 @@ const schema = gql`
     createCredentialCustomer(data: CreateCredentialCustomerInput!): Credential
     updateCredentialCustomer(id: ID!, data: UpdateCredentialCustomerInput!): Credential
     deleteOneCredentialCustomer(id: ID!): Credential
-    # Add Mutation
-    checkCredentialExist(key: String!): Boolean
   }
 
   input CreateCredentialInput {

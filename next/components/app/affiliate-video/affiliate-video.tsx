@@ -2,8 +2,11 @@
  * AI Affiliate Video Workshop – affiliate-video.tsx
  * Styling: className only (Tailwind) — no inline styles, no style= props.
  */
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../../../lib/providers/auth-provider";
+import { credentialCustomerService } from "../../../lib/repo";
+import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
 import { Button, Textarea } from "../../shared/utilities/form";
 import { buildPrompt, DEFAULT_VOICE_CONFIG, PROMPT_TEMPLATES, VoiceConfig } from "./constants";
 import { useAffiliateVideoContext } from "./providers/affiliate-video-provider";
@@ -12,9 +15,13 @@ import { SettingsModal, ZoomModal } from "./sibar/text-to-video-tab/text-to-vide
 
 export default function AffiliateVideo() {
   const { t } = useTranslation();
-
-  const [apiKey, setApiKey] = useState("");
+  const { customer } = useAuth();
   const [showSettings, setShowSettings] = useState(false);
+
+  /* ─── Credential state ─── */
+  const [credentialId, setCredentialId] = useState<string | null>(null);
+  const [credentialActive, setCredentialActive] = useState(false);
+  const [credentialLoading, setCredentialLoading] = useState(true);
 
   const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(DEFAULT_VOICE_CONFIG);
   const [templateId, setTemplateId] = useState("affiliate_review");
@@ -25,13 +32,36 @@ export default function AffiliateVideo() {
   const { showAiModal, setShowAiModal, zoomSrc, setZoomSrc, videoConfig, patchConfig } =
     useAffiliateVideoContext();
 
-  const saveSettings = (k: string) => {
-    setApiKey(k);
-    localStorage.setItem("avid-api-key", k);
-  };
+  const checkCredential = useCallback(async () => {
+    setCredentialLoading(true);
+    try {
+      const cred = await credentialCustomerService.getCredentialByKey(
+        AiProviderKeyEnum.GOOGLE_GEMINI_KEY
+      );
+      if (cred) {
+        setCredentialId(cred.id || null);
+        setCredentialActive(!!cred.active);
+      } else {
+        setCredentialId(null);
+        setCredentialActive(false);
+      }
+    } catch {
+      setCredentialId(null);
+      setCredentialActive(false);
+    } finally {
+      setCredentialLoading(false);
+    }
+  }, [customer]);
+
+  useEffect(() => {
+    checkCredential();
+  }, [checkCredential]);
+
+  const hasKey = !!credentialId;
+  const keyReady = hasKey && credentialActive;
 
   const processPrompt = useCallback(async () => {
-    if (!apiKey) {
+    if (!hasKey) {
       setShowSettings(true);
       return;
     }
@@ -58,7 +88,6 @@ export default function AffiliateVideo() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          apiKey,
           rawPrompt: finalPrompt,
           templateId,
           numberOfOutputs: videoConfig.numberOfOutputs,
@@ -71,7 +100,7 @@ export default function AffiliateVideo() {
     } finally {
       setStep1Loading(false);
     }
-  }, [apiKey, rawPrompt, templateId, videoConfig]);
+  }, [hasKey, rawPrompt, templateId, videoConfig]);
 
   return (
     <div
@@ -84,9 +113,10 @@ export default function AffiliateVideo() {
       )}
       {showSettings && (
         <SettingsModal
-          apiKey={apiKey}
-          onSave={saveSettings}
+          credentialId={credentialId}
+          credentialActive={credentialActive}
           onClose={() => setShowSettings(false)}
+          onCredentialChange={checkCredential}
         />
       )}
 
@@ -201,12 +231,22 @@ export default function AffiliateVideo() {
         <button
           onClick={() => setShowSettings(true)}
           className={`flex items-center gap-1 px-3 py-1 rounded-lg text-12 font-semibold border-0 cursor-pointer transition-all ${
-            apiKey
+            credentialLoading
+              ? "bg-indigo-900 bg-opacity-30 text-indigo-400"
+              : keyReady
               ? "bg-green-900 bg-opacity-40 text-green-400 hover:bg-opacity-60"
+              : hasKey
+              ? "bg-yellow-900 bg-opacity-40 text-yellow-400 hover:bg-opacity-60"
               : "bg-yellow-900 bg-opacity-40 text-yellow-400 hover:bg-opacity-60"
           }`}
         >
-          {apiKey ? `🔑 ${t("Key OK")}` : `⚠️ ${t("Cài API Key")}`}
+          {credentialLoading
+            ? "⏳ ..."
+            : keyReady
+            ? `🔑 ${t("Key OK")}`
+            : hasKey
+            ? `⚠️ Key inactive`
+            : `⚠️ ${t("Cài API Key")}`}
         </button>
       </div>
 

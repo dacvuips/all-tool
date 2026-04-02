@@ -2,13 +2,15 @@
  * Virtual Try-On App – Powered by Gemini AI
  * Slug: "virtual-try-on"
  */
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Mode, PoseKey, ItemType, ItemSlot, BatchOutfit, HistoryItem,
   ITEM_META, POSES, GALLERIES, CSS, uid, makeDefaultSingleSlots, makeOutfit,
 } from "../../components/app/virtual-try-on/constants";
 import { ZoomModal, SettingsModal, ImageUploader, GEMINI_MODELS } from "../../components/app/virtual-try-on/components";
 import { ItemPanel } from "../../components/app/virtual-try-on/item-panel";
+import { credentialCustomerService } from "../../lib/repo";
+import { AiProviderKeyEnum } from "../../lib/repo/product/productApp.repo";
 
 /* ══════════════════════════════════════════════════════
    Helpers
@@ -31,9 +33,13 @@ const btn = (extra: React.CSSProperties = {}): React.CSSProperties => ({
 ══════════════════════════════════════════════════════ */
 export default function VirtualTryOn() {
   /* ─── Settings ─── */
-  const [apiKey, setApiKey] = useState("");
   const [geminiModel, setGeminiModel] = useState(GEMINI_MODELS[0].value);
   const [showSettings, setShowSettings] = useState(false);
+
+  /* ─── Credential state ─── */
+  const [credentialId, setCredentialId] = useState<string | null>(null);
+  const [credentialActive, setCredentialActive] = useState(false);
+  const [credentialLoading, setCredentialLoading] = useState(true);
 
   /* ─── Mode ─── */
   const [mode, setMode] = useState<Mode>("single");
@@ -62,19 +68,34 @@ export default function VirtualTryOn() {
   /* ─── Zoom ─── */
   const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-  /* ─── Load saved API key ─── */
-  useEffect(() => {
-    const k = localStorage.getItem("vton-api-key");
-    if (k) setApiKey(k);
-    const m = localStorage.getItem("vton-model");
-    if (m) setGeminiModel(m);
+  /* ─── Check credential on mount ─── */
+  const checkCredential = useCallback(async () => {
+    setCredentialLoading(true);
+    try {
+      const cred = await credentialCustomerService.getCredentialByKey(
+        AiProviderKeyEnum.GOOGLE_GEMINI_KEY
+      );
+      if (cred) {
+        setCredentialId(cred.id || null);
+        setCredentialActive(!!cred.active);
+      } else {
+        setCredentialId(null);
+        setCredentialActive(false);
+      }
+    } catch {
+      setCredentialId(null);
+      setCredentialActive(false);
+    } finally {
+      setCredentialLoading(false);
+    }
   }, []);
 
-  const saveSettings = (k: string, m: string) => {
-    setApiKey(k);
+  useEffect(() => {
+    checkCredential();
+  }, [checkCredential]);
+
+  const saveSettings = (m: string) => {
     setGeminiModel(m);
-    localStorage.setItem("vton-api-key", k);
-    localStorage.setItem("vton-model", m);
   };
 
   /* ─── Single slot updater ─── */
@@ -114,16 +135,20 @@ export default function VirtualTryOn() {
     return { image: d.image, text: d.text };
   };
 
+  /* ─── Determine key status ─── */
+  const hasKey = !!credentialId;
+  const keyReady = hasKey && credentialActive;
+
   /* ─── Generate Single ─── */
   const generateSingle = async () => {
-    if (!apiKey) return setShowSettings(true);
+    if (!hasKey) return setShowSettings(true);
     if (!personImage) return setError("Vui lòng chọn ảnh nhân vật.");
     const items = Object.values(singleSlots).filter((s) => s.image);
     if (!items.length) return setError("Vui lòng thêm ít nhất 1 trang phục/phụ kiện.");
     setIsGenerating(true);
     setError(null);
     try {
-      const { image } = await callApi({ apiKey, personImage, personPrompt, pose, cleaningPrompt: cleanPrompt, items, mode: "single" });
+      const { image } = await callApi({ personImage, personPrompt, pose, cleaningPrompt: cleanPrompt, items, mode: "single" });
       if (image) setHistory((h) => [{ id: uid(), ts: Date.now(), image }, ...h]);
     } catch (e: any) {
       setError(e.message);
@@ -134,7 +159,7 @@ export default function VirtualTryOn() {
 
   /* ─── Generate Batch ─── */
   const generateBatch = async () => {
-    if (!apiKey) return setShowSettings(true);
+    if (!hasKey) return setShowSettings(true);
     if (!personImage) return setError("Vui lòng chọn ảnh nhân vật.");
     setError(null);
     setBatches((prev) => prev.map((o) => ({ ...o, isGenerating: true, error: null, result: null })));
@@ -148,7 +173,7 @@ export default function VirtualTryOn() {
         }
         try {
           const { image } = await callApi({
-            apiKey, personImage, personPrompt, pose, cleaningPrompt: cleanPrompt,
+            personImage, personPrompt, pose, cleaningPrompt: cleanPrompt,
             items, mode: "batch",
             changingItemTypes: Object.keys(outfit.slots),
           });
@@ -174,7 +199,16 @@ export default function VirtualTryOn() {
 
       {/* Modals */}
       {zoomedImage && <ZoomModal src={zoomedImage} onClose={() => setZoomedImage(null)} />}
-      {showSettings && <SettingsModal apiKey={apiKey} model={geminiModel} onSave={saveSettings} onClose={() => setShowSettings(false)} />}
+      {showSettings && (
+        <SettingsModal
+          credentialId={credentialId}
+          credentialActive={credentialActive}
+          model={geminiModel}
+          onSave={saveSettings}
+          onClose={() => setShowSettings(false)}
+          onCredentialChange={checkCredential}
+        />
+      )}
 
       {/* ── Header ─────────────────────────────────────── */}
       <div style={{ ...card({ borderRadius: 0, borderLeft: "none", borderRight: "none", borderTop: "none", padding: "12px 20px", display: "flex", alignItems: "center", gap: 16, position: "sticky", top: 0, zIndex: 100 }) }}>
@@ -199,13 +233,25 @@ export default function VirtualTryOn() {
           ))}
         </div>
 
-        <button onClick={() => setShowSettings(true)} title={apiKey ? "API key đã cài" : "Cần cài API key"} style={btn({
-          padding: "8px 14px", fontSize: 12,
-          background: apiKey ? "rgba(16,185,129,0.15)" : "rgba(239,68,68,0.15)",
-          border: apiKey ? "1px solid rgba(16,185,129,0.4)" : "1px solid rgba(239,68,68,0.4)",
-          color: apiKey ? "#10b981" : "#ef4444",
-        })}>
-          {apiKey ? "🔑 Key OK" : "⚠️ Cài API Key"}
+        <button
+          onClick={() => setShowSettings(true)}
+          title={credentialLoading ? "Đang kiểm tra..." : keyReady ? "Gemini key đã cài & active" : hasKey ? "Key chưa được active" : "Cần cài Gemini API key"}
+          style={btn({
+            padding: "8px 14px", fontSize: 12,
+            background: credentialLoading
+              ? "rgba(139,92,246,0.1)"
+              : keyReady
+              ? "rgba(16,185,129,0.15)"
+              : "rgba(239,68,68,0.15)",
+            border: credentialLoading
+              ? "1px solid rgba(139,92,246,0.3)"
+              : keyReady
+              ? "1px solid rgba(16,185,129,0.4)"
+              : "1px solid rgba(239,68,68,0.4)",
+            color: credentialLoading ? CSS.textMuted : keyReady ? "#10b981" : "#ef4444",
+          })}
+        >
+          {credentialLoading ? "⏳ ..." : keyReady ? "🔑 Gemini OK" : hasKey ? "⚠️ Key inactive" : "⚠️ Cài Gemini Key"}
         </button>
       </div>
 

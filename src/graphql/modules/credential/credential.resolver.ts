@@ -65,6 +65,19 @@ const Query = {
     }
     return maskCredential(credential);
   },
+  getCredentialByCustomerAndKey: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { key } = args;
+    const credential = await credentialService.findOne({
+      key,
+      customerId: context.id,
+      isCustomerCredential: true,
+    });
+    return {
+      id: credential?._id,
+      active: credential?.active,
+    };
+  },
 };
 
 const Mutation = {
@@ -167,23 +180,6 @@ const Mutation = {
       throw new ForbiddenError("Credential not found");
     }
     return maskCredential(credential);
-  },
-  checkCredentialExist: async (root: any, args: any, context: Context) => {
-    await context.auth([TOKEN_ROLES.CUSTOMER]);
-    const { key } = args;
-    const credential = await CredentialModel.findOne({
-      key,
-      customerId: context.id,
-      isCustomerCredential: true,
-    });
-    if (!credential) {
-      return false;
-    }
-    return {
-      id: credential._id,
-      key: credential.key,
-      active: credential.active,
-    };
   },
 };
 

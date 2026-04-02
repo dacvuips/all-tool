@@ -122,6 +122,27 @@ export class CredentialCustomerRepository extends CrudRepository<Credential> {
     createdAt
     updatedAt
   `);
+
+  /** Gọi mutation checkCredentialExist – trả về Boolean */
+  async checkCredentialExistMutation(key: string): Promise<boolean> {
+    return await this.mutate({
+      mutation: `checkCredentialExist(key: $key)`,
+      variablesParams: "($key: String!)",
+      options: { variables: { key } },
+    }).then((res) => !!res.data["g0"]);
+  }
+
+  /** Lấy credential customer theo key (query) */
+  async getCredentialByKey(key: string): Promise<Credential | null> {
+    return await this.query({
+      query: `getCredentialByCustomerAndKey(key: $key) {
+      id
+      active
+    }`,
+      variablesParams: "($key: String!)",
+      options: { variables: { key } },
+    }).then((res) => res.data["g0"] || null);
+  }
 }
 
 export const credentialCustomerService = new CredentialCustomerRepository();
