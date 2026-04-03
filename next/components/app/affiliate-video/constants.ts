@@ -78,6 +78,21 @@ export interface VideoConfig {
   speed: SpeedMode | string;
 }
 
+export type StoryModeType = "prompt_to_video" | "image_to_video";
+
+/** Affiliate sidebar form configuration */
+export interface AffiliateFormConfig {
+  category: string;
+  objectToPersonify: string;
+  tipContent: string;
+  mood: string;
+  language: string;
+  artStyle: string;
+  storyModeType: StoryModeType;
+  aspectRatio: AspectRatio;
+  batchSize: number;
+}
+
 // ── Mock Video Data (demo UI) ──────────────────────────────────────────────
 export interface MockVideo {
   id: string;
@@ -457,6 +472,7 @@ export const btn = (extra: CSSProps = {}): CSSProps => ({
 
 // ── Sidebar Form Options ───────────────────────────────────────────────────
 
+/** @deprecated Use ART_STYLE_OPTIONS instead */
 export const IMAGE_STYLES = [
   { value: "realistic", label: "Chân thực (Realistic)" },
   { value: "3d_pixar", label: "3D Pixar Cute" },
@@ -473,6 +489,25 @@ export const IMAGE_STYLES = [
   { value: "simpsons", label: "Hoạt hình Simpsons" },
   { value: "business", label: "Giải thích Doanh nghiệp (Business Explainer)" },
   { value: "cinematic_dark", label: "Cinematic Dark Surrealism (Siêu thực Đen tối)" },
+];
+
+/** Art style options aligned with AffiliateFormConfig.artStyle */
+export const ART_STYLE_OPTIONS = [
+  { value: "pixar", label: "3D Pixar" },
+  { value: "realistic", label: "Chân thực (Realistic)" },
+  { value: "pixar_realism", label: "Pixar Realism (Nhân hoá)" },
+  { value: "crochet", label: "Len Móc (Crochet/Amigurumi)" },
+  { value: "clay", label: "Đất Sét (Claymation)" },
+  { value: "diorama", label: "Mô hình Tí hon (Diorama)" },
+  { value: "lego", label: "Đồ chơi Gạch (LEGO)" },
+  { value: "mannequin", label: "Mannequin 3D (Siêu thực)" },
+  { value: "zack_doge", label: "3D Educational (Zack D.Style)" },
+  { value: "chalkboard", label: "Bảng Phấn (Chalkboard)" },
+  { value: "2d_minimalist", label: "2D Tối Giản (Minimalist)" },
+  { value: "stickman", label: "Người Que (Stickman)" },
+  { value: "simpsons", label: "Hoạt hình Simpsons" },
+  { value: "business", label: "Giải thích Doanh nghiệp" },
+  { value: "cinematic_dark", label: "Cinematic Dark Surrealism" },
 ];
 
 export const LANGUAGE_OPTIONS = [
@@ -505,6 +540,9 @@ export const TONE_OPTIONS = [
   { value: "thriller", label: "Kịch tính & Lố lăng" },
   { value: "creative", label: "Sáng tạo & Nghệ sĩ" },
 ];
+
+/** Mood options aligned with AffiliateFormConfig.mood (same values as TONE_OPTIONS) */
+export const MOOD_OPTIONS = TONE_OPTIONS;
 
 // ── Camera Shot Types ──────────────────────────────────────────────────────
 export type CameraShotType =

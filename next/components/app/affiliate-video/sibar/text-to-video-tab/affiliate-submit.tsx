@@ -5,17 +5,18 @@
  */
 import { useTranslation } from "react-i18next";
 import { RiFilmFill, RiLoader4Line, RiStopLine } from "react-icons/ri";
+import { Button } from "../../../../shared/utilities/form";
 import { useAffiliateVideoContext } from "../../providers/affiliate-video-provider";
 
 export const AffiliateSubmit = () => {
   const { t } = useTranslation();
-  const { batchRunning, totalCount, stopRef, setShowAiModal } = useAffiliateVideoContext();
+  const { batchRunning, stopRef } = useAffiliateVideoContext();
 
   return (
     <div className="flex-shrink-0 px-4 pb-4 pt-2 bg-white border-t border-gray-100">
       {/* Stop button when running */}
       {batchRunning && (
-        <button
+        <Button
           onClick={() => {
             if (stopRef) stopRef.current = true;
           }}
@@ -23,11 +24,12 @@ export const AffiliateSubmit = () => {
         >
           <RiStopLine className="text-base" />
           {t("Dừng lại")}
-        </button>
+        </Button>
       )}
 
       {/* Main CTA button */}
-      <button
+      <Button
+        submit
         id="create-video-btn"
         disabled={batchRunning}
         className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 cursor-pointer transition-all border-0 disabled:opacity-60 disabled:cursor-not-allowed bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 shadow-md hover:shadow-lg"
@@ -43,7 +45,7 @@ export const AffiliateSubmit = () => {
             {t("Tạo Ảnh & Phim")} 🎬
           </>
         )}
-      </button>
+      </Button>
     </div>
   );
 };

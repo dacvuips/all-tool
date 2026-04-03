@@ -2,72 +2,21 @@
  * affiliate-config.tsx
  * Sidebar form: Tạo Nhân Vật – light theme, cream/white background
  * className only – Tailwind CSS, no inline styles, no arbitrary [] values
+ * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiFilmFill, RiLightbulbLine, RiMagicFill } from "react-icons/ri";
-import { ASPECT_RATIOS, CATEGORY_OPTIONS, IMAGE_STYLES, LANGUAGE_OPTIONS, TONE_OPTIONS } from "../../constants";
+import { RiCameraLensFill, RiFilmFill, RiMagicFill } from "react-icons/ri";
+import { Button, Field } from "../../../../shared/utilities/form";
+import { Input } from "../../../../shared/utilities/form/input";
+import { Select } from "../../../../shared/utilities/form/select";
+import {
+  ART_STYLE_OPTIONS,
+  ASPECT_RATIOS,
+  CATEGORY_OPTIONS,
+  LANGUAGE_OPTIONS,
+  MOOD_OPTIONS,
+} from "../../constants";
 import { useAffiliateVideoContext } from "../../providers/affiliate-video-provider";
-
-// ── Reusable sub-components ──────────────────────────────────────────────
-
-function SectionLabel({ icon, text }: { icon?: React.ReactNode; text: string }) {
-  return (
-    <div className="flex items-center gap-1 mb-1">
-      {icon && <span className="text-gray-400 text-xs">{icon}</span>}
-      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{text}</span>
-    </div>
-  );
-}
-
-function NativeSelect({
-  value,
-  onChange,
-  options,
-  id,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-  id?: string;
-}) {
-  return (
-    <select
-      id={id}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border border-gray-200 bg-white text-gray-800 text-sm px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 transition-colors cursor-pointer appearance-none"
-    >
-      {options.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  );
-}
-
-function TextInput({
-  value,
-  onChange,
-  placeholder,
-  id,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  id?: string;
-}) {
-  return (
-    <input
-      id={id}
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full rounded-lg border border-gray-200 bg-white text-gray-800 text-sm px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 transition-colors placeholder-gray-400"
-    />
-  );
-}
 
 // ── Main Component ────────────────────────────────────────────────────────
 
@@ -76,21 +25,15 @@ export const AffiliateConfig = () => {
   const {
     videoConfig,
     patchConfig,
-    inputMode,
-    setInputMode,
-    imageStyle,
-    setImageStyle,
-    language,
-    setLanguage,
-    category,
-    setCategory,
-    tone,
-    setTone,
-    propItem,
-    setPropItem,
+    storyModeType,
+    setStoryModeType,
+    objectToPersonify,
+    setObjectToPersonify,
     tipContent,
     setTipContent,
     setShowAiModal,
+    batchSize,
+    setBatchSize,
   } = useAffiliateVideoContext();
 
   const aspectRatios = ASPECT_RATIOS.slice(0, 2); // 16:9 and 9:16
@@ -118,162 +61,125 @@ export const AffiliateConfig = () => {
       <div className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
           <button
-            onClick={() => setInputMode && setInputMode("prompt")}
+            onClick={() => setStoryModeType && setStoryModeType("prompt_to_video")}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              inputMode === "prompt"
+              storyModeType === "prompt_to_video"
                 ? "bg-white text-gray-800 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <RiFilmFill className={inputMode === "prompt" ? "text-pink-500" : "text-gray-400"} />
+            <RiFilmFill className={storyModeType === "prompt_to_video" ? "text-pink-500" : "text-gray-400"} />
             {t("Prompt to Video")}
           </button>
           <button
-            onClick={() => setInputMode && setInputMode("image")}
+            onClick={() => setStoryModeType && setStoryModeType("image_to_video")}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              inputMode === "image"
+              storyModeType === "image_to_video"
                 ? "bg-white text-gray-800 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <RiCameraLensFill className={inputMode === "image" ? "text-pink-500" : "text-gray-400"} />
+            <RiCameraLensFill
+              className={storyModeType === "image_to_video" ? "text-pink-500" : "text-gray-400"}
+            />
             {t("Image to Video")}
           </button>
         </div>
       </div>
 
       {/* ── Form Fields ── */}
-      <div className="px-4 pb-4 space-y-3">
 
-        {/* PHONG CÁCH HÌNH ẢNH */}
+      <div className="px-4 pb-4 space-y-3">
+        {/* ART STYLE */}
         <div>
-          <SectionLabel text={t("Phong cách hình ảnh")} />
-          <div className="relative">
-            <NativeSelect
-              id="image-style-select"
-              value={imageStyle || IMAGE_STYLES[0].value}
-              onChange={(v) => setImageStyle && setImageStyle(v)}
-              options={IMAGE_STYLES}
-            />
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
-              ▾
-            </div>
-          </div>
+          <Field name="artStyle" label={t("Phong cách hình ảnh")}>
+            <Select id="art-style-select" native options={ART_STYLE_OPTIONS} />
+          </Field>
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}
         <div>
-          <SectionLabel text={t("Ngôn ngữ lời thoại")} />
-          <div className="relative">
-            <NativeSelect
-              id="language-select"
-              value={language || LANGUAGE_OPTIONS[0].value}
-              onChange={(v) => setLanguage && setLanguage(v)}
-              options={LANGUAGE_OPTIONS}
-            />
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
-              ▾
-            </div>
-          </div>
+          <Field name="language" label={t("Ngôn ngữ lời thoại")}>
+            <Select id="language-select" native options={LANGUAGE_OPTIONS} />
+          </Field>
         </div>
 
         {/* TỈ LỆ KHUNG HÌNH */}
         <div>
-          <SectionLabel text={t("Tỉ lệ khung hình")} />
-          <div className="grid grid-cols-2 gap-2">
-            {aspectRatios.map((ar) => {
-              const isPortrait = ar.value === "9:16";
-              const isActive = videoConfig?.aspectRatio === ar.value;
-              return (
-                <button
-                  key={ar.value}
-                  id={`aspect-ratio-${ar.value.replace(":", "-")}`}
-                  onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
-                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                    isActive
-                      ? "border-blue-400 bg-blue-50 text-blue-600"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-base">{isPortrait ? "📱" : "🖥"}</span>
-                  {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
-                </button>
-              );
-            })}
-          </div>
+          <Field name="aspectRatio" label={t("Tỉ lệ khung hình")}>
+            <div className="grid grid-cols-2 gap-2">
+              {aspectRatios.map((ar) => {
+                const isPortrait = ar.value === "9:16";
+                const isActive = videoConfig?.aspectRatio === ar.value;
+                return (
+                  <Button
+                    key={ar.value}
+                    id={`aspect-ratio-${ar.value.replace(":", "-")}`}
+                    onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
+                    className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      isActive
+                        ? "border-blue-400 bg-blue-50 text-blue-600"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                    }`}
+                  >
+                    <span className="text-base">{isPortrait ? "📱" : "🖥"}</span>
+                    {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
+                  </Button>
+                );
+              })}
+            </div>
+          </Field>
         </div>
 
         {/* CHỦ ĐỀ / DANH MỤC */}
         <div>
-          <SectionLabel text={t("Chủ đề / Danh mục")} />
-          <div className="relative">
-            <NativeSelect
-              id="category-select"
-              value={category || CATEGORY_OPTIONS[0].value}
-              onChange={(v) => setCategory && setCategory(v)}
-              options={CATEGORY_OPTIONS}
+          <Field name="category" label={t("Chủ đề / Danh mục")}>
+            <Select id="category-select" native options={CATEGORY_OPTIONS} />
+          </Field>
+        </div>
+
+        {/* MOOD / TÍNH CÁCH */}
+        <div>
+          <Field name="mood" label={t("Tính cách / Mood")}>
+            <Select id="mood-select" native options={MOOD_OPTIONS} />
+          </Field>
+        </div>
+
+        {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
+        <div>
+          <Field name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
+            <Input
+              id="object-to-personify-input"
+              value={objectToPersonify || ""}
+              onChange={(v) => setObjectToPersonify && setObjectToPersonify(v)}
+              placeholder={t("VD: Một quả chuối tươi")}
             />
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
-              ▾
-            </div>
-          </div>
+          </Field>
         </div>
 
-        {/* TÍNH CÁCH CHUNG / TONE */}
+        {/* NỘI DUNG MẸO (tipContent) */}
         <div>
-          <SectionLabel text={t("Tính cách chung / Tone")} />
-          <div className="relative">
-            <NativeSelect
-              id="tone-select"
-              value={tone || TONE_OPTIONS[0].value}
-              onChange={(v) => setTone && setTone(v)}
-              options={TONE_OPTIONS}
+          <Field name="tipContent" label={t("Nội dung mẹo")}>
+            <Input
+              id="tip-content-input"
+              value={tipContent || ""}
+              onChange={(v) => setTipContent && setTipContent(v)}
+              placeholder={t("VD: Cách ăn chuối tốt nhất")}
             />
-            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
-              ▾
-            </div>
-          </div>
+          </Field>
         </div>
 
-        {/* NHÂN HOÁ ĐỒ VẬT */}
+        {/* SỐ LƯỢNG VIDEO (batchSize) */}
         <div>
-          <SectionLabel text={t("Nhân hoá đồ vật")} />
-          <TextInput
-            id="prop-item-input"
-            value={propItem || ""}
-            onChange={(v) => setPropItem && setPropItem(v)}
-            placeholder={t("VD: Một quả chuối tươi")}
-          />
-        </div>
-
-        {/* NỘI DUNG MẸO */}
-        <div>
-          <SectionLabel text={t("Nội dung mẹo")} />
-          <TextInput
-            id="tip-content-input"
-            value={tipContent || ""}
-            onChange={(v) => setTipContent && setTipContent(v)}
-            placeholder={t("VD: Cách ăn chuối tốt nhất")}
-          />
-        </div>
-
-        {/* Mẹo nhỏ section */}
-        <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
-          <div className="flex items-center gap-1 mb-2">
-            <RiLightbulbLine className="text-amber-500 text-sm" />
-            <span className="text-xs font-bold text-amber-700">{t("Mẹo nhỏ")}</span>
-          </div>
-          <ul className="space-y-1">
-            <li className="text-xs text-amber-700 leading-relaxed">
-              • {t("Chủ đề Cốt Truyện: Hãy nhập chi tiết bối cảnh để AI tạo drama hay hơn (VD: Mẹ chồng khó tính, Sắp hết ăm...)")}.
-            </li>
-            <li className="text-xs text-amber-700 leading-relaxed">
-              • {t("Chọn \"Mẹo Vật Cuộc Sống\" cho các tip đon đẹp.")}.
-            </li>
-            <li className="text-xs text-amber-700 leading-relaxed">
-              • {t("Visual Prompt luôn là Tiếng Anh để tối ưu cho AI về ảnh.")}.
-            </li>
-          </ul>
+          <Field name="batchSize" label={t("Số lượng video")}>
+            <Select
+              id="batch-size-select"
+              native
+              options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
+              value={String(batchSize ?? 1)}
+              onChange={(v) => setBatchSize && setBatchSize(Number(v))}
+            />
+          </Field>
         </div>
       </div>
     </div>

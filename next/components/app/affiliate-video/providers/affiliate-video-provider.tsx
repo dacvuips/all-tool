@@ -1,15 +1,17 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AffiliateFormConfig,
+  ART_STYLE_OPTIONS,
   CATEGORY_OPTIONS,
   DEFAULT_VIDEO_CONFIG,
-  IMAGE_STYLES,
   LANGUAGE_OPTIONS,
   MOCK_SCRIPT,
   MOCK_VIDEOS,
+  MOOD_OPTIONS,
   PromptItem,
   ScriptData,
-  TONE_OPTIONS,
+  StoryModeType,
   VideoConfig,
 } from "../constants";
 
@@ -57,21 +59,25 @@ export const AffiliateVideoContext = createContext<
     displayItems: PromptItem[];
     genCount: number;
     histCount: number;
-    // ── Sidebar form state ──
-    inputMode: "prompt" | "image";
-    setInputMode: (mode: "prompt" | "image") => void;
-    imageStyle: string;
-    setImageStyle: (style: string) => void;
+    // ── Sidebar form state (aligned with AffiliateFormConfig) ──
+    storyModeType: StoryModeType;
+    setStoryModeType: (mode: StoryModeType) => void;
+    artStyle: string;
+    setArtStyle: (style: string) => void;
     language: string;
     setLanguage: (lang: string) => void;
     category: string;
     setCategory: (cat: string) => void;
-    tone: string;
-    setTone: (tone: string) => void;
-    propItem: string;
-    setPropItem: (prop: string) => void;
+    mood: string;
+    setMood: (mood: string) => void;
+    objectToPersonify: string;
+    setObjectToPersonify: (prop: string) => void;
     tipContent: string;
     setTipContent: (tip: string) => void;
+    batchSize: number;
+    setBatchSize: (size: number) => void;
+    /** Convenience getter – returns current form values as AffiliateFormConfig */
+    affiliateFormConfig: AffiliateFormConfig;
     // ── Script data ──
     scriptData: ScriptData | null;
     setScriptData: (data: ScriptData | null) => void;
@@ -79,6 +85,7 @@ export const AffiliateVideoContext = createContext<
     setScriptTab: (tab: "script" | "batch") => void;
     batchList: string[];
     setBatchList: (list: string[]) => void;
+    handleSubmit: (data: VideoConfig) => void;
   }>
 >({});
 
@@ -99,14 +106,15 @@ export function AffiliateVideoProvider(props) {
   const [zoomSrc, setZoomSrc] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const stopRef = useRef(false);
 
-  // ── Sidebar form state ──
-  const [inputMode, setInputMode] = useState<"prompt" | "image">("prompt");
-  const [imageStyle, setImageStyle] = useState(IMAGE_STYLES[0].value);
+  // ── Sidebar form state (aligned with AffiliateFormConfig) ──
+  const [storyModeType, setStoryModeType] = useState<StoryModeType>("prompt_to_video");
+  const [artStyle, setArtStyle] = useState(ART_STYLE_OPTIONS[0].value); // "pixar"
   const [language, setLanguage] = useState(LANGUAGE_OPTIONS[0].value);
   const [category, setCategory] = useState(CATEGORY_OPTIONS[1].value);
-  const [tone, setTone] = useState(TONE_OPTIONS[3].value);
-  const [propItem, setPropItem] = useState("Một quả chuối tươi");
+  const [mood, setMood] = useState(MOOD_OPTIONS[3].value); // "hau_dau"
+  const [objectToPersonify, setObjectToPersonify] = useState("Một quả chuối tươi");
   const [tipContent, setTipContent] = useState("Cách ăn chuối tốt nhất");
+  const [batchSize, setBatchSize] = useState(1);
 
   // ── Script / Batch state ──
   const [scriptData, setScriptData] = useState<ScriptData | null>(MOCK_SCRIPT);
@@ -189,6 +197,23 @@ export function AffiliateVideoProvider(props) {
     ? MOCK_VIDEOS.filter((v) => v.status === "done").length
     : historyItems.length;
 
+  const handleSubmit = async (data: VideoConfig) => {
+    console.log("handleSubmit ", data);
+  };
+
+  /** Convenience computed value exposing all sidebar fields as AffiliateFormConfig */
+  const affiliateFormConfig: AffiliateFormConfig = {
+    category,
+    objectToPersonify,
+    tipContent,
+    mood,
+    language,
+    artStyle,
+    storyModeType,
+    aspectRatio: videoConfig.aspectRatio,
+    batchSize,
+  };
+
   return (
     <AffiliateVideoContext.Provider
       value={{
@@ -235,20 +260,23 @@ export function AffiliateVideoProvider(props) {
         genCount,
         histCount,
         // sidebar form
-        inputMode,
-        setInputMode,
-        imageStyle,
-        setImageStyle,
+        storyModeType,
+        setStoryModeType,
+        artStyle,
+        setArtStyle,
         language,
         setLanguage,
         category,
         setCategory,
-        tone,
-        setTone,
-        propItem,
-        setPropItem,
+        mood,
+        setMood,
+        objectToPersonify,
+        setObjectToPersonify,
         tipContent,
         setTipContent,
+        batchSize,
+        setBatchSize,
+        affiliateFormConfig,
         // script
         scriptData,
         setScriptData,
@@ -256,6 +284,7 @@ export function AffiliateVideoProvider(props) {
         setScriptTab,
         batchList,
         setBatchList,
+        handleSubmit,
       }}
     >
       {props.children}
