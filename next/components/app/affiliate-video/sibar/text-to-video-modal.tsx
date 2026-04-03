@@ -3,6 +3,9 @@
  * className only — no inline styles, no style= props.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useToast } from "../../../../lib/providers/toast-provider";
+import { credentialCustomerService } from "../../../../lib/repo";
+import { AiProviderKeyEnum } from "../../../../lib/repo/product/productApp.repo";
 import {
   BUILTIN_VOICES,
   DialogueLine,
@@ -18,10 +21,7 @@ import {
   uid,
   VideoConfig,
   VoiceConfig,
-} from "../../constants";
-import { credentialCustomerService } from "../../../../../lib/repo";
-import { AiProviderKeyEnum } from "../../../../../lib/repo/product/productApp.repo";
-import { useToast } from "../../../../../lib/providers/toast-provider";
+} from "../constants";
 
 /* ═══════════════════════════════════════════════════════════ ZoomModal */
 interface ZoomModalProps {
@@ -192,12 +192,16 @@ export function SettingsModal({
               /* Đã tồn tại → hiển thị masked + active status */
               <div className="space-y-2">
                 <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white bg-opacity-5 border border-white border-opacity-10">
-                  <span className="flex-1 text-blue-300 text-14 tracking-widest">••••••••••••••••</span>
-                  <span className={`px-3 py-1 rounded-full text-11 font-bold border ${
-                    credentialActive
-                      ? "bg-green-500 bg-opacity-15 text-green-400 border-green-500 border-opacity-40"
-                      : "bg-red-500 bg-opacity-15 text-red-400 border-red-500 border-opacity-40"
-                  }`}>
+                  <span className="flex-1 text-blue-300 text-14 tracking-widest">
+                    ••••••••••••••••
+                  </span>
+                  <span
+                    className={`px-3 py-1 rounded-full text-11 font-bold border ${
+                      credentialActive
+                        ? "bg-green-500 bg-opacity-15 text-green-400 border-green-500 border-opacity-40"
+                        : "bg-red-500 bg-opacity-15 text-red-400 border-red-500 border-opacity-40"
+                    }`}
+                  >
                     {credentialActive ? "✓ Active" : "✗ Inactive"}
                   </span>
                 </div>
@@ -211,9 +215,7 @@ export function SettingsModal({
             ) : (
               /* Chưa có hoặc đang cập nhật → form nhập */
               <div className="space-y-2">
-                {hasCredential && (
-                  <p className="text-11 text-blue-500">Nhập key mới để cập nhật</p>
-                )}
+                {hasCredential && <p className="text-11 text-blue-500">Nhập key mới để cập nhật</p>}
                 <input
                   type="password"
                   value={keyVal}
@@ -243,7 +245,10 @@ export function SettingsModal({
                   </button>
                   {hasCredential && (
                     <button
-                      onClick={() => { setEditMode(false); setKeyVal(""); }}
+                      onClick={() => {
+                        setEditMode(false);
+                        setKeyVal("");
+                      }}
                       className="px-4 py-2 rounded-xl bg-white bg-opacity-10 hover:bg-opacity-20 text-blue-300 font-semibold text-13 border-0 cursor-pointer transition-all"
                     >
                       Hủy
@@ -267,7 +272,6 @@ export function SettingsModal({
     </div>
   );
 }
-
 
 /* ═══════════════════════════════════════════════════════════ PromptTemplateSelector */
 interface PromptTemplateSelectorProps {

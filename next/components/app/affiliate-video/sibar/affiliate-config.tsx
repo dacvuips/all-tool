@@ -5,36 +5,24 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiFilmFill, RiMagicFill } from "react-icons/ri";
-import { Button, Field } from "../../../../shared/utilities/form";
-import { Input } from "../../../../shared/utilities/form/input";
-import { Select } from "../../../../shared/utilities/form/select";
+import { RiCameraLensFill, RiMagicFill } from "react-icons/ri";
+import { Button, Field } from "../../../shared/utilities/form";
+import { Input } from "../../../shared/utilities/form/input";
+import { Select } from "../../../shared/utilities/form/select";
 import {
   ART_STYLE_OPTIONS,
   ASPECT_RATIOS,
   CATEGORY_OPTIONS,
   LANGUAGE_OPTIONS,
   MOOD_OPTIONS,
-} from "../../constants";
-import { useAffiliateVideoContext } from "../../providers/affiliate-video-provider";
+} from "../constants";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
-  const {
-    videoConfig,
-    patchConfig,
-    storyModeType,
-    setStoryModeType,
-    objectToPersonify,
-    setObjectToPersonify,
-    tipContent,
-    setTipContent,
-    setShowAiModal,
-    batchSize,
-    setBatchSize,
-  } = useAffiliateVideoContext();
+  const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
 
   const aspectRatios = ASPECT_RATIOS.slice(0, 2); // 16:9 and 9:16
 
@@ -60,7 +48,7 @@ export const AffiliateConfig = () => {
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
       <div className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
-          <button
+          {/* <button
             onClick={() => setStoryModeType && setStoryModeType("prompt_to_video")}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
               storyModeType === "prompt_to_video"
@@ -68,7 +56,9 @@ export const AffiliateConfig = () => {
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
-            <RiFilmFill className={storyModeType === "prompt_to_video" ? "text-pink-500" : "text-gray-400"} />
+            <RiFilmFill
+              className={storyModeType === "prompt_to_video" ? "text-pink-500" : "text-gray-400"}
+            />
             {t("Prompt to Video")}
           </button>
           <button
@@ -83,7 +73,7 @@ export const AffiliateConfig = () => {
               className={storyModeType === "image_to_video" ? "text-pink-500" : "text-gray-400"}
             />
             {t("Image to Video")}
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -148,24 +138,14 @@ export const AffiliateConfig = () => {
         {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
         <div>
           <Field name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
-            <Input
-              id="object-to-personify-input"
-              value={objectToPersonify || ""}
-              onChange={(v) => setObjectToPersonify && setObjectToPersonify(v)}
-              placeholder={t("VD: Một quả chuối tươi")}
-            />
+            <Input id="object-to-personify-input" placeholder={t("VD: Một quả chuối tươi")} />
           </Field>
         </div>
 
         {/* NỘI DUNG MẸO (tipContent) */}
         <div>
           <Field name="tipContent" label={t("Nội dung mẹo")}>
-            <Input
-              id="tip-content-input"
-              value={tipContent || ""}
-              onChange={(v) => setTipContent && setTipContent(v)}
-              placeholder={t("VD: Cách ăn chuối tốt nhất")}
-            />
+            <Input id="tip-content-input" placeholder={t("VD: Cách ăn chuối tốt nhất")} />
           </Field>
         </div>
 
@@ -176,8 +156,8 @@ export const AffiliateConfig = () => {
               id="batch-size-select"
               native
               options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
-              value={String(batchSize ?? 1)}
-              onChange={(v) => setBatchSize && setBatchSize(Number(v))}
+              value={String(videoConfig?.batchSize ?? 1)}
+              onChange={(v) => patchConfig && patchConfig({ batchSize: Number(v) })}
             />
           </Field>
         </div>

@@ -3,10 +3,10 @@
  * Two-column layout: left sidebar + right panel, light/white theme
  * className only – Tailwind CSS
  */
-import { AffiliateVideoRightPanel } from "../right-panel/affiliate-video-right-panel";
-import { TextToVideoTab } from "./text-to-video-tab/text-to-video-tab";
+import { AffiliateVideoRightPanel } from "./right-panel/affiliate-video-right-panel";
+import { TextToVideoTab } from "./sibar/text-to-video-tab";
 
-export const AffiliateVideoSibar = () => {
+export const AffiliateVideoBody = () => {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* ══ LEFT SIDEBAR ══ */}

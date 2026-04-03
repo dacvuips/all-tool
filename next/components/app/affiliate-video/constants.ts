@@ -37,51 +37,12 @@ export type Quality = "standard" | "high";
 export type OutputFormat = "mp4" | "webm";
 export type SpeedMode = "fast" | "relaxed" | "quality";
 
-/** A single media item (image or video) in the generation pipeline */
-export interface MediaItem {
-  id: string;
-  role: ItemRole;
-  mediaType: MediaType;
-  /** data URL (base64) or external http URL */
-  src: string | null;
-  name?: string;
-  /** Per-item AI prompt override */
-  prompt: string;
-}
-
-/** A subtitle / dialogue segment with start/end timing */
-export interface DialogueLine {
-  id: string;
-  start: number; // seconds
-  end: number; // seconds
-  text: string;
-  voice: string; // voice name
-}
-
-/** Voice settings for the generated video */
-export interface VoiceConfig {
-  type: "builtin" | "custom";
-  voiceName: string;
-  customAudioSrc?: string;
-  customAudioName?: string;
-}
-
 /** Full video generation configuration */
-export interface VideoConfig {
-  duration: number; // seconds, default 8
-  aspectRatio: AspectRatio;
-  quality: Quality;
-  outputFormat: OutputFormat;
-  numberOfOutputs: number;
-  generateSubtitles: boolean;
-  personGeneration: "allow_adult" | "dont_allow";
-  speed: SpeedMode | string;
-}
 
 export type StoryModeType = "prompt_to_video" | "image_to_video";
 
 /** Affiliate sidebar form configuration */
-export interface AffiliateFormConfig {
+export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;
   tipContent: string;
@@ -93,170 +54,11 @@ export interface AffiliateFormConfig {
   batchSize: number;
 }
 
-// ── Mock Video Data (demo UI) ──────────────────────────────────────────────
-export interface MockVideo {
-  id: string;
-  thumbnail: string;
-  label: string;
-  aspectRatio: string;
-  styleTag: string;
-  quality?: string;
-  description: string;
-  model: string;
-  seed: string;
-  timeInfo: string;
-  status: "generating" | "done";
-}
-
-export const MOCK_VIDEOS: MockVideo[] = [
-  {
-    id: "m1",
-    thumbnail: "https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    quality: "1080p",
-    description:
-      "Phòng ngủ phong cách Scandinavian ấm cúng với tường kem, sàn gỗ sáng màu, giường bọc nệm vải be, cửa sổ kính lớn chiếm gần trọn bức tường...",
-    model: "fast_ultra_relaxed",
-    seed: "528414",
-    timeInfo: "15:53",
-    status: "generating",
-  },
-  {
-    id: "m2",
-    thumbnail: "https://images.unsplash.com/photo-1618221118493-9cfa1a1c00da?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ hiện đại sang trọng với nội thất gỗ óc chó, ga giường trắng ngà, thảm lông mềm, cửa sổ kính lớn nhìn ra thành phố về đêm đang...",
-    model: "fast_ultra_relaxed",
-    seed: "886026",
-    timeInfo: "15:55",
-    status: "generating",
-  },
-  {
-    id: "m3",
-    thumbnail: "https://images.unsplash.com/photo-1600210491892-03d54079f2b4?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ phong cách bãi biển nhiệt đới với nội thất mây tre, chăn ga màu cát, cửa sổ kính nhìn ra bãi biển vàng đang mưa, sóng biển nhẹ và...",
-    model: "fast_ultra_relaxed",
-    seed: "179785",
-    timeInfo: "15:55",
-    status: "generating",
-  },
-  {
-    id: "m4",
-    thumbnail: "https://images.unsplash.com/photo-1617098474202-0d0d7c5a4a8e?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ cổ điển châu Âu với tường màu xanh xám, giường đầu cao bọc nhung, bàn gỗ cổ, cửa sổ kính nhìn ra khu phố lát đá cổ kính...",
-    model: "fast_ultra_relaxed",
-    seed: "561736",
-    timeInfo: "15:55",
-    status: "generating",
-  },
-  {
-    id: "m5",
-    thumbnail: "https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ phong cách boho với ga giường họa tiết nhẹ, thảm dệt thủ công, cây xanh trong nhà, cửa sổ kính nhìn ra cánh đồng hoa oải hương...",
-    model: "fast_ultra_relaxed",
-    seed: "419841",
-    timeInfo: "15:55",
-    status: "generating",
-  },
-  {
-    id: "m6",
-    thumbnail: "https://images.unsplash.com/photo-1560448205-4d9b3e6bb6db?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ tối giản hiện đại với gam màu xám ấm, giường lớn gọn gàng, tường bê tông mịn, cửa sổ kính lớn nhìn ra cây cầu dát bạc qua đồng...",
-    model: "fast_ultra_relaxed",
-    seed: "399767",
-    timeInfo: "15:55",
-    status: "generating",
-  },
-  {
-    id: "m7",
-    thumbnail: "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    quality: "1080p",
-    description:
-      "Phòng ngủ vintage sang trọng với đèn chùm pha lê, rèm nhung đỏ đô, giường canopy gỗ cổ điển, sàn gỗ parquet bóng loáng...",
-    model: "fast_ultra_relaxed",
-    seed: "781234",
-    timeInfo: "15:55",
-    status: "done",
-  },
-  {
-    id: "m8",
-    thumbnail: "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?w=600&q=80&fit=crop",
-    label: "TEXT TO VIDEO",
-    aspectRatio: "16:9",
-    styleTag: "relaxed",
-    description:
-      "Phòng ngủ penthouse tối giản với tường kính toàn cảnh thành phố ban ngày, ánh sáng chan hòa, giường king-size trắng tinh...",
-    model: "fast_ultra_relaxed",
-    seed: "643218",
-    timeInfo: "15:55",
-    status: "done",
-  },
-];
-
-/** A generation job (pending / running / done / error) */
-export interface GenerationJob {
-  id: string;
-  ts: number;
-  status: "pending" | "running" | "done" | "error";
-  /** Output video data URLs or URIs */
-  videos: string[];
-  error?: string;
-  prompt: string;
-  configSnapshot: VideoConfig;
-}
-
-/** Status for individual async operations */
 export type OpStatus = "idle" | "loading" | "done" | "error";
 
 /** A single prompt item in the Step 2 result list */
-export interface PromptItem {
-  id: string;
-  promptText: string;
-  /** Voice-over / dialogue text (from voids array) */
-  voiceText?: string;
-  /** Generated video data URL / URI */
-  videoSrc?: string;
-  videoStatus: OpStatus;
-  videoError?: string;
-  /** Generated audio data URL */
-  audioSrc?: string;
-  audioStatus: OpStatus;
-  audioError?: string;
-}
 
 /** A prompt template option */
-export interface PromptTemplate {
-  id: string;
-  label: string;
-  icon: string;
-  template: string;
-  placeholder: string;
-  prompt: string;
-}
 
 // ── Model Options ──────────────────────────────────────────────────────────
 
@@ -317,162 +119,6 @@ export const STYLE_GALLERY = [
   },
 ];
 
-// ── Prompt Templates ──────────────────────────────────────────────────────
-export const PROMPT_TEMPLATES: PromptTemplate[] = [
-  {
-    id: "affiliate_review",
-    label: "Review Sản phẩm",
-    icon: "⭐",
-    template: `Nhân vật: “Dạ Dày” Concept: Dạ dày là đầu bếp chính, phải xử lý mọi món ăn con người gửi xuống. Nội dung: Mở đầu: Dạ dày tự hào chế biến “món ăn năng lượng”. Vấn đề: Đồ cay nóng, ăn khuya, ăn nhanh → bếp cháy, đầu bếp stress. Giáo dục: Tiêu hoá, acid dạ dày, nguy cơ viêm loét. Giải pháp: Ăn đúng giờ, nhai kỹ, giảm đồ cay dầu. Kết: Trà An Sinh như “nước làm dịu nhà bếp”, dạ dày hoạt động êm ái.`,
-    placeholder:
-      "VD: `Nhân vật: “Dạ Dày” Concept: Dạ dày là đầu bếp chính, phải xử lý mọi món ăn con người gửi xuống. Nội dung: Mở đầu: Dạ dày tự hào chế biến “món ăn năng lượng”. Vấn đề: Đồ cay nóng, ăn khuya, ăn nhanh → bếp cháy, đầu bếp stress. Giáo dục: Tiêu hoá, acid dạ dày, nguy cơ viêm loét. Giải pháp: Ăn đúng giờ, nhai kỹ, giảm đồ cay dầu. Kết: Trà An Sinh như “nước làm dịu nhà bếp”, dạ dày hoạt động êm ái.",
-    prompt: `
-    Prompt được viết bằng tiếng Anh. Sau đó viết giúp tôi {{videoCount}} prompt tạo ra {{videoCount}} Video, mỗi Video dài {{videoDuration}} giây được tạo từ Google Flow Veo 3.1. Mỗi prompt không cần lời thoại hay voice over, chỉ có âm thanh của hành động và âm thanh môi trường, không nhạc nền. Prompt viết liền, không giải thích, không xuống dòng, không cách dòng, không tạo bảng, hãy xuất ra 1 mãng mà mỗi phần tử là 1 prompt trong đó, câu hội thoại để trong dấu ' '. Bạn hãy luôn ghi nhớ, bất kỳ cảnh nào có nhân vật "Nhân vật", đều phải đưa chi tiết mô tả của nhân vật "Nhân vật" vào trong từng Prompt khi có nhân vật xuất hiện, phải viết cực kỳ chi tiết mô tả nhân vật, không được viết tắt, không được bỏ qua. Hãy nhắc để tạo Video chính xác trong từng prompt. Lời thoại là Tiếng Việt tương thích với từng prompt, nội dung phù hợp với mỗi video dài 8 giây hãy lưu hội thoại vào 1 mãng riêng có tên field "voids" trong object kết quả. Bắt buộc phải xuất kết quả dạng {prompts:[],voids:[]}. Bắt đầu viết khi tôi gửi nội dung dưới đây nha: {{template}}`,
-  },
-  {
-    id: "unboxing",
-    label: "Unboxing",
-    icon: "📦",
-    template: "Mở hộp sản phẩm theo phong cách viral",
-    placeholder: "VD: iPhone 16 Pro Max màu titan sa mạc, hộp trắng cao cấp...",
-    prompt: "Mở hộp sản phẩm theo phong cách viral",
-  },
-  {
-    id: "comparison",
-    label: "So sánh",
-    icon: "⚖️",
-    template: "So sánh sản phẩm vs đối thủ hoặc before/after",
-    placeholder: "VD: Kem chống nắng A vs B, test độ bền dưới nước...",
-    prompt: "So sánh sản phẩm vs đối thủ hoặc before/after",
-  },
-  {
-    id: "tutorial",
-    label: "Hướng dẫn",
-    icon: "📖",
-    template: "Video tutorial, hướng dẫn sử dụng step-by-step",
-    placeholder: "VD: Máy xay sinh tố, các bước làm sinh tố, nút bấm...",
-    prompt: "Video tutorial, hướng dẫn sử dụng step-by-step",
-  },
-  {
-    id: "lifestyle",
-    label: "Lifestyle",
-    icon: "✨",
-    template: "Phong cách sống, aspirational marketing cao cấp",
-    placeholder: "VD: Túi da thật Ý, người phụ nữ thanh lịch, cafe Paris...",
-    prompt: "Phong cách sống, aspirational marketing cao cấp",
-  },
-  {
-    id: "testimonial",
-    label: "Testimonial",
-    icon: "🗣️",
-    template: "User-generated content, người thật chia sẻ cảm nhận",
-    placeholder: "VD: Serum Vitamin C, da sáng sau 2 tuần, người dùng thật...",
-    prompt: "User-generated content, người thật chia sẻ cảm nhận",
-  },
-  {
-    id: "custom",
-    label: "Tùy chỉnh",
-    icon: "🎨",
-    template: "Nhập ý tưởng bất kỳ, AI sẽ tạo prompt chuyên nghiệp",
-    placeholder: "Mô tả ý tưởng video của bạn...",
-    prompt: "Nhập ý tưởng bất kỳ, AI sẽ tạo prompt chuyên nghiệp",
-  },
-];
-
-// ── Default Configs ────────────────────────────────────────────────────────
-export const DEFAULT_VIDEO_CONFIG: VideoConfig = {
-  duration: 8,
-  aspectRatio: "16:9",
-  quality: "high",
-  outputFormat: "mp4",
-  numberOfOutputs: 1,
-  generateSubtitles: false,
-  personGeneration: "allow_adult",
-  speed: "relaxed",
-};
-
-export const DEFAULT_VOICE_CONFIG: VoiceConfig = {
-  type: "builtin",
-  voiceName: BUILTIN_VOICES[0].value,
-};
-
-// ── Prompt Builder ─────────────────────────────────────────────────────────
-
-/**
- * Các biến có thể dùng trong prompt template dưới dạng {{key}}.
- * Thêm key mới ở đây nếu cần thêm placeholder mới trong tương lai.
- */
-export interface PromptVars {
-  /** Số lượng video cần tạo (từ videoConfig.numberOfOutputs) */
-  videoCount: number;
-  /** Thời lượng mỗi video tính bằng giây (từ videoConfig.duration) */
-  videoDuration: number;
-  /** Nội dung template (from PromptTemplate.template) */
-  template: string;
-  /** Nội dung người dùng nhập vào textarea */
-  userInput: string;
-  /** Các biến mở rộng tùy ý khác */
-  [key: string]: string | number;
-}
-
-/**
- * Nhận chuỗi template có dạng {{key}} và một object vars,
- * thay thế tất cả {{key}} bằng giá trị tương ứng trong vars.
- *
- * Ví dụ:
- *   buildPrompt("Tạo {{videoCount}} video dài {{videoDuration}}s", { videoCount: 3, videoDuration: 8 })
- *   → "Tạo 3 video dài 8s"
- */
-export function buildPrompt(templatePrompt: string, vars: PromptVars): string {
-  // Replace tất cả {{key}} với giá trị từ vars
-  let result = templatePrompt.replace(/\{\{(\w+)\}\}/g, (_, key) => {
-    const val = vars[key];
-    return val !== undefined && val !== null ? String(val) : `{{${key}}}`;
-  });
-  return result;
-}
-
-// ── Factory Helpers ────────────────────────────────────────────────────────
-export const makeMediaItem = (role: ItemRole, mediaType: MediaType = "image"): MediaItem => ({
-  id: uid(),
-  role,
-  mediaType,
-  src: null,
-  prompt: "",
-});
-
-export const makeDialogueLine = (start = 0, end = 3): DialogueLine => ({
-  id: uid(),
-  start,
-  end,
-  text: "",
-  voice: BUILTIN_VOICES[0].value,
-});
-
-// ── Shared button/card style builders ─────────────────────────────────────
-type CSSProps = Record<string, any>;
-
-export const card = (extra: CSSProps = {}): CSSProps => ({
-  background: CSS.bgCard,
-  border: CSS.border,
-  borderRadius: CSS.radius,
-  backdropFilter: "blur(10px)",
-  ...extra,
-});
-
-export const btn = (extra: CSSProps = {}): CSSProps => ({
-  border: "none",
-  borderRadius: CSS.radiusSm,
-  cursor: "pointer",
-  fontWeight: 600,
-  fontSize: 13,
-  transition: "all 0.15s",
-  ...extra,
-});
-
-// ── Sidebar Form Options ───────────────────────────────────────────────────
-
-/** @deprecated Use ART_STYLE_OPTIONS instead */
 export const IMAGE_STYLES = [
   { value: "realistic", label: "Chân thực (Realistic)" },
   { value: "3d_pixar", label: "3D Pixar Cute" },
@@ -635,11 +281,11 @@ export const MOCK_SCRIPT: ScriptData = {
       number: 1,
       cameraShot: "LOW ANGLE SHOT",
       imageGenPrompt:
-        'Gender: Female, Age: 65, Ethnicity: Vietnamese, Skin tone: warm tan, Hair: short curly black hair with gray streaks tied in a loose bun, Eyes: dark brown, Face: round face with fine wrinkles around eyes and mouth, Body: plump medium build, Clothing: dark red cotton áo bà ba with subtle gold floral embroidery, black cloth slippers, Distinctive features: gold hoop earrings, green jade bangle bracelet. Gender: Female, Age: 28, Ethnicity: Vietnamese, Skin tone: warm light brown, Hair: long straight black hair tied in neat ponytail, Eyes: dark almond-shaped, Face: oval face with smooth skin, Body: slim athletic build, Clothing: light pink cotton blouse with white floral pattern, beige capri pants, white canvas sneakers, Distinctive features: simple silver hoop earrings. Chị Minh squeezes toothpaste tube towards silver tray with confident squeeze, fingers gripping firmly, Bà Lan shakes head slowly arms tightening across chest, stern scowl deepening, incense smoke curling upwards, pots bubbling softly, camera low angle pushing up to emphasize tension. Setting: Traditional Vietnamese family home during Tet holiday, ancestor altar with incense smoke and fresh fruits like oranges and coconuts, busy kitchen counter cluttered with banana leaves sticky rice pots boiling, courtyard with potted kumquat tree peach blossoms, red lanterns motorbikes outside bustling street sounds. Cinematic realistic lighting, 8k, photorealistic, high fidelity, shot on 35mm lens, depth of field, natural colors. DO NOT USE \'3d\', \'render\' or \'cartoon\' keywords.',
+        "Gender: Female, Age: 65, Ethnicity: Vietnamese, Skin tone: warm tan, Hair: short curly black hair with gray streaks tied in a loose bun, Eyes: dark brown, Face: round face with fine wrinkles around eyes and mouth, Body: plump medium build, Clothing: dark red cotton áo bà ba with subtle gold floral embroidery, black cloth slippers, Distinctive features: gold hoop earrings, green jade bangle bracelet. Gender: Female, Age: 28, Ethnicity: Vietnamese, Skin tone: warm light brown, Hair: long straight black hair tied in neat ponytail, Eyes: dark almond-shaped, Face: oval face with smooth skin, Body: slim athletic build, Clothing: light pink cotton blouse with white floral pattern, beige capri pants, white canvas sneakers, Distinctive features: simple silver hoop earrings. Chị Minh squeezes toothpaste tube towards silver tray with confident squeeze, fingers gripping firmly, Bà Lan shakes head slowly arms tightening across chest, stern scowl deepening, incense smoke curling upwards, pots bubbling softly, camera low angle pushing up to emphasize tension. Setting: Traditional Vietnamese family home during Tet holiday, ancestor altar with incense smoke and fresh fruits like oranges and coconuts, busy kitchen counter cluttered with banana leaves sticky rice pots boiling, courtyard with potted kumquat tree peach blossoms, red lanterns motorbikes outside bustling street sounds. Cinematic realistic lighting, 8k, photorealistic, high fidelity, shot on 35mm lens, depth of field, natural colors. DO NOT USE '3d', 'render' or 'cartoon' keywords.",
       motionPrompt:
         "Chị Minh squeezes toothpaste tube towards silver tray with confident squeeze, fingers gripping firmly, Bà Lan shakes head slowly arms tightening across chest, stern scowl deepening, incense smoke curling upwards, pots bubbling softly, camera low angle pushing up to emphasize tension.",
       dialogue:
-        '"Chị Minh, cô gái áo hồng nhạt tóc đuôi gà: \'Mẹo 1 lau bạc: kem đánh răng chà lên khay, lau sạch bóng loáng ngay mẹ ơi!\' Bà Lan, bà áo bà ba đỏ sậm: \'Làm nhanh đi con, đừng lề mề kéo Tết muộn!\'"',
+        "\"Chị Minh, cô gái áo hồng nhạt tóc đuôi gà: 'Mẹo 1 lau bạc: kem đánh răng chà lên khay, lau sạch bóng loáng ngay mẹ ơi!' Bà Lan, bà áo bà ba đỏ sậm: 'Làm nhanh đi con, đừng lề mề kéo Tết muộn!'\"",
     },
     {
       id: "s2",
@@ -650,7 +296,7 @@ export const MOCK_SCRIPT: ScriptData = {
       motionPrompt:
         "Chị Minh shakes jar vigorously back and forth with both hands gripping tight, garlic skins loosening fluttering inside, face focused brows furrowed, Bà Lan taps foot impatiently jade bracelet jangling, steam rising from background pot, camera over-the-shoulder tracking shake.",
       dialogue:
-        '"Chị Minh, cô gái áo hồng nhạt tóc đuôi gà: \'Mẹo 2 bóc tỏi: cho vào lọ lắc mạnh, vỏ tự bong sạch sẽ!\' Bà Lan, bà áo bà ba đỏ sậm: \'Nhanh chứ lắc mãi không xong thì phí công!\'"',
+        "\"Chị Minh, cô gái áo hồng nhạt tóc đuôi gà: 'Mẹo 2 bóc tỏi: cho vào lọ lắc mạnh, vỏ tự bong sạch sẽ!' Bà Lan, bà áo bà ba đỏ sậm: 'Nhanh chứ lắc mãi không xong thì phí công!'\"",
     },
     {
       id: "s3",
@@ -660,7 +306,8 @@ export const MOCK_SCRIPT: ScriptData = {
         "Knife twists in spiral motion peeling continuous strip unfurling smoothly, papaya rotating slowly under firm grip, juice droplets trickling down blade sparkling, peels fluttering lightly, camera macro dolly zooming in on peeling contact point with subtle hand tremor.",
       motionPrompt:
         "Knife twists in spiral motion peeling continuous strip unfurling smoothly, papaya rotating slowly under firm grip, juice droplets trickling down blade sparkling, peels fluttering lightly, camera macro dolly zooming in on peeling contact point with subtle hand tremor.",
-      dialogue: '"Người dẫn chuyện: \'Mẹo 3 got đủ đũa: xoắn dao theo xoắn ốc, đẹp mắt mời khách Tết!\'"',
+      dialogue:
+        "\"Người dẫn chuyện: 'Mẹo 3 got đủ đũa: xoắn dao theo xoắn ốc, đẹp mắt mời khách Tết!'\"",
     },
   ],
 };

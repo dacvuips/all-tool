@@ -5,8 +5,8 @@
  */
 import { useTranslation } from "react-i18next";
 import { RiFilmFill, RiLoader4Line, RiStopLine } from "react-icons/ri";
-import { Button } from "../../../../shared/utilities/form";
-import { useAffiliateVideoContext } from "../../providers/affiliate-video-provider";
+import { Button } from "../../../shared/utilities/form";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 export const AffiliateSubmit = () => {
   const { t } = useTranslation();

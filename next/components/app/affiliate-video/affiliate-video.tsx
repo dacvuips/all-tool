@@ -10,10 +10,11 @@ import { useAuth } from "../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../lib/providers/global-provider";
 import { credentialCustomerService } from "../../../lib/repo";
 import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
-import { DEFAULT_VOICE_CONFIG, PROMPT_TEMPLATES, VoiceConfig } from "./constants";
+
 import { useAffiliateVideoContext } from "./providers/affiliate-video-provider";
-import { AffiliateVideoSibar } from "./sibar/affiliate-video-sibar";
-import { SettingsModal, ZoomModal } from "./sibar/text-to-video-tab/text-to-video-modal";
+
+import { AffiliateVideoBody } from "./affiliate-video-body";
+import { SettingsModal, ZoomModal } from "./sibar/text-to-video-modal";
 
 export default function AffiliateVideo() {
   const { t } = useTranslation();
@@ -26,9 +27,8 @@ export default function AffiliateVideo() {
   const [credentialActive, setCredentialActive] = useState(false);
   const [credentialLoading, setCredentialLoading] = useState(true);
 
-  const [voiceConfig, setVoiceConfig] = useState<VoiceConfig>(DEFAULT_VOICE_CONFIG);
   const [templateId, setTemplateId] = useState("affiliate_review");
-  const [rawPrompt, setRawPrompt] = useState(PROMPT_TEMPLATES[0].template);
+
   const [step1Loading, setStep1Loading] = useState(false);
   const [step1Error, setStep1Error] = useState<string | null>(null);
 
@@ -147,7 +147,7 @@ export default function AffiliateVideo() {
       </div>
 
       {/* ══ MAIN LAYOUT ══ */}
-      <AffiliateVideoSibar />
+      <AffiliateVideoBody />
     </div>
   );
 }

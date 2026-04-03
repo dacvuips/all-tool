@@ -1,18 +1,12 @@
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  AffiliateFormConfig,
+  AffiliateVideoFormConfig,
   ART_STYLE_OPTIONS,
   CATEGORY_OPTIONS,
-  DEFAULT_VIDEO_CONFIG,
   LANGUAGE_OPTIONS,
   MOCK_SCRIPT,
-  MOCK_VIDEOS,
-  MOOD_OPTIONS,
-  PromptItem,
   ScriptData,
-  StoryModeType,
-  VideoConfig,
 } from "../constants";
 
 export const AffiliateVideoContext = createContext<
@@ -27,10 +21,8 @@ export const AffiliateVideoContext = createContext<
     setSearchQuery: (searchQuery: string) => void;
     voiceMode: VoiceMode;
     setVoiceMode: (voiceMode: VoiceMode) => void;
-    videoConfig: VideoConfig;
-    setVideoConfig: (videoConfig: VideoConfig) => void;
-    promptItems: PromptItem[];
-    setPromptItems: (promptItems: PromptItem[]) => void;
+    videoConfig: AffiliateVideoFormConfig;
+    setVideoConfig: (videoConfig: AffiliateVideoFormConfig) => void;
     showAiModal: boolean;
     setShowAiModal: (showAiModal: boolean) => void;
     batchRunning: boolean;
@@ -50,34 +42,14 @@ export const AffiliateVideoContext = createContext<
     VideoCountOptions?: { label: string; value: number }[];
     totalCount: number;
     doneCount: number;
-    generatingItems: PromptItem[];
-    historyItems: PromptItem[];
-    patchConfig: (p: Partial<VideoConfig>) => void;
-    removeItem: (id: string) => void;
-    updateItem: (id: string, patch: Partial<PromptItem>) => void;
+    patchConfig: (p: Partial<AffiliateVideoFormConfig>) => void;
+
     useMock: boolean;
-    displayItems: PromptItem[];
     genCount: number;
     histCount: number;
-    // ── Sidebar form state (aligned with AffiliateFormConfig) ──
-    storyModeType: StoryModeType;
-    setStoryModeType: (mode: StoryModeType) => void;
-    artStyle: string;
-    setArtStyle: (style: string) => void;
-    language: string;
-    setLanguage: (lang: string) => void;
-    category: string;
-    setCategory: (cat: string) => void;
-    mood: string;
-    setMood: (mood: string) => void;
-    objectToPersonify: string;
-    setObjectToPersonify: (prop: string) => void;
-    tipContent: string;
-    setTipContent: (tip: string) => void;
-    batchSize: number;
-    setBatchSize: (size: number) => void;
+
     /** Convenience getter – returns current form values as AffiliateFormConfig */
-    affiliateFormConfig: AffiliateFormConfig;
+    affiliateFormConfig: AffiliateVideoFormConfig;
     // ── Script data ──
     scriptData: ScriptData | null;
     setScriptData: (data: ScriptData | null) => void;
@@ -85,36 +57,17 @@ export const AffiliateVideoContext = createContext<
     setScriptTab: (tab: "script" | "batch") => void;
     batchList: string[];
     setBatchList: (list: string[]) => void;
-    handleSubmit: (data: VideoConfig) => void;
+    handleSubmit: (data: AffiliateVideoFormConfig) => void;
+    affiliateVideoFormConfig: AffiliateVideoFormConfig;
+    setAffiliateVideoFormConfig: (videoConfig: AffiliateVideoFormConfig) => void;
+    defaultVideoConfig: AffiliateVideoFormConfig;
   }>
 >({});
 
 export function AffiliateVideoProvider(props) {
   const { t } = useTranslation();
-
-  const [modeTab, setModeTab] = useState<ModeTab>("text");
-  const [speed, setSpeed] = useState<SpeedMode | string>("relaxed");
-  const [delayQueue, setDelayQueue] = useState<DelayQueue>("15s");
   const [searchQuery, setSearchQuery] = useState("");
-  const [voiceMode, setVoiceMode] = useState<VoiceMode>("none");
-  const [videoConfig, setVideoConfig] = useState<VideoConfig>(DEFAULT_VIDEO_CONFIG);
-  const [promptItems, setPromptItems] = useState<PromptItem[]>([]);
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [batchRunning, setBatchRunning] = useState(false);
-  const [activeTab, setActiveTab] = useState<MainTab>("generating");
-  const [showSettings, setShowSettings] = useState(false);
-  const [zoomSrc, setZoomSrc] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const stopRef = useRef(false);
-
-  // ── Sidebar form state (aligned with AffiliateFormConfig) ──
-  const [storyModeType, setStoryModeType] = useState<StoryModeType>("prompt_to_video");
-  const [artStyle, setArtStyle] = useState(ART_STYLE_OPTIONS[0].value); // "pixar"
-  const [language, setLanguage] = useState(LANGUAGE_OPTIONS[0].value);
-  const [category, setCategory] = useState(CATEGORY_OPTIONS[1].value);
-  const [mood, setMood] = useState(MOOD_OPTIONS[3].value); // "hau_dau"
-  const [objectToPersonify, setObjectToPersonify] = useState("Một quả chuối tươi");
-  const [tipContent, setTipContent] = useState("Cách ăn chuối tốt nhất");
-  const [batchSize, setBatchSize] = useState(1);
 
   // ── Script / Batch state ──
   const [scriptData, setScriptData] = useState<ScriptData | null>(MOCK_SCRIPT);
@@ -160,87 +113,30 @@ export function AffiliateVideoProvider(props) {
     { label: "6", value: 6 },
     { label: "7", value: 7 },
   ];
-
-  const totalCount = promptItems.length;
-  const doneCount = promptItems.filter((i) => i.videoStatus === "done").length;
-  const generatingItems = promptItems.filter((i) => i.videoStatus !== "done");
-  const historyItems = promptItems.filter((i) => i.videoStatus === "done");
-  const patchConfig = (p: Partial<VideoConfig>) => setVideoConfig((c) => ({ ...c, ...p }));
-  const removeItem = (id: string) => setPromptItems((prev) => prev.filter((i) => i.id !== id));
-
-  const updateItem = useCallback((id: string, patch: Partial<PromptItem>) => {
-    setPromptItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  }, []);
-
-  const useMock = totalCount === 0;
-  const mockToPromptItem = (v: typeof MOCK_VIDEOS[number]): PromptItem => ({
-    id: v.id,
-    promptText: v.description,
-    videoSrc: v.thumbnail,
-    videoStatus: v.status === "done" ? "done" : "loading",
-    audioStatus: "idle",
-  });
-
-  const displayItems: PromptItem[] =
-    activeTab === "generating"
-      ? useMock
-        ? MOCK_VIDEOS.filter((v) => v.status === "generating").map(mockToPromptItem)
-        : generatingItems
-      : useMock
-      ? MOCK_VIDEOS.filter((v) => v.status === "done").map(mockToPromptItem)
-      : historyItems;
-
-  const genCount = useMock
-    ? MOCK_VIDEOS.filter((v) => v.status === "generating").length
-    : generatingItems.length;
-  const histCount = useMock
-    ? MOCK_VIDEOS.filter((v) => v.status === "done").length
-    : historyItems.length;
-
-  const handleSubmit = async (data: VideoConfig) => {
-    console.log("handleSubmit ", data);
+  const defaultVideoConfig: AffiliateVideoFormConfig = {
+    category: CATEGORY_OPTIONS[0].label,
+    objectToPersonify: "Một quả chuối tươi",
+    tipContent: "Cách ăn chuối tốt nhất",
+    mood: "Vui vẻ",
+    language: LANGUAGE_OPTIONS[0].label,
+    artStyle: ART_STYLE_OPTIONS[0].label,
+    storyModeType: "image_to_video",
+    aspectRatio: "9:16",
+    batchSize: 1,
   };
+  const [affiliateVideoFormConfig, setAffiliateVideoFormConfig] =
+    useState<AffiliateVideoFormConfig>(defaultVideoConfig);
 
-  /** Convenience computed value exposing all sidebar fields as AffiliateFormConfig */
-  const affiliateFormConfig: AffiliateFormConfig = {
-    category,
-    objectToPersonify,
-    tipContent,
-    mood,
-    language,
-    artStyle,
-    storyModeType,
-    aspectRatio: videoConfig.aspectRatio,
-    batchSize,
+  const handleSubmit = async (data: AffiliateVideoFormConfig) => {
+    console.log("handleSubmit ", data);
   };
 
   return (
     <AffiliateVideoContext.Provider
       value={{
-        modeTab,
-        setModeTab,
-        speed,
-        setSpeed,
-        delayQueue,
-        setDelayQueue,
         searchQuery,
         setSearchQuery,
-        voiceMode,
-        setVoiceMode,
-        videoConfig,
-        setVideoConfig,
-        promptItems,
-        setPromptItems,
-        showAiModal,
-        setShowAiModal,
-        batchRunning,
-        setBatchRunning,
-        activeTab,
-        setActiveTab,
-        showSettings,
-        setShowSettings,
-        zoomSrc,
-        setZoomSrc,
+
         stopRef,
         SpeedModeOptions,
         DelayQueueOptions,
@@ -248,35 +144,7 @@ export function AffiliateVideoProvider(props) {
         MainTabOptions,
         VoiceModeOptions,
         VideoCountOptions,
-        totalCount,
-        doneCount,
-        generatingItems,
-        historyItems,
-        patchConfig,
-        removeItem,
-        updateItem,
-        useMock,
-        displayItems,
-        genCount,
-        histCount,
-        // sidebar form
-        storyModeType,
-        setStoryModeType,
-        artStyle,
-        setArtStyle,
-        language,
-        setLanguage,
-        category,
-        setCategory,
-        mood,
-        setMood,
-        objectToPersonify,
-        setObjectToPersonify,
-        tipContent,
-        setTipContent,
-        batchSize,
-        setBatchSize,
-        affiliateFormConfig,
+
         // script
         scriptData,
         setScriptData,
@@ -285,6 +153,9 @@ export function AffiliateVideoProvider(props) {
         batchList,
         setBatchList,
         handleSubmit,
+        affiliateVideoFormConfig,
+        setAffiliateVideoFormConfig,
+        defaultVideoConfig,
       }}
     >
       {props.children}
