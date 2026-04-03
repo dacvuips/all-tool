@@ -1,5 +1,6 @@
 import { createContext, useContext, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   ART_STYLE_OPTIONS,
@@ -57,7 +58,7 @@ export const AffiliateVideoContext = createContext<
     setScriptTab: (tab: "script" | "batch") => void;
     batchList: string[];
     setBatchList: (list: string[]) => void;
-    handleSubmit: (data: AffiliateVideoFormConfig) => void;
+    handleSubmit: (data: AffiliateVideoFormConfig, promptText?: string) => void;
     affiliateVideoFormConfig: AffiliateVideoFormConfig;
     setAffiliateVideoFormConfig: (videoConfig: AffiliateVideoFormConfig) => void;
     defaultVideoConfig: AffiliateVideoFormConfig;
@@ -66,6 +67,7 @@ export const AffiliateVideoContext = createContext<
 
 export function AffiliateVideoProvider(props) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [searchQuery, setSearchQuery] = useState("");
   const stopRef = useRef(false);
 
@@ -73,7 +75,7 @@ export function AffiliateVideoProvider(props) {
   const [scriptData, setScriptData] = useState<ScriptData | null>(MOCK_SCRIPT);
   const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
-
+  const [batchRunning, setBatchRunning] = useState(false);
   const SpeedModeOptions: { label: string; value: SpeedMode }[] = [
     { label: t("Nhanh"), value: "fast" },
     { label: t("Thoải mái"), value: "relaxed" },
@@ -127,8 +129,27 @@ export function AffiliateVideoProvider(props) {
   const [affiliateVideoFormConfig, setAffiliateVideoFormConfig] =
     useState<AffiliateVideoFormConfig>(defaultVideoConfig);
 
-  const handleSubmit = async (data: AffiliateVideoFormConfig) => {
-    console.log("handleSubmit ", data);
+  const handleSubmit = async (data: AffiliateVideoFormConfig, promptText?: string) => {
+    try {
+      const res = await fetch("/api/app/generation-scene/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          config: data,
+        }),
+      });
+      setBatchRunning(true);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.message || `Lỗi ${res.status}`);
+      }
+      const result = await res.json();
+      console.log("[affiliate-video] submit success", result);
+      return result;
+    } catch (err: any) {
+      console.error("[affiliate-video] submit error", err?.message);
+      throw err;
+    }
   };
 
   return (

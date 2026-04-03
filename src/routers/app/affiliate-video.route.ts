@@ -1,68 +1,107 @@
+import { GoogleGenAI } from "@google/genai";
 import { Request, Response } from "express";
-import fs from "fs";
-import multer from "multer";
 import { TOKEN_ROLES } from "../../constants/role.const";
 import logger from "../../helpers/logger";
-import minio from "../../helpers/minio";
-import { AttachmentModel, attachmentService } from "../../libs/dal/attachment";
+import { credentialService } from "../../libs/dal/credential";
+import { AiProviderKeyEnum } from "../../libs/dal/product";
 import { Context } from "../../libs/graphql";
+import { decryptProviderSecret } from "../../packages/encryption/encrypt-provider";
+import { AffiliateVideoResponseSchema } from "./constanst";
+
+export interface AffiliateVideoFormConfig {
+  category: string;
+  objectToPersonify: string;
+  tipContent: string;
+  mood: string;
+  language: string;
+  artStyle: string;
+  storyModeType: "prompt_to_video" | "image_to_video";
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+  batchSize: number;
+}
+
+/**
+ * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config
+ */
+function interpolateTemplate(text: string, config: AffiliateVideoFormConfig): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const value = (config as any)[key];
+    return value !== undefined && value !== null ? String(value) : match;
+  });
+}
 
 export default [
   {
     method: "post",
-    path: "/api/app/affiliate-video/",
-    midd: [
-      multer({ dest: "./uploads/", limits: { fileSize: 26214400 } }).fields([
-        { name: "file", maxCount: 1 },
-        { name: "image", maxCount: 1 },
-        { name: "video", maxCount: 1 },
-      ]),
-    ], // 25mb limit
+    path: "/api/app/generation-scene/",
+    midd: [],
     action: async (req: Request, res: Response) => {
-      let uploadedFile: Express.Multer.File | undefined;
       try {
         const context = new Context({ req });
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
-        const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
-        uploadedFile = files?.file?.[0] || files?.image?.[0] || files?.video?.[0];
-        if (!uploadedFile) {
-          return res.status(400).json({ message: "Không tìm thấy file upload" });
+
+        const body = req.body as {
+          config: AffiliateVideoFormConfig;
+          text: string;
+        };
+
+        if (!body?.config) {
+          return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const attachment = new AttachmentModel({
-          ownerId: context.id,
-          name: uploadedFile.originalname,
-          size: uploadedFile.size,
-          mimetype: uploadedFile.mimetype,
-          processing: false,
-        });
-        const fileName = `${context.id}/${attachment._id.toString()}-${uploadedFile.originalname}`;
-        logger.info(`Tải lên tập tin ${fileName}`);
-        const file = await minio.upload(fileName, uploadedFile);
-        const { etag, link: directLink, bucket } = file;
-        attachment.etag = etag;
-        attachment.bucket = bucket;
-        attachment.path = fileName;
-        await attachment.save();
-        const baseUrl = `${req.protocol}://${req.get("host")}`;
-        const downloadUrl = attachmentService.getPermanentDownloadUrl(
-          { _id: attachment._id, name: attachment.name },
-          baseUrl
-        );
-        const json = attachment.toJSON();
-        const response = {
-          ...json,
-          id: attachment._id.toString(),
-          link: downloadUrl,
-          downloadUrl,
-          directLink,
-        };
-        await context.log(`Tải lên tập tin: ${attachment.name}`);
-        res.json(response);
-      } finally {
-        if (uploadedFile?.path && fs.existsSync(uploadedFile.path)) {
-          fs.unlinkSync(uploadedFile.path);
+        // Lấy Gemini API key của customer từ credential
+        const credentialDoc = (await credentialService.findOne({
+          customerId: context.id,
+          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+          isCustomerCredential: true,
+        })) as any;
+        const credential = credentialDoc?._doc;
+        if (!credential?.value) {
+          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
         }
+
+        const apiKey = decryptProviderSecret(credential.value);
+        logger.info("API-key", { apiKey });
+        const prompt = `Nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
+
+Xây dựng nội dung: Chuyển tải {{tipContent}} thông qua một tình huống có mood {{mood}}.
+
+Kỹ thuật Video: Viết {{visualPrompt}} và {{motionPrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ storyModeType {{storyModeType}}.
+
+Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
+
+Đầu ra (Output): Xuất kết quả duy nhất dưới dạng một JSON Object mới.
+
+`;
+
+        // Thay thế placeholder trong text
+        const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
+
+        logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
+
+        const genAI = new GoogleGenAI({ apiKey });
+
+        const result = await genAI.models.generateContent({
+          model: "gemini-2.5-flash",
+          contents: [{ role: "user", parts: [{ text: interpolatedText }] }],
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: AffiliateVideoResponseSchema as any,
+          },
+        });
+
+        const responseText = result.text;
+        let parsed: any;
+        try {
+          parsed = JSON.parse(responseText || "{}");
+        } catch {
+          parsed = { raw: responseText };
+        }
+
+        res.json({ success: true, data: parsed });
+      } catch (err: any) {
+        logger.error(`[generation-scene] Lỗi: ${err?.message}`);
+        res.status(500).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
