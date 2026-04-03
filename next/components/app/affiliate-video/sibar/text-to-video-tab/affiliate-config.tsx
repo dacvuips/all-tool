@@ -1,261 +1,281 @@
+/**
+ * affiliate-config.tsx
+ * Sidebar form: Tạo Nhân Vật – light theme, cream/white background
+ * className only – Tailwind CSS, no inline styles, no arbitrary [] values
+ */
 import { useTranslation } from "react-i18next";
-import { Button, Label, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS } from "../../constants";
+import { RiCameraLensFill, RiFilmFill, RiLightbulbLine, RiMagicFill } from "react-icons/ri";
+import { ASPECT_RATIOS, CATEGORY_OPTIONS, IMAGE_STYLES, LANGUAGE_OPTIONS, TONE_OPTIONS } from "../../constants";
 import { useAffiliateVideoContext } from "../../providers/affiliate-video-provider";
+
+// ── Reusable sub-components ──────────────────────────────────────────────
+
+function SectionLabel({ icon, text }: { icon?: React.ReactNode; text: string }) {
+  return (
+    <div className="flex items-center gap-1 mb-1">
+      {icon && <span className="text-gray-400 text-xs">{icon}</span>}
+      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{text}</span>
+    </div>
+  );
+}
+
+function NativeSelect({
+  value,
+  onChange,
+  options,
+  id,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+  id?: string;
+}) {
+  return (
+    <select
+      id={id}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="w-full rounded-lg border border-gray-200 bg-white text-gray-800 text-sm px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 transition-colors cursor-pointer appearance-none"
+    >
+      {options.map((opt) => (
+        <option key={opt.value} value={opt.value}>
+          {opt.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+  id,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  id?: string;
+}) {
+  return (
+    <input
+      id={id}
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="w-full rounded-lg border border-gray-200 bg-white text-gray-800 text-sm px-3 py-2 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 transition-colors placeholder-gray-400"
+    />
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────
 
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const {
     videoConfig,
     patchConfig,
-    SpeedModeOptions,
-    VideoCountOptions,
-    VoiceModeOptions,
-    DelayQueueOptions,
-    setVoiceMode,
-    voiceMode,
-    setDelayQueue,
-    delayQueue,
-    totalCount,
-    promptItems,
+    inputMode,
+    setInputMode,
+    imageStyle,
+    setImageStyle,
+    language,
+    setLanguage,
+    category,
+    setCategory,
+    tone,
+    setTone,
+    propItem,
+    setPropItem,
+    tipContent,
+    setTipContent,
     setShowAiModal,
-    removeItem,
-    updateItem,
-    doneCount,
   } = useAffiliateVideoContext();
 
+  const aspectRatios = ASPECT_RATIOS.slice(0, 2); // 16:9 and 9:16
+
   return (
-    <div
-      className="flex-1 overflow-y-auto"
-      style={{
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(99,102,241,0.3) transparent",
-      }}
-    >
-      {/* Config card */}
-      <div
-        className="m-3 rounded-xl border border-white border-opacity-8 overflow-hidden"
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          borderColor: "rgba(255,255,255,0.07)",
-        }}
-      >
-        {/* Card header */}
-        <div
-          className="flex items-center justify-between px-3 py-2 border-b border-white border-opacity-8"
-          style={{ borderColor: "rgba(255,255,255,0.07)" }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-14">⚙️</span>
-            <span className="text-12 font-bold text-blue-100">{t("Cấu hình")}</span>
+    <div className="flex-1 overflow-y-auto bg-white">
+      {/* ── Header: Tạo Nhân Vật ── */}
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+            <RiCameraLensFill className="text-white text-base" />
           </div>
-          <button className="text-10 text-blue-400 hover:text-blue-300 border-0 bg-transparent cursor-pointer flex items-center gap-1">
-            {t("Cấu hình gần đây")} <span>▾</span>
-          </button>
+          <span className="text-base font-bold text-gray-800">{t("Tạo Nhân Vật")}</span>
         </div>
+        <button
+          onClick={() => setShowAiModal && setShowAiModal(true)}
+          className="flex items-center gap-1 px-3 py-1 rounded-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors cursor-pointer border-0"
+        >
+          <RiMagicFill className="text-xs" />
+          {t("Gợi ý ngẫu nhiên")}
+        </button>
+      </div>
 
-        <div className="p-3 space-y-3">
-          {/* SPEED */}
-          <div>
-            <Label text={t("Tốc độ")} />
-            <div className="flex gap-1">
-              {SpeedModeOptions.map((s) => (
-                <Button
-                  key={s.value}
-                  onClick={() => patchConfig({ speed: s.value })}
-                  text={s.label}
-                  primary={videoConfig.speed === s.value}
-                ></Button>
-              ))}
-            </div>
-          </div>
-
-          {/* ASPECT */}
-          <div>
-            <Label text={t("Tỷ lệ")} />
-            <div className="flex gap-1">
-              {ASPECT_RATIOS.slice(0, 2).map((ar) => (
-                <Button
-                  key={ar.value}
-                  onClick={() => patchConfig({ aspectRatio: ar.value })}
-                  text={ar.label}
-                  primary={videoConfig.aspectRatio === ar.value}
-                ></Button>
-              ))}
-            </div>
-          </div>
-
-          {/* SỐ LƯỢNG */}
-          <div>
-            <Label text={t("Số lượng")} />
-            <div className="flex gap-1">
-              {VideoCountOptions.map((n) => (
-                <Button
-                  key={n.value}
-                  onClick={() => patchConfig({ numberOfOutputs: n.value })}
-                  primary={videoConfig.numberOfOutputs === n.value}
-                  text={`x${n.label}`}
-                ></Button>
-              ))}
-            </div>
-          </div>
-
-          {/* VOICE MODE */}
-          <div>
-            <Label text={t("Giọng nói")} />
-            <div className="flex gap-1">
-              {(VoiceModeOptions as { value: VoiceMode; label: string }[]).map((m) => (
-                <Button
-                  key={m.value}
-                  onClick={() => setVoiceMode(m.value)}
-                  text={m.label}
-                  primary={voiceMode === m.value}
-                ></Button>
-              ))}
-            </div>
-          </div>
-
-          {/* DELAY QUEUE */}
-          <div>
-            <Label text={t("Delay Queue")} />
-            <div className="flex gap-1">
-              {DelayQueueOptions.map((d) => (
-                <Button
-                  onClick={() => setDelayQueue(d.value as DelayQueue)}
-                  primary={delayQueue === d.value}
-                  text={d.label}
-                ></Button>
-              ))}
-            </div>
-          </div>
+      {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
+          <button
+            onClick={() => setInputMode && setInputMode("prompt")}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+              inputMode === "prompt"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <RiFilmFill className={inputMode === "prompt" ? "text-pink-500" : "text-gray-400"} />
+            {t("Prompt to Video")}
+          </button>
+          <button
+            onClick={() => setInputMode && setInputMode("image")}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+              inputMode === "image"
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <RiCameraLensFill className={inputMode === "image" ? "text-pink-500" : "text-gray-400"} />
+            {t("Image to Video")}
+          </button>
         </div>
       </div>
 
-      {/* Prompt card */}
-      <div
-        className="mx-3 mb-3 rounded-xl border border-white border-opacity-8 overflow-hidden"
-        style={{
-          background: "rgba(255,255,255,0.03)",
-          borderColor: "rgba(255,255,255,0.07)",
-        }}
-      >
-        {/* Card header */}
-        <div
-          className="flex items-center justify-between px-3 py-2 border-b border-white border-opacity-8"
-          style={{ borderColor: "rgba(255,255,255,0.07)" }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-14">📝</span>
-            <span className="text-12 font-bold text-blue-100">{t("Prompt")}</span>
-            {totalCount > 0 && (
-              <span className="text-10 font-bold px-2 py-0 rounded-full bg-indigo-600 text-white">
-                {totalCount}
-              </span>
-            )}
+      {/* ── Form Fields ── */}
+      <div className="px-4 pb-4 space-y-3">
+
+        {/* PHONG CÁCH HÌNH ẢNH */}
+        <div>
+          <SectionLabel text={t("Phong cách hình ảnh")} />
+          <div className="relative">
+            <NativeSelect
+              id="image-style-select"
+              value={imageStyle || IMAGE_STYLES[0].value}
+              onChange={(v) => setImageStyle && setImageStyle(v)}
+              options={IMAGE_STYLES}
+            />
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
+              ▾
+            </div>
           </div>
-          <button
-            onClick={() => setShowAiModal(true)}
-            className="flex items-center gap-1 text-10 font-semibold px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white border-0 cursor-pointer transition-all"
-          >
-            🤖 {t("AI Generate")}
-          </button>
         </div>
 
-        {totalCount === 0 ? (
-          <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
-            <div className="text-32 mb-2 opacity-50">📋</div>
-            <div className="text-13 font-semibold text-blue-200 mb-1">
-              {t("Nhấn")}
-              <strong className="text-indigo-400">🤖 {t("AI Generate")}</strong>
+        {/* NGÔN NGỮ LỜI THOẠI */}
+        <div>
+          <SectionLabel text={t("Ngôn ngữ lời thoại")} />
+          <div className="relative">
+            <NativeSelect
+              id="language-select"
+              value={language || LANGUAGE_OPTIONS[0].value}
+              onChange={(v) => setLanguage && setLanguage(v)}
+              options={LANGUAGE_OPTIONS}
+            />
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
+              ▾
             </div>
-            <div className="text-11 text-blue-500">{t("để AI tạo prompt tự động")}</div>
           </div>
-        ) : (
-          <div className="divide-y divide-white divide-opacity-5">
-            {promptItems.map((item, idx) => {
-              const statusColor =
-                item.videoStatus === "done"
-                  ? "text-green-400"
-                  : item.videoStatus === "loading"
-                  ? "text-yellow-400"
-                  : item.videoStatus === "error"
-                  ? "text-red-400"
-                  : "text-blue-400";
+        </div>
+
+        {/* TỈ LỆ KHUNG HÌNH */}
+        <div>
+          <SectionLabel text={t("Tỉ lệ khung hình")} />
+          <div className="grid grid-cols-2 gap-2">
+            {aspectRatios.map((ar) => {
+              const isPortrait = ar.value === "9:16";
+              const isActive = videoConfig?.aspectRatio === ar.value;
               return (
-                <div key={item.id} className="p-3 space-y-2">
-                  {/* Status row */}
-                  <div
-                    className={`flex items-center justify-between text-10 font-semibold ${statusColor}`}
-                  >
-                    <span>
-                      #{idx + 1} ·{" "}
-                      {item.videoStatus === "done"
-                        ? "✅ Done"
-                        : item.videoStatus === "loading"
-                        ? "⏳ Gen Video..."
-                        : item.videoStatus === "error"
-                        ? "❌ Video Err"
-                        : "○ Ready"}
-                      {item.audioStatus === "done"
-                        ? " | ✅ Audio"
-                        : item.audioStatus === "loading"
-                        ? " | ⏳ Gen Audio"
-                        : item.audioStatus === "error"
-                        ? " | ❌ Audio Err"
-                        : ""}
-                    </span>
-                    <button
-                      onClick={() => removeItem(item.id)}
-                      className="w-5 h-5 rounded flex items-center justify-center bg-white bg-opacity-5 hover:bg-red-900 hover:bg-opacity-40 text-blue-400 hover:text-red-400 border-0 cursor-pointer text-10 transition-all"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  {/* Textarea */}
-                  <Textarea
-                    value={item.promptText}
-                    onChange={(e) => updateItem(item.id, { promptText: e.target.value })}
-                    rows={3}
-                    className="w-full rounded-lg bg-black bg-opacity-30 border border-white border-opacity-8 text-blue-100 text-11 px-2 py-1 outline-none resize-none placeholder-blue-600 focus:border-indigo-500 transition-colors"
-                    style={{ borderColor: "rgba(255,255,255,0.08)" }}
-                  />
-                  {/* Action buttons */}
-                  <div className="flex gap-1">
-                    <Button
-                      // onClick={() => generateSingleVideo(item.id)}
-                      disabled={item.videoStatus === "loading"}
-                      className="flex-1 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-10 font-semibold border-0 cursor-pointer transition-all"
-                    >
-                      🎬 {t("Gen Video")}
-                    </Button>
-                    {(voiceMode === "in_video" || voiceMode === "separate") && (
-                      <Button
-                        // onClick={() => generateSingleAudio(item.id)}
-                        disabled={item.audioStatus === "loading"}
-                        className="flex-1 py-1 rounded-md bg-cyan-700 hover:bg-cyan-600 disabled:opacity-50 text-white text-10 font-semibold border-0 cursor-pointer transition-all"
-                      >
-                        🔊 {t("Gen Audio")}
-                      </Button>
-                    )}
-                  </div>
-                  {item.audioSrc && <audio controls src={item.audioSrc} className="w-full h-7" />}
-                </div>
+                <button
+                  key={ar.value}
+                  id={`aspect-ratio-${ar.value.replace(":", "-")}`}
+                  onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
+                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                    isActive
+                      ? "border-blue-400 bg-blue-50 text-blue-600"
+                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                  }`}
+                >
+                  <span className="text-base">{isPortrait ? "📱" : "🖥"}</span>
+                  {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
+                </button>
               );
             })}
           </div>
-        )}
-      </div>
-
-      {/* Info bar */}
-      {totalCount > 0 && (
-        <div className="mx-3 mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-indigo-900 bg-opacity-20 border border-indigo-500 border-opacity-20">
-          <span className="text-12">ℹ️</span>
-          <span className="text-11 text-blue-300">
-            {totalCount} {t("Prompt")} · {doneCount} {t("xong")} · {totalCount - doneCount}{" "}
-            {t("còn lại")}
-          </span>
         </div>
-      )}
+
+        {/* CHỦ ĐỀ / DANH MỤC */}
+        <div>
+          <SectionLabel text={t("Chủ đề / Danh mục")} />
+          <div className="relative">
+            <NativeSelect
+              id="category-select"
+              value={category || CATEGORY_OPTIONS[0].value}
+              onChange={(v) => setCategory && setCategory(v)}
+              options={CATEGORY_OPTIONS}
+            />
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
+              ▾
+            </div>
+          </div>
+        </div>
+
+        {/* TÍNH CÁCH CHUNG / TONE */}
+        <div>
+          <SectionLabel text={t("Tính cách chung / Tone")} />
+          <div className="relative">
+            <NativeSelect
+              id="tone-select"
+              value={tone || TONE_OPTIONS[0].value}
+              onChange={(v) => setTone && setTone(v)}
+              options={TONE_OPTIONS}
+            />
+            <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
+              ▾
+            </div>
+          </div>
+        </div>
+
+        {/* NHÂN HOÁ ĐỒ VẬT */}
+        <div>
+          <SectionLabel text={t("Nhân hoá đồ vật")} />
+          <TextInput
+            id="prop-item-input"
+            value={propItem || ""}
+            onChange={(v) => setPropItem && setPropItem(v)}
+            placeholder={t("VD: Một quả chuối tươi")}
+          />
+        </div>
+
+        {/* NỘI DUNG MẸO */}
+        <div>
+          <SectionLabel text={t("Nội dung mẹo")} />
+          <TextInput
+            id="tip-content-input"
+            value={tipContent || ""}
+            onChange={(v) => setTipContent && setTipContent(v)}
+            placeholder={t("VD: Cách ăn chuối tốt nhất")}
+          />
+        </div>
+
+        {/* Mẹo nhỏ section */}
+        <div className="mt-2 p-3 rounded-xl bg-amber-50 border border-amber-100">
+          <div className="flex items-center gap-1 mb-2">
+            <RiLightbulbLine className="text-amber-500 text-sm" />
+            <span className="text-xs font-bold text-amber-700">{t("Mẹo nhỏ")}</span>
+          </div>
+          <ul className="space-y-1">
+            <li className="text-xs text-amber-700 leading-relaxed">
+              • {t("Chủ đề Cốt Truyện: Hãy nhập chi tiết bối cảnh để AI tạo drama hay hơn (VD: Mẹ chồng khó tính, Sắp hết ăm...)")}.
+            </li>
+            <li className="text-xs text-amber-700 leading-relaxed">
+              • {t("Chọn \"Mẹo Vật Cuộc Sống\" cho các tip đon đẹp.")}.
+            </li>
+            <li className="text-xs text-amber-700 leading-relaxed">
+              • {t("Visual Prompt luôn là Tiếng Anh để tối ưu cho AI về ảnh.")}.
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   );
 };

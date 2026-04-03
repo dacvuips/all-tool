@@ -1,25 +1,19 @@
+/**
+ * text-to-video-tab.tsx
+ * Sidebar layout: Config form + Submit button, light theme
+ */
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
 export const TextToVideoTab = () => {
   return (
-    <div>
-      {/* ══ 2-column layout ══ */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* ══ LEFT SIDEBAR ══ */}
-        <div
-          className="w-72 flex-shrink-0 flex flex-col border-r border-white border-opacity-8 overflow-hidden"
-          style={{ background: "#09091a", borderColor: "rgba(255,255,255,0.07)" }}
-        >
-          <div className="flex flex-col overflow-hidden">
-            {/* ── Top action bar ── */}
-            <AffiliateConfig />
-
-            {/* ── Bottom action bar ── */}
-            <AffiliateSubmit />
-          </div>
-        </div>
+    <div className="flex flex-col h-full overflow-hidden bg-white">
+      {/* Scrollable config area */}
+      <div className="flex-1 overflow-y-auto">
+        <AffiliateConfig />
       </div>
+      {/* Fixed submit at bottom */}
+      <AffiliateSubmit />
     </div>
   );
 };

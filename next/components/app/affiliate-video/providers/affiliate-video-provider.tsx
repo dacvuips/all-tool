@@ -1,6 +1,18 @@
 import { createContext, useCallback, useContext, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DEFAULT_VIDEO_CONFIG, MOCK_VIDEOS, PromptItem, VideoConfig } from "../constants";
+import {
+  CATEGORY_OPTIONS,
+  DEFAULT_VIDEO_CONFIG,
+  IMAGE_STYLES,
+  LANGUAGE_OPTIONS,
+  MOCK_SCRIPT,
+  MOCK_VIDEOS,
+  PromptItem,
+  ScriptData,
+  TONE_OPTIONS,
+  VideoConfig,
+} from "../constants";
+
 export const AffiliateVideoContext = createContext<
   Partial<{
     modeTab: ModeTab;
@@ -45,6 +57,28 @@ export const AffiliateVideoContext = createContext<
     displayItems: PromptItem[];
     genCount: number;
     histCount: number;
+    // ── Sidebar form state ──
+    inputMode: "prompt" | "image";
+    setInputMode: (mode: "prompt" | "image") => void;
+    imageStyle: string;
+    setImageStyle: (style: string) => void;
+    language: string;
+    setLanguage: (lang: string) => void;
+    category: string;
+    setCategory: (cat: string) => void;
+    tone: string;
+    setTone: (tone: string) => void;
+    propItem: string;
+    setPropItem: (prop: string) => void;
+    tipContent: string;
+    setTipContent: (tip: string) => void;
+    // ── Script data ──
+    scriptData: ScriptData | null;
+    setScriptData: (data: ScriptData | null) => void;
+    scriptTab: "script" | "batch";
+    setScriptTab: (tab: "script" | "batch") => void;
+    batchList: string[];
+    setBatchList: (list: string[]) => void;
   }>
 >({});
 
@@ -64,6 +98,21 @@ export function AffiliateVideoProvider(props) {
   const [showSettings, setShowSettings] = useState(false);
   const [zoomSrc, setZoomSrc] = useState<{ src: string; type: "image" | "video" } | null>(null);
   const stopRef = useRef(false);
+
+  // ── Sidebar form state ──
+  const [inputMode, setInputMode] = useState<"prompt" | "image">("prompt");
+  const [imageStyle, setImageStyle] = useState(IMAGE_STYLES[0].value);
+  const [language, setLanguage] = useState(LANGUAGE_OPTIONS[0].value);
+  const [category, setCategory] = useState(CATEGORY_OPTIONS[1].value);
+  const [tone, setTone] = useState(TONE_OPTIONS[3].value);
+  const [propItem, setPropItem] = useState("Một quả chuối tươi");
+  const [tipContent, setTipContent] = useState("Cách ăn chuối tốt nhất");
+
+  // ── Script / Batch state ──
+  const [scriptData, setScriptData] = useState<ScriptData | null>(MOCK_SCRIPT);
+  const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
+  const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
+
   const SpeedModeOptions: { label: string; value: SpeedMode }[] = [
     { label: t("Nhanh"), value: "fast" },
     { label: t("Thoải mái"), value: "relaxed" },
@@ -93,6 +142,7 @@ export function AffiliateVideoProvider(props) {
     { label: t("Trong video"), value: "in_video" },
     { label: t("Riêng biệt"), value: "separate" },
   ];
+
   const VideoCountOptions = [
     { label: "1", value: 1 },
     { label: "2", value: 2 },
@@ -102,6 +152,7 @@ export function AffiliateVideoProvider(props) {
     { label: "6", value: 6 },
     { label: "7", value: 7 },
   ];
+
   const totalCount = promptItems.length;
   const doneCount = promptItems.filter((i) => i.videoStatus === "done").length;
   const generatingItems = promptItems.filter((i) => i.videoStatus !== "done");
@@ -112,6 +163,7 @@ export function AffiliateVideoProvider(props) {
   const updateItem = useCallback((id: string, patch: Partial<PromptItem>) => {
     setPromptItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }, []);
+
   const useMock = totalCount === 0;
   const mockToPromptItem = (v: typeof MOCK_VIDEOS[number]): PromptItem => ({
     id: v.id,
@@ -120,6 +172,7 @@ export function AffiliateVideoProvider(props) {
     videoStatus: v.status === "done" ? "done" : "loading",
     audioStatus: "idle",
   });
+
   const displayItems: PromptItem[] =
     activeTab === "generating"
       ? useMock
@@ -128,6 +181,7 @@ export function AffiliateVideoProvider(props) {
       : useMock
       ? MOCK_VIDEOS.filter((v) => v.status === "done").map(mockToPromptItem)
       : historyItems;
+
   const genCount = useMock
     ? MOCK_VIDEOS.filter((v) => v.status === "generating").length
     : generatingItems.length;
@@ -180,6 +234,28 @@ export function AffiliateVideoProvider(props) {
         displayItems,
         genCount,
         histCount,
+        // sidebar form
+        inputMode,
+        setInputMode,
+        imageStyle,
+        setImageStyle,
+        language,
+        setLanguage,
+        category,
+        setCategory,
+        tone,
+        setTone,
+        propItem,
+        setPropItem,
+        tipContent,
+        setTipContent,
+        // script
+        scriptData,
+        setScriptData,
+        scriptTab,
+        setScriptTab,
+        batchList,
+        setBatchList,
       }}
     >
       {props.children}
