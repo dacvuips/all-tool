@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../../lib/providers/global-provider";
 import { credentialCustomerService } from "../../../lib/repo";
 import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
 import { Button, Textarea } from "../../shared/utilities/form";
@@ -16,6 +17,7 @@ import { SettingsModal, ZoomModal } from "./sibar/text-to-video-tab/text-to-vide
 export default function AffiliateVideo() {
   const { t } = useTranslation();
   const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
   const [showSettings, setShowSettings] = useState(false);
 
   /* ─── Credential state ─── */
@@ -229,7 +231,7 @@ export default function AffiliateVideo() {
         </div>
         <div className="flex-1" />
         <button
-          onClick={() => setShowSettings(true)}
+          onClick={() => (!customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true))}
           className={`flex items-center gap-1 px-3 py-1 rounded-lg text-12 font-semibold border-0 cursor-pointer transition-all ${
             credentialLoading
               ? "bg-indigo-900 bg-opacity-30 text-indigo-400"
