@@ -65,7 +65,7 @@ function PromptBlock({
         ) : (
           <p className="text-xs text-gray-600 leading-relaxed">
             {type === "image"
-              ? content.split(", ").map((part, i, arr) => {
+              ? content?.split(", ").map((part, i, arr) => {
                   const isKeyword = [
                     "Gender",
                     "Age",

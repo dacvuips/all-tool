@@ -63,11 +63,8 @@ export type OpStatus = "idle" | "loading" | "done" | "error";
 // ── Model Options ──────────────────────────────────────────────────────────
 
 export const ASPECT_RATIOS: { value: AspectRatio; label: string; icon: string }[] = [
-  { value: "16:9", label: "16:9 Landscape", icon: "🖥" },
   { value: "9:16", label: "9:16 Portrait", icon: "📱" },
-  { value: "1:1", label: "1:1 Square", icon: "⬜" },
-  { value: "4:3", label: "4:3 Standard", icon: "📺" },
-  { value: "3:4", label: "3:4 Portrait", icon: "📄" },
+  { value: "16:9", label: "16:9 Landscape", icon: "🖥" },
 ];
 
 // ── Duration Options (seconds) ─────────────────────────────────────────────
@@ -83,40 +80,6 @@ export const BUILTIN_VOICES = [
   { value: "Orus", label: "Orus – Nam, điềm tĩnh" },
   { value: "Puck", label: "Puck – Nam, thú vị" },
   { value: "Zephyr", label: "Zephyr – Nam, sáng sủa" },
-];
-
-// ── Style Reference Gallery ────────────────────────────────────────────────
-export const STYLE_GALLERY = [
-  {
-    url: "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=220&q=75&fit=crop",
-    label: "Cinematic",
-    prompt: "Cinematic film style, dramatic lighting, professional movie color grading",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1518770660439-4636190af475?w=220&q=75&fit=crop",
-    label: "Sci-Fi",
-    prompt: "Futuristic sci-fi aesthetic, clean holographic tech look, cool blue tones",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=220&q=75&fit=crop",
-    label: "Vintage",
-    prompt: "Vintage 35mm film look, warm grain texture, retro color palette",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1634017839464-5c339ebe3cb4?w=220&q=75&fit=crop",
-    label: "Neon Noir",
-    prompt: "Dark neon-noir cyberpunk atmosphere, rain-slicked streets, vivid neon lights",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=220&q=75&fit=crop",
-    label: "Portrait",
-    prompt: "Soft portrait photography, studio bokeh, warm skin tones",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=220&q=75&fit=crop",
-    label: "Nature",
-    prompt: "Breathtaking nature photography, golden hour light, vivid landscape",
-  },
 ];
 
 export const IMAGE_STYLES = [
@@ -253,132 +216,14 @@ export interface ScriptData {
   scenes: SceneScript[];
 }
 
-/* ── Example JSON shape (for reference) ────────────────────────────────────
-{
-    "topicTitle": "Cách ăn chuối tốt nhất",
-    "artStyle": "Hoạt hình 3D phong cách Pixar, tươi sáng và rực rỡ",
-    "environment": "Một căn bếp hiện đại, sáng sủa với ánh nắng tự nhiên chiếu vào",
-    "characterName": "Chuối Vàng",
-    "characterBaseDescription": "...",
-    "voiceGender": "Nam",
-    "voiceTone": "Vui vẻ, thân thiện",
-    "voiceStyle": "Hoạt bát, năng động",
-    "scenes": [
-        {
-            "sceneNumber": 1,
-            "camera": "close-up",
-            "visualPrompt": "A close-up shot on an anthropomorphic, cheerful 3D Pixar style banana named Chuối Vàng, standing confidently on a clean kitchen counter. The background is a bright, slightly blurred modern kitchen. The banana has expressive eyes, a wide smile, and small, animated arms and legs. Shot for 9:16 aspect ratio.",
-            "imagePrompt": "A vibrant, highly detailed 3D Pixar animation of a fresh, anthropomorphic banana character, \"Chuối Vàng\", with large expressive eyes, a friendly wide smile, and small, jointed limbs. He stands on a polished kitchen counter, casting a soft shadow. The background is a sunlit, modern kitchen interior, with warm tones.",
-            "motionPrompt": "Chuối Vàng bounces slightly with excitement, waving one hand. His facial expression is animated, showing eagerness as he gestures to the viewer. His body language is inviting and full of positive energy. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-            "dialogue": "Chào các bạn! Mình là Chuối Vàng đây! Hôm nay, mình sẽ bật mí một bí mật nhỏ nhưng cực kỳ quan trọng: đó là cách ăn chuối ngon nhất, đúng chuẩn nhất để tận hưởng trọn vẹn hương vị và dinh dưỡng!"
-        },
-        {
-            "sceneNumber": 2,
-            "camera": "medium shot",
-            "visualPrompt": "Medium shot of Chuối Vàng demonstrating how to peel a banana. He holds a second, identical banana (not anthropomorphic) with his animated hands, showing the \"bottom-up\" peeling method. His expression is focused and didactic but still cheerful. Kitchen counter background. 9:16 aspect ratio.",
-            "imagePrompt": "A cheerful 3D Pixar anthropomorphic banana, \"Chuối Vàng\", demonstrating the peeling of a regular banana. He holds the banana firmly, peeling it from the non-stem end (the bottom) with his animated hands. His expression is helpful and confident. The setting is a bright, clean kitchen counter.",
-            "motionPrompt": "Chuối Vàng slowly and deliberately peels the banana from the bottom, showing the technique with clear hand gestures. He looks at the camera, then down at the banana, emphasizing the motion. His eyes twinkle, and he nods subtly as if to confirm the right way. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-            "dialogue": "Thường thì chúng ta hay bóc từ cuống đúng không? Nhưng bí quyết là hãy bóc từ 'đít' chuối, hay còn gọi là phần cuối của quả. Các bạn thấy không? Cách này không chỉ giúp chuối không bị nát mà còn dễ bóc hơn nhiều đấy!"
-        },
-        {
-            "sceneNumber": 3,
-            "camera": "close-up",
-            "visualPrompt": "Close-up on Chuối Vàng holding up a perfectly ripe banana (not anthropomorphic) to the camera. His face expresses satisfaction and delight. The banana has a few tiny brown spots, indicating ripeness. Bright kitchen background. 9:16 aspect ratio.",
-            "imagePrompt": "A joyful 3D Pixar anthropomorphic banana, \"Chuối Vàng\", proudly presenting a ripe banana. The banana he holds has a vibrant yellow color with a few natural brown speckles, signaling its optimal ripeness. His facial expression is one of pure happiness and contentment.",
-            "motionPrompt": "Chuối Vàng gently holds the ripe banana, turning it slightly to show its perfect condition. He smiles broadly and nods encouragingly to the camera, his eyes sparkling. He might give a little \"thumbs up\" with his tiny hand. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-            "dialogue": "Và nhớ nhé, hãy chọn những quả chuối chín vàng, có lấm tấm vài chấm nâu nhỏ. Đó là lúc chuối ngọt nhất, thơm nhất và dễ tiêu hóa nhất. Ăn chuối chín không chỉ ngon mà còn tốt cho sức khỏe nữa!"
-        },
-        {
-            "sceneNumber": 4,
-            "camera": "medium shot",
-            "visualPrompt": "Medium shot of Chuối Vàng happily taking a bite out of the peeled, ripe banana. He chews with visible enjoyment, perhaps closing his eyes momentarily in bliss. A slight messiness around his mouth, adding to the fun. 9:16 aspect ratio.",
-            "imagePrompt": "A delightful 3D Pixar anthropomorphic banana, \"Chuối Vàng\", joyfully taking a large bite out of a perfectly peeled and ripe banana. His eyes are wide with pleasure, and a satisfied smile is on his face, indicating pure enjoyment of the delicious fruit.",
-            "motionPrompt": "Chuối Vàng takes a big, enthusiastic bite of the banana. His cheeks puff out slightly as he chews with gusto, making happy, exaggerated facial expressions. He might hum a little tune of satisfaction while eating. His small hands hold the banana firmly. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-            "dialogue": "Ngọt lịm, thơm lừng... thật không gì sánh bằng! Và đừng bỏ lỡ phần đầu nhọn nhỏ xíu ở cuối quả nhé, đó là một phần của chuối và hoàn toàn ăn được. Tận hưởng trọn vẹn từng miếng, từng chút một!"
-        },
-        {
-            "sceneNumber": 5,
-            "camera": "full shot",
-            "visualPrompt": "Full shot of Chuối Vàng striking a confident, friendly pose, perhaps with arms akimbo or giving a thumbs-up. He winks at the camera. The background is a cheerful, slightly deeper focus on the kitchen environment. 9:16 aspect ratio.",
-            "imagePrompt": "A charming 3D Pixar anthropomorphic banana, \"Chuối Vàng\", giving a cheerful thumbs-up to the viewer. He stands tall with a confident, happy expression and a friendly wink. The bright, inviting kitchen background is now in sharper focus, showcasing a pleasant home environment.",
-            "motionPrompt": "Chuối Vàng gives a final, energetic thumbs-up or a triumphant gesture. He winks playfully at the camera, his body swaying slightly with good humor. He maintains a wide, confident smile, exuding positivity. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-            "dialogue": "Đó! Giờ thì các bạn đã biết cách ăn chuối 'chuẩn không cần chỉnh' rồi đấy! Hãy cùng mình thưởng thức những quả chuối thơm ngon và sống thật vui vẻ mỗi ngày nhé! Tạm biệt và hẹn gặp lại!"
-        }
-    ]
-}
-─────────────────────────────────────────────────────────────────────────── */
-
-// ── Mock Script Data ───────────────────────────────────────────────────────
-export const MOCK_SCRIPT: ScriptData = {
-  topicTitle: "Cách ăn chuối tốt nhất",
-  artStyle: "Hoạt hình 3D phong cách Pixar, tươi sáng và rực rỡ",
-  environment: "Một căn bếp hiện đại, sáng sủa với ánh nắng tự nhiên chiếu vào",
-  characterName: "Chuối Vàng",
-  characterBaseDescription:
-    "Một quả chuối tươi, được nhân hóa với đôi mắt to tròn, biểu cảm linh hoạt, miệng cười rạng rỡ, và đôi tay, đôi chân nhỏ nhắn đáng yêu. Phong cách hoạt hình 3D của Pixar, với bề mặt mịn màng, màu vàng tươi và một chút xanh ở cuống.",
-  voiceGender: "Nam",
-  voiceTone: "Vui vẻ, thân thiện",
-  voiceStyle: "Hoạt bát, năng động",
-  scenes: [
-    {
-      sceneNumber: 1,
-      camera: "close-up",
-      visualPrompt:
-        "A close-up shot on an anthropomorphic, cheerful 3D Pixar style banana named Chuối Vàng, standing confidently on a clean kitchen counter. The background is a bright, slightly blurred modern kitchen. The banana has expressive eyes, a wide smile, and small, animated arms and legs. Shot for 9:16 aspect ratio.",
-      imagePrompt:
-        'A vibrant, highly detailed 3D Pixar animation of a fresh, anthropomorphic banana character, "Chuối Vàng", with large expressive eyes, a friendly wide smile, and small, jointed limbs. He stands on a polished kitchen counter, casting a soft shadow. The background is a sunlit, modern kitchen interior, with warm tones.',
-      motionPrompt:
-        "Chuối Vàng bounces slightly with excitement, waving one hand. His facial expression is animated, showing eagerness as he gestures to the viewer. His body language is inviting and full of positive energy. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-      dialogue:
-        "Chào các bạn! Mình là Chuối Vàng đây! Hôm nay, mình sẽ bật mí một bí mật nhỏ nhưng cực kỳ quan trọng: đó là cách ăn chuối ngon nhất, đúng chuẩn nhất để tận hưởng trọn vẹn hương vị và dinh dưỡng!",
-    },
-    {
-      sceneNumber: 2,
-      camera: "medium shot",
-      visualPrompt:
-        'Medium shot of Chuối Vàng demonstrating how to peel a banana. He holds a second, identical banana (not anthropomorphic) with his animated hands, showing the "bottom-up" peeling method. His expression is focused and didactic but still cheerful. Kitchen counter background. 9:16 aspect ratio.',
-      imagePrompt:
-        'A cheerful 3D Pixar anthropomorphic banana, "Chuối Vàng", demonstrating the peeling of a regular banana. He holds the banana firmly, peeling it from the non-stem end (the bottom) with his animated hands. His expression is helpful and confident. The setting is a bright, clean kitchen counter.',
-      motionPrompt:
-        "Chuối Vàng slowly and deliberately peels the banana from the bottom, showing the technique with clear hand gestures. He looks at the camera, then down at the banana, emphasizing the motion. His eyes twinkle, and he nods subtly as if to confirm the right way. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-      dialogue:
-        "Thường thì chúng ta hay bóc từ cuống đúng không? Nhưng bí quyết là hãy bóc từ 'đít' chuối, hay còn gọi là phần cuối của quả. Các bạn thấy không? Cách này không chỉ giúp chuối không bị nát mà còn dễ bóc hơn nhiều đấy!",
-    },
-    {
-      sceneNumber: 3,
-      camera: "close-up",
-      visualPrompt:
-        "Close-up on Chuối Vàng holding up a perfectly ripe banana (not anthropomorphic) to the camera. His face expresses satisfaction and delight. The banana has a few tiny brown spots, indicating ripeness. Bright kitchen background. 9:16 aspect ratio.",
-      imagePrompt:
-        'A joyful 3D Pixar anthropomorphic banana, "Chuối Vàng", proudly presenting a ripe banana. The banana he holds has a vibrant yellow color with a few natural brown speckles, signaling its optimal ripeness. His facial expression is one of pure happiness and contentment.',
-      motionPrompt:
-        'Chuối Vàng gently holds the ripe banana, turning it slightly to show its perfect condition. He smiles broadly and nods encouragingly to the camera, his eyes sparkling. He might give a little "thumbs up" with his tiny hand. Smooth, fluid Pixar-style character animation, optimized for 9:16.',
-      dialogue:
-        "Và nhớ nhé, hãy chọn những quả chuối chín vàng, có lấm tấm vài chấm nâu nhỏ. Đó là lúc chuối ngọt nhất, thơm nhất và dễ tiêu hóa nhất. Ăn chuối chín không chỉ ngon mà còn tốt cho sức khỏe nữa!",
-    },
-    {
-      sceneNumber: 4,
-      camera: "medium shot",
-      visualPrompt:
-        "Medium shot of Chuối Vàng happily taking a bite out of the peeled, ripe banana. He chews with visible enjoyment, perhaps closing his eyes momentarily in bliss. A slight messiness around his mouth, adding to the fun. 9:16 aspect ratio.",
-      imagePrompt:
-        'A delightful 3D Pixar anthropomorphic banana, "Chuối Vàng", joyfully taking a large bite out of a perfectly peeled and ripe banana. His eyes are wide with pleasure, and a satisfied smile is on his face, indicating pure enjoyment of the delicious fruit.',
-      motionPrompt:
-        "Chuối Vàng takes a big, enthusiastic bite of the banana. His cheeks puff out slightly as he chews with gusto, making happy, exaggerated facial expressions. He might hum a little tune of satisfaction while eating. His small hands hold the banana firmly. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-      dialogue:
-        "Ngọt lịm, thơm lừng... thật không gì sánh bằng! Và đừng bỏ lỡ phần đầu nhọn nhỏ xíu ở cuối quả nhé, đó là một phần của chuối và hoàn toàn ăn được. Tận hưởng trọn vẹn từng miếng, từng chút một!",
-    },
-    {
-      sceneNumber: 5,
-      camera: "full shot",
-      visualPrompt:
-        "Full shot of Chuối Vàng striking a confident, friendly pose, perhaps with arms akimbo or giving a thumbs-up. He winks at the camera. The background is a cheerful, slightly deeper focus on the kitchen environment. 9:16 aspect ratio.",
-      imagePrompt:
-        'A charming 3D Pixar anthropomorphic banana, "Chuối Vàng", giving a cheerful thumbs-up to the viewer. He stands tall with a confident, happy expression and a friendly wink. The bright, inviting kitchen background is now in sharper focus, showcasing a pleasant home environment.',
-      motionPrompt:
-        "Chuối Vàng gives a final, energetic thumbs-up or a triumphant gesture. He winks playfully at the camera, his body swaying slightly with good humor. He maintains a wide, confident smile, exuding positivity. Smooth, fluid Pixar-style character animation, optimized for 9:16.",
-      dialogue:
-        "Đó! Giờ thì các bạn đã biết cách ăn chuối 'chuẩn không cần chỉnh' rồi đấy! Hãy cùng mình thưởng thức những quả chuối thơm ngon và sống thật vui vẻ mỗi ngày nhé! Tạm biệt và hẹn gặp lại!",
-    },
-  ],
+export const DB_NAME = {
+  generateScene: "generate-scene",
+  generateScript: "generate-script",
+  generateVideo: "generate-video",
+  generateVoice: "generate-voice",
+  generateImage: "generate-image",
 };
+export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
+export const DB_VERSION = 1;
+
+export const SCRIPT_CACHE_KEY = "lastScript";

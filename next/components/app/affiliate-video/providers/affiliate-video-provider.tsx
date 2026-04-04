@@ -1,13 +1,18 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   ART_STYLE_OPTIONS,
   CATEGORY_OPTIONS,
+  DB_NAME,
   LANGUAGE_OPTIONS,
+  SCRIPT_CACHE_KEY,
   ScriptData,
 } from "../constants";
+import { useIndexedDB } from "../hook/useIndexedDB";
+
+/** Key used to persist the last generated script in IndexedDB */
 
 export const AffiliateVideoContext = createContext<
   Partial<{
@@ -70,6 +75,9 @@ export function AffiliateVideoProvider(props) {
   const [searchQuery, setSearchQuery] = useState("");
   const stopRef = useRef(false);
 
+  // ── IndexedDB – shared cache for AI results ──
+  const scriptDB = useIndexedDB<ScriptData>("affiliate-video-scripts", DB_NAME.generateScene);
+
   // ── Script / Batch state ──
   const [scriptData, setScriptData] = useState<ScriptData | null>(null);
   const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
@@ -128,28 +136,60 @@ export function AffiliateVideoProvider(props) {
   const [affiliateVideoFormConfig, setAffiliateVideoFormConfig] =
     useState<AffiliateVideoFormConfig>(defaultVideoConfig);
 
+  // ── On mount: restore last cached script from IndexedDB ──
+  useEffect(() => {
+    getSceneList();
+  }, []);
+
+  const getSceneList = async () => {
+    try {
+      const cached = await scriptDB.get(SCRIPT_CACHE_KEY);
+      if (cached) {
+        setScriptData(cached);
+      }
+    } catch (err) {
+      console.warn("[affiliate-video] IndexedDB read error", err);
+    }
+  };
+
   const handleSubmit = async (data: AffiliateVideoFormConfig, promptText?: string) => {
     try {
+      setBatchRunning(true);
       const res = await fetch("/api/app/generation-scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          config: data,
-        }),
+        body: JSON.stringify({ config: data }),
       });
-      setBatchRunning(true);
+
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err?.message || `Lỗi ${res.status}`);
+        setBatchRunning(false);
+        return;
       }
+
       const result = await res.json();
-      setScriptData(result.data);
+      const scriptResult: ScriptData = result.data;
+
+      // Update UI state
+      setScriptData(scriptResult);
+
+      // Persist to IndexedDB (non-blocking)
+      scriptDB
+        .set(SCRIPT_CACHE_KEY, scriptResult)
+        .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
+      setBatchRunning(false);
       console.log("[affiliate-video] submit success", result);
       return result;
     } catch (err: any) {
       console.error("[affiliate-video] submit error", err?.message);
+      setBatchRunning(false);
       throw err;
     }
+  };
+
+  const patchConfig = (partial: Partial<AffiliateVideoFormConfig>) => {
+    setAffiliateVideoFormConfig((prev) => ({ ...prev, ...partial }));
   };
 
   return (
@@ -177,6 +217,11 @@ export function AffiliateVideoProvider(props) {
         affiliateVideoFormConfig,
         setAffiliateVideoFormConfig,
         defaultVideoConfig,
+        batchRunning,
+
+        // aliases used by AffiliateConfig
+        videoConfig: affiliateVideoFormConfig,
+        patchConfig,
       }}
     >
       {props.children}

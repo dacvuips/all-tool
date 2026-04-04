@@ -1,4 +1,4 @@
-export const AffiliateVideoR  esponseSchema = {
+export const AffiliateVideoResponseSchema = {
   $schema: "http://json-schema.org/draft-07/schema#",
   title: "AffiliateVideoSchema",
   type: "object",

@@ -23,9 +23,6 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
-
-  const aspectRatios = ASPECT_RATIOS.slice(0, 2); // 16:9 and 9:16
-
   return (
     <div className="flex-1 overflow-y-auto bg-white">
       {/* ── Header: Tạo Nhân Vật ── */}
@@ -41,7 +38,7 @@ export const AffiliateConfig = () => {
           className="flex items-center gap-1 px-3 py-1 rounded-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors cursor-pointer border-0"
         >
           <RiMagicFill className="text-xs" />
-          {t("Gợi ý ngẫu nhiên")}
+          {t("Gợi ý")}
         </button>
       </div>
 
@@ -80,25 +77,11 @@ export const AffiliateConfig = () => {
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
-        {/* ART STYLE */}
-        <div>
-          <Field name="artStyle" label={t("Phong cách hình ảnh")}>
-            <Select id="art-style-select" native options={ART_STYLE_OPTIONS} />
-          </Field>
-        </div>
-
-        {/* NGÔN NGỮ LỜI THOẠI */}
-        <div>
-          <Field name="language" label={t("Ngôn ngữ lời thoại")}>
-            <Select id="language-select" native options={LANGUAGE_OPTIONS} />
-          </Field>
-        </div>
-
         {/* TỈ LỆ KHUNG HÌNH */}
         <div>
           <Field name="aspectRatio" label={t("Tỉ lệ khung hình")}>
             <div className="grid grid-cols-2 gap-2">
-              {aspectRatios.map((ar) => {
+              {ASPECT_RATIOS.map((ar) => {
                 const isPortrait = ar.value === "9:16";
                 const isActive = videoConfig?.aspectRatio === ar.value;
                 return (
@@ -118,6 +101,19 @@ export const AffiliateConfig = () => {
                 );
               })}
             </div>
+          </Field>
+        </div>
+        {/* ART STYLE */}
+        <div>
+          <Field name="artStyle" label={t("Phong cách hình ảnh")}>
+            <Select id="art-style-select" native options={ART_STYLE_OPTIONS} />
+          </Field>
+        </div>
+
+        {/* NGÔN NGỮ LỜI THOẠI */}
+        <div>
+          <Field name="language" label={t("Ngôn ngữ lời thoại")}>
+            <Select id="language-select" native options={LANGUAGE_OPTIONS} />
           </Field>
         </div>
 
