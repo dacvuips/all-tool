@@ -42,7 +42,7 @@ function PromptBlock({
   };
 
   return (
-    <div className="rounded-xl border border-gray-100 overflow-hidden">
+    <div className={`rounded-xl border border-gray-200 overflow-hidden`}>
       {/* Block header */}
       <div className={`flex items-center justify-between px-3 py-2 ${headerColor}`}>
         <div className="flex items-center gap-1.5">
@@ -60,7 +60,7 @@ function PromptBlock({
 
       {/* Block content */}
       <div className="px-3 py-3 bg-white">
-        {type === "dialogue" || type === "visualPrompt" ? (
+        {type === "dialogue" ? (
           <p className="text-sm text-gray-700 leading-relaxed italic">{content}</p>
         ) : (
           <p className="text-xs text-gray-600 leading-relaxed">
@@ -125,24 +125,17 @@ export function SceneCard({ scene }: SceneCardProps) {
             ● {scene.cameraShot}
           </span>
         </div>
-        <button
-          onClick={handleCopyDialogue}
-          className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 cursor-pointer border-0 bg-transparent transition-colors"
-        >
-          <RiFileCopyLine className="text-xs" />
-          {copiedDialogue ? "✓ Đã copy" : "Copy Lời Thoại"}
-        </button>
       </div>
 
       {/* Prompt blocks */}
-      <div className="p-3 space-y-3">
+      <div className="p-3 space-y-3 ">
         {/* VISUAL PROMPT */}
         <PromptBlock
           type="visualPrompt"
           label="VISUAL PROMPT"
           content={scene.visualPrompt}
-          icon={<RiImageFill className="text-orange-500 text-xs" />}
-          headerColor="bg-orange-50 text-orange-700"
+          icon={<RiImageFill className="text-orange-500 text-xs " />}
+          headerColor="bg-warning-light text-warning-dark"
         />
         {/* IMAGE GEN PROMPT */}
         <PromptBlock
@@ -150,7 +143,7 @@ export function SceneCard({ scene }: SceneCardProps) {
           label="IMAGE GEN PROMPT (STATIC)"
           content={scene.imageGenPrompt}
           icon={<RiImageFill className="text-orange-500 text-xs" />}
-          headerColor="bg-orange-50 text-orange-700"
+          headerColor="bg-info-light text-info-dark"
         />
 
         {/* MOTION PROMPT */}
@@ -159,7 +152,7 @@ export function SceneCard({ scene }: SceneCardProps) {
           label="MOTION PROMPT (VIDEO GEN)"
           content={scene.motionPrompt}
           icon={<RiVideoFill className="text-teal-500 text-xs" />}
-          headerColor="bg-teal-50 text-teal-700"
+          headerColor="bg-pink-100 text-pink-700"
         />
 
         {/* DIALOGUE */}

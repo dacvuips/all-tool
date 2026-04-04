@@ -37,18 +37,18 @@ function AudioVoicePanel({
 
   return (
     <div className="h-full">
-      <div className="flex items-center gap-1.5 mb-2">
-        <RiMusicFill className="text-pink-400 text-sm" />
-        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-          AUDIO & VOICE CONFIG
-        </span>
+      <div className="flex items-center gap-1.5 mb-2 text-pink-400">
+        <RiMusicFill className=" text-sm" />
+        <span className="text-xs font-bold   uppercase tracking-wide">AUDIO & VOICE CONFIG</span>
       </div>
       {/* Tags */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {[audioConfig?.gender, audioConfig?.mood, audioConfig?.style].map((tag) => (
           <span
             key={tag}
-            className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getTagColor(tag)}`}
+            className={`text-xs font-semibold px-2.5 py-1 rounded-full border text-yellow-600 bg-yellow-50 ${getTagColor(
+              tag
+            )}`}
           >
             {tag === audioConfig?.gender && "♀ "}
             {tag === audioConfig?.mood && "⚡ "}
@@ -58,7 +58,7 @@ function AudioVoicePanel({
         ))}
       </div>
       {/* Full prompt label */}
-      <div className="text-xs font-semibold text-gray-500 mb-1">Full Audio Prompt</div>
+      <div className="text-xs font-semibold  mb-1">Full Audio Prompt</div>
       <p className="text-xs text-gray-600 leading-relaxed mb-2">{audioConfig?.fullPrompt}</p>
       {/* Copy button */}
       <button
@@ -80,17 +80,15 @@ function EnvironmentPanel({
 }) {
   return (
     <div className="h-full">
-      <div className="flex items-center gap-1.5 mb-2">
-        <RiScissorsLine className="text-blue-400 text-sm" />
-        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
-          ENVIRONMENT & STYLE
-        </span>
+      <div className="flex items-center gap-1.5 mb-2 text-blue-400">
+        <RiScissorsLine className="t text-sm" />
+        <span className="text-xs font-bold  uppercase tracking-wide">ENVIRONMENT & STYLE</span>
       </div>
-      <div className="text-xs text-gray-500 font-medium mb-1">Environment (Bối cảnh)</div>
+      <div className="text-xs font-semibold mb-1">Environment (Bối cảnh)</div>
       <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-5">
         {environment.environment}
       </p>
-      <div className="text-xs text-gray-500 font-medium mb-1">Art Style (3D CGI)</div>
+      <div className="text-xs font-semibold mb-1">Art Style (3D CGI)</div>
       <p className="text-xs text-gray-400 leading-relaxed line-clamp-2 italic">
         {environment.artStyle}
       </p>
@@ -137,7 +135,7 @@ export const AffiliateVideoRightPanel = () => {
       </div>
 
       {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto v-scrollbar  ">
         {scriptTab === "batch" ? (
           <BatchListPanel
             scenes={(scriptData?.scenes || []).map((s, i) => ({

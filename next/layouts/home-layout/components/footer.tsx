@@ -12,7 +12,7 @@ export function Footer({ className, ...props }: ReactProps) {
   const [openEmail, setOpenEmail] = useState<boolean>(false);
   if (!screenLg)
     return (
-      <footer className={`w-full text-accent mt-14 ${className}`}>
+      <footer className={`w-full text-accent mt-5 ${className}`}>
         <div className="border-t-4 border-primary"></div>
         <div className="pt-2 pb-4 bg-white">
           <div className="mx-4 ">
@@ -64,7 +64,7 @@ export function Footer({ className, ...props }: ReactProps) {
 
   return (
     <>
-      <footer className={`w-full text-accent mt-14 ${className}`}>
+      <footer className={`w-full text-accent mt-5 ${className}`}>
         <div className="border-t-4 border-primary "></div>
         <div className="pt-2 pb-4 bg-white ">
           <div className="main-container ">

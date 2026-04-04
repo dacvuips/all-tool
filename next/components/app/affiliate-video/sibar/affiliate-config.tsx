@@ -5,7 +5,6 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiMagicFill } from "react-icons/ri";
 import { Button, Field } from "../../../shared/utilities/form";
 import { Input } from "../../../shared/utilities/form/input";
 import { Select } from "../../../shared/utilities/form/select";
@@ -24,28 +23,11 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
   return (
-    <div className="flex-1 overflow-y-auto bg-white">
-      {/* ── Header: Tạo Nhân Vật ── */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-            <RiCameraLensFill className="text-white text-base" />
-          </div>
-          <span className="text-base font-bold text-gray-800">{t("Tạo Nhân Vật")}</span>
-        </div>
-        <button
-          onClick={() => setShowAiModal && setShowAiModal(true)}
-          className="flex items-center gap-1 px-3 py-1 rounded-full bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold transition-colors cursor-pointer border-0"
-        >
-          <RiMagicFill className="text-xs" />
-          {t("Gợi ý")}
-        </button>
-      </div>
-
+    <div className="flex-1 bg-white">
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
-      <div className="px-4 pt-3 pb-2">
+      {/* <div className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
-          {/* <button
+          <button
             onClick={() => setStoryModeType && setStoryModeType("prompt_to_video")}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
               storyModeType === "prompt_to_video"
@@ -70,16 +52,16 @@ export const AffiliateConfig = () => {
               className={storyModeType === "image_to_video" ? "text-pink-500" : "text-gray-400"}
             />
             {t("Image to Video")}
-          </button> */}
+          </button>
         </div>
-      </div>
+      </div> */}
 
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
         {/* TỈ LỆ KHUNG HÌNH */}
         <div>
-          <Field name="aspectRatio" label={t("Tỉ lệ khung hình")}>
+          <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
             <div className="grid grid-cols-2 gap-2">
               {ASPECT_RATIOS.map((ar) => {
                 const isPortrait = ar.value === "9:16";
@@ -105,52 +87,76 @@ export const AffiliateConfig = () => {
         </div>
         {/* ART STYLE */}
         <div>
-          <Field name="artStyle" label={t("Phong cách hình ảnh")}>
-            <Select id="art-style-select" native options={ART_STYLE_OPTIONS} />
+          <Field noError name="artStyle" label={t("Phong cách hình ảnh")}>
+            <Select
+              native
+              id="art-style-select"
+              className="border-gray-200"
+              options={ART_STYLE_OPTIONS}
+            />
           </Field>
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}
         <div>
-          <Field name="language" label={t("Ngôn ngữ lời thoại")}>
-            <Select id="language-select" native options={LANGUAGE_OPTIONS} />
+          <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
+            <Select
+              native
+              id="language-select"
+              className="border-gray-200"
+              options={LANGUAGE_OPTIONS}
+            />
           </Field>
         </div>
 
         {/* CHỦ ĐỀ / DANH MỤC */}
         <div>
-          <Field name="category" label={t("Chủ đề / Danh mục")}>
-            <Select id="category-select" native options={CATEGORY_OPTIONS} />
+          <Field noError name="category" label={t("Chủ đề / Danh mục")}>
+            <Select
+              native
+              id="category-select"
+              className="border-gray-200"
+              options={CATEGORY_OPTIONS}
+            />
           </Field>
         </div>
 
         {/* MOOD / TÍNH CÁCH */}
         <div>
-          <Field name="mood" label={t("Tính cách / Mood")}>
-            <Select id="mood-select" native options={MOOD_OPTIONS} />
+          <Field noError name="mood" label={t("Tính cách / Mood")}>
+            <Select native id="mood-select" className="border-gray-200" options={MOOD_OPTIONS} />
           </Field>
         </div>
 
         {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
         <div>
-          <Field name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
-            <Input id="object-to-personify-input" placeholder={t("VD: Một quả chuối tươi")} />
+          <Field noError name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
+            <Input
+              id="object-to-personify-input"
+              className="border-gray-200"
+              placeholder={t("VD: Một quả chuối tươi")}
+            />
           </Field>
         </div>
 
         {/* NỘI DUNG MẸO (tipContent) */}
         <div>
-          <Field name="tipContent" label={t("Nội dung mẹo")}>
-            <Input id="tip-content-input" placeholder={t("VD: Cách ăn chuối tốt nhất")} />
+          <Field noError name="tipContent" label={t("Nội dung mẹo")}>
+            <Input
+              id="tip-content-input"
+              className="border-gray-200"
+              placeholder={t("VD: Cách ăn chuối tốt nhất")}
+            />
           </Field>
         </div>
 
         {/* SỐ LƯỢNG VIDEO (batchSize) */}
         <div>
-          <Field name="batchSize" label={t("Số lượng video")}>
+          <Field noError name="batchSize" label={t("Số lượng video")}>
             <Select
-              id="batch-size-select"
               native
+              id="batch-size-select"
+              className="border-gray-200"
               options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
               value={String(videoConfig?.batchSize ?? 1)}
               onChange={(v) => patchConfig && patchConfig({ batchSize: Number(v) })}

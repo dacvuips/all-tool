@@ -291,7 +291,7 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
       >
         <button
           onClick={() => setShowModal(true)}
-          className="w-6 h-6 rounded-full bg-teal-500 hover:bg-teal-600 border-2 border-white text-white flex items-center justify-center cursor-pointer shadow-md transition-all hover:scale-110 z-10"
+          className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center cursor-pointer shadow-md transition-all hover:scale-110 z-10"
         >
           <RiAddLine className="text-xs" />
         </button>
@@ -310,7 +310,16 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
+function SceneBatchRow({
+  scene,
+  onMouseEnter,
+  onMouseLeave,
+}: {
+  scene: SceneItem;
+  index: number;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const MAX_CHARS = 160;
 
@@ -323,15 +332,19 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
     (scene.dialogue?.length || 0) > MAX_CHARS;
 
   return (
-    <tr className="border-t border-gray-100 hover:bg-gray-50 transition-colors align-top">
+    <tr
+      className="border-t border-gray-200 bg-white hover:bg-gray-50 transition-colors align-top"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+    >
       {/* Scene number */}
-      <td className="py-3 px-3 w-10">
+      <td className="py-3 px-3 w-5">
         <span className="text-xs font-bold text-gray-600">#{scene.number}</span>
       </td>
 
       {/* Image Prompt */}
       <td className="py-3 px-3">
-        <div className="text-xs font-bold text-orange-500 mb-1 uppercase tracking-wide">
+        <div className="text-xs font-bold text-orange mb-1 uppercase tracking-wide">
           IMAGE PROMPT
         </div>
         <p className="text-xs text-gray-600 leading-relaxed">
@@ -349,9 +362,7 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
 
       {/* Motion + Audio */}
       <td className="py-3 px-3">
-        <div className="text-xs font-bold text-teal-600 mb-1 uppercase tracking-wide">
-          [MOTION]:
-        </div>
+        <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
         <p className="text-xs text-teal-700 leading-relaxed">
           {expanded ? scene.motionPrompt : truncate(scene.motionPrompt)}
         </p>
@@ -399,6 +410,65 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
         </div>
       </td>
     </tr>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SceneRowGroup – nhóm row gồm: nút thêm trên + scene + nút thêm dưới
+// Quản lý hover state chung, ẩn/hiện nút thêm khi hover
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface SceneRowGroupProps {
+  scene: SceneItem;
+  index: number;
+  characters: CharacterItem[];
+  onInsert: (scene: SceneItem, position: InsertPosition, data: NewSceneData) => void;
+}
+
+function SceneRowGroup({ scene, index, characters, onInsert }: SceneRowGroupProps) {
+  const [hovered, setHovered] = useState(false);
+  const enter = () => setHovered(true);
+  const leave = () => setHovered(false);
+
+  const addBtnClass = `transition-all duration-200 overflow-hidden ${
+    hovered ? "max-h-10 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+  }`;
+
+  return (
+    <React.Fragment>
+      {/* Add ABOVE button – chỉ hiện trước scene đầu tiên */}
+      {index === 0 && (
+        <tr onMouseEnter={enter} onMouseLeave={leave}>
+          <td colSpan={5} className="p-0">
+            <div className={addBtnClass}>
+              <AddSceneButton
+                scene={scene}
+                position="above"
+                characters={characters}
+                onInsert={onInsert}
+              />
+            </div>
+          </td>
+        </tr>
+      )}
+
+      {/* Scene data row */}
+      <SceneBatchRow scene={scene} index={index} onMouseEnter={enter} onMouseLeave={leave} />
+
+      {/* Add BELOW button – sau mỗi scene */}
+      <tr onMouseEnter={enter} onMouseLeave={leave}>
+        <td colSpan={5} className="p-0">
+          <div className={addBtnClass}>
+            <AddSceneButton
+              scene={scene}
+              position="below"
+              characters={characters}
+              onInsert={onInsert}
+            />
+          </div>
+        </td>
+      </tr>
+    </React.Fragment>
   );
 }
 
@@ -510,25 +580,25 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       <BatchActionBar sceneCount={sceneList.length} />
 
       {/* Scrollable table */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto v-scrollbar">
         <table className="w-full border-collapse text-sm">
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
             <tr>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 w-10">
+              <th className="text-left py-2.5 px-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 w-5 ">
                 {t("Cảnh")}
               </th>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-orange-500 uppercase tracking-wide border-b border-gray-200 w-32">
-                <span className="flex items-center gap-1">
+              <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
+                <div className="flex items-center gap-1">
                   <RiImageFill className="text-xs" />
                   {t("PROMPT HÌNH ẢNH")}
-                </span>
+                </div>
               </th>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-teal-600 uppercase tracking-wide border-b border-gray-200 w-32">
-                <span className="flex items-center gap-1">
+              <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
+                <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
                   {t("CHUYỂN ĐỘNG & ÂM THANH")}
-                </span>
+                </div>
               </th>
               <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
                 {t("HÌNH ẢNH")}
@@ -543,36 +613,13 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
 
           <tbody>
             {sceneList.map((scene, index) => (
-              <React.Fragment key={scene.id}>
-                {/* Add ABOVE button – chỉ hiện trước scene đầu tiên */}
-                {index === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-0 py-0">
-                      <AddSceneButton
-                        scene={scene}
-                        position="above"
-                        characters={characters}
-                        onInsert={handleInsert}
-                      />
-                    </td>
-                  </tr>
-                )}
-
-                {/* Scene data row */}
-                <SceneBatchRow scene={scene} index={index} />
-
-                {/* Add BELOW button – sau mỗi scene */}
-                <tr>
-                  <td colSpan={5} className="px-0 py-0">
-                    <AddSceneButton
-                      scene={scene}
-                      position="below"
-                      characters={characters}
-                      onInsert={handleInsert}
-                    />
-                  </td>
-                </tr>
-              </React.Fragment>
+              <SceneRowGroup
+                key={scene.id}
+                scene={scene}
+                index={index}
+                characters={characters}
+                onInsert={handleInsert}
+              />
             ))}
           </tbody>
         </table>

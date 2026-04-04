@@ -10,7 +10,7 @@ export const AffiliateVideoBody = () => {
   return (
     <div className="flex flex-1 overflow-hidden">
       {/* ══ LEFT SIDEBAR ══ */}
-      <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 overflow-hidden bg-white">
+      <div className="w-80 flex-shrink-0 flex flex-col border-r border-gray-200 overflow-hidden rounded-lg bg-white">
         <TextToVideoTab />
       </div>
 

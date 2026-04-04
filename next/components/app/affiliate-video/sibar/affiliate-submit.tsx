@@ -4,7 +4,8 @@
  * className only – Tailwind CSS, no inline styles
  */
 import { useTranslation } from "react-i18next";
-import { RiFilmFill, RiLoader4Line, RiStopLine } from "react-icons/ri";
+import { RiStopLine } from "react-icons/ri";
+import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { Button } from "../../../shared/utilities/form";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
@@ -30,22 +31,14 @@ export const AffiliateSubmit = () => {
       {/* Main CTA button */}
       <Button
         submit
+        className="w-full"
         id="create-video-btn"
         disabled={batchRunning}
-        className="w-full py-3 rounded-xl font-bold text-sm text-white flex items-center justify-center gap-2 cursor-pointer transition-all border-0 disabled:opacity-60 disabled:cursor-not-allowed bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 shadow-md hover:shadow-lg"
-      >
-        {batchRunning ? (
-          <>
-            <RiLoader4Line className="text-base animate-spin" />
-            {t("Đang tạo...")}
-          </>
-        ) : (
-          <>
-            <RiFilmFill className="text-base" />
-            {t("Tạo Ảnh & Phim")} 🎬
-          </>
-        )}
-      </Button>
+        primary
+        text={batchRunning ? t("Đang tạo...") : t("Tạo Ảnh & Phim")}
+        isLoading={batchRunning}
+        icon={<GenerateAiIcon />}
+      />
     </div>
   );
 };
