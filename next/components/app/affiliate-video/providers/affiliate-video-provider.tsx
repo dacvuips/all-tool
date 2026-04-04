@@ -6,7 +6,6 @@ import {
   ART_STYLE_OPTIONS,
   CATEGORY_OPTIONS,
   LANGUAGE_OPTIONS,
-  MOCK_SCRIPT,
   ScriptData,
 } from "../constants";
 
@@ -72,7 +71,7 @@ export function AffiliateVideoProvider(props) {
   const stopRef = useRef(false);
 
   // ── Script / Batch state ──
-  const [scriptData, setScriptData] = useState<ScriptData | null>(MOCK_SCRIPT);
+  const [scriptData, setScriptData] = useState<ScriptData | null>(null);
   const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
   const [batchRunning, setBatchRunning] = useState(false);
@@ -144,6 +143,7 @@ export function AffiliateVideoProvider(props) {
         toast.error(err?.message || `Lỗi ${res.status}`);
       }
       const result = await res.json();
+      setScriptData(result.data);
       console.log("[affiliate-video] submit success", result);
       return result;
     } catch (err: any) {

@@ -4,8 +4,8 @@
  * className only – Tailwind CSS, light theme
  */
 import { useState } from "react";
-import { RiFileCopyLine, RiImageFill, RiVideoFill } from "react-icons/ri";
 import { MdRecordVoiceOver } from "react-icons/md";
+import { RiFileCopyLine, RiImageFill, RiVideoFill } from "react-icons/ri";
 import { SceneItem } from "../constants";
 
 // ── Camera shot color map ────────────────────────────────────────────────
@@ -27,7 +27,7 @@ function PromptBlock({
   icon,
   headerColor,
 }: {
-  type: "image" | "motion" | "dialogue";
+  type: "image" | "motion" | "dialogue" | "visualPrompt";
   label: string;
   content: string;
   icon: React.ReactNode;
@@ -60,15 +60,25 @@ function PromptBlock({
 
       {/* Block content */}
       <div className="px-3 py-3 bg-white">
-        {type === "dialogue" ? (
+        {type === "dialogue" || type === "visualPrompt" ? (
           <p className="text-sm text-gray-700 leading-relaxed italic">{content}</p>
         ) : (
           <p className="text-xs text-gray-600 leading-relaxed">
             {type === "image"
               ? content.split(", ").map((part, i, arr) => {
-                  const isKeyword = ["Gender", "Age", "Ethnicity", "Skin tone", "Hair", "Eyes", "Face", "Body", "Clothing", "Distinctive features", "Setting"].some(
-                    (k) => part.startsWith(k)
-                  );
+                  const isKeyword = [
+                    "Gender",
+                    "Age",
+                    "Ethnicity",
+                    "Skin tone",
+                    "Hair",
+                    "Eyes",
+                    "Face",
+                    "Body",
+                    "Clothing",
+                    "Distinctive features",
+                    "Setting",
+                  ].some((k) => part.startsWith(k));
                   return (
                     <span key={i}>
                       {isKeyword ? (
@@ -95,16 +105,16 @@ interface SceneCardProps {
 
 export function SceneCard({ scene }: SceneCardProps) {
   const [copiedDialogue, setCopiedDialogue] = useState(false);
-  const shotColorClass = SHOT_COLORS[scene.cameraShot] || "bg-gray-100 text-gray-600 border-gray-200";
+  const shotColorClass =
+    SHOT_COLORS[scene.cameraShot] || "bg-gray-100 text-gray-600 border-gray-200";
 
   const handleCopyDialogue = () => {
     navigator.clipboard.writeText(scene.dialogue);
     setCopiedDialogue(true);
     setTimeout(() => setCopiedDialogue(false), 1500);
   };
-
   return (
-    <div className="rounded-2xl border border-gray-100 bg-gray-50 overflow-hidden mb-4">
+    <div className="rounded-2xl border bg-gray-50 overflow-hidden mb-4">
       {/* Scene header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-2">
@@ -126,6 +136,14 @@ export function SceneCard({ scene }: SceneCardProps) {
 
       {/* Prompt blocks */}
       <div className="p-3 space-y-3">
+        {/* VISUAL PROMPT */}
+        <PromptBlock
+          type="visualPrompt"
+          label="VISUAL PROMPT"
+          content={scene.visualPrompt}
+          icon={<RiImageFill className="text-orange-500 text-xs" />}
+          headerColor="bg-orange-50 text-orange-700"
+        />
         {/* IMAGE GEN PROMPT */}
         <PromptBlock
           type="image"

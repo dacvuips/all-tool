@@ -5,14 +5,17 @@
  */
 import { useState } from "react";
 import { RiFileCopyLine, RiListCheck2, RiMusicFill, RiScissorsLine } from "react-icons/ri";
-import { MdRecordVoiceOver } from "react-icons/md";
-import { BatchListPanel } from "./batch-list";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { BatchListPanel } from "./batch-list";
 import { CastSection } from "./cast-section";
 import { SceneCard } from "./scene-card";
 
 // ── Audio Voice Config ───────────────────────────────────────────────────
-function AudioVoicePanel({ audioConfig }: { audioConfig: { gender: string; mood: string; style: string; fullPrompt: string } }) {
+function AudioVoicePanel({
+  audioConfig,
+}: {
+  audioConfig: { gender: string; mood: string; style: string; fullPrompt: string };
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -36,25 +39,27 @@ function AudioVoicePanel({ audioConfig }: { audioConfig: { gender: string; mood:
     <div className="h-full">
       <div className="flex items-center gap-1.5 mb-2">
         <RiMusicFill className="text-pink-400 text-sm" />
-        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">AUDIO & VOICE CONFIG</span>
+        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+          AUDIO & VOICE CONFIG
+        </span>
       </div>
       {/* Tags */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {[audioConfig.gender, audioConfig.mood, audioConfig.style].map((tag) => (
+        {[audioConfig?.gender, audioConfig?.mood, audioConfig?.style].map((tag) => (
           <span
             key={tag}
             className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${getTagColor(tag)}`}
           >
-            {tag === audioConfig.gender && "♀ "}
-            {tag === audioConfig.mood && "⚡ "}
-            {tag === audioConfig.style && "💬 "}
+            {tag === audioConfig?.gender && "♀ "}
+            {tag === audioConfig?.mood && "⚡ "}
+            {tag === audioConfig?.style && "💬 "}
             {tag}
           </span>
         ))}
       </div>
       {/* Full prompt label */}
       <div className="text-xs font-semibold text-gray-500 mb-1">Full Audio Prompt</div>
-      <p className="text-xs text-gray-600 leading-relaxed mb-2">{audioConfig.fullPrompt}</p>
+      <p className="text-xs text-gray-600 leading-relaxed mb-2">{audioConfig?.fullPrompt}</p>
       {/* Copy button */}
       <button
         onClick={handleCopy}
@@ -68,22 +73,30 @@ function AudioVoicePanel({ audioConfig }: { audioConfig: { gender: string; mood:
 }
 
 // ── Environment Panel ────────────────────────────────────────────────────
-function EnvironmentPanel({ environment }: { environment: { environment: string; artStyle: string } }) {
+function EnvironmentPanel({
+  environment,
+}: {
+  environment: { environment: string; artStyle: string };
+}) {
   return (
     <div className="h-full">
       <div className="flex items-center gap-1.5 mb-2">
         <RiScissorsLine className="text-blue-400 text-sm" />
-        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">ENVIRONMENT & STYLE</span>
+        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+          ENVIRONMENT & STYLE
+        </span>
       </div>
       <div className="text-xs text-gray-500 font-medium mb-1">Environment (Bối cảnh)</div>
-      <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-5">{environment.environment}</p>
+      <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-5">
+        {environment.environment}
+      </p>
       <div className="text-xs text-gray-500 font-medium mb-1">Art Style (3D CGI)</div>
-      <p className="text-xs text-gray-400 leading-relaxed line-clamp-2 italic">{environment.artStyle}</p>
+      <p className="text-xs text-gray-400 leading-relaxed line-clamp-2 italic">
+        {environment.artStyle}
+      </p>
     </div>
   );
 }
-
-
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
@@ -104,7 +117,7 @@ export const AffiliateVideoRightPanel = () => {
                 : "border-transparent text-gray-500 hover:text-gray-700"
             }`}
           >
-            📋 {("Kịch Bản")}
+            📋 {"Kịch Bản"}
           </button>
 
           {/* Batch List tab */}
@@ -118,7 +131,7 @@ export const AffiliateVideoRightPanel = () => {
             }`}
           >
             <RiListCheck2 className="text-sm" />
-            {("Batch List")} {batchList && batchList.length > 0 && `(${batchList.length})`}
+            {"Batch List"} {batchList && batchList.length > 0 && `(${batchList.length})`}
           </button>
         </div>
       </div>
@@ -127,15 +140,25 @@ export const AffiliateVideoRightPanel = () => {
       <div className="flex-1 overflow-y-auto">
         {scriptTab === "batch" ? (
           <BatchListPanel
-            scenes={scriptData?.scenes || []}
-            characters={scriptData?.characters || []}
+            scenes={(scriptData?.scenes || []).map((s, i) => ({
+              id: `scene-${i}`,
+              number: s.sceneNumber,
+              cameraShot: (s.camera as any) || "WIDE SHOT",
+              imageGenPrompt: s.imagePrompt || "",
+              motionPrompt: s.motionPrompt || "",
+              dialogue: s.dialogue || "",
+              visualPrompt: s.visualPrompt || "",
+            }))}
+            characters={[]}
           />
         ) : !scriptData ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16">
             <div className="text-5xl mb-4 opacity-30">📋</div>
             <div className="text-base font-medium text-gray-500 mb-1">Chưa có kịch bản</div>
-            <div className="text-sm text-gray-400">Điền thông tin sidebar và nhấn "Tạo Ảnh & Phim"</div>
+            <div className="text-sm text-gray-400">
+              Điền thông tin sidebar và nhấn "Tạo Ảnh & Phim"
+            </div>
           </div>
         ) : (
           <div className="px-4 py-4">
@@ -145,10 +168,22 @@ export const AffiliateVideoRightPanel = () => {
             {/* Environment & Audio – 2 columns */}
             <div className="grid grid-cols-2 gap-4 mb-4">
               <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                <EnvironmentPanel environment={scriptData.environment} />
+                <EnvironmentPanel
+                  environment={{
+                    environment: scriptData.environment,
+                    artStyle: scriptData.artStyle,
+                  }}
+                />
               </div>
               <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                <AudioVoicePanel audioConfig={scriptData.audioConfig} />
+                <AudioVoicePanel
+                  audioConfig={{
+                    gender: scriptData.voiceGender,
+                    mood: scriptData.voiceTone,
+                    style: scriptData.voiceStyle,
+                    fullPrompt: `${scriptData.voiceGender} · ${scriptData.voiceTone} · ${scriptData.voiceStyle}`,
+                  }}
+                />
               </div>
             </div>
 
@@ -157,8 +192,19 @@ export const AffiliateVideoRightPanel = () => {
               <h3 className="text-base font-bold text-gray-800 mb-3">
                 📽 Phân Cảnh & Prompt (Scenes)
               </h3>
-              {scriptData.scenes.map((scene) => (
-                <SceneCard key={scene.id} scene={scene} />
+              {scriptData.scenes.map((scene, i) => (
+                <SceneCard
+                  key={scene.sceneNumber ?? i}
+                  scene={{
+                    id: `scene-${i}`,
+                    number: scene.sceneNumber,
+                    cameraShot: (scene.camera as any) || "WIDE SHOT",
+                    imageGenPrompt: scene.imagePrompt,
+                    motionPrompt: scene.motionPrompt || "",
+                    dialogue: scene.dialogue || "",
+                    visualPrompt: scene.visualPrompt || "",
+                  }}
+                />
               ))}
             </div>
           </div>

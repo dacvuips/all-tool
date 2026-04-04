@@ -4,6 +4,8 @@
  * className only – Tailwind CSS, no inline styles
  */
 import React, { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { MdRecordVoiceOver } from "react-icons/md";
 import {
   RiAddLine,
   RiCloseLine,
@@ -16,8 +18,7 @@ import {
   RiRefreshLine,
   RiVideoFill,
 } from "react-icons/ri";
-import { MdRecordVoiceOver } from "react-icons/md";
-import { SceneItem, CharacterItem } from "../constants";
+import { CharacterItem, SceneItem } from "../constants";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -62,7 +63,13 @@ interface AddSceneModalProps {
   onConfirm: (data: NewSceneData) => void;
 }
 
-function AddSceneModal({ targetScene, position, characters, onClose, onConfirm }: AddSceneModalProps) {
+function AddSceneModal({
+  targetScene,
+  position,
+  characters,
+  onClose,
+  onConfirm,
+}: AddSceneModalProps) {
   const [description, setDescription] = useState("");
   const [voiceover, setVoiceover] = useState("");
   const [cameraAngle, setCameraAngle] = useState("");
@@ -70,9 +77,7 @@ function AddSceneModal({ targetScene, position, characters, onClose, onConfirm }
   const [creating, setCreating] = useState(false);
 
   const toggleChar = (id: string) => {
-    setSelectedChars((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
+    setSelectedChars((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
 
   const handleCreate = async () => {
@@ -164,8 +169,7 @@ function AddSceneModal({ targetScene, position, characters, onClose, onConfirm }
             <div className="flex items-center gap-1.5 mb-2">
               <MdRecordVoiceOver className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Voiceover / Lời thoại{" "}
-                <span className="text-gray-400 font-normal">(tùy chọn)</span>
+                Voiceover / Lời thoại <span className="text-gray-400 font-normal">(tùy chọn)</span>
               </span>
             </div>
             <textarea
@@ -182,8 +186,7 @@ function AddSceneModal({ targetScene, position, characters, onClose, onConfirm }
             <div className="flex items-center gap-1.5 mb-2">
               <RiImageFill className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Ảnh sản phẩm{" "}
-                <span className="text-gray-400 font-normal">(tùy chọn — [2])</span>
+                Ảnh sản phẩm <span className="text-gray-400 font-normal">(tùy chọn — [2])</span>
               </span>
             </div>
             <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-300 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold cursor-pointer transition-colors">
@@ -200,8 +203,7 @@ function AddSceneModal({ targetScene, position, characters, onClose, onConfirm }
             <div className="flex items-center gap-1.5 mb-2">
               <RiVideoFill className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Góc máy{" "}
-                <span className="text-gray-400 font-normal">(tùy chọn)</span>
+                Góc máy <span className="text-gray-400 font-normal">(tùy chọn)</span>
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -378,7 +380,9 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
         <div className="flex justify-center">
           <button className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group">
             <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
-            <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">Create</span>
+            <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
+              Create
+            </span>
           </button>
         </div>
       </td>
@@ -388,7 +392,9 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
         <div className="flex justify-center">
           <button className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 flex flex-col items-center justify-center cursor-pointer transition-all group">
             <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
-            <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">Create</span>
+            <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
+              Create
+            </span>
           </button>
         </div>
       </td>
@@ -402,12 +408,42 @@ function SceneBatchRow({ scene }: { scene: SceneItem; index: number }) {
 
 function BatchActionBar({ sceneCount }: { sceneCount: number }) {
   const actions = [
-    { id: "batch-create-img", icon: <RiImageFill />, label: "Tạo Ảnh", color: "bg-pink-500 hover:bg-pink-600" },
-    { id: "batch-download-img", icon: <RiDownloadLine />, label: "Tải Ảnh", color: "bg-blue-500 hover:bg-blue-600" },
-    { id: "batch-create-video", icon: <RiVideoFill />, label: `Tạo Video (x${sceneCount})`, color: "bg-purple-500 hover:bg-purple-600" },
-    { id: "batch-download-video", icon: <RiDownloadLine />, label: "Tải Video (0)", color: "bg-indigo-500 hover:bg-indigo-600" },
-    { id: "batch-retry-video", icon: <RiRefreshLine />, label: "Tạo Lại Video Lỗi", color: "bg-orange-500 hover:bg-orange-600" },
-    { id: "batch-export-prompt", icon: <RiFileCopyLine />, label: "Xuất Prompt", color: "bg-green-500 hover:bg-green-600" },
+    {
+      id: "batch-create-img",
+      icon: <RiImageFill />,
+      label: "Tạo Ảnh",
+      color: "bg-pink-500 hover:bg-pink-600",
+    },
+    {
+      id: "batch-download-img",
+      icon: <RiDownloadLine />,
+      label: "Tải Ảnh",
+      color: "bg-blue-500 hover:bg-blue-600",
+    },
+    {
+      id: "batch-create-video",
+      icon: <RiVideoFill />,
+      label: `Tạo Video (x${sceneCount})`,
+      color: "bg-purple-500 hover:bg-purple-600",
+    },
+    {
+      id: "batch-download-video",
+      icon: <RiDownloadLine />,
+      label: "Tải Video (0)",
+      color: "bg-indigo-500 hover:bg-indigo-600",
+    },
+    {
+      id: "batch-retry-video",
+      icon: <RiRefreshLine />,
+      label: "Tạo Lại Video Lỗi",
+      color: "bg-orange-500 hover:bg-orange-600",
+    },
+    {
+      id: "batch-export-prompt",
+      icon: <RiFileCopyLine />,
+      label: "Xuất Prompt",
+      color: "bg-green-500 hover:bg-green-600",
+    },
   ];
 
   return (
@@ -436,6 +472,7 @@ interface BatchListPanelProps {
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
+  const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneItem[]>(scenes);
 
   const handleInsert = (targetScene: SceneItem, position: InsertPosition, data: NewSceneData) => {
@@ -446,6 +483,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       imageGenPrompt: data.description || "(AI generated)",
       motionPrompt: data.description || "(AI generated)",
       dialogue: data.voiceover || "",
+      visualPrompt: "",
     };
 
     setSceneList((prev) => {
@@ -460,8 +498,8 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
         <RiVideoFill className="text-5xl mb-3 opacity-30" />
-        <div className="text-sm font-medium text-gray-500 mb-1">Chưa có scene nào</div>
-        <div className="text-xs text-gray-400">Chuyển sang tab Kịch Bản để tạo nội dung</div>
+        <div className="text-sm font-medium text-gray-500 mb-1">{t("Chưa có scene nào")}</div>
+        <div className="text-xs text-gray-400">{t("Chuyển sang tab Kịch Bản để tạo nội dung")}</div>
       </div>
     );
   }
@@ -478,25 +516,27 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
             <tr>
               <th className="text-left py-2.5 px-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 w-10">
-                SCENE
+                {t("Cảnh")}
               </th>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-orange-500 uppercase tracking-wide border-b border-gray-200">
+              <th className="text-left py-2.5 px-3 text-xs font-bold text-orange-500 uppercase tracking-wide border-b border-gray-200 w-32">
                 <span className="flex items-center gap-1">
                   <RiImageFill className="text-xs" />
-                  PROMPT HÌNH ẢNH
+                  {t("PROMPT HÌNH ẢNH")}
                 </span>
               </th>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-teal-600 uppercase tracking-wide border-b border-gray-200">
+              <th className="text-left py-2.5 px-3 text-xs font-bold text-teal-600 uppercase tracking-wide border-b border-gray-200 w-32">
                 <span className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
-                  CHUYỂN ĐỘNG &amp; ÂM THANH
+                  {t("CHUYỂN ĐỘNG & ÂM THANH")}
                 </span>
               </th>
-              <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200 w-24">
-                HÌNH ẢNH<br />(ĐÃ TẠO)
+              <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
+                {t("HÌNH ẢNH")}
+                <br />({t("ĐÃ TẠO")})
               </th>
-              <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200 w-24">
-                VIDEO<br />(ĐÃ TẠO)
+              <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
+                {t("VIDEO")}
+                <br />({t("ĐÃ TẠO")})
               </th>
             </tr>
           </thead>
