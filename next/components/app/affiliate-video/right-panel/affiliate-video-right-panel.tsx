@@ -4,7 +4,9 @@
  * Light theme – className only, Tailwind CSS
  */
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { RiFileCopyLine, RiListCheck2, RiMusicFill, RiScissorsLine } from "react-icons/ri";
+import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchListPanel } from "./batch-list";
 import { CastSection } from "./cast-section";
@@ -98,7 +100,9 @@ function EnvironmentPanel({
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
-  const { scriptData, scriptTab, setScriptTab, batchList } = useAffiliateVideoContext();
+  const { t } = useTranslation();
+  const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
+    useAffiliateVideoContext();
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-amber-50">
@@ -133,7 +137,6 @@ export const AffiliateVideoRightPanel = () => {
           </button>
         </div>
       </div>
-
       {/* ── Content ── */}
       <div className="flex-1 overflow-y-auto v-scrollbar  ">
         {scriptTab === "batch" ? (
@@ -150,13 +153,75 @@ export const AffiliateVideoRightPanel = () => {
             }))}
             characters={[]}
           />
+        ) : batchRunning ? (
+          /* AI Generating state */
+          <div className="flex flex-col items-center justify-center h-full py-16">
+            <div className="relative w-20 h-20 mb-6">
+              {/* Spinner ring rotating around the icon */}
+              <svg
+                className="absolute inset-0 w-full h-full animate-spin"
+                style={{ animationDuration: "1.2s" }}
+                viewBox="0 0 80 80"
+                fill="none"
+              >
+                <circle
+                  cx="40"
+                  cy="40"
+                  r="36"
+                  stroke="url(#spinnerGrad)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  strokeDasharray="180 45"
+                />
+                <defs>
+                  <linearGradient
+                    id="spinnerGrad"
+                    x1="0"
+                    y1="0"
+                    x2="80"
+                    y2="80"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop offset="0%" stopColor="#FBBF24" />
+                    <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
+                  </linearGradient>
+                </defs>
+              </svg>
+              {/* Gold glow pulse */}
+              <div
+                className="absolute inset-0 rounded-full bg-yellow-200 opacity-20 animate-ping"
+                style={{ animationDuration: "1.8s" }}
+              />
+              {/* Icon container */}
+              <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br text-yellow-200">
+                <GenerateAiIcon size={36} />
+              </div>
+            </div>
+            <div className="text-base font-semibold text-gray-700 mb-1">
+              {t("Đang tạo kịch bản AI...")}
+            </div>
+            <div className="flex items-center gap-1.5 mt-2">
+              <span
+                className="w-2 h-2 rounded-full bg-yellow-400 animate-bounce"
+                style={{ animationDelay: "0ms" }}
+              />
+              <span
+                className="w-2 h-2 rounded-full bg-amber-500 animate-bounce"
+                style={{ animationDelay: "150ms" }}
+              />
+              <span
+                className="w-2 h-2 rounded-full bg-yellow-400 animate-bounce"
+                style={{ animationDelay: "300ms" }}
+              />
+            </div>
+          </div>
         ) : !scriptData ? (
           /* Empty state */
           <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16">
             <div className="text-5xl mb-4 opacity-30">📋</div>
-            <div className="text-base font-medium text-gray-500 mb-1">Chưa có kịch bản</div>
+            <div className="text-base font-medium text-gray-500 mb-1">{t("Chưa có kịch bản")}</div>
             <div className="text-sm text-gray-400">
-              Điền thông tin sidebar và nhấn "Tạo Ảnh & Phim"
+              {t("Điền thông tin sidebar và nhấn 'Tạo Ảnh & Phim'")}
             </div>
           </div>
         ) : (

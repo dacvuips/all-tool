@@ -26,7 +26,7 @@ export interface AffiliateVideoFormConfig {
 function interpolateTemplate(text: string, config: AffiliateVideoFormConfig): string {
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = (config as any)[key];
-    return value !== undefined && value !== null ? String(value) : match;
+    return value !== undefined && value !== null ? `"${String(value)}"` : "";
   });
 }
 
@@ -66,8 +66,9 @@ export default [
 
 Xây dựng nội dung: Chuyển tải {{tipContent}} thông qua một tình huống có mood {{mood}}.
 
-Kỹ thuật Video: Viết {{visualPrompt}} và {{motionPrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ storyModeType {{storyModeType}}.
-Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ storyModeType {{storyModeType}}.
+Kỹ thuật Video: Viết {{visualPrompt}} và {{motionPrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật.
+Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật.
+Luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong "Image Prompt" và "Visual Prompt".
 
 Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
 
@@ -79,7 +80,7 @@ Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {
         const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
 
         logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
-
+        console.log(interpolatedText);
         const genAI = new GoogleGenAI({ apiKey });
 
         const result = await genAI.models.generateContent({
