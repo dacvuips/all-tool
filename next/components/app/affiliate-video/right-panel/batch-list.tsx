@@ -22,6 +22,7 @@ import {
   RiSaveLine,
   RiVideoFill,
 } from "react-icons/ri";
+import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import {
   CACHE_KEY,
   CharacterItem,
@@ -106,27 +107,36 @@ function AddSceneModal({
       : `↓ Chèn phía dưới Scene #${targetScene.sceneNumber}`;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
+    <Dialog
+      isOpen
+      onClose={onClose}
+      width={480}
+      slideFromBottom="none"
+      hasCloseIcon={false}
+      dialogClass="relative bg-white shadow-2xl rounded-2xl overflow-hidden"
+      headerClass=""
+      bodyClass=""
+      footerClass=""
     >
-      <div className="w-full max-w-md mx-4 rounded-2xl bg-white shadow-2xl overflow-hidden">
+      <Dialog.Header>
         {/* ── Modal Header ── */}
-        <div className="px-5 py-4 bg-gradient-to-r from-purple-500 to-indigo-500">
+        <div className="px-5 py-4 ">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-white font-bold text-base">✨ Thêm Scene Mới</div>
-              <div className="text-purple-200 text-xs mt-0.5">{posLabel}</div>
+              <div className=" font-bold text-base">✨ Thêm Scene Mới</div>
+              <div className="text-gray-500 text-xs mt-0.5">{posLabel}</div>
             </div>
             <button
               onClick={onClose}
-              className="w-7 h-7 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 flex items-center justify-center text-white cursor-pointer border-0 transition-colors"
+              className="w-7 h-7 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 flex items-center justify-center text-gray-500 cursor-pointer border-0 transition-colors"
             >
               <RiCloseLine className="text-sm" />
             </button>
           </div>
         </div>
+      </Dialog.Header>
 
+      <Dialog.Body>
         {/* ── Modal Body ── */}
         <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
           {/* Mô tả nội dung */}
@@ -236,9 +246,11 @@ function AddSceneModal({
             </div>
           </div>
         </div>
+      </Dialog.Body>
 
+      <Dialog.Footer>
         {/* ── Modal Footer ── */}
-        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100">
+        <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
           <button
             onClick={onClose}
             className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-pointer border-0 bg-transparent transition-colors"
@@ -263,8 +275,8 @@ function AddSceneModal({
             )}
           </button>
         </div>
-      </div>
-    </div>
+      </Dialog.Footer>
+    </Dialog>
   );
 }
 
