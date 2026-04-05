@@ -321,7 +321,7 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
-type EditField = "imageGenPrompt" | "motionPrompt";
+type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue";
 
 function SceneBatchRow({
   scene,
@@ -340,6 +340,7 @@ function SceneBatchRow({
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [hoveredField, setHoveredField] = useState<EditField | null>(null);
+  const [copiedField, setCopiedField] = useState<EditField | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -353,7 +354,7 @@ function SceneBatchRow({
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
-    setEditValue(scene[field]);
+    setEditValue(scene[field] ?? "");
     // focus textarea on next tick
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
@@ -372,6 +373,13 @@ function SceneBatchRow({
       setSaving(false);
       closeEdit();
     }
+  };
+
+  const handleCopy = (field: EditField, text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(null), 1500);
+    });
   };
 
   // auto-resize textarea
@@ -431,21 +439,38 @@ function SceneBatchRow({
       ) : (
         /* ── Display mode ── */
         <div className="relative">
-          <p className={`text-xs ${textColor} leading-relaxed pr-5`}>
+          <p className={`text-xs ${textColor} leading-relaxed pr-14`}>
             {expanded ? text : truncate(text)}
           </p>
-          {/* Pencil icon – visible when hovering this field's area */}
-          <button
-            onClick={() => openEdit(field)}
-            title="Chỉnh sửa"
+          {/* Action icons – visible when hovering this field's area */}
+          <div
+            className="absolute top-0 right-0 flex items-center gap-0.5"
             style={{
               opacity: hoveredField === field ? 1 : 0,
               pointerEvents: hoveredField === field ? "auto" : "none",
             }}
-            className="absolute top-0 right-0 w-5 h-5 rounded-md flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer border-0 bg-transparent"
           >
-            <RiPencilLine className="text-xs" />
-          </button>
+            {/* Copy prompt button */}
+            <button
+              onClick={() => handleCopy(field, text)}
+              title="Copy prompt"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all cursor-pointer border-0 bg-transparent"
+            >
+              {copiedField === field ? (
+                <span className="text-green-500 text-xs font-bold">✓</span>
+              ) : (
+                <RiFileCopyLine className="text-sm" />
+              )}
+            </button>
+            {/* Edit pencil button */}
+            <button
+              onClick={() => openEdit(field)}
+              title="Chỉnh sửa"
+              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer border-0 bg-transparent"
+            >
+              <RiPencilLine className="text-sm" />
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -490,17 +515,15 @@ function SceneBatchRow({
           "text-teal-700",
           <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
         )}
-        {scene.dialogue && (
-          <>
-            <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
-              [AUDIO]:
-            </div>
-            <p className="text-xs text-green-700 leading-relaxed italic">
-              {expanded ? scene.dialogue : truncate(scene.dialogue)}
-            </p>
-          </>
+        {renderEditablePrompt(
+          "dialogue",
+          scene.dialogue ?? "",
+          "text-green-700 italic",
+          <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
+            [AUDIO]:
+          </div>
         )}
-        {editingField !== "motionPrompt" && needsExpand && (
+        {editingField !== "motionPrompt" && editingField !== "dialogue" && needsExpand && (
           <button
             onClick={() => setExpanded((p) => !p)}
             className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
