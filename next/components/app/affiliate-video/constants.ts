@@ -185,21 +185,12 @@ export interface AudioVoiceConfig {
   fullPrompt: string;
 }
 
-export interface SceneItem {
-  id: string;
-  number: number;
-  cameraShot: CameraShotType;
-  imageGenPrompt: string;
-  motionPrompt: string;
-  dialogue: string;
-  visualPrompt: string;
-}
-
 export interface SceneScript {
+  id: string;
   sceneNumber: number;
   camera: string;
   visualPrompt: string;
-  imagePrompt: string;
+  imageGenPrompt: string;
   motionPrompt: string;
   dialogue: string;
 }
@@ -223,7 +214,12 @@ export const DB_NAME = {
   generateVoice: "generate-voice",
   generateImage: "generate-image",
 };
+export const STORE_NAME = {
+  generateScene: "generate-scene",
+};
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
 
-export const SCRIPT_CACHE_KEY = "lastScript";
+export const CACHE_KEY = {
+  lastScript: "lastScript",
+};

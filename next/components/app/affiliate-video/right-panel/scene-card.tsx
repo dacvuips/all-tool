@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { MdRecordVoiceOver } from "react-icons/md";
 import { RiFileCopyLine, RiImageFill, RiVideoFill } from "react-icons/ri";
-import { SceneItem } from "../constants";
+import { SceneScript } from "../constants";
 
 // ── Camera shot color map ────────────────────────────────────────────────
 const SHOT_COLORS: Record<string, string> = {
@@ -100,29 +100,23 @@ function PromptBlock({
 
 // ── SceneCard ────────────────────────────────────────────────────────────
 interface SceneCardProps {
-  scene: SceneItem;
+  scene: SceneScript;
 }
 
 export function SceneCard({ scene }: SceneCardProps) {
-  const [copiedDialogue, setCopiedDialogue] = useState(false);
-  const shotColorClass =
-    SHOT_COLORS[scene.cameraShot] || "bg-gray-100 text-gray-600 border-gray-200";
+  const shotColorClass = SHOT_COLORS[scene.camera] || "bg-gray-100 text-gray-600 border-gray-200";
 
-  const handleCopyDialogue = () => {
-    navigator.clipboard.writeText(scene.dialogue);
-    setCopiedDialogue(true);
-    setTimeout(() => setCopiedDialogue(false), 1500);
-  };
+  console.log(scene);
   return (
     <div className="rounded-2xl border bg-gray-50 overflow-hidden mb-4">
       {/* Scene header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-800 text-white">
-            Cảnh #{scene.number}
+            Cảnh #{scene.sceneNumber}
           </span>
           <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${shotColorClass}`}>
-            ● {scene.cameraShot}
+            ● {scene.camera}
           </span>
         </div>
       </div>

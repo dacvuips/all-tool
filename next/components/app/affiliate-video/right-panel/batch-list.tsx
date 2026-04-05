@@ -3,7 +3,7 @@
  * Batch List Panel – danh sách scene dạng bảng
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
@@ -15,10 +15,21 @@ import {
   RiImageFill,
   RiLoader4Line,
   RiMagicFill,
+  RiPencilLine,
   RiRefreshLine,
+  RiSaveLine,
   RiVideoFill,
 } from "react-icons/ri";
-import { CharacterItem, SceneItem } from "../constants";
+import {
+  CACHE_KEY,
+  CharacterItem,
+  DB_NAME,
+  SceneScript,
+  ScriptData,
+  STORE_NAME,
+} from "../constants";
+import { useIndexedDB } from "../hook/useIndexedDB";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -56,7 +67,7 @@ const CAMERA_ANGLES = [
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AddSceneModalProps {
-  targetScene: SceneItem;
+  targetScene: SceneScript;
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
@@ -89,8 +100,8 @@ function AddSceneModal({
 
   const posLabel =
     position === "above"
-      ? `↑ Chèn phía trên Scene #${targetScene.number}`
-      : `↓ Chèn phía dưới Scene #${targetScene.number}`;
+      ? `↑ Chèn phía trên Scene #${targetScene.sceneNumber}`
+      : `↓ Chèn phía dưới Scene #${targetScene.sceneNumber}`;
 
   return (
     <div
@@ -260,10 +271,10 @@ function AddSceneModal({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AddSceneButtonProps {
-  scene: SceneItem;
+  scene: SceneScript;
   position: InsertPosition;
   characters: CharacterItem[];
-  onInsert: (scene: SceneItem, position: InsertPosition, data: NewSceneData) => void;
+  onInsert: (scene: SceneScript, position: InsertPosition, data: NewSceneData) => void;
 }
 
 function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButtonProps) {
@@ -310,17 +321,26 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
+type EditField = "imageGenPrompt" | "motionPrompt";
+
 function SceneBatchRow({
   scene,
   onMouseEnter,
   onMouseLeave,
+  onUpdateScene,
 }: {
-  scene: SceneItem;
+  scene: SceneScript;
   index: number;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingField, setEditingField] = useState<EditField | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [hoveredField, setHoveredField] = useState<EditField | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
   const truncate = (text: string) =>
@@ -331,6 +351,106 @@ function SceneBatchRow({
     scene.motionPrompt.length > MAX_CHARS ||
     (scene.dialogue?.length || 0) > MAX_CHARS;
 
+  const openEdit = (field: EditField) => {
+    setEditingField(field);
+    setEditValue(scene[field]);
+    // focus textarea on next tick
+    setTimeout(() => textareaRef.current?.focus(), 50);
+  };
+
+  const closeEdit = () => {
+    setEditingField(null);
+    setEditValue("");
+  };
+
+  const handleSave = async () => {
+    if (!editingField) return;
+    setSaving(true);
+    try {
+      onUpdateScene(scene.id, editingField, editValue);
+    } finally {
+      setSaving(false);
+      closeEdit();
+    }
+  };
+
+  // auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
+    }
+  }, [editValue]);
+
+  /** Renders editable prompt cell content */
+  const renderEditablePrompt = (
+    field: EditField,
+    text: string,
+    textColor: string,
+    labelEl: React.ReactNode
+  ) => (
+    <div
+      className="relative"
+      onMouseEnter={() => setHoveredField(field)}
+      onMouseLeave={() => setHoveredField(null)}
+    >
+      {labelEl}
+      {editingField === field ? (
+        /* ── Edit mode ── */
+        <div className="mt-1">
+          <textarea
+            ref={field === editingField ? textareaRef : undefined}
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            rows={4}
+            className="w-full rounded-lg border border-blue-300 bg-blue-50 text-xs text-gray-700 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-none transition-colors leading-relaxed"
+          />
+          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
+            <button
+              onClick={closeEdit}
+              disabled={saving}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 cursor-pointer border-0 transition-colors disabled:opacity-50"
+            >
+              <RiCloseLine className="text-sm" />
+              Đóng
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 cursor-pointer border-0 transition-colors disabled:opacity-60 shadow-sm"
+            >
+              {saving ? (
+                <RiLoader4Line className="text-sm animate-spin" />
+              ) : (
+                <RiSaveLine className="text-sm" />
+              )}
+              {saving ? "Đang lưu..." : "Lưu"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* ── Display mode ── */
+        <div className="relative">
+          <p className={`text-xs ${textColor} leading-relaxed pr-5`}>
+            {expanded ? text : truncate(text)}
+          </p>
+          {/* Pencil icon – visible when hovering this field's area */}
+          <button
+            onClick={() => openEdit(field)}
+            title="Chỉnh sửa"
+            style={{
+              opacity: hoveredField === field ? 1 : 0,
+              pointerEvents: hoveredField === field ? "auto" : "none",
+            }}
+            className="absolute top-0 right-0 w-5 h-5 rounded-md flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer border-0 bg-transparent"
+          >
+            <RiPencilLine className="text-xs" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <tr
       className="border-t border-gray-200 bg-white hover:bg-gray-50 transition-colors align-top"
@@ -339,18 +459,20 @@ function SceneBatchRow({
     >
       {/* Scene number */}
       <td className="py-3 px-3 w-5">
-        <span className="text-xs font-bold text-gray-600">#{scene.number}</span>
+        <span className="text-xs font-bold text-gray-600">#{scene.sceneNumber}</span>
       </td>
 
       {/* Image Prompt */}
       <td className="py-3 px-3">
-        <div className="text-xs font-bold text-orange mb-1 uppercase tracking-wide">
-          IMAGE PROMPT
-        </div>
-        <p className="text-xs text-gray-600 leading-relaxed">
-          {expanded ? scene.imageGenPrompt : truncate(scene.imageGenPrompt)}
-        </p>
-        {scene.imageGenPrompt.length > MAX_CHARS && (
+        {renderEditablePrompt(
+          "imageGenPrompt",
+          scene.imageGenPrompt,
+          "text-gray-600",
+          <div className="text-xs font-bold text-orange mb-1 uppercase tracking-wide">
+            IMAGE PROMPT
+          </div>
+        )}
+        {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
           <button
             onClick={() => setExpanded((p) => !p)}
             className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
@@ -362,10 +484,12 @@ function SceneBatchRow({
 
       {/* Motion + Audio */}
       <td className="py-3 px-3">
-        <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
-        <p className="text-xs text-teal-700 leading-relaxed">
-          {expanded ? scene.motionPrompt : truncate(scene.motionPrompt)}
-        </p>
+        {renderEditablePrompt(
+          "motionPrompt",
+          scene.motionPrompt,
+          "text-teal-700",
+          <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
+        )}
         {scene.dialogue && (
           <>
             <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
@@ -376,7 +500,7 @@ function SceneBatchRow({
             </p>
           </>
         )}
-        {needsExpand && (
+        {editingField !== "motionPrompt" && needsExpand && (
           <button
             onClick={() => setExpanded((p) => !p)}
             className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
@@ -419,13 +543,14 @@ function SceneBatchRow({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SceneRowGroupProps {
-  scene: SceneItem;
+  scene: SceneScript;
   index: number;
   characters: CharacterItem[];
-  onInsert: (scene: SceneItem, position: InsertPosition, data: NewSceneData) => void;
+  onInsert: (scene: SceneScript, position: InsertPosition, data: NewSceneData) => void;
+  onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
 }
 
-function SceneRowGroup({ scene, index, characters, onInsert }: SceneRowGroupProps) {
+function SceneRowGroup({ scene, index, characters, onInsert, onUpdateScene }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
@@ -453,7 +578,13 @@ function SceneRowGroup({ scene, index, characters, onInsert }: SceneRowGroupProp
       )}
 
       {/* Scene data row */}
-      <SceneBatchRow scene={scene} index={index} onMouseEnter={enter} onMouseLeave={leave} />
+      <SceneBatchRow
+        scene={scene}
+        index={index}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+        onUpdateScene={onUpdateScene}
+      />
 
       {/* Add BELOW button – sau mỗi scene */}
       <tr onMouseEnter={enter} onMouseLeave={leave}>
@@ -537,19 +668,21 @@ function BatchActionBar({ sceneCount }: { sceneCount: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface BatchListPanelProps {
-  scenes: SceneItem[];
+  scenes: SceneScript[];
   characters: CharacterItem[];
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { t } = useTranslation();
-  const [sceneList, setSceneList] = useState<SceneItem[]>(scenes);
+  const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
+  const { scriptData, setScriptData } = useAffiliateVideoContext();
+  const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
 
-  const handleInsert = (targetScene: SceneItem, position: InsertPosition, data: NewSceneData) => {
-    const newScene: SceneItem = {
+  const handleInsert = (targetScene: SceneScript, position: InsertPosition, data: NewSceneData) => {
+    const newScene: SceneScript = {
       id: `s-${Date.now()}`,
-      number: 0,
-      cameraShot: (data.cameraAngle as any) || "WIDE SHOT",
+      sceneNumber: 0,
+      camera: (data.cameraAngle as any) || "WIDE SHOT",
       imageGenPrompt: data.description || "(AI generated)",
       motionPrompt: data.description || "(AI generated)",
       dialogue: data.voiceover || "",
@@ -560,8 +693,24 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       const idx = prev.findIndex((s) => s.id === targetScene.id);
       const insertAt = position === "above" ? idx : idx + 1;
       const updated = [...prev.slice(0, insertAt), newScene, ...prev.slice(insertAt)];
-      return updated.map((s, i) => ({ ...s, number: i + 1 }));
+      return updated.map((s, i) => ({ ...s, sceneNumber: i + 1 }));
     });
+  };
+
+  const handleUpdateScene = async (sceneId: string, field: EditField, value: string) => {
+    // 1. Compute the new list synchronously
+    const updated = sceneList.map((s) => (s.id === sceneId ? { ...s, [field]: value } : s));
+
+    // 2. Update React state
+    setSceneList(updated);
+
+    // 3. Persist to IndexedDB asynchronously
+    try {
+      await db.set(CACHE_KEY.lastScript, { ...scriptData, scenes: updated as any });
+      setScriptData({ ...scriptData, scenes: updated as any });
+    } catch (err) {
+      console.error("[handleUpdateScene] Failed to persist to IndexedDB:", err);
+    }
   };
 
   if (sceneList.length === 0) {
@@ -619,6 +768,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 index={index}
                 characters={characters}
                 onInsert={handleInsert}
+                onUpdateScene={handleUpdateScene}
               />
             ))}
           </tbody>

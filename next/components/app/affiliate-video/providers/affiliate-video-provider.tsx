@@ -4,11 +4,12 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   ART_STYLE_OPTIONS,
+  CACHE_KEY,
   CATEGORY_OPTIONS,
   DB_NAME,
   LANGUAGE_OPTIONS,
-  SCRIPT_CACHE_KEY,
   ScriptData,
+  STORE_NAME,
 } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
 
@@ -76,7 +77,7 @@ export function AffiliateVideoProvider(props) {
   const stopRef = useRef(false);
 
   // ── IndexedDB – shared cache for AI results ──
-  const scriptDB = useIndexedDB<ScriptData>("affiliate-video-scripts", DB_NAME.generateScene);
+  const scriptDB = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
 
   // ── Script / Batch state ──
   const [scriptData, setScriptData] = useState<ScriptData | null>(null);
@@ -143,7 +144,7 @@ export function AffiliateVideoProvider(props) {
 
   const getSceneList = async () => {
     try {
-      const cached = await scriptDB.get(SCRIPT_CACHE_KEY);
+      const cached = await scriptDB.get(CACHE_KEY.lastScript);
       if (cached) {
         setScriptData(cached);
       }
@@ -176,7 +177,7 @@ export function AffiliateVideoProvider(props) {
 
       // Persist to IndexedDB (non-blocking)
       scriptDB
-        .set(SCRIPT_CACHE_KEY, scriptResult)
+        .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
       setBatchRunning(false);
       console.log("[affiliate-video] submit success", result);

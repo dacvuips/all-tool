@@ -140,9 +140,9 @@ export const AffiliateVideoRightPanel = () => {
           <BatchListPanel
             scenes={(scriptData?.scenes || []).map((s, i) => ({
               id: `scene-${i}`,
-              number: s.sceneNumber,
-              cameraShot: (s.camera as any) || "WIDE SHOT",
-              imageGenPrompt: s.imagePrompt || "",
+              sceneNumber: s.sceneNumber,
+              camera: (s.camera as any) || "WIDE SHOT",
+              imageGenPrompt: s.imageGenPrompt || "",
               motionPrompt: s.motionPrompt || "",
               dialogue: s.dialogue || "",
               visualPrompt: s.visualPrompt || "",
@@ -195,9 +195,9 @@ export const AffiliateVideoRightPanel = () => {
                   key={scene.sceneNumber ?? i}
                   scene={{
                     id: `scene-${i}`,
-                    number: scene.sceneNumber,
-                    cameraShot: (scene.camera as any) || "WIDE SHOT",
-                    imageGenPrompt: scene.imagePrompt,
+                    sceneNumber: scene.sceneNumber,
+                    camera: (scene.camera as any) || "WIDE SHOT",
+                    imageGenPrompt: scene.imageGenPrompt,
                     motionPrompt: scene.motionPrompt || "",
                     dialogue: scene.dialogue || "",
                     visualPrompt: scene.visualPrompt || "",
