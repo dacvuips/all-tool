@@ -139,13 +139,14 @@ export const AffiliateVideoRightPanel = () => {
         {scriptTab === "batch" ? (
           <BatchListPanel
             scenes={(scriptData?.scenes || []).map((s, i) => ({
-              id: `scene-${i}`,
+              id: (s as any).id || `scene-${i}`,
               sceneNumber: s.sceneNumber,
               camera: (s.camera as any) || "WIDE SHOT",
               imageGenPrompt: s.imageGenPrompt || "",
               motionPrompt: s.motionPrompt || "",
               dialogue: s.dialogue || "",
               visualPrompt: s.visualPrompt || "",
+              disabled: (s as any).disabled ?? false,
             }))}
             characters={[]}
           />

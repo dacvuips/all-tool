@@ -10,6 +10,8 @@ import {
   RiAddLine,
   RiCloseLine,
   RiDownloadLine,
+  RiEyeLine,
+  RiEyeOffLine,
   RiFileCopyLine,
   RiImageAddFill,
   RiImageFill,
@@ -325,15 +327,19 @@ type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue";
 
 function SceneBatchRow({
   scene,
+  isDisabled,
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
+  onToggleDisable,
 }: {
   scene: SceneScript;
   index: number;
+  isDisabled: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
+  onToggleDisable: (sceneId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
@@ -478,13 +484,29 @@ function SceneBatchRow({
 
   return (
     <tr
-      className="border-t border-gray-200 bg-white hover:bg-gray-50 transition-colors align-top"
+      className={`border-t border-gray-200 bg-white transition-colors align-top ${
+        isDisabled ? "opacity-40" : "hover:bg-gray-50"
+      }`}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
       {/* Scene number */}
       <td className="py-3 px-3 w-5">
-        <span className="text-xs font-bold text-gray-600">#{scene.sceneNumber}</span>
+        <div className="flex flex-col items-center gap-1.5">
+          <span className="text-xs font-bold text-gray-600">#{scene.sceneNumber}</span>
+          {/* Toggle disable button */}
+          <button
+            onClick={() => onToggleDisable(scene.id)}
+            title={isDisabled ? "Hiện row" : "Ẩn row"}
+            className={`w-5 h-5 rounded flex items-center justify-center border-0 cursor-pointer transition-all ${
+              isDisabled
+                ? "text-gray-400 hover:text-blue-500 bg-gray-100 hover:bg-blue-50"
+                : "text-gray-300 hover:text-red-500 bg-transparent hover:bg-red-50"
+            }`}
+          >
+            {isDisabled ? <RiEyeLine className="text-xs" /> : <RiEyeOffLine className="text-xs" />}
+          </button>
+        </div>
       </td>
 
       {/* Image Prompt */}
@@ -568,12 +590,22 @@ function SceneBatchRow({
 interface SceneRowGroupProps {
   scene: SceneScript;
   index: number;
+  isDisabled: boolean;
   characters: CharacterItem[];
   onInsert: (scene: SceneScript, position: InsertPosition, data: NewSceneData) => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
+  onToggleDisable: (sceneId: string) => void;
 }
 
-function SceneRowGroup({ scene, index, characters, onInsert, onUpdateScene }: SceneRowGroupProps) {
+function SceneRowGroup({
+  scene,
+  index,
+  isDisabled,
+  characters,
+  onInsert,
+  onUpdateScene,
+  onToggleDisable,
+}: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
@@ -604,9 +636,11 @@ function SceneRowGroup({ scene, index, characters, onInsert, onUpdateScene }: Sc
       <SceneBatchRow
         scene={scene}
         index={index}
+        isDisabled={isDisabled}
         onMouseEnter={enter}
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}
+        onToggleDisable={onToggleDisable}
       />
 
       {/* Add BELOW button – sau mỗi scene */}
@@ -701,6 +735,21 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { scriptData, setScriptData } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
 
+  /** Toggle disabled state on a scene and persist to IndexedDB */
+  const handleToggleDisable = async (sceneId: string) => {
+    const updated = sceneList.map((s) => (s.id === sceneId ? { ...s, disabled: !s.disabled } : s));
+    // 1. Update UI immediately – do NOT call setScriptData to avoid
+    //    triggering a parent re-render that would overwrite local state
+    setSceneList(updated);
+    // 2. Persist to IndexedDB by reading current record then merging
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleToggleDisable] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   const handleInsert = (targetScene: SceneScript, position: InsertPosition, data: NewSceneData) => {
     const newScene: SceneScript = {
       id: `s-${Date.now()}`,
@@ -789,9 +838,11 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 key={scene.id}
                 scene={scene}
                 index={index}
+                isDisabled={!!scene.disabled}
                 characters={characters}
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
+                onToggleDisable={handleToggleDisable}
               />
             ))}
           </tbody>

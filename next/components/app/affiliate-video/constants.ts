@@ -193,6 +193,7 @@ export interface SceneScript {
   imageGenPrompt: string;
   motionPrompt: string;
   dialogue: string;
+  disabled?: boolean;
 }
 
 export interface ScriptData {
