@@ -106,7 +106,6 @@ interface SceneCardProps {
 export function SceneCard({ scene }: SceneCardProps) {
   const shotColorClass = SHOT_COLORS[scene.camera] || "bg-gray-100 text-gray-600 border-gray-200";
 
-  console.log(scene);
   return (
     <div className="rounded-2xl border bg-gray-50 overflow-hidden mb-4">
       {/* Scene header */}

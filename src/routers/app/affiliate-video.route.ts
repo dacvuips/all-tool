@@ -44,6 +44,7 @@ export default [
           config: AffiliateVideoFormConfig;
           text: string;
         };
+        console.log(body, body?.config?.batchSize);
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
@@ -62,17 +63,22 @@ export default [
 
         const apiKey = decryptProviderSecret(credential.value);
         logger.info("API-key", { apiKey });
-        const prompt = `Nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
+        const prompt = `
 
 Xây dựng nội dung: Chuyển tải {{tipContent}} thông qua một tình huống có mood {{mood}}.
 
-Kỹ thuật Video: Viết {{visualPrompt}} và {{motionPrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật.
-Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật.
-Luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong "Image Prompt" và "Visual Prompt".
+Kỹ thuật Video: Viết visualPrompt và motionPrompt bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật,luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong, nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
+Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật,luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong, nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
 
 Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
+Audio từng phân cảnh: giới tính {{gender}}, giọng {{voice}}
 
 Đầu ra (Output): Xuất kết quả duy nhất dưới dạng một JSON Object mới.
+Quang trọng: Image prompt và video prompt phải luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}}, phải đồng nhất được nhân vật qua các phân cảnh. Trong Image prompt và video prompt phải đồng nhất nhân vật giữa 2 prompt. Không chứa text trong image prompt và video prompt.
+ 
+Scenes array must contain exactly ${
+          body?.config?.batchSize > 1 ? `{{batchSize}}` : 5
+        } objects. Each object must follow the defined schema
 
 `;
 

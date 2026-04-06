@@ -5,6 +5,7 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
+import { BsFile } from "react-icons/bs";
 import { Button, Field } from "../../../shared/utilities/form";
 import { Input } from "../../../shared/utilities/form/input";
 import { Select } from "../../../shared/utilities/form/select";
@@ -77,7 +78,7 @@ export const AffiliateConfig = () => {
                         : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
                     }`}
                   >
-                    <span className="text-base">{isPortrait ? "📱" : "🖥"}</span>
+                    <span className="text-base">{isPortrait ? <BsFile /> : <BsFile style={{ transform: "rotate(90deg)" }} />}</span>
                     {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
                   </Button>
                 );

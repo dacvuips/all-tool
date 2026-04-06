@@ -194,6 +194,7 @@ export interface SceneScript {
   motionPrompt: string;
   dialogue: string;
   disabled?: boolean;
+  audio?: string;
 }
 
 export interface ScriptData {
@@ -223,4 +224,5 @@ export const DB_VERSION = 1;
 
 export const CACHE_KEY = {
   lastScript: "lastScript",
+  generateInput: "generateInput",
 };

@@ -45,6 +45,7 @@ interface NewSceneData {
   voiceover: string;
   cameraAngle: string;
   selectedCharacters: string[];
+  audio: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ function AddSceneModal({
   const [cameraAngle, setCameraAngle] = useState("");
   const [selectedChars, setSelectedChars] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
-
+  const [audio, setAudio] = useState("");
   const toggleChar = (id: string) => {
     setSelectedChars((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
@@ -97,7 +98,7 @@ function AddSceneModal({
   const handleCreate = async () => {
     setCreating(true);
     await new Promise((r) => setTimeout(r, 800));
-    onConfirm({ description, voiceover, cameraAngle, selectedCharacters: selectedChars });
+    onConfirm({ description, voiceover, cameraAngle, selectedCharacters: selectedChars, audio });
     setCreating(false);
   };
 
@@ -120,7 +121,7 @@ function AddSceneModal({
     >
       <Dialog.Header>
         {/* ── Modal Header ── */}
-        <div className="px-5 py-4 ">
+        <div className="px-5 pt-4 ">
           <div className="flex items-center justify-between">
             <div>
               <div className=" font-bold text-base">✨ Thêm Scene Mới</div>
@@ -138,7 +139,7 @@ function AddSceneModal({
 
       <Dialog.Body>
         {/* ── Modal Body ── */}
-        <div className="p-5 space-y-4 max-h-96 overflow-y-auto">
+        <div className="px-4 py-2 space-y-2 max-h-96 overflow-y-auto">
           {/* Mô tả nội dung */}
           <div>
             <div className="text-sm font-semibold text-gray-700 mb-2">
@@ -335,7 +336,7 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
-type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue";
+type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio";
 
 function SceneBatchRow({
   scene,
@@ -550,11 +551,19 @@ function SceneBatchRow({
           <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
         )}
         {renderEditablePrompt(
+          "audio",
+          scene.audio ?? "",
+          "text-purple-700",
+          <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
+            [AUDIO]:
+          </div>
+        )}
+        {renderEditablePrompt(
           "dialogue",
           scene.dialogue ?? "",
           "text-green-700 italic",
           <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
-            [AUDIO]:
+            [DIALOGUE]:
           </div>
         )}
         {editingField !== "motionPrompt" && editingField !== "dialogue" && needsExpand && (
@@ -771,6 +780,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       motionPrompt: data.description || "(AI generated)",
       dialogue: data.voiceover || "",
       visualPrompt: "",
+      audio: data.audio || "",
     };
 
     setSceneList((prev) => {

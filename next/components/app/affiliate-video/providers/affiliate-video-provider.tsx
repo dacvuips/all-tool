@@ -77,7 +77,7 @@ export function AffiliateVideoProvider(props) {
   const stopRef = useRef(false);
 
   // ── IndexedDB – shared cache for AI results ──
-  const scriptDB = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
+  const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
 
   // ── Script / Batch state ──
   const [scriptData, setScriptData] = useState<ScriptData | null>(null);
@@ -174,13 +174,16 @@ export function AffiliateVideoProvider(props) {
 
       // Update UI state
       setScriptData(scriptResult);
-
+      // update generate scene input
+      scriptDB
+        .set(CACHE_KEY.generateInput, data)
+        .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
       // Persist to IndexedDB (non-blocking)
       scriptDB
         .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
       setBatchRunning(false);
-      console.log("[affiliate-video] submit success", result);
+
       return result;
     } catch (err: any) {
       console.error("[affiliate-video] submit error", err?.message);

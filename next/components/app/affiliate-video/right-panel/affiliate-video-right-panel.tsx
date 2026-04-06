@@ -150,6 +150,7 @@ export const AffiliateVideoRightPanel = () => {
               dialogue: s.dialogue || "",
               visualPrompt: s.visualPrompt || "",
               disabled: (s as any).disabled ?? false,
+              audio: s.audio || "",
             }))}
             characters={[]}
           />
