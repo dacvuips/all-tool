@@ -11,6 +11,7 @@ import {
   ScriptData,
   STORE_NAME,
 } from "../constants";
+import { useAffiliateVideoApi, GenerateSceneFromTextParams } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -64,6 +65,7 @@ export const AffiliateVideoContext = createContext<
     batchList: string[];
     setBatchList: (list: string[]) => void;
     handleSubmit: (data: AffiliateVideoFormConfig, promptText?: string) => void;
+    generateSceneFromText: (params: GenerateSceneFromTextParams) => Promise<ScriptData | undefined>;
     affiliateVideoFormConfig: AffiliateVideoFormConfig;
     setAffiliateVideoFormConfig: (videoConfig: AffiliateVideoFormConfig) => void;
     defaultVideoConfig: AffiliateVideoFormConfig;
@@ -73,6 +75,7 @@ export const AffiliateVideoContext = createContext<
 export function AffiliateVideoProvider(props) {
   const { t } = useTranslation();
   const toast = useToast();
+  const { generateScene, generateSceneFromText } = useAffiliateVideoApi();
   const [searchQuery, setSearchQuery] = useState("");
   const stopRef = useRef(false);
 
@@ -156,35 +159,15 @@ export function AffiliateVideoProvider(props) {
   const handleSubmit = async (data: AffiliateVideoFormConfig, promptText?: string) => {
     try {
       setBatchRunning(true);
-      const res = await fetch("/api/app/generation-scene/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: data }),
-      });
+      const scriptResult = promptText
+        ? await generateSceneFromText({ text: promptText, config: data })
+        : await generateScene(data);
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        toast.error(err?.message || `Lỗi ${res.status}`);
-        setBatchRunning(false);
-        return;
+      if (scriptResult) {
+        setScriptData(scriptResult);
       }
-
-      const result = await res.json();
-      const scriptResult: ScriptData = result.data;
-
-      // Update UI state
-      setScriptData(scriptResult);
-      // update generate scene input
-      scriptDB
-        .set(CACHE_KEY.generateInput, data)
-        .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
-      // Persist to IndexedDB (non-blocking)
-      scriptDB
-        .set(CACHE_KEY.lastScript, scriptResult)
-        .catch((e) => console.warn("[affiliate-video] IndexedDB write error", e));
       setBatchRunning(false);
-
-      return result;
+      return scriptResult;
     } catch (err: any) {
       console.error("[affiliate-video] submit error", err?.message);
       setBatchRunning(false);
@@ -218,6 +201,7 @@ export function AffiliateVideoProvider(props) {
         batchList,
         setBatchList,
         handleSubmit,
+        generateSceneFromText,
         affiliateVideoFormConfig,
         setAffiliateVideoFormConfig,
         defaultVideoConfig,

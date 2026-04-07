@@ -32,6 +32,7 @@ import {
   STORE_NAME,
 } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
+import { useAffiliateVideoApi, GeneratedImageData, GeneratedVideoData } from "../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -360,6 +361,14 @@ function SceneBatchRow({
   const [saving, setSaving] = useState(false);
   const [hoveredField, setHoveredField] = useState<EditField | null>(null);
   const [copiedField, setCopiedField] = useState<EditField | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [imageProgress, setImageProgress] = useState(0);
+  const [generatedImage, setGeneratedImage] = useState<GeneratedImageData | null>(null);
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoStatusMessage, setVideoStatusMessage] = useState("");
+  const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoData | null>(null);
+  const { generateImage, getGeneratedImage, generateVideo, getGeneratedVideo } = useAffiliateVideoApi();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -408,6 +417,67 @@ function SceneBatchRow({
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [editValue]);
+
+  // Load previously generated image from IndexedDB on mount
+  useEffect(() => {
+    getGeneratedImage(scene.id).then((img) => {
+      if (img) setGeneratedImage(img);
+    });
+  }, [scene.id, getGeneratedImage]);
+
+  // Load previously generated video from IndexedDB on mount
+  useEffect(() => {
+    getGeneratedVideo(scene.id).then((vid) => {
+      if (vid) setGeneratedVideo(vid);
+    });
+  }, [scene.id, getGeneratedVideo]);
+
+  /** Handle generate image click */
+  const handleGenerateImage = async () => {
+    if (generatingImage || !scene.imageGenPrompt) return;
+    setGeneratingImage(true);
+    setImageProgress(0);
+    try {
+      const result = await generateImage({
+        sceneId: scene.id,
+        prompt: scene.imageGenPrompt,
+        onProgress: (pct) => setImageProgress(pct),
+      });
+      if (result) {
+        setGeneratedImage(result);
+      }
+    } catch {
+      // error already toasted inside generateImage
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
+  /** Handle generate video click */
+  const handleGenerateVideo = async () => {
+    if (generatingVideo || !scene.motionPrompt) return;
+    setGeneratingVideo(true);
+    setVideoProgress(0);
+    setVideoStatusMessage("");
+    try {
+      const result = await generateVideo({
+        sceneId: scene.id,
+        prompt: scene.motionPrompt,
+        image: generatedImage
+          ? { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }
+          : undefined,
+        onProgress: (pct) => setVideoProgress(pct),
+        onStatusMessage: (msg) => setVideoStatusMessage(msg),
+      });
+      if (result) {
+        setGeneratedVideo(result);
+      }
+    } catch {
+      // error already toasted inside generateVideo
+    } finally {
+      setGeneratingVideo(false);
+    }
+  };
 
   /** Renders editable prompt cell content */
   const renderEditablePrompt = (
@@ -579,24 +649,101 @@ function SceneBatchRow({
       {/* Generated Image */}
       <td className="py-3 px-3 w-24">
         <div className="flex justify-center">
-          <button className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group">
-            <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
-            <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
-              Create
-            </span>
-          </button>
+          {generatedImage ? (
+            /* ── Show generated image thumbnail ── */
+            <div className="relative w-16 h-16 group">
+              <img
+                src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
+                alt={`Scene ${scene.sceneNumber}`}
+                className="w-16 h-16 rounded-xl object-cover border-2 border-green-300 shadow-sm"
+              />
+              {/* Re-generate overlay on hover */}
+              <button
+                onClick={handleGenerateImage}
+                disabled={generatingImage}
+                className="absolute inset-0 rounded-xl bg-black bg-opacity-0 group-hover:bg-opacity-50 flex flex-col items-center justify-center cursor-pointer transition-all border-0 opacity-0 group-hover:opacity-100"
+              >
+                <RiRefreshLine className="text-white text-lg" />
+                <span className="text-white text-[10px] font-medium mt-0.5">Tạo lại</span>
+              </button>
+            </div>
+          ) : generatingImage ? (
+            /* ── Spinner + progress ── */
+            <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
+              <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
+              <span className="text-pink-600 text-[10px] font-bold mt-0.5">
+                {imageProgress}%
+              </span>
+            </div>
+          ) : (
+            /* ── Default create button ── */
+            <button
+              onClick={handleGenerateImage}
+              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+            >
+              <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
+              <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
+                Create
+              </span>
+            </button>
+          )}
         </div>
       </td>
 
       {/* Generated Video */}
       <td className="py-3 px-3 w-24">
         <div className="flex justify-center">
-          <button className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 flex flex-col items-center justify-center cursor-pointer transition-all group">
-            <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
-            <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
-              Create
-            </span>
-          </button>
+          {generatedVideo ? (
+            /* ── Show generated video thumbnail ── */
+            <div className="relative w-16 h-16 group">
+              {generatedVideo.videoUri ? (
+                <video
+                  src={generatedVideo.videoUri}
+                  className="w-16 h-16 rounded-xl object-cover border-2 border-purple-300 shadow-sm"
+                  muted
+                  loop
+                  onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                  onMouseLeave={(e) => {
+                    const v = e.target as HTMLVideoElement;
+                    v.pause();
+                    v.currentTime = 0;
+                  }}
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex items-center justify-center">
+                  <RiVideoFill className="text-purple-400 text-xl" />
+                </div>
+              )}
+              {/* Re-generate overlay on hover */}
+              <button
+                onClick={handleGenerateVideo}
+                disabled={generatingVideo}
+                className="absolute inset-0 rounded-xl bg-black bg-opacity-0 group-hover:bg-opacity-50 flex flex-col items-center justify-center cursor-pointer transition-all border-0 opacity-0 group-hover:opacity-100"
+              >
+                <RiRefreshLine className="text-white text-lg" />
+                <span className="text-white text-[10px] font-medium mt-0.5">Tạo lại</span>
+              </button>
+            </div>
+          ) : generatingVideo ? (
+            /* ── Spinner + progress ── */
+            <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
+              <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
+              <span className="text-purple-600 text-[10px] font-bold mt-0.5">
+                {videoProgress}%
+              </span>
+            </div>
+          ) : (
+            /* ── Default create button ── */
+            <button
+              onClick={handleGenerateVideo}
+              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+            >
+              <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
+              <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
+                Create
+              </span>
+            </button>
+          )}
         </div>
       </td>
     </tr>
