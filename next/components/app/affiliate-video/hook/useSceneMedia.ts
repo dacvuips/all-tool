@@ -1,0 +1,237 @@
+/**
+ * useSceneMedia.ts
+ * Hook quản lý toàn bộ logic media (ảnh/video) cho mỗi scene:
+ * - Load ảnh/video đã tạo từ IndexedDB
+ * - Tạo ảnh mới từ AI (gọi API generation-image)
+ * - Tạo video mới từ AI (gọi API generation-video, SSE)
+ * - Download ảnh đã tạo về máy
+ * - Download video đã tạo về máy
+ */
+import { useEffect, useState } from "react";
+import { SceneScript } from "../constants";
+import {
+  GeneratedImageData,
+  GeneratedVideoData,
+  useAffiliateVideoApi,
+} from "./useAffiliateVideoApi";
+
+// ── Params ─────────────────────────────────────────────────────────────────
+
+interface UseSceneMediaParams {
+  /** Scene hiện tại */
+  scene: SceneScript;
+}
+
+// ── Return type ────────────────────────────────────────────────────────────
+
+export interface UseSceneMediaReturn {
+  // ── Image state ──
+  /** Ảnh đã tạo (hoặc load từ cache) */
+  generatedImage: GeneratedImageData | null;
+  /** Đang trong quá trình tạo ảnh */
+  generatingImage: boolean;
+  /** Tiến trình tạo ảnh 0-100 */
+  imageProgress: number;
+
+  // ── Video state ──
+  /** Video đã tạo (hoặc load từ cache) */
+  generatedVideo: GeneratedVideoData | null;
+  /** Đang trong quá trình tạo video */
+  generatingVideo: boolean;
+  /** Tiến trình tạo video 0-100 */
+  videoProgress: number;
+  /** Thông báo trạng thái video (SSE message) */
+  videoStatusMessage: string;
+
+  // ── Actions ──
+  /** Gọi API tạo ảnh mới từ scene.imageGenPrompt */
+  handleGenerateImage: () => Promise<void>;
+  /** Gọi API tạo video từ scene.motionPrompt + audio + dialogue */
+  handleGenerateVideo: () => Promise<void>;
+  /** Download ảnh đã tạo về máy (trigger browser download) */
+  handleDownloadImage: () => void;
+  /** Download video đã tạo về máy (trigger browser download) */
+  handleDownloadVideo: () => Promise<void>;
+}
+
+// ── Hook ───────────────────────────────────────────────────────────────────
+
+export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaReturn {
+  // ── State ──
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [imageProgress, setImageProgress] = useState(0);
+  const [generatedImage, setGeneratedImage] = useState<GeneratedImageData | null>(null);
+
+  const [generatingVideo, setGeneratingVideo] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoStatusMessage, setVideoStatusMessage] = useState("");
+  const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoData | null>(null);
+
+  const { generateImage, getGeneratedImage, generateVideo, getGeneratedVideo } =
+    useAffiliateVideoApi();
+
+  // ── Load ảnh đã tạo trước đó từ IndexedDB ──
+  useEffect(() => {
+    getGeneratedImage(scene.id).then((img) => {
+      if (img) setGeneratedImage(img);
+    });
+  }, [scene.id, getGeneratedImage]);
+
+  // ── Load video đã tạo trước đó từ IndexedDB ──
+  useEffect(() => {
+    getGeneratedVideo(scene.id).then((vid) => {
+      if (vid) setGeneratedVideo(vid);
+    });
+  }, [scene.id, getGeneratedVideo]);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleGenerateImage
+  // Gọi API tạo ảnh từ scene.imageGenPrompt.
+  // Cập nhật progress qua callback, lưu kết quả vào state + IndexedDB.
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleGenerateImage = async () => {
+    if (generatingImage || !scene.imageGenPrompt) return;
+    setGeneratingImage(true);
+    setImageProgress(0);
+
+    try {
+      const result = await generateImage({
+        sceneId: scene.id,
+        prompt: scene.imageGenPrompt,
+        onProgress: (pct) => setImageProgress(pct),
+      });
+
+      if (result) {
+        setGeneratedImage(result);
+        console.log(
+          "[handleGenerateImage] Image set successfully, mimeType:",
+          result.mimeType,
+          "bytes length:",
+          result.imageBytes?.length
+        );
+      } else {
+        console.warn("[handleGenerateImage] No result returned");
+      }
+    } catch (err) {
+      console.error("[handleGenerateImage] Error:", err);
+    } finally {
+      setGeneratingImage(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleGenerateVideo
+  // Gọi API tạo video từ scene.motionPrompt + audio + dialogue.
+  // Nếu đã có ảnh (generatedImage) sẽ gửi kèm để dùng image-to-video.
+  // Sử dụng SSE stream để nhận progress và status message.
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleGenerateVideo = async () => {
+    if (generatingVideo || !scene.motionPrompt) return;
+    setGeneratingVideo(true);
+    setVideoProgress(0);
+    setVideoStatusMessage("");
+    try {
+      const result = await generateVideo({
+        sceneId: scene.id,
+        prompt: `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
+        image: generatedImage
+          ? { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }
+          : undefined,
+        onProgress: (pct) => setVideoProgress(pct),
+        onStatusMessage: (msg) => setVideoStatusMessage(msg),
+      });
+      if (result) {
+        setGeneratedVideo(result);
+      }
+    } catch {
+      // error already toasted inside generateVideo
+    } finally {
+      setGeneratingVideo(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleDownloadImage
+  // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
+  // Tên file: scene-{sceneNumber}-image.{ext}
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleDownloadImage = () => {
+    if (!generatedImage) return;
+    const byteChars = atob(generatedImage.imageBytes);
+    const byteNumbers = new Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedImage.mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const ext = generatedImage.mimeType.split("/")[1] || "png";
+    a.download = `scene-${scene.sceneNumber}-image.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleDownloadVideo
+  // Nếu có videoUri → fetch blob rồi download.
+  // Nếu có videoBytes (base64) → decode → Blob → download.
+  // Tên file: scene-{sceneNumber}-video.{ext}
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleDownloadVideo = async () => {
+    if (!generatedVideo) return;
+    try {
+      if (generatedVideo.videoUri) {
+        // Download từ URI
+        const res = await fetch(generatedVideo.videoUri);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `scene-${scene.sceneNumber}-video.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else if (generatedVideo.videoBytes) {
+        // Download từ base64
+        const byteChars = atob(generatedVideo.videoBytes);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNumbers[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedVideo.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ext = generatedVideo.mimeType.split("/")[1] || "mp4";
+        a.download = `scene-${scene.sceneNumber}-video.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error("[handleDownloadVideo] Error:", err);
+    }
+  };
+
+  return {
+    // Image
+    generatedImage,
+    generatingImage,
+    imageProgress,
+    // Video
+    generatedVideo,
+    generatingVideo,
+    videoProgress,
+    videoStatusMessage,
+    // Actions
+    handleGenerateImage,
+    handleGenerateVideo,
+    handleDownloadImage,
+    handleDownloadVideo,
+  };
+}

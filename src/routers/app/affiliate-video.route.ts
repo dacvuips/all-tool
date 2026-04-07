@@ -8,6 +8,28 @@ import { Context } from "../../libs/graphql";
 import { decryptProviderSecret } from "../../packages/encryption/encrypt-provider";
 import { AffiliateVideoResponseSchema } from "./constanst";
 
+/** Helper: Tạo GoogleGenAI client dùng Vertex AI */
+function createVertexAIClient(serviceAccountKeyJson: string, location = "us-central1") {
+  // Parse service account key JSON
+  let credentials: any;
+  try {
+    credentials = JSON.parse(serviceAccountKeyJson);
+  } catch {
+    // Nếu không phải JSON, coi như là API key thông thường (fallback)
+    return new GoogleGenAI({ apiKey: serviceAccountKeyJson });
+  }
+
+  // Dùng Vertex AI backend với service account credentials
+  return new GoogleGenAI({
+    vertexai: true,
+    project: credentials.project_id || "vertex-ai-app-490903",
+    location,
+    googleAuthOptions: {
+      credentials,
+    },
+  });
+}
+
 export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;
@@ -87,7 +109,7 @@ Scenes array must contain exactly ${
 
         logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
         console.log(interpolatedText);
-        const genAI = new GoogleGenAI({ apiKey });
+        const genAI = createVertexAIClient(apiKey);
 
         const result = await genAI.models.generateContent({
           model: "gemini-2.5-flash",
@@ -146,23 +168,28 @@ Scenes array must contain exactly ${
         }
 
         const apiKey = decryptProviderSecret(credential.value);
-        const genAI = new GoogleGenAI({ apiKey });
+        const genAI = createVertexAIClient(apiKey, "global");
 
-        logger.info(`[generation-image] Gọi Imagen cho user ${context.id}`);
+        logger.info(
+          `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
+        );
 
-        const response = await genAI.models.generateImages({
-          model: "imagen-3.0-generate-002",
-          prompt: body.prompt,
+        const response = await genAI.models.generateContent({
+          model: "gemini-3.1-flash-image-preview",
+          contents: [{ role: "user", parts: [{ text: body.prompt }] }],
           config: {
-            numberOfImages: body.config?.numberOfImages || 1,
-            aspectRatio: body.config?.aspectRatio || "1:1",
-          },
+            responseModalities: ["IMAGE"],
+          } as any,
         });
 
-        const images = (response.generatedImages || []).map((img: any) => ({
-          imageBytes: img.image?.imageBytes,
-          mimeType: img.image?.mimeType || "image/png",
-        }));
+        // Extract images from response candidate parts
+        const parts = (response as any).candidates?.[0]?.content?.parts || [];
+        const images = parts
+          .filter((part: any) => part.inlineData)
+          .map((part: any) => ({
+            imageBytes: part.inlineData.data,
+            mimeType: part.inlineData.mimeType || "image/png",
+          }));
 
         res.json({ success: true, data: images });
       } catch (err: any) {
@@ -205,7 +232,7 @@ Scenes array must contain exactly ${
         }
 
         const apiKey = decryptProviderSecret(credential.value);
-        const genAI = new GoogleGenAI({ apiKey });
+        const genAI = createVertexAIClient(apiKey);
 
         logger.info(`[generation-video] Gọi Veo 3.1 fast cho user ${context.id}`);
 
@@ -227,6 +254,7 @@ Scenes array must contain exactly ${
           generateAudio: body.config?.generateAudio ?? true,
         };
 
+        // Sử dụng Vertex AI với Veo 3.1 Fast (lower priority / lower cost tier)
         const generateParams: any = {
           model: "veo-3.1-fast-generate-001",
           prompt: body.prompt,
@@ -261,7 +289,7 @@ Scenes array must contain exactly ${
           });
 
           try {
-            operation = await genAI.operations.get({ operation: operation as any });
+            operation = await genAI.operations.getVideosOperation({ operation: operation as any });
           } catch (pollErr: any) {
             logger.warn(`[generation-video] Poll error: ${pollErr?.message}`);
           }
@@ -275,6 +303,8 @@ Scenes array must contain exactly ${
 
         sendSSE({ type: "progress", progress: 95, message: "Đang lấy kết quả..." });
 
+        // Log full response for debugging
+
         const generatedVideos = (operation as any).response?.generatedVideos || [];
         if (generatedVideos.length === 0) {
           sendSSE({ type: "error", message: "Không nhận được video từ API" });
@@ -283,11 +313,16 @@ Scenes array must contain exactly ${
         }
 
         const video = generatedVideos[0].video;
+        // API trả về videoBytes (base64) khi không có outputGcsUri, hoặc uri khi có GCS
+        const videoUri = video?.uri || null;
+        const videoBytes = video?.videoBytes || null;
+
         sendSSE({
           type: "done",
           progress: 100,
           data: {
-            videoUri: video?.uri || null,
+            videoUri,
+            videoBytes,
             mimeType: video?.mimeType || "video/mp4",
           },
         });

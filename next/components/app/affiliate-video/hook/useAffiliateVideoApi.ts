@@ -4,13 +4,7 @@
  */
 import { useCallback } from "react";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import {
-  AffiliateVideoFormConfig,
-  CACHE_KEY,
-  DB_NAME,
-  ScriptData,
-  STORE_NAME,
-} from "../constants";
+import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, ScriptData, STORE_NAME } from "../constants";
 import { useIndexedDB } from "./useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -60,7 +54,8 @@ export interface GeneratedImageData {
 }
 
 export interface GeneratedVideoData {
-  videoUri: string;
+  videoUri: string | null;
+  videoBytes: string | null; // base64 – returned when no outputGcsUri is set
   mimeType: string;
 }
 
@@ -127,7 +122,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       return res.json();
     },
-    [toast],
+    [toast]
   );
 
   // ── generateScene (flow cũ – từ config form) ──
@@ -148,7 +143,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       return scriptResult;
     },
-    [callGenerationSceneApi, scriptDB],
+    [callGenerationSceneApi, scriptDB]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
@@ -169,7 +164,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       return scriptResult;
     },
-    [callGenerationSceneApi, scriptDB],
+    [callGenerationSceneApi, scriptDB]
   );
 
   // ── generateImage – gọi API tạo ảnh từ prompt ──
@@ -202,7 +197,13 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const result = await res.json();
         onProgress?.(80);
 
-        const images: GeneratedImageData[] = result.data || [];
+        // Handle both formats: direct array [...] or wrapped { data: [...] }
+        const images: GeneratedImageData[] = Array.isArray(result)
+          ? result
+          : Array.isArray(result.data)
+          ? result.data
+          : [];
+
         if (images.length === 0) {
           toast.error("Không nhận được ảnh từ API");
           return undefined;
@@ -221,7 +222,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         throw err;
       }
     },
-    [toast, imageDB],
+    [toast, imageDB]
   );
 
   // ── getGeneratedImage – lấy ảnh đã tạo từ IndexedDB ──
@@ -229,7 +230,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (sceneId: string): Promise<GeneratedImageData | undefined> => {
       return imageDB.get(sceneId);
     },
-    [imageDB],
+    [imageDB]
   );
 
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
@@ -325,7 +326,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         throw err;
       }
     },
-    [toast, videoDB],
+    [toast, videoDB]
   );
 
   // ── getGeneratedVideo – lấy video đã tạo từ IndexedDB ──
@@ -333,7 +334,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (sceneId: string): Promise<GeneratedVideoData | undefined> => {
       return videoDB.get(sceneId);
     },
-    [videoDB],
+    [videoDB]
   );
 
   return {

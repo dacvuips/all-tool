@@ -28,12 +28,12 @@ export function CastSection({ scriptData, title }: CastSectionProps) {
     <div className="mb-4">
       {/* Section header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 whitespace-nowrap">
           <RiUser3Fill className="text-primary text-lg" />
           <h3 className="text-base font-bold text-gray-800">{title ?? "Dàn Nhân Vật (Cast)"}</h3>
         </div>
         {scriptData.artStyle && (
-          <span className="text-xs font-bold px-3 py-1 rounded-full bg-warning-light text-warning-dark border border-warning-200 uppercase tracking-wide whitespace-nowrap">
+          <span className="text-xs max-w-sm truncate font-bold px-3 py-1 rounded-full bg-warning-light text-warning-dark border border-warning-200 uppercase tracking-wide whitespace-nowrap">
             {scriptData.artStyle}
           </span>
         )}

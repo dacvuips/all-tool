@@ -13,6 +13,7 @@ export interface ImgProps extends ReactProps {
   avatar?: boolean;
   rounded?: boolean;
   ratio169?: boolean;
+  ratio916?: boolean;
   percent?: number;
   once?: boolean;
   checkerboard?: boolean;
@@ -93,8 +94,8 @@ export function Img({
           props.showImageOnClick || props.onClick ? "cursor-pointer" : ""
         }`}
         style={{
-          ...(props.percent || props.ratio169
-            ? { paddingTop: props.ratio169 ? "56.25%" : props.percent + "%" }
+          ...(props.percent || props.ratio169 || props.ratio916
+            ? { paddingTop: props.ratio916 ? "177.78%" : props.ratio169 ? "56.25%" : props.percent + "%" }
             : {}),
         }}
       >

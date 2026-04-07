@@ -32,7 +32,7 @@ export const uid = () => `${Date.now()}-${++_uid}`;
 // ── Core Types ─────────────────────────────────────────────────────────────
 export type MediaType = "image" | "video";
 export type ItemRole = "input" | "keyframe" | "output";
-export type AspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+export type AspectRatio = "9:16" | "16:9";
 export type Quality = "standard" | "high";
 export type OutputFormat = "mp4" | "webm";
 export type SpeedMode = "fast" | "relaxed" | "quality";
@@ -80,6 +80,19 @@ export const BUILTIN_VOICES = [
   { value: "Orus", label: "Orus – Nam, điềm tĩnh" },
   { value: "Puck", label: "Puck – Nam, thú vị" },
   { value: "Zephyr", label: "Zephyr – Nam, sáng sủa" },
+];
+export const CAMERA_ANGLES = [
+  "Cận cảnh",
+  "Trung cận",
+  "Trung cảnh",
+  "Toàn cảnh",
+  "Viền cảnh",
+  "Góc thấp",
+  "Góc cao",
+  "Qua vai",
+  "Góc nghiêng",
+  "Theo dõi",
+  "POV",
 ];
 
 export const IMAGE_STYLES = [

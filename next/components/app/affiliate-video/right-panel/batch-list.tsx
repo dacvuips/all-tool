@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
   RiAddLine,
@@ -22,9 +23,14 @@ import {
   RiSaveLine,
   RiVideoFill,
 } from "react-icons/ri";
+import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
+import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../shared/utilities/form";
+import { Img } from "../../../shared/utilities/misc";
 import {
   CACHE_KEY,
+  CAMERA_ANGLES,
   CharacterItem,
   DB_NAME,
   SceneScript,
@@ -32,12 +38,8 @@ import {
   STORE_NAME,
 } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
-import { useAffiliateVideoApi, GeneratedImageData, GeneratedVideoData } from "../hook/useAffiliateVideoApi";
+import { useSceneMedia } from "../hook/useSceneMedia";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
 
 type InsertPosition = "above" | "below";
 
@@ -48,28 +50,6 @@ interface NewSceneData {
   selectedCharacters: string[];
   audio: string;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Camera Angles
-// ─────────────────────────────────────────────────────────────────────────────
-
-const CAMERA_ANGLES = [
-  "Cận cảnh",
-  "Trung cận",
-  "Trung cảnh",
-  "Toàn cảnh",
-  "Viền cảnh",
-  "Góc thấp",
-  "Góc cao",
-  "Qua vai",
-  "Góc nghiêng",
-  "Theo dõi",
-  "POV",
-];
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AddSceneModal
-// ─────────────────────────────────────────────────────────────────────────────
 
 interface AddSceneModalProps {
   targetScene: SceneScript;
@@ -355,20 +335,29 @@ function SceneBatchRow({
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [hoveredField, setHoveredField] = useState<EditField | null>(null);
   const [copiedField, setCopiedField] = useState<EditField | null>(null);
-  const [generatingImage, setGeneratingImage] = useState(false);
-  const [imageProgress, setImageProgress] = useState(0);
-  const [generatedImage, setGeneratedImage] = useState<GeneratedImageData | null>(null);
-  const [generatingVideo, setGeneratingVideo] = useState(false);
-  const [videoProgress, setVideoProgress] = useState(0);
-  const [videoStatusMessage, setVideoStatusMessage] = useState("");
-  const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoData | null>(null);
-  const { generateImage, getGeneratedImage, generateVideo, getGeneratedVideo } = useAffiliateVideoApi();
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const {
+    generatedImage,
+    generatingImage,
+    imageProgress,
+    generatedVideo,
+    generatingVideo,
+    videoProgress,
+    videoStatusMessage,
+    handleGenerateImage,
+    handleGenerateVideo,
+    handleDownloadImage,
+    handleDownloadVideo,
+  } = useSceneMedia({ scene });
+  const { videoConfig } = useAffiliateVideoContext();
+  const videoPaddingTop = videoConfig?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -417,67 +406,6 @@ function SceneBatchRow({
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [editValue]);
-
-  // Load previously generated image from IndexedDB on mount
-  useEffect(() => {
-    getGeneratedImage(scene.id).then((img) => {
-      if (img) setGeneratedImage(img);
-    });
-  }, [scene.id, getGeneratedImage]);
-
-  // Load previously generated video from IndexedDB on mount
-  useEffect(() => {
-    getGeneratedVideo(scene.id).then((vid) => {
-      if (vid) setGeneratedVideo(vid);
-    });
-  }, [scene.id, getGeneratedVideo]);
-
-  /** Handle generate image click */
-  const handleGenerateImage = async () => {
-    if (generatingImage || !scene.imageGenPrompt) return;
-    setGeneratingImage(true);
-    setImageProgress(0);
-    try {
-      const result = await generateImage({
-        sceneId: scene.id,
-        prompt: scene.imageGenPrompt,
-        onProgress: (pct) => setImageProgress(pct),
-      });
-      if (result) {
-        setGeneratedImage(result);
-      }
-    } catch {
-      // error already toasted inside generateImage
-    } finally {
-      setGeneratingImage(false);
-    }
-  };
-
-  /** Handle generate video click */
-  const handleGenerateVideo = async () => {
-    if (generatingVideo || !scene.motionPrompt) return;
-    setGeneratingVideo(true);
-    setVideoProgress(0);
-    setVideoStatusMessage("");
-    try {
-      const result = await generateVideo({
-        sceneId: scene.id,
-        prompt: scene.motionPrompt,
-        image: generatedImage
-          ? { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }
-          : undefined,
-        onProgress: (pct) => setVideoProgress(pct),
-        onStatusMessage: (msg) => setVideoStatusMessage(msg),
-      });
-      if (result) {
-        setGeneratedVideo(result);
-      }
-    } catch {
-      // error already toasted inside generateVideo
-    } finally {
-      setGeneratingVideo(false);
-    }
-  };
 
   /** Renders editable prompt cell content */
   const renderEditablePrompt = (
@@ -651,39 +579,51 @@ function SceneBatchRow({
         <div className="flex justify-center">
           {generatedImage ? (
             /* ── Show generated image thumbnail ── */
-            <div className="relative w-16 h-16 group">
-              <img
+            <div className="relative w-32 h-full group">
+              <Img
+                showImageOnClick
                 src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
                 alt={`Scene ${scene.sceneNumber}`}
-                className="w-16 h-16 rounded-xl object-cover border-2 border-green-300 shadow-sm"
+                className="  rounded-xl object-cover border-2 border-green-300 shadow-sm"
+                ratio916
               />
+
               {/* Re-generate overlay on hover */}
-              <button
-                onClick={handleGenerateImage}
-                disabled={generatingImage}
-                className="absolute inset-0 rounded-xl bg-black bg-opacity-0 group-hover:bg-opacity-50 flex flex-col items-center justify-center cursor-pointer transition-all border-0 opacity-0 group-hover:opacity-100"
-              >
-                <RiRefreshLine className="text-white text-lg" />
-                <span className="text-white text-[10px] font-medium mt-0.5">Tạo lại</span>
-              </button>
+              <div className="flex gap-2 mt-2  w-full items-center justify-center">
+                <Button
+                  onClick={handleDownloadImage}
+                  className="w-8 rounded-lg h-8 bg-success-light text-success"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tải")}
+                  icon={<HiOutlineArrowDownTray />}
+                  placement="bottom"
+                />
+                <Button
+                  onClick={handleGenerateImage}
+                  disabled={generatingImage}
+                  icon={<GenerateAiIcon />}
+                  placement="bottom"
+                  className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tạo lại")}
+                />
+              </div>
             </div>
           ) : generatingImage ? (
             /* ── Spinner + progress ── */
             <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
               <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
-              <span className="text-pink-600 text-[10px] font-bold mt-0.5">
-                {imageProgress}%
-              </span>
+              <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
             </div>
           ) : (
             /* ── Default create button ── */
             <button
               onClick={handleGenerateImage}
-              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+              className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
             >
               <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
               <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
-                Create
+                {t("Tạo ảnh")}
               </span>
             </button>
           )}
@@ -695,53 +635,103 @@ function SceneBatchRow({
         <div className="flex justify-center">
           {generatedVideo ? (
             /* ── Show generated video thumbnail ── */
-            <div className="relative w-16 h-16 group">
-              {generatedVideo.videoUri ? (
-                <video
-                  src={generatedVideo.videoUri}
-                  className="w-16 h-16 rounded-xl object-cover border-2 border-purple-300 shadow-sm"
-                  muted
-                  loop
-                  onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                  onMouseLeave={(e) => {
-                    const v = e.target as HTMLVideoElement;
-                    v.pause();
-                    v.currentTime = 0;
-                  }}
+            <div className="relative w-32 group">
+              {(() => {
+                const videoSrc =
+                  generatedVideo.videoUri ||
+                  (generatedVideo.videoBytes
+                    ? `data:${generatedVideo.mimeType};base64,${generatedVideo.videoBytes}`
+                    : null);
+                return videoSrc ? (
+                  <>
+                    <div
+                      className="relative w-full rounded-xl overflow-hidden border-2 border-purple-300 shadow-sm"
+                      style={{ paddingTop: videoPaddingTop }}
+                    >
+                      <video
+                        src={videoSrc}
+                        className="absolute inset-0 w-full h-full object-cover cursor-pointer"
+                        muted
+                        loop
+                        playsInline
+                        preload="metadata"
+                        onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                        onMouseLeave={(e) => {
+                          const v = e.target as HTMLVideoElement;
+                          v.pause();
+                          v.currentTime = 0;
+                        }}
+                        onClick={() => setShowVideoModal(true)}
+                      />
+                      {/* Play icon overlay */}
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
+                        <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center">
+                          <span className="text-purple-600 text-xs ml-0.5">▶</span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Fullscreen video modal */}
+                    <VideoDialog
+                      videoUrl={videoSrc}
+                      isOpen={showVideoModal}
+                      onClose={() => setShowVideoModal(false)}
+                    />
+                  </>
+                ) : (
+                  <div
+                    className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
+                    style={{ paddingTop: videoPaddingTop }}
+                  >
+                    <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
+                  </div>
+                );
+              })()}
+              {/* Download & Re-generate buttons */}
+              <div className="flex gap-2 mt-2 w-full items-center justify-center">
+                <Button
+                  onClick={handleDownloadVideo}
+                  className="w-8 rounded-lg h-8 bg-success-light text-success"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tải")}
+                  icon={<HiOutlineArrowDownTray />}
+                  placement="bottom"
                 />
-              ) : (
-                <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex items-center justify-center">
-                  <RiVideoFill className="text-purple-400 text-xl" />
-                </div>
-              )}
-              {/* Re-generate overlay on hover */}
-              <button
-                onClick={handleGenerateVideo}
-                disabled={generatingVideo}
-                className="absolute inset-0 rounded-xl bg-black bg-opacity-0 group-hover:bg-opacity-50 flex flex-col items-center justify-center cursor-pointer transition-all border-0 opacity-0 group-hover:opacity-100"
-              >
-                <RiRefreshLine className="text-white text-lg" />
-                <span className="text-white text-[10px] font-medium mt-0.5">Tạo lại</span>
-              </button>
+                <Button
+                  onClick={handleGenerateVideo}
+                  disabled={generatingVideo}
+                  icon={<GenerateAiIcon />}
+                  placement="bottom"
+                  className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tạo lại")}
+                />
+              </div>
             </div>
           ) : generatingVideo ? (
             /* ── Spinner + progress ── */
-            <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
-              <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
-              <span className="text-purple-600 text-[10px] font-bold mt-0.5">
-                {videoProgress}%
-              </span>
+            <div
+              className="relative w-32 rounded-xl border-2 border-purple-300 bg-purple-50"
+              style={{ paddingTop: videoPaddingTop }}
+            >
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
+                <span className="text-purple-600 text-[10px] font-bold mt-0.5">
+                  {videoProgress}%
+                </span>
+              </div>
             </div>
           ) : (
             /* ── Default create button ── */
             <button
               onClick={handleGenerateVideo}
-              className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+              className="relative w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 cursor-pointer transition-all group"
             >
-              <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
-              <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
-                Create
-              </span>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
+                <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
+                  {t("Tạo video")}
+                </span>
+              </div>
             </button>
           )}
         </div>

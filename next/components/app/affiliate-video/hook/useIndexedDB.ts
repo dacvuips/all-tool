@@ -2,11 +2,10 @@
  * useIndexedDB.ts
  *
  * A generic, reusable hook for reading and writing typed data to the browser's
- * IndexedDB. Each "store" is an independent object-store inside the shared
- * "app-cache" database.
+ * IndexedDB. Each "store" is an independent object-store inside its own database.
  *
  * Usage:
- *   const db = useIndexedDB<ScriptData>("affiliate-video-scripts");
+ *   const db = useIndexedDB<ScriptData>("affiliate-video-scripts", "my-db");
  *   await db.set("lastScript", myData);
  *   const data = await db.get("lastScript");
  *   await db.remove("lastScript");
@@ -15,39 +14,36 @@
  */
 
 import { useCallback, useRef } from "react";
-import { DB_NAME_TYPE, DB_VERSION } from "../constants";
+import { DB_NAME_TYPE } from "../constants";
 
-// ── Config
+// ── Cache: one promise per dbName ────────────────────────────────────────────
+const _dbCache = new Map<string, Promise<IDBDatabase>>();
 
-// ── Internal: open (or reuse) the IDBDatabase ───────────────────────────────
-let _dbPromise: Promise<IDBDatabase> | null = null;
+/**
+ * Open DB with the CURRENT version (no version = latest).
+ * If the store doesn't exist yet, we'll upgrade in ensureStore.
+ */
+function openDB(dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
+  const cached = _dbCache.get(dbName);
+  if (cached) return cached;
 
-function openDB(storeName: string, dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
-  if (_dbPromise) return _dbPromise;
-
-  _dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
-    const req = indexedDB.open(dbName, DB_VERSION);
-
-    req.onupgradeneeded = (e) => {
-      const db = (e.target as IDBOpenDBRequest).result;
-      // Create object stores on-the-fly when upgrading
-      if (!db.objectStoreNames.contains(storeName)) {
-        db.createObjectStore(storeName);
-      }
-    };
+  const promise = new Promise<IDBDatabase>((resolve, reject) => {
+    // Open WITHOUT version → uses current/latest version
+    const req = indexedDB.open(dbName);
 
     req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
     req.onerror = (e) => {
-      _dbPromise = null; // allow retry
+      _dbCache.delete(dbName);
       reject((e.target as IDBOpenDBRequest).error);
     };
     req.onblocked = () => {
-      _dbPromise = null;
+      _dbCache.delete(dbName);
       reject(new Error("[useIndexedDB] Database blocked. Close other tabs."));
     };
   });
 
-  return _dbPromise;
+  _dbCache.set(dbName, promise);
+  return promise;
 }
 
 /**
@@ -56,15 +52,15 @@ function openDB(storeName: string, dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
  * onupgradeneeded again.
  */
 async function ensureStore(storeName: string, dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
-  let db = await openDB(storeName, dbName);
+  let db = await openDB(dbName);
 
   if (!db.objectStoreNames.contains(storeName)) {
-    // Need to upgrade – bump version
+    // Need to upgrade – bump version by 1
     const newVersion = db.version + 1;
     db.close();
-    _dbPromise = null;
+    _dbCache.delete(dbName);
 
-    _dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
+    const upgradePromise = new Promise<IDBDatabase>((resolve, reject) => {
       const req = indexedDB.open(dbName, newVersion);
 
       req.onupgradeneeded = (e) => {
@@ -76,12 +72,17 @@ async function ensureStore(storeName: string, dbName: DB_NAME_TYPE): Promise<IDB
 
       req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
       req.onerror = (e) => {
-        _dbPromise = null;
+        _dbCache.delete(dbName);
         reject((e.target as IDBOpenDBRequest).error);
+      };
+      req.onblocked = () => {
+        _dbCache.delete(dbName);
+        reject(new Error("[useIndexedDB] Database upgrade blocked. Close other tabs."));
       };
     });
 
-    db = await _dbPromise;
+    _dbCache.set(dbName, upgradePromise);
+    db = await upgradePromise;
   }
 
   return db;
@@ -95,13 +96,45 @@ function txPromise<T>(
   fn: (store: IDBObjectStore) => IDBRequest<T>
 ): Promise<T> {
   return new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, mode);
-    const store = tx.objectStore(storeName);
-    const req = fn(store);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-    tx.onerror = () => reject(tx.error);
+    try {
+      const tx = db.transaction(storeName, mode);
+      const store = tx.objectStore(storeName);
+      const req = fn(store);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      tx.onerror = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
   });
+}
+
+/**
+ * Wraps a DB operation with automatic retry on closed connection errors.
+ */
+async function withRetry<T>(
+  storeName: string,
+  dbName: DB_NAME_TYPE,
+  mode: IDBTransactionMode,
+  fn: (store: IDBObjectStore) => IDBRequest<T>
+): Promise<T> {
+  try {
+    const db = await ensureStore(storeName, dbName);
+    return await txPromise<T>(db, storeName, mode, fn);
+  } catch (err: any) {
+    // If the connection was closed or version mismatch, clear cache and retry once
+    if (
+      err?.name === "InvalidStateError" ||
+      err?.name === "VersionError" ||
+      err?.message?.includes("closing")
+    ) {
+      console.warn("[useIndexedDB] Connection issue, retrying...", dbName, storeName, err?.message);
+      _dbCache.delete(dbName);
+      const db = await ensureStore(storeName, dbName);
+      return await txPromise<T>(db, storeName, mode, fn);
+    }
+    throw err;
+  }
 }
 
 // ── Public hook ──────────────────────────────────────────────────────────────
@@ -119,7 +152,7 @@ export interface UseIndexedDBReturn<T> {
 }
 
 /**
- * useIndexedDB<T>(storeName)
+ * useIndexedDB<T>(storeName, dbName)
  *
  * Returns stable async helpers bound to the given object-store.
  * Safe to call at the top level of any component or hook – operations are
@@ -129,38 +162,45 @@ export function useIndexedDB<T = unknown>(
   storeName: string,
   dbName: DB_NAME_TYPE
 ): UseIndexedDBReturn<T> {
-  // Keep storeName stable across renders via ref
   const storeRef = useRef(storeName);
   storeRef.current = storeName;
 
+  const dbNameRef = useRef(dbName);
+  dbNameRef.current = dbName;
+
   const set = useCallback(async (key: IDBValidKey, value: T): Promise<void> => {
-    const db = await ensureStore(storeRef.current, dbName);
-    await txPromise<IDBValidKey>(db, storeRef.current, "readwrite", (s) => s.put(value, key));
+    await withRetry<IDBValidKey>(storeRef.current, dbNameRef.current, "readwrite", (s) =>
+      s.put(value, key)
+    );
   }, []);
 
   const get = useCallback(async (key: IDBValidKey): Promise<T | undefined> => {
     try {
-      const db = await ensureStore(storeRef.current, dbName);
-      return await txPromise<T>(db, storeRef.current, "readonly", (s) => s.get(key));
+      return await withRetry<T>(storeRef.current, dbNameRef.current, "readonly", (s) =>
+        s.get(key)
+      );
     } catch {
       return undefined;
     }
   }, []);
 
   const remove = useCallback(async (key: IDBValidKey): Promise<void> => {
-    const db = await ensureStore(storeRef.current, dbName);
-    await txPromise<undefined>(db, storeRef.current, "readwrite", (s) => s.delete(key));
+    await withRetry<undefined>(storeRef.current, dbNameRef.current, "readwrite", (s) =>
+      s.delete(key)
+    );
   }, []);
 
   const clear = useCallback(async (): Promise<void> => {
-    const db = await ensureStore(storeRef.current, dbName);
-    await txPromise<undefined>(db, storeRef.current, "readwrite", (s) => s.clear());
+    await withRetry<undefined>(storeRef.current, dbNameRef.current, "readwrite", (s) =>
+      s.clear()
+    );
   }, []);
 
   const getAll = useCallback(async (): Promise<T[]> => {
     try {
-      const db = await ensureStore(storeRef.current, dbName);
-      return await txPromise<T[]>(db, storeRef.current, "readonly", (s) => s.getAll());
+      return await withRetry<T[]>(storeRef.current, dbNameRef.current, "readonly", (s) =>
+        s.getAll()
+      );
     } catch {
       return [];
     }
