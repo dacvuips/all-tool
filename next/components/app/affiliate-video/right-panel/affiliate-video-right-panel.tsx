@@ -5,9 +5,10 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiFileCopyLine, RiListCheck2, RiMusicFill, RiScissorsLine } from "react-icons/ri";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
+import { RiFileCopyLine, RiMusicFill, RiScissorsLine } from "react-icons/ri";
+import { TabGroup } from "../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";
 import { CastSection } from "./cast-section";
 import { SceneCard } from "./scene-card";
@@ -98,183 +99,122 @@ function EnvironmentPanel({
   );
 }
 
+// ── Tab name ↔ index mapping ─────────────────────────────────────────────
+const TAB_NAMES = ["script", "batch"] as const;
+
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
   const { t } = useTranslation();
   const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
     useAffiliateVideoContext();
+  console.log(scriptData);
+  const tabIndex =
+    TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
+
+  const batchLabel = `Batch List${
+    batchList && batchList.length > 0 ? ` (${batchList.length})` : ""
+  }`;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-amber-50">
-      {/* ── Tab bar ── */}
-      <div className="flex items-center px-4 border-b border-gray-200 bg-white flex-shrink-0">
-        <div className="flex gap-0">
-          {/* Kịch Bản tab */}
-          <button
-            id="tab-script"
-            onClick={() => setScriptTab && setScriptTab("script")}
-            className={`flex items-center gap-1.5 px-4 py-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer border-0 bg-transparent ${
-              scriptTab === "script"
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            📋 {"Kịch Bản"}
-          </button>
-
-          {/* Batch List tab */}
-          <button
-            id="tab-batch"
-            onClick={() => setScriptTab && setScriptTab("batch")}
-            className={`flex items-center gap-1.5 px-4 py-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer border-0 bg-transparent ${
-              scriptTab === "batch"
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <RiListCheck2 className="text-sm" />
-            {"Batch List"} {batchList && batchList.length > 0 && `(${batchList.length})`}
-          </button>
-        </div>
-      </div>
-      {/* ── Content ── */}
-      <div className="flex-1 overflow-y-auto v-scrollbar  ">
-        {scriptTab === "batch" ? (
-          <BatchListPanel
-            scenes={(scriptData?.scenes || []).map((s, i) => ({
-              id: (s as any).id || `scene-${i}`,
-              sceneNumber: s.sceneNumber,
-              camera: (s.camera as any) || "WIDE SHOT",
-              imageGenPrompt: s.imageGenPrompt || "",
-              motionPrompt: s.motionPrompt || "",
-              dialogue: s.dialogue || "",
-              visualPrompt: s.visualPrompt || "",
-              disabled: (s as any).disabled ?? false,
-              audio: s.audio || "",
-            }))}
-            characters={[]}
-          />
-        ) : batchRunning ? (
-          /* AI Generating state */
-          <div className="flex flex-col items-center justify-center h-full py-16">
-            <div className="relative w-20 h-20 mb-6">
-              {/* Spinner ring rotating around the icon */}
-              <svg
-                className="absolute inset-0 w-full h-full animate-spin"
-                style={{ animationDuration: "1.2s" }}
-                viewBox="0 0 80 80"
-                fill="none"
-              >
-                <circle
-                  cx="40"
-                  cy="40"
-                  r="36"
-                  stroke="url(#spinnerGrad)"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  strokeDasharray="180 45"
-                />
-                <defs>
-                  <linearGradient
-                    id="spinnerGrad"
-                    x1="0"
-                    y1="0"
-                    x2="80"
-                    y2="80"
-                    gradientUnits="userSpaceOnUse"
-                  >
-                    <stop offset="0%" stopColor="#FBBF24" />
-                    <stop offset="100%" stopColor="#F59E0B" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-              {/* Gold glow pulse */}
-              <div
-                className="absolute inset-0 rounded-full bg-yellow-200 opacity-20 animate-ping"
-                style={{ animationDuration: "1.8s" }}
-              />
-              {/* Icon container */}
-              <div className="relative flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br text-yellow-200">
-                <GenerateAiIcon size={36} />
+      <TabGroup
+        index={tabIndex}
+        onChange={(i) => setScriptTab && setScriptTab(TAB_NAMES[i])}
+        name="affiliate-video-right"
+        flex={false}
+        tabClassName="px-4 py-3"
+        titleClassName="text-sm font-semibold whitespace-nowrap"
+        bodyClassName="flex-1 overflow-y-auto v-scrollbar"
+        className="bg-white"
+      >
+        {/* ── Kịch Bản tab ── */}
+        <TabGroup.Tab label={t("Kịch Bản")}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : !scriptData ? (
+            /* Empty state */
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16">
+              <div className="text-5xl mb-4 opacity-30">📋</div>
+              <div className="text-base font-medium text-gray-500 mb-1">
+                {t("Chưa có kịch bản")}
+              </div>
+              <div className="text-sm text-gray-400">
+                {t("Điền thông tin sidebar và nhấn 'Tạo Ảnh & Phim'")}
               </div>
             </div>
-            <div className="text-base font-semibold text-gray-700 mb-1">
-              {t("Đang tạo kịch bản AI...")}
-            </div>
-            <div className="flex items-center gap-1.5 mt-2">
-              <span
-                className="w-2 h-2 rounded-full bg-yellow-400 animate-bounce"
-                style={{ animationDelay: "0ms" }}
-              />
-              <span
-                className="w-2 h-2 rounded-full bg-amber-500 animate-bounce"
-                style={{ animationDelay: "150ms" }}
-              />
-              <span
-                className="w-2 h-2 rounded-full bg-yellow-400 animate-bounce"
-                style={{ animationDelay: "300ms" }}
-              />
-            </div>
-          </div>
-        ) : !scriptData ? (
-          /* Empty state */
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16">
-            <div className="text-5xl mb-4 opacity-30">📋</div>
-            <div className="text-base font-medium text-gray-500 mb-1">{t("Chưa có kịch bản")}</div>
-            <div className="text-sm text-gray-400">
-              {t("Điền thông tin sidebar và nhấn 'Tạo Ảnh & Phim'")}
-            </div>
-          </div>
-        ) : (
-          <div className="px-4 py-4">
-            {/* Cast Section */}
-            <CastSection scriptData={scriptData} />
+          ) : (
+            <div className="px-4 py-4">
+              {/* Cast Section */}
+              <CastSection scriptData={scriptData} />
 
-            {/* Environment & Audio – 2 columns */}
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                <EnvironmentPanel
-                  environment={{
-                    environment: scriptData.environment,
-                    artStyle: scriptData.artStyle,
-                  }}
-                />
+              {/* Environment & Audio – 2 columns */}
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <EnvironmentPanel
+                    environment={{
+                      environment: scriptData.environment,
+                      artStyle: scriptData.artStyle,
+                    }}
+                  />
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <AudioVoicePanel
+                    audioConfig={{
+                      gender: scriptData.voiceGender,
+                      mood: scriptData.voiceTone,
+                      style: scriptData.voiceStyle,
+                      fullPrompt: `${scriptData.voiceGender} · ${scriptData.voiceTone} · ${scriptData.voiceStyle}`,
+                    }}
+                  />
+                </div>
               </div>
-              <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                <AudioVoicePanel
-                  audioConfig={{
-                    gender: scriptData.voiceGender,
-                    mood: scriptData.voiceTone,
-                    style: scriptData.voiceStyle,
-                    fullPrompt: `${scriptData.voiceGender} · ${scriptData.voiceTone} · ${scriptData.voiceStyle}`,
-                  }}
-                />
+
+              {/* Scenes Section */}
+              <div className="mb-3">
+                <h3 className="text-base font-bold text-gray-800 mb-3">
+                  📽 Phân Cảnh & Prompt (Scenes)
+                </h3>
+                {scriptData.scenes.map((scene, i) => (
+                  <SceneCard
+                    key={scene.sceneNumber ?? i}
+                    scene={{
+                      id: `scene-${i}`,
+                      sceneNumber: scene.sceneNumber,
+                      camera: (scene.camera as any) || "WIDE SHOT",
+                      imageGenPrompt: scene.imageGenPrompt,
+                      motionPrompt: scene.motionPrompt || "",
+                      dialogue: scene.dialogue || "",
+                      visualPrompt: scene.visualPrompt || "",
+                    }}
+                  />
+                ))}
               </div>
             </div>
+          )}
+        </TabGroup.Tab>
 
-            {/* Scenes Section */}
-            <div className="mb-3">
-              <h3 className="text-base font-bold text-gray-800 mb-3">
-                📽 Phân Cảnh & Prompt (Scenes)
-              </h3>
-              {scriptData.scenes.map((scene, i) => (
-                <SceneCard
-                  key={scene.sceneNumber ?? i}
-                  scene={{
-                    id: `scene-${i}`,
-                    sceneNumber: scene.sceneNumber,
-                    camera: (scene.camera as any) || "WIDE SHOT",
-                    imageGenPrompt: scene.imageGenPrompt,
-                    motionPrompt: scene.motionPrompt || "",
-                    dialogue: scene.dialogue || "",
-                    visualPrompt: scene.visualPrompt || "",
-                  }}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+        {/* ── Batch List tab ── */}
+        <TabGroup.Tab label={batchLabel}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <BatchListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                id: (s as any).id || `scene-${i}`,
+                sceneNumber: s.sceneNumber,
+                camera: (s.camera as any) || "WIDE SHOT",
+                imageGenPrompt: s.imageGenPrompt || "",
+                motionPrompt: s.motionPrompt || "",
+                dialogue: s.dialogue || "",
+                visualPrompt: s.visualPrompt || "",
+                disabled: (s as any).disabled ?? false,
+                audio: s.audio || "",
+              }))}
+              characters={[]}
+            />
+          )}
+        </TabGroup.Tab>
+      </TabGroup>
     </div>
   );
 };

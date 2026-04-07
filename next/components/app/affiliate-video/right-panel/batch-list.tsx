@@ -724,11 +724,25 @@ function SceneBatchRow({
             /* ── Default create button ── */
             <button
               onClick={handleGenerateVideo}
-              className="relative w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 cursor-pointer transition-all group"
+              disabled={!generatedImage}
+              title={!generatedImage ? t("Cần tạo ảnh trước khi tạo video") : undefined}
+              className={`relative w-32 h-16 rounded-xl border-2 border-dashed transition-all group ${
+                generatedImage
+                  ? "border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 cursor-pointer"
+                  : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50"
+              }`}
             >
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <RiVideoFill className="text-gray-300 group-hover:text-purple-400 text-xl mb-0.5" />
-                <span className="text-gray-400 group-hover:text-purple-500 text-xs font-medium">
+                <RiVideoFill
+                  className={`text-xl mb-0.5 ${
+                    generatedImage ? "text-gray-300 group-hover:text-purple-400" : "text-gray-200"
+                  }`}
+                />
+                <span
+                  className={`text-xs font-medium ${
+                    generatedImage ? "text-gray-400 group-hover:text-purple-500" : "text-gray-300"
+                  }`}
+                >
                   {t("Tạo video")}
                 </span>
               </div>

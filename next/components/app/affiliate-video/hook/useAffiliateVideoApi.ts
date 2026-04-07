@@ -131,6 +131,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({ config: data });
       const scriptResult: ScriptData = result.data;
 
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
       // Persist config input
       scriptDB
         .set(CACHE_KEY.generateInput, data)
@@ -156,6 +164,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         text,
       });
       const scriptResult: ScriptData = result.data;
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
 
       // Persist script result
       scriptDB

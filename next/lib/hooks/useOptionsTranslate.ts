@@ -1,8 +1,14 @@
 import { useTranslation } from "next-i18next";
+import {
+  AffiliateVideoFormConfig,
+  ART_STYLE_OPTIONS,
+  CATEGORY_OPTIONS,
+  LANGUAGE_OPTIONS,
+} from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
-import { AiProviderKeyEnum, } from "../repo/product/productApp.repo";
+import { AiProviderKeyEnum } from "../repo/product/productApp.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
   AffiliateBoothStatus,
@@ -172,7 +178,7 @@ export const useOptionsTranslation = () => {
     { value: UserStatus.ACTIVE, label: t("Kích hoạt"), color: "success" },
     { value: UserStatus.BLOCKED, label: t("Bị khóa"), color: "danger" },
   ];
- 
+
   const SHOP_PRODUCT_TYPE_OPTION = [
     { value: ShopProductTypeEnum.SELL, label: t("Bán"), color: "danger" },
     { value: ShopProductTypeEnum.BUY, label: t("Mua"), color: "success" },
@@ -701,7 +707,56 @@ export const useOptionsTranslation = () => {
       image: "/assets/img/see-dance.png",
     },
   ];
+  const SPEED_MODE_OPTIONS: { label: string; value: SpeedMode }[] = [
+    { label: t("Nhanh"), value: "fast" },
+    { label: t("Thoải mái"), value: "relaxed" },
+    { label: t("Chất lượng"), value: "quality" },
+  ];
 
+  const DELAY_QUEUE_OPTIONS = [
+    { label: "15s", value: "15s" },
+    { label: "30s", value: "30s" },
+    { label: "1m", value: "1m" },
+  ];
+
+  const MODE_TAB_OPTIONS = [
+    { label: t("Text"), value: "text" },
+    { label: t("Ảnh đầu"), value: "start_image" },
+    { label: t("Ảnh đầu cuối"), value: "start_end" },
+    { label: t("Đồng bộ"), value: "sync" },
+  ];
+
+  const MAIN_TAB_OPTIONS = [
+    { label: t("Đang tạo"), value: "generating" },
+    { label: t("Lịch sử"), value: "history" },
+  ];
+
+  const VOICE_MODE_OPTIONS = [
+    { label: t("Không"), value: "none" },
+    { label: t("Trong video"), value: "in_video" },
+    { label: t("Riêng biệt"), value: "separate" },
+  ];
+
+  const VIDEO_COUNT_OPTIONS = [
+    { label: "1", value: 1 },
+    { label: "2", value: 2 },
+    { label: "3", value: 3 },
+    { label: "4", value: 4 },
+    { label: "5", value: 5 },
+    { label: "6", value: 6 },
+    { label: "7", value: 7 },
+  ];
+  const DEFAULT_VIDEO_CONFIG: AffiliateVideoFormConfig = {
+    category: CATEGORY_OPTIONS[0].label,
+    objectToPersonify: "Một quả chuối tươi",
+    tipContent: "Cách ăn chuối tốt nhất",
+    mood: "Vui vẻ",
+    language: LANGUAGE_OPTIONS[0].label,
+    artStyle: ART_STYLE_OPTIONS[0].label,
+    storyModeType: "image_to_video",
+    aspectRatio: "9:16",
+    batchSize: 1,
+  };
   return {
     TARGETS,
     TYPE,
@@ -777,5 +832,13 @@ export const useOptionsTranslation = () => {
     SHIPPING_PROVIDER_CODE_OPTIONS,
     SHIPMENT_STATUS_OPTIONS,
     CREDENTIAL_KEY_OPTIONS,
+
+    SPEED_MODE_OPTIONS,
+    DELAY_QUEUE_OPTIONS,
+    MODE_TAB_OPTIONS,
+    MAIN_TAB_OPTIONS,
+    VOICE_MODE_OPTIONS,
+    VIDEO_COUNT_OPTIONS,
+    DEFAULT_VIDEO_CONFIG,
   };
 };

@@ -1,17 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import {
-  AffiliateVideoFormConfig,
-  ART_STYLE_OPTIONS,
-  CACHE_KEY,
-  CATEGORY_OPTIONS,
-  DB_NAME,
-  LANGUAGE_OPTIONS,
-  ScriptData,
-  STORE_NAME,
-} from "../constants";
-import { useAffiliateVideoApi, GenerateSceneFromTextParams } from "../hook/useAffiliateVideoApi";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
+import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, ScriptData, STORE_NAME } from "../constants";
+import { GenerateSceneFromTextParams, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -73,8 +63,6 @@ export const AffiliateVideoContext = createContext<
 >({});
 
 export function AffiliateVideoProvider(props) {
-  const { t } = useTranslation();
-  const toast = useToast();
   const { generateScene, generateSceneFromText } = useAffiliateVideoApi();
   const [searchQuery, setSearchQuery] = useState("");
   const stopRef = useRef(false);
@@ -87,62 +75,22 @@ export function AffiliateVideoProvider(props) {
   const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
   const [batchRunning, setBatchRunning] = useState(false);
-  const SpeedModeOptions: { label: string; value: SpeedMode }[] = [
-    { label: t("Nhanh"), value: "fast" },
-    { label: t("Thoải mái"), value: "relaxed" },
-    { label: t("Chất lượng"), value: "quality" },
-  ];
-
-  const DelayQueueOptions = [
-    { label: "15s", value: "15s" },
-    { label: "30s", value: "30s" },
-    { label: "1m", value: "1m" },
-  ];
-
-  const ModeTabOptions = [
-    { label: t("Text"), value: "text" },
-    { label: t("Ảnh đầu"), value: "start_image" },
-    { label: t("Ảnh đầu cuối"), value: "start_end" },
-    { label: t("Đồng bộ"), value: "sync" },
-  ];
-
-  const MainTabOptions = [
-    { label: t("Đang tạo"), value: "generating" },
-    { label: t("Lịch sử"), value: "history" },
-  ];
-
-  const VoiceModeOptions = [
-    { label: t("Không"), value: "none" },
-    { label: t("Trong video"), value: "in_video" },
-    { label: t("Riêng biệt"), value: "separate" },
-  ];
-
-  const VideoCountOptions = [
-    { label: "1", value: 1 },
-    { label: "2", value: 2 },
-    { label: "3", value: 3 },
-    { label: "4", value: 4 },
-    { label: "5", value: 5 },
-    { label: "6", value: 6 },
-    { label: "7", value: 7 },
-  ];
-  const defaultVideoConfig: AffiliateVideoFormConfig = {
-    category: CATEGORY_OPTIONS[0].label,
-    objectToPersonify: "Một quả chuối tươi",
-    tipContent: "Cách ăn chuối tốt nhất",
-    mood: "Vui vẻ",
-    language: LANGUAGE_OPTIONS[0].label,
-    artStyle: ART_STYLE_OPTIONS[0].label,
-    storyModeType: "image_to_video",
-    aspectRatio: "9:16",
-    batchSize: 1,
-  };
+  const {
+    DEFAULT_VIDEO_CONFIG,
+    SPEED_MODE_OPTIONS,
+    DELAY_QUEUE_OPTIONS,
+    MODE_TAB_OPTIONS,
+    MAIN_TAB_OPTIONS,
+    VOICE_MODE_OPTIONS,
+    VIDEO_COUNT_OPTIONS,
+  } = useOptionsTranslation();
   const [affiliateVideoFormConfig, setAffiliateVideoFormConfig] =
-    useState<AffiliateVideoFormConfig>(defaultVideoConfig);
+    useState<AffiliateVideoFormConfig>(DEFAULT_VIDEO_CONFIG);
 
-  // ── On mount: restore last cached script from IndexedDB ──
+  // ── On mount: restore last cached script + config from IndexedDB ──
   useEffect(() => {
     getSceneList();
+    restoreConfigFromDB();
   }, []);
 
   const getSceneList = async () => {
@@ -156,8 +104,22 @@ export function AffiliateVideoProvider(props) {
     }
   };
 
+  /** Restore form config from IndexedDB; fall back to DEFAULT_VIDEO_CONFIG */
+
+  const restoreConfigFromDB = async () => {
+    try {
+      const cachedConfig = await scriptDB.get(CACHE_KEY.generateInput);
+      if (cachedConfig) {
+        setAffiliateVideoFormConfig(cachedConfig);
+      }
+    } catch (err) {
+      console.warn("[affiliate-video] Failed to restore config from IndexedDB", err);
+    }
+  };
+
   const handleSubmit = async (data: AffiliateVideoFormConfig, promptText?: string) => {
     try {
+      setScriptTab("script");
       setBatchRunning(true);
       const scriptResult = promptText
         ? await generateSceneFromText({ text: promptText, config: data })
@@ -175,8 +137,25 @@ export function AffiliateVideoProvider(props) {
     }
   };
 
+  /** Persist config to IndexedDB */
+  const persistConfig = (config: AffiliateVideoFormConfig) => {
+    scriptDB
+      .set(CACHE_KEY.generateInput, config)
+      .catch((err) => console.warn("[affiliate-video] Failed to persist config", err));
+  };
+
   const patchConfig = (partial: Partial<AffiliateVideoFormConfig>) => {
-    setAffiliateVideoFormConfig((prev) => ({ ...prev, ...partial }));
+    setAffiliateVideoFormConfig((prev) => {
+      const next = { ...prev, ...partial };
+      persistConfig(next);
+      return next;
+    });
+  };
+
+  /** Wrapped setter that also persists to IndexedDB */
+  const updateAffiliateVideoFormConfig = (config: AffiliateVideoFormConfig) => {
+    setAffiliateVideoFormConfig(config);
+    persistConfig(config);
   };
 
   return (
@@ -186,12 +165,12 @@ export function AffiliateVideoProvider(props) {
         setSearchQuery,
 
         stopRef,
-        SpeedModeOptions,
-        DelayQueueOptions,
-        ModeTabOptions,
-        MainTabOptions,
-        VoiceModeOptions,
-        VideoCountOptions,
+        SpeedModeOptions: SPEED_MODE_OPTIONS,
+        DelayQueueOptions: DELAY_QUEUE_OPTIONS,
+        ModeTabOptions: MODE_TAB_OPTIONS,
+        MainTabOptions: MAIN_TAB_OPTIONS,
+        VoiceModeOptions: VOICE_MODE_OPTIONS,
+        VideoCountOptions: VIDEO_COUNT_OPTIONS,
 
         // script
         scriptData,
@@ -203,8 +182,8 @@ export function AffiliateVideoProvider(props) {
         handleSubmit,
         generateSceneFromText,
         affiliateVideoFormConfig,
-        setAffiliateVideoFormConfig,
-        defaultVideoConfig,
+        setAffiliateVideoFormConfig: updateAffiliateVideoFormConfig,
+        defaultVideoConfig: affiliateVideoFormConfig,
         batchRunning,
 
         // aliases used by AffiliateConfig

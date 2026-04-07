@@ -15,8 +15,9 @@ function createVertexAIClient(serviceAccountKeyJson: string, location = "us-cent
   try {
     credentials = JSON.parse(serviceAccountKeyJson);
   } catch {
-    // Nếu không phải JSON, coi như là API key thông thường (fallback)
-    return new GoogleGenAI({ apiKey: serviceAccountKeyJson });
+    throw new Error(
+      "Credential không hợp lệ: Vui lòng cung cấp Service Account Key JSON cho Vertex AI."
+    );
   }
 
   // Dùng Vertex AI backend với service account credentials
@@ -84,7 +85,7 @@ export default [
         }
 
         const apiKey = decryptProviderSecret(credential.value);
-        logger.info("API-key", { apiKey });
+
         const prompt = `
 
 Xây dựng nội dung: Chuyển tải {{tipContent}} thông qua một tình huống có mood {{mood}}.
@@ -95,13 +96,12 @@ Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâ
 Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
 Audio từng phân cảnh: giới tính {{gender}}, giọng {{voice}}
 
-Đầu ra (Output): Xuất kết quả duy nhất dưới dạng một JSON Object mới.
-Quang trọng: Image prompt và video prompt phải luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}}, phải đồng nhất được nhân vật qua các phân cảnh. Trong Image prompt và video prompt phải đồng nhất nhân vật giữa 2 prompt. Không chứa text trong image prompt và video prompt.
+Quang trọng: Image prompt và video prompt phải luôn mô tả chi tiết nhân vật (khuôn mặt, tay chân, hình thể, ăn mặc, màu sắc chi tiết,...) tại những nơi có {{objectToPersonify}}, (phải đồng nhất được nhân vật {{objectToPersonify}} và bối cảnh, cảnh vật xung quanh nhân vật {{objectToPersonify}} qua các "scene") (mô tả chi tiết bối cảnh, cảnh vật xung quanh nhân vật {{objectToPersonify}} qua các "scene"). Trong Image prompt và video prompt phải đồng nhất nhân vật giữa 2 prompt. Không chứa text trong image prompt và video prompt.
  
 Scenes array must contain exactly ${
           body?.config?.batchSize > 1 ? `{{batchSize}}` : 5
         } objects. Each object must follow the defined schema
-
+Đầu ra (Output): Xuất kết quả duy nhất dưới dạng một JSON Object mới.
 `;
 
         // Thay thế placeholder trong text
