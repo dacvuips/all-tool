@@ -88,20 +88,25 @@ export default [
 
         const prompt = `
 
-Xây dựng nội dung: Chuyển tải {{tipContent}} thông qua một tình huống có mood {{mood}}.
 
-Kỹ thuật Video: Viết visualPrompt và motionPrompt bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật,luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong, nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
-Kỹ thuật Image Prompt: Viết {{imagePrompt}} bằng tiếng Anh chuyên sâu, tối ưu cho tỉ lệ khung hình {{aspectRatio}} và chế độ {{storyModeType}}, chuẩn nét nhân vật,luôn mô tả chi tiết nhân vật tại những nơi {{objectToPersonify}} xuất hiện trong, nhân hóa nhân vật: Dựa trên {{objectToPersonify}}, hãy tạo ra một nhân vật sống động có biểu cảm khuôn mặt, tay chân theo phong cách {{artStyle}}.
+Character Anchor: Trước khi viết các scene, hãy xác định một mô tả cố định cho nhân vật nhân hóa từ {{objectToPersonify}}.
+Mô tả cố định ({{character_fixed_description}}): Phải bao gồm chi tiết khuôn mặt, tay chân, hình thể, trang phục đặc trưng và màu sắc chủ đạo theo phong cách {{artStyle}}.
+
+Environment Anchor: Xác định một bối cảnh (background) duy nhất phù hợp với chủ đề {{category}}. Bối cảnh này phải giữ nguyên các vật dụng chính, ánh sáng và tông màu qua tất cả các scene.
+
+Ngôn ngữ Prompt: Viết visualPrompt, motionPrompt và imagePrompt bằng tiếng Anh chuyên sâu.
+
+Cấu trúc bắt buộc: Mọi prompt trong từng scene đều PHẢI bắt đầu bằng đoạn mô tả {{character_fixed_description}} để đảm bảo nhân vật không bị biến đổi.
+
+Tối ưu hóa: Tỉ lệ khung hình {{aspectRatio}}, chế độ {{storyModeType}}, chuẩn nét nhân vật (High-definition, consistent character design).
+
+Tính nhất quán: Image prompt và video prompt trong cùng một scene phải mô tả cùng một hành động và cùng một nhân vật.
+
+Cấm: Không chứa bất kỳ chữ viết (text/watermark) nào trong hình ảnh và video.
 
 Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
-Audio từng phân cảnh: giới tính {{gender}}, giọng {{voice}}
-
-Quang trọng: Image prompt và video prompt phải luôn mô tả chi tiết nhân vật (khuôn mặt, tay chân, hình thể, ăn mặc, màu sắc chi tiết,...) tại những nơi có {{objectToPersonify}}, (phải đồng nhất được nhân vật {{objectToPersonify}} và bối cảnh, cảnh vật xung quanh nhân vật {{objectToPersonify}} qua các "scene") (mô tả chi tiết bối cảnh, cảnh vật xung quanh nhân vật {{objectToPersonify}} qua các "scene"). Trong Image prompt và video prompt phải đồng nhất nhân vật giữa 2 prompt. Không chứa text trong image prompt và video prompt.
- 
-Scenes array must contain exactly ${
-          body?.config?.batchSize > 1 ? `{{batchSize}}` : 5
-        } objects. Each object must follow the defined schema
-Đầu ra (Output): Xuất kết quả duy nhất dưới dạng một JSON Object mới.
+            
+Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoại ở tất cả các scene.
 `;
 
         // Thay thế placeholder trong text
@@ -528,7 +533,13 @@ Yêu cầu:
 1. "objectToPersonify": Một đồ vật / thực phẩm cụ thể để nhân hoá thành nhân vật chính (VD: "Một quả chuối tươi", "Một cuộn giấy vệ sinh", "Một chiếc tất lẻ"). Phải cụ thể, sinh động, dễ hình dung.
 2. "tipContent": Nội dung mẹo vặt liên quan đến đồ vật đó (VD: "Cách bảo quản chuối tươi lâu gấp 3 lần", "5 công dụng bất ngờ của lõi giấy vệ sinh"). Phải hấp dẫn, gây tò mò.
 
-Trả về JSON object duy nhất với 2 field trên. Viết bằng ${languageHint === "en" ? "English" : languageHint === "vn" || languageHint === "vi" ? "tiếng Việt" : languageHint}.`;
+Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
+          languageHint === "en"
+            ? "English"
+            : languageHint === "vn" || languageHint === "vi"
+            ? "tiếng Việt"
+            : languageHint
+        }.`;
 
         logger.info(`[suggest-config] Gọi Gemini cho user ${context.id}`);
 

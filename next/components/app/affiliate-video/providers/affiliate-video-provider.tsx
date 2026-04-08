@@ -65,6 +65,12 @@ export const AffiliateVideoContext = createContext<
     addBatchGeneratingSceneId: (id: string) => void;
     /** Remove a scene ID from the batch-generating set */
     removeBatchGeneratingSceneId: (id: string) => void;
+    /** Set of scene IDs currently generating video by batch process */
+    batchGeneratingVideoSceneIds: Set<string>;
+    /** Add a scene ID to the batch-video-generating set */
+    addBatchGeneratingVideoSceneId: (id: string) => void;
+    /** Remove a scene ID from the batch-video-generating set */
+    removeBatchGeneratingVideoSceneId: (id: string) => void;
   }>
 >({});
 
@@ -82,6 +88,7 @@ export function AffiliateVideoProvider(props) {
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchGeneratingSceneIds, setBatchGeneratingSceneIds] = useState<Set<string>>(new Set());
+  const [batchGeneratingVideoSceneIds, setBatchGeneratingVideoSceneIds] = useState<Set<string>>(new Set());
 
   const addBatchGeneratingSceneId = useCallback((id: string) => {
     setBatchGeneratingSceneIds((prev) => new Set(prev).add(id));
@@ -89,6 +96,18 @@ export function AffiliateVideoProvider(props) {
 
   const removeBatchGeneratingSceneId = useCallback((id: string) => {
     setBatchGeneratingSceneIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }, []);
+
+  const addBatchGeneratingVideoSceneId = useCallback((id: string) => {
+    setBatchGeneratingVideoSceneIds((prev) => new Set(prev).add(id));
+  }, []);
+
+  const removeBatchGeneratingVideoSceneId = useCallback((id: string) => {
+    setBatchGeneratingVideoSceneIds((prev) => {
       const next = new Set(prev);
       next.delete(id);
       return next;
@@ -208,6 +227,9 @@ export function AffiliateVideoProvider(props) {
         batchGeneratingSceneIds,
         addBatchGeneratingSceneId,
         removeBatchGeneratingSceneId,
+        batchGeneratingVideoSceneIds,
+        addBatchGeneratingVideoSceneId,
+        removeBatchGeneratingVideoSceneId,
 
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,
