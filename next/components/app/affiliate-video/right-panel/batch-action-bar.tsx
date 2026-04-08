@@ -19,6 +19,7 @@ import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { SceneScript } from "../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 interface BatchActionBarProps {
   scenes: SceneScript[];
@@ -27,12 +28,14 @@ interface BatchActionBarProps {
 export function BatchActionBar({ scenes }: BatchActionBarProps) {
   const { t } = useTranslation();
   const { generateImage, getGeneratedImage } = useAffiliateVideoApi();
+  const { addBatchGeneratingSceneId, removeBatchGeneratingSceneId } = useAffiliateVideoContext();
   const toast = useToast();
 
   // ── Batch image generation state ──
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchDone, setBatchDone] = useState(false);
   const [batchCurrentIndex, setBatchCurrentIndex] = useState(-1);
+  const [batchCurrentSceneLabel, setBatchCurrentSceneLabel] = useState("");
   const [batchTotal, setBatchTotal] = useState(0);
   const [batchCompleted, setBatchCompleted] = useState(0);
   const [batchErrors, setBatchErrors] = useState(0);
@@ -127,6 +130,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     setBatchErrors(0);
     setBatchSkipped(0);
     setBatchCurrentIndex(0);
+    setBatchCurrentSceneLabel("");
     stopRef.current = false;
 
     let completed = 0;
@@ -139,6 +143,14 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
       const scene = eligibleScenes[i];
       setBatchCurrentIndex(i);
+
+      // Build label for current scene
+      const label = scene.dialogue
+        ? scene.dialogue.length > 40
+          ? scene.dialogue.slice(0, 40) + "…"
+          : scene.dialogue
+        : "";
+      setBatchCurrentSceneLabel(label);
 
       // Skip scenes that already have a generated image
       const existing = await getGeneratedImage(scene.id);
@@ -160,6 +172,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       }
 
       try {
+        addBatchGeneratingSceneId(scene.id);
         await generateImage({
           sceneId: scene.id,
           prompt: scene.imageGenPrompt,
@@ -173,12 +186,15 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         completed++;
         setBatchCompleted(completed);
         // Continue to next scene
+      } finally {
+        removeBatchGeneratingSceneId(scene.id);
       }
     }
 
     setBatchRunning(false);
     setBatchDone(true);
     setBatchCurrentIndex(-1);
+    setBatchCurrentSceneLabel("");
 
     // Toast thông báo kết quả
     const generated = completed - skipped - errors;
@@ -279,11 +295,18 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       {(batchRunning || batchDone) && (
         <div className="px-3 pb-2">
           <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span>
+            <span className="flex items-center gap-1 min-w-0">
               {batchRunning ? (
                 <>
-                  🎨 {t("Scene")} #{scenes.filter((s) => !s.disabled)[batchCurrentIndex]?.sceneNumber ?? "?"}{" "}
-                  — {batchCompleted}/{batchTotal}
+                  <span className="whitespace-nowrap">
+                    🎨 {t("Scene")} #{scenes.filter((s) => !s.disabled)[batchCurrentIndex]?.sceneNumber ?? "?"}
+                    {" "}— {batchCompleted}/{batchTotal}
+                  </span>
+                  {batchCurrentSceneLabel && (
+                    <span className="text-gray-400 truncate ml-1" title={batchCurrentSceneLabel}>
+                      · {batchCurrentSceneLabel}
+                    </span>
+                  )}
                 </>
               ) : (
                 <>
