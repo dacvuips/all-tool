@@ -48,6 +48,44 @@ export interface GenerateVideoParams {
   onStatusMessage?: (msg: string) => void;
 }
 
+export interface InsertSceneParams {
+  /** Mô tả nội dung scene mới */
+  description: string;
+  /** Voiceover / lời thoại gợi ý (tùy chọn) */
+  voiceover?: string;
+  /** Góc máy yêu cầu (tùy chọn) */
+  camera?: string;
+  /** Selected character IDs (tùy chọn) */
+  selectedCharacters?: string[];
+  /** Scene number mới */
+  sceneNumber: number;
+  /** Scene trước (nếu insert below) */
+  prevScene?: any;
+  /** Scene sau (nếu insert above) */
+  nextScene?: any;
+  /** ScriptData context – để lấy character, environment, artStyle */
+  scriptContext?: {
+    cast?: { name: string; tag: string; description: string }[];
+    environment?: string;
+    artStyle?: string;
+    audioPrompt?: string;
+    voiceGender?: string;
+    voiceTone?: string;
+    language?: string;
+    characterDna?: string;
+  };
+}
+
+export interface InsertSceneResult {
+  sceneNumber: number;
+  imagePrompt: string;
+  motionPrompt: string;
+  visualPrompt: string;
+  audio: string;
+  camera: string;
+  dialogue: string;
+}
+
 export interface GeneratedImageData {
   imageBytes: string; // base64
   mimeType: string;
@@ -94,6 +132,12 @@ export interface UseAffiliateVideoApiReturn {
    * Lấy video đã tạo từ IndexedDB theo sceneId.
    */
   getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoData | undefined>;
+
+  /**
+   * Gọi API chèn scene mới giữa 2 scene.
+   * Trả về scene data đã được AI generate.
+   */
+  insertScene: (params: InsertSceneParams) => Promise<InsertSceneResult | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -353,6 +397,58 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [videoDB]
   );
 
+  // ── insertScene – gọi API chèn scene mới ──
+  const insertScene = useCallback(
+    async (params: InsertSceneParams): Promise<InsertSceneResult | undefined> => {
+      const {
+        description,
+        voiceover,
+        camera,
+        sceneNumber,
+        prevScene,
+        nextScene,
+        scriptContext,
+      } = params;
+
+      try {
+        const res = await fetch("/api/app/insert-scene/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            description,
+            voiceover,
+            camera,
+            sceneNumber,
+            prevScene,
+            nextScene,
+            cast: scriptContext?.cast,
+            environment: scriptContext?.environment,
+            artStyle: scriptContext?.artStyle,
+            audioPrompt: scriptContext?.audioPrompt,
+            voiceGender: scriptContext?.voiceGender,
+            voiceTone: scriptContext?.voiceTone,
+            language: scriptContext?.language,
+            characterDna: scriptContext?.characterDna,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.message || `Lỗi ${res.status}`;
+          toast.error(message);
+          throw new Error(message);
+        }
+
+        const result = await res.json();
+        return result.data as InsertSceneResult;
+      } catch (err: any) {
+        console.error("[insertScene] Error:", err);
+        throw err;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -360,5 +456,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getGeneratedImage,
     generateVideo,
     getGeneratedVideo,
+    insertScene,
   };
 }

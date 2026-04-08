@@ -107,7 +107,6 @@ export const AffiliateVideoRightPanel = () => {
   const { t } = useTranslation();
   const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
     useAffiliateVideoContext();
-  console.log(scriptData);
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 

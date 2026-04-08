@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BiPlayCircle } from "react-icons/bi";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
@@ -37,6 +38,7 @@ import {
   ScriptData,
   STORE_NAME,
 } from "../constants";
+import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { useSceneMedia } from "../hook/useSceneMedia";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
@@ -56,7 +58,7 @@ interface AddSceneModalProps {
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
-  onConfirm: (data: NewSceneData) => void;
+  onConfirm: (data: NewSceneData) => Promise<void> | void;
 }
 
 function AddSceneModal({
@@ -66,6 +68,7 @@ function AddSceneModal({
   onClose,
   onConfirm,
 }: AddSceneModalProps) {
+  const { t } = useTranslation();
   const [description, setDescription] = useState("");
   const [voiceover, setVoiceover] = useState("");
   const [cameraAngle, setCameraAngle] = useState("");
@@ -76,11 +79,19 @@ function AddSceneModal({
     setSelectedChars((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
 
-  const handleCreate = async () => {
+  const handleInsertScene = async () => {
     setCreating(true);
-    await new Promise((r) => setTimeout(r, 800));
-    onConfirm({ description, voiceover, cameraAngle, selectedCharacters: selectedChars, audio });
-    setCreating(false);
+    try {
+      await onConfirm({
+        description,
+        voiceover,
+        cameraAngle,
+        selectedCharacters: selectedChars,
+        audio,
+      });
+    } finally {
+      setCreating(false);
+    }
   };
 
   const posLabel =
@@ -105,7 +116,7 @@ function AddSceneModal({
         <div className="px-5 pt-4 ">
           <div className="flex items-center justify-between">
             <div>
-              <div className=" font-bold text-base">✨ Thêm Scene Mới</div>
+              <div className=" font-bold text-base">✨ {t("Thêm Cảnh Mới")}</div>
               <div className="text-gray-500 text-xs mt-0.5">{posLabel}</div>
             </div>
             <button
@@ -120,11 +131,11 @@ function AddSceneModal({
 
       <Dialog.Body>
         {/* ── Modal Body ── */}
-        <div className="px-4 py-2 space-y-2 max-h-96 overflow-y-auto">
+        <div className="px-4 py-2 space-y-2 max-h-96 overflow-y-auto v-scrollbar">
           {/* Mô tả nội dung */}
           <div>
             <div className="text-sm font-semibold text-gray-700 mb-2">
-              🎭 Mô tả nội dung scene mới:
+              🎭 {t("Mô tả nội dung cảnh mới")}:
             </div>
             {/* Character tags */}
             <div className="flex flex-wrap gap-1.5 mb-2">
@@ -148,20 +159,22 @@ function AddSceneModal({
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="VD: Bà Lan tức giận ném khay bạc xuống đất, Chị Hoa sợ hãi lùi lại..."
+                placeholder={`${t("VD")}: ${t(
+                  "Bà Lan tức giận ném khay bạc xuống đất, Chị Hoa sợ hãi lùi lại..."
+                )}`}
                 rows={3}
                 className="w-full rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-700 px-3 py-2.5 pb-8 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400"
               />
               <div className="absolute bottom-2 right-2 flex items-center gap-1">
                 <button
                   className="w-6 h-6 rounded-full bg-green-100 hover:bg-green-200 text-green-600 flex items-center justify-center cursor-pointer border-0 transition-colors"
-                  title="Dịch"
+                  title={t("Dịch")}
                 >
                   <span className="text-xs font-bold">G</span>
                 </button>
                 <button
                   className="w-6 h-6 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 flex items-center justify-center cursor-pointer border-0 transition-colors"
-                  title="AI viết lại"
+                  title={t("AI viết lại")}
                 >
                   <RiMagicFill className="text-xs" />
                 </button>
@@ -174,13 +187,14 @@ function AddSceneModal({
             <div className="flex items-center gap-1.5 mb-2">
               <MdRecordVoiceOver className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Voiceover / Lời thoại <span className="text-gray-400 font-normal">(tùy chọn)</span>
+                Voiceover / {t("Lời thoại")}{" "}
+                <span className="text-gray-400 font-normal">({t("tùy chọn")})</span>
               </span>
             </div>
             <textarea
               value={voiceover}
               onChange={(e) => setVoiceover(e.target.value)}
-              placeholder="Có thể để trống, AI sẽ tự sinh lời thoại..."
+              placeholder={t("Có thể để trống, AI sẽ tự sinh lời thoại...")}
               rows={2}
               className="w-full rounded-xl border border-gray-200 bg-gray-50 text-sm text-gray-700 px-3 py-2.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400"
             />
@@ -191,15 +205,16 @@ function AddSceneModal({
             <div className="flex items-center gap-1.5 mb-2">
               <RiImageFill className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Ảnh sản phẩm <span className="text-gray-400 font-normal">(tùy chọn — [2])</span>
+                {t("Ảnh sản phẩm")}{" "}
+                <span className="text-gray-400 font-normal">({t("tùy chọn")} — [2])</span>
               </span>
             </div>
             <button className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-green-300 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-semibold cursor-pointer transition-colors">
               <RiImageAddFill className="text-sm" />
-              Tải ảnh sản phẩm
+              {t("Tải ảnh sản phẩm")}
             </button>
             <p className="text-xs text-gray-400 mt-1">
-              * AI sẽ dùng [2] đã chọn sẵn để chèn ảnh vào scene
+              * {t("AI sẽ dùng [2] đã chọn sẵn để chèn ảnh vào scene")}
             </p>
           </div>
 
@@ -208,7 +223,7 @@ function AddSceneModal({
             <div className="flex items-center gap-1.5 mb-2">
               <RiVideoFill className="text-gray-500 text-sm" />
               <span className="text-sm font-semibold text-gray-700">
-                Góc máy <span className="text-gray-400 font-normal">(tùy chọn)</span>
+                {t("Góc máy")} <span className="text-gray-400 font-normal">({t("tùy chọn")})</span>
               </span>
             </div>
             <div className="flex flex-wrap gap-1.5">
@@ -233,29 +248,22 @@ function AddSceneModal({
       <Dialog.Footer>
         {/* ── Modal Footer ── */}
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl text-sm font-semibold text-gray-500 hover:bg-gray-100 cursor-pointer border-0 bg-transparent transition-colors"
-          >
-            Hủy
-          </button>
-          <button
-            onClick={handleCreate}
-            disabled={creating}
-            className="flex items-center gap-1.5 px-5 py-2 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 disabled:opacity-60 cursor-pointer border-0 transition-all shadow-md"
-          >
+          <Button onClick={onClose} outline>
+            {t("Hủy")}
+          </Button>
+          <Button onClick={handleInsertScene} disabled={creating} primary>
             {creating ? (
               <>
                 <RiLoader4Line className="text-sm animate-spin" />
-                Đang tạo...
+                {`${t("Đang tạo")}...`}
               </>
             ) : (
               <>
                 <RiMagicFill className="text-sm" />
-                Tạo Scene
+                {t("Tạo Scene")}
               </>
             )}
-          </button>
+          </Button>
         </div>
       </Dialog.Footer>
     </Dialog>
@@ -270,7 +278,11 @@ interface AddSceneButtonProps {
   scene: SceneScript;
   position: InsertPosition;
   characters: CharacterItem[];
-  onInsert: (scene: SceneScript, position: InsertPosition, data: NewSceneData) => void;
+  onInsert: (
+    scene: SceneScript,
+    position: InsertPosition,
+    data: NewSceneData
+  ) => Promise<void> | void;
 }
 
 function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButtonProps) {
@@ -285,8 +297,8 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
           position={position}
           characters={characters}
           onClose={() => setShowModal(false)}
-          onConfirm={(data) => {
-            onInsert(scene, position, data);
+          onConfirm={async (data) => {
+            await onInsert(scene, position, data);
             setShowModal(false);
           }}
         />
@@ -665,8 +677,8 @@ function SceneBatchRow({
                       />
                       {/* Play icon overlay */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                        <div className="w-6 h-6 rounded-full bg-white/80 flex items-center justify-center">
-                          <span className="text-purple-600 text-xs ml-0.5">▶</span>
+                        <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
+                          <BiPlayCircle className="text-white w-12 h-12" />
                         </div>
                       </div>
                     </div>
@@ -764,7 +776,11 @@ interface SceneRowGroupProps {
   index: number;
   isDisabled: boolean;
   characters: CharacterItem[];
-  onInsert: (scene: SceneScript, position: InsertPosition, data: NewSceneData) => void;
+  onInsert: (
+    scene: SceneScript,
+    position: InsertPosition,
+    data: NewSceneData
+  ) => Promise<void> | void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
 }
@@ -906,6 +922,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
   const { scriptData, setScriptData } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
+  const { insertScene } = useAffiliateVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
   const handleToggleDisable = async (sceneId: string) => {
@@ -922,24 +939,97 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     }
   };
 
-  const handleInsert = (targetScene: SceneScript, position: InsertPosition, data: NewSceneData) => {
-    const newScene: SceneScript = {
-      id: `s-${Date.now()}`,
-      sceneNumber: 0,
-      camera: (data.cameraAngle as any) || "WIDE SHOT",
-      imageGenPrompt: data.description || "(AI generated)",
-      motionPrompt: data.description || "(AI generated)",
-      dialogue: data.voiceover || "",
-      visualPrompt: "",
-      audio: data.audio || "",
-    };
+  const handleInsert = async (
+    targetScene: SceneScript,
+    position: InsertPosition,
+    data: NewSceneData
+  ) => {
+    // Determine insert index and adjacent scenes for context
+    const idx = sceneList.findIndex((s) => s.id === targetScene.id);
+    const insertAt = position === "above" ? idx : idx + 1;
+    const newSceneNumber = insertAt + 1;
+    const prevScene = insertAt > 0 ? sceneList[insertAt - 1] : undefined;
+    const nextScene = insertAt < sceneList.length ? sceneList[insertAt] : undefined;
 
-    setSceneList((prev) => {
-      const idx = prev.findIndex((s) => s.id === targetScene.id);
-      const insertAt = position === "above" ? idx : idx + 1;
-      const updated = [...prev.slice(0, insertAt), newScene, ...prev.slice(insertAt)];
-      return updated.map((s, i) => ({ ...s, sceneNumber: i + 1 }));
-    });
+    try {
+      // Call AI API to generate proper prompts for the new scene
+      const result = await insertScene({
+        description: data.description,
+        voiceover: data.voiceover,
+        camera: data.cameraAngle,
+        selectedCharacters: data.selectedCharacters,
+        sceneNumber: newSceneNumber,
+        prevScene,
+        nextScene,
+        scriptContext: scriptData
+          ? {
+              cast: scriptData.characterName
+                ? [
+                    {
+                      name: scriptData.characterName,
+                      tag: "main",
+                      description: scriptData.characterBaseDescription || "",
+                    },
+                  ]
+                : undefined,
+              environment: scriptData.environment,
+              artStyle: scriptData.artStyle,
+              voiceGender: scriptData.voiceGender,
+              voiceTone: scriptData.voiceTone,
+            }
+          : undefined,
+      });
+
+      // Build SceneScript from API result
+      const newScene: SceneScript = {
+        id: crypto.randomUUID(),
+        sceneNumber: newSceneNumber,
+        camera: result?.camera || data.cameraAngle || "WIDE SHOT",
+        imageGenPrompt: result?.imagePrompt || data.description || "(AI generated)",
+        motionPrompt: result?.motionPrompt || data.description || "(AI generated)",
+        dialogue: result?.dialogue || data.voiceover || "",
+        visualPrompt: result?.visualPrompt || "",
+        audio: result?.audio || data.audio || "",
+      };
+
+      // Insert into list and re-number
+      const updated = [...sceneList.slice(0, insertAt), newScene, ...sceneList.slice(insertAt)].map(
+        (s, i) => ({ ...s, sceneNumber: i + 1 })
+      );
+
+      setSceneList(updated);
+
+      // Persist to IndexedDB
+      try {
+        const current = await db.get(CACHE_KEY.lastScript);
+        const merged = { ...(current ?? scriptData), scenes: updated as any };
+        await db.set(CACHE_KEY.lastScript, merged);
+        setScriptData(merged as any);
+      } catch (err) {
+        console.error("[handleInsert] Failed to persist to IndexedDB:", err);
+      }
+    } catch (err) {
+      console.error("[handleInsert] API error:", err);
+      // Fallback: insert scene với dữ liệu từ modal (không có AI)
+      const fallbackScene: SceneScript = {
+        id: crypto.randomUUID(),
+        sceneNumber: newSceneNumber,
+        camera: data.cameraAngle || "WIDE SHOT",
+        imageGenPrompt: data.description || "(AI generated)",
+        motionPrompt: data.description || "(AI generated)",
+        dialogue: data.voiceover || "",
+        visualPrompt: "",
+        audio: data.audio || "",
+      };
+
+      const updated = [
+        ...sceneList.slice(0, insertAt),
+        fallbackScene,
+        ...sceneList.slice(insertAt),
+      ].map((s, i) => ({ ...s, sceneNumber: i + 1 }));
+
+      setSceneList(updated);
+    }
   };
 
   const handleUpdateScene = async (sceneId: string, field: EditField, value: string) => {
