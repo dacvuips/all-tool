@@ -86,6 +86,20 @@ export interface InsertSceneResult {
   dialogue: string;
 }
 
+export interface SuggestConfigParams {
+  /** Danh mục hiện tại (tuỳ chọn) */
+  category?: string;
+  /** Mood hiện tại (tuỳ chọn) */
+  mood?: string;
+  /** Ngôn ngữ (tuỳ chọn) */
+  language?: string;
+}
+
+export interface SuggestConfigResult {
+  objectToPersonify: string;
+  tipContent: string;
+}
+
 export interface GeneratedImageData {
   imageBytes: string; // base64
   mimeType: string;
@@ -138,6 +152,11 @@ export interface UseAffiliateVideoApiReturn {
    * Trả về scene data đã được AI generate.
    */
   insertScene: (params: InsertSceneParams) => Promise<InsertSceneResult | undefined>;
+
+  /**
+   * Gọi API gợi ý objectToPersonify và tipContent từ AI.
+   */
+  suggestConfig: (params: SuggestConfigParams) => Promise<SuggestConfigResult | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -449,6 +468,37 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── suggestConfig – gọi API gợi ý objectToPersonify & tipContent ──
+  const suggestConfig = useCallback(
+    async (params: SuggestConfigParams): Promise<SuggestConfigResult | undefined> => {
+      try {
+        const res = await fetch("/api/app/suggest-config/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: params.category,
+            mood: params.mood,
+            language: params.language,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.message || `Lỗi ${res.status}`;
+          toast.error(message);
+          throw new Error(message);
+        }
+
+        const result = await res.json();
+        return result.data as SuggestConfigResult;
+      } catch (err: any) {
+        console.error("[suggestConfig] Error:", err);
+        throw err;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -457,5 +507,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     generateVideo,
     getGeneratedVideo,
     insertScene,
+    suggestConfig,
   };
 }
