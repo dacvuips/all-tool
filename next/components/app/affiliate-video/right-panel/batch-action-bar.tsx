@@ -473,11 +473,14 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id);
+          const audioDesc = [scriptData?.voiceGender, scriptData?.voiceStyle, scriptData?.voiceTone]
+            .filter(Boolean)
+            .join(", ");
           await generateVideo({
             sceneId: scene.id,
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motionPrompt}`
-              : `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
+              : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
             image: {
               imageBytes: existingImage.imageBytes,
               mimeType: existingImage.mimeType,
