@@ -10,6 +10,7 @@ import { useIndexedDB } from "./useIndexedDB";
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
 const VIDEO_STORE_NAME = "generated-videos";
+const AUDIO_STORE_NAME = "generated-audio";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -119,6 +120,24 @@ export interface SuggestConfigResult {
   tipContent: string;
 }
 
+export interface GenerateTTSParams {
+  /** Unique key to store audio (e.g. "voice-export-{timestamp}") */
+  cacheKey: string;
+  /** The dialogue / text content to convert to speech */
+  text: string;
+  /** Voice name (e.g. "Kore", "Puck", "Aoede") */
+  voiceName?: string;
+  /** Style/tone instructions (e.g. "Read cheerfully") */
+  stylePrompt?: string;
+}
+
+export interface GeneratedAudioData {
+  audioBytes: string; // base64 WAV
+  mimeType: string;
+  sampleRate?: number;
+  durationMs?: number;
+}
+
 export interface GeneratedImageData {
   imageBytes: string; // base64
   mimeType: string;
@@ -190,6 +209,17 @@ export interface UseAffiliateVideoApiReturn {
    * Gọi API gợi ý objectToPersonify và tipContent từ AI.
    */
   suggestConfig: (params: SuggestConfigParams) => Promise<SuggestConfigResult | undefined>;
+
+  /**
+   * Gọi API tạo audio từ text (TTS) bằng Gemini.
+   * Lưu kết quả WAV vào IndexedDB.
+   */
+  generateTTS: (params: GenerateTTSParams) => Promise<GeneratedAudioData | undefined>;
+
+  /**
+   * Lấy audio đã tạo từ IndexedDB theo cacheKey.
+   */
+  getGeneratedAudio: (cacheKey: string) => Promise<GeneratedAudioData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -199,6 +229,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
+  const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
 
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
@@ -640,6 +671,53 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── generateTTS – gọi API tạo audio từ text (Gemini TTS) ──
+  const generateTTS = useCallback(
+    async (params: GenerateTTSParams): Promise<GeneratedAudioData | undefined> => {
+      const { cacheKey, text, voiceName, stylePrompt } = params;
+
+      try {
+        const res = await fetch("/api/app/generation-tts/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, voiceName, stylePrompt }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.message || `Lỗi ${res.status}`;
+          toast.error(message);
+          throw new Error(message);
+        }
+
+        const result = await res.json();
+        const audioData: GeneratedAudioData = result.data;
+
+        if (!audioData?.audioBytes) {
+          toast.error("Không nhận được audio từ API");
+          return undefined;
+        }
+
+        // Persist to IndexedDB
+        await audioDB.set(cacheKey, audioData);
+
+        return audioData;
+      } catch (err: any) {
+        console.error("[generateTTS] Error:", err);
+        throw err;
+      }
+    },
+    [toast, audioDB]
+  );
+
+  // ── getGeneratedAudio – lấy audio đã tạo từ IndexedDB ──
+  const getGeneratedAudio = useCallback(
+    async (cacheKey: string): Promise<GeneratedAudioData | undefined> => {
+      return audioDB.get(cacheKey);
+    },
+    [audioDB]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -651,5 +729,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getExtendedVideo,
     insertScene,
     suggestConfig,
+    generateTTS,
+    getGeneratedAudio,
   };
 }

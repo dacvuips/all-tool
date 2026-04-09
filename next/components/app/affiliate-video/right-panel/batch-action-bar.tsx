@@ -16,14 +16,16 @@ import {
   RiFileCopyLine,
   RiImageFill,
   RiLoader4Line,
+  RiMagicLine,
   RiRefreshLine,
   RiVideoAddLine,
   RiVideoFill,
+  RiVolumeUpLine,
 } from "react-icons/ri";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button, Input } from "../../../shared/utilities/form";
-import { SceneScript } from "../constants";
+import { Button, Input, Select } from "../../../shared/utilities/form";
+import { BUILTIN_VOICES, SceneScript } from "../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
@@ -40,6 +42,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     getGeneratedImage,
     getGeneratedVideo,
     getExtendedVideo,
+    generateTTS,
   } = useAffiliateVideoApi();
   const {
     scriptData,
@@ -88,6 +91,12 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       setTimeout(() => setAudioCopied(false), 2000);
     });
   }, [audioExportText, toast, t]);
+
+  // ── TTS Generation state ──
+  const [ttsGenerating, setTtsGenerating] = useState(false);
+  const [ttsAudioUrl, setTtsAudioUrl] = useState<string | null>(null);
+  const [ttsVoiceName, setTtsVoiceName] = useState("Kore");
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // ── Batch image generation state ──
   const [batchRunning, setBatchRunning] = useState(false);
@@ -1103,6 +1112,114 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
               ) : (
                 <div className="text-center text-gray-400 text-xs py-4 border border-dashed border-gray-200 rounded-xl">
                   {t("Không có Dialogue")}
+                </div>
+              )}
+            </div>
+
+            {/* ── AI Text-to-Speech Section ── */}
+            <div className="border-t border-gray-100 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <RiVolumeUpLine className="text-purple-500" />
+                <span className="text-sm font-semibold text-gray-700">
+                  {t("Tạo Giọng AI")}
+                </span>
+              </div>
+
+              {/* Voice selector + Generate button */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className="flex-1">
+                  <Select
+                    value={ttsVoiceName}
+                    onChange={(val: string) => setTtsVoiceName(val)}
+                    options={BUILTIN_VOICES.map((v) => ({
+                      value: v.value,
+                      label: v.label,
+                    }))}
+                    className="text-xs"
+                  />
+                </div>
+                <Button
+                  onClick={async () => {
+                    if (ttsGenerating || !dialogueExportText) return;
+                    setTtsGenerating(true);
+                    setTtsAudioUrl(null);
+                    try {
+                      const cacheKey = `voice-export-${Date.now()}`;
+                      const audioData = await generateTTS({
+                        cacheKey,
+                        text: dialogueExportText,
+                        voiceName: ttsVoiceName,
+                        stylePrompt: audioExportText
+                          ? `Voice style: ${audioExportText}`
+                          : undefined,
+                      });
+                      if (audioData?.audioBytes) {
+                        const dataUrl = `data:${audioData.mimeType};base64,${audioData.audioBytes}`;
+                        setTtsAudioUrl(dataUrl);
+                        toast.success(t("Đã tạo giọng AI thành công!"));
+                      }
+                    } catch (err) {
+                      console.error("[TTS] Error:", err);
+                    } finally {
+                      setTtsGenerating(false);
+                    }
+                  }}
+                  disabled={ttsGenerating || !dialogueExportText}
+                  className="!h-9 !px-4 text-xs whitespace-nowrap"
+                  icon={
+                    ttsGenerating ? (
+                      <RiLoader4Line className="animate-spin" />
+                    ) : (
+                      <RiMagicLine />
+                    )
+                  }
+                  primary
+                >
+                  {ttsGenerating ? t("Đang tạo...") : t("Generate AI")}
+                </Button>
+              </div>
+
+              {/* Audio player */}
+              {ttsAudioUrl && (
+                <div className="rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-3">
+                  <audio
+                    ref={ttsAudioRef}
+                    controls
+                    src={ttsAudioUrl}
+                    className="w-full h-8"
+                    style={{ borderRadius: "8px" }}
+                  />
+                  <div className="flex items-center justify-end gap-2 mt-2">
+                    <Button
+                      onClick={() => {
+                        if (!ttsAudioUrl) return;
+                        const link = document.createElement("a");
+                        link.href = ttsAudioUrl;
+                        link.download = `voice-ai-${Date.now()}.wav`;
+                        link.click();
+                      }}
+                      className="!h-7 !px-2.5 text-xs"
+                      icon={<RiDownloadLine />}
+                      outline
+                    >
+                      {t("Tải Audio")}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {!ttsAudioUrl && !ttsGenerating && (
+                <div className="text-center text-gray-400 text-xs py-3 border border-dashed border-gray-200 rounded-xl">
+                  {t("Chọn giọng đọc và nhấn Generate AI để tạo audio từ Dialogue")}
+                </div>
+              )}
+
+              {ttsGenerating && (
+                <div className="flex items-center justify-center gap-2 py-4">
+                  <RiLoader4Line className="animate-spin text-purple-500 text-lg" />
+                  <span className="text-xs text-gray-500">
+                    {t("Đang tạo giọng nói bằng AI... Vui lòng chờ")}
+                  </span>
                 </div>
               )}
             </div>
