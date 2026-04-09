@@ -157,10 +157,10 @@ export function SceneBatchRow({
       onMouseEnter={() => setHoveredField(field)}
       onMouseLeave={() => setHoveredField(null)}
     >
-      {labelEl}
       {editingField === field ? (
         /* ── Edit mode ── */
-        <div className="mt-1">
+        <div>
+          {labelEl}
           <textarea
             ref={field === editingField ? textareaRef : undefined}
             value={editValue}
@@ -175,7 +175,7 @@ export function SceneBatchRow({
               className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 cursor-pointer border-0 transition-colors disabled:opacity-50"
             >
               <RiCloseLine className="text-sm" />
-              Đóng
+              {t("Đóng")}
             </button>
             <button
               onClick={handleSave}
@@ -187,16 +187,17 @@ export function SceneBatchRow({
               ) : (
                 <RiSaveLine className="text-sm" />
               )}
-              {saving ? "Đang lưu..." : "Lưu"}
+              {saving ? `${t("Đang lưu")}...` : `${t("Lưu")}`}
             </button>
           </div>
         </div>
       ) : (
         /* ── Display mode ── */
         <div className="relative">
-          <p className={`text-xs ${textColor} leading-relaxed pr-14`}>
+          {labelEl}
+          <span className={`text-xs ${textColor} leading-relaxed pr-14`}>
             {expanded ? text : truncate(text)}
-          </p>
+          </span>
           {/* Action icons – visible when hovering this field's area */}
           <div
             className="absolute top-0 right-0 flex items-center gap-0.5"
@@ -220,7 +221,7 @@ export function SceneBatchRow({
             {/* Edit pencil button */}
             <button
               onClick={() => openEdit(field)}
-              title="Chỉnh sửa"
+              title={t("Chỉnh sửa")}
               className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer border-0 bg-transparent"
             >
               <RiPencilLine className="text-sm" />
@@ -256,9 +257,9 @@ export function SceneBatchRow({
           "imageGenPrompt",
           scene.imageGenPrompt,
           "text-gray-600",
-          <div className="text-xs font-bold text-orange mb-1 uppercase tracking-wide">
+          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
             IMAGE PROMPT
-          </div>
+          </span>
         )}
         {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
           <button
@@ -276,23 +277,23 @@ export function SceneBatchRow({
           "motionPrompt",
           scene.motionPrompt,
           "text-teal-700",
-          <div className="text-xs font-bold text-teal mb-1 uppercase tracking-wide">[MOTION]:</div>
+          <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">[MOTION]:</span>
         )}
         {renderEditablePrompt(
           "audio",
           scene.audio ?? "",
           "text-purple-700",
-          <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
+          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [AUDIO]:
-          </div>
+          </span>
         )}
         {renderEditablePrompt(
           "dialogue",
           scene.dialogue ?? "",
           "text-green-700 italic",
-          <div className="text-xs font-bold text-green-600 mt-2 mb-1 uppercase tracking-wide">
+          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [DIALOGUE]:
-          </div>
+          </span>
         )}
         {editingField !== "motionPrompt" && editingField !== "dialogue" && needsExpand && (
           <button
