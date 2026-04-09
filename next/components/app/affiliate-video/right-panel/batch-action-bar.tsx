@@ -42,7 +42,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     getGeneratedImage,
     getGeneratedVideo,
     getExtendedVideo,
-    generateTTS,
+    generateAudioTTS,
   } = useAffiliateVideoApi();
   const {
     scriptData,
@@ -1120,9 +1120,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
             <div className="border-t border-gray-100 pt-4">
               <div className="flex items-center gap-2 mb-3">
                 <RiVolumeUpLine className="text-purple-500" />
-                <span className="text-sm font-semibold text-gray-700">
-                  {t("Tạo Giọng AI")}
-                </span>
+                <span className="text-sm font-semibold text-gray-700">{t("Tạo Giọng AI")}</span>
               </div>
 
               {/* Voice selector + Generate button */}
@@ -1145,7 +1143,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                     setTtsAudioUrl(null);
                     try {
                       const cacheKey = `voice-export-${Date.now()}`;
-                      const audioData = await generateTTS({
+                      const audioData = await generateAudioTTS({
                         cacheKey,
                         text: dialogueExportText,
                         voiceName: ttsVoiceName,
@@ -1167,11 +1165,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   disabled={ttsGenerating || !dialogueExportText}
                   className="!h-9 !px-4 text-xs whitespace-nowrap"
                   icon={
-                    ttsGenerating ? (
-                      <RiLoader4Line className="animate-spin" />
-                    ) : (
-                      <RiMagicLine />
-                    )
+                    ttsGenerating ? <RiLoader4Line className="animate-spin" /> : <RiMagicLine />
                   }
                   primary
                 >

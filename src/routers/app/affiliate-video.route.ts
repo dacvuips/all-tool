@@ -730,7 +730,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
   },
   {
     method: "post",
-    path: "/api/app/generation-tts/",
+    path: "/api/app/generation-audio-tts/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -765,13 +765,9 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
         const genAI = createVertexAIClient(apiKey);
 
         const voiceName = body.voiceName || "Kore";
-        const textContent = body.stylePrompt
-          ? `${body.stylePrompt}\n\n${body.text}`
-          : body.text;
+        const textContent = body.stylePrompt ? `${body.stylePrompt}\n\n${body.text}` : body.text;
 
-        logger.info(
-          `[generation-tts] Gọi Gemini TTS (voice: ${voiceName}) cho user ${context.id}`
-        );
+        logger.info(`[generation-tts] Gọi Gemini TTS (voice: ${voiceName}) cho user ${context.id}`);
 
         const response = await genAI.models.generateContent({
           model: "gemini-2.5-flash-preview-tts",
@@ -838,7 +834,9 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
             audioBytes: wavBase64,
             mimeType: "audio/wav",
             sampleRate,
-            durationMs: Math.round((dataLength / (sampleRate * numChannels * (bitsPerSample / 8))) * 1000),
+            durationMs: Math.round(
+              (dataLength / (sampleRate * numChannels * (bitsPerSample / 8))) * 1000
+            ),
           },
         });
       } catch (err: any) {

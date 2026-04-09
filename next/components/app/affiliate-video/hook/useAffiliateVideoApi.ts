@@ -120,7 +120,7 @@ export interface SuggestConfigResult {
   tipContent: string;
 }
 
-export interface GenerateTTSParams {
+export interface GenerateAudioTTSParams {
   /** Unique key to store audio (e.g. "voice-export-{timestamp}") */
   cacheKey: string;
   /** The dialogue / text content to convert to speech */
@@ -214,7 +214,7 @@ export interface UseAffiliateVideoApiReturn {
    * Gọi API tạo audio từ text (TTS) bằng Gemini.
    * Lưu kết quả WAV vào IndexedDB.
    */
-  generateTTS: (params: GenerateTTSParams) => Promise<GeneratedAudioData | undefined>;
+  generateAudioTTS: (params: GenerateAudioTTSParams) => Promise<GeneratedAudioData | undefined>;
 
   /**
    * Lấy audio đã tạo từ IndexedDB theo cacheKey.
@@ -672,12 +672,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   );
 
   // ── generateTTS – gọi API tạo audio từ text (Gemini TTS) ──
-  const generateTTS = useCallback(
-    async (params: GenerateTTSParams): Promise<GeneratedAudioData | undefined> => {
+  const generateAudioTTS = useCallback(
+    async (params: GenerateAudioTTSParams): Promise<GeneratedAudioData | undefined> => {
       const { cacheKey, text, voiceName, stylePrompt } = params;
 
       try {
-        const res = await fetch("/api/app/generation-tts/", {
+        const res = await fetch("/api/app/generation-audio-tts/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text, voiceName, stylePrompt }),
@@ -703,7 +703,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
         return audioData;
       } catch (err: any) {
-        console.error("[generateTTS] Error:", err);
+        console.error("[generateAudioTTS] Error:", err);
         throw err;
       }
     },
@@ -729,7 +729,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getExtendedVideo,
     insertScene,
     suggestConfig,
-    generateTTS,
+    generateAudioTTS,
     getGeneratedAudio,
   };
 }
