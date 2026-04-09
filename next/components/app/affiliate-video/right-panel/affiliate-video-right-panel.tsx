@@ -115,7 +115,7 @@ export const AffiliateVideoRightPanel = () => {
   }`;
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-amber-50">
+    <div className="flex-1 flex flex-col overflow-hidden">
       <TabGroup
         index={tabIndex}
         onChange={(i) => setScriptTab && setScriptTab(TAB_NAMES[i])}

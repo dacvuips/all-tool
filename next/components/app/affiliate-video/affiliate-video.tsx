@@ -64,7 +64,10 @@ export default function AffiliateVideo() {
   const keyReady = hasKey && credentialActive;
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden bg-amber-50">
+    <div
+      className="flex flex-col h-screen overflow-hidden bg-amber-50"
+      style={{ height: "calc(100vh - 10px)" }}
+    >
       {/* Modals */}
       {zoomSrc && (
         <ZoomModal src={zoomSrc.src} mediaType={zoomSrc.type} onClose={() => setZoomSrc(null)} />
