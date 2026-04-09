@@ -21,9 +21,6 @@ const maskCredential = (credential: ICredential | null) => {
     customerId: doc.customerId,
     isCustomerCredential: doc.isCustomerCredential,
     isAdminCredential: doc.isAdminCredential,
-    oauthClientId: maskCredentialValue(doc.oauthClientId),
-    oauthClientSecret: maskCredentialValue(doc.oauthClientSecret),
-    oauthRefreshToken: maskCredentialValue(doc.oauthRefreshToken),
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -67,6 +64,19 @@ const Query = {
       throw new ForbiddenError("Credential not found");
     }
     return maskCredential(credential);
+  },
+  getCredentialByCustomerAndKey: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { key } = args;
+    const credential = await credentialService.findOne({
+      key,
+      customerId: context.id,
+      isCustomerCredential: true,
+    });
+    return {
+      id: credential?._id,
+      active: credential?.active,
+    };
   },
 };
 

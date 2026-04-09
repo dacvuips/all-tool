@@ -8,8 +8,4 @@ export type ICredential = TimestampEntity & {
   customerId?: string;
   isCustomerCredential?: boolean;
   isAdminCredential?: boolean;
-  /** Vertex AI OAuth2 – encrypted fields for auto-refresh token flow */
-  oauthClientId?: string;
-  oauthClientSecret?: string;
-  oauthRefreshToken?: string;
 };

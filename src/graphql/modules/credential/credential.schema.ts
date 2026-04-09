@@ -8,6 +8,7 @@ const schema = gql`
     getAllCredentialCustomer(q: QueryGetListInput): CredentialPageData
     getOneCredentialCustomer(id: ID!): Credential
     # Add Query
+    getCredentialByCustomerAndKey(key: String!): Credential
   }
 
   extend type Mutation {
@@ -17,7 +18,6 @@ const schema = gql`
     createCredentialCustomer(data: CreateCredentialCustomerInput!): Credential
     updateCredentialCustomer(id: ID!, data: UpdateCredentialCustomerInput!): Credential
     deleteOneCredentialCustomer(id: ID!): Credential
-    # Add Mutation
   }
 
   input CreateCredentialInput {
@@ -27,9 +27,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
 
   input UpdateCredentialInput {
@@ -39,9 +36,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
   input CreateCredentialCustomerInput {
     key: AiProviderKeyEnum
@@ -67,9 +61,6 @@ const schema = gql`
     customerId: String
     isCustomerCredential: Boolean
     isAdminCredential: Boolean
-    oauthClientId: String
-    oauthClientSecret: String
-    oauthRefreshToken: String
   }
 
   type CredentialPageData {

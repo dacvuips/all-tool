@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineBell, AiOutlineSearch } from "react-icons/ai";
 import { FiShoppingCart } from "react-icons/fi";
@@ -8,7 +8,9 @@ import { HiArrowLeft, HiOutlineCheck, HiOutlineChevronDown } from "react-icons/h
 import {
   RiArrowLeftSLine,
   RiBankCardLine,
+  RiBookOpenLine,
   RiHandCoinFill,
+  RiKey2Line,
   RiLockPasswordLine,
   RiLogoutBoxLine,
   RiMenu3Line,
@@ -30,12 +32,14 @@ import { useGlobalContext } from "../lib/providers/global-provider";
 import { useLocale } from "../lib/providers/locale-provider";
 
 import { Pagination, QueryInput } from "../lib/repo/crud.repo";
-import { NOTIFY_FRAGMENT, NotificationService } from "../lib/repo/notification/notification.repo";
+import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/notification.repo";
 
+import { SettingsModal } from "../components/app/affiliate-video/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { parseNumber } from "../lib/helpers/parser";
-import { Order, PaymentStatus } from "../lib/repo";
+import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
+import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
 import { useHomeLayoutContext } from "./home-layout/provider/home-layout-provider";
@@ -70,6 +74,43 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
   const { setOpenCustomerLoginDialog, setOpenSidebarSlideout } = useGlobalContext();
   const screenXl = useScreen("xl");
   const isHomePage = router.pathname === "/";
+  const isAffiliateVideoPage = router.pathname.startsWith("/app/affiliate-video");
+
+  /* ─── Credential state (for affiliate-video API Key button) ─── */
+  const [showSettings, setShowSettings] = useState(false);
+  const [credentialId, setCredentialId] = useState<string | null>(null);
+  const [credentialActive, setCredentialActive] = useState(false);
+  const [credentialLoading, setCredentialLoading] = useState(true);
+
+  const checkCredential = useCallback(async () => {
+    setCredentialLoading(true);
+    try {
+      const cred = await credentialCustomerService.getCredentialByKey(
+        AiProviderKeyEnum.GOOGLE_GEMINI_KEY
+      );
+      if (cred) {
+        setCredentialId(cred.id || null);
+        setCredentialActive(!!cred.active);
+      } else {
+        setCredentialId(null);
+        setCredentialActive(false);
+      }
+    } catch {
+      setCredentialId(null);
+      setCredentialActive(false);
+    } finally {
+      setCredentialLoading(false);
+    }
+  }, [customer]);
+
+  useEffect(() => {
+    if (isAffiliateVideoPage) {
+      checkCredential();
+    }
+  }, [checkCredential, isAffiliateVideoPage]);
+
+  const hasKey = !!credentialId;
+  const keyReady = hasKey && credentialActive;
 
   return (
     <>
@@ -102,6 +143,44 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                 </Link>
               </div>
             </div>
+
+            {/* ── Affiliate Video: Right side actions ── */}
+            {isAffiliateVideoPage && (
+              <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
+                {/* Hướng dẫn */}
+                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all cursor-pointer border-0 bg-transparent whitespace-nowrap">
+                  <RiBookOpenLine className="text-sm" />
+                  {t("Hướng dẫn")}
+                </button>
+
+                {/* API Key status */}
+                <button
+                  id="api-key-btn"
+                  onClick={() =>
+                    !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                  }
+                  className={`flex items-center gap-1.5 mr-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                    credentialLoading
+                      ? "bg-gray-50 text-gray-400 border-gray-200"
+                      : keyReady
+                      ? "bg-emerald-50 text-emerald-600 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300"
+                      : "bg-amber-50 text-amber-600 border-amber-200/80 hover:bg-amber-100 hover:border-amber-300"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      credentialLoading
+                        ? "bg-gray-300"
+                        : keyReady
+                        ? "bg-emerald-500"
+                        : "bg-amber-500 animate-pulse"
+                    }`}
+                  />
+                  <RiKey2Line className="text-xs" />
+                  {credentialLoading ? "..." : keyReady ? t("Key OK") : t("Cài API Key")}
+                </button>
+              </div>
+            )}
             <div className="flex flex-row justify-around items-center">
               <nav className="min-h-15">
                 <div className="flex flex-row justify-between items-center py-3">
@@ -189,6 +268,16 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
           isOpen={!!openTrainingByVideoDialog}
         ></VideoDialog>
       </header>
+
+      {/* ── Affiliate Video: Settings Modal ── */}
+      {showSettings && (
+        <SettingsModal
+          credentialId={credentialId}
+          credentialActive={credentialActive}
+          onClose={() => setShowSettings(false)}
+          onCredentialChange={checkCredential}
+        />
+      )}
     </>
   );
 }
@@ -206,6 +295,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
 
   const isMainPage = !name;
   const isHomePage = router.pathname === "/";
+  const isAffiliateVideoPage = router.pathname.startsWith("/app/affiliate-video");
 
   const {
     setOpenCustomerLoginDialog,
@@ -214,6 +304,42 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
     setOpenCardMenu,
     setOpenSidebarSlideout,
   } = useGlobalContext();
+
+  /* ─── Credential state (for affiliate-video API Key button) ─── */
+  const [showSettings, setShowSettings] = useState(false);
+  const [credentialId, setCredentialId] = useState<string | null>(null);
+  const [credentialActive, setCredentialActive] = useState(false);
+  const [credentialLoading, setCredentialLoading] = useState(true);
+
+  const checkCredential = useCallback(async () => {
+    setCredentialLoading(true);
+    try {
+      const cred = await credentialCustomerService.getCredentialByKey(
+        AiProviderKeyEnum.GOOGLE_GEMINI_KEY
+      );
+      if (cred) {
+        setCredentialId(cred.id || null);
+        setCredentialActive(!!cred.active);
+      } else {
+        setCredentialId(null);
+        setCredentialActive(false);
+      }
+    } catch {
+      setCredentialId(null);
+      setCredentialActive(false);
+    } finally {
+      setCredentialLoading(false);
+    }
+  }, [customer]);
+
+  useEffect(() => {
+    if (isAffiliateVideoPage) {
+      checkCredential();
+    }
+  }, [checkCredential, isAffiliateVideoPage]);
+
+  const hasKey = !!credentialId;
+  const keyReady = hasKey && credentialActive;
 
   return (
     <>
@@ -283,6 +409,33 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                     </>
                   )}
 
+                  {/* Affiliate Video: API Key status (mobile) */}
+                  {isAffiliateVideoPage && (
+                    <button
+                      onClick={() =>
+                        !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                      }
+                      className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
+                        credentialLoading
+                          ? "bg-gray-50 text-gray-400 border-gray-200"
+                          : keyReady
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-200/80"
+                          : "bg-amber-50 text-amber-600 border-amber-200/80"
+                      }`}
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          credentialLoading
+                            ? "bg-gray-300"
+                            : keyReady
+                            ? "bg-emerald-500"
+                            : "bg-amber-500 animate-pulse"
+                        }`}
+                      />
+                      <RiKey2Line className="text-xs" />
+                    </button>
+                  )}
+
                   <CartDropdown order={order} />
                   {customer && <NotifiCationDropdown />}
                   <Button
@@ -300,6 +453,16 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
 
       <CardMenu isOpen={!!openCardMenu} onClose={() => setOpenCardMenu?.(false)} />
       <OrderNotify order={order} />
+
+      {/* ── Affiliate Video: Settings Modal (mobile) ── */}
+      {showSettings && (
+        <SettingsModal
+          credentialId={credentialId}
+          credentialActive={credentialActive}
+          onClose={() => setShowSettings(false)}
+          onCredentialChange={checkCredential}
+        />
+      )}
     </>
   );
 }

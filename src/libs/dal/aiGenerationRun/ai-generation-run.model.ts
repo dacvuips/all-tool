@@ -3,9 +3,8 @@ import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../core";
 import {
   AiGenerationRunStatusEnum,
-  GenerationOutputRef,
+  AiGenerationRunTypeEnum,
   IAiGenerationRun,
-  ResponseSummary,
 } from "./ai-generation-run.interface";
 
 const Schema = mongoose.Schema;
@@ -35,10 +34,11 @@ const responseSummarySchema = new Schema(
 const aiGenerationRunSchema = new Schema(
   {
     customerId: { type: String, required: true, index: true },
-    productId: { type: String, required: true, index: true },
-    nodeId: { type: String, required: true, index: true },
+    prompt: { type: String, required: true },
+    voicePrompt: { type: String, required: true },
     provider: { type: String, required: true },
     outputType: { type: String, required: true },
+    type: { type: String, enum: Object.values(AiGenerationRunTypeEnum), required: true },
     status: {
       type: String,
       enum: Object.values(AiGenerationRunStatusEnum),
@@ -53,12 +53,13 @@ const aiGenerationRunSchema = new Schema(
     creditCost: { type: Number, default: 0 },
     creditChargedAt: { type: Date },
     creditRefundedAt: { type: Date },
+    metadata: { type: Schema.Types.Mixed },
   },
   { timestamps: true }
 );
 
-/** Index để query lịch sử theo customer + product, sort mới nhất trước */
-aiGenerationRunSchema.index({ customerId: 1, productId: 1, createdAt: -1 });
+/** Index để query lịch sử theo customer, sort mới nhất trước */
+aiGenerationRunSchema.index({ customerId: 1, createdAt: -1 });
 aiGenerationRunSchema.index({ customerId: 1, status: 1 });
 
 export const AiGenerationRunModel = MainConnection.model<IAiGenerationRun>(
