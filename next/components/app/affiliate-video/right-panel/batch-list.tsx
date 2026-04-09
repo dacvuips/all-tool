@@ -496,7 +496,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       <div className="flex-1 overflow-auto v-scrollbar">
         <table className="w-full border-collapse text-sm">
           {/* Sticky header */}
-          <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+          <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
               <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
@@ -512,11 +512,9 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
               </th>
               <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
                 {t("HÌNH ẢNH")}
-                <br />({t("ĐÃ TẠO")})
               </th>
               <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
                 {t("VIDEO")}
-                <br />({t("ĐÃ TẠO")})
               </th>
               <th className="border-b border-gray-200 w-0 p-0">
                 <Button
@@ -527,7 +525,13 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                       : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
                   }`}
                   iconClassName="text-sm"
-                  icon={sceneList.every((s) => s.voiceDisable) ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
+                  icon={
+                    sceneList.every((s) => s.voiceDisable) ? (
+                      <MdVoiceOverOff />
+                    ) : (
+                      <MdRecordVoiceOver />
+                    )
+                  }
                   tooltip={
                     sceneList.every((s) => s.voiceDisable)
                       ? t("Bật thoại tất cả")
