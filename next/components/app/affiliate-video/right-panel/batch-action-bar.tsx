@@ -5,9 +5,12 @@
  */
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { MdRecordVoiceOver } from "react-icons/md";
 import {
+  RiCheckLine,
+  RiClipboardLine,
   RiCloseLine,
   RiDownloadLine,
   RiFileCopyLine,
@@ -18,6 +21,8 @@ import {
   RiVideoFill,
 } from "react-icons/ri";
 import { useToast } from "../../../../lib/providers/toast-provider";
+import { Dialog } from "../../../shared/utilities/dialog/dialog";
+import { Button, Input } from "../../../shared/utilities/form";
 import { SceneScript } from "../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
@@ -37,12 +42,52 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     getExtendedVideo,
   } = useAffiliateVideoApi();
   const {
+    scriptData,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
   } = useAffiliateVideoContext();
   const toast = useToast();
+
+  // ── Voice Export Dialog state ──
+  const [showVoiceExportDialog, setShowVoiceExportDialog] = useState(false);
+  const [dialogueCopied, setDialogueCopied] = useState(false);
+  const [audioCopied, setAudioCopied] = useState(false);
+
+  /** Aggregate all dialogue from enabled scenes */
+  const dialogueExportText = useMemo(() => {
+    const eligibleScenes = scenes.filter((s) => !s.disabled);
+    if (eligibleScenes.length === 0) return "";
+    return eligibleScenes
+      .filter((s) => s.dialogue)
+      .map((s) => `"${s.dialogue}"`)
+      .join("\n");
+  }, [scenes]);
+
+  /** Aggregate voice profile from scriptData (voiceGender · voiceTone · voiceStyle) */
+  const audioExportText = useMemo(() => {
+    if (!scriptData) return "";
+    return [scriptData.voiceGender, scriptData.voiceTone, scriptData.voiceStyle]
+      .filter(Boolean)
+      .join(" · ");
+  }, [scriptData]);
+
+  const handleCopyDialogue = useCallback(() => {
+    navigator.clipboard.writeText(dialogueExportText).then(() => {
+      setDialogueCopied(true);
+      toast.success(t("Đã sao chép Dialogue!"));
+      setTimeout(() => setDialogueCopied(false), 2000);
+    });
+  }, [dialogueExportText, toast, t]);
+
+  const handleCopyAudio = useCallback(() => {
+    navigator.clipboard.writeText(audioExportText).then(() => {
+      setAudioCopied(true);
+      toast.success(t("Đã sao chép Audio!"));
+      setTimeout(() => setAudioCopied(false), 2000);
+    });
+  }, [audioExportText, toast, t]);
 
   // ── Batch image generation state ──
   const [batchRunning, setBatchRunning] = useState(false);
@@ -554,12 +599,14 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
             mimeType: chainVideo!.mimeType,
           },
           // Ảnh tham chiếu của scene kế tiếp
-          ...(sceneImage ? {
-            image: {
-              imageBytes: sceneImage.imageBytes,
-              mimeType: sceneImage.mimeType,
-            },
-          } : {}),
+          ...(sceneImage
+            ? {
+                image: {
+                  imageBytes: sceneImage.imageBytes,
+                  mimeType: sceneImage.mimeType,
+                },
+              }
+            : {}),
           onProgress: (pct) => setExtendStepProgress(pct),
           onStatusMessage: (msg) => setExtendStepMessage(msg),
         });
@@ -791,193 +838,282 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       label: t("Xuất Prompt"),
       color: "bg-green-500 hover:bg-green-600",
     },
+    {
+      id: "batch-export-voice",
+      icon: <MdRecordVoiceOver />,
+      label: t("Xuất Voice"),
+      color: "bg-blue-500 hover:bg-blue-600",
+      method: () => setShowVoiceExportDialog(true),
+    },
   ];
 
   return (
-    <div className="flex flex-col border-b border-gray-100 bg-white flex-shrink-0">
-      <div className="flex items-center gap-2 p-3 flex-wrap ">
-        {actions.map((action) => (
-          <button
-            key={action.id}
-            id={action.id}
-            onClick={action.method}
-            disabled={action.disabled}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${action.color}`}
-          >
-            {action.icon}
-            {action.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
-      {(batchRunning || batchDone) && (
-        <div className="px-3 pb-2">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span className="flex items-center gap-1 min-w-0">
-              {batchRunning ? (
-                <>
-                  <span className="whitespace-nowrap">
-                    🎨 {t("Cảnh")} #
-                    {scenes.filter((s) => !s.disabled)[batchCurrentIndex]?.sceneNumber ?? "?"} —{" "}
-                    {batchCompleted}/{batchTotal}
-                  </span>
-                  {batchCurrentSceneLabel && (
-                    <span className="text-gray-400 truncate ml-1" title={batchCurrentSceneLabel}>
-                      · {batchCurrentSceneLabel}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  ✅ {t("Hoàn thành")} — {batchCompleted}/{batchTotal}
-                </>
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              {batchSkipped > 0 && (
-                <span className="text-blue-500">
-                  {batchSkipped} {t("bỏ qua")}
-                </span>
-              )}
-              {batchErrors > 0 && (
-                <span className="text-red-500">
-                  {batchErrors} {t("lỗi")}
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                batchDone && !batchRunning
-                  ? "bg-gradient-to-r from-green-400 to-emerald-500"
-                  : "bg-gradient-to-r from-pink-500 to-purple-500"
-              }`}
-              style={{ width: `${batchTotal > 0 ? (batchCompleted / batchTotal) * 100 : 0}%` }}
-            />
-          </div>
+    <>
+      <div className="flex flex-col border-b border-gray-100 bg-white flex-shrink-0">
+        <div className="flex items-center gap-2 p-3 flex-wrap ">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              id={action.id}
+              onClick={action.method}
+              disabled={action.disabled}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${action.color}`}
+            >
+              {action.icon}
+              {action.label}
+            </button>
+          ))}
         </div>
-      )}
 
-      {/* Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
-      {(videoBatchRunning || videoBatchDone) && (
-        <div className="px-3 pb-2">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span className="flex items-center gap-1 min-w-0">
-              {videoBatchRunning ? (
-                <>
-                  <span className="whitespace-nowrap">
-                    🎬 {t("Video Scene")} #
-                    {scenes.filter((s) => !s.disabled && s.motionPrompt)[videoBatchCurrentIndex]
-                      ?.sceneNumber ?? "?"}{" "}
-                    — {videoBatchCompleted}/{videoBatchTotal}
-                  </span>
-                  {videoBatchCurrentSceneLabel && (
-                    <span
-                      className="text-gray-400 truncate ml-1"
-                      title={videoBatchCurrentSceneLabel}
-                    >
-                      · {videoBatchCurrentSceneLabel}
+        {/* Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
+        {(batchRunning || batchDone) && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span className="flex items-center gap-1 min-w-0">
+                {batchRunning ? (
+                  <>
+                    <span className="whitespace-nowrap">
+                      🎨 {t("Cảnh")} #
+                      {scenes.filter((s) => !s.disabled)[batchCurrentIndex]?.sceneNumber ?? "?"} —{" "}
+                      {batchCompleted}/{batchTotal}
                     </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  ✅ {t("Video hoàn thành")} — {videoBatchCompleted}/{videoBatchTotal}
-                </>
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              {videoBatchSkipped > 0 && (
-                <span className="text-blue-500">
-                  {videoBatchSkipped} {t("bỏ qua")}
-                </span>
-              )}
-              {videoBatchErrors > 0 && (
-                <span className="text-red-500">
-                  {videoBatchErrors} {t("lỗi")}
-                </span>
-              )}
-            </span>
-          </div>
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                videoBatchDone && !videoBatchRunning
-                  ? "bg-gradient-to-r from-green-400 to-emerald-500"
-                  : "bg-gradient-to-r from-purple-500 to-indigo-500"
-              }`}
-              style={{
-                width: `${
-                  videoBatchTotal > 0 ? (videoBatchCompleted / videoBatchTotal) * 100 : 0
-                }%`,
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Extend Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
-      {(extendBatchRunning || extendBatchDone) && (
-        <div className="px-3 pb-2">
-          <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-            <span className="flex items-center gap-1 min-w-0">
-              {extendBatchRunning ? (
-                <>
-                  <span className="whitespace-nowrap">
-                    🔗 {t("Nối chuỗi")}: {extendBatchCurrentSceneLabel || "..."} —{" "}
-                    {extendBatchCompleted}/{extendBatchTotal}
+                    {batchCurrentSceneLabel && (
+                      <span className="text-gray-400 truncate ml-1" title={batchCurrentSceneLabel}>
+                        · {batchCurrentSceneLabel}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    ✅ {t("Hoàn thành")} — {batchCompleted}/{batchTotal}
+                  </>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                {batchSkipped > 0 && (
+                  <span className="text-blue-500">
+                    {batchSkipped} {t("bỏ qua")}
                   </span>
-                  {extendStepMessage && (
-                    <span className="text-gray-400 truncate ml-1" title={extendStepMessage}>
-                      · {extendStepMessage}
-                    </span>
-                  )}
-                </>
-              ) : (
-                <>
-                  ✅ {t("Nối video hoàn thành")} — {extendBatchCompleted}/{extendBatchTotal}
-                </>
-              )}
-            </span>
-            <span className="flex items-center gap-2">
-              {extendBatchRunning && extendStepProgress > 0 && (
-                <span className="text-teal-500 font-medium">{extendStepProgress}%</span>
-              )}
-              {extendBatchErrors > 0 && (
-                <span className="text-red-500">
-                  {extendBatchErrors} {t("lỗi")}
-                </span>
-              )}
-            </span>
-          </div>
-          {/* Thanh tổng: hiển thị tiến trình theo bước */}
-          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-300 ${
-                extendBatchDone && !extendBatchRunning
-                  ? "bg-gradient-to-r from-green-400 to-emerald-500"
-                  : "bg-gradient-to-r from-teal-500 to-cyan-500"
-              }`}
-              style={{
-                width: `${
-                  extendBatchTotal > 0 ? (extendBatchCompleted / extendBatchTotal) * 100 : 0
-                }%`,
-              }}
-            />
-          </div>
-          {/* Thanh con: tiến trình SSE của bước hiện tại */}
-          {extendBatchRunning && (
-            <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden mt-1">
+                )}
+                {batchErrors > 0 && (
+                  <span className="text-red-500">
+                    {batchErrors} {t("lỗi")}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
               <div
-                className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-400 to-teal-400"
-                style={{ width: `${extendStepProgress}%` }}
+                className={`h-full rounded-full transition-all duration-300 ${
+                  batchDone && !batchRunning
+                    ? "bg-gradient-to-r from-green-400 to-emerald-500"
+                    : "bg-gradient-to-r from-pink-500 to-purple-500"
+                }`}
+                style={{ width: `${batchTotal > 0 ? (batchCompleted / batchTotal) * 100 : 0}%` }}
               />
             </div>
-          )}
-        </div>
-      )}
-    </div>
+          </div>
+        )}
+
+        {/* Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
+        {(videoBatchRunning || videoBatchDone) && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span className="flex items-center gap-1 min-w-0">
+                {videoBatchRunning ? (
+                  <>
+                    <span className="whitespace-nowrap">
+                      🎬 {t("Video Scene")} #
+                      {scenes.filter((s) => !s.disabled && s.motionPrompt)[videoBatchCurrentIndex]
+                        ?.sceneNumber ?? "?"}{" "}
+                      — {videoBatchCompleted}/{videoBatchTotal}
+                    </span>
+                    {videoBatchCurrentSceneLabel && (
+                      <span
+                        className="text-gray-400 truncate ml-1"
+                        title={videoBatchCurrentSceneLabel}
+                      >
+                        · {videoBatchCurrentSceneLabel}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    ✅ {t("Video hoàn thành")} — {videoBatchCompleted}/{videoBatchTotal}
+                  </>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                {videoBatchSkipped > 0 && (
+                  <span className="text-blue-500">
+                    {videoBatchSkipped} {t("bỏ qua")}
+                  </span>
+                )}
+                {videoBatchErrors > 0 && (
+                  <span className="text-red-500">
+                    {videoBatchErrors} {t("lỗi")}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  videoBatchDone && !videoBatchRunning
+                    ? "bg-gradient-to-r from-green-400 to-emerald-500"
+                    : "bg-gradient-to-r from-purple-500 to-indigo-500"
+                }`}
+                style={{
+                  width: `${
+                    videoBatchTotal > 0 ? (videoBatchCompleted / videoBatchTotal) * 100 : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Extend Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
+        {(extendBatchRunning || extendBatchDone) && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span className="flex items-center gap-1 min-w-0">
+                {extendBatchRunning ? (
+                  <>
+                    <span className="whitespace-nowrap">
+                      🔗 {t("Nối chuỗi")}: {extendBatchCurrentSceneLabel || "..."} —{" "}
+                      {extendBatchCompleted}/{extendBatchTotal}
+                    </span>
+                    {extendStepMessage && (
+                      <span className="text-gray-400 truncate ml-1" title={extendStepMessage}>
+                        · {extendStepMessage}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    ✅ {t("Nối video hoàn thành")} — {extendBatchCompleted}/{extendBatchTotal}
+                  </>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                {extendBatchRunning && extendStepProgress > 0 && (
+                  <span className="text-teal-500 font-medium">{extendStepProgress}%</span>
+                )}
+                {extendBatchErrors > 0 && (
+                  <span className="text-red-500">
+                    {extendBatchErrors} {t("lỗi")}
+                  </span>
+                )}
+              </span>
+            </div>
+            {/* Thanh tổng: hiển thị tiến trình theo bước */}
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  extendBatchDone && !extendBatchRunning
+                    ? "bg-gradient-to-r from-green-400 to-emerald-500"
+                    : "bg-gradient-to-r from-teal-500 to-cyan-500"
+                }`}
+                style={{
+                  width: `${
+                    extendBatchTotal > 0 ? (extendBatchCompleted / extendBatchTotal) * 100 : 0
+                  }%`,
+                }}
+              />
+            </div>
+            {/* Thanh con: tiến trình SSE của bước hiện tại */}
+            {extendBatchRunning && (
+              <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden mt-1">
+                <div
+                  className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-400 to-teal-400"
+                  style={{ width: `${extendStepProgress}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Voice Export Dialog ── */}
+      <Dialog
+        isOpen={showVoiceExportDialog}
+        onClose={() => setShowVoiceExportDialog(false)}
+        width={600}
+        slideFromBottom="none"
+        hasCloseIcon={false}
+        dialogClass="relative bg-white shadow-2xl rounded-2xl overflow-hidden"
+        headerClass=""
+        bodyClass=""
+        footerClass=""
+      >
+        <Dialog.Header>
+          <div className="px-5 pt-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-bold text-base flex items-center gap-2">
+                  <MdRecordVoiceOver className="text-blue-500" />
+                  {t("Xuất Voice")}
+                </div>
+                <div className="text-gray-500 text-xs mt-0.5">
+                  {t("Tổng hợp Dialogue & Audio từ tất cả Scene")}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowVoiceExportDialog(false)}
+                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 cursor-pointer border-0 transition-colors"
+              >
+                <RiCloseLine className="text-sm" />
+              </button>
+            </div>
+          </div>
+        </Dialog.Header>
+
+        <Dialog.Body>
+          <div className="px-5 py-3 space-y-4 max-h-[70vh] overflow-y-auto v-scrollbar">
+            {/* ── Audio Section ── */}
+
+            <Input
+              prefix={t("Giọng đọc")}
+              value={audioExportText}
+              prefixClassName="border-r border-gray-200 bg-gray-50"
+              placeholder={t("Không có Audio")}
+            />
+            {/* ── Dialogue Section ── */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-gray-700">Dialogue</span>
+                <Button
+                  onClick={handleCopyDialogue}
+                  disabled={!dialogueExportText}
+                  className="!h-7 !px-2.5 text-xs"
+                  icon={dialogueCopied ? <RiCheckLine /> : <RiClipboardLine />}
+                  outline
+                >
+                  {dialogueCopied ? t("Đã chép") : t("Copy")}
+                </Button>
+              </div>
+              {dialogueExportText ? (
+                <pre className="w-full rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-700 px-4 py-3 whitespace-pre-wrap leading-relaxed font-mono">
+                  {dialogueExportText}
+                </pre>
+              ) : (
+                <div className="text-center text-gray-400 text-xs py-4 border border-dashed border-gray-200 rounded-xl">
+                  {t("Không có Dialogue")}
+                </div>
+              )}
+            </div>
+          </div>
+        </Dialog.Body>
+
+        <Dialog.Footer>
+          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+            <Button onClick={() => setShowVoiceExportDialog(false)} outline>
+              {t("Đóng")}
+            </Button>
+          </div>
+        </Dialog.Footer>
+      </Dialog>
+    </>
   );
 }
