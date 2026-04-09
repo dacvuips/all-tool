@@ -1,4 +1,4 @@
-import { Children, CSSProperties, Fragment, useEffect, useRef, useState } from "react";
+import { Children, CSSProperties, Fragment, ReactNode, useEffect, useRef, useState } from "react";
 import { RiArrowLeftSLine, RiArrowRightSLine } from "react-icons/ri";
 import { useUUID } from "../../../../lib/hooks/useUUID";
 import { Button } from "../form";
@@ -188,7 +188,7 @@ export function TabGroup({
 }
 
 interface TabPropsType extends ReactProps {
-  label: string;
+  label: ReactNode | string;
   subtitle?: string;
   count?: string;
 }

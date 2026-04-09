@@ -6,8 +6,7 @@
  */
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
-import { Button, Field } from "../../../shared/utilities/form";
-import { Input } from "../../../shared/utilities/form/input";
+import { Button, Field, Textarea } from "../../../shared/utilities/form";
 import { Select } from "../../../shared/utilities/form/select";
 import {
   ART_STYLE_OPTIONS,
@@ -78,7 +77,9 @@ export const AffiliateConfig = () => {
                         : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
                     }`}
                   >
-                    <span className="text-base">{isPortrait ? <BsFile /> : <BsFile style={{ transform: "rotate(90deg)" }} />}</span>
+                    <span className="text-base">
+                      {isPortrait ? <BsFile /> : <BsFile style={{ transform: "rotate(90deg)" }} />}
+                    </span>
                     {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
                   </Button>
                 );
@@ -132,7 +133,7 @@ export const AffiliateConfig = () => {
         {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
         <div>
           <Field noError name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
-            <Input
+            <Textarea
               id="object-to-personify-input"
               className="border-gray-200"
               placeholder={t("VD: Một quả chuối tươi")}
@@ -143,7 +144,7 @@ export const AffiliateConfig = () => {
         {/* NỘI DUNG MẸO (tipContent) */}
         <div>
           <Field noError name="tipContent" label={t("Nội dung mẹo")}>
-            <Input
+            <Textarea
               id="tip-content-input"
               className="border-gray-200"
               placeholder={t("VD: Cách ăn chuối tốt nhất")}

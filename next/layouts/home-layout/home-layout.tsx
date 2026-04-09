@@ -14,7 +14,6 @@ import { BackToTop } from "./components/back-to-top";
 import { Footer } from "./components/footer";
 import { PopupNotifyDialog } from "./components/popup-notify-dialog";
 import { SelectCategoryGlobalDialog } from "./components/select-category-global-dialog";
-import { Sidebar } from "./components/sidebar";
 import { UpdatePhoneNumberDialog } from "./components/update-phone-number-dialog";
 import { HomeLayoutProvider } from "./provider/home-layout-provider";
 
@@ -36,7 +35,7 @@ export function HomeLayout({ ...props }: LayoutProps) {
         <DefaultHead shopCode="" shopLogo="" />
         <GlobalProvider>
           <div className="pt-14 w-full min-h-screen">
-            {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />}
+            {/* {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />} */}
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
             {customer && (
@@ -44,12 +43,11 @@ export function HomeLayout({ ...props }: LayoutProps) {
                 <ChatWidget senderRole="CUSTOMER" senderId={customer?._id} />
               </ChatProvider>
             )}
-            <div className={`flex flex-col flex-1 grow ${isHomePage ? "xl:pl-56" : "pl-0"}`}>
-              <div className={`${!xs ? "p-1" : "p-4"}`}>
-                <ErrorCatcher>
-                  <HomeLayoutContent {...props} />
-                </ErrorCatcher>
-              </div>
+            <div className={`flex flex-col flex-1 grow `}>
+              <ErrorCatcher>
+                <HomeLayoutContent {...props} />
+              </ErrorCatcher>
+
               <Footer />
             </div>
           </div>{" "}

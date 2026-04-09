@@ -67,7 +67,6 @@ export default [
           config: AffiliateVideoFormConfig;
           text: string;
         };
-        console.log(body, body?.config?.batchSize);
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });

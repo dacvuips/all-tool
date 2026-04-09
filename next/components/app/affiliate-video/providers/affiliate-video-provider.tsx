@@ -26,8 +26,7 @@ export const AffiliateVideoContext = createContext<
     setBatchRunning: (batchRunning: boolean) => void;
     activeTab: MainTab;
     setActiveTab: (activeTab: MainTab) => void;
-    showSettings: boolean;
-    setShowSettings: (showSettings: boolean) => void;
+
     zoomSrc: { src: string; type: "image" | "video" } | null;
     setZoomSrc: (zoomSrc: { src: string; type: "image" | "video" } | null) => void;
     stopRef: React.MutableRefObject<boolean>;
