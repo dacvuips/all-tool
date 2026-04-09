@@ -225,6 +225,7 @@ export const AffiliateVideoRightPanel = () => {
                 dialogue: s.dialogue || "",
                 visualPrompt: s.visualPrompt || "",
                 disabled: (s as any).disabled ?? false,
+                voiceDisable: (s as any).voiceDisable ?? false,
                 audio: s.audio || "",
               }))}
               characters={[]}

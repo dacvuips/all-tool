@@ -9,6 +9,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BiPlayCircle } from "react-icons/bi";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
+import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
   RiCloseLine,
   RiEyeLine,
@@ -48,6 +49,7 @@ interface SceneBatchRowProps {
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
+  onToggleVoiceDisable: (sceneId: string) => void;
 }
 
 export function SceneBatchRow({
@@ -58,6 +60,7 @@ export function SceneBatchRow({
   onMouseLeave,
   onUpdateScene,
   onToggleDisable,
+  onToggleVoiceDisable,
 }: {
   scene: SceneScript;
   index: number;
@@ -67,6 +70,7 @@ export function SceneBatchRow({
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
+  onToggleVoiceDisable: (sceneId: string) => void;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -478,27 +482,58 @@ export function SceneBatchRow({
         </div>
       </td>
 
-      {/* Right-side overlay: scene number badge + toggle disable – visible on hover */}
+      {/* Right-side overlay: eye + voice + scene number */}
       <td className="p-0 w-0" style={{ position: "relative" }}>
-        <div
-          className={`absolute right-2 top-2 bottom-2 flex flex-col items-center justify-between z-10 transition-opacity duration-200 ${
-            rowHovered || isDisabled ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <Button
-            onClick={() => onToggleDisable(scene.id)}
-            className={`w-6 h-6 rounded-md shadow-sm ${
-              isDisabled
-                ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+        <div className="absolute right-2 top-2 bottom-2 flex flex-col items-center justify-between z-10">
+          {/* Top group: eye + voice buttons */}
+          <div className="flex flex-col items-center gap-1">
+            {/* Eye toggle – visible on hover or when disabled */}
+            <div
+              className={`transition-opacity duration-200 ${
+                rowHovered || isDisabled ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`}
+            >
+              <Button
+                onClick={() => onToggleDisable(scene.id)}
+                className={`w-6 h-6 rounded-md shadow-sm ${
+                  isDisabled
+                    ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+                }`}
+                iconClassName="text-sm"
+                icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
+                tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
+                placement="bottom"
+              />
+            </div>
+            {/* Voice toggle – visible on hover OR when voiceDisable is true */}
+            <div
+              className={`transition-opacity duration-200 ${
+                rowHovered || scene.voiceDisable ? "opacity-100" : "opacity-0 pointer-events-none"
+              }`}
+            >
+              <Button
+                onClick={() => onToggleVoiceDisable(scene.id)}
+                className={`w-6 h-6 rounded-md shadow-sm ${
+                  scene.voiceDisable
+                    ? "text-red-500 bg-red-50 hover:bg-red-100"
+                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+                }`}
+                iconClassName="text-sm"
+                icon={scene.voiceDisable ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
+                tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
+                placement="bottom"
+              />
+            </div>
+          </div>
+          {/* Scene number badge – bottom, visible on hover */}
+          <span
+            className={`text-lg font-extrabold text-gray-300 transition-opacity duration-200 ${
+              rowHovered || isDisabled ? "opacity-100" : "opacity-0"
             }`}
-            iconClassName="text-sm"
-            icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
-            tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
-            placement="bottom"
-          />
-          {/* Scene number badge – bottom right, large text */}
-          <span className="text-lg font-extrabold text-gray-300">#{scene.sceneNumber}</span>
+          >
+            #{scene.sceneNumber}
+          </span>
         </div>
       </td>
     </tr>
@@ -522,6 +557,7 @@ interface SceneRowGroupProps {
   ) => Promise<void> | void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
+  onToggleVoiceDisable: (sceneId: string) => void;
 }
 
 export function SceneRowGroup({
@@ -532,6 +568,7 @@ export function SceneRowGroup({
   onInsert,
   onUpdateScene,
   onToggleDisable,
+  onToggleVoiceDisable,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -573,6 +610,7 @@ export function SceneRowGroup({
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
+        onToggleVoiceDisable={onToggleVoiceDisable}
       />
 
       {/* Add BELOW button – absolute positioned, floats between rows */}

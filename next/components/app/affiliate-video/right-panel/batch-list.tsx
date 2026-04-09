@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MdRecordVoiceOver } from "react-icons/md";
+import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
   RiAddLine,
   RiCloseLine,
@@ -341,6 +341,33 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     }
   };
 
+  /** Toggle voiceDisable state on a single scene and persist to IndexedDB */
+  const handleToggleVoiceDisable = async (sceneId: string) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, voiceDisable: !s.voiceDisable } : s
+    );
+    setSceneList(updated);
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleToggleVoiceDisable] Failed to persist to IndexedDB:", err);
+    }
+  };
+
+  /** Toggle voiceDisable for ALL scenes at once */
+  const handleToggleAllVoiceDisable = async () => {
+    const allDisabled = sceneList.every((s) => s.voiceDisable);
+    const updated = sceneList.map((s) => ({ ...s, voiceDisable: !allDisabled }));
+    setSceneList(updated);
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleToggleAllVoiceDisable] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   const handleInsert = async (
     targetScene: SceneScript,
     position: InsertPosition,
@@ -491,7 +518,24 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 {t("VIDEO")}
                 <br />({t("ĐÃ TẠO")})
               </th>
-              <th className="border-b border-gray-200 w-0 p-0"></th>
+              <th className="border-b border-gray-200 w-0 p-0">
+                <Button
+                  onClick={handleToggleAllVoiceDisable}
+                  className={`w-6 h-6 rounded-md shadow-sm ${
+                    sceneList.every((s) => s.voiceDisable)
+                      ? "text-red-500 bg-red-50 hover:bg-red-100"
+                      : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+                  }`}
+                  iconClassName="text-sm"
+                  icon={sceneList.every((s) => s.voiceDisable) ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
+                  tooltip={
+                    sceneList.every((s) => s.voiceDisable)
+                      ? t("Bật thoại tất cả")
+                      : t("Tắt thoại tất cả")
+                  }
+                  placement="bottom"
+                />
+              </th>
             </tr>
           </thead>
 
@@ -506,6 +550,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}
+                onToggleVoiceDisable={handleToggleVoiceDisable}
               />
             ))}
           </tbody>

@@ -207,6 +207,7 @@ export interface SceneScript {
   motionPrompt: string;
   dialogue: string;
   disabled?: boolean;
+  voiceDisable?: boolean;
   audio?: string;
 }
 
