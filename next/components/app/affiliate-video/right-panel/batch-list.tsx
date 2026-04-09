@@ -350,6 +350,7 @@ function SceneBatchRow({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
   const [editValue, setEditValue] = useState("");
   const [saving, setSaving] = useState(false);
@@ -508,7 +509,7 @@ function SceneBatchRow({
 
   return (
     <tr
-      className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top ${
+      className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top relative ${
         isDisabled ? "opacity-40" : "hover:bg-gray-50"
       }`}
       style={
@@ -516,28 +517,15 @@ function SceneBatchRow({
           ? { outline: "1px dashed #a855f7", outlineOffset: "-1px" }
           : undefined
       }
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
+      onMouseEnter={() => {
+        setRowHovered(true);
+        onMouseEnter?.();
+      }}
+      onMouseLeave={() => {
+        setRowHovered(false);
+        onMouseLeave?.();
+      }}
     >
-      {/* Scene number */}
-      <td className="py-3 px-3 w-5">
-        <div className="flex flex-col items-center gap-1.5">
-          <span className="text-xs font-bold text-gray-600">#{scene.sceneNumber}</span>
-          {/* Toggle disable button */}
-          <button
-            onClick={() => onToggleDisable(scene.id)}
-            title={isDisabled ? "Hiện row" : "Ẩn row"}
-            className={`w-5 h-5 rounded flex items-center justify-center border-0 cursor-pointer transition-all ${
-              isDisabled
-                ? "text-gray-400 hover:text-blue-500 bg-gray-100 hover:bg-blue-50"
-                : "text-gray-300 hover:text-red-500 bg-transparent hover:bg-red-50"
-            }`}
-          >
-            {isDisabled ? <RiEyeLine className="text-xs" /> : <RiEyeOffLine className="text-xs" />}
-          </button>
-        </div>
-      </td>
-
       {/* Image Prompt */}
       <td className="py-3 px-3">
         {renderEditablePrompt(
@@ -602,7 +590,7 @@ function SceneBatchRow({
                 showImageOnClick
                 src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
                 alt={`Scene ${scene.sceneNumber}`}
-                className="  rounded-xl object-cover border-2 border-green-300 shadow-sm"
+                className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
                 ratio916
               />
 
@@ -766,6 +754,30 @@ function SceneBatchRow({
               </div>
             </button>
           )}
+        </div>
+      </td>
+
+      {/* Right-side overlay: scene number badge + toggle disable – visible on hover */}
+      <td className="p-0 w-0" style={{ position: "relative" }}>
+        <div
+          className={`absolute right-2 top-2 bottom-2 flex flex-col items-center justify-between z-10 transition-opacity duration-200 ${
+            rowHovered || isDisabled ? "opacity-100" : "opacity-0 pointer-events-none"
+          }`}
+        >
+          <Button
+            onClick={() => onToggleDisable(scene.id)}
+            className={`w-6 h-6 rounded-md shadow-sm ${
+              isDisabled
+                ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+                : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+            }`}
+            iconClassName="text-sm"
+            icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
+            tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
+            placement="bottom"
+          />
+          {/* Scene number badge – bottom right, large text */}
+          <span className="text-lg font-extrabold text-gray-300">#{scene.sceneNumber}</span>
         </div>
       </td>
     </tr>
@@ -1024,9 +1036,6 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
             <tr>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-gray-500 uppercase tracking-wide border-b border-gray-200 w-5 ">
-                {t("Cảnh")}
-              </th>
               <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiImageFill className="text-xs" />
@@ -1047,6 +1056,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 {t("VIDEO")}
                 <br />({t("ĐÃ TẠO")})
               </th>
+              <th className="border-b border-gray-200 w-0 p-0"></th>
             </tr>
           </thead>
 

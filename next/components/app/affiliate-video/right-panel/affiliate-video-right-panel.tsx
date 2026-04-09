@@ -1,6 +1,8 @@
 /**
  * affiliate-video-right-panel.tsx
- * Right panel: Kịch Bản tab / Batch List tab
+ * Right panel: Tab Kịch Bản (Script) / Tab Batch List
+ * - i18n: tất cả text bọc trong t()
+ * - Responsive: grid stack trên mobile
  * Light theme – className only, Tailwind CSS
  */
 import { useState } from "react";
@@ -13,21 +15,24 @@ import { BatchListPanel } from "./batch-list";
 import { CastSection } from "./cast-section";
 import { SceneCard } from "./scene-card";
 
-// ── Audio Voice Config ───────────────────────────────────────────────────
+// ── Audio Voice Config Panel ─────────────────────────────────────────────
 function AudioVoicePanel({
   audioConfig,
 }: {
   audioConfig: { gender: string; mood: string; style: string; fullPrompt: string };
 }) {
-  const [copied, setCopied] = useState(false);
+  const { t } = useTranslation();
+  const [isCopied, setIsCopied] = useState(false);
 
-  const handleCopy = () => {
+  /** Copy toàn bộ audio prompt vào clipboard */
+  const handleCopyAudioPrompt = () => {
     navigator.clipboard.writeText(audioConfig.fullPrompt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 1500);
   };
 
-  const TAG_COLORS = {
+  /** Màu tag theo loại */
+  const TAG_COLORS: Record<string, string> = {
     Female: "bg-pink-100 text-pink-600 border-pink-200",
     Male: "bg-blue-100 text-blue-600 border-blue-200",
     Energetic: "bg-orange-100 text-orange-600 border-orange-200",
@@ -40,11 +45,14 @@ function AudioVoicePanel({
 
   return (
     <div className="h-full">
+      {/* Tiêu đề section */}
       <div className="flex items-center gap-1.5 mb-2 text-pink-400">
-        <RiMusicFill className=" text-sm" />
-        <span className="text-xs font-bold   uppercase tracking-wide">AUDIO & VOICE CONFIG</span>
+        <RiMusicFill className="text-sm" />
+        <span className="text-xs font-bold uppercase tracking-wide">
+          {t("CẤU HÌNH ÂM THANH & GIỌNG NÓI")}
+        </span>
       </div>
-      {/* Tags */}
+      {/* Tags: giới tính, mood, phong cách */}
       <div className="flex flex-wrap gap-1.5 mb-3">
         {[audioConfig?.gender, audioConfig?.mood, audioConfig?.style].map((tag) => (
           <span
@@ -61,15 +69,15 @@ function AudioVoicePanel({
         ))}
       </div>
       {/* Full prompt label */}
-      <div className="text-xs font-semibold  mb-1">Full Audio Prompt</div>
+      <div className="text-xs font-semibold mb-1">{t("Prompt âm thanh đầy đủ")}</div>
       <p className="text-xs text-gray-600 leading-relaxed mb-2">{audioConfig?.fullPrompt}</p>
-      {/* Copy button */}
+      {/* Nút copy */}
       <button
-        onClick={handleCopy}
+        onClick={handleCopyAudioPrompt}
         className="flex items-center gap-1 text-xs font-semibold text-pink-500 hover:text-pink-700 cursor-pointer border-0 bg-transparent transition-colors"
       >
         <RiFileCopyLine className="text-xs" />
-        {copied ? "✓ Đã copy" : "Copy Full Audio Prompt"}
+        {isCopied ? `✓ ${t("Đã sao chép")}` : t("Sao chép Prompt âm thanh")}
       </button>
     </div>
   );
@@ -81,17 +89,24 @@ function EnvironmentPanel({
 }: {
   environment: { environment: string; artStyle: string };
 }) {
+  const { t } = useTranslation();
+
   return (
     <div className="h-full">
+      {/* Tiêu đề section */}
       <div className="flex items-center gap-1.5 mb-2 text-blue-400">
-        <RiScissorsLine className="t text-sm" />
-        <span className="text-xs font-bold  uppercase tracking-wide">ENVIRONMENT & STYLE</span>
+        <RiScissorsLine className="text-sm" />
+        <span className="text-xs font-bold uppercase tracking-wide">
+          {t("BỐI CẢNH & PHONG CÁCH")}
+        </span>
       </div>
-      <div className="text-xs font-semibold mb-1">Environment (Bối cảnh)</div>
+      {/* Bối cảnh */}
+      <div className="text-xs font-semibold mb-1">{t("Bối cảnh")}</div>
       <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-5">
         {environment.environment}
       </p>
-      <div className="text-xs font-semibold mb-1">Art Style (3D CGI)</div>
+      {/* Phong cách nghệ thuật */}
+      <div className="text-xs font-semibold mb-1">{t("Phong cách nghệ thuật")}</div>
       <p className="text-xs text-gray-400 leading-relaxed line-clamp-2 italic">
         {environment.artStyle}
       </p>
@@ -99,7 +114,7 @@ function EnvironmentPanel({
   );
 }
 
-// ── Tab name ↔ index mapping ─────────────────────────────────────────────
+// ── Tab index mapping ────────────────────────────────────────────────────
 const TAB_NAMES = ["script", "batch"] as const;
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
@@ -107,10 +122,12 @@ export const AffiliateVideoRightPanel = () => {
   const { t } = useTranslation();
   const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
     useAffiliateVideoContext();
+
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 
-  const batchLabel = `Batch List${
+  // Label tab Batch List kèm số lượng
+  const batchTabLabel = `${t("Danh sách hàng loạt")}${
     batchList && batchList.length > 0 ? ` (${batchList.length})` : ""
   }`;
 
@@ -126,12 +143,12 @@ export const AffiliateVideoRightPanel = () => {
         bodyClassName="flex-1 overflow-y-auto v-scrollbar"
         className="bg-white"
       >
-        {/* ── Kịch Bản tab ── */}
+        {/* ── Tab: Kịch Bản (Script) ── */}
         <TabGroup.Tab label={t("Kịch Bản")}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : !scriptData ? (
-            /* Empty state */
+            /* Trạng thái trống */
             <div className="flex flex-col items-center justify-center h-full text-gray-400 py-16">
               <div className="text-5xl mb-4 opacity-30">📋</div>
               <div className="text-base font-medium text-gray-500 mb-1">
@@ -143,11 +160,11 @@ export const AffiliateVideoRightPanel = () => {
             </div>
           ) : (
             <div className="px-4 py-4">
-              {/* Cast Section */}
+              {/* Phần nhân vật */}
               <CastSection scriptData={scriptData} />
 
-              {/* Environment & Audio – 2 columns */}
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              {/* Bối cảnh & Âm thanh – responsive grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
                   <EnvironmentPanel
                     environment={{
@@ -168,10 +185,10 @@ export const AffiliateVideoRightPanel = () => {
                 </div>
               </div>
 
-              {/* Scenes Section */}
+              {/* Phần danh sách cảnh */}
               <div className="mb-3">
                 <h3 className="text-base font-bold text-gray-800 mb-3">
-                  📽 Phân Cảnh & Prompt (Scenes)
+                  📽 {t("Phân Cảnh & Prompt")}
                 </h3>
                 {scriptData.scenes.map((scene, i) => (
                   <SceneCard
@@ -192,8 +209,8 @@ export const AffiliateVideoRightPanel = () => {
           )}
         </TabGroup.Tab>
 
-        {/* ── Batch List tab ── */}
-        <TabGroup.Tab label={batchLabel}>
+        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
+        <TabGroup.Tab label={batchTabLabel}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (

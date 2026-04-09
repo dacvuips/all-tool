@@ -1,6 +1,7 @@
 /**
  * affiliate-video.tsx
- * Main page – light cream theme matching "3 BIG Studio" design
+ * Trang chính – layout phía trên gồm top nav + body content
+ * - Navigation tabs cho các chế độ tạo video
  * className only – Tailwind CSS, no inline styles
  */
 import { useTranslation } from "react-i18next";
@@ -20,7 +21,8 @@ import { AffiliateVideoBody } from "./affiliate-video-body";
 export default function AffiliateVideo() {
   const { t } = useTranslation();
 
-  const categorys = [
+  /** Các tab chế độ tạo video */
+  const navigationTabs = [
     { icon: <RiFileTextLine />, label: t("Đơn Lẻ") },
     { icon: <RiGridLine />, label: t("Hàng Loạt") },
     { icon: <RiBookOpenLine />, label: t("Cốt Truyện") },
@@ -35,11 +37,8 @@ export default function AffiliateVideo() {
       className="flex flex-col h-screen overflow-hidden bg-amber-50"
       style={{ height: "calc(100vh - 10px)" }}
     >
-      {/* ══ TOP NAV ══ */}
-      <div className="flex items-center h-12  border-gray-200/80 flex-shrink-0 bg-white">
-        {/* Brand */}
-
-        {/* Nav links */}
+      {/* ══ TOP NAV – thanh điều hướng chính ══ */}
+      <div className="flex items-center h-12 border-gray-200/80 flex-shrink-0 bg-white overflow-x-auto">
         <TabGroup
           name="affiliate-video-nav"
           flex={false}
@@ -50,7 +49,7 @@ export default function AffiliateVideo() {
           hasArrow
           activeClassName=""
         >
-          {categorys.map((item, i) => (
+          {navigationTabs.map((item, i) => (
             <TabGroup.Tab
               key={i}
               label={
@@ -65,7 +64,7 @@ export default function AffiliateVideo() {
         </TabGroup>
       </div>
 
-      {/* ══ MAIN LAYOUT ══ */}
+      {/* ══ MAIN LAYOUT – sidebar trái + panel phải ══ */}
       <AffiliateVideoBody />
     </div>
   );

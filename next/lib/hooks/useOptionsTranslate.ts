@@ -746,6 +746,97 @@ export const useOptionsTranslation = () => {
     { label: "6", value: 6 },
     { label: "7", value: 7 },
   ];
+
+  // ── Affiliate Video: Camera Angle Options (translated) ──
+  const CAMERA_ANGLE_OPTIONS = [
+    { value: "close_up", label: t("Cận cảnh") },
+    { value: "medium_close", label: t("Trung cận") },
+    { value: "medium_shot", label: t("Trung cảnh") },
+    { value: "wide_shot", label: t("Toàn cảnh") },
+    { value: "extreme_wide", label: t("Viền cảnh") },
+    { value: "low_angle", label: t("Góc thấp") },
+    { value: "high_angle", label: t("Góc cao") },
+    { value: "over_shoulder", label: t("Qua vai") },
+    { value: "dutch_angle", label: t("Góc nghiêng") },
+    { value: "tracking", label: t("Theo dõi") },
+    { value: "pov", label: "POV" },
+  ];
+
+  // ── Affiliate Video: Built-in TTS Voice Options (translated) ──
+  const BUILTIN_VOICE_OPTIONS = [
+    { value: "Aoede", label: `Aoede – ${t("Nữ, tươi vui")}` },
+    { value: "Charon", label: `Charon – ${t("Nam, trầm ấm")}` },
+    { value: "Fenrir", label: `Fenrir – ${t("Nam, mạnh mẽ")}` },
+    { value: "Kore", label: `Kore – ${t("Nữ, chuyên nghiệp")}` },
+    { value: "Leda", label: `Leda – ${t("Nữ, nhẹ nhàng")}` },
+    { value: "Orus", label: `Orus – ${t("Nam, điềm tĩnh")}` },
+    { value: "Puck", label: `Puck – ${t("Nam, thú vị")}` },
+    { value: "Zephyr", label: `Zephyr – ${t("Nam, sáng sủa")}` },
+  ];
+
+  // ── Affiliate Video: Image Style Options (translated) ──
+  const IMAGE_STYLE_OPTIONS = [
+    { value: "realistic", label: t("Chân thực (Realistic)") },
+    { value: "3d_pixar", label: t("3D Pixar Cute") },
+    { value: "pixar_realism", label: t("Pixar Realism (Nhân hoá)") },
+    { value: "crochet", label: t("Len Móc (Crochet/Amigurumi)") },
+    { value: "clay", label: t("Đất Sét (Claymation)") },
+    { value: "diorama", label: t("Mô hình Tí hon (Diorama)") },
+    { value: "lego", label: t("Đồ chơi Gạch (LEGO)") },
+    { value: "mannequin", label: t("Mannequin 3D (Siêu thực)") },
+    { value: "zack_doge", label: t("3D Educational Simulation (Zack D.Style)") },
+    { value: "chalkboard", label: t("Bảng Phấn (Chalkboard)") },
+    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist Animation)") },
+    { value: "stickman", label: t("Người Que (Stickman)") },
+    { value: "simpsons", label: t("Hoạt hình Simpsons") },
+    { value: "business", label: t("Giải thích Doanh nghiệp (Business Explainer)") },
+    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
+  ];
+
+  // ── Affiliate Video: Category Options (translated) ──
+  const CATEGORY_TRANSLATED_OPTIONS = [
+    { value: "meo_nau_an", label: t("Mẹo Nấu Ăn") },
+    { value: "meo_cuoc_song", label: t("Mẹo Vật Cuộc Sống") },
+    { value: "meo_don_dep", label: t("Mẹo Don Dẹp") },
+    { value: "thu_cong_diy", label: t("Thủ Công & DIY") },
+    { value: "meo_hoc_tap", label: t("Mẹo Học Tập") },
+    { value: "suc_khoe", label: t("Mẹo Sức Khoẻ") },
+    { value: "lam_dep", label: t("Mẹo Làm Đẹp") },
+    { value: "tai_chinh", label: t("Mẹo Tài Chính") },
+    { value: "cong_nghe", label: t("Mẹo Công Nghệ") },
+    { value: "cham_thu_cung", label: t("Mẹo Chăm Thú Cưng") },
+  ];
+
+  // ── Affiliate Video: Mood / Tone Options (translated) ──
+  const MOOD_TRANSLATED_OPTIONS = [
+    { value: "dynamic", label: t("Năng động & Nhiệt tình") },
+    { value: "drama", label: t("Drama & Kịch tính") },
+    { value: "expert", label: t("Chuyên gia khó tính") },
+    { value: "hau_dau", label: t("Hậu đậu & Hài hước") },
+    { value: "zen", label: t("Điềm tính (Zen)") },
+    { value: "thriller", label: t("Kịch tính & Lố lăng") },
+    { value: "creative", label: t("Sáng tạo & Nghệ sĩ") },
+  ];
+
+  // ── Affiliate Video: Art Style Options (translated) ──
+  const ART_STYLE_TRANSLATED_OPTIONS = [
+    { value: "pixar", label: t("3D Pixar") },
+    { value: "realistic", label: t("Chân thực (Realistic)") },
+    { value: "pixar_realism", label: t("Pixar Realism (Nhân hoá)") },
+    { value: "crochet", label: t("Len Móc (Crochet/Amigurumi)") },
+    { value: "clay", label: t("Đất Sét (Claymation)") },
+    { value: "diorama", label: t("Mô hình Tí hon (Diorama)") },
+    { value: "lego", label: t("Đồ chơi Gạch (LEGO)") },
+    { value: "mannequin", label: t("Mannequin 3D (Siêu thực)") },
+    { value: "zack_doge", label: t("3D Educational (Zack D.Style)") },
+    { value: "chalkboard", label: t("Bảng Phấn (Chalkboard)") },
+    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist)") },
+    { value: "stickman", label: t("Người Que (Stickman)") },
+    { value: "simpsons", label: t("Hoạt hình Simpsons") },
+    { value: "business", label: t("Giải thích Doanh nghiệp") },
+    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism") },
+  ];
+
   const DEFAULT_VIDEO_CONFIG: AffiliateVideoFormConfig = {
     category: CATEGORY_OPTIONS[0].label,
     objectToPersonify: "Một quả chuối tươi",
@@ -840,5 +931,13 @@ export const useOptionsTranslation = () => {
     VOICE_MODE_OPTIONS,
     VIDEO_COUNT_OPTIONS,
     DEFAULT_VIDEO_CONFIG,
+
+    // ── Affiliate Video translated options ──
+    CAMERA_ANGLE_OPTIONS,
+    BUILTIN_VOICE_OPTIONS,
+    IMAGE_STYLE_OPTIONS,
+    CATEGORY_TRANSLATED_OPTIONS,
+    MOOD_TRANSLATED_OPTIONS,
+    ART_STYLE_TRANSLATED_OPTIONS,
   };
 };
