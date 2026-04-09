@@ -401,6 +401,7 @@ export function SceneBatchRow({
                       videoUrl={videoSrc}
                       isOpen={showVideoModal}
                       onClose={() => setShowVideoModal(false)}
+                      aspectRatio={videoConfig?.aspectRatio}
                     />
                   </>
                 ) : (

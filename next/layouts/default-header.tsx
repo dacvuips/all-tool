@@ -2,7 +2,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiOutlineBell, AiOutlineSearch } from "react-icons/ai";
+import { AiOutlineBell } from "react-icons/ai";
 import { FiShoppingCart } from "react-icons/fi";
 import { HiArrowLeft, HiOutlineCheck, HiOutlineChevronDown } from "react-icons/hi";
 import {
@@ -148,37 +148,26 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
             {isAffiliateVideoPage && (
               <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                 {/* Hướng dẫn */}
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all cursor-pointer border-0 bg-transparent whitespace-nowrap">
-                  <RiBookOpenLine className="text-sm" />
-                  {t("Hướng dẫn")}
-                </button>
+                <Button
+                  outline
+                  className="px-2 h-8 rounded-md"
+                  icon={<RiBookOpenLine className="text-xs" />}
+                  text={t("Hướng dẫn")}
+                />
 
                 {/* API Key status */}
-                <button
-                  id="api-key-btn"
+                <Button
                   onClick={() =>
                     !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
                   }
-                  className={`flex items-center gap-1.5 mr-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
-                    credentialLoading
-                      ? "bg-gray-50 text-gray-400 border-gray-200"
-                      : keyReady
-                      ? "bg-emerald-50 text-emerald-600 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300"
-                      : "bg-amber-50 text-amber-600 border-amber-200/80 hover:bg-amber-100 hover:border-amber-300"
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      credentialLoading
-                        ? "bg-gray-300"
-                        : keyReady
-                        ? "bg-emerald-500"
-                        : "bg-amber-500 animate-pulse"
-                    }`}
-                  />
-                  <RiKey2Line className="text-xs" />
-                  {credentialLoading ? "..." : keyReady ? t("Key OK") : t("Cài API Key")}
-                </button>
+                  outline
+                  className="px-2 h-8 rounded-md mr-2"
+                  success={keyReady}
+                  gray={!keyReady}
+                  icon={<RiKey2Line className="text-xs" />}
+                  asyncLoading={false}
+                  text={t("API Key")}
+                />
               </div>
             )}
             <div className="flex flex-row justify-around items-center">
@@ -399,41 +388,23 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                       <SelectLanguage mode="mobile" />
                     </>
                   ) : (
-                    <>
-                      <i
-                        onClick={() => setIsMobileSearchBox(true)}
-                        className="p-1.5 leading-3 border rounded-full border-primary cursor-pointer"
-                      >
-                        <AiOutlineSearch />
-                      </i>
-                    </>
+                    <></>
                   )}
 
                   {/* Affiliate Video: API Key status (mobile) */}
                   {isAffiliateVideoPage && (
-                    <button
+                    <Button
                       onClick={() =>
                         !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
                       }
-                      className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer whitespace-nowrap ${
-                        credentialLoading
-                          ? "bg-gray-50 text-gray-400 border-gray-200"
-                          : keyReady
-                          ? "bg-emerald-50 text-emerald-600 border-emerald-200/80"
-                          : "bg-amber-50 text-amber-600 border-amber-200/80"
-                      }`}
-                    >
-                      <span
-                        className={`w-1.5 h-1.5 rounded-full ${
-                          credentialLoading
-                            ? "bg-gray-300"
-                            : keyReady
-                            ? "bg-emerald-500"
-                            : "bg-amber-500 animate-pulse"
-                        }`}
-                      />
-                      <RiKey2Line className="text-xs" />
-                    </button>
+                      outline
+                      className="px-2 h-8 rounded-md"
+                      success={keyReady}
+                      gray={!keyReady}
+                      icon={<RiKey2Line className="text-xs" />}
+                      asyncLoading={false}
+                      text={t("API Key")}
+                    />
                   )}
 
                   <CartDropdown order={order} />

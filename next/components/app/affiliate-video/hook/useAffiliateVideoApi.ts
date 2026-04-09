@@ -128,6 +128,8 @@ export interface GeneratedVideoData {
   videoUri: string | null;
   videoBytes: string | null; // base64 – returned when no outputGcsUri is set
   mimeType: string;
+  /** Aspect ratio used when this video was generated (e.g. "9:16", "16:9") */
+  aspectRatio?: string;
 }
 
 export interface UseAffiliateVideoApiReturn {
@@ -426,6 +428,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           return undefined;
         }
 
+        // Attach the aspect ratio used at generation time
+        videoData.aspectRatio = aspectRatio;
         // Persist to IndexedDB
         await videoDB.set(sceneId, videoData);
 
@@ -529,6 +533,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           return undefined;
         }
 
+        // Attach the aspect ratio used at generation time
+        videoData.aspectRatio = aspectRatio;
         // Persist to IndexedDB with "-extended" suffix key
         await videoDB.set(`${sceneId}-extended`, videoData);
 

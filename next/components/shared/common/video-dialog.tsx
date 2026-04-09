@@ -1,15 +1,55 @@
+import { useMemo } from "react";
 import { HiOutlineX } from "react-icons/hi";
 import ReactPlayer from "react-player";
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { Dialog, DialogProps } from "../utilities/dialog/dialog";
 
-export function VideoDialog({ videoUrl = "", ...props }: DialogProps & { videoUrl: string }) {
+interface VideoDialogExtraProps {
+  videoUrl: string;
+  /** e.g. "16:9", "9:16", "1:1", "4:3" */
+  aspectRatio?: string;
+}
+
+export function VideoDialog({
+  videoUrl = "",
+  aspectRatio,
+  ...props
+}: DialogProps & VideoDialogExtraProps) {
   const screenSm = useScreen("sm");
+
+  /** Compute player dimensions based on aspect ratio */
+  const { playerWidth, playerHeight, dialogWidth } = useMemo(() => {
+    // Parse aspect ratio string "W:H" → numeric ratio
+    let ratioW = 16;
+    let ratioH = 9;
+    if (aspectRatio) {
+      const parts = aspectRatio.split(":").map(Number);
+      if (parts.length === 2 && parts[0] > 0 && parts[1] > 0) {
+        ratioW = parts[0];
+        ratioH = parts[1];
+      }
+    }
+
+    const isPortrait = ratioH > ratioW;
+
+    if (screenSm) {
+      // Desktop: base width 700px for landscape, 400px for portrait
+      const w = isPortrait ? 400 : 700;
+      const h = Math.round(w * (ratioH / ratioW));
+      return { playerWidth: `${w}px`, playerHeight: `${h}px`, dialogWidth: `${w}px` };
+    } else {
+      // Mobile: base width 300px for landscape, 260px for portrait
+      const w = isPortrait ? 260 : 300;
+      const h = Math.round(w * (ratioH / ratioW));
+      return { playerWidth: `${w}px`, playerHeight: `${h}px`, dialogWidth: `${w}px` };
+    }
+  }, [aspectRatio, screenSm]);
+
   return (
     <Dialog
       mobileSizeMode={!screenSm}
       slideFromBottom={"none"}
-      width={screenSm ? "700px" : "300px"}
+      width={dialogWidth}
       className="relative"
       {...props}
     >
@@ -20,41 +60,22 @@ export function VideoDialog({ videoUrl = "", ...props }: DialogProps & { videoUr
         <HiOutlineX />
       </i>
       <div>
-        {screenSm ? (
-          <ReactPlayer
-            url={videoUrl}
-            width="700px"
-            height="400px"
-            controls
-            config={{
-              youtube: {
-                playerVars: { showinfo: 1, origin: "/" },
+        <ReactPlayer
+          url={videoUrl}
+          width={playerWidth}
+          height={playerHeight}
+          controls
+          config={{
+            youtube: {
+              playerVars: { showinfo: 1, origin: "/" },
+            },
+            file: {
+              attributes: {
+                controlsList: "nodownload",
               },
-              file: {
-                attributes: {
-                  controlsList: "nodownload",
-                },
-              },
-            }}
-          />
-        ) : (
-          <ReactPlayer
-            url={videoUrl}
-            width="300px"
-            height="200px"
-            controls
-            config={{
-              youtube: {
-                playerVars: { showinfo: 1, origin: "/" },
-              },
-              file: {
-                attributes: {
-                  controlsList: "nodownload",
-                },
-              },
-            }}
-          />
-        )}
+            },
+          }}
+        />
       </div>
     </Dialog>
   );

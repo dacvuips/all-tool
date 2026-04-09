@@ -126,9 +126,10 @@ export const AffiliateVideoRightPanel = () => {
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 
-  // Label tab Batch List kèm số lượng
+  // Label tab Batch List kèm số lượng scene
+  const sceneCount = scriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${
-    batchList && batchList.length > 0 ? ` (${batchList.length})` : ""
+    sceneCount > 0 ? ` (${sceneCount})` : ""
   }`;
 
   return (
