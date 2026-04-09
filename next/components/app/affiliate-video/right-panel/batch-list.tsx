@@ -333,6 +333,7 @@ type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio";
 function SceneBatchRow({
   scene,
   isDisabled,
+  isGroupHovered,
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
@@ -341,6 +342,7 @@ function SceneBatchRow({
   scene: SceneScript;
   index: number;
   isDisabled: boolean;
+  isGroupHovered?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -506,9 +508,14 @@ function SceneBatchRow({
 
   return (
     <tr
-      className={`border-t border-gray-200 bg-white transition-colors align-top ${
+      className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top ${
         isDisabled ? "opacity-40" : "hover:bg-gray-50"
       }`}
+      style={
+        isGroupHovered && !isDisabled
+          ? { outline: "1px dashed #a855f7", outlineOffset: "-1px" }
+          : undefined
+      }
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -797,17 +804,21 @@ function SceneRowGroup({
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
 
-  const addBtnClass = `transition-all duration-200 overflow-hidden ${
-    hovered ? "max-h-10 opacity-100" : "max-h-0 opacity-0 pointer-events-none"
+  const addBtnAbsClass = `absolute left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
+    hovered ? "opacity-100" : "opacity-0 pointer-events-none"
   }`;
 
   return (
     <React.Fragment>
-      {/* Add ABOVE button – chỉ hiện trước scene đầu tiên */}
+      {/* Add ABOVE button – chỉ hiện trước scene đầu tiên, absolute positioned */}
       {index === 0 && (
         <tr onMouseEnter={enter} onMouseLeave={leave}>
-          <td colSpan={5} className="p-0">
-            <div className={addBtnClass}>
+          <td
+            colSpan={5}
+            className="p-0 relative overflow-visible"
+            style={{ height: 0, lineHeight: 0, border: "none" }}
+          >
+            <div className={addBtnAbsClass} style={{ top: "50%", transform: "translateY(-50%)" }}>
               <AddSceneButton
                 scene={scene}
                 position="above"
@@ -819,21 +830,26 @@ function SceneRowGroup({
         </tr>
       )}
 
-      {/* Scene data row */}
+      {/* Scene data row – highlighted with colored border on hover */}
       <SceneBatchRow
         scene={scene}
         index={index}
         isDisabled={isDisabled}
+        isGroupHovered={hovered}
         onMouseEnter={enter}
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
       />
 
-      {/* Add BELOW button – sau mỗi scene */}
+      {/* Add BELOW button – absolute positioned, floats between rows */}
       <tr onMouseEnter={enter} onMouseLeave={leave}>
-        <td colSpan={5} className="p-0">
-          <div className={addBtnClass}>
+        <td
+          colSpan={5}
+          className="p-0 relative overflow-visible"
+          style={{ height: 0, lineHeight: 0, border: "none" }}
+        >
+          <div className={addBtnAbsClass} style={{ top: "50%", transform: "translateY(-50%)" }}>
             <AddSceneButton
               scene={scene}
               position="below"

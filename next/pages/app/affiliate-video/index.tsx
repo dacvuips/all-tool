@@ -16,5 +16,4 @@ export default function Page(props) {
 }
 
 Page.Layout = HomeLayout;
-Page.LayoutProps = { name: "AI Affiliate Video Workshop" };
 export const getServerSideProps = getServerSideTranslationsProps();
