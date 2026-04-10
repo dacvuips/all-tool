@@ -111,10 +111,10 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
           if (plan === SubscriptionPlanEnum.FREE) {
             configs.push({
               plan,
-              videoLimit: 0,
-              imageLimit: 0,
-              imageStreamCount: 0,
-              videoStreamCount: 0,
+              videoLimit: 5,
+              imageLimit: 10,
+              imageStreamCount: 1,
+              videoStreamCount: 1,
               price: 0,
             });
             continue;
@@ -179,127 +179,128 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
 
   return (
     <>
-    <Dialog
-      isOpen={isOpen}
-      onClose={onClose}
-      title={t("Cấu hình gói đăng ký")}
-      width="900px"
-      slideFromBottom="none"
-    >
-      <div className="p-5">
-        {/* Current plan info */}
-        <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
-          <RiStackLine className="text-lg" />
-          <span>
-            {t("Gói hiện tại")}:{" "}
-            <strong className="text-primary">
-              {customer?.googlePackage?.subscription || "Free"}
-            </strong>
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Spinner />
+      <Dialog
+        isOpen={isOpen}
+        onClose={onClose}
+        title={t("Cấu hình gói đăng ký")}
+        width="900px"
+        slideFromBottom="none"
+      >
+        <div className="p-5">
+          {/* Current plan info */}
+          <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
+            <RiStackLine className="text-lg" />
+            <span>
+              {t("Gói hiện tại")}:{" "}
+              <strong className="text-primary">
+                {customer?.googlePackage?.subscription || "Free"}
+              </strong>
+            </span>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {planConfigs.map((config) => {
-              const colors = PLAN_COLORS[config.plan];
-              const isCurrent = isCurrentPlan(config.plan);
 
-              return (
-                <div
-                  key={config.plan}
-                  className={`relative flex flex-col rounded-xl border-2 p-4 transition-all ${
-                    isCurrent
-                      ? `${colors.border} ${colors.bg} ring-2 ring-primary ring-offset-1`
-                      : `border-gray-200 hover:${colors.border} hover:shadow-md`
-                  }`}
-                >
-                  {/* Plan badge */}
-                  <div className="flex items-center justify-between mb-3">
-                    <span
-                      className={`inline-block rounded-full px-3 py-1 text-xs font-bold text-white ${colors.badge}`}
-                    >
-                      {config.plan}
-                    </span>
-                    {isCurrent && (
-                      <span className="flex items-center gap-1 text-xs font-semibold text-primary">
-                        <HiCheck className="text-sm" /> {t("Đang dùng")}
-                      </span>
-                    )}
-                  </div>
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Spinner />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {planConfigs.map((config) => {
+                const colors = PLAN_COLORS[config.plan];
+                const isCurrent = isCurrentPlan(config.plan);
 
-                  {/* Price */}
-                  <div className="mb-3 text-lg font-bold text-gray-800">
-                    {formatPrice(config.price)}
-                  </div>
-
-                  {/* Limits */}
-                  <div className="flex-1 space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <HiVideoCamera className="text-base text-blue-500" />
-                      <span>
-                        {t("Video")}: <strong>{formatNumber(config.videoLimit)}</strong>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <HiPhotograph className="text-base text-green-500" />
-                      <span>
-                        {t("Ảnh")}: <strong>{formatNumber(config.imageLimit)}</strong>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RiFlowChart className="text-base text-purple-500" />
-                      <span>
-                        {t("Luồng video")}: <strong>{formatNumber(config.videoStreamCount)}</strong>
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <RiFlowChart className="text-base text-orange-500" />
-                      <span>
-                        {t("Luồng ảnh")}: <strong>{formatNumber(config.imageStreamCount)}</strong>
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Select button */}
-                  <button
-                    className={`mt-4 w-full rounded-lg py-2 text-sm font-semibold transition-colors ${
+                return (
+                  <div
+                    key={config.plan}
+                    className={`relative flex flex-col rounded-xl border-2 p-4 transition-all ${
                       isCurrent
-                        ? "cursor-default bg-gray-200 text-gray-500"
-                        : `${colors.badge} text-white hover:opacity-90`
+                        ? `${colors.border} ${colors.bg} ring-2 ring-primary ring-offset-1`
+                        : `border-gray-200 hover:${colors.border} hover:shadow-md`
                     }`}
-                    disabled={isCurrent || saving || !userPermission("EDIT_CUSTOMER")}
-                    onClick={() => setConfirmConfig(config)}
                   >
-                    {saving ? t("Đang lưu...") : isCurrent ? t("Đang dùng") : t("Chọn gói")}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </Dialog>
+                    {/* Plan badge */}
+                    <div className="flex items-center justify-between mb-3">
+                      <span
+                        className={`inline-block rounded-full px-3 py-1 text-xs font-bold text-white ${colors.badge}`}
+                      >
+                        {config.plan}
+                      </span>
+                      {isCurrent && (
+                        <span className="flex items-center gap-1 text-xs font-semibold text-primary">
+                          <HiCheck className="text-sm" /> {t("Đang dùng")}
+                        </span>
+                      )}
+                    </div>
 
-    {/* Confirm alert */}
-    <AlertDialog
-      isOpen={!!confirmConfig}
-      type="question"
-      title={t("Xác nhận chọn gói")}
-      content={t(`Bạn có chắc muốn chuyển sang gói "${confirmConfig?.plan}"?`)}
-      confirm={t("Xác nhận")}
-      cancel={t("Huỷ")}
-      onConfirm={async () => {
-        if (confirmConfig) {
-          await handleSelectPlan(confirmConfig);
-        }
-        setConfirmConfig(null);
-      }}
-      onClose={() => setConfirmConfig(null)}
-    />
+                    {/* Price */}
+                    <div className="mb-3 text-lg font-bold text-gray-800">
+                      {formatPrice(config.price)}
+                    </div>
+
+                    {/* Limits */}
+                    <div className="flex-1 space-y-2 text-sm text-gray-600">
+                      <div className="flex items-center gap-2">
+                        <HiVideoCamera className="text-base text-blue-500" />
+                        <span>
+                          {t("Video")}: <strong>{formatNumber(config.videoLimit)}</strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <HiPhotograph className="text-base text-green-500" />
+                        <span>
+                          {t("Ảnh")}: <strong>{formatNumber(config.imageLimit)}</strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RiFlowChart className="text-base text-purple-500" />
+                        <span>
+                          {t("Luồng video")}:{" "}
+                          <strong>{formatNumber(config.videoStreamCount)}</strong>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RiFlowChart className="text-base text-orange-500" />
+                        <span>
+                          {t("Luồng ảnh")}: <strong>{formatNumber(config.imageStreamCount)}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Select button */}
+                    <button
+                      className={`mt-4 w-full rounded-lg py-2 text-sm font-semibold transition-colors ${
+                        isCurrent
+                          ? "cursor-default bg-gray-200 text-gray-500"
+                          : `${colors.badge} text-white hover:opacity-90`
+                      }`}
+                      disabled={isCurrent || saving || !userPermission("EDIT_CUSTOMER")}
+                      onClick={() => setConfirmConfig(config)}
+                    >
+                      {saving ? t("Đang lưu...") : isCurrent ? t("Đang dùng") : t("Chọn gói")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </Dialog>
+
+      {/* Confirm alert */}
+      <AlertDialog
+        isOpen={!!confirmConfig}
+        type="question"
+        title={t("Xác nhận chọn gói")}
+        content={t(`Bạn có chắc muốn chuyển sang gói "${confirmConfig?.plan}"?`)}
+        confirm={t("Xác nhận")}
+        cancel={t("Huỷ")}
+        onConfirm={async () => {
+          if (confirmConfig) {
+            await handleSelectPlan(confirmConfig);
+          }
+          setConfirmConfig(null);
+        }}
+        onClose={() => setConfirmConfig(null)}
+      />
     </>
   );
 }
