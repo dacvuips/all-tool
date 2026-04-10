@@ -3,6 +3,7 @@ import _ from "lodash";
 
 import logger from "../helpers/logger";
 import { Agenda } from "./agenda";
+import ResetGooglePackageJob from "./jobs/resetGooglePackage.job";
 
 export function InitRepeatJobs() {
   logger.info("Generating Repeat Jobs");
@@ -15,7 +16,8 @@ export function InitRepeatJobs() {
   }[] = [
     // repeat every 30 minutes
     // { job: PreprocessGameCardOrderJob, crontab: "*/30 * * * *" },
-    // repeat every day at 23:55
+    // repeat every day at 00:00
+    { job: ResetGooglePackageJob, crontab: "0 0 * * *" },
   ];
 
   for (const { job, crontab, data = {}, option = {} } of JOBS) {

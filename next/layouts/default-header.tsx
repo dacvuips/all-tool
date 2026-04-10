@@ -166,7 +166,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                     !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
                   }
                   outline
-                  className="px-2 h-8 rounded-md mr-2"
+                  className="px-2 h-8 rounded-md"
                   success={keyReady}
                   gray={!keyReady}
                   icon={<RiKey2Line className="text-xs" />}
@@ -362,18 +362,6 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
         <div className="flex fixed top-0 left-0 z-50 flex-row items-center w-full h-14 bg-white shadow">
           <div className="flex flex-row gap-2 justify-between px-4 w-full">
             <div className="flex flex-row gap-2 items-center">
-              {isHomePage && (
-                <div className="pr-2">
-                  <Button
-                    outline
-                    tooltip={t("Danh mục")}
-                    small
-                    icon={<RiMenu3Line />}
-                    className="p-0 w-8 h-8 text-xl rounded-md text-primary"
-                    onClick={() => setOpenSidebarSlideout?.(true)}
-                  />
-                </div>
-              )}
               <Link href="/" className="block">
                 <img
                   src={`${screenXs ? "/assets/img/logo-new.png" : "/assets/img/logo-vuong.png"}`}
