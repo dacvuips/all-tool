@@ -60,6 +60,7 @@ const customerSchema = new Schema(
         videoStreamCount: { type: Number, default: 0 },
         expiryPackageDate: { type: Date },
       },
+      default: {},
     },
   },
   { timestamps: true }

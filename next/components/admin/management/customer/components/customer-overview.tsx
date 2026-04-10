@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { HiCurrencyDollar } from "react-icons/hi";
-import { RiAccountPinBoxFill, RiLockPasswordLine, RiStackLine, RiUserStarLine } from "react-icons/ri";
+import {
+  RiAccountPinBoxFill,
+  RiLockPasswordLine,
+  RiStackLine,
+  RiUserStarLine,
+} from "react-icons/ri";
 import { uploadImage } from "../../../../../lib/helpers/image";
 import { parseNumber } from "../../../../../lib/helpers/parser";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -127,7 +132,7 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
           </div>
         </div>
         <div className="flex flex-row">
-          <div className="relative w-40 border-gray-200 sm:pl-4 sm:border-l">
+          <div className="relative w-full border-gray-200 sm:pl-4 sm:border-l">
             <div className="text-sm font-semibold text-gray-600 pb-0.5">{t("Trạng thái")}</div>
             <div
               className={`uppercase font-semibold text-base text-${
@@ -175,7 +180,7 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
                 }
               }}
             />
-            <div className={`absolute top-0 -right-20 xs:-right-24 flex flex-col gap-2`}>
+            <div className={`flex flex-row gap-2`}>
               <Button
                 small
                 outline
