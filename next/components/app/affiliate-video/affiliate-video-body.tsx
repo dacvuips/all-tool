@@ -19,7 +19,7 @@ export const AffiliateVideoBody = () => {
       {/* ══ NÚT MỞ SIDEBAR (chỉ hiện trên mobile) ══ */}
       <button
         onClick={() => setIsSidebarOpen(true)}
-        className="md:hidden fixed bottom-4 left-4 z-50 w-12 h-12 rounded-full bg-red-500 text-white shadow-lg flex items-center justify-center cursor-pointer border-0 hover:bg-red-600 transition-colors"
+        className="md:hidden fixed bottom-16 left-4 z-50 w-12 h-12 rounded-full bg-red-500 text-white shadow-lg flex items-center justify-center cursor-pointer border-0 hover:bg-red-600 transition-colors"
         title={t("Mở cấu hình")}
       >
         <RiMenuLine className="text-xl" />

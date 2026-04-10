@@ -3,9 +3,15 @@
  * Individual scene card with Image Gen Prompt, Motion Prompt, Dialogue
  * className only – Tailwind CSS, light theme
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MdRecordVoiceOver } from "react-icons/md";
-import { RiFileCopyLine, RiImageFill, RiVideoFill } from "react-icons/ri";
+import {
+  RiArrowDownSLine,
+  RiArrowUpSLine,
+  RiFileCopyLine,
+  RiImageFill,
+  RiVideoFill,
+} from "react-icons/ri";
 import { SceneScript } from "../constants";
 
 // ── Camera shot color map ────────────────────────────────────────────────
@@ -18,6 +24,8 @@ const SHOT_COLORS: Record<string, string> = {
   "CLOSE-UP": "bg-pink-100 text-pink-700 border-pink-200",
   "TWO-SHOT": "bg-orange-100 text-orange-700 border-orange-200",
 };
+
+const COLLAPSED_HEIGHT = 60; // px
 
 // ── Reusable PromptBlock ─────────────────────────────────────────────────
 function PromptBlock({
@@ -34,6 +42,15 @@ function PromptBlock({
   headerColor: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [isOverflow, setIsOverflow] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (contentRef.current) {
+      setIsOverflow(contentRef.current.scrollHeight > COLLAPSED_HEIGHT);
+    }
+  }, [content]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content);
@@ -59,39 +76,78 @@ function PromptBlock({
       </div>
 
       {/* Block content */}
-      <div className="px-3 py-3 bg-white">
-        {type === "dialogue" ? (
-          <p className="text-sm text-gray-700 leading-relaxed italic">{content}</p>
-        ) : (
-          <p className="text-xs text-gray-600 leading-relaxed">
-            {type === "image"
-              ? content?.split(", ").map((part, i, arr) => {
-                  const isKeyword = [
-                    "Gender",
-                    "Age",
-                    "Ethnicity",
-                    "Skin tone",
-                    "Hair",
-                    "Eyes",
-                    "Face",
-                    "Body",
-                    "Clothing",
-                    "Distinctive features",
-                    "Setting",
-                  ].some((k) => part.startsWith(k));
-                  return (
-                    <span key={i}>
-                      {isKeyword ? (
-                        <span className="text-blue-600">{part}</span>
-                      ) : (
-                        <span>{part}</span>
-                      )}
-                      {i < arr.length - 1 ? ", " : ""}
-                    </span>
-                  );
-                })
-              : content}
-          </p>
+      <div className="bg-white">
+        <div
+          ref={contentRef}
+          className="px-3 py-3 relative"
+          style={{
+            maxHeight: collapsed && isOverflow ? `${COLLAPSED_HEIGHT}px` : undefined,
+            overflow: collapsed && isOverflow ? "hidden" : undefined,
+            transition: "max-height 0.3s ease",
+          }}
+        >
+          {type === "dialogue" ? (
+            <p className="text-sm text-gray-700 leading-relaxed italic">{content}</p>
+          ) : (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              {type === "image"
+                ? content?.split(", ").map((part, i, arr) => {
+                    const isKeyword = [
+                      "Gender",
+                      "Age",
+                      "Ethnicity",
+                      "Skin tone",
+                      "Hair",
+                      "Eyes",
+                      "Face",
+                      "Body",
+                      "Clothing",
+                      "Distinctive features",
+                      "Setting",
+                    ].some((k) => part.startsWith(k));
+                    return (
+                      <span key={i}>
+                        {isKeyword ? (
+                          <span className="text-blue-600">{part}</span>
+                        ) : (
+                          <span>{part}</span>
+                        )}
+                        {i < arr.length - 1 ? ", " : ""}
+                      </span>
+                    );
+                  })
+                : content}
+            </p>
+          )}
+
+          {/* Gradient fade overlay when collapsed */}
+          {collapsed && isOverflow && (
+            <div
+              className="absolute bottom-0 left-0 right-0 pointer-events-none"
+              style={{
+                height: "32px",
+                background: "linear-gradient(transparent, white)",
+              }}
+            />
+          )}
+        </div>
+
+        {/* Toggle button */}
+        {isOverflow && (
+          <button
+            onClick={() => setCollapsed((prev) => !prev)}
+            className="w-full flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 cursor-pointer border-0 border-t border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors"
+          >
+            {collapsed ? (
+              <>
+                Xem thêm <RiArrowDownSLine className="text-sm" />
+              </>
+            ) : (
+              <>
+                Thu gọn <RiArrowUpSLine className="text-sm" />
+              </>
+            )}
+          </button>
         )}
       </div>
     </div>

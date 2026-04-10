@@ -436,7 +436,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           res.end();
         } else {
           const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
+          res.status(status).json({ message: err?.message || "Lỗi server" });
         }
       }
     },
@@ -803,7 +803,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           res.end();
         } else {
           const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
+          res.status(status).json({ message: err?.message || "Lỗi server" });
         }
       }
     },
