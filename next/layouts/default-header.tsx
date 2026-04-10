@@ -74,7 +74,6 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
   const { setOpenCustomerLoginDialog, setOpenSidebarSlideout } = useGlobalContext();
   const screenXl = useScreen("xl");
   const isHomePage = router.pathname === "/";
-  const isAffiliateVideoPage = router.pathname.startsWith("/app/affiliate-video");
 
   /* ─── Credential state (for affiliate-video API Key button) ─── */
   const [showSettings, setShowSettings] = useState(false);
@@ -105,10 +104,8 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
 
 
   useEffect(() => {
-    if (isAffiliateVideoPage) {
-      checkCredential();
-    }
-  }, [checkCredential, isAffiliateVideoPage]);
+    checkCredential();
+  }, [checkCredential]);
 
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
@@ -146,7 +143,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
             </div>
 
             {/* ── Affiliate Video: Right side actions ── */}
-            {isAffiliateVideoPage && customer && (
+            {customer && (
               <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                 {/* Hướng dẫn */}
                 <Button
@@ -313,7 +310,6 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
 
   const isMainPage = !name;
   const isHomePage = router.pathname === "/";
-  const isAffiliateVideoPage = router.pathname.startsWith("/app/affiliate-video");
 
   const {
     setOpenCustomerLoginDialog,
@@ -351,10 +347,8 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
   }, [customer]);
 
   useEffect(() => {
-    if (isAffiliateVideoPage) {
-      checkCredential();
-    }
-  }, [checkCredential, isAffiliateVideoPage]);
+    checkCredential();
+  }, [checkCredential]);
 
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
@@ -421,7 +415,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                   )}
 
                   {/* Affiliate Video: API Key status (mobile) */}
-                  {isAffiliateVideoPage && (
+                  {(
                     <Button
                       onClick={() =>
                         !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)

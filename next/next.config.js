@@ -50,11 +50,6 @@ const nextConfig = {
         destination: "/admin/management/users",
         permanent: true,
       },
-      {
-        source: "/",
-        destination: "/app/affiliate-video",
-        permanent: true,
-      },
     ];
   },
   async headers() {
