@@ -102,7 +102,6 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
     }
   }, [customer]);
 
-
   useEffect(() => {
     checkCredential();
   }, [checkCredential]);
@@ -165,35 +164,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   asyncLoading={false}
                   text={t("API Key")}
                 />{" "}
-                {/* Package usage quota */}
-                <div className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2">
-                  <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
-                    {t("Gói")}:{" "}
-                    <span className="text-gray-900">
-                      {customer?.googlePackage?.subscription || t("Dùng thử")}
-                    </span>
-                  </span>
-                  <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
-                    Video:{" "}
-                    <span className="font-semibold  text-gray-900">
-                      {customer?.googlePackage?.videoCount ?? 0}
-                    </span>
-                    <span className="text-gray-400">
-                      {" "}
-                      /{customer?.googlePackage?.videoLimit ?? 0}
-                    </span>
-                  </span>
-                  <span className="px-2.5 text-gray-600 whitespace-nowrap">
-                    {t("Ảnh")}:{" "}
-                    <span className="font-semibold   text-gray-900">
-                      {customer?.googlePackage?.imageCount ?? 0}
-                    </span>
-                    <span className="text-gray-400">
-                      {" "}
-                      /{customer?.googlePackage?.imageLimit ?? 0}
-                    </span>
-                  </span>
-                </div>
+                <PackageUsageQuota />
               </div>
             )}
             <div className="flex flex-row justify-around items-center">
@@ -415,7 +386,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                   )}
 
                   {/* Affiliate Video: API Key status (mobile) */}
-                  {(
+                  {
                     <Button
                       onClick={() =>
                         !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
@@ -428,7 +399,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                       asyncLoading={false}
                       text={t("API Key")}
                     />
-                  )}
+                  }
 
                   <CartDropdown order={order} />
                   {customer && <NotifiCationDropdown />}
@@ -636,6 +607,36 @@ export function NotifiCationDropdown() {
         placement="bottom-end"
         hideOnClickOutside={false}
       ></Popover>
+    </div>
+  );
+}
+
+function PackageUsageQuota() {
+  const { t } = useTranslation();
+  const { customer } = useAuth();
+
+  return (
+    <div className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2">
+      <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
+        {t("Gói")}:{" "}
+        <span className="text-gray-900">
+          {customer?.googlePackage?.subscription || t("Dùng thử")}
+        </span>
+      </span>
+      <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
+        Video:{" "}
+        <span className="font-semibold  text-gray-900">
+          {customer?.googlePackage?.videoCount ?? 0}
+        </span>
+        <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
+      </span>
+      <span className="px-2.5 text-gray-600 whitespace-nowrap">
+        {t("Ảnh")}:{" "}
+        <span className="font-semibold   text-gray-900">
+          {customer?.googlePackage?.imageCount ?? 0}
+        </span>
+        <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
+      </span>
     </div>
   );
 }
