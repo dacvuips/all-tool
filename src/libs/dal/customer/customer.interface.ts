@@ -7,6 +7,7 @@ export enum CustomerStatusEnum {
 }
 
 export enum SubscriptionPlanEnum {
+  FREE = "Free",
   TRIAL = "Trial",
   BASIC = "Basic",
   STANDARD = "Standard",
@@ -21,49 +22,6 @@ export type SubscriptionPlanOption = {
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
-};
-
-export const SUBSCRIPTION_PLAN_OPTIONS: Record<SubscriptionPlanEnum, SubscriptionPlanOption> = {
-  [SubscriptionPlanEnum.TRIAL]: {
-    label: "Trial",
-    videoLimit: 20,
-    imageLimit: 50,
-    imageStreamCount: 2,
-    videoStreamCount: 3,
-    price: 0,
-  },
-  [SubscriptionPlanEnum.BASIC]: {
-    label: "Basic",
-    videoLimit: 100,
-    imageLimit: 300,
-    imageStreamCount: 3,
-    videoStreamCount: 5,
-    price: 100000,
-  },
-  [SubscriptionPlanEnum.STANDARD]: {
-    label: "Standard",
-    videoLimit: 300,
-    imageLimit: 500,
-    imageStreamCount: 5,
-    videoStreamCount: 6,
-    price: 200000,
-  },
-  [SubscriptionPlanEnum.PROFESSIONAL]: {
-    label: "Professional",
-    videoLimit: 800,
-    imageLimit: 1200,
-    imageStreamCount: 8,
-    videoStreamCount: 10,
-    price: 500000,
-  },
-  [SubscriptionPlanEnum.UNLIMITED]: {
-    label: "Unlimited",
-    videoLimit: -1,
-    imageLimit: -1,
-    imageStreamCount: -1,
-    videoStreamCount: -1,
-    price: 1000000,
-  },
 };
 
 export type CustomerTimes = {

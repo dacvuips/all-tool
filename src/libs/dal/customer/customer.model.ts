@@ -48,14 +48,14 @@ const customerSchema = new Schema(
     subscription: {
       type: String,
       enum: Object.values(SubscriptionPlanEnum),
-      default: SubscriptionPlanEnum.TRIAL,
+      default: SubscriptionPlanEnum.FREE,
     },
     videoCount: { type: Number, default: 0 },
-    videoLimit: { type: Number, default: 20 },
+    videoLimit: { type: Number, default: 0 },
     imageCount: { type: Number, default: 0 },
-    imageLimit: { type: Number, default: 50 },
-    imageStreamCount: { type: Number, default: 2 },
-    videoStreamCount: { type: Number, default: 3 },
+    imageLimit: { type: Number, default: 0 },
+    imageStreamCount: { type: Number, default: 0 },
+    videoStreamCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

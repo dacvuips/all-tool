@@ -3,6 +3,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../constants/role.const";
 import logger from "../../helpers/logger";
 import { credentialService } from "../../libs/dal/credential";
+import { CustomerModel } from "../../libs/dal/customer";
 import { AiProviderKeyEnum } from "../../libs/dal/product";
 import { Context } from "../../libs/graphql";
 import { decryptProviderSecret } from "../../packages/encryption/encrypt-provider";
@@ -54,6 +55,61 @@ export async function getCustomerGeminiClient(
   return createVertexAIClient(apiKey, location);
 }
 
+/**
+ * Kiểm tra giới hạn ảnh của customer. Throw error 403 nếu vượt quá.
+ */
+async function checkImageLimit(customerId: string): Promise<void> {
+  const customer = await CustomerModel.findById(customerId)
+    .select("imageCount imageLimit")
+    .lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+  const currentCount = customer.imageCount || 0;
+  const limit = customer.imageLimit || 0;
+  if (currentCount + 1 > limit) {
+    const err: any = new Error(
+      `Bạn đã vượt quá giới hạn ảnh (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+/**
+ * Kiểm tra giới hạn video của customer. Throw error 403 nếu vượt quá.
+ */
+async function checkVideoLimit(customerId: string): Promise<void> {
+  const customer = await CustomerModel.findById(customerId)
+    .select("videoCount videoLimit")
+    .lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+  const currentCount = customer.videoCount || 0;
+  const limit = customer.videoLimit || 0;
+  if (currentCount + 1 > limit) {
+    const err: any = new Error(
+      `Bạn đã vượt quá giới hạn video (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+/** Tăng imageCount lên 1 sau khi tạo ảnh thành công */
+async function incrementImageCount(customerId: string): Promise<void> {
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { imageCount: 1 } });
+}
+
+/** Tăng videoCount lên 1 sau khi tạo video thành công */
+async function incrementVideoCount(customerId: string): Promise<void> {
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { videoCount: 1 } });
+}
 
 export interface AffiliateVideoFormConfig {
   category: string;
@@ -173,6 +229,9 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
+        // Kiểm tra giới hạn ảnh trước khi tạo
+        await checkImageLimit(context.id);
+
         const genAI = await getCustomerGeminiClient(context.id, "global");
 
         logger.info(
@@ -195,6 +254,9 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
             imageBytes: part.inlineData.data,
             mimeType: part.inlineData.mimeType || "image/png",
           }));
+
+        // Tạo ảnh thành công → tăng imageCount
+        await incrementImageCount(context.id);
 
         res.json({ success: true, data: images });
       } catch (err: any) {
@@ -225,6 +287,9 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         if (!body?.prompt) {
           return res.status(400).json({ message: "Thiếu prompt" });
         }
+
+        // Kiểm tra giới hạn video trước khi tạo
+        await checkVideoLimit(context.id);
 
         const genAI = await getCustomerGeminiClient(context.id);
 
@@ -310,6 +375,9 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         // API trả về videoBytes (base64) khi không có outputGcsUri, hoặc uri khi có GCS
         const videoUri = video?.uri || null;
         const videoBytes = video?.videoBytes || null;
+
+        // Tạo video thành công → tăng videoCount
+        await incrementVideoCount(context.id);
 
         sendSSE({
           type: "done",
@@ -567,6 +635,9 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           return res.status(400).json({ message: "Thiếu video gốc để nối tiếp" });
         }
 
+        // Kiểm tra giới hạn video trước khi tạo
+        await checkVideoLimit(context.id);
+
         const genAI = await getCustomerGeminiClient(context.id);
 
         logger.info(`[extend-video] Gọi Veo 3.1 (extend mode) cho user ${context.id}`);
@@ -660,6 +731,9 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
         const video = generatedVideos[0].video;
         const videoUri = video?.uri || null;
         const videoBytes = video?.videoBytes || null;
+
+        // Nối video thành công → tăng videoCount
+        await incrementVideoCount(context.id);
 
         sendSSE({
           type: "done",
