@@ -9,6 +9,32 @@ import { Context } from "../../libs/graphql";
 import { decryptProviderSecret } from "../../packages/encryption/encrypt-provider";
 import { AffiliateVideoResponseSchema } from "./constanst";
 
+const AI_MAX_RETRIES = 5;
+
+/**
+ * Helper: Gọi lại AI API tối đa AI_MAX_RETRIES lần nếu có lỗi.
+ * Chỉ throw error nếu tất cả các lần gọi đều thất bại.
+ */
+async function retryAICall<T>(fn: () => Promise<T>, label: string): Promise<T> {
+  let lastError: any;
+  for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastError = err;
+      logger.warn(
+        `[${label}] AI call failed (attempt ${attempt}/${AI_MAX_RETRIES}): ${err?.message}`
+      );
+      if (attempt === AI_MAX_RETRIES) {
+        break;
+      }
+      // Wait before retrying (exponential backoff: 1s, 2s, 4s, 8s)
+      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
+    }
+  }
+  throw lastError;
+}
+
 /** Helper: Tạo GoogleGenAI client dùng Vertex AI */
 function createVertexAIClient(serviceAccountKeyJson: string, location = "us-central1") {
   // Parse service account key JSON
@@ -183,14 +209,18 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
         console.log(interpolatedText);
 
-        const result = await genAI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: interpolatedText }] }],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: AffiliateVideoResponseSchema as any,
-          },
-        });
+        const result = await retryAICall(
+          () =>
+            genAI.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: [{ role: "user", parts: [{ text: interpolatedText }] }],
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: AffiliateVideoResponseSchema as any,
+              },
+            }),
+          "generation-scene"
+        );
 
         const responseText = result.text;
         let parsed: any;
@@ -238,13 +268,17 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
         );
 
-        const response = await genAI.models.generateContent({
-          model: "gemini-3.1-flash-image-preview",
-          contents: [{ role: "user", parts: [{ text: body.prompt }] }],
-          config: {
-            responseModalities: ["IMAGE"],
-          } as any,
-        });
+        const response = await retryAICall(
+          () =>
+            genAI.models.generateContent({
+              model: "gemini-3.1-flash-image-preview",
+              contents: [{ role: "user", parts: [{ text: body.prompt }] }],
+              config: {
+                responseModalities: ["IMAGE"],
+              } as any,
+            }),
+          "generation-image"
+        );
 
         // Extract images from response candidate parts
         const parts = (response as any).candidates?.[0]?.content?.parts || [];
@@ -328,7 +362,10 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           };
         }
 
-        let operation = await genAI.models.generateVideos(generateParams);
+        let operation = await retryAICall(
+          () => genAI.models.generateVideos(generateParams),
+          "generation-video"
+        );
 
         sendSSE({ type: "progress", progress: 15, message: "Đã gửi yêu cầu, đang chờ xử lý..." });
 
@@ -506,14 +543,18 @@ Trả về JSON object duy nhất.`;
           ],
         };
 
-        const result = await genAI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: insertSceneSchema as any,
-          },
-        });
+        const result = await retryAICall(
+          () =>
+            genAI.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: insertSceneSchema as any,
+              },
+            }),
+          "insert-scene"
+        );
 
         const responseText = result.text;
         let parsed: any;
@@ -587,14 +628,18 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           required: ["objectToPersonify", "tipContent"],
         };
 
-        const result = await genAI.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: suggestSchema as any,
-          },
-        });
+        const result = await retryAICall(
+          () =>
+            genAI.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: [{ role: "user", parts: [{ text: prompt }] }],
+              config: {
+                responseMimeType: "application/json",
+                responseSchema: suggestSchema as any,
+              },
+            }),
+          "suggest-config"
+        );
 
         const responseText = result.text;
         let parsed: any;
@@ -683,7 +728,10 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           video: body.video,
         };
 
-        let operation = await genAI.models.generateVideos(generateParams);
+        let operation = await retryAICall(
+          () => genAI.models.generateVideos(generateParams),
+          "extend-video"
+        );
 
         sendSSE({
           type: "progress",
@@ -789,20 +837,24 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
 
         logger.info(`[generation-tts] Gọi Gemini TTS (voice: ${voiceName}) cho user ${context.id}`);
 
-        const response = await genAI.models.generateContent({
-          model: "gemini-2.5-flash-preview-tts",
-          contents: [{ role: "user", parts: [{ text: textContent }] }],
-          config: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName,
+        const response = await retryAICall(
+          () =>
+            genAI.models.generateContent({
+              model: "gemini-2.5-flash-preview-tts",
+              contents: [{ role: "user", parts: [{ text: textContent }] }],
+              config: {
+                responseModalities: ["AUDIO"],
+                speechConfig: {
+                  voiceConfig: {
+                    prebuiltVoiceConfig: {
+                      voiceName,
+                    },
+                  },
                 },
-              },
-            },
-          } as any,
-        });
+              } as any,
+            }),
+          "generation-tts"
+        );
 
         // Extract audio from response
         const parts = (response as any).candidates?.[0]?.content?.parts || [];
