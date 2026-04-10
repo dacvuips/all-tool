@@ -145,7 +145,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
             </div>
 
             {/* ── Affiliate Video: Right side actions ── */}
-            {isAffiliateVideoPage && (
+            {isAffiliateVideoPage && customer && (
               <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                 {/* Hướng dẫn */}
                 <Button
@@ -170,14 +170,21 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                 {/* Package usage quota */}
                 <div className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2">
                   <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
-                    {t("Gói")}: <span className="text-gray-900">{customer?.subscription || t("Dùng thử")}</span>
+                    {t("Gói")}:{" "}
+                    <span className="text-gray-900">{customer?.subscription || t("Dùng thử")}</span>
                   </span>
                   <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
-                    Video: <span className="font-semibold  text-gray-900">{customer?.videoCount ?? 0}</span>
+                    Video:{" "}
+                    <span className="font-semibold  text-gray-900">
+                      {customer?.videoCount ?? 0}
+                    </span>
                     <span className="text-gray-400"> /{customer?.videoLimit ?? 20}</span>
                   </span>
                   <span className="px-2.5 text-gray-600 whitespace-nowrap">
-                    {t("Ảnh")}: <span className="font-semibold   text-gray-900">{customer?.imageCount ?? 0}</span>
+                    {t("Ảnh")}:{" "}
+                    <span className="font-semibold   text-gray-900">
+                      {customer?.imageCount ?? 0}
+                    </span>
                     <span className="text-gray-400"> /{customer?.imageLimit ?? 50}</span>
                   </span>
                 </div>

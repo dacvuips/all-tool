@@ -1,6 +1,14 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
-import { CustomerIntro, CustomerStatusEnum, CustomerTimes, SubscriptionPlanEnum } from "../types";
+import { CustomerIntro, CustomerStatusEnum, CustomerTimes } from "../types";
+export enum SubscriptionPlanEnum {
+  FREE = "Free",
+  TRIAL = "Trial",
+  BASIC = "Basic",
+  STANDARD = "Standard",
+  PROFESSIONAL = "Professional",
+  UNLIMITED = "Unlimited",
+}
 
 export interface Customer extends BaseModel {
   code?: string; // Mã khách hàng
@@ -82,7 +90,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
-    creditBalance
+    creditPoint
     hasReward
     province: String
     district: String

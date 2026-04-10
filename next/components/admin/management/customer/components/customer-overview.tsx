@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { HiCurrencyDollar } from "react-icons/hi";
-import { RiAccountPinBoxFill, RiLockPasswordLine, RiUserStarLine } from "react-icons/ri";
+import { RiAccountPinBoxFill, RiLockPasswordLine, RiStackLine, RiUserStarLine } from "react-icons/ri";
 import { uploadImage } from "../../../../../lib/helpers/image";
 import { parseNumber } from "../../../../../lib/helpers/parser";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -16,6 +16,7 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { useScreen } from "../../../../../lib/hooks/useScreen";
 import { Customer, CustomerService } from "../../../../../lib/repo/customer/customer.repo";
 import { CustomerCreditPointConfigDialog } from "./customer-credit-point-config-dialog";
+import { CustomerPackageConfigDialog } from "./customer-package-config-dialog";
 interface Props extends ReactProps {
   customer: Customer;
   setCustomer: (customer: Customer) => any;
@@ -46,6 +47,7 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
   const [openChangePasswordUser, setOpenChangePasswordUser] = useState<Customer>(null);
   const [uploading, setUploading] = useState(false);
   const [openCustomerCreditPointConfig, setOpenCustomerCreditPointConfig] = useState(false);
+  const [openCustomerPackageConfig, setOpenCustomerPackageConfig] = useState(false);
 
   const { CUSTOMER_STATUS_OPTIONS } = useOptionsTranslation();
 
@@ -173,7 +175,7 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
                 }
               }}
             />
-            <div className={`absolute top-0 -right-20 xs:-right-24`}>
+            <div className={`absolute top-0 -right-20 xs:-right-24 flex flex-col gap-2`}>
               <Button
                 small
                 outline
@@ -182,6 +184,15 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
                 text={t("Cấu hình uy tín")}
                 className="whitespace-nowrap"
                 onClick={() => setOpenCustomerCreditPointConfig(true)}
+              />
+              <Button
+                small
+                outline
+                disabled={!userPermission("EDIT_CUSTOMER")}
+                icon={<RiStackLine />}
+                text={t("Cấu hình gói")}
+                className="whitespace-nowrap"
+                onClick={() => setOpenCustomerPackageConfig(true)}
               />
             </div>
           </div>
@@ -240,6 +251,15 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
         isOpen={openCustomerCreditPointConfig}
         onClose={() => {
           setOpenCustomerCreditPointConfig(false);
+        }}
+        loadAll={loadAll}
+        customer={customer}
+      />
+
+      <CustomerPackageConfigDialog
+        isOpen={openCustomerPackageConfig}
+        onClose={() => {
+          setOpenCustomerPackageConfig(false);
         }}
         loadAll={loadAll}
         customer={customer}
