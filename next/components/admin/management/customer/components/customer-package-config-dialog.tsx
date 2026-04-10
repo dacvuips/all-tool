@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiCheck, HiPhotograph, HiVideoCamera } from "react-icons/hi";
-import { RiStackLine, RiFlowChart } from "react-icons/ri";
+import { RiFlowChart, RiStackLine } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import {
@@ -9,12 +9,14 @@ import {
   CustomerService,
   SubscriptionPlanEnum,
 } from "../../../../../lib/repo/customer/customer.repo";
-import { SettingService, Setting } from "../../../../../lib/repo/general/setting.repo";
+import { Setting, SettingService } from "../../../../../lib/repo/general/setting.repo";
+import { AlertDialog } from "../../../../shared/utilities/dialog/alert-dialog";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Spinner } from "../../../../shared/utilities/misc";
 
 /** Map from SubscriptionPlanEnum value → lowercase key prefix used in settings */
 const PLAN_KEY_MAP: Record<string, string> = {
+  [SubscriptionPlanEnum.FREE]: "free",
   [SubscriptionPlanEnum.TRIAL]: "trial",
   [SubscriptionPlanEnum.BASIC]: "basic",
   [SubscriptionPlanEnum.STANDARD]: "standard",
@@ -22,8 +24,9 @@ const PLAN_KEY_MAP: Record<string, string> = {
   [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
 };
 
-/** Ordered list of plans to display (excluding FREE which has no config) */
+/** Ordered list of plans to display */
 const PLAN_ORDER = [
+  SubscriptionPlanEnum.FREE,
   SubscriptionPlanEnum.TRIAL,
   SubscriptionPlanEnum.BASIC,
   SubscriptionPlanEnum.STANDARD,
@@ -33,6 +36,11 @@ const PLAN_ORDER = [
 
 /** Accent colour per plan for card styling */
 const PLAN_COLORS: Record<string, { bg: string; border: string; badge: string }> = {
+  [SubscriptionPlanEnum.FREE]: {
+    bg: "bg-slate-50",
+    border: "border-gray-300",
+    badge: "bg-gray-400",
+  },
   [SubscriptionPlanEnum.TRIAL]: {
     bg: "bg-gray-50",
     border: "border-gray-300",
@@ -83,6 +91,7 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
+  const [confirmConfig, setConfirmConfig] = useState<PlanConfig | null>(null);
 
   // Fetch settings with "pk-" prefix when the dialog opens
   useEffect(() => {
@@ -98,6 +107,19 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
         const configs: PlanConfig[] = [];
 
         for (const plan of PLAN_ORDER) {
+          // Free plan has all values as 0, no need to fetch from settings
+          if (plan === SubscriptionPlanEnum.FREE) {
+            configs.push({
+              plan,
+              videoLimit: 0,
+              imageLimit: 0,
+              imageStreamCount: 0,
+              videoStreamCount: 0,
+              price: 0,
+            });
+            continue;
+          }
+
           const prefix = `pk-${PLAN_KEY_MAP[plan]}`;
           const getValue = (suffix: string) => {
             const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
@@ -150,12 +172,13 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
   };
 
   const formatNumber = (n: number) => (n === -1 ? "∞" : n.toLocaleString("vi-VN"));
-  const formatPrice = (n: number) =>
-    n === 0 ? t("Miễn phí") : n.toLocaleString("vi-VN") + " đ";
+  const formatPrice = (n: number) => (n === 0 ? t("Miễn phí") : n.toLocaleString("vi-VN") + " đ");
 
-  const isCurrentPlan = (plan: SubscriptionPlanEnum) => customer?.googlePackage?.subscription === plan;
+  const isCurrentPlan = (plan: SubscriptionPlanEnum) =>
+    customer?.googlePackage?.subscription === plan;
 
   return (
+    <>
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
@@ -169,7 +192,9 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
           <RiStackLine className="text-lg" />
           <span>
             {t("Gói hiện tại")}:{" "}
-            <strong className="text-primary">{customer?.googlePackage?.subscription || "Free"}</strong>
+            <strong className="text-primary">
+              {customer?.googlePackage?.subscription || "Free"}
+            </strong>
           </span>
         </div>
 
@@ -228,15 +253,13 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
                     <div className="flex items-center gap-2">
                       <RiFlowChart className="text-base text-purple-500" />
                       <span>
-                        {t("Luồng video")}:{" "}
-                        <strong>{formatNumber(config.videoStreamCount)}</strong>
+                        {t("Luồng video")}: <strong>{formatNumber(config.videoStreamCount)}</strong>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <RiFlowChart className="text-base text-orange-500" />
                       <span>
-                        {t("Luồng ảnh")}:{" "}
-                        <strong>{formatNumber(config.imageStreamCount)}</strong>
+                        {t("Luồng ảnh")}: <strong>{formatNumber(config.imageStreamCount)}</strong>
                       </span>
                     </div>
                   </div>
@@ -249,7 +272,7 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
                         : `${colors.badge} text-white hover:opacity-90`
                     }`}
                     disabled={isCurrent || saving || !userPermission("EDIT_CUSTOMER")}
-                    onClick={() => handleSelectPlan(config)}
+                    onClick={() => setConfirmConfig(config)}
                   >
                     {saving ? t("Đang lưu...") : isCurrent ? t("Đang dùng") : t("Chọn gói")}
                   </button>
@@ -260,5 +283,23 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
         )}
       </div>
     </Dialog>
+
+    {/* Confirm alert */}
+    <AlertDialog
+      isOpen={!!confirmConfig}
+      type="question"
+      title={t("Xác nhận chọn gói")}
+      content={t(`Bạn có chắc muốn chuyển sang gói "${confirmConfig?.plan}"?`)}
+      confirm={t("Xác nhận")}
+      cancel={t("Huỷ")}
+      onConfirm={async () => {
+        if (confirmConfig) {
+          await handleSelectPlan(confirmConfig);
+        }
+        setConfirmConfig(null);
+      }}
+      onClose={() => setConfirmConfig(null)}
+    />
+    </>
   );
 }
