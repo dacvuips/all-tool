@@ -2,8 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { CustomerStatusEnum } from "../../../libs/shared/interfaces/customer.interface";
-import { ICustomer } from "./customer.interface";
+import { CustomerStatusEnum, ICustomer, SubscriptionPlanEnum } from "./customer.interface";
 
 const Schema = mongoose.Schema;
 
@@ -46,6 +45,17 @@ const customerSchema = new Schema(
     province: { type: String },
     district: { type: String },
     ward: { type: String },
+    subscription: {
+      type: String,
+      enum: Object.values(SubscriptionPlanEnum),
+      default: SubscriptionPlanEnum.TRIAL,
+    },
+    videoCount: { type: Number, default: 0 },
+    videoLimit: { type: Number, default: 20 },
+    imageCount: { type: Number, default: 0 },
+    imageLimit: { type: Number, default: 50 },
+    imageStreamCount: { type: Number, default: 2 },
+    videoStreamCount: { type: Number, default: 3 },
   },
   { timestamps: true }
 );

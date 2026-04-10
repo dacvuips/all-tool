@@ -1,9 +1,94 @@
 import { TimestampEntity } from "../../core";
-import {
-  CustomerIntro,
-  CustomerStatusEnum,
-  CustomerTimes,
-} from "../../shared/interfaces/customer.interface";
+
+export enum CustomerStatusEnum {
+  ACTIVE = "ACTIVE", // Kích hoạt
+  INACTIVE = "INACTIVE", // Không kích hoạt
+  BLOCKED = "BLOCKED", // Bị khóa
+}
+
+export enum SubscriptionPlanEnum {
+  TRIAL = "Trial",
+  BASIC = "Basic",
+  STANDARD = "Standard",
+  PROFESSIONAL = "Professional",
+  UNLIMITED = "Unlimited",
+}
+
+export type SubscriptionPlanOption = {
+  label: string;
+  videoLimit: number;
+  imageLimit: number;
+  imageStreamCount: number;
+  videoStreamCount: number;
+  price: number;
+};
+
+export const SUBSCRIPTION_PLAN_OPTIONS: Record<SubscriptionPlanEnum, SubscriptionPlanOption> = {
+  [SubscriptionPlanEnum.TRIAL]: {
+    label: "Trial",
+    videoLimit: 20,
+    imageLimit: 50,
+    imageStreamCount: 2,
+    videoStreamCount: 3,
+    price: 0,
+  },
+  [SubscriptionPlanEnum.BASIC]: {
+    label: "Basic",
+    videoLimit: 100,
+    imageLimit: 300,
+    imageStreamCount: 3,
+    videoStreamCount: 5,
+    price: 100000,
+  },
+  [SubscriptionPlanEnum.STANDARD]: {
+    label: "Standard",
+    videoLimit: 300,
+    imageLimit: 500,
+    imageStreamCount: 5,
+    videoStreamCount: 6,
+    price: 200000,
+  },
+  [SubscriptionPlanEnum.PROFESSIONAL]: {
+    label: "Professional",
+    videoLimit: 800,
+    imageLimit: 1200,
+    imageStreamCount: 8,
+    videoStreamCount: 10,
+    price: 500000,
+  },
+  [SubscriptionPlanEnum.UNLIMITED]: {
+    label: "Unlimited",
+    videoLimit: -1,
+    imageLimit: -1,
+    imageStreamCount: -1,
+    videoStreamCount: -1,
+    price: 1000000,
+  },
+};
+
+export type CustomerTimes = {
+  registedAt?: Date; // Thời gian đăng ký
+  lastLoginAt?: Date; // Thời gian đăng nhập cuối
+  lastOrderAt?: Date; // Thời gian đặt hàng cuối
+  emailVerifiedAt?: Date; // Thời gian xác thực email
+  passwordChangedAt?: Date; // Thời gian thay đổi mật khẩu
+};
+
+export enum RewardPointTypeEnum {
+  TRANSACTION = "TRANSACTION",
+  PAYMENT = "PAYMENT",
+}
+export type BankCustomer = {
+  accountName: string;
+  accountNumber: string;
+  bankName: string;
+  code: string;
+  bin: string;
+};
+export type CustomerIntro = {
+  order: boolean;
+  card: boolean;
+};
 
 export type ICustomer = TimestampEntity & {
   code?: string; // Mã khách hàng
@@ -27,4 +112,11 @@ export type ICustomer = TimestampEntity & {
   province?: string;
   district?: string;
   ward?: string;
+  subscription?: SubscriptionPlanEnum; // Gói đăng ký
+  videoCount?: number; // Số video đã dùng
+  videoLimit?: number; // Giới hạn video
+  imageCount?: number; // Số ảnh đã dùng
+  imageLimit?: number; // Giới hạn ảnh
+  imageStreamCount?: number; // Số luồng ảnh đồng thời
+  videoStreamCount?: number; // Số luồng video đồng thời
 };

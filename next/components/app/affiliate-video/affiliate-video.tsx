@@ -13,6 +13,7 @@ import {
   RiSettings3Line,
   RiShirtLine,
   RiStackLine,
+  RiVideoDownloadLine,
 } from "react-icons/ri";
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
@@ -30,6 +31,7 @@ export default function AffiliateVideo() {
     { icon: <RiStackLine />, label: t("Nhân Bản") },
     { icon: <RiShirtLine />, label: t("Thời Trang") },
     { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
+    { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },
   ];
 
   return (
@@ -42,7 +44,7 @@ export default function AffiliateVideo() {
         <TabGroup
           name="affiliate-video-nav"
           flex={false}
-          className="border-transparent pl-0"
+          className="border-transparent pl-0 "
           tabClassName="px-3 py-2.5"
           titleClassName="text-xs font-medium whitespace-nowrap"
           bodyClassName="hidden"

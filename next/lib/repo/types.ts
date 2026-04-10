@@ -42,6 +42,14 @@ export enum CustomerStatusEnum {
   BLOCKED = "BLOCKED", // Bị khóa
 }
 
+export enum SubscriptionPlanEnum {
+  TRIAL = "Trial",
+  BASIC = "Basic",
+  STANDARD = "Standard",
+  PROFESSIONAL = "Professional",
+  UNLIMITED = "Unlimited",
+}
+
 export type CustomerTimes = {
   registedAt?: Date; // Thời gian đăng ký
   lastLoginAt?: Date; // Thời gian đăng nhập cuối

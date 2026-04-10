@@ -1,6 +1,14 @@
 import { gql } from "apollo-server-express";
 
 const schema = gql`
+  enum SubscriptionPlanEnum {
+    Trial
+    Basic
+    Standard
+    Professional
+    Unlimited
+  }
+
   extend type Query {
     getAllCustomer(q: QueryGetListInput): CustomerPageData
     getOneCustomer(id: ID!): Customer
@@ -34,6 +42,20 @@ const schema = gql`
     district: String
     "Phường/Xã"
     ward: String
+    "Gói đăng ký"
+    subscription: SubscriptionPlanEnum
+    "Số video đã dùng"
+    videoCount: Int
+    "Giới hạn video"
+    videoLimit: Int
+    "Số ảnh đã dùng"
+    imageCount: Int
+    "Giới hạn ảnh"
+    imageLimit: Int
+    "Số luồng ảnh đồng thời"
+    imageStreamCount: Int
+    "Số luồng video đồng thời"
+    videoStreamCount: Int
   }
 
   type Customer {
@@ -77,6 +99,20 @@ const schema = gql`
     district: String
     "Phường/Xã"
     ward: String
+    "Gói đăng ký"
+    subscription: SubscriptionPlanEnum
+    "Số video đã dùng"
+    videoCount: Int
+    "Giới hạn video"
+    videoLimit: Int
+    "Số ảnh đã dùng"
+    imageCount: Int
+    "Giới hạn ảnh"
+    imageLimit: Int
+    "Số luồng ảnh đồng thời"
+    imageStreamCount: Int
+    "Số luồng video đồng thời"
+    videoStreamCount: Int
   }
   type CustomerIntro {
     "Đơn hàng"

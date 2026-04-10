@@ -200,7 +200,7 @@ export function SceneBatchRow({
           </span>
           {/* Action icons – visible when hovering this field's area */}
           <div
-            className="absolute top-0 right-0 flex items-center gap-0.5"
+            className="absolute top-0 -right-6 flex items-center gap-0.5 border border-gray-200 bg-white rounded-md"
             style={{
               opacity: hoveredField === field ? 1 : 0,
               pointerEvents: hoveredField === field ? "auto" : "none",
@@ -277,7 +277,9 @@ export function SceneBatchRow({
           "motionPrompt",
           scene.motionPrompt,
           "text-teal-700",
-          <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">[MOTION]:</span>
+          <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">
+            [MOTION]:
+          </span>
         )}
         {renderEditablePrompt(
           "audio",

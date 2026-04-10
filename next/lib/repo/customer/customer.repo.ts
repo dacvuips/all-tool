@@ -1,6 +1,6 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
-import { CustomerIntro, CustomerStatusEnum, CustomerTimes } from "../types";
+import { CustomerIntro, CustomerStatusEnum, CustomerTimes, SubscriptionPlanEnum } from "../types";
 
 export interface Customer extends BaseModel {
   code?: string; // Mã khách hàng
@@ -21,6 +21,13 @@ export interface Customer extends BaseModel {
   province?: string;
   district?: string;
   ward?: string;
+  subscription?: SubscriptionPlanEnum; // Gói đăng ký
+  videoCount?: number; // Số video đã dùng
+  videoLimit?: number; // Giới hạn video
+  imageCount?: number; // Số ảnh đã dùng
+  imageLimit?: number; // Giới hạn ảnh
+  imageStreamCount?: number; // Số luồng ảnh đồng thời
+  videoStreamCount?: number; // Số luồng video đồng thời
 }
 export class CustomerRepository extends CrudRepository<Customer> {
   apiName: string = "Customer";
@@ -46,6 +53,13 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
+    subscription: String
+    videoCount: Int
+    videoLimit: Int
+    imageCount: Int
+    imageLimit: Int
+    imageStreamCount: Int
+    videoStreamCount: Int
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -72,8 +86,14 @@ export class CustomerRepository extends CrudRepository<Customer> {
     hasReward
     province: String
     district: String
-    ward: String  
-   
+    ward: String
+    subscription: String
+    videoCount: Int
+    videoLimit: Int
+    imageCount: Int
+    imageLimit: Int
+    imageStreamCount: Int
+    videoStreamCount: Int
   `);
 
   async checkCustomerPhone(phoneNumber: string) {
