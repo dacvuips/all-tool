@@ -60,15 +60,15 @@ export async function getCustomerGeminiClient(
  */
 async function checkImageLimit(customerId: string): Promise<void> {
   const customer = await CustomerModel.findById(customerId)
-    .select("imageCount imageLimit")
+    .select("googlePackage.imageCount googlePackage.imageLimit")
     .lean();
   if (!customer) {
     const err: any = new Error("Không tìm thấy thông tin khách hàng");
     err.statusCode = 404;
     throw err;
   }
-  const currentCount = customer.imageCount || 0;
-  const limit = customer.imageLimit || 0;
+  const currentCount = customer.googlePackage?.imageCount || 0;
+  const limit = customer.googlePackage?.imageLimit || 0;
   if (currentCount + 1 > limit) {
     const err: any = new Error(
       `Bạn đã vượt quá giới hạn ảnh (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
@@ -83,15 +83,15 @@ async function checkImageLimit(customerId: string): Promise<void> {
  */
 async function checkVideoLimit(customerId: string): Promise<void> {
   const customer = await CustomerModel.findById(customerId)
-    .select("videoCount videoLimit")
+    .select("googlePackage.videoCount googlePackage.videoLimit")
     .lean();
   if (!customer) {
     const err: any = new Error("Không tìm thấy thông tin khách hàng");
     err.statusCode = 404;
     throw err;
   }
-  const currentCount = customer.videoCount || 0;
-  const limit = customer.videoLimit || 0;
+  const currentCount = customer.googlePackage?.videoCount || 0;
+  const limit = customer.googlePackage?.videoLimit || 0;
   if (currentCount + 1 > limit) {
     const err: any = new Error(
       `Bạn đã vượt quá giới hạn video (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
@@ -103,12 +103,12 @@ async function checkVideoLimit(customerId: string): Promise<void> {
 
 /** Tăng imageCount lên 1 sau khi tạo ảnh thành công */
 async function incrementImageCount(customerId: string): Promise<void> {
-  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { imageCount: 1 } });
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.imageCount": 1 } });
 }
 
 /** Tăng videoCount lên 1 sau khi tạo video thành công */
 async function incrementVideoCount(customerId: string): Promise<void> {
-  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { videoCount: 1 } });
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": 1 } });
 }
 
 export interface AffiliateVideoFormConfig {

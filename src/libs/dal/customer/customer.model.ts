@@ -45,17 +45,22 @@ const customerSchema = new Schema(
     province: { type: String },
     district: { type: String },
     ward: { type: String },
-    subscription: {
-      type: String,
-      enum: Object.values(SubscriptionPlanEnum),
-      default: SubscriptionPlanEnum.FREE,
+    googlePackage: {
+      type: {
+        subscription: {
+          type: String,
+          enum: Object.values(SubscriptionPlanEnum),
+          default: SubscriptionPlanEnum.FREE,
+        },
+        videoCount: { type: Number, default: 0 },
+        videoLimit: { type: Number, default: 0 },
+        imageCount: { type: Number, default: 0 },
+        imageLimit: { type: Number, default: 0 },
+        imageStreamCount: { type: Number, default: 0 },
+        videoStreamCount: { type: Number, default: 0 },
+        expiryPackageDate: { type: Date },
+      },
     },
-    videoCount: { type: Number, default: 0 },
-    videoLimit: { type: Number, default: 0 },
-    imageCount: { type: Number, default: 0 },
-    imageLimit: { type: Number, default: 0 },
-    imageStreamCount: { type: Number, default: 0 },
-    videoStreamCount: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

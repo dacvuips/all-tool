@@ -10,6 +10,17 @@ export enum SubscriptionPlanEnum {
   UNLIMITED = "Unlimited",
 }
 
+export type GooglePackage = {
+  subscription?: SubscriptionPlanEnum;
+  videoCount?: number;
+  videoLimit?: number;
+  imageCount?: number;
+  imageLimit?: number;
+  imageStreamCount?: number;
+  videoStreamCount?: number;
+  expiryPackageDate?: Date;
+};
+
 export interface Customer extends BaseModel {
   code?: string; // Mã khách hàng
   name?: string; // Tên khách hàng
@@ -29,13 +40,7 @@ export interface Customer extends BaseModel {
   province?: string;
   district?: string;
   ward?: string;
-  subscription?: SubscriptionPlanEnum; // Gói đăng ký
-  videoCount?: number; // Số video đã dùng
-  videoLimit?: number; // Giới hạn video
-  imageCount?: number; // Số ảnh đã dùng
-  imageLimit?: number; // Giới hạn ảnh
-  imageStreamCount?: number; // Số luồng ảnh đồng thời
-  videoStreamCount?: number; // Số luồng video đồng thời
+  googlePackage?: GooglePackage; // Gói Google
 }
 export class CustomerRepository extends CrudRepository<Customer> {
   apiName: string = "Customer";
@@ -61,13 +66,16 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
-    subscription: String
-    videoCount: Int
-    videoLimit: Int
-    imageCount: Int
-    imageLimit: Int
-    imageStreamCount: Int
-    videoStreamCount: Int
+    googlePackage {
+      subscription: String
+      videoCount: Int
+      videoLimit: Int
+      imageCount: Int
+      imageLimit: Int
+      imageStreamCount: Int
+      videoStreamCount: Int
+      expiryPackageDate: DateTime
+    }
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -95,13 +103,16 @@ export class CustomerRepository extends CrudRepository<Customer> {
     province: String
     district: String
     ward: String
-    subscription: String
-    videoCount: Int
-    videoLimit: Int
-    imageCount: Int
-    imageLimit: Int
-    imageStreamCount: Int
-    videoStreamCount: Int
+    googlePackage {
+      subscription: String
+      videoCount: Int
+      videoLimit: Int
+      imageCount: Int
+      imageLimit: Int
+      imageStreamCount: Int
+      videoStreamCount: Int
+      expiryPackageDate: DateTime
+    }
   `);
 
   async checkCustomerPhone(phoneNumber: string) {

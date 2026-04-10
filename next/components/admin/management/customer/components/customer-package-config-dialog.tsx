@@ -130,11 +130,13 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
       await CustomerService.update({
         id: customer.id,
         data: {
-          subscription: config.plan,
-          videoLimit: config.videoLimit,
-          imageLimit: config.imageLimit,
-          imageStreamCount: config.imageStreamCount,
-          videoStreamCount: config.videoStreamCount,
+          googlePackage: {
+            subscription: config.plan,
+            videoLimit: config.videoLimit,
+            imageLimit: config.imageLimit,
+            imageStreamCount: config.imageStreamCount,
+            videoStreamCount: config.videoStreamCount,
+          },
         },
       });
       toast.success(t("Cập nhật gói thành công"));
@@ -151,7 +153,7 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
   const formatPrice = (n: number) =>
     n === 0 ? t("Miễn phí") : n.toLocaleString("vi-VN") + " đ";
 
-  const isCurrentPlan = (plan: SubscriptionPlanEnum) => customer?.subscription === plan;
+  const isCurrentPlan = (plan: SubscriptionPlanEnum) => customer?.googlePackage?.subscription === plan;
 
   return (
     <Dialog
@@ -167,7 +169,7 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
           <RiStackLine className="text-lg" />
           <span>
             {t("Gói hiện tại")}:{" "}
-            <strong className="text-primary">{customer?.subscription || "Free"}</strong>
+            <strong className="text-primary">{customer?.googlePackage?.subscription || "Free"}</strong>
           </span>
         </div>
 

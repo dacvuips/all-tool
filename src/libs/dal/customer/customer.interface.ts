@@ -48,6 +48,17 @@ export type CustomerIntro = {
   card: boolean;
 };
 
+export type GooglePackage = {
+  subscription?: SubscriptionPlanEnum; // Gói đăng ký
+  videoCount?: number; // Số video đã dùng
+  videoLimit?: number; // Giới hạn video
+  imageCount?: number; // Số ảnh đã dùng
+  imageLimit?: number; // Giới hạn ảnh
+  imageStreamCount?: number; // Số luồng ảnh đồng thời
+  videoStreamCount?: number; // Số luồng video đồng thời
+  expiryPackageDate?: Date; // Ngày hết hạn gói
+};
+
 export type ICustomer = TimestampEntity & {
   code?: string; // Mã khách hàng
   name?: string; // Tên khách hàng
@@ -70,11 +81,5 @@ export type ICustomer = TimestampEntity & {
   province?: string;
   district?: string;
   ward?: string;
-  subscription?: SubscriptionPlanEnum; // Gói đăng ký
-  videoCount?: number; // Số video đã dùng
-  videoLimit?: number; // Giới hạn video
-  imageCount?: number; // Số ảnh đã dùng
-  imageLimit?: number; // Giới hạn ảnh
-  imageStreamCount?: number; // Số luồng ảnh đồng thời
-  videoStreamCount?: number; // Số luồng video đồng thời
+  googlePackage?: GooglePackage; // Gói Google (subscription, limits, counts)
 };

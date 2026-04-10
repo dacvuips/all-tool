@@ -43,20 +43,8 @@ const schema = gql`
     district: String
     "Phường/Xã"
     ward: String
-    "Gói đăng ký"
-    subscription: SubscriptionPlanEnum
-    "Số video đã dùng"
-    videoCount: Int
-    "Giới hạn video"
-    videoLimit: Int
-    "Số ảnh đã dùng"
-    imageCount: Int
-    "Giới hạn ảnh"
-    imageLimit: Int
-    "Số luồng ảnh đồng thời"
-    imageStreamCount: Int
-    "Số luồng video đồng thời"
-    videoStreamCount: Int
+    "Gói Google"
+    googlePackage: GooglePackageInput
   }
 
   type Customer {
@@ -100,20 +88,8 @@ const schema = gql`
     district: String
     "Phường/Xã"
     ward: String
-    "Gói đăng ký"
-    subscription: SubscriptionPlanEnum
-    "Số video đã dùng"
-    videoCount: Int
-    "Giới hạn video"
-    videoLimit: Int
-    "Số ảnh đã dùng"
-    imageCount: Int
-    "Giới hạn ảnh"
-    imageLimit: Int
-    "Số luồng ảnh đồng thời"
-    imageStreamCount: Int
-    "Số luồng video đồng thời"
-    videoStreamCount: Int
+    "Gói Google"
+    googlePackage: GooglePackage
   }
   type CustomerIntro {
     "Đơn hàng"
@@ -132,6 +108,43 @@ const schema = gql`
     emailVerifiedAt: DateTime
     "Thời gian thay đổi mật khẩu"
     passwordChangedAt: DateTime
+  }
+
+  type GooglePackage {
+    "Gói đăng ký"
+    subscription: SubscriptionPlanEnum
+    "Số video đã dùng"
+    videoCount: Int
+    "Giới hạn video"
+    videoLimit: Int
+    "Số ảnh đã dùng"
+    imageCount: Int
+    "Giới hạn ảnh"
+    imageLimit: Int
+    "Số luồng ảnh đồng thời"
+    imageStreamCount: Int
+    "Số luồng video đồng thời"
+    videoStreamCount: Int
+    "Ngày hết hạn gói"
+    expiryPackageDate: DateTime
+  }
+  input GooglePackageInput {
+    "Gói đăng ký"
+    subscription: SubscriptionPlanEnum
+    "Số video đã dùng"
+    videoCount: Int
+    "Giới hạn video"
+    videoLimit: Int
+    "Số ảnh đã dùng"
+    imageCount: Int
+    "Giới hạn ảnh"
+    imageLimit: Int
+    "Số luồng ảnh đồng thời"
+    imageStreamCount: Int
+    "Số luồng video đồng thời"
+    videoStreamCount: Int
+    "Ngày hết hạn gói"
+    expiryPackageDate: DateTime
   }
 
   type CustomerPageData {
