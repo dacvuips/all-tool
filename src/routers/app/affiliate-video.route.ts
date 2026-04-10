@@ -31,6 +31,30 @@ function createVertexAIClient(serviceAccountKeyJson: string, location = "us-cent
   });
 }
 
+/**
+ * Helper chung: Lấy credential Gemini của customer, giải mã và tạo GoogleGenAI client.
+ * Throw error nếu chưa cấu hình key.
+ */
+export async function getCustomerGeminiClient(
+  customerId: string,
+  location = "us-central1"
+): Promise<InstanceType<typeof GoogleGenAI>> {
+  const credentialDoc = (await credentialService.findOne({
+    customerId,
+    key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+    isCustomerCredential: true,
+  })) as any;
+  const credential = credentialDoc?._doc;
+  if (!credential?.value) {
+    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
+    err.statusCode = 403;
+    throw err;
+  }
+  const apiKey = decryptProviderSecret(credential.value);
+  return createVertexAIClient(apiKey, location);
+}
+
+
 export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;
@@ -72,18 +96,7 @@ export default [
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         const prompt = `
 
@@ -113,7 +126,6 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
 
         logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
         console.log(interpolatedText);
-        const genAI = createVertexAIClient(apiKey);
 
         const result = await genAI.models.generateContent({
           model: "gemini-2.5-flash",
@@ -135,7 +147,8 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         res.json({ success: true, data: parsed });
       } catch (err: any) {
         logger.error(`[generation-scene] Lỗi: ${err?.message}`);
-        res.status(500).json({ message: err?.message || "Lỗi server" });
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
@@ -160,19 +173,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey, "global");
+        const genAI = await getCustomerGeminiClient(context.id, "global");
 
         logger.info(
           `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
@@ -198,7 +199,8 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         res.json({ success: true, data: images });
       } catch (err: any) {
         logger.error(`[generation-image] Lỗi: ${err?.message}`);
-        res.status(500).json({ message: err?.message || "Lỗi server" });
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
@@ -224,19 +226,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         logger.info(`[generation-video] Gọi Veo 3.1 fast cho user ${context.id}`);
 
@@ -340,7 +330,8 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           );
           res.end();
         } else {
-          res.status(500).json({ message: err?.message || "Lỗi server" });
+          const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
         }
       }
     },
@@ -375,19 +366,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           return res.status(400).json({ message: "Thiếu description cho scene mới" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         // Build context prompt
         const prevSceneInfo = body.prevScene
@@ -484,7 +463,8 @@ Trả về JSON object duy nhất.`;
         res.json({ success: true, data: parsed });
       } catch (err: any) {
         logger.error(`[insert-scene] Lỗi: ${err?.message}`);
-        res.status(500).json({ message: err?.message || "Lỗi server" });
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
@@ -503,19 +483,7 @@ Trả về JSON object duy nhất.`;
           language?: string;
         };
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         const categoryHint = body.category ? `Danh mục: ${body.category}` : "Danh mục: tự chọn";
         const moodHint = body.mood ? `Mood/Tính cách: ${body.mood}` : "";
@@ -571,7 +539,8 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
         res.json({ success: true, data: parsed });
       } catch (err: any) {
         logger.error(`[suggest-config] Lỗi: ${err?.message}`);
-        res.status(500).json({ message: err?.message || "Lỗi server" });
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
@@ -598,19 +567,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           return res.status(400).json({ message: "Thiếu video gốc để nối tiếp" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         logger.info(`[extend-video] Gọi Veo 3.1 (extend mode) cho user ${context.id}`);
 
@@ -723,7 +680,8 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           );
           res.end();
         } else {
-          res.status(500).json({ message: err?.message || "Lỗi server" });
+          const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
         }
       }
     },
@@ -750,19 +708,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           return res.status(400).json({ message: "Thiếu text để tạo giọng nói" });
         }
 
-        // Lấy Gemini API key của customer từ credential
-        const credentialDoc = (await credentialService.findOne({
-          customerId: context.id,
-          key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-          isCustomerCredential: true,
-        })) as any;
-        const credential = credentialDoc?._doc;
-        if (!credential?.value) {
-          return res.status(403).json({ message: "Chưa cấu hình Google Gemini API Key" });
-        }
-
-        const apiKey = decryptProviderSecret(credential.value);
-        const genAI = createVertexAIClient(apiKey);
+        const genAI = await getCustomerGeminiClient(context.id);
 
         const voiceName = body.voiceName || "Kore";
         const textContent = body.stylePrompt ? `${body.stylePrompt}\n\n${body.text}` : body.text;
@@ -841,7 +787,8 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
         });
       } catch (err: any) {
         logger.error(`[generation-tts] Lỗi: ${err?.message}`);
-        res.status(500).json({ message: err?.message || "Lỗi server" });
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },
