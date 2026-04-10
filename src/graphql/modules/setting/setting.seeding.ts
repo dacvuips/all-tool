@@ -38,6 +38,10 @@ export default async function execute() {
           ...setting,
           groupId: settingGroup._id.toString(),
         });
+      } else if (oldSetting.isPrivate !== setting.isPrivate) {
+        console.log("Cập nhật isPrivate cho", setting.name);
+        oldSetting.isPrivate = setting.isPrivate;
+        await oldSetting.save();
       }
     }
     await settingGroup.save();

@@ -14,6 +14,7 @@ import {
   RiLockPasswordLine,
   RiLogoutBoxLine,
   RiMenu3Line,
+  RiPriceTag3Line,
   RiShoppingCart2Line,
   RiUserHeartFill,
 } from "react-icons/ri";
@@ -150,6 +151,14 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   className="px-2 h-8 rounded-md"
                   icon={<RiBookOpenLine className="text-xs" />}
                   text={t("Hướng dẫn")}
+                />{" "}
+                {/* Bảng giá */}
+                <Button
+                  outline
+                  className="px-2 h-8 rounded-md"
+                  icon={<RiPriceTag3Line className="text-xs" />}
+                  text={t("Bảng giá")}
+                  href="/pricing"
                 />
                 {/* API Key status */}
                 <Button
