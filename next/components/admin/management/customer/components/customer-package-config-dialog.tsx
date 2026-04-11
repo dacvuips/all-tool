@@ -149,16 +149,14 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
     if (!userPermission("EDIT_CUSTOMER")) return;
     setSaving(true);
     try {
-      await CustomerService.update({
-        id: customer.id,
-        data: {
-          googlePackage: {
-            subscription: config.plan,
-            videoLimit: config.videoLimit,
-            imageLimit: config.imageLimit,
-            imageStreamCount: config.imageStreamCount,
-            videoStreamCount: config.videoStreamCount,
-          },
+      await CustomerService.customerUpdatePackage({
+        customerId: customer.id,
+        packageData: {
+          subscription: config.plan,
+          videoLimit: config.videoLimit,
+          imageLimit: config.imageLimit,
+          imageStreamCount: config.imageStreamCount,
+          videoStreamCount: config.videoStreamCount,
         },
       });
       toast.success(t("Cập nhật gói thành công"));

@@ -282,6 +282,27 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }).then((res) => res.data.g0);
   }
 
+  async customerUpdatePackage(data: {
+    customerId: string;
+    packageData: {
+      subscription?: string;
+      videoLimit?: number;
+      imageLimit?: number;
+      imageStreamCount?: number;
+      videoStreamCount?: number;
+    };
+  }) {
+    return this.mutate({
+      mutation: `customerUpdatePackage(customerId: "${data.customerId}", data: $data) { ${this.shortFragment} }`,
+      variablesParams: "($data: GooglePackageInput!)",
+      options: {
+        variables: {
+          data: data.packageData,
+        },
+      },
+    }).then((res) => res.data.g0);
+  }
+
   async accessCustomer() {
     return this.mutate({
       mutation: `accessCustomer`,

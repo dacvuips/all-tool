@@ -7,13 +7,14 @@ import { BreadCrumbs, Spinner } from "../../shared/utilities/misc";
 import { ProfileAccount } from "./components/account/profile-account";
 
 import { useTranslation } from "react-i18next";
-import { RiBankCardLine, RiImageLine, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
+import { RiBankCardLine, RiExchangeLine, RiImageLine, RiQuestionLine, RiShoppingCart2Line } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 
 import { ProfileCredential } from "./components/credential/profile-credential";
 import { ProfileMediaGallery } from "./components/media-gallery/profile-media-gallery";
 import { ProfileNotificationPage } from "./components/notification/profile-notification-page";
 import { ProfileOrderBuyPage } from "./components/order-buy/order-buy-page";
+import { ProfilePackageTransactionPage } from "./components/package-transaction/profile-package-transaction-page";
 import { ProfileTrainingPage } from "./components/training/training-page";
 import { ProfileMenu } from "./profile-menu";
 
@@ -79,6 +80,7 @@ export function ProfilePage({ ...props }) {
                       "/profile/credential": <ProfileCredential />,
                       "/profile/orders-buy": <ProfileOrderBuyPage />,
                       "/profile/media-gallery": <ProfileMediaGallery />,
+                      "/profile/package-transactions": <ProfilePackageTransactionPage />,
                     }[selectedMenu.href]
                   }
                 </>
@@ -97,6 +99,7 @@ export const ProfileMenuList = () => {
   const { t } = useTranslation();
   return [
     { label: t("Hồ sơ của tôi"), icon: <AiOutlineUser />, href: "/profile/account" },
+    { label: t("Giao dịch gói"), icon: <RiExchangeLine />, href: "/profile/package-transactions" },
     { label: t("Đơn mua"), icon: <RiShoppingCart2Line />, href: "/profile/orders-buy" },
     { label: t("Thư viện Media"), icon: <RiImageLine />, href: "/profile/media-gallery" },
     { label: t("Nạp ví"), icon: <RiBankCardLine />, href: "/checkout" },
