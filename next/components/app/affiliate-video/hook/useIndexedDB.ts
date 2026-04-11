@@ -149,6 +149,8 @@ export interface UseIndexedDBReturn<T> {
   clear: () => Promise<void>;
   /** Return all stored values */
   getAll: () => Promise<T[]>;
+  /** Return all stored entries with their keys */
+  getAllWithKeys: () => Promise<{ key: IDBValidKey; value: T }[]>;
 }
 
 /**
@@ -206,5 +208,34 @@ export function useIndexedDB<T = unknown>(
     }
   }, []);
 
-  return { set, get, remove, clear, getAll };
+  const getAllWithKeys = useCallback(async (): Promise<{ key: IDBValidKey; value: T }[]> => {
+    try {
+      const db = await ensureStore(storeRef.current, dbNameRef.current);
+      return new Promise((resolve, reject) => {
+        try {
+          const tx = db.transaction(storeRef.current, "readonly");
+          const store = tx.objectStore(storeRef.current);
+          const req = store.openCursor();
+          const results: { key: IDBValidKey; value: T }[] = [];
+          req.onsuccess = () => {
+            const cursor = req.result;
+            if (cursor) {
+              results.push({ key: cursor.key, value: cursor.value });
+              cursor.continue();
+            } else {
+              resolve(results);
+            }
+          };
+          req.onerror = () => reject(req.error);
+          tx.onerror = () => reject(tx.error);
+        } catch (err) {
+          reject(err);
+        }
+      });
+    } catch {
+      return [];
+    }
+  }, []);
+
+  return { set, get, remove, clear, getAll, getAllWithKeys };
 }
