@@ -38,7 +38,7 @@ import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/n
 import { SettingsModal } from "../components/app/affiliate-video/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
-import { parseNumber } from "../lib/helpers/parser";
+import { formatDate, parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
 import { CardMenu } from "./home-layout/components/card-menu";
@@ -119,18 +119,6 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
         <div className="w-full bg-white">
           <div className="flex flex-row justify-between items-center pr-1 pl-5 w-full h-14">
             <div className="flex flex-row justify-around items-center">
-              {!screenXl && isHomePage && (
-                <div className="pr-3 mr-1">
-                  <Button
-                    outline
-                    tooltip={t("Danh mục")}
-                    small
-                    icon={<RiMenu3Line />}
-                    className="p-0 w-8 h-8 text-xl rounded-md text-primary"
-                    onClick={() => setOpenSidebarSlideout?.(true)}
-                  />
-                </div>
-              )}
               <div className="mr-6 logo min-w-12">
                 <Link href={"/"}>
                   <img
@@ -611,30 +599,51 @@ export function NotifiCationDropdown() {
 function PackageUsageQuota() {
   const { t } = useTranslation();
   const { customer } = useAuth();
+  const packageRef = useRef();
+
+  const expiryDate = customer?.googlePackage?.expiryPackageDate;
+  const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
+  const expiryText = expiryDate
+    ? `${t("Hết hạn")}: ${formatDate(expiryDate, "datetime")}`
+    : t("Chưa có thời hạn");
 
   return (
-    <div className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2">
-      <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
-        {t("Gói")}:{" "}
-        <span className="text-gray-900">
-          {customer?.googlePackage?.subscription || t("Dùng thử")}
+    <>
+      <div
+        ref={packageRef}
+        className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2 cursor-default"
+      >
+        <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
+          {t("Gói")}:{" "}
+          <span className="text-gray-900">
+            {customer?.googlePackage?.subscription || t("Dùng thử")}
+          </span>
         </span>
-      </span>
-      <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
-        Video:{" "}
-        <span className="font-semibold  text-gray-900">
-          {customer?.googlePackage?.videoCount ?? 0}
+        <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
+          Video:{" "}
+          <span className="font-semibold  text-gray-900">
+            {customer?.googlePackage?.videoCount ?? 0}
+          </span>
+          <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
         </span>
-        <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
-      </span>
-      <span className="px-2.5 text-gray-600 whitespace-nowrap">
-        {t("Ảnh")}:{" "}
-        <span className="font-semibold   text-gray-900">
-          {customer?.googlePackage?.imageCount ?? 0}
+        <span className="px-2.5 text-gray-600 whitespace-nowrap">
+          {t("Ảnh")}:{" "}
+          <span className="font-semibold   text-gray-900">
+            {customer?.googlePackage?.imageCount ?? 0}
+          </span>
+          <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
         </span>
-        <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
-      </span>
-    </div>
+      </div>
+      <Popover reference={packageRef} trigger="hover" placement="bottom" arrow>
+        <div
+          className={`p-2 text-sm whitespace-nowrap ${
+            isExpired ? "text-red-600 font-semibold" : "text-gray-700"
+          }`}
+        >
+          {expiryText}
+        </div>
+      </Popover>
+    </>
   );
 }
 

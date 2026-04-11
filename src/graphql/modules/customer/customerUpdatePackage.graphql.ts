@@ -2,10 +2,10 @@ import { gql } from "apollo-server-express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { t } from "../../../helpers/functions/string";
 import { Scope } from "../../../libs/dal/authority";
-import { CustomerModel } from "../../../libs/dal/customer";
+import { CustomerModel, SubscriptionPlanEnum } from "../../../libs/dal/customer";
 import {
-  PackageTransactionTypeEnum,
   PackageTransactionSnapshot,
+  PackageTransactionTypeEnum,
 } from "../../../libs/dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../libs/dal/packageTransaction/package-transaction.model";
 import { Context } from "../../../libs/graphql";
@@ -58,8 +58,24 @@ export default {
           updateFields["googlePackage.videoCount"] = data.videoCount;
         if (data.imageCount !== undefined)
           updateFields["googlePackage.imageCount"] = data.imageCount;
-        if (data.expiryPackageDate !== undefined)
-          updateFields["googlePackage.expiryPackageDate"] = data.expiryPackageDate;
+
+        // Tự động tính expiryPackageDate theo loại gói
+        const subscription = data.subscription ?? pkg.subscription;
+        const now = new Date();
+        if (subscription === SubscriptionPlanEnum.FREE) {
+          // Gói Free: vô thời hạn
+          updateFields["googlePackage.expiryPackageDate"] = null;
+        } else if (subscription === SubscriptionPlanEnum.TRIAL) {
+          // Gói Trial: hạn 24 giờ
+          updateFields["googlePackage.expiryPackageDate"] = new Date(
+            now.getTime() + 24 * 60 * 60 * 1000
+          );
+        } else if (subscription) {
+          // Các gói khác: hạn 1 tháng
+          const expiryDate = new Date(now);
+          expiryDate.setMonth(expiryDate.getMonth() + 1);
+          updateFields["googlePackage.expiryPackageDate"] = expiryDate;
+        }
 
         const updatedCustomer = await CustomerModel.findByIdAndUpdate(
           customerId,
@@ -88,7 +104,9 @@ export default {
           type: PackageTransactionTypeEnum.MANUAL_ADJUST,
           before: beforeSnapshot,
           after: afterSnapshot,
-          description: `Admin cập nhật gói: ${beforeSnapshot.subscription || "N/A"} → ${afterSnapshot.subscription || "N/A"}`,
+          description: `Admin cập nhật gói: ${beforeSnapshot.subscription || "N/A"} → ${
+            afterSnapshot.subscription || "N/A"
+          }`,
         });
 
         return updatedCustomer;
