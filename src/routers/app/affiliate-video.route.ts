@@ -35,27 +35,9 @@ async function retryAICall<T>(fn: () => Promise<T>, label: string): Promise<T> {
   throw lastError;
 }
 
-/** Helper: Tạo GoogleGenAI client dùng Vertex AI */
-function createVertexAIClient(serviceAccountKeyJson: string, location = "us-central1") {
-  // Parse service account key JSON
-  let credentials: any;
-  try {
-    credentials = JSON.parse(serviceAccountKeyJson);
-  } catch {
-    throw new Error(
-      "Credential không hợp lệ: Vui lòng cung cấp Service Account Key JSON cho Vertex AI."
-    );
-  }
-
-  // Dùng Vertex AI backend với service account credentials
-  return new GoogleGenAI({
-    vertexai: true,
-    project: credentials.project_id || "vertex-ai-app-490903",
-    location,
-    googleAuthOptions: {
-      credentials,
-    },
-  });
+/** Helper: Tạo GoogleGenAI client dùng Gemini API Key */
+function createGeminiClient(apiKey: string) {
+  return new GoogleGenAI({ apiKey });
 }
 
 /**
@@ -63,8 +45,7 @@ function createVertexAIClient(serviceAccountKeyJson: string, location = "us-cent
  * Throw error nếu chưa cấu hình key.
  */
 export async function getCustomerGeminiClient(
-  customerId: string,
-  location = "us-central1"
+  customerId: string
 ): Promise<InstanceType<typeof GoogleGenAI>> {
   const credentialDoc = (await credentialService.findOne({
     customerId,
@@ -78,7 +59,7 @@ export async function getCustomerGeminiClient(
     throw err;
   }
   const apiKey = decryptProviderSecret(credential.value);
-  return createVertexAIClient(apiKey, location);
+  return createGeminiClient(apiKey);
 }
 
 /**
@@ -262,7 +243,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         // Kiểm tra giới hạn ảnh trước khi tạo
         await checkImageLimit(context.id);
 
-        const genAI = await getCustomerGeminiClient(context.id, "global");
+        const genAI = await getCustomerGeminiClient(context.id);
 
         logger.info(
           `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
@@ -327,7 +308,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
 
         const genAI = await getCustomerGeminiClient(context.id);
 
-        logger.info(`[generation-video] Gọi Veo 3.1 fast cho user ${context.id}`);
+        logger.info(`[generation-video] Gọi Veo 3 fast cho user ${context.id}`);
 
         // Setup SSE headers
         res.setHeader("Content-Type", "text/event-stream");
@@ -347,9 +328,9 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           generateAudio: body.config?.generateAudio ?? true,
         };
 
-        // Sử dụng Vertex AI với Veo 3.1 Fast (lower priority / lower cost tier)
+        // Sử dụng Gemini API với Veo 3 Fast (lower priority / lower cost tier)
         const generateParams: any = {
-          model: "veo-3.1-fast-generate-001",
+          model: "veo-3-fast-generate",
           prompt: body.prompt,
           config: generateConfig,
         };
@@ -685,7 +666,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
 
         const genAI = await getCustomerGeminiClient(context.id);
 
-        logger.info(`[extend-video] Gọi Veo 3.1 (extend mode) cho user ${context.id}`);
+        logger.info(`[extend-video] Gọi Veo 3 fast (extend mode) cho user ${context.id}`);
 
         // Setup SSE headers
         res.setHeader("Content-Type", "text/event-stream");
@@ -718,11 +699,11 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           ];
         }
 
-        // Use Veo 3.1 (non-fast) for extend mode
+        // Use Veo 3 fast for extend mode
         const finalPrompt = body.prompt?.trim() || "Continue the scene naturally";
 
         const generateParams: any = {
-          model: "veo-3.1-generate-001",
+          model: "veo-3-fast-generate",
           prompt: finalPrompt,
           config: generateConfig,
           video: body.video,
