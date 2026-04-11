@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -155,10 +154,13 @@ export function CheckoutPaymentForm() {
       {/* Sticky Toolbar */}
       <div className="sticky top-14 z-40 bg-white shadow-sm">
         <div className="flex items-center gap-4 max-w-screen-xl mx-auto px-6 py-3">
-          <Link href="/" className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary">
+          <div
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary"
+          >
             <HiArrowLeft className="text-base" />
             <span>{t("Quay lại")}</span>
-          </Link>
+          </div>
           <div className="w-px h-5 bg-gray-300" />
           <div className="flex items-center gap-2">
             <RiSecurePaymentLine className="text-xl text-green-500" />
@@ -171,7 +173,6 @@ export function CheckoutPaymentForm() {
 
       <div className="container flex flex-col flex-1 justify-center items-center mx-auto pt-4">
         <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
-
           {/* Thông báo hệ số quy đổi */}
           <NotifyText
             text={t(`Hệ số chuyển đổi: 1 credit = ${parseNumber(creditAmountSetting, true)}`)}

@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { useRouter } from "next/router";
-import { useEffect, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { BiExit } from "react-icons/bi";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { Img } from "../../shared/utilities/misc";
+import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { ProfileMenuList } from "./profile-page";
 
 export function ProfileMenu({ selectedMenu, ...props }) {
@@ -13,30 +13,11 @@ export function ProfileMenu({ selectedMenu, ...props }) {
   const router = useRouter();
   const PROFILE_MENUS = ProfileMenuList();
 
-  const tabsRef = useRef<HTMLDivElement>(null);
-  const inkbarRef = useRef<HTMLDivElement>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  // Find active index based on selectedMenu
-  useEffect(() => {
-    if (selectedMenu) {
-      const idx = PROFILE_MENUS.findIndex((m) => m.href === selectedMenu.href);
-      if (idx >= 0) setActiveIndex(idx);
-    }
+  const activeIndex = useMemo(() => {
+    if (!selectedMenu) return 0;
+    const idx = PROFILE_MENUS.findIndex((m) => m.href === selectedMenu.href);
+    return idx >= 0 ? idx : 0;
   }, [selectedMenu]);
-
-  // Animate ink bar
-  useEffect(() => {
-    if (tabsRef.current && inkbarRef.current) {
-      const tabEl = tabsRef.current.children[activeIndex] as HTMLElement;
-      if (tabEl) {
-        inkbarRef.current.style.width = `${tabEl.offsetWidth}px`;
-        inkbarRef.current.style.left = `${tabEl.offsetLeft}px`;
-        // Scroll active tab into view on mobile
-        tabEl.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-      }
-    }
-  }, [activeIndex, tabsRef.current]);
 
   return (
     <div className="bg-white rounded-xl overflow-hidden shadow-sm">
@@ -80,42 +61,36 @@ export function ProfileMenu({ selectedMenu, ...props }) {
       )}
 
       {/* Horizontal Tab Navigation */}
-      <div className="relative overflow-hidden">
-        <div className="flex overflow-x-auto no-scrollbar relative" ref={tabsRef}>
-          {PROFILE_MENUS.map((item, index) => {
-            const isActive = item.href === selectedMenu?.href;
-            return (
-              <Link
-                href={item.href}
-                key={index}
-                className={`flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-2.5 md:py-3.5 whitespace-nowrap cursor-pointer no-underline font-medium text-xs md:text-sm flex-shrink-0 border-b-2 transition-all duration-200 ${
-                  isActive
-                    ? "text-primary font-semibold border-primary bg-primary-light bg-opacity-50"
-                    : "text-gray-500 border-transparent hover:text-primary hover:bg-primary-light hover:bg-opacity-30"
-                }`}
-                onClick={() => setActiveIndex(index)}
-              >
-                <span
-                  className={`flex items-center text-base md:text-lg flex-shrink-0 transition-transform duration-200 ${
-                    isActive ? "scale-110" : ""
-                  }`}
-                >
+      <TabGroup
+        name="profile-menu"
+        index={activeIndex}
+        flex={false}
+        className="border-transparent"
+        tabClassName="px-3 md:px-5 py-2.5 md:py-3.5"
+        titleClassName="text-xs md:text-sm font-medium whitespace-nowrap"
+        bodyClassName="hidden"
+        activeClassName="font-semibold"
+        onChange={(index) => {
+          const menu = PROFILE_MENUS[index];
+          if (menu) router.push(menu.href);
+        }}
+      >
+        {PROFILE_MENUS.map((item, index) => (
+          <TabGroup.Tab
+            key={index}
+            label={
+              <span className="flex items-center gap-1.5 md:gap-2">
+                <span className="flex items-center text-base md:text-lg flex-shrink-0">
                   {item.icon}
                 </span>
                 <span className="hidden xs:inline leading-none">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-        {/* Animated Ink Bar */}
-        <div
-          className="absolute bottom-0 h-0.5 bg-gradient-to-r from-primary to-yellow-400 rounded-t-sm z-10"
-          ref={inkbarRef}
-          style={{
-            transition: "left 0.3s cubic-bezier(0.4,0,0.2,1), width 0.3s cubic-bezier(0.4,0,0.2,1)",
-          }}
-        />
-      </div>
+              </span>
+            }
+          >
+            <></>
+          </TabGroup.Tab>
+        ))}
+      </TabGroup>
     </div>
   );
 }
