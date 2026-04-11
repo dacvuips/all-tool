@@ -21,7 +21,6 @@ import {
   CustomerGenerationMediaService,
   CustomerMediaType,
 } from "../../../../../lib/repo/customer-generation-media.repo";
-import { Pagination } from "../../../../../lib/repo/crud.repo";
 import { Img } from "../../../../shared/utilities/misc";
 
 const MEDIA_TYPES: { value: CustomerMediaType | "all"; label: string; icon: JSX.Element }[] = [
@@ -87,10 +86,7 @@ export function ProfileMediaGallery() {
   const totalPages = useMemo(() => Math.ceil(total / PAGE_SIZE), [total]);
 
   const handleDelete = async (media: CustomerGenerationMedia) => {
-    const confirmed = await alert.danger(
-      t("Xác nhận xóa"),
-      t("Bạn có chắc muốn xóa media này?")
-    );
+    const confirmed = await alert.danger(t("Xác nhận xóa"), t("Bạn có chắc muốn xóa media này?"));
     if (!confirmed) return;
     try {
       await CustomerGenerationMediaService.delete({ id: media.id, toast });
@@ -126,7 +122,12 @@ export function ProfileMediaGallery() {
 
   return (
     <div className="p-4 bg-white rounded-md min-h-[400px]">
-      <h2 className="mb-4 text-xl font-bold text-accent">{t("Thư viện Media")}</h2>
+      <div className="flex gap-2 items-center px-3 py-2 border-gray-100">
+        <RiImageLine className="text-xl text-primary" />
+        <div>
+          <p className="font-semibold text-gray-800">{t("Thư viện Media")}</p>
+        </div>
+      </div>
 
       {/* Filter bar */}
       <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:items-center sm:justify-between">
@@ -283,10 +284,7 @@ function MediaCard({
   return (
     <div className="overflow-hidden transition-shadow bg-white border border-gray-100 rounded-xl group hover:shadow-lg">
       {/* Thumbnail */}
-      <div
-        className="relative cursor-pointer aspect-square bg-gray-50"
-        onClick={onPreview}
-      >
+      <div className="relative cursor-pointer aspect-square bg-gray-50" onClick={onPreview}>
         {media.type === "image" && (
           <Img
             src={media.url}

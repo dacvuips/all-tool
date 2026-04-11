@@ -3,7 +3,7 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineMail, AiOutlineMobile, AiOutlineUser } from "react-icons/ai";
-import { RiCameraSwitchFill, RiLockPasswordLine } from "react-icons/ri";
+import { RiCameraSwitchFill, RiLockPasswordLine, RiUser2Line } from "react-icons/ri";
 import { useHomeLayoutContext } from "../../../../../layouts/home-layout/provider/home-layout-provider";
 import { uploadImage } from "../../../../../lib/helpers/image";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
@@ -61,9 +61,12 @@ export function ProfileAccount({ ...props }) {
 
   return (
     <div className="p-4 text-base bg-white rounded-md text-accent ">
-      {screenLg && (
-        <div className="my-5 text-lg font-semibold leading-7 text-accent">{t("Hồ sơ của tôi")}</div>
-      )}
+      <div className="flex gap-2 items-center px-1 pb-2 border-gray-100">
+        <RiUser2Line className="text-xl text-primary" />
+        <div>
+          <p className="font-semibold text-gray-800">{t("Hồ sơ của tôi")}</p>
+        </div>
+      </div>
 
       <div className="flex flex-row items-center justify-between overflow-hidden">
         <div className="flex flex-row items-center">

@@ -63,9 +63,9 @@ export function ProfilePage({ ...props }) {
           ]}
         />
       </div>
-      <div className="flex justify-between">
+      <div className="flex flex-col">
         <ProfileMenu selectedMenu={selectedMenu} />
-        <div className="flex-1 ml-5">
+        <div className="flex-1 mt-2 ">
           {
             <div className="">
               {selectedMenu ? (
