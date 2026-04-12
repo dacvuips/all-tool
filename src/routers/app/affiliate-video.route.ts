@@ -11,6 +11,15 @@ import { AffiliateVideoResponseSchema } from "./constanst";
 
 const AI_MAX_RETRIES = 5;
 
+/** Generate a simple UUID v4 string */
+function generateUUID(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 /**
  * Helper: Gọi lại AI API tối đa AI_MAX_RETRIES lần nếu có lỗi.
  * Chỉ throw error nếu tất cả các lần gọi đều thất bại.
@@ -25,6 +34,14 @@ async function retryAICall<T>(fn: () => Promise<T>, label: string): Promise<T> {
       logger.warn(
         `[${label}] AI call failed (attempt ${attempt}/${AI_MAX_RETRIES}): ${err?.message}`
       );
+
+      // Không retry nếu lỗi 403 (permission/reCAPTCHA) hoặc 401 (auth) vì retry cũng không giải quyết được
+      const errStatus = err?.statusCode || err?.status;
+      if (errStatus === 403 || errStatus === 401) {
+        logger.warn(`[${label}] Lỗi xác thực (${errStatus}), không retry thêm.`);
+        break;
+      }
+
       if (attempt === AI_MAX_RETRIES) {
         break;
       }
@@ -60,6 +77,43 @@ export async function getCustomerGeminiClient(
   }
   const apiKey = decryptProviderSecret(credential.value);
   return createGeminiClient(apiKey);
+}
+
+/**
+ * Helper: Lấy Google Labs Access Token và Project ID của customer.
+ * Throw error nếu chưa cấu hình.
+ */
+export async function getCustomerGoogleLabsCredentials(
+  customerId: string
+): Promise<{ accessToken: string; projectId: string }> {
+  const [tokenDoc, projectDoc] = await Promise.all([
+    credentialService.findOne({
+      customerId,
+      key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
+      isCustomerCredential: true,
+    }),
+    credentialService.findOne({
+      customerId,
+      key: AiProviderKeyEnum.GOOGLE_LABS_PROJECT_ID,
+      isCustomerCredential: true,
+    }),
+  ]);
+  const tokenCred = (tokenDoc as any)?._doc;
+  const projectCred = (projectDoc as any)?._doc;
+  if (!tokenCred?.value) {
+    const err: any = new Error("Chưa cấu hình Google Labs Access Token");
+    err.statusCode = 403;
+    throw err;
+  }
+  if (!projectCred?.value) {
+    const err: any = new Error("Chưa cấu hình Google Labs Project ID");
+    err.statusCode = 403;
+    throw err;
+  }
+  return {
+    accessToken: decryptProviderSecret(tokenCred.value),
+    projectId: decryptProviderSecret(projectCred.value),
+  };
 }
 
 /**
@@ -219,6 +273,69 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
       }
     },
   },
+  // {
+  //   method: "post",
+  //   path: "/api/app/generation-image/",
+  //   midd: [],
+  //   action: async (req: Request, res: Response) => {
+  //     try {
+  //       const context = new Context({ req });
+  //       context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+
+  //       const body = req.body as {
+  //         prompt: string;
+  //         config?: {
+  //           numberOfImages?: number;
+  //           aspectRatio?: string;
+  //         };
+  //       };
+
+  //       if (!body?.prompt) {
+  //         return res.status(400).json({ message: "Thiếu prompt" });
+  //       }
+
+  //       // Kiểm tra giới hạn ảnh trước khi tạo
+  //       await checkImageLimit(context.id);
+
+  //       const genAI = await getCustomerGeminiClient(context.id);
+
+  //       logger.info(
+  //         `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
+  //       );
+
+  //       const response = await retryAICall(
+  //         () =>
+  //           genAI.models.generateContent({
+  //             model: "gemini-3.1-flash-image-preview",
+  //             contents: [{ role: "user", parts: [{ text: body.prompt }] }],
+  //             config: {
+  //               responseModalities: ["IMAGE"],
+  //             } as any,
+  //           }),
+  //         "generation-image"
+  //       );
+
+  //       // Extract images from response candidate parts
+  //       const parts = (response as any).candidates?.[0]?.content?.parts || [];
+  //       const images = parts
+  //         .filter((part: any) => part.inlineData)
+  //         .map((part: any) => ({
+  //           imageBytes: part.inlineData.data,
+  //           mimeType: part.inlineData.mimeType || "image/png",
+  //         }));
+
+  //       // Tạo ảnh thành công → tăng imageCount
+  //       await incrementImageCount(context.id);
+
+  //       res.json({ success: true, data: images });
+  //     } catch (err: any) {
+  //       logger.error(`[generation-image] Lỗi: ${err?.message}`);
+  //       const status = err?.statusCode || 500;
+  //       res.status(status).json({ message: err?.message || "Lỗi server" });
+  //     }
+  //   },
+  // },
+
   {
     method: "post",
     path: "/api/app/generation-image/",
@@ -226,8 +343,10 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
     action: async (req: Request, res: Response) => {
       try {
         const context = new Context({ req });
+        const endPoint = "https://aisandbox-pa.googleapis.com/v1/projects";
+        const params = "flowMedia:batchGenerateImages";
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
-
+        const imageModelName = "NARWHAL";
         const body = req.body as {
           prompt: string;
           config?: {
@@ -243,32 +362,133 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         // Kiểm tra giới hạn ảnh trước khi tạo
         await checkImageLimit(context.id);
 
-        const genAI = await getCustomerGeminiClient(context.id);
+        // Lấy captcha + credentials từ Cliproxy API
+        const captchaResp = await fetch("http://cliproxy.io.vn/captcha?action=IMAGE_GENERATION");
 
-        logger.info(
-          `[generation-image] Gọi Banana 2 (gemini-3.1-flash-image-preview) cho user ${context.id}`
+        const captchaData = (await captchaResp.json()) as {
+          Time: string;
+          Gmail: string;
+          ProjectID: string;
+          sessionId: string;
+          captcha: string;
+          accessToken: string;
+          Cookie: string;
+        };
+
+        if (!captchaData?.captcha) {
+          const err: any = new Error(`Không lấy được captcha/credentials từ Cliproxy API`);
+          err.statusCode = 500;
+          throw err;
+        }
+        const { accessToken, projectId } = await getCustomerGoogleLabsCredentials(context.id);
+        const recaptchaToken = captchaData.captcha;
+
+        const sessionId = Date.now().toString();
+
+        // Map aspectRatio sang format Google Labs
+        const aspectRatioInput = body.config?.aspectRatio || "9:16";
+        let imageAspectRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE";
+        if (aspectRatioInput === "16:9" || aspectRatioInput === "landscape") {
+          imageAspectRatio = "IMAGE_ASPECT_RATIO_LANDSCAPE";
+        } else if (aspectRatioInput === "1:1" || aspectRatioInput === "square") {
+          imageAspectRatio = "IMAGE_ASPECT_RATIO_SQUARE";
+        } else if (aspectRatioInput === "9:16" || aspectRatioInput === "portrait") {
+          imageAspectRatio = "IMAGE_ASPECT_RATIO_PORTRAIT";
+        }
+
+        // Tạo payload theo cấu trúc Google Labs API
+        const numberOfImages = body.config?.numberOfImages || 1;
+        const batchId = crypto.randomUUID();
+
+        const clientContext = {
+          recaptchaContext: {
+            token: recaptchaToken,
+            applicationType: "RECAPTCHA_APPLICATION_TYPE_WEB",
+          },
+          projectId,
+          tool: "PINHOLE",
+          sessionId,
+        };
+
+        // Build inner requests array (one per image)
+        const imageRequests: any[] = [];
+        for (let i = 0; i < numberOfImages; i++) {
+          const seed = Math.floor(Math.random() * 1000000);
+          imageRequests.push({
+            clientContext,
+            imageModelName,
+            imageAspectRatio,
+            structuredPrompt: {
+              parts: [{ text: body.prompt }],
+            },
+            seed,
+            imageInputs: [],
+          });
+        }
+
+        // Top-level payload for batchGenerateImages
+        const payload = {
+          clientContext,
+          mediaGenerationContext: {
+            batchId,
+          },
+          useNewMedia: true,
+          requests: imageRequests,
+        };
+
+        const endpoint = `${endPoint}/${projectId}/${params}`;
+        const response = await retryAICall(async () => {
+          const resp = await fetch(endpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          if (!resp.ok) {
+            const errText = await resp.text();
+            const err: any = new Error(`Google Labs API error ${resp.status}: ${errText}`);
+            err.statusCode = resp.status;
+            throw err;
+          }
+          return resp.json();
+        }, "generation-image");
+
+        // Extract images từ response Google Labs
+        // Response trả về { media: [{ image: { generatedImage: { fifeUrl: "..." } } }] }
+        console.log(JSON.stringify(response, null, 2));
+        const mediaItems = (response as any)?.media || [];
+
+        if (mediaItems.length === 0) {
+          const err: any = new Error("Không nhận được ảnh từ Google Labs API");
+          err.statusCode = 500;
+          throw err;
+        }
+
+        // Fetch từng ảnh từ fifeUrl và convert sang base64
+        const images = await Promise.all(
+          mediaItems.map(async (item: any) => {
+            const fifeUrl = item?.image?.generatedImage?.fifeUrl;
+            if (fifeUrl) {
+              // Fetch image binary từ Google Storage URL
+              const imgResp = await fetch(fifeUrl);
+              if (!imgResp.ok) {
+                logger.warn(`[generation-image] Không thể fetch ảnh từ fifeUrl: ${imgResp.status}`);
+                return { imageUrl: fifeUrl };
+              }
+              const imgBuffer = await imgResp.arrayBuffer();
+              const base64 = Buffer.from(imgBuffer).toString("base64");
+              const contentType = imgResp.headers.get("content-type") || "image/png";
+              return {
+                imageBytes: base64,
+                mimeType: contentType,
+              };
+            }
+            // Fallback: trả về toàn bộ object
+            return item;
+          })
         );
-
-        const response = await retryAICall(
-          () =>
-            genAI.models.generateContent({
-              model: "gemini-3.1-flash-image-preview",
-              contents: [{ role: "user", parts: [{ text: body.prompt }] }],
-              config: {
-                responseModalities: ["IMAGE"],
-              } as any,
-            }),
-          "generation-image"
-        );
-
-        // Extract images from response candidate parts
-        const parts = (response as any).candidates?.[0]?.content?.parts || [];
-        const images = parts
-          .filter((part: any) => part.inlineData)
-          .map((part: any) => ({
-            imageBytes: part.inlineData.data,
-            mimeType: part.inlineData.mimeType || "image/png",
-          }));
 
         // Tạo ảnh thành công → tăng imageCount
         await incrementImageCount(context.id);
@@ -299,6 +519,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
           };
         };
 
+        //hàm import ở đây
         if (!body?.prompt) {
           return res.status(400).json({ message: "Thiếu prompt" });
         }

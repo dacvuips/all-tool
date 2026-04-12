@@ -151,6 +151,42 @@ export function ZoomModal({ src, mediaType = "image", onClose }: ZoomModalProps)
 
 /* ═══════════════════════════════════════════════════════════ SettingsModal */
 
+interface CredentialTab {
+  key: AiProviderKeyEnum;
+  label: string;
+  placeholder: string;
+  helpUrl?: string;
+  helpLabel?: string;
+  inputType?: string;
+  description?: string;
+}
+
+const CREDENTIAL_TABS: CredentialTab[] = [
+  {
+    key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+    label: "Gemini API Key",
+    placeholder: "AIza...",
+    helpUrl: "https://aistudio.google.com/app/apikey",
+    helpLabel: "aistudio.google.com",
+    description: "Dùng cho tạo kịch bản và video (Gemini / Veo)",
+  },
+  {
+    key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
+    label: "Google Labs Token",
+    placeholder: "ya29...",
+    helpUrl: "https://aisandbox.google.com",
+    helpLabel: "aisandbox.google.com",
+    description: "Access Token cho tạo ảnh (GEM PIX 2)",
+  },
+  {
+    key: AiProviderKeyEnum.GOOGLE_LABS_PROJECT_ID,
+    label: "Google Labs Project ID",
+    placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    inputType: "text",
+    description: "Project ID từ Google Labs Sandbox",
+  },
+];
+
 export function SettingsModal({
   credentialId,
   credentialActive,
@@ -164,47 +200,100 @@ export function SettingsModal({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const [keyVal, setKeyVal] = useState("");
+
+  // Per-tab state
+  const [tabCreds, setTabCreds] = useState<
+    Record<string, { id: string | null; active: boolean; loaded: boolean }>
+  >({});
+  const [editingTab, setEditingTab] = useState<string | null>(null);
+  const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [activeTabKey, setActiveTabKey] = useState(CREDENTIAL_TABS[0].key);
 
-  const hasCredential = !!credentialId;
+  // Seed Gemini tab from parent props
+  useEffect(() => {
+    setTabCreds((prev) => ({
+      ...prev,
+      [AiProviderKeyEnum.GOOGLE_GEMINI_KEY]: {
+        id: credentialId,
+        active: credentialActive,
+        loaded: true,
+      },
+    }));
+  }, [credentialId, credentialActive]);
 
-  const handleSaveKey = async () => {
-    if (!keyVal.trim()) return;
+  // Load Labs credentials on mount
+  useEffect(() => {
+    const loadLabsCreds = async () => {
+      for (const tab of CREDENTIAL_TABS) {
+        if (tab.key === AiProviderKeyEnum.GOOGLE_GEMINI_KEY) continue; // already seeded
+        try {
+          const cred = await credentialCustomerService.getCredentialByKey(tab.key);
+          setTabCreds((prev) => ({
+            ...prev,
+            [tab.key]: {
+              id: cred?.id || null,
+              active: !!cred?.active,
+              loaded: true,
+            },
+          }));
+        } catch {
+          setTabCreds((prev) => ({
+            ...prev,
+            [tab.key]: { id: null, active: false, loaded: true },
+          }));
+        }
+      }
+    };
+    loadLabsCreds();
+  }, []);
+
+  const handleSave = async (tabKey: AiProviderKeyEnum) => {
+    const val = (inputValues[tabKey] || "").trim();
+    if (!val) return;
     setSaving(true);
     try {
-      if (hasCredential) {
+      const existing = tabCreds[tabKey];
+      if (existing?.id) {
         await credentialCustomerService.update({
-          id: credentialId!,
-          data: { value: keyVal.trim(), key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY },
+          id: existing.id,
+          data: { value: val, key: tabKey },
           toast,
         });
       } else {
         await credentialCustomerService.create({
-          data: {
-            key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-            value: keyVal.trim(),
-            active: true,
-          },
+          data: { key: tabKey, value: val, active: true },
           toast,
         });
       }
-      setKeyVal("");
-      setEditMode(false);
+      setInputValues((prev) => ({ ...prev, [tabKey]: "" }));
+      setEditingTab(null);
+      // Refresh this tab's credential
+      try {
+        const cred = await credentialCustomerService.getCredentialByKey(tabKey);
+        setTabCreds((prev) => ({
+          ...prev,
+          [tabKey]: { id: cred?.id || null, active: !!cred?.active, loaded: true },
+        }));
+      } catch {}
       onCredentialChange();
     } catch {
-      // toast đã hiển thị lỗi
+      // toast already shows error
     } finally {
       setSaving(false);
     }
   };
 
+  const activeTab = CREDENTIAL_TABS.find((t) => t.key === activeTabKey)!;
+  const cred = tabCreds[activeTabKey];
+  const hasCred = !!cred?.id;
+  const isEditing = editingTab === activeTabKey;
+
   return (
     <Dialog
       isOpen
       onClose={onClose}
-      width={460}
+      width={520}
       slideFromBottom="none"
       dialogClass="relative overflow-hidden rounded-2xl bg-white shadow-lg"
       hasCloseIcon
@@ -217,11 +306,11 @@ export function SettingsModal({
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base font-bold text-gray-800 leading-tight">
-              {t("Cài đặt Gemini API Key")}
+              {t("Cài đặt API Credentials")}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
               <RiShieldCheckLine className="text-green-500 flex-shrink-0" />
-              {t("API Key được lưu trên server, an toàn hơn lưu trình duyệt.")}
+              {t("Credentials được mã hóa và lưu trên server.")}
             </p>
           </div>
         </div>
@@ -235,9 +324,49 @@ export function SettingsModal({
       </Dialog.Header>
       <Dialog.Body>
         <div className="p-1">
+          {/* ── Tabs ── */}
+          <div className="flex gap-1 mb-4 bg-gray-50 rounded-xl p-1 border border-gray-100">
+            {CREDENTIAL_TABS.map((tab) => {
+              const tc = tabCreds[tab.key];
+              const isActive = tab.key === activeTabKey;
+              const hasVal = !!tc?.id;
+              const isOk = hasVal && tc?.active;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => {
+                    setActiveTabKey(tab.key);
+                    setEditingTab(null);
+                  }}
+                  className={`flex-1 text-xs font-medium py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    isActive
+                      ? "bg-white shadow-sm text-gray-800 border border-gray-200"
+                      : "text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent"
+                  }`}
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                      isOk ? "bg-green-500" : hasVal ? "bg-amber-400" : "bg-gray-300"
+                    }`}
+                  />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* ── Description ── */}
+          {activeTab.description && (
+            <p className="text-xs text-gray-400 mb-3 px-1">{t(activeTab.description)}</p>
+          )}
+
           {/* ── Content ── */}
-          {hasCredential && !editMode ? (
-            /* ── Credential exists → show masked key + status ── */
+          {!cred?.loaded ? (
+            <div className="flex items-center justify-center py-6">
+              <span className="text-xs text-gray-400">{t("Đang tải...")}</span>
+            </div>
+          ) : hasCred && !isEditing ? (
+            /* ── Credential exists → show masked + status ── */
             <div className="space-y-3">
               <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gray-50 border border-gray-100">
                 <RiEyeOffLine className="text-gray-400 flex-shrink-0" />
@@ -246,12 +375,12 @@ export function SettingsModal({
                 </span>
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold ${
-                    credentialActive
+                    cred.active
                       ? "bg-green-50 text-green-600 border border-green-200"
                       : "bg-red-50 text-red-600 border border-red-200"
                   }`}
                 >
-                  {credentialActive ? (
+                  {cred.active ? (
                     <>
                       <RiCheckLine /> {t("Active")}
                     </>
@@ -262,9 +391,9 @@ export function SettingsModal({
               </div>
               <div className="flex justify-end">
                 <Button
-                  onClick={() => setEditMode(true)}
+                  onClick={() => setEditingTab(activeTabKey)}
                   icon={<RiEditLine />}
-                  text={t("Cập nhật key")}
+                  text={t("Cập nhật")}
                   outline
                   className="justify-end"
                   info
@@ -274,51 +403,57 @@ export function SettingsModal({
           ) : (
             /* ── No credential or editing → input form ── */
             <div className="space-y-3">
-              {hasCredential && (
-                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg py-2">
-                  {t("Nhập key mới để cập nhật")}
+              {hasCred && (
+                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg py-2 px-3">
+                  {t("Nhập giá trị mới để cập nhật")}
                 </p>
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">API Key</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  {activeTab.label}
+                </label>
                 <input
-                  type="password"
-                  value={keyVal}
-                  onChange={(e) => setKeyVal(e.target.value)}
-                  placeholder="AIza..."
-                  onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
+                  type={activeTab.inputType || "password"}
+                  value={inputValues[activeTabKey] || ""}
+                  onChange={(e) =>
+                    setInputValues((prev) => ({ ...prev, [activeTabKey]: e.target.value }))
+                  }
+                  placeholder={activeTab.placeholder}
+                  onKeyDown={(e) => e.key === "Enter" && handleSave(activeTabKey)}
                   className="w-full rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm px-4 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder-gray-400"
                 />
               </div>
 
-              <p className="text-xs text-gray-400 flex items-center gap-1">
-                {t("Lấy key tại")}{" "}
-                <a
-                  href="https://aistudio.google.com/app/apikey"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-0.5 text-indigo-500 hover:text-indigo-600 font-medium no-underline hover:underline transition-colors"
-                >
-                  aistudio.google.com
-                  <RiExternalLinkLine className="text-xs" />
-                </a>
-              </p>
+              {activeTab.helpUrl && (
+                <p className="text-xs text-gray-400 flex items-center gap-1">
+                  {t("Lấy tại")}{" "}
+                  <a
+                    href={activeTab.helpUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-0.5 text-indigo-500 hover:text-indigo-600 font-medium no-underline hover:underline transition-colors"
+                  >
+                    {activeTab.helpLabel || activeTab.helpUrl}
+                    <RiExternalLinkLine className="text-xs" />
+                  </a>
+                </p>
+              )}
 
               <div className="flex gap-2 pt-1 justify-end">
                 <Button
-                  onClick={handleSaveKey}
-                  disabled={saving || !keyVal.trim()}
+                  onClick={() => handleSave(activeTabKey)}
+                  disabled={saving || !(inputValues[activeTabKey] || "").trim()}
                   primary
                   icon={<RiSaveLine />}
                   isLoading={saving}
-                  text={t("Lưu key")}
+                  text={t("Lưu")}
                 ></Button>
-                {hasCredential && (
+                {hasCred && (
                   <Button
                     onClick={() => {
-                      setEditMode(false);
-                      setKeyVal("");
+                      setEditingTab(null);
+                      setInputValues((prev) => ({ ...prev, [activeTabKey]: "" }));
                     }}
                     outline
                     text={t("Hủy")}
@@ -332,3 +467,4 @@ export function SettingsModal({
     </Dialog>
   );
 }
+
