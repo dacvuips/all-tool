@@ -100,8 +100,8 @@ export async function getCustomerOpenAIKey(customerId: string): Promise<string> 
  */
 export async function getCustomerGoogleLabsCredentials(
   customerId: string
-): Promise<{ accessToken: string; projectId: string }> {
-  const [tokenDoc, projectDoc] = await Promise.all([
+): Promise<{ accessToken: string; projectId: string; geminiAPIKey: string }> {
+  const [tokenDoc, projectDoc, geminiAPIKeyDoc] = await Promise.all([
     credentialService.findOne({
       customerId,
       key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
@@ -110,6 +110,11 @@ export async function getCustomerGoogleLabsCredentials(
     credentialService.findOne({
       customerId,
       key: AiProviderKeyEnum.GOOGLE_LABS_PROJECT_ID,
+      isCustomerCredential: true,
+    }),
+    credentialService.findOne({
+      customerId,
+      key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
       isCustomerCredential: true,
     }),
   ]);
@@ -128,6 +133,7 @@ export async function getCustomerGoogleLabsCredentials(
   return {
     accessToken: decryptProviderSecret(tokenCred.value),
     projectId: decryptProviderSecret(projectCred.value),
+    geminiAPIKey: decryptProviderSecret(geminiAPIKeyDoc?.value),
   };
 }
 

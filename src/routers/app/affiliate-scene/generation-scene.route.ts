@@ -1,3 +1,4 @@
+import { GoogleGenAI } from "@google/genai";
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
@@ -29,7 +30,8 @@ export default [
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const { accessToken } = await getCustomerGoogleLabsCredentials(context.id);
+        const { geminiAPIKey } = await getCustomerGoogleLabsCredentials(context.id);
+        const ai = new GoogleGenAI({ apiKey: geminiAPIKey });
 
         const prompt = `
 
@@ -58,42 +60,25 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
 
         logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
-        console.log(interpolatedText);
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
-
-        const result = await retryAICall(async () => {
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: interpolatedText }] }],
-              generationConfig: {
+        const response = await retryAICall(
+          () =>
+            ai.models.generateContent({
+              model: "gemini-2.5-flash",
+              contents: interpolatedText,
+              config: {
                 responseMimeType: "application/json",
                 responseSchema: AffiliateVideoResponseSchema,
               },
             }),
-          });
+          "generation-scene"
+        );
 
-          if (!response.ok) {
-            const errText = await response.text();
-            const err: any = new Error(`Gemini API error ${response.status}: ${errText}`);
-            err.statusCode = response.status;
-            throw err;
-          }
-
-          return response.json();
-        }, "generation-scene");
-
-        const responseText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
         let parsed: any;
         try {
-          parsed = JSON.parse(responseText || "{}");
+          parsed = JSON.parse(response.text || "{}");
         } catch {
-          parsed = { raw: responseText };
+          parsed = { raw: response.text };
         }
 
         res.json({ success: true, data: parsed });
