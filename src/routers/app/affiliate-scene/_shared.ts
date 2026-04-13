@@ -31,10 +31,10 @@ export async function retryAICall<T>(fn: () => Promise<T>, label: string): Promi
         `[${label}] AI call failed (attempt ${attempt}/${AI_MAX_RETRIES}): ${err?.message}`
       );
 
-      // Không retry nếu lỗi 403 (permission/reCAPTCHA) hoặc 401 (auth) vì retry cũng không giải quyết được
+      // Không retry nếu lỗi 403 (permission/reCAPTCHA), 401 (auth), hoặc 429 (hết quota) vì retry cũng không giải quyết được
       const errStatus = err?.statusCode || err?.status;
-      if (errStatus === 403 || errStatus === 401) {
-        logger.warn(`[${label}] Lỗi xác thực (${errStatus}), không retry thêm.`);
+      if (errStatus === 403 || errStatus === 401 || errStatus === 429) {
+        logger.warn(`[${label}] Lỗi không thể retry (${errStatus}), dừng ngay.`);
         break;
       }
 
@@ -73,6 +73,25 @@ export async function getCustomerGeminiClient(
   }
   const apiKey = decryptProviderSecret(credential.value);
   return createGeminiClient(apiKey);
+}
+
+/**
+ * Helper: Lấy OpenAI API Key của customer, giải mã và trả về.
+ * Throw error nếu chưa cấu hình key.
+ */
+export async function getCustomerOpenAIKey(customerId: string): Promise<string> {
+  const credentialDoc = (await credentialService.findOne({
+    customerId,
+    key: AiProviderKeyEnum.OPENAI_KEY,
+    isCustomerCredential: true,
+  })) as any;
+  const credential = credentialDoc?._doc;
+  if (!credential?.value) {
+    const err: any = new Error("Chưa cấu hình OpenAI API Key");
+    err.statusCode = 403;
+    throw err;
+  }
+  return decryptProviderSecret(credential.value);
 }
 
 /**

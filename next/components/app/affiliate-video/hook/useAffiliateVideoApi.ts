@@ -234,7 +234,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
     async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string }) => {
-      const res = await fetch("/api/app/generation-scene/", {
+      const res = await fetch("/api/app/generation-scene-chatgpt/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

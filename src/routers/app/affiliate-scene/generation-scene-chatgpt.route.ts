@@ -5,7 +5,7 @@ import { Context } from "../../../libs/graphql";
 import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   AffiliateVideoFormConfig,
-  getCustomerGoogleLabsCredentials,
+  getCustomerOpenAIKey,
   interpolateTemplate,
   retryAICall,
 } from "./_shared";
@@ -13,7 +13,7 @@ import {
 export default [
   {
     method: "post",
-    path: "/api/app/generation-scene/",
+    path: "/api/app/generation-scene-chatgpt/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -23,13 +23,14 @@ export default [
         const body = req.body as {
           config: AffiliateVideoFormConfig;
           text: string;
+          model?: string;
         };
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const { accessToken } = await getCustomerGoogleLabsCredentials(context.id);
+        const openaiKey = await getCustomerOpenAIKey(context.id);
 
         const prompt = `
 
@@ -57,38 +58,50 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         // Thay thế placeholder trong text
         const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
 
-        logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
+        // Xây dựng system prompt yêu cầu trả về JSON theo schema
+        const systemPrompt = `You are a professional video scene generation assistant. You MUST respond with valid JSON only, no markdown, no explanation, no code block.
+The JSON response MUST strictly follow this schema:
+${JSON.stringify(AffiliateVideoResponseSchema, null, 2)}
+
+Required top-level fields: "topicTitle", "characterBaseDescription", "scenes".
+Each scene must have: "sceneNumber", "visualPrompt", "imageGenPrompt", "motionPrompt", "dialogue".`;
+
+        const model = body.model || "gpt-4o";
+
+        logger.info(`[generation-scene-chatgpt] Gọi ChatGPT (${model}) cho user ${context.id}`);
         console.log(interpolatedText);
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`;
+        const url = "https://api.openai.com/v1/chat/completions";
 
         const result = await retryAICall(async () => {
           const response = await fetch(url, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${accessToken}`,
+              Authorization: `Bearer ${openaiKey}`,
             },
             body: JSON.stringify({
-              contents: [{ role: "user", parts: [{ text: interpolatedText }] }],
-              generationConfig: {
-                responseMimeType: "application/json",
-                responseSchema: AffiliateVideoResponseSchema,
-              },
+              model,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: interpolatedText },
+              ],
+              response_format: { type: "json_object" },
+              temperature: 0.7,
             }),
           });
 
           if (!response.ok) {
             const errText = await response.text();
-            const err: any = new Error(`Gemini API error ${response.status}: ${errText}`);
+            const err: any = new Error(`ChatGPT API error ${response.status}: ${errText}`);
             err.statusCode = response.status;
             throw err;
           }
 
           return response.json();
-        }, "generation-scene");
+        }, "generation-scene-chatgpt");
 
-        const responseText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const responseText = result?.choices?.[0]?.message?.content;
         let parsed: any;
         try {
           parsed = JSON.parse(responseText || "{}");
@@ -98,7 +111,7 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
 
         res.json({ success: true, data: parsed });
       } catch (err: any) {
-        logger.error(`[generation-scene] Lỗi: ${err?.message}`);
+        logger.error(`[generation-scene-chatgpt] Lỗi: ${err?.message}`);
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }
