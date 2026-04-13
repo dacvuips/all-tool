@@ -188,7 +188,7 @@ const schema = gql`
     required: Boolean
     clearable: Boolean
     options: [PropertySelectOption]
-  }
+  } 
   enum AiProviderKeyEnum {
     OPENAI_KEY
     CLAUDE_KEY
