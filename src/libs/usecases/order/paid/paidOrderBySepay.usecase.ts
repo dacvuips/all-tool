@@ -128,10 +128,10 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
       { new: true }
     );
 
-    if (!!order.customerId && order.creditAmount > 0) {
+    if (!!order.customerId && order.totalAmount > 0) {
       const customer = await CustomerModel.findByIdAndUpdate(
         order.customerId,
-        { $inc: { creditBalance: order.creditAmount } },
+        { $inc: { creditBalance: order.totalAmount } },
         { new: true }
       );
 
@@ -143,10 +143,10 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
       await creditTransactionService.create({
         customerId: order.customerId.toString(),
         type: CreditTransactionTypeEnum.ORDER_TOPUP,
-        amount: order.creditAmount,
+        amount: order.totalAmount,
         balanceAfter,
         orderId: order._id.toString(),
-        description: `Cộng ${order.creditAmount} credit từ thanh toán đơn hàng ${order.orderNumber}`,
+        description: `Cộng ${order.totalAmount} credit từ thanh toán đơn hàng ${order.orderNumber}`,
       });
     }
 

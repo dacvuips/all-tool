@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft, HiCheck } from "react-icons/hi";
@@ -105,6 +106,7 @@ const PLAN_META: Record<
 
 export default function PricingPage() {
   const { t } = useTranslation();
+  const router = useRouter();
   const { customer } = useAuth();
   const [loading, setLoading] = useState(true);
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
@@ -264,11 +266,16 @@ export default function PricingPage() {
                     <button className="pricing-card__btn pricing-card__btn--current" disabled>
                       {t("Đang sử dụng")}
                     </button>
+                  ) : config.plan === SubscriptionPlanEnum.TRIAL ? (
+                    <button className="pricing-card__btn pricing-card__btn--current" disabled>
+                      {t("Liên hệ admin")}
+                    </button>
                   ) : (
                     <button
                       className={`pricing-card__btn ${
                         isHighlight ? "pricing-card__btn--highlight" : "pricing-card__btn--default"
                       }`}
+                      onClick={() => router.push(`/checkout?subscription=${config.plan}`)}
                     >
                       {t("Đăng Ký Ngay")}
                     </button>

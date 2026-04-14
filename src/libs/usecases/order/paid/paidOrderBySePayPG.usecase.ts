@@ -6,19 +6,24 @@ import { NotificationBuilder } from "../../../../graphql/modules/notification/no
 import { OrderChangeEventEnum } from "../../../../graphql/modules/order/orderChangeStream.graphql";
 import { t } from "../../../../helpers/functions/string";
 import { MainConnection } from "../../../../helpers/mongo";
-import { BaseCommand, BaseUsecase } from "../../../core";
-import { ForbiddenError } from "../../../core/errors";
-import { CreditTransactionTypeEnum, creditTransactionService } from "../../../dal/creditTransaction";
-import { CustomerModel } from "../../../dal/customer";
-import { InsertNotification, NotificationTarget } from "../../../dal/notification";
-import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
-import { OrderModel } from "../../../dal/order/order.model";
-import { pubsub } from "../../../graphql/pub-sub";
 import {
   SePayPGIPNPayload,
   SePayPGNotificationType,
   SePayPGOrderStatus,
 } from "../../../../services/sepayPG/sepayPG.service";
+import { BaseCommand, BaseUsecase } from "../../../core";
+import { ForbiddenError } from "../../../core/errors";
+import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
+import { InsertNotification, NotificationTarget } from "../../../dal/notification";
+import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
+import { OrderModel } from "../../../dal/order/order.model";
+import {
+  PackageTransactionSnapshot,
+  PackageTransactionTypeEnum,
+} from "../../../dal/packageTransaction/package-transaction.interface";
+import { PackageTransactionModel } from "../../../dal/packageTransaction/package-transaction.model";
+import { SettingModel } from "../../../dal/setting/setting.model";
+import { pubsub } from "../../../graphql/pub-sub";
 
 /**
  * Command chứa payload IPN từ SePay PG
@@ -64,10 +69,6 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       return this._handleOrderPaid(command);
     }
 
-    if (notification_type === SePayPGNotificationType.TRANSACTION_VOID) {
-      return this._handleTransactionVoid(command);
-    }
-
     // Loại thông báo không xử lý → bỏ qua, trả về 200 để SePay không retry
     return { success: true };
   }
@@ -75,13 +76,17 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
   // ─────────────────────────────────────────────────────────────────────────
   // ORDER_PAID: Thanh toán thành công
   // ─────────────────────────────────────────────────────────────────────────
-  private async _handleOrderPaid(command: PaidOrderBySePayPGCommand): Promise<PaidOrderBySePayPGResponse> {
+  private async _handleOrderPaid(
+    command: PaidOrderBySePayPGCommand
+  ): Promise<PaidOrderBySePayPGResponse> {
     const { order_invoice_number, order_status } = command.order;
     const { transaction_id, transaction_amount, payment_method } = command.transaction;
 
     // Validate: SePay phải báo trạng thái CAPTURED
     if (order_status !== SePayPGOrderStatus.CAPTURED) {
-      throw new ForbiddenError(t(`ORDER_PAID nhưng order_status không phải CAPTURED: ${order_status}`));
+      throw new ForbiddenError(
+        t(`ORDER_PAID nhưng order_status không phải CAPTURED: ${order_status}`)
+      );
     }
 
     // Tìm đơn hàng theo orderNumber (= order_invoice_number)
@@ -135,12 +140,12 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
         $push: {
           orderLogs: {
             status: OrderStatusEnum.PAYMENT_CONFIRMED,
-            des: "Đơn hàng đã được thanh toán qua SePay PG",
+            des: "Đơn hàng đã được thanh toán",
             createdAt: new Date(),
           } as any,
           paymentLogs: {
             status: PaymentStatus.PAYMENT_SUCCESS,
-            des: `Thanh toán thành công qua SePay PG - ${payment_method}`,
+            des: `Thanh toán thành công - ${payment_method}`,
             amount: sePayAmount,
             transactionId: transaction_id,
             createdAt: new Date(),
@@ -166,34 +171,22 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       { new: true }
     );
 
-    // ── Cộng credit cho khách hàng ────────────────────────────────────────
-    if (order.customerId && order.creditAmount > 0) {
-      const customer = await CustomerModel.findByIdAndUpdate(
-        order.customerId,
-        { $inc: { creditBalance: order.creditAmount } },
-        { new: true }
+    // ── Kích hoạt gói subscription cho khách hàng ──────────────────────────
+    const subscriptionPlan = (order as any).subscriptionPlan;
+    if (order.customerId && subscriptionPlan) {
+      await this._activateSubscription(
+        order.customerId.toString(),
+        subscriptionPlan,
+        order._id.toString(),
+        order.orderNumber
       );
-
-      if (!customer) {
-        throw new ForbiddenError(t("Không tìm thấy khách hàng để cộng credit"));
-      }
-
-      const balanceAfter = (customer as any).creditBalance ?? 0;
-      await creditTransactionService.create({
-        customerId: order.customerId.toString(),
-        type: CreditTransactionTypeEnum.ORDER_TOPUP,
-        amount: order.creditAmount,
-        balanceAfter,
-        orderId: order._id.toString(),
-        description: `Cộng ${order.creditAmount} credit từ đơn hàng ${order.orderNumber} qua SePay PG`,
-      });
     }
 
     // ── Thông báo & real-time event ───────────────────────────────────────
     if (order.customerId) {
       const customerNotify = new NotificationBuilder(
         "Thanh toán thành công",
-        `Hệ thống đã nhận được thanh toán qua SePay PG cho đơn hàng ${order.orderNumber}`
+        `Hệ thống đã nhận được thanh toán cho đơn hàng ${order.orderNumber}`
       )
         .sendTo(NotificationTarget.CUSTOMER, order.customerId.toString())
         .order(order._id.toString())
@@ -214,98 +207,129 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
   // ─────────────────────────────────────────────────────────────────────────
   // TRANSACTION_VOID: Huỷ giao dịch
   // ─────────────────────────────────────────────────────────────────────────
-  private async _handleTransactionVoid(command: PaidOrderBySePayPGCommand): Promise<PaidOrderBySePayPGResponse> {
-    const { order_invoice_number } = command.order;
-    const { transaction_id } = command.transaction;
 
-    // Tìm đơn hàng
-    const order = await OrderModel.findOne({ orderNumber: order_invoice_number });
-    if (!order) {
-      // Không tìm thấy đơn → bỏ qua (có thể đơn chưa sync hoặc đã xoá)
-      return { success: true };
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helper: Kích hoạt gói subscription cho khách hàng
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Map SubscriptionPlanEnum → setting key prefix */
+  private static PLAN_KEY_MAP: Record<string, string> = {
+    [SubscriptionPlanEnum.TRIAL]: "trial",
+    [SubscriptionPlanEnum.BASIC]: "basic",
+    [SubscriptionPlanEnum.STANDARD]: "standard",
+    [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
+    [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+  };
+
+  private async _activateSubscription(
+    customerId: string,
+    subscriptionPlan: string,
+    orderId: string,
+    orderNumber: string
+  ): Promise<void> {
+    const customer = await CustomerModel.findById(customerId);
+    if (!customer) {
+      throw new ForbiddenError(t("Không tìm thấy khách hàng để kích hoạt gói"));
     }
 
-    // Idempotency: đơn đã bị huỷ trước đó → bỏ qua
-    if (
-      order.paymentStatus === PaymentStatus.PAYMENT_CANCELLED ||
-      order.status === OrderStatusEnum.CANCELLED
-    ) {
-      return { success: true };
+    const pkg = (customer as any).googlePackage || {};
+
+    // Snapshot BEFORE
+    const beforeSnapshot: PackageTransactionSnapshot = {
+      subscription: pkg.subscription,
+      videoCount: pkg.videoCount,
+      videoLimit: pkg.videoLimit,
+      imageCount: pkg.imageCount,
+      imageLimit: pkg.imageLimit,
+      imageStreamCount: pkg.imageStreamCount,
+      videoStreamCount: pkg.videoStreamCount,
+      expiryPackageDate: pkg.expiryPackageDate,
+    };
+
+    // Lấy thông số gói từ Setting
+    const planKey = PaidOrderBySePayPGUsecase.PLAN_KEY_MAP[subscriptionPlan];
+    if (!planKey) {
+      throw new ForbiddenError(t(`Gói subscription không hợp lệ: ${subscriptionPlan}`));
     }
 
-    // Ghi nhớ xem đơn đã được thanh toán thành công chưa (để thu hồi credit)
-    const wasAlreadyPaid = order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS;
+    const prefix = `pk-${planKey}`;
+    const settings = await SettingModel.find({
+      key: { $regex: `^${prefix}-`, $options: "i" },
+    }).lean();
 
-    // ── Cập nhật đơn hàng: huỷ giao dịch ────────────────────────────────
-    await OrderModel.findOneAndUpdate(
-      { _id: order._id },
+    const getValue = (suffix: string): number => {
+      const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
+      return s ? Number(s.value) : 0;
+    };
+
+    const packageConfig = {
+      videoLimit: getValue("video-limit"),
+      imageLimit: getValue("image-limit"),
+      imageStreamCount: getValue("image-stream-count"),
+      videoStreamCount: getValue("video-stream-count"),
+    };
+
+    // Tính expiryPackageDate
+    const now = new Date();
+    let expiryPackageDate: Date | null = null;
+    if (subscriptionPlan === SubscriptionPlanEnum.TRIAL) {
+      expiryPackageDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 giờ
+    } else {
+      const expiryDate = new Date(now);
+      expiryDate.setMonth(expiryDate.getMonth() + 1); // 1 tháng
+      expiryPackageDate = expiryDate;
+    }
+
+    // Cập nhật googlePackage
+    const updatedCustomer = await CustomerModel.findByIdAndUpdate(
+      customerId,
       {
         $set: {
-          status: OrderStatusEnum.CANCELLED,
-          paymentStatus: PaymentStatus.PAYMENT_CANCELLED,
-          cancelledAt: new Date(),
-          "paymentInfo.metaData.voidTransactionId": transaction_id,
-          "paymentInfo.metaData.voidedAt": new Date(),
-          "paymentInfo.metaData.voidIpnTimestamp": command.timestamp,
-        },
-        $push: {
-          orderLogs: {
-            status: OrderStatusEnum.CANCELLED,
-            des: "Giao dịch SePay PG bị huỷ (TRANSACTION_VOID)",
-            meta: { transactionId: transaction_id },
-            createdAt: new Date(),
-          } as any,
-          paymentLogs: {
-            status: PaymentStatus.PAYMENT_CANCELLED,
-            des: `Giao dịch bị huỷ qua SePay PG - ${command.transaction.payment_method}`,
-            transactionId: transaction_id,
-            createdAt: new Date(),
-          } as any,
+          "googlePackage.subscription": subscriptionPlan,
+          "googlePackage.videoLimit": packageConfig.videoLimit,
+          "googlePackage.imageLimit": packageConfig.imageLimit,
+          "googlePackage.imageStreamCount": packageConfig.imageStreamCount,
+          "googlePackage.videoStreamCount": packageConfig.videoStreamCount,
+          "googlePackage.videoCount": 0,
+          "googlePackage.imageCount": 0,
+          "googlePackage.expiryPackageDate": expiryPackageDate,
         },
       },
       { new: true }
     );
 
-    // ── Thu hồi credit nếu đơn đã được cộng credit trước đó ──────────────
-    if (wasAlreadyPaid && order.customerId && order.creditAmount > 0) {
-      const customer = await CustomerModel.findByIdAndUpdate(
-        order.customerId,
-        { $inc: { creditBalance: -order.creditAmount } },
-        { new: true }
-      );
+    const updatedPkg = (updatedCustomer as any)?.googlePackage || {};
 
-      if (customer) {
-        const balanceAfter = (customer as any).creditBalance ?? 0;
-        await creditTransactionService.create({
-          customerId: order.customerId.toString(),
-          type: CreditTransactionTypeEnum.ORDER_VOID,
-          amount: order.creditAmount,
-          balanceAfter,
-          orderId: order._id.toString(),
-          description: `Thu hồi ${order.creditAmount} credit từ đơn hàng ${order.orderNumber} do giao dịch SePay PG bị void`,
-        });
-      }
-    }
+    // Snapshot AFTER
+    const afterSnapshot: PackageTransactionSnapshot = {
+      subscription: updatedPkg.subscription,
+      videoCount: updatedPkg.videoCount,
+      videoLimit: updatedPkg.videoLimit,
+      imageCount: updatedPkg.imageCount,
+      imageLimit: updatedPkg.imageLimit,
+      imageStreamCount: updatedPkg.imageStreamCount,
+      videoStreamCount: updatedPkg.videoStreamCount,
+      expiryPackageDate: updatedPkg.expiryPackageDate,
+    };
 
-    // ── Thông báo & real-time event ───────────────────────────────────────
-    if (order.customerId) {
-      const customerNotify = new NotificationBuilder(
-        "Giao dịch bị huỷ",
-        `Giao dịch SePay PG cho đơn hàng ${order.orderNumber} đã bị huỷ`
-      )
-        .sendTo(NotificationTarget.CUSTOMER, order.customerId.toString())
-        .order(order._id.toString())
-        .build();
-      InsertNotification([customerNotify]);
-    }
-
-    pubsub.publish(CONSTANTS.SOCKET_EVENT_NAME.ORDER, {
-      event: OrderChangeEventEnum.PAYMENT_CHANGED,
-      orderId: order._id,
-      data: { paymentStatus: PaymentStatus.PAYMENT_CANCELLED },
+    // Ghi log PackageTransaction
+    await PackageTransactionModel.create({
+      customerId,
+      customerCode: (customer as any).code,
+      type: PackageTransactionTypeEnum.PAYMENT,
+      before: beforeSnapshot,
+      after: afterSnapshot,
+      description: `Kích hoạt gói ${subscriptionPlan} từ đơn hàng thanh toán`,
     });
 
-    return { success: true };
+    // Thông báo cho customer
+    const notify = new NotificationBuilder(
+      `Gói ${subscriptionPlan} đã được kích hoạt`,
+      `Gói ${subscriptionPlan} đã được kích hoạt thành công.\nVideo: ${afterSnapshot.videoLimit}/ngày, Ảnh: ${afterSnapshot.imageLimit}/ngày.`
+    )
+      .sendTo(NotificationTarget.CUSTOMER, customerId)
+      .build();
+    InsertNotification([notify]);
   }
 }
 

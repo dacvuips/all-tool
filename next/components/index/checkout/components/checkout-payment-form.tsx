@@ -1,47 +1,105 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiArrowLeft, HiOutlineCreditCard } from "react-icons/hi";
+import { HiArrowLeft, HiCheck } from "react-icons/hi";
 import { RiSecurePaymentLine } from "react-icons/ri";
-import { MAX_SUGGESTED, ParamName, QUICK_AMOUNTS } from "../../../../lib/constants/constants";
 import { parseNumber } from "../../../../lib/helpers/parser";
-import { useQueryParams } from "../../../../lib/hooks/useQueryParams";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { SettingService } from "../../../../lib/repo";
+import { SubscriptionPlanEnum } from "../../../../lib/repo/customer/customer.repo";
+import { Setting, SettingService } from "../../../../lib/repo/general/setting.repo";
 import { orderService, PaymentMethod } from "../../../../lib/repo/order/order.repo";
-import { NotifyText } from "../../../shared/common/notify-text";
-import { Input, Label } from "../../../shared/utilities/form";
+import { Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
 import { useCheckoutContext } from "../provider/checkout-provider";
-/**
- * Các phương thức thanh toán được hỗ trợ
- */
 
-/**
- * Thông tin hiển thị cho từng phương thức thanh toán
- */
+/** Map from SubscriptionPlanEnum value → lowercase key prefix used in settings */
+const PLAN_KEY_MAP: Record<string, string> = {
+  [SubscriptionPlanEnum.BASIC]: "basic",
+  [SubscriptionPlanEnum.STANDARD]: "standard",
+  [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
+  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+};
 
-/** Tạo các đề xuất "thêm số 0" từ số đã nhập: ví dụ 5 → [50, 500, 5000, 50000] */
-function getSuggestedAmounts(base: number): number[] {
-  if (base <= 0) return [];
-  const suggested: number[] = [];
-  let next = base * 10;
-  while (next <= MAX_SUGGESTED && next > base) {
-    suggested.push(next);
-    next *= 10;
-  }
-  return suggested;
+/** Plans to display (excludes Free) */
+const PLAN_ORDER = [
+  SubscriptionPlanEnum.BASIC,
+  SubscriptionPlanEnum.STANDARD,
+  SubscriptionPlanEnum.PROFESSIONAL,
+  SubscriptionPlanEnum.UNLIMITED,
+];
+
+interface PlanConfig {
+  plan: SubscriptionPlanEnum;
+  videoLimit: number;
+  imageLimit: number;
+  imageStreamCount: number;
+  videoStreamCount: number;
+  price: number;
 }
+
+/** Plan display metadata */
+const PLAN_META: Record<
+  string,
+  {
+    label: string;
+    icon: string;
+    accentColor: string;
+    accentBg: string;
+    borderActive: string;
+    highlight?: boolean;
+    badgeLabel?: string;
+  }
+> = {
+  [SubscriptionPlanEnum.BASIC]: {
+    label: "Gói Cơ Bản",
+    icon: "⭐",
+    accentColor: "text-blue-600",
+    accentBg: "bg-blue-50",
+    borderActive: "border-blue-500",
+    badgeLabel: "Phổ biến",
+  },
+  [SubscriptionPlanEnum.STANDARD]: {
+    label: "Gói Tiêu Chuẩn",
+    icon: "⚡",
+    accentColor: "text-primary",
+    accentBg: "bg-primary/10",
+    borderActive: "border-primary",
+    highlight: true,
+    badgeLabel: "Hot",
+  },
+  [SubscriptionPlanEnum.PROFESSIONAL]: {
+    label: "Gói Chuyên Nghiệp",
+    icon: "🚀",
+    accentColor: "text-green-600",
+    accentBg: "bg-green-50",
+    borderActive: "border-green-500",
+    badgeLabel: "Chuyên nghiệp",
+  },
+  [SubscriptionPlanEnum.UNLIMITED]: {
+    label: "Gói Không Giới Hạn",
+    icon: "💎",
+    accentColor: "text-yellow-600",
+    accentBg: "bg-yellow-50",
+    borderActive: "border-yellow-500",
+    badgeLabel: "Best Value",
+  },
+};
 
 export function CheckoutPaymentForm() {
   const { t } = useTranslation();
   const router = useRouter();
-  const [queryParams] = useQueryParams({
-    [ParamName.creditAmount]: "",
-  });
-  const amountFromParam = Number(queryParams[ParamName.creditAmount]) || 0;
+  const toast = useToast();
+  const { order, loading } = useCheckoutContext();
 
+  // Plan configs loaded from settings
+  const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
+  const [loadingPlans, setLoadingPlans] = useState(true);
+
+  // Selected plan
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanEnum | null>(null);
+
+  // Payment method
   const PAYMENT_METHOD_OPTIONS: {
     value: PaymentMethod;
     label: string;
@@ -56,59 +114,68 @@ export function CheckoutPaymentForm() {
     },
   ];
 
-  const [amount, setAmount] = useState<number>(amountFromParam);
-  const [creditAmount, setCreditAmount] = useState<number>(amountFromParam);
-  const [creditAmountSetting, setCreditAmountSetting] = useState<number>(0);
-
-  // Phương thức thanh toán đang được chọn
   const [selectedPaymentType, setSelectedPaymentType] = useState<PaymentMethod>(
     PaymentMethod.SEPAY_PG
   );
 
-  // Loading riêng cho SePay PG để tránh nhầm với loading tạo đơn chuyển khoản
+  // Loading for SePay PG redirect
   const [sePayLoading, setSePayLoading] = useState(false);
 
-  const toast = useToast();
-  const { order, loading } = useCheckoutContext();
-  const suggestedAmounts = creditAmount > 0 ? getSuggestedAmounts(creditAmount) : [];
-  const showQuickAmounts = suggestedAmounts.length > 0 ? suggestedAmounts : QUICK_AMOUNTS;
-
-  // Lấy hệ số quy đổi credit → VND từ setting
+  // Load plan configs from settings
   useEffect(() => {
-    getCreditAmount();
+    setLoadingPlans(true);
+    SettingService.getAll({
+      query: { limit: 0, filter: { key: { $regex: "^pk-", $options: "i" } } },
+    })
+      .then((res) => {
+        const settings = res.data as Setting[];
+        const configs: PlanConfig[] = [];
+
+        for (const plan of PLAN_ORDER) {
+          const prefix = `pk-${PLAN_KEY_MAP[plan]}`;
+          const getValue = (suffix: string) => {
+            const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
+            return s ? Number(s.value) : 0;
+          };
+
+          configs.push({
+            plan,
+            videoLimit: getValue("video-limit"),
+            imageLimit: getValue("image-limit"),
+            imageStreamCount: getValue("image-stream-count"),
+            videoStreamCount: getValue("video-stream-count"),
+            price: getValue("price"),
+          });
+        }
+
+        setPlanConfigs(configs);
+
+        // Auto-select plan from URL param `subscription`, fallback to first plan
+        const subscriptionParam = router.query.subscription as string | undefined;
+        if (subscriptionParam && configs.some((c) => c.plan === subscriptionParam)) {
+          setSelectedPlan(subscriptionParam as SubscriptionPlanEnum);
+        } else if (configs.length > 0) {
+          setSelectedPlan(configs[0].plan);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load plan configs:", err);
+        toast.error(t("Không thể tải danh sách gói. Vui lòng thử lại."));
+      })
+      .finally(() => setLoadingPlans(false));
   }, []);
 
-  const getCreditAmount = async () => {
-    const setting = await SettingService.getSettingByKey(
-      "wa-mpoint-change-credit-balance",
-      "value"
-    );
-    setCreditAmountSetting(setting.value);
-    if (amountFromParam > 0) {
-      setAmount(amountFromParam * setting.value);
-    }
-  };
+  const formatNumber = (n: number) => (n === -1 ? "∞" : n.toLocaleString("vi-VN"));
+  const formatPrice = (n: number) => (n === 0 ? t("Miễn phí") : n.toLocaleString("vi-VN") + "đ");
 
-  const handleQuickAmount = (value: number) => {
-    setCreditAmount((prev) => (prev === value ? 0 : value));
-    calculateCreditAmount(Number(value) || 0);
-  };
+  const selectedConfig = planConfigs.find((c) => c.plan === selectedPlan) || null;
 
-  const calculateCreditAmount = (value: number) => {
-    setAmount(value * (creditAmountSetting as number));
-  };
-
-  // /** Thanh toán qua chuyển khoản ngân hàng */
-  // const handleBankTransferCheckout = async () => {
-  //   await createOrder(creditAmount);
-  // };
-
-  /** Thanh toán qua cổng SePay PG — tạo hidden form rồi auto-submit (POST) */
+  /** Thanh toán qua cổng SePay PG */
   const handleSePayPGCheckout = async () => {
-    if (creditAmount <= 0) return;
+    if (!selectedPlan) return;
     setSePayLoading(true);
     try {
-      const data = await orderService.createSePayPGCheckout(creditAmount);
+      const data = await orderService.createSePayPGCheckout(selectedPlan);
 
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
 
@@ -156,7 +223,7 @@ export function CheckoutPaymentForm() {
         <div className="flex items-center gap-4 max-w-screen-xl mx-auto px-6 py-3">
           <div
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary"
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary cursor-pointer"
           >
             <HiArrowLeft className="text-base" />
             <span>{t("Quay lại")}</span>
@@ -164,7 +231,7 @@ export function CheckoutPaymentForm() {
           <div className="w-px h-5 bg-gray-300" />
           <div className="flex items-center gap-2">
             <RiSecurePaymentLine className="text-xl text-green-500" />
-            <h1 className="text-base font-bold text-gray-800 m-0">{t("Thanh Toán")}</h1>
+            <h1 className="text-base font-bold text-gray-800 m-0">{t("Đăng Ký Gói")}</h1>
           </div>
         </div>
         {/* Green accent bar */}
@@ -172,71 +239,156 @@ export function CheckoutPaymentForm() {
       </div>
 
       <div className="container flex flex-col flex-1 justify-center items-center mx-auto pt-4">
-        <div className="flex overflow-hidden flex-col gap-y-3 p-4 w-full max-w-md bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
-          {/* Thông báo hệ số quy đổi */}
-          <NotifyText
-            text={t(`Hệ số chuyển đổi: 1 credit = ${parseNumber(creditAmountSetting, true)}`)}
-          />
-
-          {/* Nhập số credit */}
+        <div className="flex overflow-hidden flex-col gap-y-4 p-4 w-full max-w-lg bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
+          {/* Chọn gói subscription */}
           <div>
-            <Label text={t("Số credit")} />
-            <div className="flex overflow-hidden items-center w-full bg-white rounded-xl border border-gray-300 focus-within:border-primary">
-              <Input
-                number
-                numberLength={10}
-                placeholder={t("Nhập số credit cần nạp...")}
-                value={creditAmount === 0 ? "" : creditAmount}
-                showZeroDefaultValue
-                onChange={(e) => {
-                  const raw = e;
-                  if (raw === "") {
-                    setCreditAmount(0);
-                    calculateCreditAmount(0);
-                  } else {
-                    const num = Number(raw);
-                    if (!Number.isNaN(num) && num >= 0) {
-                      setCreditAmount(num);
-                      calculateCreditAmount(num);
-                    }
-                  }
-                }}
-                clearable
-                controlClassName=""
-                inputClassName="w-full"
-                className="flex-1 py-3 pr-2 pl-3 placeholder-gray-400 text-gray-800 border-0 focus:ring-0 focus:outline-none"
-                prefix={<HiOutlineCreditCard />}
-                suffix={
-                  <span className="flex-shrink-0 pr-4 text-sm text-gray-500">{t("credit")}</span>
-                }
-              />
-            </div>
+            <Label text={t("Chọn gói đăng ký")} />
+            {loadingPlans ? (
+              <div className="flex justify-center py-6">
+                <Spinner />
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {planConfigs.map((config) => {
+                  const meta = PLAN_META[config.plan];
+                  const isSelected = selectedPlan === config.plan;
+                  const isHighlight = meta?.highlight;
+
+                  return (
+                    <button
+                      key={config.plan}
+                      type="button"
+                      onClick={() => setSelectedPlan(config.plan)}
+                      className={`relative flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${
+                        isSelected
+                          ? `${meta.borderActive} ${meta.accentBg}`
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      {/* Highlight badge */}
+                      {isHighlight && (
+                        <span className="absolute -top-2 right-3 px-2 py-0.5 text-[10px] font-bold text-white bg-primary rounded-full">
+                          {t(meta.badgeLabel)}
+                        </span>
+                      )}
+
+                      {/* Radio indicator */}
+                      <div
+                        className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                          isSelected ? meta.borderActive : "border-gray-400"
+                        }`}
+                      >
+                        {isSelected && (
+                          <div
+                            className={`w-2.5 h-2.5 rounded-full ${
+                              isSelected ? meta.accentBg.replace("/10", "") || "bg-primary" : ""
+                            }`}
+                            style={{
+                              backgroundColor: isSelected ? "currentColor" : undefined,
+                            }}
+                          />
+                        )}
+                      </div>
+
+                      {/* Icon */}
+                      <div
+                        className={`flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center text-lg ${meta.accentBg}`}
+                      >
+                        {meta.icon}
+                      </div>
+
+                      {/* Plan info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`text-sm font-semibold ${
+                              isSelected ? meta.accentColor : "text-gray-800"
+                            }`}
+                          >
+                            {t(meta.label)}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {formatNumber(config.videoLimit)} video &{" "}
+                          {formatNumber(config.imageLimit)} {t("ảnh")} / {t("ngày")}
+                        </p>
+                      </div>
+
+                      {/* Price */}
+                      <div className="flex-shrink-0 text-right">
+                        <span className={`text-sm font-bold ${meta.accentColor}`}>
+                          {formatPrice(config.price)}
+                        </span>
+                        {config.price > 0 && (
+                          <span className="text-[10px] text-gray-400 block">/{t("tháng")}</span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          {/* Gợi ý số lượng credit nhanh */}
-          <div className="flex flex-wrap gap-2">
-            {showQuickAmounts.slice(0, 4).map((value) => (
-              <Button
-                key={value}
-                onClick={() => handleQuickAmount(value)}
-                className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
-                  creditAmount === value
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-gray-300 bg-gray-50 text-gray-700 hover:border-primary"
+          {/* Chi tiết gói đã chọn */}
+          {selectedConfig && (
+            <div
+              className={`p-3 rounded-xl border ${
+                PLAN_META[selectedConfig.plan]?.accentBg || "bg-gray-50"
+              } border-gray-200`}
+            >
+              <h4
+                className={`text-sm font-semibold mb-2 ${
+                  PLAN_META[selectedConfig.plan]?.accentColor || "text-gray-800"
                 }`}
               >
-                {parseNumber(value)}
-              </Button>
-            ))}
-          </div>
+                {t("Chi tiết gói")} {t(PLAN_META[selectedConfig.plan]?.label)}
+              </h4>
+              <ul className="space-y-1.5">
+                <li className="flex items-center gap-2 text-xs text-gray-700">
+                  <HiCheck className="text-green-500 flex-shrink-0" />
+                  <span>
+                    {t("Tạo tối đa")} {formatNumber(selectedConfig.videoLimit)} video / {t("ngày")}
+                  </span>
+                </li>
+                <li className="flex items-center gap-2 text-xs text-gray-700">
+                  <HiCheck className="text-green-500 flex-shrink-0" />
+                  <span>
+                    {t("Tạo tối đa")} {formatNumber(selectedConfig.imageLimit)} {t("hình ảnh")} /{" "}
+                    {t("ngày")}
+                  </span>
+                </li>
+                <li className="flex items-center gap-2 text-xs text-gray-700">
+                  <HiCheck className="text-green-500 flex-shrink-0" />
+                  <span>
+                    {t("Tối đa")} {formatNumber(selectedConfig.videoStreamCount)}{" "}
+                    {t("luồng video cùng lúc")}
+                  </span>
+                </li>
+                <li className="flex items-center gap-2 text-xs text-gray-700">
+                  <HiCheck className="text-green-500 flex-shrink-0" />
+                  <span>
+                    {t("Tối đa")} {formatNumber(selectedConfig.imageStreamCount)}{" "}
+                    {t("luồng tạo ảnh cùng lúc")}
+                  </span>
+                </li>
+                <li className="flex items-center gap-2 text-xs text-gray-700">
+                  <HiCheck className="text-green-500 flex-shrink-0" />
+                  <span>{t("Không giới hạn câu prompt chuyển động")}</span>
+                </li>
+              </ul>
+            </div>
+          )}
 
           {/* Hiển thị tổng tiền */}
-          <div className="flex gap-x-2 items-center w-full text-lg font-bold text-right text-red-700">
-            <span className="text-sm text-gray-600">{`${t("Tổng thanh toán")}:`}</span>
-            <span className="text-lg font-bold text-right text-red-700">
-              {parseNumber(amount, true)}
-            </span>
-          </div>
+          {selectedConfig && (
+            <div className="flex gap-x-2 items-center w-full text-lg font-bold text-right text-red-700">
+              <span className="text-sm text-gray-600">{`${t("Tổng thanh toán")}:`}</span>
+              <span className="text-lg font-bold text-right text-red-700">
+                {parseNumber(selectedConfig.price, true)}
+              </span>
+            </div>
+          )}
 
           {/* Chọn phương thức thanh toán */}
           <div>
@@ -296,14 +448,12 @@ export function CheckoutPaymentForm() {
                 className="py-3 w-full font-semibold rounded-xl"
                 text={
                   <>
-                    {selectedPaymentType === "SEPAY_PG"
-                      ? t("Thanh toán ngay")
-                      : t("Thanh toán ngay")}
+                    {t("Thanh toán ngay")}
                     <span className="inline-block ml-1">›</span>
                   </>
                 }
                 onClick={handleCheckout}
-                disabled={isLoading || creditAmount <= 0}
+                disabled={isLoading || !selectedPlan}
               />
             )}
           </div>

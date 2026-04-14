@@ -131,7 +131,7 @@ function SePayPGWaitingView() {
     if (!order?.id) return;
     setRetrying(true);
     try {
-      const data = await orderService.createSePayPGCheckout(order.creditAmount, order.id);
+      const data = await orderService.createSePayPGCheckout(order.subscriptionPlan, order.id);
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
       const form = document.createElement("form");
       form.method = "POST";

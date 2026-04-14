@@ -128,7 +128,7 @@ export interface Order extends BaseModel {
   tax?: number;
   discount?: number;
   totalAmount?: number;
-
+  subscriptionPlan?: string;
   shippingAddress?: ShippingAddress;
   shopAddress?: ShopAddress;
 
@@ -176,7 +176,7 @@ export class OrderRepository extends CrudRepository<Order> {
     status
     paymentStatus
     totalAmount 
-    creditAmount
+    subscriptionPlan
     customerId  
      paymentInfo {
       method 
@@ -204,7 +204,7 @@ export class OrderRepository extends CrudRepository<Order> {
     tax
     discount
     totalAmount
-    creditAmount
+    subscriptionPlan
     paymentMethod
     paymentStatus
     paymentInfo {
@@ -323,20 +323,20 @@ export class OrderRepository extends CrudRepository<Order> {
    * để render các hidden input rồi auto-submit form.
    */
   async createSePayPGCheckout(
-    creditAmount: number,
+    subscriptionPlan: string,
     orderId?: string
   ): Promise<SePayPGCheckoutData> {
     return this.apollo
       .mutate({
         mutation: gql`
-          mutation CreateSePayPGCheckout($creditAmount: Float!, $orderId: ID) {
-            createSePayPGCheckout(creditAmount: $creditAmount, orderId: $orderId) {
+          mutation CreateSePayPGCheckout($subscriptionPlan: String!, $orderId: ID) {
+            createSePayPGCheckout(subscriptionPlan: $subscriptionPlan, orderId: $orderId) {
               checkoutUrl
               formFieldsJson
             }
           }
         `,
-        variables: { creditAmount, orderId },
+        variables: { subscriptionPlan, orderId },
       })
       .then((res) => res.data.createSePayPGCheckout as SePayPGCheckoutData);
   }
@@ -453,7 +453,7 @@ export class OrderRepository extends CrudRepository<Order> {
     tax
     discount
     totalAmount
-    creditAmount
+    subscriptionPlan
     shippingAddress {
       recipientName
       phone

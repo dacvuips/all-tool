@@ -166,23 +166,41 @@ const Mutation = {
   },
 
   /**
-   * Tạo form thanh toán qua cổng SePay PG.
+   * Tạo form thanh toán qua cổng SePay PG cho gói subscription.
    * - Không truyền orderId → CREATE đơn mới + sinh form
    * - Truyền orderId (đơn PAYMENT_PENDING+SEPAY_PG) → chỉ tái tạo form (retry)
    */
   createSePayPGCheckout: async (root: any, args: any, context: Context) => {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
     const customerId = context.customerId;
-    const { creditAmount, orderId } = args;
+    const { subscriptionPlan, orderId } = args;
 
-    if (!creditAmount || creditAmount <= 0) {
-      throw new Error("Số credit không hợp lệ");
+    if (!subscriptionPlan) {
+      throw new Error("Vui lòng chọn gói subscription");
     }
 
-    const creditAmountSetting = await settingService.findOne({
-      key: "wa-mpoint-change-credit-balance",
+    // Map plan value → setting key prefix (giống PLAN_KEY_MAP bên pricing-page)
+    const PLAN_KEY_MAP: Record<string, string> = {
+      Trial: "trial",
+      Basic: "basic",
+      Standard: "standard",
+      Professional: "professional",
+      Unlimited: "unlimited",
+    };
+
+    const planKey = PLAN_KEY_MAP[subscriptionPlan];
+    if (!planKey) {
+      throw new Error("Gói subscription không hợp lệ");
+    }
+
+    // Lấy giá gói từ setting
+    const priceSetting = await settingService.findOne({
+      key: `pk-${planKey}-price`,
     });
-    const totalAmount = creditAmountSetting.value * creditAmount;
+    if (!priceSetting || !priceSetting.value || priceSetting.value <= 0) {
+      throw new Error("Không tìm thấy giá cho gói subscription này");
+    }
+    const totalAmount = Number(priceSetting.value);
 
     let order: any;
 
@@ -205,11 +223,11 @@ const Mutation = {
         paymentStatus: PaymentStatus.PAYMENT_PENDING,
         status: OrderStatusEnum.CREATED,
         totalAmount,
-        creditAmount,
+        subscriptionPlan,
         orderLogs: [
           {
             status: OrderStatusEnum.CREATED,
-            des: "Don hang duoc tao qua cong SePay PG",
+            des: `Đăng ký gói ${subscriptionPlan} qua cổng SePay PG`,
             createdAt: new Date(),
             creatorId: customerId,
           },
@@ -217,7 +235,7 @@ const Mutation = {
         paymentLogs: [
           {
             status: PaymentStatus.PAYMENT_PENDING,
-            des: "Cho thanh toan qua cong SePay PG",
+            des: `Chờ thanh toán gói ${subscriptionPlan} qua cổng SePay PG`,
             createdAt: new Date(),
             creatorId: customerId,
           },

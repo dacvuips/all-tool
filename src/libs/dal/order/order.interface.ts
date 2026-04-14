@@ -16,7 +16,7 @@ export type IOrder = TimestampEntity & {
   productId: string;
 
   // Pricing
-  creditAmount: number;
+  subscriptionPlan?: string;
   totalAmount: number;
 
   // Payment

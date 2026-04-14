@@ -95,7 +95,7 @@ const orderSchema = new Schema(
     productId: { type: Schema.Types.ObjectId, ref: "Product" },
     items: [orderItemSchema],
 
-    creditAmount: { type: Number, required: true },
+    subscriptionPlan: { type: String },
     totalAmount: { type: Number, required: true },
 
     paymentMethod: {
