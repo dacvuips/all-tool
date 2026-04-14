@@ -6,6 +6,7 @@ import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
 
 const AI_MAX_RETRIES = 5;
+const SERVICE_UNAVAILABLE_RETRIES = 5;
 
 /** Generate a simple UUID v4 string */
 export function generateUUID(): string {
@@ -54,12 +55,26 @@ function createGeminiClient(apiKey: string) {
 }
 
 /**
- * Helper chung: Lấy credential Gemini của customer, giải mã và tạo GoogleGenAI client.
+ * Helper: Parse danh sách API keys từ credential value.
+ * Hỗ trợ nhiều key phân tách bằng dấu phẩy hoặc xuống dòng.
+ */
+function parseMultipleKeys(encryptedValue: string): string[] {
+  const decrypted = decryptProviderSecret(encryptedValue);
+  if (!decrypted) return [];
+  return decrypted
+    .split(/[,\n]+/)
+    .map((k) => k.trim())
+    .filter((k) => k.length > 0);
+}
+
+/**
+ * Helper chung: Lấy danh sách credential Gemini API keys của customer.
+ * Trả về array GoogleGenAI clients (1 per key).
  * Throw error nếu chưa cấu hình key.
  */
-export async function getCustomerGeminiClient(
+export async function getCustomerGeminiClients(
   customerId: string
-): Promise<InstanceType<typeof GoogleGenAI>> {
+): Promise<InstanceType<typeof GoogleGenAI>[]> {
   const credentialDoc = (await credentialService.findOne({
     customerId,
     key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
@@ -71,8 +86,127 @@ export async function getCustomerGeminiClient(
     err.statusCode = 403;
     throw err;
   }
-  const apiKey = decryptProviderSecret(credential.value);
-  return createGeminiClient(apiKey);
+  const apiKeys = parseMultipleKeys(credential.value);
+  if (apiKeys.length === 0) {
+    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
+    err.statusCode = 403;
+    throw err;
+  }
+  return apiKeys.map((k) => createGeminiClient(k));
+}
+
+/**
+ * (Backward compat) Lấy 1 GoogleGenAI client duy nhất (key đầu tiên).
+ */
+export async function getCustomerGeminiClient(
+  customerId: string
+): Promise<InstanceType<typeof GoogleGenAI>> {
+  const clients = await getCustomerGeminiClients(customerId);
+  return clients[0];
+}
+
+/**
+ * Kiểm tra xem error có phải lỗi 429 / quota exceeded không.
+ * Gemini SDK trả về: { code: 429, status: "RESOURCE_EXHAUSTED", message: "You exceeded your current quota..." }
+ */
+function isRateLimitOrQuotaError(err: any): boolean {
+  const numericCode = err?.code || err?.statusCode || err?.httpCode;
+  if (numericCode === 429) return true;
+
+  const statusStr = (err?.status || "").toString().toUpperCase();
+  if (statusStr === "RESOURCE_EXHAUSTED") return true;
+  if (Number(err?.status) === 429) return true;
+
+  const msg = (err?.message || "").toLowerCase();
+  if (
+    msg.includes("quota") ||
+    msg.includes("rate limit") ||
+    msg.includes("resource_exhausted") ||
+    msg.includes("429")
+  )
+    return true;
+
+  return false;
+}
+
+/**
+ * Kiểm tra xem error có phải lỗi 503 (Service Unavailable) không.
+ */
+function isServiceUnavailableError(err: any): boolean {
+  const numericCode = err?.code || err?.statusCode || err?.httpCode;
+  if (numericCode === 503) return true;
+  if (Number(err?.status) === 503) return true;
+
+  const msg = (err?.message || "").toLowerCase();
+  if (msg.includes("503") || msg.includes("service unavailable")) return true;
+
+  return false;
+}
+
+/**
+ * Gọi AI API với cơ chế xoay vòng nhiều API key:
+ * - Nếu 429 / quota exceeded → nhảy sang API key tiếp theo.
+ * - Nếu 503 → retry tối đa SERVICE_UNAVAILABLE_RETRIES lần cho key đó, rồi mới nhảy sang key tiếp.
+ * - Các lỗi khác → throw ngay.
+ * - Nếu tất cả key đều thất bại → throw error cuối cùng.
+ */
+export async function callWithKeyRotation<T>(
+  clients: InstanceType<typeof GoogleGenAI>[],
+  fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
+  label: string
+): Promise<T> {
+  let lastError: any;
+  for (let keyIdx = 0; keyIdx < clients.length; keyIdx++) {
+    const client = clients[keyIdx];
+    const keyLabel = `key ${keyIdx + 1}/${clients.length}`;
+
+    // Đối với mỗi key, thử gọi; nếu 503 thì retry tối đa SERVICE_UNAVAILABLE_RETRIES lần
+    let retriesFor503 = 0;
+    let shouldTryNextKey = false;
+
+    while (true) {
+      try {
+        const result = await fn(client);
+        return result;
+      } catch (err: any) {
+        lastError = err;
+
+        if (isRateLimitOrQuotaError(err)) {
+          logger.warn(
+            `[${label}] ${keyLabel} bị 429/quota: ${err?.message}. Chuyển sang key tiếp theo.`
+          );
+          shouldTryNextKey = true;
+          break;
+        }
+
+        if (isServiceUnavailableError(err)) {
+          retriesFor503++;
+          if (retriesFor503 >= SERVICE_UNAVAILABLE_RETRIES) {
+            logger.warn(
+              `[${label}] ${keyLabel} bị 503 sau ${retriesFor503} lần retry. Chuyển sang key tiếp theo.`
+            );
+            shouldTryNextKey = true;
+            break;
+          }
+          logger.warn(
+            `[${label}] ${keyLabel} bị 503 (lần ${retriesFor503}/${SERVICE_UNAVAILABLE_RETRIES}). Retry sau 3s...`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+          continue;
+        }
+
+        // Lỗi khác (400, 401, 403, 500...) → throw ngay
+        logger.error(`[${label}] ${keyLabel} lỗi không thể retry: ${err?.message}`);
+        throw err;
+      }
+    }
+
+    if (!shouldTryNextKey) break;
+  }
+
+  // Tất cả key đều thất bại
+  logger.error(`[${label}] Tất cả ${clients.length} API key đều thất bại.`);
+  throw lastError;
 }
 
 /**
@@ -100,7 +234,7 @@ export async function getCustomerOpenAIKey(customerId: string): Promise<string> 
  */
 export async function getCustomerGoogleLabsCredentials(
   customerId: string
-): Promise<{ accessToken: string; projectId: string; geminiAPIKey: string }> {
+): Promise<{ accessToken: string; projectId: string; geminiAPIKeys: string[] }> {
   const [tokenDoc, projectDoc, geminiAPIKeyDoc] = await Promise.all([
     credentialService.findOne({
       customerId,
@@ -130,10 +264,12 @@ export async function getCustomerGoogleLabsCredentials(
     err.statusCode = 403;
     throw err;
   }
+  const geminiCred = (geminiAPIKeyDoc as any)?._doc;
+  const geminiAPIKeys = geminiCred?.value ? parseMultipleKeys(geminiCred.value) : [];
   return {
     accessToken: decryptProviderSecret(tokenCred.value),
     projectId: decryptProviderSecret(projectCred.value),
-    geminiAPIKey: decryptProviderSecret(geminiAPIKeyDoc?.value),
+    geminiAPIKeys,
   };
 }
 

@@ -159,16 +159,20 @@ interface CredentialTab {
   helpLabel?: string;
   inputType?: string;
   description?: string;
+  multiLine?: boolean;
+  multiLineHint?: string;
 }
 
 const CREDENTIAL_TABS: CredentialTab[] = [
   {
     key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
     label: "Gemini API Key",
-    placeholder: "AIza...",
+    placeholder: "AIza...\nAIza...\nAIza...",
     helpUrl: "https://aistudio.google.com/app/apikey",
     helpLabel: "aistudio.google.com",
-    description: "Dùng cho tạo kịch bản và video (Gemini / Veo)",
+    description: "Dùng cho tạo kịch bản và video (Gemini / Veo). Hỗ trợ nhiều key, mỗi key 1 dòng.",
+    multiLine: true,
+    multiLineHint: "Nhập mỗi API Key trên một dòng riêng. Hệ thống sẽ tự động xoay vòng khi key bị giới hạn.",
   },
   {
     key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
@@ -413,16 +417,35 @@ export function SettingsModal({
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">
                   {activeTab.label}
                 </label>
-                <input
-                  type={activeTab.inputType || "password"}
-                  value={inputValues[activeTabKey] || ""}
-                  onChange={(e) =>
-                    setInputValues((prev) => ({ ...prev, [activeTabKey]: e.target.value }))
-                  }
-                  placeholder={activeTab.placeholder}
-                  onKeyDown={(e) => e.key === "Enter" && handleSave(activeTabKey)}
-                  className="w-full rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm px-4 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder-gray-400"
-                />
+                {activeTab.multiLine ? (
+                  <>
+                    <textarea
+                      value={inputValues[activeTabKey] || ""}
+                      onChange={(e) =>
+                        setInputValues((prev) => ({ ...prev, [activeTabKey]: e.target.value }))
+                      }
+                      placeholder={activeTab.placeholder}
+                      rows={4}
+                      className="w-full rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm px-4 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder-gray-400 resize-none font-mono"
+                    />
+                    {activeTab.multiLineHint && (
+                      <p className="text-xs text-blue-500 mt-1.5 flex items-center gap-1">
+                        💡 {t(activeTab.multiLineHint)}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <input
+                    type={activeTab.inputType || "password"}
+                    value={inputValues[activeTabKey] || ""}
+                    onChange={(e) =>
+                      setInputValues((prev) => ({ ...prev, [activeTabKey]: e.target.value }))
+                    }
+                    placeholder={activeTab.placeholder}
+                    onKeyDown={(e) => e.key === "Enter" && handleSave(activeTabKey)}
+                    className="w-full rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm px-4 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder-gray-400"
+                  />
+                )}
               </div>
 
               {activeTab.helpUrl && (

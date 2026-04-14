@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
@@ -6,9 +5,9 @@ import { Context } from "../../../libs/graphql";
 import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   AffiliateVideoFormConfig,
-  getCustomerGoogleLabsCredentials,
+  callWithKeyRotation,
+  getCustomerGeminiClients,
   interpolateTemplate,
-  retryAICall,
 } from "./_shared";
 
 export default [
@@ -30,8 +29,7 @@ export default [
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const { geminiAPIKey } = await getCustomerGoogleLabsCredentials(context.id);
-        const ai = new GoogleGenAI({ apiKey: geminiAPIKey });
+        const clients = await getCustomerGeminiClients(context.id);
 
         const prompt = `
 
@@ -59,10 +57,11 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
         // Thay thế placeholder trong text
         const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
 
-        logger.info(`[generation-scene] Gọi Gemini cho user ${context.id}`);
+        logger.info(`[generation-scene] Gọi Gemini cho user ${context.id} (${clients.length} keys)`);
 
-        const response = await retryAICall(
-          () =>
+        const response = await callWithKeyRotation(
+          clients,
+          (ai) =>
             ai.models.generateContent({
               model: "gemini-2.5-flash",
               contents: interpolatedText,
