@@ -128,9 +128,7 @@ export const AffiliateVideoRightPanel = () => {
 
   // Label tab Batch List kèm số lượng scene
   const sceneCount = scriptData?.scenes?.length ?? 0;
-  const batchTabLabel = `${t("Danh sách hàng loạt")}${
-    sceneCount > 0 ? ` (${sceneCount})` : ""
-  }`;
+  const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -191,20 +189,22 @@ export const AffiliateVideoRightPanel = () => {
                 <h3 className="text-base font-bold text-gray-800 mb-3">
                   📽 {t("Phân Cảnh & Prompt")}
                 </h3>
-                {scriptData.scenes.map((scene, i) => (
-                  <SceneCard
-                    key={scene.sceneNumber ?? i}
-                    scene={{
-                      id: `scene-${i}`,
-                      sceneNumber: scene.sceneNumber,
-                      camera: (scene.camera as any) || "WIDE SHOT",
-                      imageGenPrompt: scene.imageGenPrompt,
-                      motionPrompt: scene.motionPrompt || "",
-                      dialogue: scene.dialogue || "",
-                      visualPrompt: scene.visualPrompt || "",
-                    }}
-                  />
-                ))}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {scriptData.scenes.map((scene, i) => (
+                    <SceneCard
+                      key={scene.sceneNumber ?? i}
+                      scene={{
+                        id: `scene-${i}`,
+                        sceneNumber: scene.sceneNumber,
+                        camera: (scene.camera as any) || "WIDE SHOT",
+                        imageGenPrompt: scene.imageGenPrompt,
+                        motionPrompt: scene.motionPrompt || "",
+                        dialogue: scene.dialogue || "",
+                        visualPrompt: scene.visualPrompt || "",
+                      }}
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           )}

@@ -4,6 +4,7 @@
  * className only – Tailwind CSS, light theme
  */
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
   RiArrowDownSLine,
@@ -34,15 +35,17 @@ function PromptBlock({
   content,
   icon,
   headerColor,
+  noCollapse,
 }: {
   type: "image" | "motion" | "dialogue" | "visualPrompt";
   label: string;
   content: string;
   icon: React.ReactNode;
   headerColor: string;
+  noCollapse?: boolean;
 }) {
   const [copied, setCopied] = useState(false);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!noCollapse);
   const [isOverflow, setIsOverflow] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -81,8 +84,8 @@ function PromptBlock({
           ref={contentRef}
           className="px-3 py-3 relative"
           style={{
-            maxHeight: collapsed && isOverflow ? `${COLLAPSED_HEIGHT}px` : undefined,
-            overflow: collapsed && isOverflow ? "hidden" : undefined,
+            maxHeight: !noCollapse && collapsed && isOverflow ? `${COLLAPSED_HEIGHT}px` : undefined,
+            overflow: !noCollapse && collapsed && isOverflow ? "hidden" : undefined,
             transition: "max-height 0.3s ease",
           }}
         >
@@ -121,7 +124,7 @@ function PromptBlock({
           )}
 
           {/* Gradient fade overlay when collapsed */}
-          {collapsed && isOverflow && (
+          {!noCollapse && collapsed && isOverflow && (
             <div
               className="absolute bottom-0 left-0 right-0 pointer-events-none"
               style={{
@@ -133,7 +136,7 @@ function PromptBlock({
         </div>
 
         {/* Toggle button */}
-        {isOverflow && (
+        {!noCollapse && isOverflow && (
           <button
             onClick={() => setCollapsed((prev) => !prev)}
             className="w-full flex items-center justify-center gap-1 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-800 cursor-pointer border-0 border-t border-gray-100 bg-gray-50 hover:bg-gray-100 transition-colors"
@@ -161,14 +164,14 @@ interface SceneCardProps {
 
 export function SceneCard({ scene }: SceneCardProps) {
   const shotColorClass = SHOT_COLORS[scene.camera] || "bg-gray-100 text-gray-600 border-gray-200";
-
+  const { t } = useTranslation();
   return (
     <div className="rounded-2xl border bg-gray-50 overflow-hidden mb-4">
       {/* Scene header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white">
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold px-3 py-1 rounded-full bg-gray-800 text-white">
-            Cảnh #{scene.sceneNumber}
+            {t("Cảnh")} #{scene.sceneNumber}
           </span>
           <span className={`text-xs font-semibold px-2 py-1 rounded-full border ${shotColorClass}`}>
             ● {scene.camera}
@@ -211,6 +214,7 @@ export function SceneCard({ scene }: SceneCardProps) {
           content={scene.dialogue}
           icon={<MdRecordVoiceOver className="text-green-500 text-xs" />}
           headerColor="bg-green-50 text-green-700"
+          noCollapse
         />
       </div>
     </div>
