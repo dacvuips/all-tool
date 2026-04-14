@@ -7,8 +7,8 @@ import { FiShoppingCart } from "react-icons/fi";
 import { HiArrowLeft, HiOutlineCheck, HiOutlineChevronDown } from "react-icons/hi";
 import {
   RiArrowLeftSLine,
-  RiBankCardLine,
   RiBookOpenLine,
+  RiExchangeLine,
   RiHandCoinFill,
   RiImageLine,
   RiKey2Line,
@@ -16,7 +16,6 @@ import {
   RiLogoutBoxLine,
   RiMenu3Line,
   RiPriceTag3Line,
-  RiShoppingCart2Line,
   RiUserHeartFill,
 } from "react-icons/ri";
 
@@ -656,15 +655,20 @@ const useHeaderDropDownMenus = () => {
 
   const HEADER_DROPDOWN_MENUS = [
     {
-      text: t("Nạp ví"),
-      icon: <RiBankCardLine />,
-      onclick: () => router.push("/checkout"),
+      text: t("Lịch sử giao dịch gói"),
+      icon: <RiExchangeLine />,
+      onclick: () => router.push("/profile/package-transactions"),
     },
-    {
-      text: t("Đơn mua"),
-      icon: <RiShoppingCart2Line />,
-      onclick: () => router.push("/profile/orders-buy"),
-    },
+    // {
+    //   text: t("Nạp ví"),
+    //   icon: <RiBankCardLine />,
+    //   onclick: () => router.push("/checkout"),
+    // },
+    // {
+    //   text: t("Đơn mua"),
+    //   icon: <RiShoppingCart2Line />,
+    //   onclick: () => router.push("/profile/orders-buy"),
+    // },
     // {
     //   text: t("API Key"),
     //   icon: <RiKey2Line />,
@@ -680,6 +684,7 @@ const useHeaderDropDownMenus = () => {
       icon: <RiImageLine />,
       onclick: () => router.push("/profile/media-gallery"),
     },
+
     {
       text: t("Đổi mật khẩu"),
       icon: <RiLockPasswordLine />,

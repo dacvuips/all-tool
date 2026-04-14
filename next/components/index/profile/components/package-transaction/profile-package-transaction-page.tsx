@@ -25,7 +25,7 @@ const TYPE_LABELS: Record<PackageTransactionTypeEnum, { label: string; color: st
     color: "bg-green-100 text-green-700",
   },
   [PackageTransactionTypeEnum.MANUAL_ADJUST]: {
-    label: "Điều chỉnh",
+    label: "Hệ thống điều chỉnh",
     color: "bg-yellow-100 text-yellow-700",
   },
 };

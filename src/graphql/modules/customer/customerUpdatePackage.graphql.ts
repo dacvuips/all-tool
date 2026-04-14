@@ -3,17 +3,38 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import { t } from "../../../helpers/functions/string";
 import { Scope } from "../../../libs/dal/authority";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../libs/dal/customer";
+import { NotificationModel, NotificationTarget } from "../../../libs/dal/notification";
 import {
   PackageTransactionSnapshot,
   PackageTransactionTypeEnum,
 } from "../../../libs/dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../libs/dal/packageTransaction/package-transaction.model";
+import { SettingModel } from "../../../libs/dal/setting/setting.model";
 import { Context } from "../../../libs/graphql";
+import { NotificationBuilder } from "../notification/notificationBuilder";
+
+/** Map SubscriptionPlanEnum → setting key prefix */
+const PLAN_KEY_MAP: Record<string, string> = {
+  [SubscriptionPlanEnum.FREE]: "free",
+  [SubscriptionPlanEnum.TRIAL]: "trial",
+  [SubscriptionPlanEnum.BASIC]: "basic",
+  [SubscriptionPlanEnum.STANDARD]: "standard",
+  [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
+  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+};
+
+/** Giá trị mặc định cho gói Free */
+const FREE_PACKAGE_DEFAULTS = {
+  videoLimit: 5,
+  imageLimit: 10,
+  imageStreamCount: 1,
+  videoStreamCount: 1,
+};
 
 export default {
   schema: gql`
     extend type Mutation {
-      customerUpdatePackage(customerId: ID!, data: GooglePackageInput!): Customer
+      customerUpdatePackage(customerId: ID!, subscription: String!): Customer
     }
   `,
   resolver: {
@@ -21,7 +42,12 @@ export default {
       customerUpdatePackage: async (root: any, args: any, context: Context) => {
         await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["QT-3-3"]]);
 
-        const { customerId, data } = args;
+        const { customerId, subscription } = args;
+
+        // Validate subscription
+        if (!Object.values(SubscriptionPlanEnum).includes(subscription)) {
+          throw new Error(t("Gói đăng ký không hợp lệ"));
+        }
 
         // Lấy customer hiện tại để snapshot trước khi thay đổi
         const customer = await CustomerModel.findById(customerId).orFail(
@@ -42,25 +68,47 @@ export default {
           expiryPackageDate: pkg.expiryPackageDate,
         };
 
+        // Lấy thông số gói từ Setting
+        let packageConfig: {
+          videoLimit: number;
+          imageLimit: number;
+          imageStreamCount: number;
+          videoStreamCount: number;
+        };
+
+        if (subscription === SubscriptionPlanEnum.FREE) {
+          packageConfig = FREE_PACKAGE_DEFAULTS;
+        } else {
+          const prefix = `pk-${PLAN_KEY_MAP[subscription]}`;
+          const settings = await SettingModel.find({
+            key: { $regex: `^${prefix}-`, $options: "i" },
+          }).lean();
+
+          const getValue = (suffix: string): number => {
+            const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
+            return s ? Number(s.value) : 0;
+          };
+
+          packageConfig = {
+            videoLimit: getValue("video-limit"),
+            imageLimit: getValue("image-limit"),
+            imageStreamCount: getValue("image-stream-count"),
+            videoStreamCount: getValue("video-stream-count"),
+          };
+        }
+
         // Cập nhật googlePackage
-        const updateFields: Record<string, any> = {};
-        if (data.subscription !== undefined)
-          updateFields["googlePackage.subscription"] = data.subscription;
-        if (data.videoLimit !== undefined)
-          updateFields["googlePackage.videoLimit"] = data.videoLimit;
-        if (data.imageLimit !== undefined)
-          updateFields["googlePackage.imageLimit"] = data.imageLimit;
-        if (data.imageStreamCount !== undefined)
-          updateFields["googlePackage.imageStreamCount"] = data.imageStreamCount;
-        if (data.videoStreamCount !== undefined)
-          updateFields["googlePackage.videoStreamCount"] = data.videoStreamCount;
-        if (data.videoCount !== undefined)
-          updateFields["googlePackage.videoCount"] = data.videoCount;
-        if (data.imageCount !== undefined)
-          updateFields["googlePackage.imageCount"] = data.imageCount;
+        const updateFields: Record<string, any> = {
+          "googlePackage.subscription": subscription,
+          "googlePackage.videoLimit": packageConfig.videoLimit,
+          "googlePackage.imageLimit": packageConfig.imageLimit,
+          "googlePackage.imageStreamCount": packageConfig.imageStreamCount,
+          "googlePackage.videoStreamCount": packageConfig.videoStreamCount,
+          "googlePackage.videoCount": 0,
+          "googlePackage.imageCount": 0,
+        };
 
         // Tự động tính expiryPackageDate theo loại gói
-        const subscription = data.subscription ?? pkg.subscription;
         const now = new Date();
         if (subscription === SubscriptionPlanEnum.FREE) {
           // Gói Free: vô thời hạn
@@ -108,6 +156,14 @@ export default {
             afterSnapshot.subscription || "N/A"
           }`,
         });
+
+        // Tạo thông báo tới customer
+        const notifyTitle = `Gói dịch vụ đã được cập nhật`;
+        const notifyBody = `Gói của bạn đã được điều chỉnh từ ${beforeSnapshot.subscription || "N/A"} sang ${afterSnapshot.subscription || "N/A"}.\nVideo: ${afterSnapshot.videoLimit}, Ảnh: ${afterSnapshot.imageLimit}.`;
+        const notify = new NotificationBuilder(notifyTitle, notifyBody)
+          .sendTo(NotificationTarget.CUSTOMER, customerId)
+          .build();
+        await NotificationModel.create(notify);
 
         return updatedCustomer;
       },
