@@ -215,14 +215,11 @@ export default function PricingPage() {
                   isCurrent ? "pricing-card--current" : ""
                 }`}
               >
-                {/* Badge */}
-                <div className={`pricing-card__badge ${meta.badgeBg} ${meta.badgeTextColor}`}>
-                  <span>{meta.icon}</span> {t(meta.badgeLabel)}
-                </div>
-
                 {/* Plan name & icon */}
                 <div className="pricing-card__name">
-                  <div className={`pricing-card__name-icon ${meta.accentColor}`}>
+                  <div
+                    className={`pricing-card__name-icon ${meta.accentColor} ${meta.badgeBg} p-1 rounded-md`}
+                  >
                     {config.plan === SubscriptionPlanEnum.TRIAL && "📦"}
                     {config.plan === SubscriptionPlanEnum.BASIC && "⭐"}
                     {config.plan === SubscriptionPlanEnum.STANDARD && "⚡"}
