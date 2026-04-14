@@ -10,6 +10,7 @@ import {
   RiBankCardLine,
   RiBookOpenLine,
   RiHandCoinFill,
+  RiImageLine,
   RiKey2Line,
   RiLockPasswordLine,
   RiLogoutBoxLine,
@@ -674,7 +675,11 @@ const useHeaderDropDownMenus = () => {
     //   icon: <RiHandCoinLine />,
     //   onclick: () => router.push("/profile/orders-sell"),
     // },
-
+    {
+      text: t("Thư viện Media"),
+      icon: <RiImageLine />,
+      onclick: () => router.push("/profile/media-gallery"),
+    },
     {
       text: t("Đổi mật khẩu"),
       icon: <RiLockPasswordLine />,
