@@ -92,6 +92,11 @@ export async function getCustomerGeminiClients(
     err.statusCode = 403;
     throw err;
   }
+  // Xáo trộn ngẫu nhiên thứ tự API keys để phân tải đều
+  for (let i = apiKeys.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [apiKeys[i], apiKeys[j]] = [apiKeys[j], apiKeys[i]];
+  }
   return apiKeys.map((k) => createGeminiClient(k));
 }
 
