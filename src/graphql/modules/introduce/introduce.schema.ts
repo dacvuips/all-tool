@@ -4,6 +4,9 @@ const schema = gql`
   extend type Query {
     getAllIntroduce(q: QueryGetListInput): IntroducePageData
     getOneIntroduce(id: ID!): Introduce
+    getMyIntroduces(q: QueryGetListInput): IntroducePageData
+    "Lấy thông tin người đã giới thiệu mình"
+    getMyReferrer: Introduce
     # Add Query
   }
 
@@ -11,6 +14,8 @@ const schema = gql`
     createIntroduce(data: CreateIntroduceInput!): Introduce
     updateIntroduce(id: ID!, data: UpdateIntroduceInput!): Introduce
     deleteOneIntroduce(id: ID!): Introduce
+    "Cập nhật người giới thiệu theo mã giới thiệu"
+    updateMyReferrer(introduceCode: String!): Introduce
     # Add Mutation
   }
 
@@ -26,6 +31,11 @@ const schema = gql`
     blocked: Boolean
   }
 
+  type IntroduceOrder {
+    orderId: String
+    discountPrice: Float
+  }
+
   type Introduce {
     id: String
     createdAt: DateTime
@@ -37,6 +47,8 @@ const schema = gql`
     refereeId: String
     "Trạng thái khoá"
     blocked: Boolean
+    "Danh sách đơn hàng liên quan"
+    orders: [IntroduceOrder]
 
     "Thông tin người giới thiệu"
     referrer: Customer

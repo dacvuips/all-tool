@@ -30,6 +30,7 @@ import {
   GeneratedVideoData,
 } from "../../../../app/affiliate-video/hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../../../app/affiliate-video/hook/useIndexedDB";
+import { Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { TabGroup } from "../../../../shared/utilities/tab";
 
@@ -457,7 +458,7 @@ function LocalMediaGallery() {
         <button
           onClick={fetchLocalMedia}
           disabled={localLoading}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-indigo-600 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition disabled:opacity-50"
         >
           <RiRefreshLine className={localLoading ? "animate-spin" : ""} />
           {t("Làm mới")}
@@ -473,7 +474,7 @@ function LocalMediaGallery() {
               onClick={() => setLocalTypeFilter(item.value)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-full transition-all ${
                 localTypeFilter === item.value
-                  ? "bg-indigo-500 text-white shadow-sm"
+                  ? "bg-primary text-white shadow-sm"
                   : "bg-gray-100 text-gray-600 hover:bg-gray-200"
               }`}
             >
@@ -492,13 +493,13 @@ function LocalMediaGallery() {
           ))}
         </div>
         <div className="relative">
-          <RiSearchLine className="absolute text-gray-400 -translate-y-1/2 left-3 top-1/2" />
-          <input
+          <Input
             type="text"
             placeholder={t("Tìm theo key...")}
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
-            className="py-2 pl-9 pr-3 text-sm border border-gray-200 rounded-lg w-full sm:w-[220px] focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+            className="   text-sm border border-gray-200 rounded-lg w-full sm:w-[220px] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            prefix={<RiSearchLine />}
           />
         </div>
       </div>

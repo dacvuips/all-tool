@@ -7,4 +7,9 @@ export type IIntroduce = TimestampEntity & {
   refereeId: string;
   /** Trạng thái khoá */
   blocked: boolean;
+  /** Danh sách đơn hàng liên quan đến lượt giới thiệu này */
+  orders: {
+    orderId: string;
+    discountPrice: number;
+  }[];
 };
