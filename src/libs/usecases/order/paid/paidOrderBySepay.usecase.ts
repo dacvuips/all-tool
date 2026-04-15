@@ -5,6 +5,7 @@ import { increaseCustomerTryOnLimit } from "../../../../graphql/modules/guest/gu
 import { NotificationBuilder } from "../../../../graphql/modules/notification/notificationBuilder";
 import { OrderChangeEventEnum } from "../../../../graphql/modules/order/orderChangeStream.graphql";
 import { t } from "../../../../helpers/functions/string";
+import logger from "../../../../helpers/logger";
 import { MainConnection } from "../../../../helpers/mongo";
 import { OrderCode } from "../../../../packages/order-code";
 import { BaseCommand, BaseUsecase } from "../../../core";
@@ -14,6 +15,7 @@ import {
   creditTransactionService,
 } from "../../../dal/creditTransaction";
 import { CustomerModel } from "../../../dal/customer";
+import { IntroduceModel } from "../../../dal/introduce/introduce.model";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
 import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
@@ -151,7 +153,7 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
     }
 
     if (!!order.customerId) {
-      // Tạo thông báo
+      // Tạo thông báo thanh toán
       const customerNotify = new NotificationBuilder(
         "Đơn hàng đã được thanh toán",
         `Hệ thống đã nhận được thông tin chuyển khoản từ bạn và đang tiến hành xử lý cho đơn hàng ${order.orderNumber}`
@@ -159,9 +161,88 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
         .sendTo(NotificationTarget.CUSTOMER, order.customerId.toString())
         .order(order._id.toString())
         .build();
-      InsertNotification([customerNotify]);
+
+      // Tạo thông báo đơn thành công
+      const successNotify = new NotificationBuilder(
+        "Nạp gói thành công",
+        `Đơn hàng ${order.orderNumber} đã được xử lý thành công. Bạn đã được cộng ${order.totalAmount} credit vào tài khoản.`
+      )
+        .sendTo(NotificationTarget.CUSTOMER, order.customerId.toString())
+        .order(order._id.toString())
+        .build();
+
+      InsertNotification([customerNotify, successNotify]);
       await increaseCustomerTryOnLimit(order.customerId.toString(), 15);
     }
+
+    // === Hoa hồng giới thiệu: cộng 10% giá đơn cho người giới thiệu ===
+    if (!!order.customerId && order.totalAmount > 0) {
+      try {
+        // Tìm bản ghi giới thiệu: người nạp đơn là refereeId
+        const introduce = await IntroduceModel.findOne({
+          refereeId: order.customerId,
+          blocked: false,
+        });
+
+        if (introduce) {
+          const referralBonus = Math.round(order.totalAmount * 0.1); // 10%
+          const referrerId = introduce.referrerId.toString();
+
+          // Cộng credit cho người giới thiệu
+          const referrer = await CustomerModel.findByIdAndUpdate(
+            referrerId,
+            { $inc: { creditBalance: referralBonus } },
+            { new: true }
+          );
+
+          if (referrer) {
+            const balanceAfter = (referrer as any).creditBalance ?? 0;
+            await creditTransactionService.create({
+              customerId: referrerId,
+              type: CreditTransactionTypeEnum.REFERRAL_BONUS,
+              amount: referralBonus,
+              balanceAfter,
+              orderId: order._id.toString(),
+              description: `Hoa hồng giới thiệu ${referralBonus} credit (10% đơn hàng ${order.orderNumber})`,
+            });
+          }
+
+          // Thông báo cho người giới thiệu
+          const referrerNotify = new NotificationBuilder(
+            "Hoa hồng giới thiệu",
+            `Bạn nhận được ${referralBonus} credit hoa hồng từ đơn hàng của người bạn giới thiệu`
+          )
+            .sendTo(NotificationTarget.CUSTOMER, referrerId)
+            .build();
+          InsertNotification([referrerNotify]);
+
+          // Ghi thông tin đơn vào Introduce
+          await IntroduceModel.findByIdAndUpdate(introduce._id, {
+            $push: {
+              orders: {
+                orderId: order._id,
+                discountPrice: referralBonus,
+              },
+            },
+          });
+
+          logger.info(`Đã cộng hoa hồng giới thiệu`, {
+            referrerId,
+            refereeId: order.customerId.toString(),
+            orderId: order._id.toString(),
+            referralBonus,
+          });
+        }
+      } catch (err) {
+        // Không để lỗi hoa hồng ảnh hưởng tới luồng thanh toán chính
+        logger.error(`Lỗi khi xử lý hoa hồng giới thiệu`, {
+          err,
+          orderId: order._id.toString(),
+          customerId: order.customerId.toString(),
+        });
+      }
+    }
+
     // Bắn socket thông báo cập nhật đơn hàng nếu có
     pubsub.publish(CONSTANTS.SOCKET_EVENT_NAME.ORDER, {
       event: OrderChangeEventEnum.PAYMENT_CHANGED,

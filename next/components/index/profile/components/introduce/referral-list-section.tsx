@@ -69,7 +69,7 @@ export function ReferralListSection({
               text={t(
                 "Mỗi lần người được bạn giới thiệu nạp gói thành công bạn sẽ nhận được 5% - 10% trên mỗi đơn nạp gói của người đó, không giới hạn số lần"
               )}
-              className="mt-2"
+              className="mb-2"
             />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {introduces.map((item, idx) => (

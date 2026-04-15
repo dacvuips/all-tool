@@ -10,6 +10,8 @@ export enum CreditTransactionTypeEnum {
   ORDER_TOPUP = "ORDER_TOPUP",
   /** Trừ credit (hoàn lại) khi giao dịch bị void/huỷ sau khi đã cộng credit */
   ORDER_VOID = "ORDER_VOID",
+  /** Cộng credit hoa hồng giới thiệu (10% giá đơn hàng) */
+  REFERRAL_BONUS = "REFERRAL_BONUS",
 }
 
 export type ICreditTransaction = TimestampEntity & {
