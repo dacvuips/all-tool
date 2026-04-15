@@ -54,26 +54,8 @@ export class ResetGooglePackageJob {
           const pkg = customer.googlePackage || {};
           const expiryDate = pkg.expiryPackageDate ? new Date(pkg.expiryPackageDate) : null;
 
-          // Snapshot trước khi thay đổi
-          const beforeSnapshot: PackageTransactionSnapshot = {
-            subscription: pkg.subscription,
-            videoCount: pkg.videoCount,
-            videoLimit: pkg.videoLimit,
-            imageCount: pkg.imageCount,
-            imageLimit: pkg.imageLimit,
-            imageStreamCount: pkg.imageStreamCount,
-            videoStreamCount: pkg.videoStreamCount,
-            expiryPackageDate: pkg.expiryPackageDate,
-          };
-
           if (expiryDate && expiryDate > now) {
-            // Gói còn hạn → reset count về 0
-            const afterSnapshot: PackageTransactionSnapshot = {
-              ...beforeSnapshot,
-              videoCount: 0,
-              imageCount: 0,
-            };
-
+            // Gói còn hạn → chỉ reset count về 0, KHÔNG lưu PackageTransact
             await CustomerModel.updateOne(
               { _id: customer._id },
               {
@@ -84,19 +66,24 @@ export class ResetGooglePackageJob {
               }
             );
 
-            // Ghi log transaction
-            await PackageTransactionModel.create({
-              customerId: customer._id.toString(),
-              customerCode: customer.code,
-              type: PackageTransactionTypeEnum.DAILY_RESET_COUNT,
-              before: beforeSnapshot,
-              after: afterSnapshot,
-              description: `Reset daily usage count cho gói ${pkg.subscription} (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})`,
-            });
+            logger.info(
+              `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription} (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})`
+            );
 
             resetCount++;
           } else {
             // Gói hết hạn → hạ xuống Free với thông số mặc định
+            const beforeSnapshot: PackageTransactionSnapshot = {
+              subscription: pkg.subscription,
+              videoCount: pkg.videoCount,
+              videoLimit: pkg.videoLimit,
+              imageCount: pkg.imageCount,
+              imageLimit: pkg.imageLimit,
+              imageStreamCount: pkg.imageStreamCount,
+              videoStreamCount: pkg.videoStreamCount,
+              expiryPackageDate: pkg.expiryPackageDate,
+            };
+
             const afterSnapshot: PackageTransactionSnapshot = {
               ...FREE_PACKAGE_DEFAULTS,
               expiryPackageDate: undefined,
