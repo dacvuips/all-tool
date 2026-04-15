@@ -293,7 +293,7 @@ export default function PricingPage() {
           <div className="pricing-referral__badge">
             <RiGiftLine /> {t("Chương Trình Giới Thiệu")}
           </div>
-          <h2 className="pricing-referral__title">{t("Kiếm 10 - 30% Hoa Hồng")}</h2>
+          <h2 className="pricing-referral__title">{t("Hoa Hồng Trọn Đời")}</h2>
           <p className="pricing-referral__desc">
             {t("Giới thiệu bạn bè đăng ký gói và nhận hoa hồng cho mỗi gói được kích hoạt.")}
           </p>
@@ -302,15 +302,9 @@ export default function PricingPage() {
           <div className="pricing-referral__tiers">
             <div className="pricing-referral__tier">
               <span className="pricing-referral__tier-percent">10%</span>
-              <span className="pricing-referral__tier-label">{t("Giới thiệu < 10 người")}</span>
-            </div>
-            <div className="pricing-referral__tier">
-              <span className="pricing-referral__tier-percent">20%</span>
-              <span className="pricing-referral__tier-label">{t("Giới thiệu 20 - 50 người")}</span>
-            </div>
-            <div className="pricing-referral__tier">
-              <span className="pricing-referral__tier-percent">30%</span>
-              <span className="pricing-referral__tier-label">{t("Giới thiệu > 50 người")}</span>
+              <span className="pricing-referral__tier-label">
+                {t("Hoa hồng cho mỗi đơn hàng kích hoạt thành công")}
+              </span>
             </div>
           </div>
 

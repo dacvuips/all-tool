@@ -370,21 +370,36 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                     <></>
                   )}
 
+                  {/* Hướng dẫn (mobile) */}
+                  <Button
+                    outline
+                    className="px-2 h-8 rounded-md"
+                    icon={<RiBookOpenLine className="text-xs" />}
+                    text={screenMd ? t("Hướng dẫn") : undefined}
+                  />
+                  {/* Bảng giá (mobile) */}
+                  <Button
+                    outline
+                    className="px-2 h-8 rounded-md"
+                    icon={<RiPriceTag3Line className="text-xs" />}
+                    text={screenMd ? t("Bảng giá") : undefined}
+                    href="/pricing"
+                  />
                   {/* Affiliate Video: API Key status (mobile) */}
-                  {
-                    <Button
-                      onClick={() =>
-                        !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
-                      }
-                      outline
-                      className="px-2 h-8 rounded-md"
-                      success={keyReady}
-                      gray={!keyReady}
-                      icon={<RiKey2Line className="text-xs" />}
-                      asyncLoading={false}
-                      text={t("API Key")}
-                    />
-                  }
+                  <Button
+                    onClick={() =>
+                      !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                    }
+                    outline
+                    className="px-2 h-8 rounded-md"
+                    success={keyReady}
+                    gray={!keyReady}
+                    icon={<RiKey2Line className="text-xs" />}
+                    asyncLoading={false}
+                    text={screenMd ? t("API Key") : undefined}
+                  />
+                  {/* Package Usage Quota (mobile) */}
+                  {customer && <PackageUsageQuota compact />}
 
                   <CartDropdown order={order} />
                   {customer && <NotifiCationDropdown />}
@@ -596,7 +611,7 @@ export function NotifiCationDropdown() {
   );
 }
 
-function PackageUsageQuota() {
+function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const packageRef = useRef();
@@ -613,34 +628,58 @@ function PackageUsageQuota() {
         ref={packageRef}
         className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2 cursor-default"
       >
-        <span className="px-2.5 text-gray-700 font-semibold  whitespace-nowrap border-r border-gray-300">
+        <span className={`px-2.5 text-gray-700 font-semibold whitespace-nowrap ${!compact ? 'border-r border-gray-300' : ''}`}>
           {t("Gói")}:{" "}
           <span className="text-gray-900">
             {customer?.googlePackage?.subscription || t("Dùng thử")}
           </span>
         </span>
-        <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
-          Video:{" "}
-          <span className="font-semibold  text-gray-900">
-            {customer?.googlePackage?.videoCount ?? 0}
-          </span>
-          <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
-        </span>
-        <span className="px-2.5 text-gray-600 whitespace-nowrap">
-          {t("Ảnh")}:{" "}
-          <span className="font-semibold   text-gray-900">
-            {customer?.googlePackage?.imageCount ?? 0}
-          </span>
-          <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
-        </span>
+        {!compact && (
+          <>
+            <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
+              Video:{" "}
+              <span className="font-semibold  text-gray-900">
+                {customer?.googlePackage?.videoCount ?? 0}
+              </span>
+              <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
+            </span>
+            <span className="px-2.5 text-gray-600 whitespace-nowrap">
+              {t("Ảnh")}:{" "}
+              <span className="font-semibold   text-gray-900">
+                {customer?.googlePackage?.imageCount ?? 0}
+              </span>
+              <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
+            </span>
+          </>
+        )}
       </div>
       <Popover reference={packageRef} trigger="hover" placement="bottom" arrow>
-        <div
-          className={`p-2 text-sm whitespace-nowrap ${
-            isExpired ? "text-red-600 font-semibold" : "text-gray-700"
-          }`}
-        >
-          {expiryText}
+        <div className="p-2 text-sm space-y-1">
+          {compact && (
+            <>
+              <div className="text-gray-600 whitespace-nowrap">
+                Video:{" "}
+                <span className="font-semibold text-gray-900">
+                  {customer?.googlePackage?.videoCount ?? 0}
+                </span>
+                <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
+              </div>
+              <div className="text-gray-600 whitespace-nowrap">
+                {t("Ảnh")}:{" "}
+                <span className="font-semibold text-gray-900">
+                  {customer?.googlePackage?.imageCount ?? 0}
+                </span>
+                <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
+              </div>
+            </>
+          )}
+          <div
+            className={`whitespace-nowrap ${
+              isExpired ? "text-red-600 font-semibold" : "text-gray-700"
+            }`}
+          >
+            {expiryText}
+          </div>
         </div>
       </Popover>
     </>
