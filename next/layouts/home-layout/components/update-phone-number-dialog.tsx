@@ -1,8 +1,7 @@
 import { Player } from "@lottiefiles/react-lottie-player";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { PhoneNumberField } from "../../../components/shared/common/phone-number-field";
 import { Button, Field, Form, Input } from "../../../components/shared/utilities/form";
 import { useOptionsTranslation } from "../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../lib/providers/auth-provider";
@@ -26,26 +25,25 @@ const UpdatePhoneNumberForm = () => {
   const [selectCountryCode, setSelectCountryCode] = useState(LOCALES[0].value);
   const selectLocale = LOCALES.find((item) => item.value === selectCountryCode);
 
-  useEffect(() => {
-    if (customer && !isOpen) {
-      setIsOpen(!!customer?.phoneNumber ? false : true);
-    }
-  }, [customer]);
+  // useEffect(() => {
+  //   if (customer && !isOpen) {
+  //     setIsOpen(!!customer?.phoneNumber ? false : true);
+  //   }
+  // }, [customer]);
 
   const handleSubmit = async (data) => {
     setLoading(true);
     try {
       await CustomerService.customerUpdatePhoneNumberAndPassword({
-        phoneNumber: data.phone,
         password: data.password,
+        ...(data.introduceCode ? { introduceCode: data.introduceCode } : {}),
       }).then((res) => {
-        setCustomer({ ...customer, ...res });
         setLoading(false);
-        toast.success(t("Cập nhật số điện thoại thành công"));
+        toast.success(t("Cập nhật thành công"));
         setIsSuccess(true);
       });
     } catch (error) {
-      toast.error(`${t("Cập nhật số điện thoại không thành công")}, ${error.message}`);
+      toast.error(`${t("Cập nhật không thành công")}, ${error.message}`);
       setLoading(false);
     }
   };
@@ -103,7 +101,7 @@ const UpdatePhoneNumberAndPasswordFields = ({
           "Tài khoản chưa có số điện thoại và mật khẩu, số điện thoại dùng để phục vụ việc mua hàng của quý khách, nên cập nhật chính xác !"
         )}
       </div>
-      <PhoneNumberField required={true} name="phone" />
+
       <Field
         required
         className="w-full"
@@ -141,6 +139,19 @@ const UpdatePhoneNumberAndPasswordFields = ({
         <Input
           placeholder={t("Xác nhận lại mật khẩu mới")}
           type="password"
+          className="text-sm font-light border-gray-200 sm:h-12 sm:text-base"
+        />
+      </Field>
+
+      <Field
+        className="w-full"
+        name="introduceCode"
+        label={t("Mã giới thiệu")}
+        tooltip={t("Nhập mã giới thiệu nếu có (không bắt buộc)")}
+        validation={{ code: true }}
+      >
+        <Input
+          placeholder={t("Nhập mã giới thiệu (nếu có)")}
           className="text-sm font-light border-gray-200 sm:h-12 sm:text-base"
         />
       </Field>

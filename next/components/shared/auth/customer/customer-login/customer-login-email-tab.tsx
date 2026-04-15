@@ -10,7 +10,6 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CustomerService } from "../../../../../lib/repo/customer/customer.repo";
 import { loginModeEnum } from "../../../../../lib/repo/types";
-import { PhoneNumberField } from "../../../common/phone-number-field";
 import { SlideCaptchaVerifyDialog } from "../../../common/slide-captcha_verify";
 import { DialogProps } from "../../../utilities/dialog/dialog";
 import { Button, Field, Form, Input } from "../../../utilities/form";
@@ -43,15 +42,15 @@ export const CustomerLoginEmailTab = ({ ...props }: Props) => {
 
   const isWaitingOTPDelay = useMemo(() => otpDelay > 0, [otpDelay]);
 
-  const handleSubmit = async ({ phone, email, password, name }) => {
+  const handleSubmit = async ({ email, password, name, introduceCode }) => {
     try {
       if (mode == loginModeEnum.regis) {
         if (!customer) {
           await CustomerService.customerRegisterWithEmail({
             name,
-            phoneNumber: phone,
             email,
             password: password,
+            ...(introduceCode ? { introduceCode } : {}),
           })
             .then((res) => {
               toast.success(t("Đăng ký thành công."));
@@ -189,7 +188,6 @@ function CustomerLoginFields({
   const [forgetPasswordNoteText, setForgetPasswordNoteText] = useState<string>();
   const [openSlideVerify, setOpenSlideVerify] = useState(null);
   const [emailError, setEmailError] = useState<string>();
-  const [nameError, setNameError] = useState<string>();
 
   const { setTimeBlock, timeBlockRemain, removeTimeBlock } = useTimeBlockButtonForgetPassword();
 
@@ -326,10 +324,6 @@ function CustomerLoginFields({
         <div className="max-w-xs text-sm text-center text-gray-600">{forgetPasswordNoteText}</div>
       )}
 
-      {mode === loginModeEnum.regis && !forgotPassQuery && (
-        <PhoneNumberField required={mode == loginModeEnum.regis} name="phone" />
-      )}
-
       {!forgotPassQuery && (
         <Field
           required
@@ -353,25 +347,39 @@ function CustomerLoginFields({
         </Field>
       )}
       {mode === loginModeEnum.regis && !forgotPassQuery && (
-        <Field
-          required
-          className={`w-full`}
-          name="retypePassword"
-          label={t("Nhập lại mật khẩu")}
-          tooltip={t("Xác nhận lại mật khẩu đăng nhập của bạn")}
-          validation={{
-            checkPassword: (value, values) => {
-              if (value != values["password"]) return t("Mật khẩu nhập lại không khớp");
-              return "";
-            },
-          }}
-        >
-          <Input
-            placeholder={t("Xác nhận lại mật khẩu")}
-            type="password"
-            className="text-sm font-light border-gray-200 sm:h-12 sm:text-base"
-          />
-        </Field>
+        <>
+          <Field
+            required
+            className={`w-full`}
+            name="retypePassword"
+            label={t("Nhập lại mật khẩu")}
+            tooltip={t("Xác nhận lại mật khẩu đăng nhập của bạn")}
+            validation={{
+              checkPassword: (value, values) => {
+                if (value != values["password"]) return t("Mật khẩu nhập lại không khớp");
+                return "";
+              },
+            }}
+          >
+            <Input
+              placeholder={t("Xác nhận lại mật khẩu")}
+              type="password"
+              className="text-sm font-light border-gray-200 sm:h-12 sm:text-base"
+            />
+          </Field>
+          <Field
+            className="w-full"
+            name="introduceCode"
+            label={t("Mã giới thiệu")}
+            tooltip={t("Nhập mã giới thiệu nếu có (không bắt buộc)")}
+            validation={{ code: true }}
+          >
+            <Input
+              placeholder={t("Nhập mã giới thiệu (nếu có)")}
+              className="text-sm font-light border-gray-200 sm:h-12 sm:text-base"
+            />
+          </Field>
+        </>
       )}
       {(forgotPassQuery || mode != loginModeEnum.regis) && (
         <div className="flex justify-end mb-2 w-full">

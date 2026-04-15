@@ -161,9 +161,9 @@ export class CustomerRepository extends CrudRepository<Customer> {
 
   async customerRegisterWithEmail(data: {
     name: string;
-    phoneNumber: string;
     email: string;
     password: string;
+    introduceCode?: string;
   }) {
     return await this.mutate({
       mutation: `customerRegisterWithEmail(input: $input)`,
@@ -224,7 +224,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }).then((res) => res.data.g0);
   }
 
-  async customerUpdatePhoneNumberAndPassword(data: { phoneNumber: string; password: string }) {
+  async customerUpdatePhoneNumberAndPassword(data: { password: string; introduceCode?: string }) {
     return this.mutate({
       mutation: `customerUpdatePhoneNumberAndPassword(input: $input)`,
       variablesParams: "($input: CustomerUpdatePhoneNumberAndPasswordInput!)",
@@ -282,10 +282,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }).then((res) => res.data.g0);
   }
 
-  async customerUpdatePackage(data: {
-    customerId: string;
-    subscription: string;
-  }) {
+  async customerUpdatePackage(data: { customerId: string; subscription: string }) {
     return this.mutate({
       mutation: `customerUpdatePackage(customerId: "${data.customerId}", subscription: "${data.subscription}") { ${this.shortFragment} }`,
     }).then((res) => res.data.g0);

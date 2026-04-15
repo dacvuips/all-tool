@@ -7,18 +7,18 @@ import { getFirebaseErrorMsg } from "../../../../helpers/getFirebaseErrorMsg";
 import { startSession } from "../../../../helpers/mongo";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { CustomerModel } from "../../../dal/customer";
+import { IntroduceModel } from "../../../dal/introduce/introduce.model";
 import { UserModel } from "../../../dal/user";
 import { CreateNewCustomerAndShop, Payload } from "./create-customer";
 export class CustomerRegistWithEmailCommand extends BaseCommand {
   @IsNotEmpty()
   name: string;
   @IsNotEmpty()
-  phoneNumber: string;
-  @IsNotEmpty()
   @IsEmail()
   email: string;
   @IsNotEmpty()
   password: string;
+  introduceCode?: string;
 }
 
 type CustomerRegistWithEmailResponse = {
@@ -26,11 +26,11 @@ type CustomerRegistWithEmailResponse = {
 };
 class CustomerRegistWithEmailUsercase extends BaseUsecase {
   async execute(cmd: CustomerRegistWithEmailCommand): Promise<CustomerRegistWithEmailResponse> {
-    const { phoneNumber, email, password, name } = cmd;
+    const { email, password, name, introduceCode } = cmd;
 
     // get customer by phone number and email to check exist customer
     const customer = await CustomerModel.findOne({
-      $or: [{ phoneNumber: convertPhone(phoneNumber, "") }, { email: email }],
+      $or: [{ email: email }],
     });
 
     const userExit = await UserModel.findOne({ email });
@@ -58,7 +58,6 @@ class CustomerRegistWithEmailUsercase extends BaseUsecase {
           name,
           email,
           uid: fbCustomer.uid,
-          phoneNumber: convertPhone(phoneNumber, ""),
           passwordHash: passwordHash.generate(password),
         };
 
@@ -67,6 +66,25 @@ class CustomerRegistWithEmailUsercase extends BaseUsecase {
       .finally(() => {
         session.endSession();
       });
+
+    // Xử lý mã giới thiệu nếu có
+    if (introduceCode) {
+      const referrer = await CustomerModel.findOne({ code: introduceCode });
+      if (!referrer) {
+        throw new ForbiddenError(t("Mã giới thiệu không tồn tại, vui lòng kiểm tra lại"));
+      }
+      const newCustomer = await CustomerModel.findOne({ email });
+      if (newCustomer) {
+        const existingIntroduce = await IntroduceModel.findOne({ refereeId: newCustomer._id });
+        if (!existingIntroduce) {
+          await IntroduceModel.create({
+            referrerId: referrer._id,
+            refereeId: newCustomer._id,
+          });
+        }
+      }
+    }
+
     return {
       success: true,
     };

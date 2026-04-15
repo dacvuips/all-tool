@@ -11,10 +11,8 @@ import { useSettingPublic } from "../../../../../lib/hooks/useSettingPublic";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../../lib/providers/global-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { NotifyText } from "../../../../shared/common/notify-text";
 import { Button, Field, Form, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
-import { AddressSelector } from "../../../cart/address-selector";
 import { ProfileAccountBankInfo } from "./profile-account-bank";
 export function ProfileAccount({ ...props }) {
   const { t } = useTranslation();
@@ -105,13 +103,7 @@ export function ProfileAccount({ ...props }) {
           </div>
         </div>
       </div>
-      <NotifyText
-        color="blue"
-        className="mt-2"
-        text={t(
-          "Quý khách hàng tuyệt đối không cung cấp số điện thoại, mật khẩu, otp cho bất kỳ ai kể cả Admin và giao dịch viên"
-        )}
-      />
+
       <div className="my-4 mt-0 lg:mt-0 lg:my-8">
         {!!isMandatoryBankUpdate && (
           <>
@@ -167,7 +159,7 @@ export function ProfileAccount({ ...props }) {
               placeholder={t("Nhập email")}
             />
           </Field>
-          <AddressSelector />
+
           <div
             className="flex items-center col-span-12 mb-2 text-sm font-semibold cursor-pointer hover:text-danger text-primary md:text-base"
             onClick={() => setOpenChangePasswordDialog(true)}

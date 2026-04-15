@@ -13,10 +13,10 @@ export default {
     }
 
     input CustomerUpdatePhoneNumberAndPasswordInput {
-      "Số điện thoại"
-      phoneNumber: String!
       "Mật khẩu"
       password: String!
+      "Mã giới thiệu (không bắt buộc)"
+      introduceCode: String
     }
   `,
   resolver: {

@@ -13,12 +13,12 @@ export default {
     input CustomerRegisterWithEmailInput {
       "Tên khách hàng"
       name: String!
-      "Số điện thoại của khách hàng"
-      phoneNumber: String!
       "Email của khách hàng"
       email: String!
       "Mật khẩu của khách hàng"
       password: String!
+      "Mã giới thiệu (không bắt buộc)"
+      introduceCode: String
     }
   `,
   resolver: {
