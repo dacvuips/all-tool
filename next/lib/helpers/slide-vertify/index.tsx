@@ -193,14 +193,15 @@ export default memo(
     const draw = (img: HTMLImageElement) => {
       const canvasCtx = canvasRef.current?.getContext("2d");
       const blockCtx = blockRef.current?.getContext("2d");
+      if (!canvasCtx || !blockCtx || !blockRef.current) return;
 
       xRef.current = getRandomNumberByRange(L + 10, width - (L + 10));
       yRef.current = getRandomNumberByRange(10 + r * 2, height - (L + 10));
-      canvasCtx && drawPath(canvasCtx, xRef.current, yRef.current, "fill");
-      blockCtx && drawPath(blockCtx, xRef.current, yRef.current, "clip");
+      drawPath(canvasCtx, xRef.current, yRef.current, "fill");
+      drawPath(blockCtx, xRef.current, yRef.current, "clip");
 
-      canvasCtx?.drawImage(img, 0, 0, width, height);
-      blockCtx?.drawImage(img, 0, 0, width, height);
+      canvasCtx.drawImage(img, 0, 0, width, height);
+      blockCtx.drawImage(img, 0, 0, width, height);
 
       const y1 = yRef.current - r * 2 - 1;
       const ImageData = blockCtx.getImageData(xRef.current - 3, y1, L, L);
@@ -219,6 +220,7 @@ export default memo(
     const reset = () => {
       const canvasCtx = canvasRef.current?.getContext("2d");
       const blockCtx = blockRef.current?.getContext("2d");
+      if (!canvasCtx || !blockCtx || !blockRef.current) return;
 
       setSliderLeft(0);
       setResult("result");
@@ -230,7 +232,7 @@ export default memo(
       blockCtx.clearRect(0, 0, width, height);
 
       setLoading(true);
-      imgRef.current.setSrc(getRandomImgSrc());
+      imgRef.current?.setSrc(getRandomImgSrc());
     };
 
     const handleRefresh = () => {
@@ -243,7 +245,7 @@ export default memo(
       const average = arr.reduce(sum) / arr.length;
       const deviations = arr.map((x) => x - average);
       const stddev = Math.sqrt(deviations.map(square).reduce(sum) / arr.length);
-      const left = parseInt(blockRef.current.style.left);
+      const left = parseInt(blockRef.current?.style.left || "0");
       const percent = ((left / xRef.current) * 100).toFixed(1);
       setResultText(percent);
       return {
@@ -270,7 +272,7 @@ export default memo(
       if (moveX < 0 || moveX + (sliderWidth || 60) + 2 >= width) return false;
       setSliderLeft(moveX);
       const blockLeft = ((width - 40) / (width - (sliderWidth || 60) + 2)) * moveX;
-      blockRef.current.style.left = blockLeft + "px";
+      if (blockRef.current) blockRef.current.style.left = blockLeft + "px";
 
       setSliderClass("sliderContainer sliderContainer_active");
       trailRef.current.push(moveY);
