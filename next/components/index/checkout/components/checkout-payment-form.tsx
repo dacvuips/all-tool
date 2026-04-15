@@ -63,7 +63,7 @@ const PLAN_META: Record<
     label: "Gói Tiêu Chuẩn",
     icon: "⚡",
     accentColor: "text-primary",
-    accentBg: "bg-primary/10",
+    accentBg: " bg-gray-100",
     borderActive: "border-primary",
     highlight: true,
     badgeLabel: "Hot",

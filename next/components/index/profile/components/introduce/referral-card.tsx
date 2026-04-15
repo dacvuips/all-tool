@@ -124,4 +124,3 @@ export function ReferralCard({ item, index }: { item: Introduce; index: number }
     </div>
   );
 }
-
