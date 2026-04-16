@@ -272,6 +272,7 @@ export function ProfileIntroduce() {
               )}
               className="mt-2"
             />
+            <NotifyText color="green" text={t("Đồng hành cùng phát triển")} className="mt-2" />
           </div>
         </div>
 

@@ -37,6 +37,7 @@ const schema = gql`
     birthday: DateTime
     "Điểm thưởng"
     rewardPoint: Int
+
     "Tỉnh/Thành phố"
     province: String
     "Quận/Huyện"
@@ -76,8 +77,6 @@ const schema = gql`
     rewardPoint: Int
     "Ngân hàng đã xác thực"
     bankVerifiedId: String
-    "Điểm uy tín/điểm tín dụng"
-    creditPoint: Float
     "Có thưởng"
     hasReward: Boolean
     "Giới thiệu"

@@ -32,6 +32,7 @@ export type CustomerTimes = {
   passwordChangedAt?: Date; // Thời gian thay đổi mật khẩu
 };
 
+
 export enum RewardPointTypeEnum {
   TRANSACTION = "TRANSACTION",
   PAYMENT = "PAYMENT",
@@ -72,8 +73,7 @@ export type ICustomer = TimestampEntity & {
   birthday?: Date; // Ngày sinh
   times?: CustomerTimes; // Lần mua hàng
   rewardPoint?: number; // Điểm thưởng
-  creditBalance?: number; // Điểm tín dụng (uy tín 0-100)
-  /** Số dư credit để trừ khi chạy node (charge/refund theo CreditTransaction) */
+
   bankVerifiedId?: string; // Mã Ngân hàng đã xác thực
   bankVerified?: any; //Ngân hàng đã xác thực
   hasReward?: boolean; // Có thưởng

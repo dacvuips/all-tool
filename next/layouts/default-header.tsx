@@ -16,7 +16,6 @@ import {
   RiLogoutBoxLine,
   RiMenu3Line,
   RiPriceTag3Line,
-  RiUserHeartFill,
 } from "react-icons/ri";
 
 import { VideoDialog } from "../components/shared/common/video-dialog";
@@ -222,10 +221,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                             <RiHandCoinFill className="mr-2 ml-1 text-yellow-400" />
                             {parseNumber(wallet?.balance) || 0} {" MPoint"}
                           </div>
-                          <div className="flex flex-row items-center font-semibold">
-                            <RiUserHeartFill className="mr-2 ml-1 text-yellow-400" />
-                            {parseNumber(customer?.creditBalance) || 0} {t("Credit")}
-                          </div>
+
                         </div>
                       </div>
                     </Dropdown.Item>

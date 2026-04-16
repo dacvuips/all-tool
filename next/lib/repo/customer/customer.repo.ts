@@ -34,7 +34,6 @@ export interface Customer extends BaseModel {
   times?: CustomerTimes; // Lần mua hàng
   rewardPoint?: number; //Điểm thưởng
   bankVerifiedId?: string; // Ngân hàng đã xác thực
-  creditBalance?: number; //Điểm uy tín / Điểm tín dụng
   hasReward?: boolean; // Có thưởng
   intro?: CustomerIntro; // giới thiệu
   province?: string;
@@ -98,7 +97,6 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
-    creditPoint
     hasReward
     province: String
     district: String
@@ -125,11 +123,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
       query: `checkCustomerEmail(email: "${email}")`,
     }).then((res) => res.data.g0);
   }
-  async customerUpdateHasRewardPoint() {
-    return await this.mutate({
-      mutation: `customerUpdateHasRewardPoint`,
-    }).then((res) => res.data.g0);
-  }
+
   async customerIntroOrder() {
     return await this.mutate({
       mutation: `customerIntroOrder`,
@@ -270,11 +264,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
       },
     }).then((res) => res.data.g0);
   }
-  async customerCreditPoint(data: { action: "add" | "sub"; customerId: string; point: number }) {
-    return this.query({
-      query: `customerCreditPoint(action: "${data.action}", customerId: "${data.customerId}", point: ${data.point})`,
-    }).then((res) => res.data.g0);
-  }
+
 
   async customerGetEmail() {
     return this.query({

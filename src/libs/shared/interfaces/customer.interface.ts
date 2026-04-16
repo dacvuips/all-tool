@@ -12,6 +12,7 @@ export type CustomerTimes = {
   passwordChangedAt?: Date; // Thời gian thay đổi mật khẩu
 };
 
+
 export enum RewardPointTypeEnum {
   TRANSACTION = "TRANSACTION",
   PAYMENT = "PAYMENT",
