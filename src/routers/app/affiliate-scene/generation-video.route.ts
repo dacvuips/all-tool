@@ -4,7 +4,7 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
   checkVideoLimit,
-  getCliproxyCredentials,
+  getReCaptchaCredentials,
   incrementVideoCount,
   uploadImageToGoogleLabs,
 } from "./_shared";
@@ -153,7 +153,13 @@ export default [
 
         // Kiểm tra giới hạn video trước khi tạo
         await checkVideoLimit(context.id);
-
+        // Lấy captcha + credentials + projectId + accessToken
+        const {
+          captcha: recaptchaToken,
+          sessionId,
+          projectId,
+          accessToken,
+        } = await getReCaptchaCredentials("VIDEO_GENERATION");
         // Upload ảnh lên Google Labs trước nếu có
         let uploadedImageName: string | null = null;
         if (body.image?.imageBytes) {
@@ -161,7 +167,8 @@ export default [
           uploadedImageName = await uploadImageToGoogleLabs(
             body.image.imageBytes,
             body.image.mimeType || "image/jpeg",
-            context.id
+            accessToken,
+            projectId
           );
           logger.info(`[generation-video] Upload ảnh thành công, name: ${uploadedImageName}`);
         }
@@ -179,14 +186,6 @@ export default [
         };
 
         sendSSE({ type: "progress", progress: 5, message: "Đang khởi tạo..." });
-
-        // Lấy captcha + credentials từ Cliproxy API
-        const {
-          captcha: recaptchaToken,
-          sessionId,
-          projectId,
-          accessToken,
-        } = await getCliproxyCredentials("VIDEO_GENERATION", context.id);
 
         sendSSE({
           type: "progress",

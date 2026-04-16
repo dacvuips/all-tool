@@ -706,6 +706,11 @@ export const useOptionsTranslation = () => {
       label: t("SeeDance"),
       image: "/assets/img/see-dance.png",
     },
+    {
+      value: AiProviderKeyEnum.GOOGLE_LABS_API_KEY,
+      label: t("Google Labs"),
+      image: "/assets/img/flow.png",
+    },
   ];
   const SPEED_MODE_OPTIONS: { label: string; value: SpeedMode }[] = [
     { label: t("Nhanh"), value: "fast" },

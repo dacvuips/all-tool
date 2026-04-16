@@ -6,7 +6,7 @@ import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   AffiliateVideoFormConfig,
   callWithKeyRotation,
-  getCustomerGeminiClients,
+  getAdminGeminiClients,
   interpolateTemplate,
 } from "./_shared";
 
@@ -29,7 +29,7 @@ export default [
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const clients = await getCustomerGeminiClients(context.id);
+        const clients = await getAdminGeminiClients();
 
         const prompt = `
 
@@ -56,8 +56,6 @@ Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoạ
 
         // Thay thế placeholder trong text
         const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
-
-        logger.info(`[generation-scene] Gọi Gemini cho user ${context.id} (${clients.length} keys)`);
 
         const response = await callWithKeyRotation(
           clients,

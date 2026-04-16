@@ -72,13 +72,10 @@ function parseMultipleKeys(encryptedValue: string): string[] {
  * Trả về array GoogleGenAI clients (1 per key).
  * Throw error nếu chưa cấu hình key.
  */
-export async function getCustomerGeminiClients(
-  customerId: string
-): Promise<InstanceType<typeof GoogleGenAI>[]> {
+export async function getAdminGeminiClients(): Promise<InstanceType<typeof GoogleGenAI>[]> {
   const credentialDoc = (await credentialService.findOne({
-    customerId,
     key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-    isCustomerCredential: true,
+    isAdminCredential: true,
   })) as any;
   const credential = credentialDoc?._doc;
   if (!credential?.value) {
@@ -103,11 +100,19 @@ export async function getCustomerGeminiClients(
 /**
  * (Backward compat) Lấy 1 GoogleGenAI client duy nhất (key đầu tiên).
  */
-export async function getCustomerGeminiClient(
-  customerId: string
-): Promise<InstanceType<typeof GoogleGenAI>> {
-  const clients = await getCustomerGeminiClients(customerId);
+export async function getGeminiClient(): Promise<InstanceType<typeof GoogleGenAI>> {
+  const clients = await getAdminGeminiClients();
   return clients[0];
+}
+
+/**
+ * Lấy GoogleGenAI client cho customer (hiện tại dùng admin key chung).
+ * customerId được nhận nhưng chưa dùng vì chưa có customer-specific Gemini key.
+ */
+export async function getCustomerGeminiClient(
+  _customerId: string
+): Promise<InstanceType<typeof GoogleGenAI>> {
+  return getGeminiClient();
 }
 
 /**
@@ -237,43 +242,33 @@ export async function getCustomerOpenAIKey(customerId: string): Promise<string> 
  * Helper: Lấy Google Labs Access Token và Project ID của customer.
  * Throw error nếu chưa cấu hình.
  */
-export async function getCustomerGoogleLabsCredentials(
-  customerId: string
-): Promise<{ accessToken: string; projectId: string; geminiAPIKeys: string[] }> {
-  const [tokenDoc, projectDoc, geminiAPIKeyDoc] = await Promise.all([
+export async function getCustomerGoogleLabsCredentials(): Promise<{
+  googleLabsApiKey: string;
+  geminiAPIKeys: string[];
+}> {
+  const [apiKeyDoc, geminiAPIKeyDoc] = await Promise.all([
     credentialService.findOne({
-      customerId,
-      key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
-      isCustomerCredential: true,
+      key: AiProviderKeyEnum.GOOGLE_LABS_API_KEY,
+      isAdminCredential: true,
     }),
+
     credentialService.findOne({
-      customerId,
-      key: AiProviderKeyEnum.GOOGLE_LABS_PROJECT_ID,
-      isCustomerCredential: true,
-    }),
-    credentialService.findOne({
-      customerId,
       key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-      isCustomerCredential: true,
+      isAdminCredential: true,
     }),
   ]);
-  const tokenCred = (tokenDoc as any)?._doc;
-  const projectCred = (projectDoc as any)?._doc;
-  if (!tokenCred?.value) {
+  const apiKeyCred = (apiKeyDoc as any)?._doc;
+
+  if (!apiKeyCred?.value) {
     const err: any = new Error("Chưa cấu hình Google Labs Access Token");
     err.statusCode = 403;
     throw err;
   }
-  if (!projectCred?.value) {
-    const err: any = new Error("Chưa cấu hình Google Labs Project ID");
-    err.statusCode = 403;
-    throw err;
-  }
+
   const geminiCred = (geminiAPIKeyDoc as any)?._doc;
   const geminiAPIKeys = geminiCred?.value ? parseMultipleKeys(geminiCred.value) : [];
   return {
-    accessToken: decryptProviderSecret(tokenCred.value),
-    projectId: decryptProviderSecret(projectCred.value),
+    googleLabsApiKey: decryptProviderSecret(apiKeyCred.value),
     geminiAPIKeys,
   };
 }
@@ -363,9 +358,9 @@ export function interpolateTemplate(text: string, config: AffiliateVideoFormConf
 export async function uploadImageToGoogleLabs(
   imageBytes: string,
   mimeType: string,
-  customerId: string
+  accessToken: string,
+  projectId: string
 ): Promise<string> {
-  const { accessToken, projectId } = await getCustomerGoogleLabsCredentials(customerId);
   const endpoint = "https://aisandbox-pa.googleapis.com/v1/flow/uploadImage";
   const fileName = `photo_${Date.now()}.jpg`;
 
@@ -429,19 +424,18 @@ export interface CliproxyCaptchaData {
  * Hỗ trợ 2 loại action: VIDEO_GENERATION và IMAGE_GENERATION.
  * Throw error nếu không lấy được captcha hoặc accessToken.
  */
-export async function getCliproxyCredentials(
-  action: CliproxyAction,
-  customerId: string
+export async function getReCaptchaCredentials(
+  action: CliproxyAction
 ): Promise<CliproxyCaptchaData & { projectId: string; accessToken: string }> {
-  const url =
-    action === "VIDEO_GENERATION"
-      ? "http://cliproxy.io.vn/captcha"
-      : `http://cliproxy.io.vn/captcha?action=${action}`;
-
-  const [captchaResp, googleLabsCreds] = await Promise.all([
-    fetch(url),
-    getCustomerGoogleLabsCredentials(customerId),
-  ]);
+  const url = `https://capcha.aitipmart.site/captcha${
+    action === "VIDEO_GENERATION" ? "" : "?action=IMAGE_GENERATION"
+  }`;
+  const { googleLabsApiKey } = await getCustomerGoogleLabsCredentials();
+  const captchaResp = await fetch(url, {
+    headers: {
+      "X-API-Key": googleLabsApiKey,
+    },
+  });
 
   const captchaData = (await captchaResp.json()) as CliproxyCaptchaData;
 
@@ -454,7 +448,7 @@ export async function getCliproxyCredentials(
   return {
     ...captchaData,
     sessionId: captchaData.sessionId,
-    projectId: googleLabsCreds.projectId,
-    accessToken: googleLabsCreds.accessToken,
+    projectId: captchaData.ProjectID,
+    accessToken: captchaData.accessToken,
   };
 }

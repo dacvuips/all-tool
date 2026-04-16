@@ -160,34 +160,17 @@ interface CredentialTab {
   inputType?: string;
   description?: string;
   multiLine?: boolean;
-  multiLineHint?: string;
 }
 
 const CREDENTIAL_TABS: CredentialTab[] = [
   {
     key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
     label: "Gemini API Key",
-    placeholder: "AIza...\nAIza...\nAIza...",
+    placeholder: "AIza...",
     helpUrl: "https://aistudio.google.com/app/apikey",
     helpLabel: "aistudio.google.com",
-    description: "Dùng cho tạo kịch bản và video (Gemini / Veo). Hỗ trợ nhiều key, mỗi key 1 dòng.",
+    description: "Dùng cho tạo kịch bản và video (Gemini / Veo).",
     multiLine: true,
-    multiLineHint: "Nhập mỗi API Key trên một dòng riêng. Hệ thống sẽ tự động xoay vòng khi key bị giới hạn.",
-  },
-  {
-    key: AiProviderKeyEnum.GOOGLE_LABS_TOKEN,
-    label: "Google Labs Token",
-    placeholder: "ya29...",
-    helpUrl: "https://aisandbox.google.com",
-    helpLabel: "aisandbox.google.com",
-    description: "Access Token cho tạo ảnh (GEM PIX 2)",
-  },
-  {
-    key: AiProviderKeyEnum.GOOGLE_LABS_PROJECT_ID,
-    label: "Google Labs Project ID",
-    placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-    inputType: "text",
-    description: "Project ID từ Google Labs Sandbox",
   },
 ];
 
@@ -359,11 +342,6 @@ export function SettingsModal({
             })}
           </div>
 
-          {/* ── Description ── */}
-          {activeTab.description && (
-            <p className="text-xs text-gray-400 mb-3 px-1">{t(activeTab.description)}</p>
-          )}
-
           {/* ── Content ── */}
           {!cred?.loaded ? (
             <div className="flex items-center justify-center py-6">
@@ -407,12 +385,6 @@ export function SettingsModal({
           ) : (
             /* ── No credential or editing → input form ── */
             <div className="space-y-3">
-              {hasCred && (
-                <p className="text-xs text-amber-600 bg-amber-50 rounded-lg py-2 px-3">
-                  {t("Nhập giá trị mới để cập nhật")}
-                </p>
-              )}
-
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1.5">
                   {activeTab.label}
@@ -428,11 +400,6 @@ export function SettingsModal({
                       rows={4}
                       className="w-full rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm px-4 py-2.5 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all placeholder-gray-400 resize-none font-mono"
                     />
-                    {activeTab.multiLineHint && (
-                      <p className="text-xs text-blue-500 mt-1.5 flex items-center gap-1">
-                        💡 {t(activeTab.multiLineHint)}
-                      </p>
-                    )}
                   </>
                 ) : (
                   <input

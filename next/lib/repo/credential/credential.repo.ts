@@ -25,9 +25,6 @@ export class CredentialRepository extends CrudRepository<Credential> {
     customerId
     isCustomerCredential
     isAdminCredential
-    oauthClientId
-    oauthClientSecret
-    oauthRefreshToken
     createdAt
     updatedAt
   `);
@@ -40,9 +37,6 @@ export class CredentialRepository extends CrudRepository<Credential> {
     customerId
     isCustomerCredential
     isAdminCredential
-    oauthClientId
-    oauthClientSecret
-    oauthRefreshToken
     createdAt
     updatedAt
   `);

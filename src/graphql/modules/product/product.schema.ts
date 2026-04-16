@@ -196,8 +196,7 @@ const schema = gql`
     DEEP_SEEK_KEY
     KLING_KEY
     SEE_DANCE_KEY
-    GOOGLE_LABS_TOKEN
-    GOOGLE_LABS_PROJECT_ID
+    GOOGLE_LABS_API_KEY
   } 
 
   type ProductPageData {

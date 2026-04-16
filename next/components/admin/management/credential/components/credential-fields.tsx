@@ -2,9 +2,9 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useScreen } from "../../../../../lib/hooks/useScreen";
- 
+
 import { AiProviderKeyEnum } from "../../../../../lib/repo/product/productApp.repo";
-import { Field, Input, Select } from "../../../../shared/utilities/form";
+import { Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { Switch } from "../../../../shared/utilities/form/switch";
 import { useDataTable } from "../../../../shared/utilities/table/data-table";
 
@@ -22,7 +22,7 @@ export function CredentialFields() {
       <div className="col-span-12">
         <h3 className="mb-3 text-lg font-semibold text-gray-800">{t("Thông tin chứng chỉ")}</h3>
       </div>
-      <Field name="key" label={t("Loại (Key)")} cols={sm ? 6 : 12} required>
+      <Field name="key" label={t("Loại (Key)")} cols={12} required>
         <Select
           hasImage
           options={CREDENTIAL_KEY_OPTIONS}
@@ -31,34 +31,12 @@ export function CredentialFields() {
           readOnly={!!formItem?.id}
         />
       </Field>
-      <Field name="value" label={t("Giá trị (Token)")} cols={sm ? 6 : 12} required={!isGemini}>
-        <Input placeholder={t("Nhập token / API key")} />
+      <Field name="value" label={t("Giá trị (Token)")} cols={12} required={!isGemini}>
+        <Textarea placeholder={t("Nhập token / API key")} />
       </Field>
-      <Field name="active" label={t("Kích hoạt")} cols={sm ? 6 : 12}>
+      <Field name="active" label={t("Kích hoạt")} cols={12}>
         <Switch />
       </Field>
-
-      {isGemini && (
-        <>
-          <div className="col-span-12">
-            <h3 className="mb-3 text-lg font-semibold text-gray-800">
-              {t("Vertex AI OAuth2 (tuỳ chọn)")}
-            </h3>
-            <p className="mb-2 text-sm text-gray-500">
-              {t("Điền để sử dụng Vertex AI qua OAuth2. Bỏ trống nếu dùng API key thông thường.")}
-            </p>
-          </div>
-          <Field name="oauthClientId" label={t("OAuth Client ID")} cols={sm ? 6 : 12}>
-            <Input placeholder={t("Nhập OAuth Client ID")} />
-          </Field>
-          <Field name="oauthClientSecret" label={t("OAuth Client Secret")} cols={sm ? 6 : 12}>
-            <Input placeholder={t("Nhập OAuth Client Secret")} />
-          </Field>
-          <Field name="oauthRefreshToken" label={t("OAuth Refresh Token")} cols={12}>
-            <Input placeholder={t("Nhập OAuth Refresh Token")} />
-          </Field>
-        </>
-      )}
     </>
   );
 }

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getCustomerGeminiClient, retryAICall } from "./_shared";
+import { getGeminiClient, retryAICall } from "./_shared";
 
 export default [
   {
@@ -27,7 +27,7 @@ export default [
           return res.status(400).json({ message: "Thiếu text để tạo giọng nói" });
         }
 
-        const genAI = await getCustomerGeminiClient(context.id);
+        const genAI = await getGeminiClient();
 
         const voiceName = body.voiceName || "Kore";
         const textContent = body.stylePrompt ? `${body.stylePrompt}\n\n${body.text}` : body.text;

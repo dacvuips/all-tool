@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getCustomerGeminiClient, retryAICall } from "./_shared";
+import { getGeminiClient, retryAICall } from "./_shared";
 
 export default [
   {
@@ -20,7 +20,7 @@ export default [
           language?: string;
         };
 
-        const genAI = await getCustomerGeminiClient(context.id);
+        const genAI = await getGeminiClient();
 
         const categoryHint = body.category ? `Danh mục: ${body.category}` : "Danh mục: tự chọn";
         const moodHint = body.mood ? `Mood/Tính cách: ${body.mood}` : "";

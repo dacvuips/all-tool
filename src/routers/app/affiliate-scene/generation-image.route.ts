@@ -4,7 +4,7 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
   checkImageLimit,
-  getCliproxyCredentials,
+  getReCaptchaCredentials,
   incrementImageCount,
   retryAICall,
 } from "./_shared";
@@ -20,6 +20,7 @@ export default [
         const endPoint = "https://aisandbox-pa.googleapis.com/v1/projects";
         const params = "flowMedia:batchGenerateImages";
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+
         const imageModelName = "NARWHAL";
         const body = req.body as {
           prompt: string;
@@ -37,10 +38,12 @@ export default [
         await checkImageLimit(context.id);
 
         // Lấy captcha + credentials từ Cliproxy API
-        const { captcha: recaptchaToken, sessionId: cliproxySessionId, projectId, accessToken } =
-          await getCliproxyCredentials("IMAGE_GENERATION", context.id);
-
-        const sessionId = Date.now().toString();
+        const {
+          captcha: recaptchaToken,
+          sessionId,
+          projectId,
+          accessToken,
+        } = await getReCaptchaCredentials("IMAGE_GENERATION");
 
         // Map aspectRatio sang format Google Labs
         const aspectRatioInput = body.config?.aspectRatio || "9:16";
@@ -114,7 +117,7 @@ export default [
 
         // Extract images từ response Google Labs
         // Response trả về { media: [{ image: { generatedImage: { fifeUrl: "..." } } }] }
-        console.log(JSON.stringify(response, null, 2));
+
         const mediaItems = (response as any)?.media || [];
 
         if (mediaItems.length === 0) {

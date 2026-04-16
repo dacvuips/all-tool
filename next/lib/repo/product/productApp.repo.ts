@@ -1,6 +1,6 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
- 
+
 export interface ProductApp extends BaseModel {
   id?: string;
   name?: string;
@@ -11,19 +11,16 @@ export interface ProductApp extends BaseModel {
   slug?: string;
   priority?: number;
   creditCost?: number;
- 
- 
 }
 
-export enum AiProviderKeyEnum{
+export enum AiProviderKeyEnum {
   OPENAI_KEY = "OPENAI_KEY",
   CLAUDE_KEY = "CLAUDE_KEY",
   GOOGLE_GEMINI_KEY = "GOOGLE_GEMINI_KEY",
   DEEP_SEEK_KEY = "DEEP_SEEK_KEY",
   KLING_KEY = "KLING_KEY",
   SEE_DANCE_KEY = "SEE_DANCE_KEY",
-  GOOGLE_LABS_TOKEN = "GOOGLE_LABS_TOKEN",
-  GOOGLE_LABS_PROJECT_ID = "GOOGLE_LABS_PROJECT_ID",
+  GOOGLE_LABS_API_KEY = "GOOGLE_LABS_API_KEY",
 }
 
 // ─── Repository ───────────────────────────────────────────────────────────────
@@ -102,8 +99,6 @@ export class ProductAppRepository extends CrudRepository<ProductApp> {
       }`,
     }).then((res) => res.data.g0);
   }
-
- 
 }
 
 export const ProductAppService = new ProductAppRepository();
