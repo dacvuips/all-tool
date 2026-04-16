@@ -1,8 +1,8 @@
 import { NextSeo } from "next-seo";
 import { useTranslation } from "react-i18next";
-import { HomePage } from "../components/index/home/home-page";
-import { HomeLayout } from "../layouts/home-layout/home-layout";
-import { getServerSideTranslationsProps } from "../lib/functions/locale";
+import RecaptchaPage from "../../components/recaptcha/recaptcha-page";
+import { HomeLayout } from "../../layouts/home-layout/home-layout";
+import { getServerSideTranslationsProps } from "../../lib/functions/locale";
 
 export default function Page(props) {
   const { t } = useTranslation();
@@ -19,7 +19,7 @@ export default function Page(props) {
         description={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
         title={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
       />
-      <HomePage />
+      <RecaptchaPage />
     </>
   );
 }
