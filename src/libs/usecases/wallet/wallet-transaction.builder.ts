@@ -69,11 +69,19 @@ export class WalletTransactionBuilder {
     this._doc.description = description;
     return this.setAmount(amount, WalletTransactionSideEnum.IN);
   }
-  introduceReward(input: { amount: number; description: string }) {
-    const { amount, description } = input;
+  introduceReward(input: { amount: number; description: string; orderId?: string; orderCode?: string }) {
+    const { amount, description, orderId, orderCode } = input;
     this._doc.type = WalletTransactionTypeEnum.INTRODUCE;
     this._doc.description = description;
-    return this.setAmount(amount, WalletTransactionSideEnum.IN);
+    const builder = this.setAmount(amount, WalletTransactionSideEnum.IN);
+    if (orderId) builder.setOrderId(orderId);
+    return builder;
+  }
+  buyPackage(input: { amount: number; orderId: string; orderCode: string }) {
+    const { amount, orderId, orderCode } = input;
+    this._doc.type = WalletTransactionTypeEnum.BUY_PACKAGE;
+    this._doc.description = `Nạp tiền từ đơn hàng ${orderCode}`;
+    return this.setAmount(amount, WalletTransactionSideEnum.IN).setOrderId(orderId);
   }
   buyUtilitesCustomer(input: { amount: number; customerId: string; description: string }) {
     const { amount, description, customerId } = input;

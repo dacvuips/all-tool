@@ -10,11 +10,9 @@ import { MainConnection } from "../../../../helpers/mongo";
 import { OrderCode } from "../../../../packages/order-code";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
-import {
-  CreditTransactionTypeEnum,
-  creditTransactionService,
-} from "../../../dal/creditTransaction";
-import { CustomerModel } from "../../../dal/customer";
+import { walletService } from "../../../dal/wallet";
+import { GetWalletInfo } from "../../wallet/get-wallet-info.usecase";
+import { WalletTransactionBuilder } from "../../wallet/wallet-transaction.builder";
 import { IntroduceModel } from "../../../dal/introduce/introduce.model";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
 import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
@@ -131,25 +129,26 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
     );
 
     if (!!order.customerId && order.totalAmount > 0) {
-      const customer = await CustomerModel.findByIdAndUpdate(
-        order.customerId,
-        { $inc: { creditBalance: order.totalAmount } },
-        { new: true }
-      );
-
-      if (!customer) {
-        throw new ForbiddenError(t("Không tìm thấy khách hàng để cập nhật credit"));
-      }
-
-      const balanceAfter = (customer as any).creditBalance ?? 0;
-      await creditTransactionService.create({
-        customerId: order.customerId.toString(),
-        type: CreditTransactionTypeEnum.ORDER_TOPUP,
-        amount: order.totalAmount,
-        balanceAfter,
-        orderId: order._id.toString(),
-        description: `Cộng ${order.totalAmount} credit từ thanh toán đơn hàng ${order.orderNumber}`,
+      const customerWallet = await GetWalletInfo.usecase.execute({
+        ownerId: order.customerId.toString(),
       });
+      const session = await MainConnection.startSession();
+      try {
+        await session.withTransaction(async () => {
+          await walletService.createTransaction({
+            transaction: new WalletTransactionBuilder(customerWallet)
+              .buyPackage({
+                amount: order.totalAmount,
+                orderId: order._id.toString(),
+                orderCode: order.orderNumber,
+              })
+              .build(),
+            session,
+          });
+        });
+      } finally {
+        await session.endSession();
+      }
     }
 
     if (!!order.customerId) {
@@ -188,23 +187,27 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
           const referralBonus = Math.round(order.totalAmount * 0.1); // 10%
           const referrerId = introduce.referrerId.toString();
 
-          // Cộng credit cho người giới thiệu
-          const referrer = await CustomerModel.findByIdAndUpdate(
-            referrerId,
-            { $inc: { creditBalance: referralBonus } },
-            { new: true }
-          );
-
-          if (referrer) {
-            const balanceAfter = (referrer as any).creditBalance ?? 0;
-            await creditTransactionService.create({
-              customerId: referrerId,
-              type: CreditTransactionTypeEnum.REFERRAL_BONUS,
-              amount: referralBonus,
-              balanceAfter,
-              orderId: order._id.toString(),
-              description: `Hoa hồng giới thiệu ${referralBonus} credit (10% đơn hàng ${order.orderNumber})`,
+          // Cộng wallet cho người giới thiệu
+          const referrerWallet = await GetWalletInfo.usecase.execute({
+            ownerId: referrerId,
+          });
+          const referralSession = await MainConnection.startSession();
+          try {
+            await referralSession.withTransaction(async () => {
+              await walletService.createTransaction({
+                transaction: new WalletTransactionBuilder(referrerWallet)
+                  .introduceReward({
+                    amount: referralBonus,
+                    description: `Hoa hồng giới thiệu ${referralBonus} (10% đơn hàng ${order.orderNumber})`,
+                    orderId: order._id.toString(),
+                    orderCode: order.orderNumber,
+                  })
+                  .build(),
+                session: referralSession,
+              });
             });
+          } finally {
+            await referralSession.endSession();
           }
 
           // Thông báo cho người giới thiệu

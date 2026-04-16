@@ -14,6 +14,7 @@ export enum WalletTransactionTypeEnum {
   INTRODUCE = "INTRODUCE", // Giới thiệu khách hàng
   AFFILIATE_ORDER = "AFFILIATE_ORDER", // Đơn hàng affiliate
   DEPOSIT_WITH_PAYPAL = "DEPOSIT_WITH_PAYPA", // Nạp tiền vào ví với paypal
+  BUY_PACKAGE = "BUY_PACKAGE", // Mua gói / Nạp tiền từ đơn hàng
 }
 
 export enum WalletTransactionSideEnum {
