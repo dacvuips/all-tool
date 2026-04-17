@@ -11,11 +11,11 @@ import { Spinner } from "../shared/utilities/misc";
 
 /** Map from SubscriptionPlanEnum value → lowercase key prefix used in settings */
 const PLAN_KEY_MAP: Record<string, string> = {
-  [SubscriptionPlanEnum.TRIAL]: "trial",
-  [SubscriptionPlanEnum.BASIC]: "basic",
-  [SubscriptionPlanEnum.STANDARD]: "standard",
-  [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
-  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+  [SubscriptionPlanEnum.TRIAL]: SubscriptionPlanEnum.TRIAL,
+  [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
+  [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
+  [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
+  [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
 };
 
 /** Plans to display on pricing page (excludes Free) */
@@ -275,7 +275,7 @@ export default function PricingPage() {
                       className={`pricing-card__btn ${
                         isHighlight ? "pricing-card__btn--highlight" : "pricing-card__btn--default"
                       }`}
-                      onClick={() => router.push(`/checkout?subscription=${config.plan}`)}
+                      onClick={() => router.push(`/checkout?type=tool&subscription=${config.plan}`)}
                     >
                       {t("Đăng Ký Ngay")}
                     </button>

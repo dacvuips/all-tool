@@ -13,12 +13,15 @@ import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
 import { useCheckoutContext } from "../provider/checkout-provider";
 
-/** Map from SubscriptionPlanEnum value → lowercase key prefix used in settings */
+/** Checkout type: "tool" (default) or "recaptcha" */
+type CheckoutType = "tool" | "recaptcha";
+
+/** Map from SubscriptionPlanEnum value → key prefix used in settings */
 const PLAN_KEY_MAP: Record<string, string> = {
-  [SubscriptionPlanEnum.BASIC]: "basic",
-  [SubscriptionPlanEnum.STANDARD]: "standard",
-  [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
-  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+  [SubscriptionPlanEnum.BASIC]: "Basic",
+  [SubscriptionPlanEnum.STANDARD]: "Standard",
+  [SubscriptionPlanEnum.PROFESSIONAL]: "Professional",
+  [SubscriptionPlanEnum.UNLIMITED]: "Unlimited",
 };
 
 /** Plans to display (excludes Free) */
@@ -31,66 +34,71 @@ const PLAN_ORDER = [
 
 interface PlanConfig {
   plan: SubscriptionPlanEnum;
-  videoLimit: number;
-  imageLimit: number;
-  imageStreamCount: number;
-  videoStreamCount: number;
   price: number;
+  // Tool-specific
+  videoLimit?: number;
+  imageLimit?: number;
+  imageStreamCount?: number;
+  videoStreamCount?: number;
+  // Recaptcha-specific
+  requestQuantity?: number;
 }
-
-/** Plan display metadata */
-const PLAN_META: Record<
-  string,
-  {
-    label: string;
-    icon: string;
-    accentColor: string;
-    accentBg: string;
-    borderActive: string;
-    highlight?: boolean;
-    badgeLabel?: string;
-  }
-> = {
-  [SubscriptionPlanEnum.BASIC]: {
-    label: "Gói Cơ Bản",
-    icon: "⭐",
-    accentColor: "text-blue-600",
-    accentBg: "bg-blue-50",
-    borderActive: "border-blue-500",
-    badgeLabel: "Phổ biến",
-  },
-  [SubscriptionPlanEnum.STANDARD]: {
-    label: "Gói Tiêu Chuẩn",
-    icon: "⚡",
-    accentColor: "text-primary",
-    accentBg: " bg-gray-100",
-    borderActive: "border-primary",
-    highlight: true,
-    badgeLabel: "Hot",
-  },
-  [SubscriptionPlanEnum.PROFESSIONAL]: {
-    label: "Gói Chuyên Nghiệp",
-    icon: "🚀",
-    accentColor: "text-green-600",
-    accentBg: "bg-green-50",
-    borderActive: "border-green-500",
-    badgeLabel: "Chuyên nghiệp",
-  },
-  [SubscriptionPlanEnum.UNLIMITED]: {
-    label: "Gói Không Giới Hạn",
-    icon: "💎",
-    accentColor: "text-yellow-600",
-    accentBg: "bg-yellow-50",
-    borderActive: "border-yellow-500",
-    badgeLabel: "Best Value",
-  },
-};
 
 export function CheckoutPaymentForm() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
   const { order, loading } = useCheckoutContext();
+  /** Plan display metadata */
+  const PLAN_META: Record<
+    string,
+    {
+      label: string;
+      icon: string;
+      accentColor: string;
+      accentBg: string;
+      borderActive: string;
+      highlight?: boolean;
+      badgeLabel?: string;
+    }
+  > = {
+    [SubscriptionPlanEnum.BASIC]: {
+      label: t("Gói Cơ Bản"),
+      icon: "⭐",
+      accentColor: "text-blue-600",
+      accentBg: "bg-blue-50",
+      borderActive: "border-blue-500",
+      badgeLabel: t("Phổ biến"),
+    },
+    [SubscriptionPlanEnum.STANDARD]: {
+      label: t("Gói Tiêu Chuẩn"),
+      icon: "⚡",
+      accentColor: "text-primary",
+      accentBg: " bg-gray-100",
+      borderActive: "border-primary",
+      highlight: true,
+      badgeLabel: "Hot",
+    },
+    [SubscriptionPlanEnum.PROFESSIONAL]: {
+      label: t("Gói Chuyên Nghiệp"),
+      icon: "🚀",
+      accentColor: "text-green-600",
+      accentBg: "bg-green-50",
+      borderActive: "border-green-500",
+      badgeLabel: t("Chuyên nghiệp"),
+    },
+    [SubscriptionPlanEnum.UNLIMITED]: {
+      label: t("Gói Không Giới Hạn"),
+      icon: "💎",
+      accentColor: "text-yellow-600",
+      accentBg: "bg-yellow-50",
+      borderActive: "border-yellow-500",
+      badgeLabel: t("Best Value"),
+    },
+  };
+  // Determine checkout type from URL param
+  const checkoutType: CheckoutType =
+    (router.query.type as string) === "recaptcha" ? "recaptcha" : "tool";
 
   // Plan configs loaded from settings
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
@@ -121,31 +129,43 @@ export function CheckoutPaymentForm() {
   // Loading for SePay PG redirect
   const [sePayLoading, setSePayLoading] = useState(false);
 
-  // Load plan configs from settings
+  // Load plan configs from settings based on checkout type
   useEffect(() => {
     setLoadingPlans(true);
+
+    // Prefix: "rpk-" for recaptcha, "pk-" for tool
+    const settingPrefix = checkoutType === "recaptcha" ? "rpk-" : "pk-";
+
     SettingService.getAll({
-      query: { limit: 0, filter: { key: { $regex: "^pk-", $options: "i" } } },
+      query: { limit: 0, filter: { key: { $regex: `^${settingPrefix}`, $options: "i" } } },
     })
       .then((res) => {
         const settings = res.data as Setting[];
         const configs: PlanConfig[] = [];
 
         for (const plan of PLAN_ORDER) {
-          const prefix = `pk-${PLAN_KEY_MAP[plan]}`;
+          const prefix = `${settingPrefix}${PLAN_KEY_MAP[plan]}`;
           const getValue = (suffix: string) => {
             const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
             return s ? Number(s.value) : 0;
           };
 
-          configs.push({
-            plan,
-            videoLimit: getValue("video-limit"),
-            imageLimit: getValue("image-limit"),
-            imageStreamCount: getValue("image-stream-count"),
-            videoStreamCount: getValue("video-stream-count"),
-            price: getValue("price"),
-          });
+          if (checkoutType === "recaptcha") {
+            configs.push({
+              plan,
+              requestQuantity: getValue("request-quantity"),
+              price: getValue("price"),
+            });
+          } else {
+            configs.push({
+              plan,
+              videoLimit: getValue("video-limit"),
+              imageLimit: getValue("image-limit"),
+              imageStreamCount: getValue("image-stream-count"),
+              videoStreamCount: getValue("video-stream-count"),
+              price: getValue("price"),
+            });
+          }
         }
 
         setPlanConfigs(configs);
@@ -163,7 +183,7 @@ export function CheckoutPaymentForm() {
         toast.error(t("Không thể tải danh sách gói. Vui lòng thử lại."));
       })
       .finally(() => setLoadingPlans(false));
-  }, []);
+  }, [checkoutType]);
 
   const formatNumber = (n: number) => (n === -1 ? "∞" : n.toLocaleString("vi-VN"));
   const formatPrice = (n: number) => (n === 0 ? t("Miễn phí") : n.toLocaleString("vi-VN") + "đ");
@@ -175,7 +195,7 @@ export function CheckoutPaymentForm() {
     if (!selectedPlan) return;
     setSePayLoading(true);
     try {
-      const data = await orderService.createSePayPGCheckout(selectedPlan);
+      const data = await orderService.createSePayPGCheckout(selectedPlan, undefined, checkoutType);
 
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
 
@@ -194,8 +214,8 @@ export function CheckoutPaymentForm() {
       document.body.appendChild(form);
       form.submit();
     } catch (err) {
-      console.error("Lỗi tạo checkout:", err);
-      toast.error("Không thể kết nối cổng thanh toán. Vui lòng thử lại.");
+      console.error(t("Lỗi tạo checkout:"), err);
+      toast.error(t("Không thể kết nối cổng thanh toán. Vui lòng thử lại."));
       setSePayLoading(false);
     }
   };
@@ -216,6 +236,98 @@ export function CheckoutPaymentForm() {
     );
   }
 
+  /** Render mô tả ngắn cho plan card */
+  const renderPlanDescription = (config: PlanConfig) => {
+    if (checkoutType === "recaptcha") {
+      return (
+        <p className="text-xs text-gray-500 mt-0.5">
+          {formatNumber(config.requestQuantity)} request / {t("tháng")}
+        </p>
+      );
+    }
+    return (
+      <p className="text-xs text-gray-500 mt-0.5">
+        {formatNumber(config.videoLimit)} video & {formatNumber(config.imageLimit)} {t("ảnh")} /{" "}
+        {t("ngày")}
+      </p>
+    );
+  };
+
+  /** Render chi tiết gói đã chọn */
+  const renderPlanDetails = (config: PlanConfig) => {
+    const meta = PLAN_META[config.plan];
+    if (checkoutType === "recaptcha") {
+      return (
+        <div className={`p-3 rounded-xl border ${meta?.accentBg || "bg-gray-50"} border-gray-200`}>
+          <h4 className={`text-sm font-semibold mb-2 ${meta?.accentColor || "text-gray-800"}`}>
+            {t("Chi tiết gói")} {t(meta?.label)}
+          </h4>
+          <ul className="space-y-1.5">
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>
+                {formatNumber(config.requestQuantity)} request / {t("tháng")}
+              </span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("Hỗ trợ reCAPTCHA v2 & v3")}</span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("API Key riêng biệt")}</span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("Bảo mật cao")}</span>
+            </li>
+          </ul>
+        </div>
+      );
+    }
+
+    // Tool details
+    return (
+      <div className={`p-3 rounded-xl border ${meta?.accentBg || "bg-gray-50"} border-gray-200`}>
+        <h4 className={`text-sm font-semibold mb-2 ${meta?.accentColor || "text-gray-800"}`}>
+          {t("Chi tiết gói")} {t(meta?.label)}
+        </h4>
+        <ul className="space-y-1.5">
+          <li className="flex items-center gap-2 text-xs text-gray-700">
+            <HiCheck className="text-green-500 flex-shrink-0" />
+            <span>
+              {t("Tạo tối đa")} {formatNumber(config.videoLimit)} video / {t("ngày")}
+            </span>
+          </li>
+          <li className="flex items-center gap-2 text-xs text-gray-700">
+            <HiCheck className="text-green-500 flex-shrink-0" />
+            <span>
+              {t("Tạo tối đa")} {formatNumber(config.imageLimit)} {t("hình ảnh")} / {t("ngày")}
+            </span>
+          </li>
+          <li className="flex items-center gap-2 text-xs text-gray-700">
+            <HiCheck className="text-green-500 flex-shrink-0" />
+            <span>
+              {t("Tối đa")} {formatNumber(config.videoStreamCount)} {t("luồng video cùng lúc")}
+            </span>
+          </li>
+          <li className="flex items-center gap-2 text-xs text-gray-700">
+            <HiCheck className="text-green-500 flex-shrink-0" />
+            <span>
+              {t("Tối đa")} {formatNumber(config.imageStreamCount)} {t("luồng tạo ảnh cùng lúc")}
+            </span>
+          </li>
+          <li className="flex items-center gap-2 text-xs text-gray-700">
+            <HiCheck className="text-green-500 flex-shrink-0" />
+            <span>{t("Không giới hạn câu prompt chuyển động")}</span>
+          </li>
+        </ul>
+      </div>
+    );
+  };
+
+  const headerTitle = checkoutType === "recaptcha" ? t("Đăng Ký Gói reCAPTCHA") : t("Đăng Ký Gói");
+
   return (
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
       {/* Sticky Toolbar */}
@@ -231,7 +343,7 @@ export function CheckoutPaymentForm() {
           <div className="w-px h-5 bg-gray-300" />
           <div className="flex items-center gap-2">
             <RiSecurePaymentLine className="text-xl text-green-500" />
-            <h1 className="text-base font-bold text-gray-800 m-0">{t("Đăng Ký Gói")}</h1>
+            <h1 className="text-base font-bold text-gray-800 m-0">{headerTitle}</h1>
           </div>
         </div>
         {/* Green accent bar */}
@@ -308,10 +420,7 @@ export function CheckoutPaymentForm() {
                             {t(meta.label)}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          {formatNumber(config.videoLimit)} video &{" "}
-                          {formatNumber(config.imageLimit)} {t("ảnh")} / {t("ngày")}
-                        </p>
+                        {renderPlanDescription(config)}
                       </div>
 
                       {/* Price */}
@@ -331,54 +440,7 @@ export function CheckoutPaymentForm() {
           </div>
 
           {/* Chi tiết gói đã chọn */}
-          {selectedConfig && (
-            <div
-              className={`p-3 rounded-xl border ${
-                PLAN_META[selectedConfig.plan]?.accentBg || "bg-gray-50"
-              } border-gray-200`}
-            >
-              <h4
-                className={`text-sm font-semibold mb-2 ${
-                  PLAN_META[selectedConfig.plan]?.accentColor || "text-gray-800"
-                }`}
-              >
-                {t("Chi tiết gói")} {t(PLAN_META[selectedConfig.plan]?.label)}
-              </h4>
-              <ul className="space-y-1.5">
-                <li className="flex items-center gap-2 text-xs text-gray-700">
-                  <HiCheck className="text-green-500 flex-shrink-0" />
-                  <span>
-                    {t("Tạo tối đa")} {formatNumber(selectedConfig.videoLimit)} video / {t("ngày")}
-                  </span>
-                </li>
-                <li className="flex items-center gap-2 text-xs text-gray-700">
-                  <HiCheck className="text-green-500 flex-shrink-0" />
-                  <span>
-                    {t("Tạo tối đa")} {formatNumber(selectedConfig.imageLimit)} {t("hình ảnh")} /{" "}
-                    {t("ngày")}
-                  </span>
-                </li>
-                <li className="flex items-center gap-2 text-xs text-gray-700">
-                  <HiCheck className="text-green-500 flex-shrink-0" />
-                  <span>
-                    {t("Tối đa")} {formatNumber(selectedConfig.videoStreamCount)}{" "}
-                    {t("luồng video cùng lúc")}
-                  </span>
-                </li>
-                <li className="flex items-center gap-2 text-xs text-gray-700">
-                  <HiCheck className="text-green-500 flex-shrink-0" />
-                  <span>
-                    {t("Tối đa")} {formatNumber(selectedConfig.imageStreamCount)}{" "}
-                    {t("luồng tạo ảnh cùng lúc")}
-                  </span>
-                </li>
-                <li className="flex items-center gap-2 text-xs text-gray-700">
-                  <HiCheck className="text-green-500 flex-shrink-0" />
-                  <span>{t("Không giới hạn câu prompt chuyển động")}</span>
-                </li>
-              </ul>
-            </div>
-          )}
+          {selectedConfig && renderPlanDetails(selectedConfig)}
 
           {/* Hiển thị tổng tiền */}
           {selectedConfig && (
@@ -440,7 +502,7 @@ export function CheckoutPaymentForm() {
               // Hiển thị thông báo đang chuyển hướng khi xử lý SePay PG
               <div className="flex gap-2 justify-center items-center py-3 w-full font-semibold text-center rounded-xl bg-primary/10 text-primary">
                 <Spinner className="!w-5 !h-5" />
-                <span>{t("Đang chuyển đến cổng thanh toán...")}</span>
+                <span>{`${t("Đang chuyển đến cổng thanh toán")}...`}</span>
               </div>
             ) : (
               <Button

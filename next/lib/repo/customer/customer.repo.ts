@@ -2,12 +2,12 @@ import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 import { CustomerIntro, CustomerStatusEnum, CustomerTimes } from "../types";
 export enum SubscriptionPlanEnum {
-  FREE = "Free",
-  TRIAL = "Trial",
-  BASIC = "Basic",
-  STANDARD = "Standard",
-  PROFESSIONAL = "Professional",
-  UNLIMITED = "Unlimited",
+  FREE = "free",
+  TRIAL = "trial",
+  BASIC = "basic",
+  STANDARD = "standard",
+  PROFESSIONAL = "professional",
+  UNLIMITED = "unlimited",
 }
 
 export type GooglePackage = {
@@ -264,7 +264,6 @@ export class CustomerRepository extends CrudRepository<Customer> {
       },
     }).then((res) => res.data.g0);
   }
-
 
   async customerGetEmail() {
     return this.query({

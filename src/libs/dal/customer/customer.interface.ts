@@ -7,12 +7,12 @@ export enum CustomerStatusEnum {
 }
 
 export enum SubscriptionPlanEnum {
-  FREE = "Free",
-  TRIAL = "Trial",
-  BASIC = "Basic",
-  STANDARD = "Standard",
-  PROFESSIONAL = "Professional",
-  UNLIMITED = "Unlimited",
+  FREE = "free",
+  TRIAL = "trial",
+  BASIC = "basic",
+  STANDARD = "standard",
+  PROFESSIONAL = "professional",
+  UNLIMITED = "unlimited",
 }
 
 export type SubscriptionPlanOption = {
@@ -31,7 +31,6 @@ export type CustomerTimes = {
   emailVerifiedAt?: Date; // Thời gian xác thực email
   passwordChangedAt?: Date; // Thời gian thay đổi mật khẩu
 };
-
 
 export enum RewardPointTypeEnum {
   TRANSACTION = "TRANSACTION",

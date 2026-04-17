@@ -15,19 +15,6 @@ const orderItemSchema = new Schema({
   subtotal: { type: Number, required: true },
 });
 
-const shippingAddressSchema = new Schema({
-  recipientName: { type: String, required: true },
-  phone: { type: String, required: true },
-  email: { type: String, required: true },
-  address: { type: String, required: true },
-  ward: { type: String },
-  district: { type: String },
-  province: { type: String },
-  country: { type: String, default: "Vietnam" },
-  postalCode: { type: String },
-  note: { type: String },
-});
-
 const paymentInfoSchema = new Schema({
   method: { type: String, enum: Object.values(PaymentMethodEnum), required: true },
   bankImage: { type: String },
@@ -67,18 +54,6 @@ const paymentLogSchema = new Schema({
   creatorId: { type: Schema.Types.ObjectId },
   amount: { type: Number },
   transactionId: { type: String },
-});
-
-const shopAddressSchema = new Schema({
-  name: { type: String },
-  phone: { type: String },
-  email: { type: String },
-  address: { type: String },
-  ward: { type: String },
-  district: { type: String },
-  province: { type: String },
-  country: { type: String, default: "Vietnam" },
-  postalCode: { type: String },
 });
 
 const orderSchema = new Schema(

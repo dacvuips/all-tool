@@ -173,7 +173,7 @@ const Mutation = {
   createSePayPGCheckout: async (root: any, args: any, context: Context) => {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
     const customerId = context.customerId;
-    const { subscriptionPlan, orderId } = args;
+    const { subscriptionPlan, orderId, type } = args;
 
     if (!subscriptionPlan) {
       throw new Error("Vui lòng chọn gói subscription");
@@ -193,10 +193,14 @@ const Mutation = {
       throw new Error("Gói subscription không hợp lệ");
     }
 
+    // Xác định setting prefix theo type: recaptcha → rpk, tool → pk
+    const settingPrefix = type === "recaptcha" ? "rpk" : "pk";
+
     // Lấy giá gói từ setting
     const priceSetting = await settingService.findOne({
-      key: `pk-${planKey}-price`,
+      key: `${settingPrefix}-${planKey}-price`,
     });
+
     if (!priceSetting || !priceSetting.value || priceSetting.value <= 0) {
       throw new Error("Không tìm thấy giá cho gói subscription này");
     }

@@ -20,7 +20,7 @@ const schema = gql`
     createGiaoHangNhanhShipping(orderId: ID!): ShippingResult
     # Tạo form thanh toán qua cổng SePay PG, trả về dữ liệu để frontend auto-submit form
     # orderId: truyền khi muốn retry đơn PAYMENT_PENDING+SEPAY_PG đã có
-    createSePayPGCheckout(subscriptionPlan: String!, orderId: ID): SePayPGCheckoutData
+    createSePayPGCheckout(subscriptionPlan: String!, orderId: ID, type: String): SePayPGCheckoutData
   }
 
   input CreateOrderInput {
