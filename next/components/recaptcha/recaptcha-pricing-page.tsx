@@ -168,7 +168,9 @@ export default function RecaptchaPricingPage() {
           {t("Chọn Gói reCAPTCHA Phù Hợp")}
         </h2>
         <p className="text-sm sm:text-base text-gray-500 max-w-lg mx-auto">
-          {t("Bảo vệ website và ứng dụng của bạn khỏi bot và spam với reCAPTCHA API Key.")}
+          {t(
+            "reCAPTCHA giúp bạn generate các image banana và Veo 3 nhanh chóng. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
+          )}
         </p>
       </div>
 

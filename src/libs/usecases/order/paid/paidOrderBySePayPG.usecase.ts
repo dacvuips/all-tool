@@ -15,13 +15,14 @@ import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
-import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
+import { OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
 import {
   PackageTransactionSnapshot,
   PackageTransactionTypeEnum,
 } from "../../../dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../dal/packageTransaction/package-transaction.model";
+import { RecaptchaSubscriptionPlanEnum, recaptchaTokenService } from "../../../dal/recaptchaToken";
 import { SettingModel } from "../../../dal/setting/setting.model";
 import { pubsub } from "../../../graphql/pub-sub";
 
@@ -173,13 +174,26 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
 
     // ── Kích hoạt gói subscription cho khách hàng ──────────────────────────
     const subscriptionPlan = (order as any).subscriptionPlan;
+    const orderType = (order as any).type;
+
     if (order.customerId && subscriptionPlan) {
-      await this._activateSubscription(
-        order.customerId.toString(),
-        subscriptionPlan,
-        order._id.toString(),
-        order.orderNumber
-      );
+      if (orderType === OrderTypeEnum.RECAPTCHA) {
+        // RECAPTCHA: Tạo recaptcha token key theo gói cụ thể
+        await this._activateRecaptchaSubscription(
+          order.customerId.toString(),
+          subscriptionPlan,
+          order._id.toString(),
+          order.orderNumber
+        );
+      } else {
+        // TOOL (default): Cập nhật googlePackage cho Customer
+        await this._activateSubscription(
+          order.customerId.toString(),
+          subscriptionPlan,
+          order._id.toString(),
+          order.orderNumber
+        );
+      }
     }
 
     // ── Thông báo & real-time event ───────────────────────────────────────
@@ -214,11 +228,11 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
 
   /** Map SubscriptionPlanEnum → setting key prefix */
   private static PLAN_KEY_MAP: Record<string, string> = {
-    [SubscriptionPlanEnum.TRIAL]: "trial",
-    [SubscriptionPlanEnum.BASIC]: "basic",
-    [SubscriptionPlanEnum.STANDARD]: "standard",
-    [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
-    [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+    [SubscriptionPlanEnum.TRIAL]: SubscriptionPlanEnum.TRIAL,
+    [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
+    [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
+    [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
+    [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
   };
 
   private async _activateSubscription(
@@ -328,6 +342,58 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       `Gói ${subscriptionPlan} đã được kích hoạt thành công.\nVideo: ${afterSnapshot.videoLimit}/ngày, Ảnh: ${afterSnapshot.imageLimit}/ngày.`
     )
       .sendTo(NotificationTarget.CUSTOMER, customerId)
+      .build();
+    InsertNotification([notify]);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helper: Kích hoạt gói reCAPTCHA cho khách hàng
+  // ─────────────────────────────────────────────────────────────────────────
+  private async _activateRecaptchaSubscription(
+    customerId: string,
+    subscriptionPlan: string,
+    orderId: string,
+    orderNumber: string
+  ): Promise<void> {
+    const customer = await CustomerModel.findById(customerId);
+    if (!customer) {
+      throw new ForbiddenError(t("Không tìm thấy khách hàng để kích hoạt gói"));
+    }
+
+    // Map subscriptionPlan → RecaptchaSubscriptionPlanEnum value (lowercase)
+    const planKey = subscriptionPlan.toLowerCase();
+
+    // Lấy số lượng request từ setting theo gói cụ thể (rpk-{plan}-request-quantity)
+    const requestQuantitySetting = await SettingModel.findOne({
+      key: `rpk-${planKey}-request-quantity`,
+    }).lean();
+    const requestQuantity = requestQuantitySetting?.value ?? 1000;
+
+    // Generate a unique key
+    const key = (require("crypto") as any).randomUUID();
+    const expiredDate = new Date();
+    expiredDate.setDate(expiredDate.getDate() + 30); // 30 ngày
+
+    // Tạo recaptcha token mới
+    await recaptchaTokenService.create({
+      key,
+      requestQuantity: Number(requestQuantity),
+      expiredDate,
+      customerId,
+      active: true,
+      usedQuantity: 0,
+      subscriptionPlan: planKey as RecaptchaSubscriptionPlanEnum,
+    });
+
+    // Thông báo cho customer
+    const notify = new NotificationBuilder(
+      `Gói reCAPTCHA ${subscriptionPlan} đã được kích hoạt`,
+      `Gói reCAPTCHA ${subscriptionPlan} đã được kích hoạt thành công.\nSố lượng request: ${requestQuantity}. Hết hạn: ${expiredDate.toLocaleDateString(
+        "vi-VN"
+      )}.`
+    )
+      .sendTo(NotificationTarget.CUSTOMER, customerId)
+      .order(orderId)
       .build();
     InsertNotification([notify]);
   }
