@@ -305,6 +305,11 @@ export class CustomerRepository extends CrudRepository<Customer> {
       mutation: `accessCustomer`,
     }).then((res) => res.data.g0);
   }
+  async customerCreditPoint(data: { action: "add" | "sub"; customerId: string; point: number }) {
+    return this.query({
+      query: `customerCreditPoint(action: "${data.action}", customerId: "${data.customerId}", point: ${data.point})`,
+    }).then((res) => res.data.g0);
+  }
 }
 
 export const CustomerService = new CustomerRepository();
