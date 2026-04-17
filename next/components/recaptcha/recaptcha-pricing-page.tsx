@@ -125,11 +125,12 @@ export default function RecaptchaPricingPage() {
     const features: string[] = [];
     features.push(`${formatNumber(plan.requestQuantity)} ${t("request")} / ${t("tháng")}`);
     features.push(`${t("Thời hạn")} ${plan.duration} ${t("ngày")}`);
-    features.push(t("Hỗ trợ reCAPTCHA v2 & v3"));
+    features.push(t("reCAPTCHA token Flow"));
     features.push(t("API Key riêng biệt"));
     features.push(t("Bảo mật cao"));
     return features;
   };
+  if (loading) return <Spinner />;
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -162,14 +163,14 @@ export default function RecaptchaPricingPage() {
             color: "#10b981",
           }}
         >
-          <span>🛡️</span> {t("Bảo vệ ứng dụng của bạn")}
+          <span>⚡</span> {t("Nâng tầm ứng dụng của bạn")}
         </div>
         <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
-          {t("Chọn Gói reCAPTCHA Phù Hợp")}
+          {t("Chọn Gói Giải ReCAPTCHA Flow")}
         </h2>
         <p className="text-sm sm:text-base text-gray-500 max-w-lg mx-auto">
           {t(
-            "reCAPTCHA giúp bạn generate các image banana và Veo 3 nhanh chóng. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
+            "Giải reCAPTCHA Flow giúp bạn vượt qua các bước xác minh captcha generate Image banana và Veo 3 nhanh chóng. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
           )}
         </p>
       </div>
@@ -278,27 +279,31 @@ export default function RecaptchaPricingPage() {
             <div className="flex items-start gap-3">
               <span className="text-2xl">🤖</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Chống Bot")}</p>
+                <p className="text-sm font-semibold text-gray-800 mb-1">
+                  {t("Thuốc giải reCAPTCHA cho Flow")}
+                </p>
                 <p className="text-xs text-gray-500">
-                  {t("Ngăn chặn bot tự động tấn công website của bạn")}
+                  {t(
+                    "Thuật toán giải mã reCAPTCHA giúp bạn vượt qua việc ngăn chặn generate Image/Video của Flow"
+                  )}
                 </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <span className="text-2xl">🔒</span>
+              <span className="text-2xl">⏱️</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Bảo mật")}</p>
-                <p className="text-xs text-gray-500">
-                  {t("API Key được mã hóa và bảo vệ an toàn")}
+                <p className="text-sm font-semibold text-gray-800 mb-1">
+                  {t("Tốc độ xử lý nhanh")}
                 </p>
+                <p className="text-xs text-gray-500">{t("Giải reCAPTCHA chỉ mất chưa đến 2s ")}</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <span className="text-2xl">📊</span>
+              <span className="text-2xl">⚡</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Theo dõi")}</p>
+                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Chịu tải cao")}</p>
                 <p className="text-xs text-gray-500">
-                  {t("Theo dõi số lượng request sử dụng theo thời gian thực")}
+                  {t("Xử lý hàng ngàn request/giây đảm bảo không gián đoạn")}
                 </p>
               </div>
             </div>

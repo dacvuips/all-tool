@@ -19,6 +19,7 @@ import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import {
+  RecaptchaSubscriptionPlanEnum,
   RecaptchaToken,
   recaptchaTokenService,
 } from "../../lib/repo/recaptcha-token/recaptcha-token.repo";
@@ -40,15 +41,12 @@ const RecaptchaPage = () => {
   const totalPages = useMemo(() => Math.ceil(total / LIMIT), [total]);
 
   const fetchTokens = async () => {
-    if (!customer) {
-      setOpenCustomerLoginDialog(true);
-      return;
-    }
     setLoading(true);
     try {
       const result = await recaptchaTokenService.getMyRecaptchaTokens({
         query: { limit: LIMIT, page },
       });
+
       setTokens(result.data);
       setTotal(result.total);
     } catch (err) {
@@ -148,6 +146,42 @@ const RecaptchaPage = () => {
     return "#10b981";
   };
 
+  const getPlanInfo = (plan?: RecaptchaSubscriptionPlanEnum) => {
+    switch (plan) {
+      case RecaptchaSubscriptionPlanEnum.BASIC:
+        return {
+          label: t("Cơ Bản"),
+          icon: "🛡️",
+          color: "bg-blue-50 text-blue-700 border-blue-200",
+        };
+      case RecaptchaSubscriptionPlanEnum.STANDARD:
+        return {
+          label: t("Tiêu Chuẩn"),
+          icon: "⚡",
+          color: "bg-orange-50 text-orange-700 border-orange-200",
+        };
+      case RecaptchaSubscriptionPlanEnum.PROFESSIONAL:
+        return {
+          label: t("Chuyên Nghiệp"),
+          icon: "🚀",
+          color: "bg-green-50 text-green-700 border-green-200",
+        };
+      case RecaptchaSubscriptionPlanEnum.UNLIMITED:
+        return {
+          label: t("Không Giới Hạn"),
+          icon: "💎",
+          color: "bg-yellow-50 text-yellow-700 border-yellow-200",
+        };
+      case RecaptchaSubscriptionPlanEnum.FREE:
+      default:
+        return {
+          label: t("Miễn phí"),
+          icon: "🎁",
+          color: "bg-gray-50 text-gray-600 border-gray-200",
+        };
+    }
+  };
+
   // Summary stats
   const stats = useMemo(() => {
     const activeCount = tokens.filter((t) => {
@@ -159,6 +193,7 @@ const RecaptchaPage = () => {
     const usedRequests = tokens.reduce((acc, t) => acc + (t.usedQuantity || 0), 0);
     return { activeCount, totalRequests, usedRequests };
   }, [tokens]);
+  console.log(tokens);
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -235,10 +270,14 @@ const RecaptchaPage = () => {
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
           {/* Table Header Row */}
           <div className="px-5 sm:px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-base sm:text-lg font-bold text-gray-900">{t("Danh sách Token")}</h2>
-            <span className="text-xs sm:text-sm text-gray-400 font-medium">
-              {total > 0 && `${total} ${t("token")}`}
-            </span>
+            <div className="flex items-center gap-2">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900">
+                {t("Danh sách Token")}
+              </h2>
+              <span className="text-xs sm:text-sm text-gray-400 font-medium">
+                {total > 0 && `${total} ${t("token")}`}
+              </span>
+            </div>
             <div className="flex gap-2">
               <Button
                 onClick={handleAddNew}
@@ -305,6 +344,9 @@ const RecaptchaPage = () => {
                       API Key
                     </th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">
+                      {t("Gói")}
+                    </th>
+                    <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">
                       {t("Sử dụng")}
                     </th>
                     <th className="text-left text-xs font-semibold text-gray-500 uppercase tracking-wider px-4 py-3">
@@ -321,6 +363,7 @@ const RecaptchaPage = () => {
                 <tbody className="divide-y divide-gray-50">
                   {tokens.map((token) => {
                     const status = getStatusInfo(token);
+                    const planInfo = getPlanInfo(token.subscriptionPlan);
                     const usagePercent = getUsagePercent(token);
                     const usageColor = getUsageColor(usagePercent);
                     const maskedKey = token.key
@@ -360,6 +403,16 @@ const RecaptchaPage = () => {
                               </p>
                             </div>
                           </div>
+                        </td>
+
+                        {/* Plan */}
+                        <td className="px-4 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${planInfo.color}`}
+                          >
+                            <span>{planInfo.icon}</span>
+                            {planInfo.label}
+                          </span>
                         </td>
 
                         {/* Usage */}
@@ -466,6 +519,15 @@ const RecaptchaPage = () => {
                           <p className="text-xs text-gray-400">
                             {t("Tạo ngày")} {formatDate(token.createdAt)}
                           </p>
+                          {/* Plan Badge */}
+                          <span
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full whitespace-nowrap text-10 font-semibold border mt-1 ${
+                              getPlanInfo(token.subscriptionPlan).color
+                            }`}
+                          >
+                            <span>{getPlanInfo(token.subscriptionPlan).icon}</span>
+                            {getPlanInfo(token.subscriptionPlan).label}
+                          </span>
                         </div>
                       </div>
                       <span

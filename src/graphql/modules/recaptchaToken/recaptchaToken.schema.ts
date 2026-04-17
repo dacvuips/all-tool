@@ -27,7 +27,7 @@ const schema = gql`
     customerId: ID
     "Trạng thái kích hoạt"
     active: Boolean
-    subscriptionPlan: RecaptchaSubscriptionPlanEnum
+    subscriptionPlan: String
   }
 
   input UpdateRecaptchaTokenInput {
@@ -42,7 +42,7 @@ const schema = gql`
     "Số lượng đã sử dụng"
     usedQuantity: Int
     "Gói đăng ký"
-    subscriptionPlan: RecaptchaSubscriptionPlanEnum
+    subscriptionPlan: String
   }
 
   type RecaptchaToken {
@@ -63,14 +63,7 @@ const schema = gql`
     "Số lượng đã sử dụng"
     usedQuantity: Int
     "Gói đăng ký"
-    subscriptionPlan: RecaptchaSubscriptionPlanEnum
-  }
-  enum RecaptchaSubscriptionPlanEnum {
-    FREE
-    BASIC
-    STANDARD
-    PROFESSIONAL
-    UNLIMITED
+    subscriptionPlan: String
   }
 
   type RecaptchaTokenPageData {

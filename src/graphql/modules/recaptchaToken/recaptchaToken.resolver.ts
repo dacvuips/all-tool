@@ -73,6 +73,7 @@ const Mutation = {
       customerId,
       active: true,
       usedQuantity: 0,
+      subscriptionPlan: RecaptchaSubscriptionPlanEnum.FREE,
     });
   },
 };
