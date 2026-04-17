@@ -236,7 +236,10 @@ function SePayPGWaitingView() {
             primary
             className="py-3 w-full rounded-xl"
             text={t("Tạo đơn mới")}
-            onClick={() => router.reload()}
+            onClick={() => {
+              const typeParam = order?.type === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool";
+              router.replace(`/checkout${typeParam}`);
+            }}
           />
         )}
         {!timeRemaining.expired && (
@@ -271,6 +274,7 @@ function SePayPGCallbackView({
 
   const [verifying, setVerifying] = useState(true);
   const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">("success");
+  const [orderType, setOrderType] = useState<"TOOL" | "RECAPTCHA">("TOOL");
 
   useEffect(() => {
     let cancelled = false;
@@ -297,6 +301,7 @@ function SePayPGCallbackView({
         if (resolved) {
           clearInterval(poll);
           if (!cancelled) {
+            setOrderType(order.type === "RECAPTCHA" ? "RECAPTCHA" : "TOOL");
             setFinalStatus(resolved);
             setVerifying(false);
           }
@@ -344,7 +349,8 @@ function SePayPGCallbackView({
         "Thanh toán không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
       ),
       buttonText: t("Thử lại"),
-      buttonAction: () => router.replace("/checkout"),
+      buttonAction: () =>
+        router.replace(`/checkout${orderType === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool"}`),
       bgColor: "bg-red-50",
       borderColor: "border-red-200",
     },
@@ -354,7 +360,8 @@ function SePayPGCallbackView({
       title: t("Đã hủy đơn hàng"),
       message: t("Bạn đã hủy thanh toán. Đơn hàng đã được hủy, bạn có thể tạo đơn hàng mới."),
       buttonText: t("Tạo đơn mới"),
-      buttonAction: () => router.replace("/checkout"),
+      buttonAction: () =>
+        router.replace(`/checkout${orderType === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool"}`),
       bgColor: "bg-yellow-50",
       borderColor: "border-yellow-200",
     },
@@ -363,7 +370,7 @@ function SePayPGCallbackView({
   const cfg = statusConfig[finalStatus];
 
   return (
-    <div className="flex flex-col justify-center items-center min-h-[60vh] pb-10 bg-gray-100">
+    <div className="flex flex-col justify-center items-center min-h-[60vh] bg-gray-100 my-10 px-2">
       <div
         className={`flex flex-col items-center gap-4 p-6 w-full max-w-md ${cfg.bgColor} rounded-2xl border ${cfg.borderColor} shadow-sm`}
       >

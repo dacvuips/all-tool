@@ -129,6 +129,7 @@ export interface Order extends BaseModel {
   discount?: number;
   totalAmount?: number;
   subscriptionPlan?: string;
+  type?: "TOOL" | "RECAPTCHA";
   shippingAddress?: ShippingAddress;
   shopAddress?: ShopAddress;
 
@@ -177,6 +178,7 @@ export class OrderRepository extends CrudRepository<Order> {
     paymentStatus
     totalAmount 
     subscriptionPlan
+    type
     customerId  
      paymentInfo {
       method 
@@ -205,6 +207,7 @@ export class OrderRepository extends CrudRepository<Order> {
     discount
     totalAmount
     subscriptionPlan
+    type
     paymentMethod
     paymentStatus
     paymentInfo {

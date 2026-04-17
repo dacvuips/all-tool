@@ -2,6 +2,11 @@ import { Types } from "mongoose";
 import { TimestampEntity } from "../../core";
 import { PaymentMethodEnum } from "../bank";
 
+export enum OrderTypeEnum {
+  TOOL = "TOOL",
+  RECAPTCHA = "RECAPTCHA",
+}
+
 export type IOrder = TimestampEntity & {
   id: string;
 
@@ -17,6 +22,7 @@ export type IOrder = TimestampEntity & {
 
   // Pricing
   subscriptionPlan?: string;
+  type?: OrderTypeEnum;
   totalAmount: number;
 
   // Payment

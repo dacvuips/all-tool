@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
 import { PaymentMethodEnum } from "../bank";
-import { IOrder, OrderStatusEnum, PaymentStatus } from "./order.interface";
+import { IOrder, OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "./order.interface";
 
 const Schema = mongoose.Schema;
 
@@ -71,6 +71,7 @@ const orderSchema = new Schema(
     items: [orderItemSchema],
 
     subscriptionPlan: { type: String },
+    type: { type: String, enum: Object.values(OrderTypeEnum) },
     totalAmount: { type: Number, required: true },
 
     paymentMethod: {

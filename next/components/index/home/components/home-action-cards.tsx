@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
-import { HiArrowRight, HiShoppingCart } from "react-icons/hi";
-import { RiDownloadCloudLine } from "react-icons/ri";
+import { FaPhotoVideo } from "react-icons/fa";
+import { HiArrowRight } from "react-icons/hi";
+import { RiShieldCheckLine } from "react-icons/ri";
 
 export function HomeActionCards() {
   const { t } = useTranslation();
@@ -17,15 +18,15 @@ export function HomeActionCards() {
           >
             <div className="flex items-start gap-4">
               {/* Icon */}
-              <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-primary-light text-primary">
-                <HiShoppingCart className="text-xl" />
+              <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-success-light text-success-light">
+                <RiShieldCheckLine className="text-xl text-success" />
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900">
-                    {t("reCAPTCHA Token")}
+                  <h3 className="text-base sm:text-lg font-bold text-success-dark">
+                    {t("reCAPTCHA Token (Flow)")}
                   </h3>
                   <span
                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-bold uppercase text-white"
@@ -57,13 +58,13 @@ export function HomeActionCards() {
           >
             <div className="flex items-start gap-4">
               {/* Icon */}
-              <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-gray-100 text-gray-600">
-                <RiDownloadCloudLine className="text-xl" />
+              <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-danger-light text-gray-600">
+                <FaPhotoVideo className="text-xl text-danger" />
               </div>
 
               {/* Content */}
               <div className="flex-1 min-w-0">
-                <h3 className="text-base sm:text-lg font-bold mb-1.5 text-gray-900">
+                <h3 className="text-base sm:text-lg font-bold mb-1.5 text-danger-dark">
                   {t("Generate Banana 2 & Veo 3 Tools")}
                 </h3>
                 <p className="text-xs sm:text-sm leading-relaxed text-gray-500">

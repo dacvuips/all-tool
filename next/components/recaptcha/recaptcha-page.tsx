@@ -17,6 +17,7 @@ import {
 } from "react-icons/hi";
 import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../lib/providers/global-provider";
 import {
   RecaptchaToken,
   recaptchaTokenService,
@@ -35,10 +36,14 @@ const RecaptchaPage = () => {
   const [total, setTotal] = useState(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const sm = useScreen("sm");
-
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
   const totalPages = useMemo(() => Math.ceil(total / LIMIT), [total]);
 
   const fetchTokens = async () => {
+    if (!customer) {
+      setOpenCustomerLoginDialog(true);
+      return;
+    }
     setLoading(true);
     try {
       const result = await recaptchaTokenService.getMyRecaptchaTokens({
@@ -76,6 +81,10 @@ const RecaptchaPage = () => {
   };
 
   const handleAddNew = async () => {
+    if (!customer) {
+      setOpenCustomerLoginDialog(true);
+      return;
+    }
     if (total > 0) {
       // Customer already has tokens, navigate to pricing page
       router.push("/recaptcha/pricing");
@@ -234,14 +243,14 @@ const RecaptchaPage = () => {
               <Button
                 onClick={handleAddNew}
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300  bg-opacity-10 text-gray-800 hover:bg-opacity-20 border border-white border-opacity-10 backdrop-blur-sm disabled:opacity-50"
+                outline
                 icon={<HiPlus className={`text-lg ${loading ? "animate-spin" : ""}`} />}
                 text={sm ? t("Thêm mới") : ""}
               />
               <Button
                 onClick={fetchTokens}
                 disabled={loading}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300  bg-opacity-10 text-gray-800 hover:bg-opacity-20 border border-white border-opacity-10 backdrop-blur-sm disabled:opacity-50"
+                outline
                 icon={<HiRefresh className={`text-lg ${loading ? "animate-spin" : ""}`} />}
                 text={sm ? t("Làm mới") : ""}
               />
@@ -281,7 +290,7 @@ const RecaptchaPage = () => {
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">{t("Chưa có token nào")}</h3>
               <p className="text-sm text-gray-500 text-center max-w-sm">
-                {t("Bạn chưa có reCAPTCHA token nào. Hãy mua thêm reCAPTCHA token.")}
+                {t("Bạn chưa có reCAPTCHA token nào. Hãy [+ thêm mới] reCAPTCHA token.")}
               </p>
             </div>
           )}

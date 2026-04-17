@@ -4,6 +4,7 @@ import moment from "moment-timezone";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { BankModel, PaymentMethodEnum } from "../../../libs/dal/bank";
+import { SubscriptionPlanEnum } from "../../../libs/dal/customer";
 import { OrderStatusEnum, PaymentStatus } from "../../../libs/dal/order/order.interface";
 import orderService from "../../../libs/dal/order/order.service";
 import { settingService } from "../../../libs/dal/setting";
@@ -181,11 +182,11 @@ const Mutation = {
 
     // Map plan value → setting key prefix (giống PLAN_KEY_MAP bên pricing-page)
     const PLAN_KEY_MAP: Record<string, string> = {
-      Trial: "trial",
-      Basic: "basic",
-      Standard: "standard",
-      Professional: "professional",
-      Unlimited: "unlimited",
+      [SubscriptionPlanEnum.TRIAL]: SubscriptionPlanEnum.TRIAL,
+      [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
+      [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
+      [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
+      [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
     };
 
     const planKey = PLAN_KEY_MAP[subscriptionPlan];
@@ -228,6 +229,7 @@ const Mutation = {
         status: OrderStatusEnum.CREATED,
         totalAmount,
         subscriptionPlan,
+        type: type === "recaptcha" ? "RECAPTCHA" : "TOOL",
         orderLogs: [
           {
             status: OrderStatusEnum.CREATED,

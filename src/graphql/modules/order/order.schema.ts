@@ -109,6 +109,7 @@ const schema = gql`
     discount: Float
     totalAmount: Float
     subscriptionPlan: String
+    type: String
 
     paymentMethod: String
     paymentStatus: PaymentStatus
@@ -200,6 +201,7 @@ const schema = gql`
     discount: Float
     totalAmount: Float
     subscriptionPlan: String
+    type: String
 
     shippingAddress: ShippingAddress
 

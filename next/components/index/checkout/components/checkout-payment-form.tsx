@@ -18,10 +18,10 @@ type CheckoutType = "tool" | "recaptcha";
 
 /** Map from SubscriptionPlanEnum value → key prefix used in settings */
 const PLAN_KEY_MAP: Record<string, string> = {
-  [SubscriptionPlanEnum.BASIC]: "Basic",
-  [SubscriptionPlanEnum.STANDARD]: "Standard",
-  [SubscriptionPlanEnum.PROFESSIONAL]: "Professional",
-  [SubscriptionPlanEnum.UNLIMITED]: "Unlimited",
+  [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
+  [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
+  [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
+  [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
 };
 
 /** Plans to display (excludes Free) */

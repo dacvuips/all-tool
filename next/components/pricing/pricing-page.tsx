@@ -172,7 +172,7 @@ export default function PricingPage() {
       {/* Header */}
       <div className="pricing-header">
         <div className="pricing-header__inner">
-          <Link href="/" className="pricing-header__back">
+          <Link href="/app/affiliate-video" className="pricing-header__back">
             <HiArrowLeft className="pricing-header__back-icon" />
             <span>{t("Quay lại")}</span>
           </Link>
