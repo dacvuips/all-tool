@@ -1,3 +1,6 @@
+import { HomeActionCards } from "./components/home-action-cards";
+import { HomeBestSeller } from "./components/home-best-seller";
+import { HomeHero } from "./components/home-hero";
 import { HomeProvider } from "./provider/home-provider";
 
 export function HomePage() {
@@ -10,15 +13,10 @@ export function HomePage() {
 
 function HomeComponent() {
   return (
-    <>
-      <div className="flex flex-col gap-5 pb-10 bg-gray-100">
-        {/* <HomeBanners />
-        <ProductSearch />
-        <HomeProducts /> */}
-
-        {/* <HomeStreams /> */}
-        {/* <HomeNews /> */}
-      </div>
-    </>
+    <div className="bg-gray-100">
+      <HomeHero />
+      <HomeActionCards />
+      <HomeBestSeller />
+    </div>
   );
 }

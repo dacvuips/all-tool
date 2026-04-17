@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
 import { PaymentMethodEnum } from "../bank";
-import { IOrder, OrderStatusEnum, PaymentStatus } from "./order.interface";
+import { IOrder, OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "./order.interface";
 
 const Schema = mongoose.Schema;
 
@@ -13,19 +13,6 @@ const orderItemSchema = new Schema({
   originalPrice: { type: Number },
   quantity: { type: Number, required: true },
   subtotal: { type: Number, required: true },
-});
-
-const shippingAddressSchema = new Schema({
-  recipientName: { type: String, required: true },
-  phone: { type: String, required: true },
-  email: { type: String, required: true },
-  address: { type: String, required: true },
-  ward: { type: String },
-  district: { type: String },
-  province: { type: String },
-  country: { type: String, default: "Vietnam" },
-  postalCode: { type: String },
-  note: { type: String },
 });
 
 const paymentInfoSchema = new Schema({
@@ -69,18 +56,6 @@ const paymentLogSchema = new Schema({
   transactionId: { type: String },
 });
 
-const shopAddressSchema = new Schema({
-  name: { type: String },
-  phone: { type: String },
-  email: { type: String },
-  address: { type: String },
-  ward: { type: String },
-  district: { type: String },
-  province: { type: String },
-  country: { type: String, default: "Vietnam" },
-  postalCode: { type: String },
-});
-
 const orderSchema = new Schema(
   {
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
@@ -96,6 +71,7 @@ const orderSchema = new Schema(
     items: [orderItemSchema],
 
     subscriptionPlan: { type: String },
+    type: { type: String, enum: Object.values(OrderTypeEnum) },
     totalAmount: { type: Number, required: true },
 
     paymentMethod: {

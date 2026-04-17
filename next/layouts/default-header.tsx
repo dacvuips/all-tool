@@ -108,6 +108,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
 
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
+  const isToolPage = router.pathname.startsWith("/app/");
 
   return (
     <>
@@ -130,7 +131,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
             </div>
 
             {/* ── Affiliate Video: Right side actions ── */}
-            {customer && (
+            {customer && isToolPage && (
               <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
                 {/* Hướng dẫn */}
                 <Button
@@ -145,7 +146,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   className="px-2 h-8 rounded-md"
                   icon={<RiPriceTag3Line className="text-xs" />}
                   text={t("Bảng giá")}
-                  href="/pricing"
+                  href="/app/affiliate-video/pricing"
                 />
                 {/* API Key status */}
                 <Button
@@ -221,7 +222,6 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                             <RiHandCoinFill className="mr-2 ml-1 text-yellow-400" />
                             {parseNumber(wallet?.balance) || 0} {" MPoint"}
                           </div>
-
                         </div>
                       </div>
                     </Dropdown.Item>
@@ -624,7 +624,11 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
         ref={packageRef}
         className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2 cursor-default"
       >
-        <span className={`px-2.5 text-gray-700 font-semibold whitespace-nowrap ${!compact ? 'border-r border-gray-300' : ''}`}>
+        <span
+          className={`px-2.5 text-gray-700 font-semibold whitespace-nowrap ${
+            !compact ? "border-r border-gray-300" : ""
+          }`}
+        >
           {t("Gói")}:{" "}
           <span className="text-gray-900">
             {customer?.googlePackage?.subscription || t("Dùng thử")}

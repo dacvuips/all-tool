@@ -1,8 +1,8 @@
 import { NextSeo } from "next-seo";
 import { useTranslation } from "react-i18next";
-import PricingPage from "../../components/pricing/pricing-page";
-import { HomeLayout } from "../../layouts/home-layout/home-layout";
-import { getServerSideTranslationsProps } from "../../lib/functions/locale";
+import PricingPage from "../../../../components/pricing/pricing-page";
+import { HomeLayout } from "../../../../layouts/home-layout/home-layout";
+import { getServerSideTranslationsProps } from "../../../../lib/functions/locale";
 
 export default function Page() {
   const { t } = useTranslation();

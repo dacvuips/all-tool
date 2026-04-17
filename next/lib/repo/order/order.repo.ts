@@ -129,6 +129,7 @@ export interface Order extends BaseModel {
   discount?: number;
   totalAmount?: number;
   subscriptionPlan?: string;
+  type?: "TOOL" | "RECAPTCHA";
   shippingAddress?: ShippingAddress;
   shopAddress?: ShopAddress;
 
@@ -177,6 +178,7 @@ export class OrderRepository extends CrudRepository<Order> {
     paymentStatus
     totalAmount 
     subscriptionPlan
+    type
     customerId  
      paymentInfo {
       method 
@@ -205,6 +207,7 @@ export class OrderRepository extends CrudRepository<Order> {
     discount
     totalAmount
     subscriptionPlan
+    type
     paymentMethod
     paymentStatus
     paymentInfo {
@@ -324,19 +327,24 @@ export class OrderRepository extends CrudRepository<Order> {
    */
   async createSePayPGCheckout(
     subscriptionPlan: string,
-    orderId?: string
+    orderId?: string,
+    type?: "recaptcha" | "tool"
   ): Promise<SePayPGCheckoutData> {
     return this.apollo
       .mutate({
         mutation: gql`
-          mutation CreateSePayPGCheckout($subscriptionPlan: String!, $orderId: ID) {
-            createSePayPGCheckout(subscriptionPlan: $subscriptionPlan, orderId: $orderId) {
+          mutation CreateSePayPGCheckout($subscriptionPlan: String!, $orderId: ID, $type: String) {
+            createSePayPGCheckout(
+              subscriptionPlan: $subscriptionPlan
+              orderId: $orderId
+              type: $type
+            ) {
               checkoutUrl
               formFieldsJson
             }
           }
         `,
-        variables: { subscriptionPlan, orderId },
+        variables: { subscriptionPlan, orderId, type },
       })
       .then((res) => res.data.createSePayPGCheckout as SePayPGCheckoutData);
   }
