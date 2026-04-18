@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { HiSparkles } from "react-icons/hi";
+import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 
 export function HomeHero() {
   const { t } = useTranslation();
@@ -37,25 +39,25 @@ export function HomeHero() {
           className="text-4xl sm:text-5xl md:text-6xl lg:text-5xl font-extrabold tracking-tight mb-4 sm:mb-6 text-gray-600"
           style={{ lineHeight: "1.1" }}
         >
-          AI Video Generator
-          <span className="text-primary"> Tools</span>
+          <span className="text-primary"> {t("[Tools] ")}</span>
+          {t("Generate Banana 2 & Veo 3")}
         </h1>
 
         {/* Description */}
         <p className="text-sm sm:text-base md:text-lg max-w-xl mx-auto mb-8 sm:mb-10 leading-relaxed text-gray-500">
           {t(
-            "Optimal API solution for Google Veo 3 and Imagen 3. High speed, low cost, easy integration into your app."
+            "Cung cấp công cụ hỗ trợ tạo video Veo 3 và ảnh Banana 2, tạo kịch bản, sao chép video và hình ảnh  , đồng nhất nhân vật, lồng tiếng, edit video miễn phí tốt nhất"
           )}
         </p>
 
-        {/* CTA Button
+        {/* CTA Button */}
         <Link
           href="/app/affiliate-video"
           className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 border border-gray-300 text-gray-700 bg-white hover:border-primary hover:text-primary hover:shadow-md"
         >
-          <HiCode className="text-lg" />
-          <span>{t("Start integrating")}</span>
-        </Link> */}
+          <GenerateAiIcon className="text-lg" />
+          <span>{t("Bắt đàu miễn phí")}</span>
+        </Link>
       </div>
     </section>
   );

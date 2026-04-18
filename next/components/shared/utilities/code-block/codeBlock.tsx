@@ -46,7 +46,7 @@ export const SyntaxLine = memo(({ line }: { line: string }) => {
         (part.startsWith("`") && part.endsWith("`"))
       ) {
         parts.push(
-          <span key={pi} className="text-green-400">
+          <span key={pi} className="text-primary">
             {part}
           </span>
         );
@@ -88,7 +88,7 @@ export const SyntaxLine = memo(({ line }: { line: string }) => {
             varParts.forEach((vp, vi) => {
               if (vp.startsWith("$")) {
                 parts.push(
-                  <span key={`${pi}-${ki}-${vi}`} className="text-sky-400">
+                  <span key={`${pi}-${ki}-${vi}`} className="text-red-800">
                     {vp}
                   </span>
                 );
@@ -97,13 +97,19 @@ export const SyntaxLine = memo(({ line }: { line: string }) => {
                 fnParts.forEach((fp, fi) => {
                   if (fp === "->" || fp === "=>") {
                     parts.push(
-                      <span key={`${pi}-${ki}-${vi}-${fi}`} className="text-yellow-300">
+                      <span
+                        key={`${pi}-${ki}-${vi}-${fi}`}
+                        className="text-yellow-300 font-semibold  "
+                      >
                         {fp}
                       </span>
                     );
                   } else if (fp.endsWith("(")) {
                     parts.push(
-                      <span key={`${pi}-${ki}-${vi}-${fi}`} className="text-green-400">
+                      <span
+                        key={`${pi}-${ki}-${vi}-${fi}`}
+                        className="text-green-400 font-semibold"
+                      >
                         {fp}
                       </span>
                     );
@@ -165,10 +171,8 @@ export const CodeBlock = ({ codeSample, title }: { codeSample: CodeSample[]; tit
                 <Button
                   key={tab.label}
                   onClick={() => setActiveTab(tab.label)}
-                  className={`flex items-center  border whitespace-nowrap rounded-md gap-1.5 py-2 h-7 px-1 text-8 font-semibold transition-all duration-150 ${
-                    isActive
-                      ? "border-primary  text-primary bg-white"
-                      : "text-gray-400 hover:text-gray-200 "
+                  className={`flex items-center  border whitespace-nowrap rounded-md gap-1.5 py-2 h-7 px-1 text-8 font-semibold transition-all  bg-white duration-150 ${
+                    isActive ? "border-primary  text-primary" : "text-gray-400 hover:text-gray-200 "
                   }`}
                 >
                   <span

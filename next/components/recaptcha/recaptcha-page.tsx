@@ -728,7 +728,9 @@ fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recapt
   .catch(error => console.error('Error:', error));
 
 // With type IMAGE_GENERATION parameter
-fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION', {
+fetch('${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/recaptcha?type=IMAGE_GENERATION', {
   method: 'GET',
   headers: {
     'x-api-key': '${apiKey}'
@@ -746,7 +748,9 @@ fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recapt
 
 // Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha');
+curl_setopt($ch, CURLOPT_URL, '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/recaptcha');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ${apiKey}'
@@ -757,7 +761,9 @@ echo "Response: " . $response . PHP_EOL;
 
 // With type IMAGE_GENERATION parameter
 $ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION');
+curl_setopt($ch, CURLOPT_URL, '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/recaptcha?type=IMAGE_GENERATION');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ${apiKey}'
@@ -872,6 +878,63 @@ const ApiKeyGuideDialog = ({
           </div>
 
           <CodeBlock codeSample={codeSampleList} title={t("Hướng dẫn tích hợp")} />
+
+          {/* Response Format Info */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              {t("Thông tin phản hồi")}
+            </label>
+            <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              {/* Header */}
+              <div className="flex items-center gap-2 bg-gray-50 border-b border-gray-100 px-4 py-2.5">
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-success  text-4 font-bold">
+                  ✓
+                </span>
+                <span className="text-xs font-semibold text-gray-700">{t("Response")}</span>
+                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-emerald-50 text-success border border-emerald-200 ">
+                  200 OK
+                </span>
+              </div>
+              {/* Response Body */}
+              <div className="px-4 py-3 bg-white">
+                <div className="rounded-lg bg-gray-900 px-4 py-3 font-mono text-sm overflow-x-auto">
+                  <span className="text-gray-500">{"{"}</span>
+                  {"\n"}
+                  <span className="text-gray-500 ml-4"> </span>
+                  <span className="text-blue-400">"reCaptchaToken"</span>
+                  <span className="text-gray-500">: </span>
+                  <span className="text-green-400">
+                    "0cAFcWeA6iKP40OyvMmF320Erxp0tFr2R0go1Q6pu1G-95PxLvNmY_hZjnmRQz-bXshKOBfJ1C_6yYwlxi..."
+                  </span>
+                  {"\n"}
+                  <span className="text-gray-500">{"}"}</span>
+                </div>
+                {/* Description */}
+                <div className="mt-3 space-y-2">
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-1 w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">
+                        reCaptchaToken
+                      </span>
+                      <span className="mx-1">—</span>
+                      {t(
+                        "Token reCAPTCHA được tạo thành công. Sử dụng token này để xác thực trong các yêu cầu tiếp theo."
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-2.5">
+                    <div className="mt-1 w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                    <p className="text-xs text-gray-500 leading-relaxed">
+                      {t(
+                        "Token có thời hạn sử dụng giới hạn. Vui lòng tạo token mới nếu token hiện tại đã hết hạn."
+                      )}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </Dialog.Body>
     </Dialog>
