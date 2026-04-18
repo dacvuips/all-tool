@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import {
   RecaptchaSubscriptionPlanEnum,
@@ -5,7 +6,6 @@ import {
 } from "../../../libs/dal/recaptchaToken";
 import { settingService } from "../../../libs/dal/setting";
 import { Context } from "../../../libs/graphql";
-
 const Query = {
   getAllRecaptchaToken: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
@@ -62,7 +62,7 @@ const Mutation = {
     const requestQuantity = requestQuantitySetting?.value ?? 1000;
 
     // Generate a unique key
-    const key = crypto.randomUUID();
+    const key = crypto.randomBytes(32).toString("hex");
     const expiredDate = new Date();
     expiredDate.setDate(expiredDate.getDate() + 30);
 

@@ -1,5 +1,5 @@
 import { IsNotEmpty } from "class-validator";
-
+import crypto from "crypto";
 import { CONSTANTS } from "../../../../constants/constant.const";
 import { increaseCustomerTryOnLimit } from "../../../../graphql/modules/guest/guest.helper";
 import { NotificationBuilder } from "../../../../graphql/modules/notification/notificationBuilder";
@@ -446,7 +446,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const requestQuantity = requestQuantitySetting?.value ?? 1000;
 
     // Generate a unique key
-    const key = (require("crypto") as any).randomUUID();
+    const key = crypto.randomBytes(32).toString("hex");
     const expiredDate = new Date();
     expiredDate.setDate(expiredDate.getDate() + 30); // 30 ngày
 
