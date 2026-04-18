@@ -13,6 +13,7 @@ const schema = gql`
     updateRecaptchaToken(id: ID!, data: UpdateRecaptchaTokenInput!): RecaptchaToken
     deleteOneRecaptchaToken(id: ID!): RecaptchaToken
     createMyRecaptchaToken: RecaptchaToken
+    toggleMyRecaptchaTokenActive(id: ID!): RecaptchaToken
     # Add Mutation
   }
 

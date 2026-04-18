@@ -67,6 +67,18 @@ export class RecaptchaTokenRepository extends CrudRepository<RecaptchaToken> {
     await this.clearStore();
     return result.data["g0"] as RecaptchaToken;
   }
+
+  async toggleMyRecaptchaTokenActive(id: string): Promise<RecaptchaToken> {
+    const result = await this.apollo.mutate({
+      mutation: this.gql`mutation toggleMyRecaptchaTokenActive($id: ID!) {
+        g0: toggleMyRecaptchaTokenActive(id: $id) { ${this.fullFragment} }
+      }`,
+      variables: { id },
+      fetchPolicy: "no-cache",
+    });
+    await this.clearStore();
+    return result.data["g0"] as RecaptchaToken;
+  }
 }
 
 export const recaptchaTokenService = new RecaptchaTokenRepository();

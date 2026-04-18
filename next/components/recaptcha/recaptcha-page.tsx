@@ -28,7 +28,7 @@ import {
 } from "../../lib/repo/recaptcha-token/recaptcha-token.repo";
 import CodeBlock, { CodeSample } from "../shared/utilities/code-block/codeBlock";
 import { Dialog } from "../shared/utilities/dialog/dialog";
-import { Button } from "../shared/utilities/form";
+import { Button, Switch } from "../shared/utilities/form";
 
 const LIMIT = 10;
 
@@ -122,7 +122,7 @@ const RecaptchaPage = () => {
     }
     return {
       label: t("Hoạt động"),
-      color: "bg-emerald-50 text-emerald-600 border-emerald-200",
+      color: "bg-success-light text-success border-success",
       dotColor: "bg-emerald-500",
     };
   };
@@ -187,6 +187,22 @@ const RecaptchaPage = () => {
   }, [tokens]);
 
   const [openSettingToken, setOpenSettingToken] = useState<string>("");
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const handleToggleActive = async (token: RecaptchaToken) => {
+    if (togglingId) return;
+    setTogglingId(token.id);
+    try {
+      const updated = await recaptchaTokenService.toggleMyRecaptchaTokenActive(token.id);
+      setTokens((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+      toast.success(updated.active ? t("Đã kích hoạt token") : t("Đã vô hiệu token"));
+    } catch (err) {
+      console.error("Failed to toggle token active:", err);
+      toast.error(t("Có lỗi xảy ra, vui lòng thử lại"));
+    } finally {
+      setTogglingId(null);
+    }
+  };
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -458,12 +474,19 @@ const RecaptchaPage = () => {
 
                         {/* Status */}
                         <td className="px-4 py-4">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${status.color}`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`} />
-                            {status.label}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`inline-flex h-8 items-center gap-1 px-0.5  rounded-full text-xs font-semibold border ${status.color}`}
+                            >
+                              <Switch
+                                value={token.active}
+                                onChange={() => handleToggleActive(token)}
+                                dependent
+                              />
+                              <span className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`} />
+                              {status.label}
+                            </span>
+                          </div>
                         </td>
 
                         {/* Actions */}
@@ -528,8 +551,13 @@ const RecaptchaPage = () => {
                         </div>
                       </div>
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border flex-shrink-0 ${status.color}`}
+                        className={`inline-flex h-8 items-center gap-1 px-0.5  rounded-full text-xs font-semibold border ${status.color}`}
                       >
+                        <Switch
+                          value={token.active}
+                          onChange={() => handleToggleActive(token)}
+                          dependent
+                        />
                         <span className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`} />
                         {status.label}
                       </span>
@@ -794,7 +822,9 @@ curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/
   -H 'X-API-Key: ${apiKey}'
 
 # With action type IMAGE_GENERATION parameter
-curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?action=IMAGE_GENERATION' \\
+curl -X GET '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/recaptcha?action=IMAGE_GENERATION' \\
   -H 'X-API-Key: ${apiKey}'`,
   },
 };

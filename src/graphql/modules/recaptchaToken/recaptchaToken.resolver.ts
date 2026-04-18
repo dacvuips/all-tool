@@ -76,6 +76,19 @@ const Mutation = {
       subscriptionPlan: RecaptchaSubscriptionPlanEnum.FREE,
     });
   },
+  toggleMyRecaptchaTokenActive: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { id } = args;
+    const customerId = context.id;
+
+    // Verify ownership
+    const token = await recaptchaTokenService.findOne({ _id: id, customerId });
+    if (!token) {
+      throw new Error("Token không tồn tại hoặc bạn không có quyền thực hiện thao tác này.");
+    }
+
+    return await recaptchaTokenService.updateOne(id, { active: !token.active });
+  },
 };
 
 export default {

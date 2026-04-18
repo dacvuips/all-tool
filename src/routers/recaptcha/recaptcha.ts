@@ -28,7 +28,7 @@ export default [
       }
 
       // Kiểm tra token hợp lệ
-      const token = await recaptchaTokenService.findOne({ key: apiKey });
+      const token = await recaptchaTokenService.findOne({ key: apiKey, active: true });
       if (!token) {
         const err: any = new Error("API Key không hợp lệ");
         err.statusCode = 401;
