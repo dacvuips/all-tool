@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { useTranslation } from "react-i18next";
 import { FaPhotoVideo } from "react-icons/fa";
-import { HiArrowRight } from "react-icons/hi";
-import { RiShieldCheckLine } from "react-icons/ri";
+import { HiArrowRight, HiKey } from "react-icons/hi";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 
 export function HomeActionCards() {
@@ -89,7 +88,7 @@ export function HomeActionCards() {
               <div className="flex items-center gap-4 mb-3">
                 {/* Icon */}
                 <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-success-light text-success-light">
-                  <RiShieldCheckLine className="text-xl text-success" />
+                  <HiKey className="text-xl text-success" />
                 </div>
 
                 {/* Title */}

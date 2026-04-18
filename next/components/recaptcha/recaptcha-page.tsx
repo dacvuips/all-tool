@@ -414,6 +414,7 @@ const RecaptchaPage = () => {
 
                                 <Button
                                   onClick={() => copyToClipboard(token.key)}
+                                  className="px-0"
                                   tooltip={t("Sao chép")}
                                   icon={
                                     copiedId === token.id ? (
@@ -493,6 +494,7 @@ const RecaptchaPage = () => {
                         <td className="px-6 py-4 text-right">
                           <Button
                             onClick={() => setOpenSettingToken(token.key)}
+                            className=" bg-gray-50"
                             icon={<RiSettings4Line />}
                           ></Button>
                         </td>
@@ -533,9 +535,27 @@ const RecaptchaPage = () => {
                           />
                         </div>
                         <div className="min-w-0">
-                          <p className="text-sm font-mono font-medium text-gray-900 truncate">
-                            {maskedKey}
-                          </p>
+                          <div
+                            onClick={() => copyToClipboard(token.key)}
+                            className="flex items-center gap-2"
+                          >
+                            <p className="text-sm font-mono font-medium text-gray-900 truncate max-w-xs">
+                              {maskedKey}
+                            </p>
+
+                            <Button
+                              onClick={() => copyToClipboard(token.key)}
+                              className="px-0"
+                              tooltip={t("Sao chép")}
+                              icon={
+                                copiedId === token.id ? (
+                                  <HiCheck className="text-sm" />
+                                ) : (
+                                  <HiClipboardCopy className="text-sm" />
+                                )
+                              }
+                            />
+                          </div>
                           <p className="text-xs text-gray-400">
                             {t("Tạo ngày")} {formatDate(token.createdAt)}
                           </p>
@@ -592,22 +612,11 @@ const RecaptchaPage = () => {
                           {t("Hết hạn")}: {formatDate(token.expiredDate)}
                         </span>
                       </div>
-                      <button
-                        onClick={() => copyToClipboard(token.key)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-gray-100 text-gray-600 hover:bg-primary hover:text-white active:scale-95"
-                      >
-                        {copiedId === token.id ? (
-                          <>
-                            <HiCheck className="text-sm" />
-                            {t("Đã sao chép")}
-                          </>
-                        ) : (
-                          <>
-                            <HiClipboardCopy className="text-sm" />
-                            {t("Sao chép")}
-                          </>
-                        )}
-                      </button>
+                      <Button
+                        onClick={() => setOpenSettingToken(token.key)}
+                        className=" bg-gray-50"
+                        icon={<RiSettings4Line />}
+                      ></Button>
                     </div>
                   </div>
                 );
@@ -710,8 +719,8 @@ const CODE_SAMPLES: Record<string, any> = {
     code: (apiKey: string) => `const API_KEY = '${apiKey}';
 const BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
 
-async function getReCaptchaToken(action) {
-  const url = action ? \`\${BASE_URL}?action=\${action}\` : BASE_URL;
+async function getReCaptchaToken(type) {
+  const url = type ? \`\${BASE_URL}?type=\${type}\` : BASE_URL;
   
   try {
     const response = await fetch(url, {
@@ -734,10 +743,10 @@ async function getReCaptchaToken(action) {
   }
 }
 
-// Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 getReCaptchaToken();
 
-// With action type IMAGE_GENERATION parameter
+// With type IMAGE_GENERATION parameter
 getReCaptchaToken('IMAGE_GENERATION');`,
   },
   PHP: {
@@ -749,10 +758,10 @@ getReCaptchaToken('IMAGE_GENERATION');`,
 $apiKey = '${apiKey}';
 $baseUrl = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
 
-function getReCaptchaToken($apiKey, $baseUrl, $action = null) {
+function getReCaptchaToken($apiKey, $baseUrl, $type = null) {
     $url = $baseUrl;
-    if ($action) {
-        $url .= '?action=' . urlencode($action);
+    if ($type) {
+        $url .= '?type=' . urlencode($type);
     }
 
     $ch = curl_init();
@@ -773,10 +782,10 @@ function getReCaptchaToken($apiKey, $baseUrl, $action = null) {
     }
 }
 
-// Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 getReCaptchaToken($apiKey, $baseUrl);
 
-// With action type IMAGE_GENERATION parameter
+// With type IMAGE_GENERATION parameter
 getReCaptchaToken($apiKey, $baseUrl, 'IMAGE_GENERATION');`,
   },
   Python: {
@@ -788,10 +797,10 @@ getReCaptchaToken($apiKey, $baseUrl, 'IMAGE_GENERATION');`,
 API_KEY = '${apiKey}'
 BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha'
 
-def get_recaptcha_token(action=None):
+def get_recaptcha_token(type=None):
     url = BASE_URL
-    if action:
-        url += f'?action={action}'
+    if type:
+        url += f'?type={type}'
         
     headers = {
         'X-API-Key': API_KEY
@@ -807,24 +816,24 @@ def get_recaptcha_token(action=None):
         print('Error:', e)
         raise
 
-# Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+# Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 get_recaptcha_token()
 
-# With action type IMAGE_GENERATION parameter
+# With type IMAGE_GENERATION parameter
 get_recaptcha_token('IMAGE_GENERATION')`,
   },
   Curl: {
     lang: "bash",
     icon: ">_",
     iconBg: "bg-gray-700 text-green-400",
-    code: (apiKey: string) => `# Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+    code: (apiKey: string) => `# Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha' \\
   -H 'X-API-Key: ${apiKey}'
 
-# With action type IMAGE_GENERATION parameter
+# With type IMAGE_GENERATION parameter
 curl -X GET '${
       typeof window !== "undefined" ? window.location.origin : ""
-    }/api/recaptcha?action=IMAGE_GENERATION' \\
+    }/api/recaptcha?type=IMAGE_GENERATION' \\
   -H 'X-API-Key: ${apiKey}'`,
   },
 };
@@ -901,14 +910,6 @@ const ApiKeyGuideDialog = ({
           <CodeBlock codeSample={codeSampleList} title={t("Hướng dẫn tích hợp")} />
         </div>
       </Dialog.Body>
-
-      <Dialog.Footer>
-        <div className="flex justify-end w-full gap-2">
-          <Button onClick={onClose} outline>
-            {t("Đóng")}
-          </Button>
-        </div>
-      </Dialog.Footer>
     </Dialog>
   );
 };
