@@ -133,9 +133,15 @@ export default [
         usedQuantity: (token.usedQuantity || 0) + 1,
       });
 
-      return {
+      if (!captchaData.captcha) {
+        const err: any = new Error("Captcha API trả về dữ liệu không hợp lệ (thiếu captcha token)");
+        err.statusCode = 502;
+        throw err;
+      }
+
+      res.json({
         reCaptchaToken: captchaData.captcha,
-      };
+      });
     },
   },
 ];
