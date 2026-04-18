@@ -80,15 +80,16 @@ export default [
         Seed: string;
       } = null;
       let lastError: any = null;
+      console.log("links", links, settingValue, setting, captchaData, type, apiKey);
 
       for (const selectedLink of links) {
         if (!selectedLink || !selectedLink.url) {
           continue;
         }
-
+        console.log("tôi đâc vào đây");
         try {
           const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
-
+          console.log("captchaUrl", captchaUrl);
           const headers: Record<string, string> = {};
           if (selectedLink.apiKey) {
             headers["X-API-Key"] = selectedLink.apiKey;
