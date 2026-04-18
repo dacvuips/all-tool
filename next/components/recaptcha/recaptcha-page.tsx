@@ -1,5 +1,6 @@
+import copy from "copy-to-clipboard";
 import { useRouter } from "next/router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiArrowLeft,
@@ -15,14 +16,18 @@ import {
   HiRefresh,
   HiShieldCheck,
 } from "react-icons/hi";
+import { RiSettings4Line } from "react-icons/ri";
 import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
+import { useToast } from "../../lib/providers/toast-provider";
 import {
   RecaptchaSubscriptionPlanEnum,
   RecaptchaToken,
   recaptchaTokenService,
 } from "../../lib/repo/recaptcha-token/recaptcha-token.repo";
+import CodeBlock, { CodeSample } from "../shared/utilities/code-block/codeBlock";
+import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
 
 const LIMIT = 10;
@@ -30,6 +35,7 @@ const LIMIT = 10;
 const RecaptchaPage = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
+  const toast = useToast();
   const router = useRouter();
   const [tokens, setTokens] = useState<RecaptchaToken[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,8 +44,12 @@ const RecaptchaPage = () => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const sm = useScreen("sm");
   const { setOpenCustomerLoginDialog } = useGlobalContext();
-  const totalPages = useMemo(() => Math.ceil(total / LIMIT), [total]);
 
+  const totalPages = useMemo(() => Math.ceil(total / LIMIT), [total]);
+  function copyToClipboard(text) {
+    copy(text);
+    toast.success(t("Đã sao chép"));
+  }
   const fetchTokens = async () => {
     setLoading(true);
     try {
@@ -59,24 +69,6 @@ const RecaptchaPage = () => {
   useEffect(() => {
     fetchTokens();
   }, [page, customer]);
-
-  const handleCopy = async (key: string, id: string) => {
-    try {
-      await navigator.clipboard.writeText(key);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      // fallback
-      const textarea = document.createElement("textarea");
-      textarea.value = key;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    }
-  };
 
   const handleAddNew = async () => {
     if (!customer) {
@@ -193,7 +185,8 @@ const RecaptchaPage = () => {
     const usedRequests = tokens.reduce((acc, t) => acc + (t.usedQuantity || 0), 0);
     return { activeCount, totalRequests, usedRequests };
   }, [tokens]);
-  console.log(tokens);
+
+  const [openSettingToken, setOpenSettingToken] = useState<string>("");
 
   return (
     <div className="bg-gray-100 min-h-screen">
@@ -395,9 +388,26 @@ const RecaptchaPage = () => {
                               />
                             </div>
                             <div className="min-w-0">
-                              <p className="text-sm font-mono font-medium text-gray-900 truncate max-w-xs">
-                                {maskedKey}
-                              </p>
+                              <div
+                                onClick={() => copyToClipboard(token.key)}
+                                className="flex items-center gap-2"
+                              >
+                                <p className="text-sm font-mono font-medium text-gray-900 truncate max-w-xs">
+                                  {maskedKey}
+                                </p>
+
+                                <Button
+                                  onClick={() => copyToClipboard(token.key)}
+                                  tooltip={t("Sao chép")}
+                                  icon={
+                                    copiedId === token.id ? (
+                                      <HiCheck className="text-sm" />
+                                    ) : (
+                                      <HiClipboardCopy className="text-sm" />
+                                    )
+                                  }
+                                />
+                              </div>
                               <p className="text-xs text-gray-400 mt-0.5">
                                 {t("Tạo ngày")} {formatDate(token.createdAt)}
                               </p>
@@ -458,23 +468,10 @@ const RecaptchaPage = () => {
 
                         {/* Actions */}
                         <td className="px-6 py-4 text-right">
-                          <button
-                            onClick={() => handleCopy(token.key, token.id)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-gray-100 text-gray-600 hover:bg-primary hover:text-white"
-                            title={t("Sao chép API Key")}
-                          >
-                            {copiedId === token.id ? (
-                              <>
-                                <HiCheck className="text-sm" />
-                                {t("Đã sao chép")}
-                              </>
-                            ) : (
-                              <>
-                                <HiClipboardCopy className="text-sm" />
-                                {t("Sao chép")}
-                              </>
-                            )}
-                          </button>
+                          <Button
+                            onClick={() => setOpenSettingToken(token.key)}
+                            icon={<RiSettings4Line />}
+                          ></Button>
                         </td>
                       </tr>
                     );
@@ -568,7 +565,7 @@ const RecaptchaPage = () => {
                         </span>
                       </div>
                       <button
-                        onClick={() => handleCopy(token.key, token.id)}
+                        onClick={() => copyToClipboard(token.key)}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 bg-gray-100 text-gray-600 hover:bg-primary hover:text-white active:scale-95"
                       >
                         {copiedId === token.id ? (
@@ -668,7 +665,221 @@ const RecaptchaPage = () => {
           </div>
         )}
       </div>
+      <ApiKeyGuideDialog
+        isOpen={!!openSettingToken}
+        onClose={() => setOpenSettingToken("")}
+        apiKey={openSettingToken}
+      />
     </div>
+  );
+};
+// ===== Default Code Samples =====
+const CODE_SAMPLES: Record<string, any> = {
+  NodeJS: {
+    lang: "javascript",
+    icon: "JS",
+    iconBg: "bg-yellow-400 text-gray-900",
+    code: (apiKey: string) => `const API_KEY = '${apiKey}';
+const BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
+
+async function getReCaptchaToken(action) {
+  const url = action ? \`\${BASE_URL}?action=\${action}\` : BASE_URL;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-API-Key': API_KEY,
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(\`HTTP error! status: \${response.status}\`);
+    }
+    
+    const data = await response.json();
+    console.log('Response:', data);
+    return data;
+  } catch (error) {
+    console.error('Error:', error.message);
+    throw error;
+  }
+}
+
+// Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+getReCaptchaToken();
+
+// With action type IMAGE_GENERATION parameter
+getReCaptchaToken('IMAGE_GENERATION');`,
+  },
+  PHP: {
+    lang: "php",
+    icon: "PHP",
+    iconBg: "bg-indigo-500 text-white",
+    code: (apiKey: string) => `<?php
+
+$apiKey = '${apiKey}';
+$baseUrl = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
+
+function getReCaptchaToken($apiKey, $baseUrl, $action = null) {
+    $url = $baseUrl;
+    if ($action) {
+        $url .= '?action=' . urlencode($action);
+    }
+
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'X-API-Key: ' . $apiKey,
+    ]);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200) {
+        echo "Response: " . $response . PHP_EOL;
+    } else {
+        echo "Error (" . $httpCode . "): " . $response . PHP_EOL;
+    }
+}
+
+// Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+getReCaptchaToken($apiKey, $baseUrl);
+
+// With action type IMAGE_GENERATION parameter
+getReCaptchaToken($apiKey, $baseUrl, 'IMAGE_GENERATION');`,
+  },
+  Python: {
+    lang: "python",
+    icon: "PY",
+    iconBg: "bg-blue-500 text-yellow-300",
+    code: (apiKey: string) => `import requests
+
+API_KEY = '${apiKey}'
+BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha'
+
+def get_recaptcha_token(action=None):
+    url = BASE_URL
+    if action:
+        url += f'?action={action}'
+        
+    headers = {
+        'X-API-Key': API_KEY
+    }
+    
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        data = response.json()
+        print('Response:', data)
+        return data
+    except requests.exceptions.RequestException as e:
+        print('Error:', e)
+        raise
+
+# Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+get_recaptcha_token()
+
+# With action type IMAGE_GENERATION parameter
+get_recaptcha_token('IMAGE_GENERATION')`,
+  },
+  Curl: {
+    lang: "bash",
+    icon: ">_",
+    iconBg: "bg-gray-700 text-green-400",
+    code: (apiKey: string) => `# Get reCAPTCHA token (Default action: VIDEO_GENERATION)
+curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha' \\
+  -H 'X-API-Key: ${apiKey}'
+
+# With action type IMAGE_GENERATION parameter
+curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?action=IMAGE_GENERATION' \\
+  -H 'X-API-Key: ${apiKey}'`,
+  },
+};
+
+// ===== API Key Guide Dialog =====
+const ApiKeyGuideDialog = ({
+  isOpen,
+  onClose,
+  apiKey,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  apiKey: string;
+}) => {
+  const { t } = useTranslation();
+  const toast = useToast();
+
+  const [keyCopied, setKeyCopied] = useState(false);
+
+  const handleCopyKey = useCallback(() => {
+    copy(apiKey);
+    setKeyCopied(true);
+    toast.success(t("Đã sao chép API Key"));
+    setTimeout(() => setKeyCopied(false), 2000);
+  }, [apiKey]);
+
+  const codeSampleList: CodeSample[] = useMemo(() => {
+    return Object.entries(CODE_SAMPLES).map(([key, value]) => {
+      return {
+        ...value,
+        label: key,
+        code: value.code(apiKey),
+      };
+    });
+  }, [apiKey]);
+  return (
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("Cài đặt API Key")}
+      width="620px"
+      maxWidth="95vw"
+    >
+      <Dialog.Body>
+        <div className="space-y-5">
+          {/* API Key Display */}
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+              API Key
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 font-mono text-sm text-gray-800 overflow-hidden">
+                <HiKey className="text-orange-500 mr-2 flex-shrink-0" />
+                <span className="truncate select-all">{apiKey}</span>
+              </div>
+              <button
+                onClick={handleCopyKey}
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
+                  keyCopied
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-600"
+                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
+                }`}
+              >
+                {keyCopied ? (
+                  <HiCheck className="text-sm" />
+                ) : (
+                  <HiClipboardCopy className="text-sm" />
+                )}
+                {keyCopied ? t("Đã chép") : t("Sao chép")}
+              </button>
+            </div>
+          </div>
+
+          <CodeBlock codeSample={codeSampleList} title={t("Hướng dẫn tích hợp")} />
+        </div>
+      </Dialog.Body>
+
+      <Dialog.Footer>
+        <div className="flex justify-end w-full gap-2">
+          <Button onClick={onClose} outline>
+            {t("Đóng")}
+          </Button>
+        </div>
+      </Dialog.Footer>
+    </Dialog>
   );
 };
 
