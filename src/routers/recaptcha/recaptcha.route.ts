@@ -56,7 +56,17 @@ export default [
 
       // Lấy cấu hình API captcha từ setting
       const setting = await settingService.findOne({ key: "recaptcha-api-secret-key" });
-      const settingValue = setting?.value as RecaptchaAPISetting | undefined;
+      let settingValue: RecaptchaAPISetting | undefined;
+      try {
+        settingValue =
+          typeof setting?.value === "string"
+            ? JSON.parse(setting.value)
+            : (setting?.value as RecaptchaAPISetting | undefined);
+      } catch {
+        const err: any = new Error("Cấu hình API captcha không hợp lệ (JSON parse error)");
+        err.statusCode = 500;
+        throw err;
+      }
 
       if (!settingValue?.link || settingValue.link.length === 0) {
         const err: any = new Error("Chưa cấu hình API captcha");
@@ -80,16 +90,13 @@ export default [
         Seed: string;
       } = null;
       let lastError: any = null;
-      console.log("links", links, settingValue, setting, captchaData, type, apiKey);
 
       for (const selectedLink of links) {
         if (!selectedLink || !selectedLink.url) {
           continue;
         }
-        console.log("tôi đâc vào đây");
         try {
           const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
-          console.log("captchaUrl", captchaUrl);
           const headers: Record<string, string> = {};
           if (selectedLink.apiKey) {
             headers["X-API-Key"] = selectedLink.apiKey;
