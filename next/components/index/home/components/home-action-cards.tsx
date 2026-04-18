@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { FaPhotoVideo } from "react-icons/fa";
 import { HiArrowRight } from "react-icons/hi";
 import { RiShieldCheckLine } from "react-icons/ri";
+import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 
 export function HomeActionCards() {
   const { t } = useTranslation();
@@ -14,7 +15,7 @@ export function HomeActionCards() {
           {/* Buy Card */}
           <Link
             href="/recaptcha"
-            className="group relative overflow-hidden rounded-xl p-5 sm:p-6 transition-all duration-300 bg-white border border-gray-200 hover:border-primary hover:shadow-lg"
+            className="block group relative overflow-hidden rounded-xl p-5 sm:p-6 transition-all duration-300 bg-white border border-gray-200 hover:border-primary hover:shadow-lg"
           >
             <div className="flex items-start gap-4">
               {/* Icon */}
@@ -54,7 +55,7 @@ export function HomeActionCards() {
           {/* Free Tools Card */}
           <Link
             href="/app/affiliate-video"
-            className="group relative overflow-hidden rounded-xl p-5 sm:p-6 transition-all duration-300 bg-white border border-gray-200 hover:border-gray-400 hover:shadow-lg"
+            className="block group relative overflow-hidden rounded-xl p-5 sm:p-6 transition-all duration-300 bg-white border border-gray-200 hover:border-primary hover:shadow-lg"
           >
             <div className="flex items-start gap-4">
               {/* Icon */}
@@ -65,11 +66,75 @@ export function HomeActionCards() {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <h3 className="text-base sm:text-lg font-bold mb-1.5 text-danger-dark">
-                  {t("Generate Banana 2 & Veo 3 Tools")}
+                  {t("[API] - Generate Banana 2 & Veo 3")}
                 </h3>
                 <p className="text-xs sm:text-sm leading-relaxed text-gray-500">
                   {t(
-                    "Công cụ hỗ trợ generate video veo 3 và image banana 2 hàng loạt miễn phí tốt nhất."
+                    "Cung cấp API hỗ trợ generate video veo 3 và image Banana 2 miễn phí tốt nhất."
+                  )}
+                </p>
+              </div>
+
+              {/* Arrow */}
+              <div className="flex-shrink-0 self-center">
+                <HiArrowRight className="text-lg text-gray-300 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-gray-600" />
+              </div>
+            </div>
+          </Link>
+        </div>
+        {/* Free Tools Card */}
+        <div
+          className="mt-4"
+          style={{
+            position: "relative",
+            overflow: "hidden",
+            borderRadius: "0.75rem",
+            padding: "1px",
+          }}
+        >
+          <style>{`
+            @keyframes rainbowSpin {
+              0% { transform: translate(-50%, -50%) rotate(0deg); }
+              100% { transform: translate(-50%, -50%) rotate(-360deg); }
+            }
+          `}</style>
+          <div
+            style={{
+              position: "absolute",
+              top: "50%",
+              left: "50%",
+              width: "2000px",
+              height: "2000px",
+              background:
+                "conic-gradient(from 90deg at 50% 50%, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff, #ff0000)",
+              animation: "rainbowSpin 5s linear infinite",
+            }}
+          />
+          <Link
+            href="/app/affiliate-video"
+            className="block group relative p-5 sm:p-6 transition-all duration-300 hover:shadow-lg"
+            style={{
+              height: "100%",
+              width: "100%",
+              backgroundColor: "white",
+              borderRadius: "0.65rem",
+              zIndex: 10,
+            }}
+          >
+            <div className="flex items-start gap-4">
+              {/* Icon */}
+              <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center bg-pink-light text-pink-500">
+                <GenerateAiIcon className="text-xl text-pink-500" />
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base sm:text-lg font-bold mb-1.5 text-pink">
+                  {t("[Tools] - Generate Banana 2 & Veo 3")}
+                </h3>
+                <p className="text-xs sm:text-sm leading-relaxed text-gray-500">
+                  {t(
+                    "Cung cấp công cụ hỗ trợ generate video Veo 3 và image Banana 2, tạo kịch bản, Copy, đồng nhất nhân vật, lồng tiếng, edit video miễn phí tốt nhất."
                   )}
                 </p>
               </div>
