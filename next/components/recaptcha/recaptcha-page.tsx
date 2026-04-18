@@ -716,38 +716,27 @@ const CODE_SAMPLES: Record<string, any> = {
     lang: "javascript",
     icon: "JS",
     iconBg: "bg-yellow-400 text-gray-900",
-    code: (apiKey: string) => `const API_KEY = '${apiKey}';
-const BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
-
-async function getReCaptchaToken(type) {
-  const url = type ? \`\${BASE_URL}?type=\${type}\` : BASE_URL;
-  
-  try {
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'X-API-Key': API_KEY,
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(\`HTTP error! status: \${response.status}\`);
-    }
-    
-    const data = await response.json();
-    console.log('Response:', data);
-    return data;
-  } catch (error) {
-    console.error('Error:', error.message);
-    throw error;
+    code: (apiKey: string) => `// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
+fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha', {
+  method: 'GET',
+  headers: {
+    'x-api-key': '${apiKey}'
   }
-}
-
-// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
-getReCaptchaToken();
+})
+  .then(response => response.json())
+  .then(data => console.log('Response:', data))
+  .catch(error => console.error('Error:', error));
 
 // With type IMAGE_GENERATION parameter
-getReCaptchaToken('IMAGE_GENERATION');`,
+fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION', {
+  method: 'GET',
+  headers: {
+    'x-api-key': '${apiKey}'
+  }
+})
+  .then(response => response.json())
+  .then(data => console.log('Response:', data))
+  .catch(error => console.error('Error:', error));`,
   },
   PHP: {
     lang: "php",
@@ -755,38 +744,27 @@ getReCaptchaToken('IMAGE_GENERATION');`,
     iconBg: "bg-indigo-500 text-white",
     code: (apiKey: string) => `<?php
 
-$apiKey = '${apiKey}';
-$baseUrl = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha';
-
-function getReCaptchaToken($apiKey, $baseUrl, $type = null) {
-    $url = $baseUrl;
-    if ($type) {
-        $url .= '?type=' . urlencode($type);
-    }
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'X-API-Key: ' . $apiKey,
-    ]);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    if ($httpCode === 200) {
-        echo "Response: " . $response . PHP_EOL;
-    } else {
-        echo "Error (" . $httpCode . "): " . $response . PHP_EOL;
-    }
-}
-
 // Get reCAPTCHA token (Default type: VIDEO_GENERATION)
-getReCaptchaToken($apiKey, $baseUrl);
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'x-api-key: ${apiKey}'
+]);
+$response = curl_exec($ch);
+curl_close($ch);
+echo "Response: " . $response . PHP_EOL;
 
 // With type IMAGE_GENERATION parameter
-getReCaptchaToken($apiKey, $baseUrl, 'IMAGE_GENERATION');`,
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'x-api-key: ${apiKey}'
+]);
+$response = curl_exec($ch);
+curl_close($ch);
+echo "Response: " . $response . PHP_EOL;`,
   },
   Python: {
     lang: "python",
@@ -794,33 +772,19 @@ getReCaptchaToken($apiKey, $baseUrl, 'IMAGE_GENERATION');`,
     iconBg: "bg-blue-500 text-yellow-300",
     code: (apiKey: string) => `import requests
 
-API_KEY = '${apiKey}'
-BASE_URL = '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha'
-
-def get_recaptcha_token(type=None):
-    url = BASE_URL
-    if type:
-        url += f'?type={type}'
-        
-    headers = {
-        'X-API-Key': API_KEY
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        print('Response:', data)
-        return data
-    except requests.exceptions.RequestException as e:
-        print('Error:', e)
-        raise
-
 # Get reCAPTCHA token (Default type: VIDEO_GENERATION)
-get_recaptcha_token()
+response = requests.get(
+    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha',
+    headers={'x-api-key': '\${apiKey}'}
+)
+print('Response:', response.json())
 
 # With type IMAGE_GENERATION parameter
-get_recaptcha_token('IMAGE_GENERATION')`,
+response = requests.get(
+    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION',
+    headers={'x-api-key': '\${apiKey}'}
+)
+print('Response:', response.json())`,
   },
   Curl: {
     lang: "bash",
@@ -828,13 +792,13 @@ get_recaptcha_token('IMAGE_GENERATION')`,
     iconBg: "bg-gray-700 text-green-400",
     code: (apiKey: string) => `# Get reCAPTCHA token (Default type: VIDEO_GENERATION)
 curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha' \\
-  -H 'X-API-Key: ${apiKey}'
+  -H 'x-api-key: ${apiKey}'
 
 # With type IMAGE_GENERATION parameter
 curl -X GET '${
       typeof window !== "undefined" ? window.location.origin : ""
     }/api/recaptcha?type=IMAGE_GENERATION' \\
-  -H 'X-API-Key: ${apiKey}'`,
+  -H 'x-api-key: ${apiKey}'`,
   },
 };
 

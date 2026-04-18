@@ -17,7 +17,7 @@ export default [
     path: "/api/recaptcha",
     midd: [],
     action: async (req: Request, res: Response) => {
-      const { type } = req.params as { type?: string };
+      const { type } = req.query as { type?: string };
       const apiKey = req.headers["x-api-key"] as string | undefined;
 
       // Validate apiKey

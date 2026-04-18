@@ -440,7 +440,7 @@ export async function getReCaptchaCredentials(
   const captchaData = (await captchaResp.json()) as CliproxyCaptchaData;
 
   if (!captchaData?.captcha || !captchaData?.accessToken) {
-    const err: any = new Error("Không lấy được captcha/credentials từ Cliproxy API");
+    const err: any = new Error("Không lấy được captcha/credentials từ server");
     err.statusCode = 500;
     throw err;
   }
