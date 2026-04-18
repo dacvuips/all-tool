@@ -82,6 +82,10 @@ export default [
       let lastError: any = null;
 
       for (const selectedLink of links) {
+        if (!selectedLink || !selectedLink.url) {
+          continue;
+        }
+
         try {
           const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
 
@@ -102,7 +106,7 @@ export default [
         } catch (err: any) {
           lastError = err;
           console.warn(
-            `[recaptcha] Link ${selectedLink.url} thất bại: ${err.message}. Thử link tiếp theo...`
+            `[recaptcha] Link ${selectedLink?.url} thất bại: ${err.message}. Thử link tiếp theo...`
           );
           continue;
         }
