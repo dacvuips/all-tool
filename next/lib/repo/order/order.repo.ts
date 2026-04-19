@@ -129,7 +129,7 @@ export interface Order extends BaseModel {
   discount?: number;
   totalAmount?: number;
   subscriptionPlan?: string;
-  type?: "TOOL" | "RECAPTCHA";
+  type?: "TOOL" | "RECAPTCHA" | "API_MEDIA";
   shippingAddress?: ShippingAddress;
   shopAddress?: ShopAddress;
 
@@ -328,7 +328,7 @@ export class OrderRepository extends CrudRepository<Order> {
   async createSePayPGCheckout(
     subscriptionPlan: string,
     orderId?: string,
-    type?: "recaptcha" | "tool"
+    type?: "recaptcha" | "tool" | "api-media"
   ): Promise<SePayPGCheckoutData> {
     return this.apollo
       .mutate({

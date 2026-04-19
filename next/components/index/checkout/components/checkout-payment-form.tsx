@@ -13,8 +13,8 @@ import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
 import { useCheckoutContext } from "../provider/checkout-provider";
 
-/** Checkout type: "tool" (default) or "recaptcha" */
-type CheckoutType = "tool" | "recaptcha";
+/** Checkout type: "tool" (default), "recaptcha", or "api-media" */
+type CheckoutType = "tool" | "recaptcha" | "api-media";
 
 /** Map from SubscriptionPlanEnum value → key prefix used in settings */
 const PLAN_KEY_MAP: Record<string, string> = {
@@ -98,7 +98,11 @@ export function CheckoutPaymentForm() {
   };
   // Determine checkout type from URL param
   const checkoutType: CheckoutType =
-    (router.query.type as string) === "recaptcha" ? "recaptcha" : "tool";
+    (router.query.type as string) === "recaptcha"
+      ? "recaptcha"
+      : (router.query.type as string) === "api-media"
+      ? "api-media"
+      : "tool";
 
   // Plan configs loaded from settings
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
@@ -133,8 +137,9 @@ export function CheckoutPaymentForm() {
   useEffect(() => {
     setLoadingPlans(true);
 
-    // Prefix: "rpk-" for recaptcha, "pk-" for tool
-    const settingPrefix = checkoutType === "recaptcha" ? "rpk-" : "pk-";
+    // Prefix: "rpk-" for recaptcha, "ampk-" for api-media, "pk-" for tool
+    const settingPrefix =
+      checkoutType === "recaptcha" ? "rpk-" : checkoutType === "api-media" ? "ampk-" : "pk-";
 
     SettingService.getAll({
       query: { limit: 0, filter: { key: { $regex: `^${settingPrefix}`, $options: "i" } } },
@@ -150,7 +155,7 @@ export function CheckoutPaymentForm() {
             return s ? Number(s.value) : 0;
           };
 
-          if (checkoutType === "recaptcha") {
+          if (checkoutType === "recaptcha" || checkoutType === "api-media") {
             configs.push({
               plan,
               requestQuantity: getValue("request-quantity"),
@@ -245,6 +250,13 @@ export function CheckoutPaymentForm() {
         </p>
       );
     }
+    if (checkoutType === "api-media") {
+      return (
+        <p className="text-xs text-gray-500 mt-0.5">
+          {formatNumber(config.requestQuantity)} {t("lượt tạo")} / {t("tháng")}
+        </p>
+      );
+    }
     return (
       <p className="text-xs text-gray-500 mt-0.5">
         {formatNumber(config.videoLimit)} video & {formatNumber(config.imageLimit)} {t("ảnh")} /{" "}
@@ -280,6 +292,36 @@ export function CheckoutPaymentForm() {
             <li className="flex items-center gap-2 text-xs text-gray-700">
               <HiCheck className="text-green-500 flex-shrink-0" />
               <span>{t("Bảo mật cao")}</span>
+            </li>
+          </ul>
+        </div>
+      );
+    }
+
+    if (checkoutType === "api-media") {
+      return (
+        <div className={`p-3 rounded-xl border ${meta?.accentBg || "bg-gray-50"} border-gray-200`}>
+          <h4 className={`text-sm font-semibold mb-2 ${meta?.accentColor || "text-gray-800"}`}>
+            {t("Chi tiết gói")} {t(meta?.label)}
+          </h4>
+          <ul className="space-y-1.5">
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>
+                {formatNumber(config.requestQuantity)} {t("lượt tạo")} / {t("tháng")}
+              </span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("Generate Image Banana 2 & Video Veo 3")}</span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("API Key riêng biệt")}</span>
+            </li>
+            <li className="flex items-center gap-2 text-xs text-gray-700">
+              <HiCheck className="text-green-500 flex-shrink-0" />
+              <span>{t("Chịu tải cao")}</span>
             </li>
           </ul>
         </div>
@@ -326,7 +368,12 @@ export function CheckoutPaymentForm() {
     );
   };
 
-  const headerTitle = checkoutType === "recaptcha" ? t("Đăng Ký Gói reCAPTCHA") : t("Đăng Ký Gói");
+  const headerTitle =
+    checkoutType === "recaptcha"
+      ? t("Đăng Ký Gói reCAPTCHA")
+      : checkoutType === "api-media"
+      ? t("Đăng Ký Gói API Media")
+      : t("Đăng Ký Gói");
 
   return (
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
@@ -428,9 +475,6 @@ export function CheckoutPaymentForm() {
                         <span className={`text-sm font-bold ${meta.accentColor}`}>
                           {formatPrice(config.price)}
                         </span>
-                        {config.price > 0 && (
-                          <span className="text-[10px] text-gray-400 block">/{t("tháng")}</span>
-                        )}
                       </div>
                     </button>
                   );
