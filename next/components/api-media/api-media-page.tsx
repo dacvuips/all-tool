@@ -22,22 +22,22 @@ import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import { useToast } from "../../lib/providers/toast-provider";
 import {
-  RecaptchaSubscriptionPlanEnum,
-  RecaptchaToken,
-  recaptchaTokenService,
-} from "../../lib/repo/recaptcha-token/recaptcha-token.repo";
+  ApiMediaSubscriptionPlanEnum,
+  ApiMediaToken,
+  apiMediaTokenService,
+} from "../../lib/repo/api-media-token/api-media-token.repo";
 import CodeBlock, { CodeSample } from "../shared/utilities/code-block/codeBlock";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button, Switch } from "../shared/utilities/form";
 
 const LIMIT = 10;
 
-const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader?: boolean; onNavigateToPricing?: () => void }) => {
+const ApiMediaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader?: boolean; onNavigateToPricing?: () => void }) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const toast = useToast();
   const router = useRouter();
-  const [tokens, setTokens] = useState<RecaptchaToken[]>([]);
+  const [tokens, setTokens] = useState<ApiMediaToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -53,14 +53,14 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
   const fetchTokens = async () => {
     setLoading(true);
     try {
-      const result = await recaptchaTokenService.getMyRecaptchaTokens({
+      const result = await apiMediaTokenService.getMyApiMediaTokens({
         query: { limit: LIMIT, page },
       });
 
       setTokens(result.data);
       setTotal(result.total);
     } catch (err) {
-      console.error("Failed to fetch recaptcha tokens:", err);
+      console.error("Failed to fetch API Media tokens:", err);
     } finally {
       setLoading(false);
     }
@@ -80,17 +80,17 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
       if (onNavigateToPricing) {
         onNavigateToPricing();
       } else {
-        router.push("/recaptcha/pricing");
+        router.push("/api-generate-media/pricing");
       }
       return;
     }
     // No tokens yet, create one immediately
     setLoading(true);
     try {
-      await recaptchaTokenService.createMyRecaptchaToken();
+      await apiMediaTokenService.createMyApiMediaToken();
       await fetchTokens();
     } catch (err) {
-      console.error("Failed to create recaptcha token:", err);
+      console.error("Failed to create API Media token:", err);
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
     });
   };
 
-  const getStatusInfo = (token: RecaptchaToken) => {
+  const getStatusInfo = (token: ApiMediaToken) => {
     const now = new Date();
     const expired = token.expiredDate ? new Date(token.expiredDate) < now : false;
 
@@ -131,7 +131,7 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
     };
   };
 
-  const getUsagePercent = (token: RecaptchaToken) => {
+  const getUsagePercent = (token: ApiMediaToken) => {
     if (!token.requestQuantity || token.requestQuantity === 0) return 0;
     return Math.min(100, Math.round(((token.usedQuantity || 0) / token.requestQuantity) * 100));
   };
@@ -142,33 +142,33 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
     return "#10b981";
   };
 
-  const getPlanInfo = (plan?: RecaptchaSubscriptionPlanEnum) => {
+  const getPlanInfo = (plan?: ApiMediaSubscriptionPlanEnum) => {
     switch (plan) {
-      case RecaptchaSubscriptionPlanEnum.BASIC:
+      case ApiMediaSubscriptionPlanEnum.BASIC:
         return {
           label: t("Cơ Bản"),
           icon: "🛡️",
           color: "bg-blue-50 text-blue-700 border-blue-200",
         };
-      case RecaptchaSubscriptionPlanEnum.STANDARD:
+      case ApiMediaSubscriptionPlanEnum.STANDARD:
         return {
           label: t("Tiêu Chuẩn"),
           icon: "⚡",
           color: "bg-orange-50 text-orange-700 border-orange-200",
         };
-      case RecaptchaSubscriptionPlanEnum.PROFESSIONAL:
+      case ApiMediaSubscriptionPlanEnum.PROFESSIONAL:
         return {
           label: t("Chuyên Nghiệp"),
           icon: "🚀",
           color: "bg-green-50 text-green-700 border-green-200",
         };
-      case RecaptchaSubscriptionPlanEnum.UNLIMITED:
+      case ApiMediaSubscriptionPlanEnum.UNLIMITED:
         return {
           label: t("Không Giới Hạn"),
           icon: "💎",
           color: "bg-yellow-50 text-yellow-700 border-yellow-200",
         };
-      case RecaptchaSubscriptionPlanEnum.FREE:
+      case ApiMediaSubscriptionPlanEnum.FREE:
       default:
         return {
           label: t("Miễn phí"),
@@ -193,11 +193,11 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
   const [openSettingToken, setOpenSettingToken] = useState<string>("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const handleToggleActive = async (token: RecaptchaToken) => {
+  const handleToggleActive = async (token: ApiMediaToken) => {
     if (togglingId) return;
     setTogglingId(token.id);
     try {
-      const updated = await recaptchaTokenService.toggleMyRecaptchaTokenActive(token.id);
+      const updated = await apiMediaTokenService.toggleMyApiMediaTokenActive(token.id);
       setTokens((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
       toast.success(updated.active ? t("Đã kích hoạt token") : t("Đã vô hiệu token"));
     } catch (err) {
@@ -225,9 +225,7 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
               <div className="w-px h-5 bg-gray-300" />
               <div className="flex items-center gap-2">
                 <HiShieldCheck className="text-xl text-green-500" />
-                <h1 className="text-base font-bold text-gray-800 m-0">
-                  {t("Quản lý API Key reCAPTCHA")}
-                </h1>
+                <h1 className="text-base font-bold text-gray-800 m-0">{t("Quản lý API Key Media")}</h1>
               </div>
             </div>
 
@@ -346,7 +344,7 @@ const RecaptchaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-2">{t("Chưa có token nào")}</h3>
               <p className="text-sm text-gray-500 text-center max-w-sm">
-                {t("Bạn chưa có reCAPTCHA token nào. Hãy [+ thêm mới] reCAPTCHA token.")}
+                {t("Bạn chưa có API Media token nào. Hãy [+ thêm mới] API Media token.")}
               </p>
             </div>
           )}
@@ -724,8 +722,8 @@ const CODE_SAMPLES: Record<string, any> = {
     lang: "javascript",
     icon: "JS",
     iconBg: "bg-yellow-400 text-gray-900",
-    code: (apiKey: string) => `// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
-fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha', {
+    code: (apiKey: string) => `// Get API Media token (Default type: VIDEO_GENERATION)
+fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media', {
   method: 'GET',
   headers: {
     'x-api-key': '${apiKey}'
@@ -738,7 +736,7 @@ fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/recapt
 // With type IMAGE_GENERATION parameter
 fetch('${
       typeof window !== "undefined" ? window.location.origin : ""
-    }/api/recaptcha?type=IMAGE_GENERATION', {
+    }/api/api-media?type=IMAGE_GENERATION', {
   method: 'GET',
   headers: {
     'x-api-key': '${apiKey}'
@@ -754,11 +752,11 @@ fetch('${
     iconBg: "bg-indigo-500 text-white",
     code: (apiKey: string) => `<?php
 
-// Get reCAPTCHA token (Default type: VIDEO_GENERATION)
+// Get API Media token (Default type: VIDEO_GENERATION)
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, '${
       typeof window !== "undefined" ? window.location.origin : ""
-    }/api/recaptcha');
+    }/api/api-media');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ${apiKey}'
@@ -771,7 +769,7 @@ echo "Response: " . $response . PHP_EOL;
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, '${
       typeof window !== "undefined" ? window.location.origin : ""
-    }/api/recaptcha?type=IMAGE_GENERATION');
+    }/api/api-media?type=IMAGE_GENERATION');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'x-api-key: ${apiKey}'
@@ -786,16 +784,16 @@ echo "Response: " . $response . PHP_EOL;`,
     iconBg: "bg-blue-500 text-yellow-300",
     code: (apiKey: string) => `import requests
 
-# Get reCAPTCHA token (Default type: VIDEO_GENERATION)
+# Get API Media token (Default type: VIDEO_GENERATION)
 response = requests.get(
-    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha',
+    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media',
     headers={'x-api-key': '\${apiKey}'}
 )
 print('Response:', response.json())
 
 # With type IMAGE_GENERATION parameter
 response = requests.get(
-    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha?type=IMAGE_GENERATION',
+    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media?type=IMAGE_GENERATION',
     headers={'x-api-key': '\${apiKey}'}
 )
 print('Response:', response.json())`,
@@ -804,14 +802,14 @@ print('Response:', response.json())`,
     lang: "bash",
     icon: ">_",
     iconBg: "bg-gray-700 text-green-400",
-    code: (apiKey: string) => `# Get reCAPTCHA token (Default type: VIDEO_GENERATION)
-curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/recaptcha' \\
+    code: (apiKey: string) => `# Get API Media token (Default type: VIDEO_GENERATION)
+curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media' \\
   -H 'x-api-key: ${apiKey}'
 
 # With type IMAGE_GENERATION parameter
 curl -X GET '${
       typeof window !== "undefined" ? window.location.origin : ""
-    }/api/recaptcha?type=IMAGE_GENERATION' \\
+    }/api/api-media?type=IMAGE_GENERATION' \\
   -H 'x-api-key: ${apiKey}'`,
   },
 };
@@ -949,4 +947,4 @@ const ApiKeyGuideDialog = ({
   );
 };
 
-export default RecaptchaPage;
+export default ApiMediaPage;

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft, HiCheck } from "react-icons/hi";
 import { RiGiftLine, RiPriceTag3Line } from "react-icons/ri";
+import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { SubscriptionPlanEnum } from "../../lib/repo/customer/customer.repo";
 import { Setting, SettingService } from "../../lib/repo/general/setting.repo";
@@ -107,6 +108,7 @@ const PLAN_META: Record<
 export default function PricingPage() {
   const { t } = useTranslation();
   const router = useRouter();
+  const sm = useScreen("sm");
   const { customer } = useAuth();
   const [loading, setLoading] = useState(true);
   const [planConfigs, setPlanConfigs] = useState<PlanConfig[]>([]);
@@ -174,7 +176,7 @@ export default function PricingPage() {
         <div className="pricing-header__inner">
           <Link href="/app/affiliate-video" className="pricing-header__back">
             <HiArrowLeft className="pricing-header__back-icon" />
-            <span>{t("Quay lại")}</span>
+            {sm && <span>{t("Quay lại")}</span>}
           </Link>
           <div className="pricing-header__divider" />
           <div className="pricing-header__title">

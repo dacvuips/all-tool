@@ -1,6 +1,6 @@
 import { NextSeo } from "next-seo";
 import { useTranslation } from "react-i18next";
-import RecaptchaTabLayout from "../../components/recaptcha/recaptcha-tab-layout";
+import ApiMediaTabLayout from "../../components/api-media/api-media-tab-layout";
 import { HomeLayout } from "../../layouts/home-layout/home-layout";
 import { getServerSideTranslationsProps } from "../../lib/functions/locale";
 
@@ -12,14 +12,14 @@ export default function Page(props) {
       <NextSeo
         openGraph={{
           url: "https://aitipmart.site",
-          title: t("AI Tip Mart - Gói reCAPTCHA"),
-          description: t("Chọn gói reCAPTCHA phù hợp để bảo vệ ứng dụng của bạn"),
+          title: t("AI Tip Mart - API Video"),
+          description: t("AI Tip Mart - API Video"),
           images: [{ url: "/assets/img/logo-icon.png" }],
         }}
-        description={t("Chọn gói reCAPTCHA phù hợp để bảo vệ ứng dụng của bạn")}
-        title={t("AI Tip Mart - Gói reCAPTCHA")}
+        description={t("AI Tip Mart - API Video")}
+        title={t("AI Tip Mart - API Video")}
       />
-      <RecaptchaTabLayout defaultTab={1} />
+      <ApiMediaTabLayout defaultTab={0} />
     </>
   );
 }
