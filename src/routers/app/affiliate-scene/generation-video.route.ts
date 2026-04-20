@@ -7,7 +7,6 @@ import {
   checkVideoLimit,
   getReCaptchaCredentials,
   incrementVideoCount,
-  uploadImageToGoogleLabs,
 } from "./_shared";
 
 interface PollAndExtractVideoParams {
