@@ -37,8 +37,11 @@ export interface GenerateVideoParams {
   sceneId: string;
   /** Video generation prompt (scene.motionPrompt hoặc scene.imageGenPrompt) */
   prompt: string;
-  /** Optional generated image to use for image-to-video */
-  image?: { imageBytes: string; mimeType: string };
+  /** Optional images to use for image-to-video (URLs or base64 objects) */
+  images?: Array<
+    | string // URL ảnh
+    | { imageBytes: string; mimeType?: string } // base64
+  >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
   /** Generate audio (tuỳ chọn, default true) */
@@ -382,7 +385,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const {
         sceneId,
         prompt,
-        image,
+        images,
         aspectRatio = "9:16",
         generateAudio = true,
         onProgress,
@@ -398,7 +401,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
-            image,
+            images,
             config: { aspectRatio, generateAudio },
           }),
         });

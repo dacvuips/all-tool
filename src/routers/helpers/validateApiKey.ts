@@ -129,14 +129,12 @@ export interface CaptchaResponseData {
  * Trả về captchaData object.
  */
 export async function fetchCaptchaData<T extends IApiToken>(opts: {
-  links: ApiLinkData[];
   type?: string;
   logPrefix: string;
-  token: T;
-  tokenService: IApiTokenService<T>;
 }): Promise<CaptchaResponseData> {
-  const { links, type, logPrefix, token, tokenService } = opts;
-
+  const { type, logPrefix } = opts;
+  // Lấy links & captcha data
+  const links = await getApiSetting("recaptcha-api-secret-key");
   let captchaData: CaptchaResponseData = null;
   let lastError: any = null;
 

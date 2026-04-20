@@ -222,8 +222,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s interval
     pollCount++;
 
-    const progress = Math.min(15 + Math.round((pollCount / MAX_POLLS) * 75), 90);
-
     try {
       const pollResp = await fetch(
         "https://aisandbox-pa.googleapis.com/v1/video:batchCheckAsyncVideoGenerationStatus",
@@ -278,6 +276,8 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
         mediaResult
       )}`
     );
+    // Log error message
+    logger.error(`[generation-video] Error message: ${errorMsg}`);
 
     res.end();
     return;
@@ -296,6 +296,20 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   }
 
   logger.info(`[generation-video] fifeUrl: ${fifeUrl}`);
+
+  // Gửi kết quả video về client qua SSE
+  const sendSSE = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+  sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
+  sendSSE({
+    type: "done",
+    data: {
+      videoUri: fifeUrl,
+      videoBytes: null,
+      mimeType: "video/mp4",
+    },
+  });
 
   res.end();
 }

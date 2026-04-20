@@ -2,13 +2,8 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import {
-  ActionEnum,
-  checkImageLimit,
-  getReCaptchaCredentials,
-  incrementImageCount,
-  retryAICall,
-} from "./_shared";
+import { fetchCaptchaData } from "../../helpers/validateApiKey";
+import { ActionEnum, checkImageLimit, incrementImageCount, retryAICall } from "./_shared";
 
 export default [
   {
@@ -42,9 +37,12 @@ export default [
         const {
           captcha: recaptchaToken,
           sessionId,
-          projectId,
+          ProjectID: projectId,
           accessToken,
-        } = await getReCaptchaCredentials(ActionEnum.IMAGE_GENERATION);
+        } = await fetchCaptchaData({
+          type: ActionEnum.IMAGE_GENERATION,
+          logPrefix: "api-media",
+        });
 
         // Map aspectRatio sang format Google Labs
         const aspectRatioInput = body.config?.aspectRatio || "9:16";
