@@ -3,6 +3,7 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
+  ActionEnum,
   checkVideoLimit,
   getReCaptchaCredentials,
   incrementVideoCount,
@@ -159,7 +160,7 @@ export default [
           sessionId,
           projectId,
           accessToken,
-        } = await getReCaptchaCredentials("VIDEO_GENERATION");
+        } = await getReCaptchaCredentials(ActionEnum.VIDEO_GENERATION);
         // Upload ảnh lên Google Labs trước nếu có
         let uploadedImageName: string | null = null;
         if (body.image?.imageBytes) {

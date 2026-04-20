@@ -25,6 +25,7 @@ export interface IApiToken {
 export interface IApiTokenService<T extends IApiToken> {
   findOne(filter: Record<string, any>): Promise<T | null>;
   updateOne(id: any, data: Record<string, any>): Promise<any>;
+  model: any;
 }
 
 /**
@@ -127,15 +128,13 @@ export interface CaptchaResponseData {
  * Thử lần lượt các link, tăng usedQuantity, validate response.
  * Trả về captchaData object.
  */
-export async function fetchCaptchaData<T extends IApiToken>(
-  opts: {
-    links: ApiLinkData[];
-    type?: string;
-    logPrefix: string;
-    token: T;
-    tokenService: IApiTokenService<T>;
-  }
-): Promise<CaptchaResponseData> {
+export async function fetchCaptchaData<T extends IApiToken>(opts: {
+  links: ApiLinkData[];
+  type?: string;
+  logPrefix: string;
+  token: T;
+  tokenService: IApiTokenService<T>;
+}): Promise<CaptchaResponseData> {
   const { links, type, logPrefix, token, tokenService } = opts;
 
   let captchaData: CaptchaResponseData = null;
@@ -177,11 +176,6 @@ export async function fetchCaptchaData<T extends IApiToken>(
     err.statusCode = 502;
     throw err;
   }
-
-  // Tăng usedQuantity
-  await tokenService.updateOne(token._id, {
-    usedQuantity: (token.usedQuantity || 0) + 1,
-  });
 
   return captchaData;
 }

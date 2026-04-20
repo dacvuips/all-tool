@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { recaptchaTokenService } from "../../libs/dal/recaptchaToken";
-import { validateApiKey, getApiSetting, fetchCaptchaData } from "../helpers/validateApiKey";
+import { ActionEnum } from "../app/affiliate-scene/_shared";
+import { fetchCaptchaData, getApiSetting, validateApiKey } from "../helpers/validateApiKey";
 
 export default [
   {
@@ -8,7 +9,7 @@ export default [
     path: "/api/recaptcha",
     midd: [],
     action: async (req: Request, res: Response) => {
-      const { type } = req.query as { type?: string };
+      const { type } = req.query as { type?: ActionEnum };
 
       // Validate apiKey & kiểm tra token hợp lệ
       const token = await validateApiKey(req, recaptchaTokenService);

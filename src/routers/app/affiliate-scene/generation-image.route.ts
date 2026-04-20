@@ -3,6 +3,7 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
+  ActionEnum,
   checkImageLimit,
   getReCaptchaCredentials,
   incrementImageCount,
@@ -43,7 +44,7 @@ export default [
           sessionId,
           projectId,
           accessToken,
-        } = await getReCaptchaCredentials("IMAGE_GENERATION");
+        } = await getReCaptchaCredentials(ActionEnum.IMAGE_GENERATION);
 
         // Map aspectRatio sang format Google Labs
         const aspectRatioInput = body.config?.aspectRatio || "9:16";

@@ -4,6 +4,7 @@ import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
+import { CaptchaResponseData } from "../../helpers/validateApiKey";
 
 const AI_MAX_RETRIES = 5;
 const SERVICE_UNAVAILABLE_RETRIES = 5;
@@ -407,16 +408,9 @@ export async function uploadImageToGoogleLabs(
   return mediaName;
 }
 
-export type CliproxyAction = "VIDEO_GENERATION" | "IMAGE_GENERATION";
-
-export interface CliproxyCaptchaData {
-  Time: string;
-  Gmail: string;
-  ProjectID: string;
-  sessionId: string;
-  captcha: string;
-  accessToken: string;
-  Cookie: string;
+export enum ActionEnum {
+  VIDEO_GENERATION = "VIDEO_GENERATION",
+  IMAGE_GENERATION = "IMAGE_GENERATION",
 }
 
 /**
@@ -425,10 +419,10 @@ export interface CliproxyCaptchaData {
  * Throw error nếu không lấy được captcha hoặc accessToken.
  */
 export async function getReCaptchaCredentials(
-  action: CliproxyAction
-): Promise<CliproxyCaptchaData & { projectId: string; accessToken: string }> {
+  action: ActionEnum
+): Promise<CaptchaResponseData & { projectId: string; accessToken: string }> {
   const url = `https://capcha.aitipmart.site/captcha${
-    action === "VIDEO_GENERATION" ? "" : "?action=IMAGE_GENERATION"
+    action === ActionEnum.VIDEO_GENERATION ? "" : "?action=IMAGE_GENERATION"
   }`;
   const { googleLabsApiKey } = await getCustomerGoogleLabsCredentials();
   const captchaResp = await fetch(url, {
@@ -437,7 +431,7 @@ export async function getReCaptchaCredentials(
     },
   });
 
-  const captchaData = (await captchaResp.json()) as CliproxyCaptchaData;
+  const captchaData = (await captchaResp.json()) as CaptchaResponseData;
 
   if (!captchaData?.captcha || !captchaData?.accessToken) {
     const err: any = new Error("Không lấy được captcha/credentials từ server");
