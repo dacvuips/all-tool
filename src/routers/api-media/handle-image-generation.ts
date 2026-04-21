@@ -37,7 +37,7 @@ export async function handleImageGeneration(
   const context = new Context({ req });
   const uploadedImageNames = await processAndUploadImages(
     body.images || [],
-    captchaData.Headers.Authorization,
+    captchaData.accessToken,
     captchaData.ProjectID,
     context.id
   );
@@ -51,7 +51,7 @@ export async function handleImageGeneration(
     recaptchaToken: captchaData.captcha,
     sessionId: captchaData.sessionId,
     projectId: captchaData.ProjectID,
-    accessToken: captchaData.Headers.Authorization,
+    accessToken: captchaData.accessToken,
   });
 
   // Tăng usedQuantity sau khi generate image thành công (atomic $inc, tìm theo API key)

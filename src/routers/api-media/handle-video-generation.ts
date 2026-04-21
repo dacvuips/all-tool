@@ -39,7 +39,7 @@ export async function handleVideoGeneration(
   const context = new Context({ req });
   const uploadedImageNames = await processAndUploadImages(
     body.images || [],
-    captchaData.Headers.Authorization,
+    captchaData.accessToken,
     captchaData.ProjectID,
     context.id
   );
@@ -53,12 +53,12 @@ export async function handleVideoGeneration(
     recaptchaToken: captchaData.captcha,
     sessionId: captchaData.sessionId,
     projectId: captchaData.ProjectID,
-    accessToken: captchaData.Headers.Authorization,
+    accessToken: captchaData.accessToken,
   });
 
   await pollAndExtractVideo({
     mediaName,
-    accessToken: captchaData.Headers.Authorization,
+    accessToken: captchaData.accessToken,
     customerId: context.id,
 
     res,
