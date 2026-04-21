@@ -316,6 +316,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
 
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
+  const isToolPage = router.pathname.startsWith("/app/");
 
   return (
     <>
@@ -365,37 +366,39 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                   ) : (
                     <></>
                   )}
-
-                  {/* Hướng dẫn (mobile) */}
-                  <Button
-                    outline
-                    className="px-2 h-8 rounded-md"
-                    icon={<RiBookOpenLine className="text-xs" />}
-                    text={screenMd ? t("Hướng dẫn") : undefined}
-                  />
-                  {/* Bảng giá (mobile) */}
-                  <Button
-                    outline
-                    className="px-2 h-8 rounded-md"
-                    icon={<RiPriceTag3Line className="text-xs" />}
-                    text={screenMd ? t("Bảng giá") : undefined}
-                    href="/pricing"
-                  />
-                  {/* Affiliate Video: API Key status (mobile) */}
-                  <Button
-                    onClick={() =>
-                      !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
-                    }
-                    outline
-                    className="px-2 h-8 rounded-md"
-                    success={keyReady}
-                    gray={!keyReady}
-                    icon={<RiKey2Line className="text-xs" />}
-                    asyncLoading={false}
-                    text={screenMd ? t("API Key") : undefined}
-                  />
-                  {/* Package Usage Quota (mobile) */}
-                  {customer && <PackageUsageQuota compact />}
+                  {customer && isToolPage && (
+                    <>
+                      {/* Hướng dẫn (mobile) */}
+                      <Button
+                        outline
+                        className="px-2 h-8 rounded-md"
+                        icon={<RiBookOpenLine className="text-xs" />}
+                        text={screenMd ? t("Hướng dẫn") : undefined}
+                      />
+                      {/* Bảng giá (mobile) */}
+                      <Button
+                        outline
+                        className="px-2 h-8 rounded-md"
+                        icon={<RiPriceTag3Line className="text-xs" />}
+                        text={screenMd ? t("Bảng giá") : undefined}
+                        href="/pricing"
+                      />
+                      {/* Affiliate Video: API Key status (mobile) */}
+                      <Button
+                        onClick={() =>
+                          !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                        }
+                        outline
+                        className="px-2 h-8 rounded-md"
+                        success={keyReady}
+                        gray={!keyReady}
+                        icon={<RiKey2Line className="text-xs" />}
+                        asyncLoading={false}
+                        text={screenMd ? t("API Key") : undefined}
+                      />
+                      <PackageUsageQuota compact />
+                    </>
+                  )}
 
                   <CartDropdown order={order} />
                   {customer && <NotifiCationDropdown />}

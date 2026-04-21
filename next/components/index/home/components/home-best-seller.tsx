@@ -63,7 +63,7 @@ export function HomeBestSeller() {
                 <span className="text-xs sm:text-sm mb-1 text-gray-400">{t("From only")}</span>
                 <div className="flex items-baseline gap-0.5">
                   <span className="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-gray-900">
-                    79.000
+                    50.000
                   </span>
                   <span
                     className="text-base sm:text-lg font-bold relative text-gray-900"

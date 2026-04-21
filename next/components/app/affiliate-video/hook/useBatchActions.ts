@@ -523,10 +523,10 @@ export function useBatchActions(scenes: SceneScript[]) {
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motionPrompt}`
               : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
-            image: {
+            images: [{
               imageBytes: existingImage.imageBytes,
               mimeType: existingImage.mimeType,
-            },
+            }],
           });
           completed++;
           setVideoBatchCompleted(completed);

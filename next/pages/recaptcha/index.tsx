@@ -1,6 +1,6 @@
 import { NextSeo } from "next-seo";
 import { useTranslation } from "react-i18next";
-import RecaptchaPage from "../../components/recaptcha/recaptcha-page";
+import RecaptchaTabLayout from "../../components/recaptcha/recaptcha-tab-layout";
 import { HomeLayout } from "../../layouts/home-layout/home-layout";
 import { getServerSideTranslationsProps } from "../../lib/functions/locale";
 
@@ -19,7 +19,7 @@ export default function Page(props) {
         description={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
         title={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
       />
-      <RecaptchaPage />
+      <RecaptchaTabLayout defaultTab={0} />
     </>
   );
 }

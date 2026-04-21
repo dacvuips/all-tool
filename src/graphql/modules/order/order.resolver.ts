@@ -194,8 +194,9 @@ const Mutation = {
       throw new Error("Gói subscription không hợp lệ");
     }
 
-    // Xác định setting prefix theo type: recaptcha → rpk, tool → pk
-    const settingPrefix = type === "recaptcha" ? "rpk" : "pk";
+    // Xác định setting prefix theo type: recaptcha → rpk, api-media → ampk, tool → pk
+    const settingPrefix =
+      type === "recaptcha" ? "rpk" : type === "api-media" ? "ampk" : "pk";
 
     // Lấy giá gói từ setting
     const priceSetting = await settingService.findOne({
@@ -229,7 +230,12 @@ const Mutation = {
         status: OrderStatusEnum.CREATED,
         totalAmount,
         subscriptionPlan,
-        type: type === "recaptcha" ? "RECAPTCHA" : "TOOL",
+        type:
+          type === "recaptcha"
+            ? "RECAPTCHA"
+            : type === "api-media"
+              ? "API_MEDIA"
+              : "TOOL",
         orderLogs: [
           {
             status: OrderStatusEnum.CREATED,

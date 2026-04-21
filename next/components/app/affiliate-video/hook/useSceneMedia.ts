@@ -146,8 +146,8 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
       const result = await generateVideo({
         sceneId: scene.id,
         prompt: `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
-        image: generatedImage
-          ? { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }
+        images: generatedImage
+          ? [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }]
           : undefined,
         onProgress: (pct) => setVideoProgress(pct),
         onStatusMessage: (msg) => setVideoStatusMessage(msg),

@@ -4,6 +4,7 @@ import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
+import { CaptchaResponseData } from "../../helpers/validateApiKey";
 
 const AI_MAX_RETRIES = 5;
 const SERVICE_UNAVAILABLE_RETRIES = 5;
@@ -351,72 +352,9 @@ export function interpolateTemplate(text: string, config: AffiliateVideoFormConf
   });
 }
 
-/**
- * Upload ảnh lên Google Labs (aisandbox) và trả về media name.
- * Endpoint: POST https://aisandbox-pa.googleapis.com/v1/flow/uploadImage
- */
-export async function uploadImageToGoogleLabs(
-  imageBytes: string,
-  mimeType: string,
-  accessToken: string,
-  projectId: string
-): Promise<string> {
-  const endpoint = "https://aisandbox-pa.googleapis.com/v1/flow/uploadImage";
-  const fileName = `photo_${Date.now()}.jpg`;
-
-  const payload = {
-    clientContext: {
-      projectId,
-      tool: "PINHOLE",
-    },
-    imageBytes,
-    isUserUploaded: true,
-    isHidden: false,
-    mimeType: mimeType || "image/jpeg",
-    fileName,
-  };
-
-  const resp = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!resp.ok) {
-    const errText = await resp.text();
-    const err: any = new Error(`Upload image API error ${resp.status}: ${errText}`);
-    err.statusCode = resp.status;
-    throw err;
-  }
-
-  const result = await resp.json();
-
-  // Response là array, lấy media.name từ phần tử đầu tiên
-  const mediaName = Array.isArray(result) ? result[0]?.media?.name : result?.media?.name;
-
-  if (!mediaName) {
-    const err: any = new Error("Không lấy được media name từ uploadImage response");
-    err.statusCode = 500;
-    throw err;
-  }
-
-  logger.info(`[uploadImage] Upload thành công, media name: ${mediaName}`);
-  return mediaName;
-}
-
-export type CliproxyAction = "VIDEO_GENERATION" | "IMAGE_GENERATION";
-
-export interface CliproxyCaptchaData {
-  Time: string;
-  Gmail: string;
-  ProjectID: string;
-  sessionId: string;
-  captcha: string;
-  accessToken: string;
-  Cookie: string;
+export enum ActionEnum {
+  VIDEO_GENERATION = "VIDEO_GENERATION",
+  IMAGE_GENERATION = "IMAGE_GENERATION",
 }
 
 /**
@@ -425,10 +363,10 @@ export interface CliproxyCaptchaData {
  * Throw error nếu không lấy được captcha hoặc accessToken.
  */
 export async function getReCaptchaCredentials(
-  action: CliproxyAction
-): Promise<CliproxyCaptchaData & { projectId: string; accessToken: string }> {
+  action: ActionEnum
+): Promise<CaptchaResponseData & { projectId: string; accessToken: string }> {
   const url = `https://capcha.aitipmart.site/captcha${
-    action === "VIDEO_GENERATION" ? "" : "?action=IMAGE_GENERATION"
+    action === ActionEnum.VIDEO_GENERATION ? "" : "?action=IMAGE_GENERATION"
   }`;
   const { googleLabsApiKey } = await getCustomerGoogleLabsCredentials();
   const captchaResp = await fetch(url, {
@@ -437,7 +375,7 @@ export async function getReCaptchaCredentials(
     },
   });
 
-  const captchaData = (await captchaResp.json()) as CliproxyCaptchaData;
+  const captchaData = (await captchaResp.json()) as CaptchaResponseData;
 
   if (!captchaData?.captcha || !captchaData?.accessToken) {
     const err: any = new Error("Không lấy được captcha/credentials từ server");

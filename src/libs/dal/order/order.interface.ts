@@ -5,6 +5,7 @@ import { PaymentMethodEnum } from "../bank";
 export enum OrderTypeEnum {
   TOOL = "TOOL",
   RECAPTCHA = "RECAPTCHA",
+  API_MEDIA = "API_MEDIA",
 }
 
 export type IOrder = TimestampEntity & {

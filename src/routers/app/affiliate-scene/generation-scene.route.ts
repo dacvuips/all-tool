@@ -33,25 +33,59 @@ export default [
 
         const prompt = `
 
+Before generating scenes, create two fixed anchors:
 
-Character Anchor: Trước khi viết các scene, hãy xác định một mô tả cố định cho nhân vật nhân hóa từ {{objectToPersonify}}.
-Mô tả cố định ({{character_fixed_description}}): Phải bao gồm chi tiết khuôn mặt, tay chân, hình thể, trang phục đặc trưng và màu sắc chủ đạo theo phong cách {{artStyle}}.
+1. CHARACTER ANCHOR:
+Create one fixed, highly detailed character description based on {{objectToPersonify}}.
+This description must remain exactly the same in every scene.
+It must include:
+- face shape and facial features
+- eyes, mouth, expression style
+- body proportions
+- arms, legs, hands, feet
+- outfit, accessories, colors
+- material/texture
+- art style: {{artStyle}}
+- consistent character identity
 
-Environment Anchor: Xác định một bối cảnh (background) duy nhất phù hợp với chủ đề {{category}}. Bối cảnh này phải giữ nguyên các vật dụng chính, ánh sáng và tông màu qua tất cả các scene.
+Save it as:
+{{character_fixed_description}}
 
-Ngôn ngữ Prompt: Viết visualPrompt, motionPrompt và imagePrompt bằng tiếng Anh chuyên sâu.
+Important rule:
+Do not redesign, reinterpret, recolor, resize, age, simplify, or change the character in any scene.
 
-Cấu trúc bắt buộc: Mọi prompt trong từng scene đều PHẢI bắt đầu bằng đoạn mô tả {{character_fixed_description}} để đảm bảo nhân vật không bị biến đổi.
+2. ENVIRONMENT ANCHOR:
+Create one fixed background/environment description based on {{category}}.
+This environment must remain exactly the same in every scene.
+It must include:
+- location
+- main background objects
+- lighting
+- color palette
+- atmosphere
+- camera perspective
+- time of day
+- props and spatial layout
 
-Tối ưu hóa: Tỉ lệ khung hình {{aspectRatio}}, chế độ {{storyModeType}}, chuẩn nét nhân vật (High-definition, consistent character design).
+Save it as:
+{{environment_fixed_description}}
 
-Tính nhất quán: Image prompt và video prompt trong cùng một scene phải mô tả cùng một hành động và cùng một nhân vật.
+Important rule:
+Do not change the location, lighting style, background objects, color palette, or camera perspective unless the scene explicitly requires only a small camera movement.
 
-Cấm: Không chứa bất kỳ chữ viết (text/watermark) nào trong hình ảnh và video.
-
-Ngôn ngữ: Toàn bộ lời thoại và chỉ dẫn nội dung phải bằng {{language}}.
-            
-Audio: Giới tính {{gender}}, giọng {{mood}} đồng bộ với lời thoại ở tất cả các scene.
+For every scene:
+- visualPrompt, imagePrompt, and motionPrompt must start with the exact same {{character_fixed_description}}.
+- Then immediately include the exact same {{environment_fixed_description}}.
+- The imagePrompt and videoPrompt must describe the same character, same action, same pose, same background, and same scene moment.
+- Only the character’s pose, facial expression, and action may change between scenes.
+- The character design, outfit, colors, body shape, and background must stay consistent.
+- Use high-definition, consistent character design, cinematic composition.
+- Aspect ratio: {{aspectRatio}}.
+- Story mode: {{storyModeType}}.
+- No text, no logo, no watermark, no subtitles, no written words in image or video.
+- All visualPrompt, motionPrompt, and imagePrompt must be written in advanced English.
+- All dialogue and content instructions must be in {{language}}.
+- Audio: {{gender}} voice, {{mood}} tone, consistent across all scenes.
 `;
 
         // Thay thế placeholder trong text

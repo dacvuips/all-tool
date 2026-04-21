@@ -56,7 +56,7 @@ export function HomeActionCards() {
 
           {/* Free Tools Card */}
           <Link
-            href="/api-links"
+            href="/api-generate-media"
             className="block group relative overflow-hidden rounded-xl p-5 sm:p-6 transition-all duration-300 bg-white border border-gray-200 hover:border-primary hover:shadow-lg"
           >
             <div className="flex flex-col">

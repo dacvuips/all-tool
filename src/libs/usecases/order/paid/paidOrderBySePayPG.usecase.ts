@@ -25,6 +25,10 @@ import {
 } from "../../../dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../dal/packageTransaction/package-transaction.model";
 import { RecaptchaSubscriptionPlanEnum, recaptchaTokenService } from "../../../dal/recaptchaToken";
+import {
+  ApiMediaSubscriptionPlanEnum,
+  apiMediaTokenService,
+} from "../../../dal/apiMediaToken";
 import { SettingModel } from "../../../dal/setting/setting.model";
 import { walletService } from "../../../dal/wallet";
 import { pubsub } from "../../../graphql/pub-sub";
@@ -185,6 +189,14 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       if (orderType === OrderTypeEnum.RECAPTCHA) {
         // RECAPTCHA: Tạo recaptcha token key theo gói cụ thể
         await this._activateRecaptchaSubscription(
+          order.customerId.toString(),
+          subscriptionPlan,
+          order._id.toString(),
+          order.orderNumber
+        );
+      } else if (orderType === OrderTypeEnum.API_MEDIA) {
+        // API_MEDIA: Tạo api media token key theo gói cụ thể
+        await this._activateApiMediaSubscription(
           order.customerId.toString(),
           subscriptionPlan,
           order._id.toString(),
@@ -465,6 +477,58 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const notify = new NotificationBuilder(
       `Gói reCAPTCHA ${subscriptionPlan} đã được kích hoạt`,
       `Gói reCAPTCHA ${subscriptionPlan} đã được kích hoạt thành công.\nSố lượng request: ${requestQuantity}. Hết hạn: ${expiredDate.toLocaleDateString(
+        "vi-VN"
+      )}.`
+    )
+      .sendTo(NotificationTarget.CUSTOMER, customerId)
+      .order(orderId)
+      .build();
+    InsertNotification([notify]);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helper: Kích hoạt gói API Media cho khách hàng
+  // ─────────────────────────────────────────────────────────────────────────
+  private async _activateApiMediaSubscription(
+    customerId: string,
+    subscriptionPlan: string,
+    orderId: string,
+    orderNumber: string
+  ): Promise<void> {
+    const customer = await CustomerModel.findById(customerId);
+    if (!customer) {
+      throw new ForbiddenError(t("Không tìm thấy khách hàng để kích hoạt gói"));
+    }
+
+    // Map subscriptionPlan → ApiMediaSubscriptionPlanEnum value (lowercase)
+    const planKey = subscriptionPlan.toLowerCase();
+
+    // Lấy số lượng request từ setting theo gói cụ thể (ampk-{plan}-request-quantity)
+    const requestQuantitySetting = await SettingModel.findOne({
+      key: `ampk-${planKey}-request-quantity`,
+    }).lean();
+    const requestQuantity = requestQuantitySetting?.value ?? 1000;
+
+    // Generate a unique key
+    const key = crypto.randomBytes(32).toString("hex");
+    const expiredDate = new Date();
+    expiredDate.setDate(expiredDate.getDate() + 30); // 30 ngày
+
+    // Tạo api media token mới
+    await apiMediaTokenService.create({
+      key,
+      requestQuantity: Number(requestQuantity),
+      expiredDate,
+      customerId,
+      active: true,
+      usedQuantity: 0,
+      subscriptionPlan: planKey as ApiMediaSubscriptionPlanEnum,
+    });
+
+    // Thông báo cho customer
+    const notify = new NotificationBuilder(
+      `Gói API Media ${subscriptionPlan} đã được kích hoạt`,
+      `Gói API Media ${subscriptionPlan} đã được kích hoạt thành công.\nSố lượng lượt tạo: ${requestQuantity}. Hết hạn: ${expiredDate.toLocaleDateString(
         "vi-VN"
       )}.`
     )
