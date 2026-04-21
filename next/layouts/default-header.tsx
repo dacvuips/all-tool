@@ -6,9 +6,12 @@ import { AiOutlineBell } from "react-icons/ai";
 import { FiShoppingCart } from "react-icons/fi";
 import { HiArrowLeft, HiOutlineCheck, HiOutlineChevronDown } from "react-icons/hi";
 import {
+  RiAppsLine,
   RiArrowLeftSLine,
   RiBookOpenLine,
+  RiCodeLine,
   RiExchangeLine,
+  RiGalleryFill,
   RiHandCoinFill,
   RiImageLine,
   RiKey2Line,
@@ -16,6 +19,7 @@ import {
   RiLogoutBoxLine,
   RiMenu3Line,
   RiPriceTag3Line,
+  RiShieldCheckLine,
 } from "react-icons/ri";
 
 import { VideoDialog } from "../components/shared/common/video-dialog";
@@ -115,7 +119,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
       {/* {!isBlockPage && <HomePopupNotify />} */}
       {/* <RewardPointNotifyDialog /> */}
       <HomePageDeactiveDialog isOpen={!!isBlockPage} pageDeactiveDialogValue={isBlockPage?.value} />
-      <header className="flex fixed top-0 left-0 z-50 items-center w-full h-14 bg-white shadow">
+      <header className="flex fixed top-0 left-0 z-200 items-center w-full h-14 bg-white shadow">
         <div className="w-full bg-white">
           <div className="flex flex-row justify-between items-center pr-1 pl-5 w-full h-14">
             <div className="flex flex-row justify-around items-center">
@@ -128,6 +132,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   />
                 </Link>
               </div>
+              <ServicesNavDropdown />
             </div>
 
             {/* ── Affiliate Video: Right side actions ── */}
@@ -137,14 +142,14 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                 <Button
                   outline
                   className="px-2 h-8 rounded-md"
-                  icon={<RiBookOpenLine className="text-xs" />}
+                  icon={<RiBookOpenLine className="text-lg" />}
                   text={t("Hướng dẫn")}
                 />{" "}
                 {/* Bảng giá */}
                 <Button
                   outline
                   className="px-2 h-8 rounded-md"
-                  icon={<RiPriceTag3Line className="text-xs" />}
+                  icon={<RiPriceTag3Line className="text-lg" />}
                   text={t("Bảng giá")}
                   href="/app/affiliate-video/pricing"
                 />
@@ -157,14 +162,14 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   className="px-2 h-8 rounded-md"
                   success={keyReady}
                   gray={!keyReady}
-                  icon={<RiKey2Line className="text-xs" />}
+                  icon={<RiKey2Line className="text-lg" />}
                   asyncLoading={false}
                   text={t("API Key")}
                 />{" "}
                 <PackageUsageQuota />
               </div>
             )}
-            <div className="flex flex-row justify-around items-center">
+            <div className="flex flex-row justify-around items-center ml-2">
               <nav className="min-h-15">
                 <div className="flex flex-row justify-between items-center py-3">
                   <div className="flex flex-row flex-grow-0 flex-shrink-0 gap-2 items-center">
@@ -267,6 +272,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
   const screenLg = useScreen("lg");
   const screenMd = useScreen("md");
   const screenXs = useScreen("xs");
+  const screenSm = useScreen("sm");
 
   const { customer } = useAuth();
   const [isMobileSearchBox, setIsMobileSearchBox] = useState(false);
@@ -344,7 +350,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
       )}
 
       <>
-        <div className="flex fixed top-0 left-0 z-50 flex-row items-center w-full h-14 bg-white shadow">
+        <div className="flex fixed top-0 left-0 z-200 flex-row items-center w-full h-14 bg-white shadow">
           <div className="flex flex-row gap-2 justify-between px-4 w-full">
             <div className="flex flex-row gap-2 items-center">
               <Link href="/" className="block">
@@ -353,33 +359,27 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                   className="object-contain w-14 h-14 min-w-14 xs:min-w-36 xs:w-36"
                 />
               </Link>
+              <ServicesNavDropdown compact />
             </div>
             {isMobileSearchBox && !screenMd ? (
               <SearchInputMobile setIsMobileSearchBox={setIsMobileSearchBox} />
             ) : (
               <div className="flex flex-row gap-4 justify-between items-center">
                 <div className="flex flex-row gap-2 items-center">
-                  {screenMd ? (
-                    <>
-                      <SelectLanguage mode="mobile" />
-                    </>
-                  ) : (
-                    <></>
-                  )}
-                  {customer && isToolPage && (
+                  {customer && isToolPage && screenSm && (
                     <>
                       {/* Hướng dẫn (mobile) */}
                       <Button
                         outline
                         className="px-2 h-8 rounded-md"
-                        icon={<RiBookOpenLine className="text-xs" />}
+                        icon={<RiBookOpenLine className="text-lg" />}
                         text={screenMd ? t("Hướng dẫn") : undefined}
                       />
                       {/* Bảng giá (mobile) */}
                       <Button
                         outline
                         className="px-2 h-8 rounded-md"
-                        icon={<RiPriceTag3Line className="text-xs" />}
+                        icon={<RiPriceTag3Line className="text-lg" />}
                         text={screenMd ? t("Bảng giá") : undefined}
                         href="/pricing"
                       />
@@ -392,14 +392,14 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                         className="px-2 h-8 rounded-md"
                         success={keyReady}
                         gray={!keyReady}
-                        icon={<RiKey2Line className="text-xs" />}
+                        icon={<RiKey2Line className="text-lg" />}
                         asyncLoading={false}
                         text={screenMd ? t("API Key") : undefined}
                       />
                       <PackageUsageQuota compact />
                     </>
                   )}
-
+                  {screenMd && <SelectLanguage mode="mobile" />}
                   <CartDropdown order={order} />
                   {customer && <NotifiCationDropdown />}
                   <Button
@@ -446,36 +446,14 @@ export const SelectLanguage = ({
 
   return (
     <>
-      {mode === "mobile" ? (
-        <div
-          ref={languageRef}
-          className={`p-1.5 leading-3 rounded-full  cursor-pointer ${
-            !isDashboard
-              ? "border-primary border"
-              : "h-8 w-8 flex items-center justify-center hover:bg-gray-100 text-xl text-gray-600"
-          }`}
-        >
-          <Img className="w-4 h-4 leading-3 rounded-full border" src={selectLocale.image} />
-        </div>
-      ) : (
-        <Button
-          innerRef={languageRef}
-          small
-          text={
-            <>
-              <span>{selectLocale.label}</span>
-              <i className="text-14">
-                <HiOutlineChevronDown />
-              </i>
-            </>
-          }
-          className="px-1 font-semibold whitespace-nowrap rounded-full border cursor-pointer"
-          icon={<Img className="w-4 h-4 leading-3" src={selectLocale.image} />}
-          iconClassName="text-20"
-          outline
-          primary
-        />
-      )}
+      <Button
+        innerRef={languageRef}
+        className="p-1 h-7 font-semibold rounded-full border cursor-pointer"
+        icon={<Img className="w-4 h-4" src={selectLocale.image} />}
+        iconClassName="text-20"
+        outline
+        primary
+      />
 
       <Popover reference={languageRef} trigger="hover" placement="bottom" arrow>
         {LOCALES.map((locale) => {
@@ -610,6 +588,143 @@ export function NotifiCationDropdown() {
   );
 }
 
+function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [isOpen]);
+
+  useEffect(() => {
+    setIsOpen(false);
+  }, [router.pathname]);
+
+  const SERVICES = [
+    {
+      label: "[Tools] Generate Banana 2 & Veo 3",
+      desc: t("Tạo ảnh & video AI hàng loạt"),
+      href: "/app/affiliate-video",
+      icon: <RiGalleryFill />,
+      gradient: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
+    },
+    {
+      label: "reCAPTCHA Token (Flow)",
+      desc: t("Quản lý reCAPTCHA Token"),
+      href: "/recaptcha",
+      icon: <RiShieldCheckLine />,
+      gradient: "linear-gradient(135deg, #10B981, #059669)",
+    },
+    {
+      label: "[API] - Generate Banana 2 & Veo 3",
+      desc: t("API tạo ảnh & video tự động"),
+      href: "/api-generate-media",
+      icon: <RiCodeLine />,
+      gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
+    },
+  ];
+
+  const isActive = (href: string) => router.pathname.startsWith(href);
+  const activeService = SERVICES.find((s) => isActive(s.href));
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Trigger */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className={`flex items-center gap-1.5 h-8 mr-2 text-sm font-semibold rounded-lg border transition-all duration-200 ${
+          compact ? "px-2" : "px-3"
+        } ${
+          isOpen
+            ? "border-primary text-primary bg-primary/5"
+            : "border-gray-400 text-gray-700 hover:border-primary/50 hover:text-primary bg-white"
+        }`}
+      >
+        <RiAppsLine className={compact ? "text-lg" : "text-base"} />
+        {!compact && (
+          <span className="whitespace-nowrap">
+            {activeService ? activeService.label.substring(0, 18) + "..." : "Dịch vụ"}
+          </span>
+        )}
+        <HiOutlineChevronDown
+          className={`text-xs transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {/* Dropdown */}
+      {isOpen && (
+        <>
+          {compact && (
+            <div
+              className="fixed inset-0 bg-black/20"
+              style={{ zIndex: 210 }}
+              onClick={() => setIsOpen(false)}
+            />
+          )}
+          <div
+            className={`bg-white rounded-xl border border-gray-100 overflow-hidden ${
+              compact ? "fixed left-4 right-4 max-w-sm mx-auto" : "absolute left-0 mt-2 w-80"
+            }`}
+            style={{
+              zIndex: 211,
+              ...(compact ? { top: "4rem" } : {}),
+              boxShadow: "0 20px 60px -15px rgba(0,0,0,0.15), 0 4px 25px -5px rgba(0,0,0,0.08)",
+            }}
+          >
+            <div className="px-4 pt-3 pb-2">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                {t("Dịch vụ")}
+              </div>
+            </div>
+            <div className="px-1.5 pb-1.5">
+              {SERVICES.map((service, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    router.push(service.href);
+                    setIsOpen(false);
+                  }}
+                  className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 group ${
+                    isActive(service.href) ? "bg-primary/5" : "hover:bg-gray-50"
+                  }`}
+                >
+                  <div
+                    className="flex items-center justify-center w-10 h-10 rounded-lg text-white text-lg flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
+                    style={{ background: service.gradient }}
+                  >
+                    {service.icon}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={`text-sm font-semibold leading-tight ${
+                        isActive(service.href) ? "text-primary" : "text-gray-800"
+                      }`}
+                    >
+                      {service.label}
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5 leading-tight">{service.desc}</div>
+                  </div>
+                  {isActive(service.href) && (
+                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const { customer } = useAuth();
@@ -625,7 +740,7 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
     <>
       <div
         ref={packageRef}
-        className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm mr-2 cursor-default"
+        className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm  cursor-default"
       >
         <span
           className={`px-2.5 text-gray-700 font-semibold whitespace-nowrap ${

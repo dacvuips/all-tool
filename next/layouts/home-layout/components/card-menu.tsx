@@ -1,30 +1,37 @@
 import Link from "next/link";
 import { useRouter } from "next/router";
-import { ReactElement, useEffect } from "react";
+import { ReactElement, useCallback, useEffect, useState } from "react";
 import { Scrollbars } from "react-custom-scrollbars";
 import { useTranslation } from "react-i18next";
 import { HiOutlineShare, HiOutlineX } from "react-icons/hi";
 import { MdOutlineLanguage } from "react-icons/md";
 import {
   RiArrowRightSLine,
+  RiBookOpenLine,
   RiCustomerService2Line,
   RiFileList2Line,
   RiHome5Line,
+  RiKey2Line,
   RiLoginBoxLine,
   RiLogoutBoxRLine,
+  RiPriceTag3Line,
   RiQuestionLine,
   RiShoppingCart2Line,
   RiUser3Line,
   RiVideoLine,
 } from "react-icons/ri";
 
+import { SettingsModal } from "../../../components/app/affiliate-video/sibar/text-to-video-modal";
 import { Slideout, SlideoutProps } from "../../../components/shared/utilities/dialog/slideout";
 import { Button } from "../../../components/shared/utilities/form";
 import { Img } from "../../../components/shared/utilities/misc";
+import { formatDate } from "../../../lib/helpers/parser";
 import { useAlert } from "../../../lib/providers/alert-provider";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../lib/providers/global-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
+import { credentialCustomerService } from "../../../lib/repo";
+import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
 import { SelectLanguage } from "../../default-header";
 import { Category } from "./category";
 
@@ -170,6 +177,36 @@ export function CardMenu({ ...props }: SlideoutProps) {
 
   const { GLOBAL_MENUS, GLOBAL_SUBMENUS } = useGlobalMenuConstants();
 
+  /* ─── Credential state (for API Key) ─── */
+  const [showSettings, setShowSettings] = useState(false);
+  const [credentialId, setCredentialId] = useState<string | null>(null);
+  const [credentialActive, setCredentialActive] = useState(false);
+
+  const checkCredential = useCallback(async () => {
+    try {
+      const cred = await credentialCustomerService.getCredentialByKey(
+        AiProviderKeyEnum.GOOGLE_GEMINI_KEY
+      );
+      if (cred) {
+        setCredentialId(cred.id || null);
+        setCredentialActive(!!cred.active);
+      } else {
+        setCredentialId(null);
+        setCredentialActive(false);
+      }
+    } catch {
+      setCredentialId(null);
+      setCredentialActive(false);
+    }
+  }, [customer]);
+
+  useEffect(() => {
+    if (customer) checkCredential();
+  }, [checkCredential]);
+
+  const hasKey = !!credentialId;
+  const keyReady = hasKey && credentialActive;
+
   useEffect(() => {
     props.onClose();
   }, [router.pathname]);
@@ -182,6 +219,7 @@ export function CardMenu({ ...props }: SlideoutProps) {
         minWidth={290}
         placement="right"
         hasCloseButton={false}
+        className="top-14"
       >
         <div
           className="flex justify-between items-center pl-5 h-12"
@@ -280,14 +318,332 @@ export function CardMenu({ ...props }: SlideoutProps) {
               </div>
             </>
           )}
+
+          {/* ── AI Tools & Package Info Section ── */}
+          {customer && (
+            <AIToolsSection
+              customer={customer}
+              keyReady={keyReady}
+              onApiKeyClick={() =>
+                !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+              }
+              onClose={props.onClose}
+            />
+          )}
+
           <Category onClose={props.onClose} />
           <CategorySelectLanguage />
           <CategoryGroup />
         </Scrollbars>
       </Slideout>
+
+      {/* ── Settings Modal ── */}
+      {showSettings && (
+        <SettingsModal
+          credentialId={credentialId}
+          credentialActive={credentialActive}
+          onClose={() => setShowSettings(false)}
+          onCredentialChange={checkCredential}
+        />
+      )}
     </>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════
+   AI Tools & Package Usage Section
+   ═══════════════════════════════════════════════════════════ */
+function AIToolsSection({
+  customer,
+  keyReady,
+  onApiKeyClick,
+  onClose,
+}: {
+  customer: any;
+  keyReady: boolean;
+  onApiKeyClick: () => void;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const router = useRouter();
+
+  const pkg = customer?.googlePackage;
+  const videoCount = pkg?.videoCount ?? 0;
+  const videoLimit = pkg?.videoLimit ?? 0;
+  const imageCount = pkg?.imageCount ?? 0;
+  const imageLimit = pkg?.imageLimit ?? 0;
+  const videoPct = videoLimit > 0 ? Math.min((videoCount / videoLimit) * 100, 100) : 0;
+  const imagePct = imageLimit > 0 ? Math.min((imageCount / imageLimit) * 100, 100) : 0;
+
+  const expiryDate = pkg?.expiryPackageDate;
+  const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
+  const expiryText = expiryDate ? formatDate(expiryDate, "datetime") : null;
+
+  const QUICK_ACTIONS = [
+    {
+      label: t("Hướng dẫn"),
+      icon: <RiBookOpenLine />,
+      gradient: "linear-gradient(135deg, #3B82F6, #2563EB)",
+      onClick: () => {
+        onClose();
+        router.push("/post");
+      },
+    },
+    {
+      label: t("Bảng giá"),
+      icon: <RiPriceTag3Line />,
+      gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
+      onClick: () => {
+        onClose();
+        router.push("/app/affiliate-video/pricing");
+      },
+    },
+    {
+      label: t("API Key"),
+      icon: <RiKey2Line />,
+      gradient: keyReady
+        ? "linear-gradient(135deg, #10B981, #059669)"
+        : "linear-gradient(135deg, #9CA3AF, #6B7280)",
+      onClick: () => {
+        onApiKeyClick();
+      },
+      badge: keyReady ? t("Đã kích hoạt") : t("Chưa kích hoạt"),
+      badgeColor: keyReady ? "#059669" : "#9CA3AF",
+    },
+  ];
+
+  return (
+    <div className="px-3 mt-4">
+      {/* ── Section Header ── */}
+      <div
+        className="flex items-center gap-2 px-1 mb-3"
+        style={{ borderLeft: "3px solid #8B5CF6", paddingLeft: "8px" }}
+      >
+        <span className="text-sm font-bold" style={{ color: "#5B21B6" }}>
+          {t("AI Tools & Gói dịch vụ")}
+        </span>
+      </div>
+
+      {/* ── Package Usage Card ── */}
+      <div
+        className="relative overflow-hidden rounded-xl p-3.5"
+        style={{
+          background: "linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%)",
+          boxShadow: "0 4px 20px -4px rgba(67, 56, 202, 0.4)",
+        }}
+      >
+        {/* Decorative circles */}
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: "80px",
+            height: "80px",
+            top: "-20px",
+            right: "-10px",
+            background: "rgba(255,255,255,0.06)",
+          }}
+        />
+        <div
+          className="absolute rounded-full"
+          style={{
+            width: "40px",
+            height: "40px",
+            bottom: "10px",
+            right: "30px",
+            background: "rgba(255,255,255,0.04)",
+          }}
+        />
+
+        {/* Package name */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div
+              className="flex items-center justify-center rounded-lg"
+              style={{
+                width: "28px",
+                height: "28px",
+                background: "rgba(255,255,255,0.15)",
+                backdropFilter: "blur(4px)",
+              }}
+            >
+              <span style={{ fontSize: "14px" }}>✨</span>
+            </div>
+            <div>
+              <div className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
+                {t("Gói hiện tại")}
+              </div>
+              <div className="text-sm font-bold text-white leading-tight">
+                {pkg?.subscription || t("Dùng thử")}
+              </div>
+            </div>
+          </div>
+          {/* Status dot */}
+          <div
+            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
+            style={{
+              background: isExpired ? "rgba(239, 68, 68, 0.2)" : "rgba(52, 211, 153, 0.2)",
+            }}
+          >
+            <div
+              className="rounded-full"
+              style={{
+                width: "6px",
+                height: "6px",
+                background: isExpired ? "#EF4444" : "#34D399",
+              }}
+            />
+            <span
+              className="text-xs font-medium"
+              style={{ color: isExpired ? "#FCA5A5" : "#6EE7B7" }}
+            >
+              {isExpired ? t("Hết hạn") : t("Hoạt động")}
+            </span>
+          </div>
+        </div>
+
+        {/* Usage bars */}
+        <div className="space-y-2.5">
+          {/* Video usage */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
+                🎬 Video
+              </span>
+              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                {videoCount}
+                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {videoLimit}</span>
+              </span>
+            </div>
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{
+                height: "6px",
+                background: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${videoPct}%`,
+                  background:
+                    videoPct >= 90
+                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
+                      : "linear-gradient(90deg, #818CF8, #A78BFA)",
+                  transition: "width 0.6s ease",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Image usage */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
+                🖼️ {t("Ảnh")}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                {imageCount}
+                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {imageLimit}</span>
+              </span>
+            </div>
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{
+                height: "6px",
+                background: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${imagePct}%`,
+                  background:
+                    imagePct >= 90
+                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
+                      : "linear-gradient(90deg, #34D399, #6EE7B7)",
+                  transition: "width 0.6s ease",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Expiry info */}
+        {expiryText && (
+          <div
+            className="flex items-center gap-1 mt-2.5 pt-2"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+              ⏱️
+            </span>
+            <span
+              className="text-xs"
+              style={{
+                color: isExpired ? "#FCA5A5" : "rgba(255,255,255,0.5)",
+                fontWeight: isExpired ? 600 : 400,
+              }}
+            >
+              {t("Hết hạn")}: {expiryText}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* ── Quick Action Buttons ── */}
+      <div className="grid grid-cols-3 gap-2 mt-3">
+        {QUICK_ACTIONS.map((action, idx) => (
+          <button
+            key={idx}
+            onClick={action.onClick}
+            className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-gray-100 bg-white group"
+            style={{
+              transition: "all 0.2s ease",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
+            <div
+              className="flex items-center justify-center rounded-lg text-white"
+              style={{
+                width: "32px",
+                height: "32px",
+                background: action.gradient,
+                fontSize: "16px",
+                transition: "transform 0.2s ease",
+              }}
+            >
+              {action.icon}
+            </div>
+            <span className="text-xs font-semibold text-gray-700 whitespace-nowrap leading-tight">
+              {action.label}
+            </span>
+            {action.badge && (
+              <span
+                className="text-xs font-medium px-1.5 py-0.5 rounded-full leading-none"
+                style={{
+                  fontSize: "9px",
+                  color: "white",
+                  background: action.badgeColor,
+                }}
+              >
+                {action.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const CategoryHeader = ({ icon, text }: { icon: ReactElement; text: string }) => {
   return (
     <div className="flex flex-row gap-1 items-center pl-1 my-3 ml-2 border-l-2 bg-primary-light border-primary">

@@ -21,15 +21,14 @@ export function Footer({ className, ...props }: ReactProps) {
 
               <div className="flex flex-row ">
                 <span className="text-sm font-bold text-accent">
-                  {t("Dự án giao dịch chống lừa đảo")}
+                  {t("Generate Image - Video - AI")}
                 </span>
               </div>
-              <div className="flex flex-row items-center justify-center ">
+              <div className="flex flex-col  items-center justify-center ">
                 <div className="max-w-3xl text-center text-12 text-accent">
-                  {t(
-                    "Mỗi ngày có hàng ngàn trường hợp lừa đảo trên không gian mạng mà không có biện pháp nào ngăn chặn, chúng tôi đưa ra giải pháp an toàn góp phần chống lừa đảo cho cộng đồng rất mong luật pháp nước nhà cởi mở hơn cho chúng tôi và về giao dịch game."
-                  )}
+                  {t("Hãy tham gia cùng chúng mình để tạo ra hàng triệu video - ảnh mỗi ngày nhé.")}
                 </div>
+                <div className="text-center text-12 text-accent">{`Zalo: 037.7733.100`}</div>
               </div>
               <div className="flex flex-col items-center">
                 <div className="flex flex-col items-center justify-center ">
@@ -73,15 +72,16 @@ export function Footer({ className, ...props }: ReactProps) {
               <div>
                 <div className="flex flex-row ">
                   <span className="text-sm font-bold text-accent">
-                    {t("Dự án giao dịch chống lừa đảo")}
+                    {t("Generate Image - Video - AI")}
                   </span>
                 </div>
-                <div className="flex flex-row items-center justify-center ">
+                <div className="flex flex-col   justify-center ">
                   <span className=" text-12 text-accent">
                     {t(
-                      "Mỗi ngày có hàng ngàn trường hợp lừa đảo trên không gian mạng mà không có biện pháp nào ngăn chặn, chúng tôi đưa ra giải pháp an toàn góp phần chống lừa đảo cho cộng đồng rất mong luật pháp nước nhà cởi mở hơn cho chúng tôi và về giao dịch game."
+                      "Hãy tham gia cùng chúng mình để tạo ra hàng triệu video - ảnh mỗi ngày nhé."
                     )}
                   </span>
+                  <p className="text-12   text-accent">{`Zalo: 037.7733.100`}</p>
                 </div>
               </div>
             </div>
