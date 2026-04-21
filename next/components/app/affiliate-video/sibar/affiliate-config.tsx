@@ -95,6 +95,7 @@ export const AffiliateConfig = () => {
               id="art-style-select"
               className="border-gray-200"
               options={ART_STYLE_OPTIONS}
+              onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
             />
           </Field>
         </div>
@@ -107,6 +108,7 @@ export const AffiliateConfig = () => {
               id="language-select"
               className="border-gray-200"
               options={LANGUAGE_OPTIONS}
+              onChange={(v) => patchConfig && patchConfig({ language: v })}
             />
           </Field>
         </div>
@@ -119,6 +121,7 @@ export const AffiliateConfig = () => {
               id="category-select"
               className="border-gray-200"
               options={CATEGORY_OPTIONS}
+              onChange={(v) => patchConfig && patchConfig({ category: v })}
             />
           </Field>
         </div>
@@ -126,7 +129,13 @@ export const AffiliateConfig = () => {
         {/* MOOD / TÍNH CÁCH */}
         <div>
           <Field noError name="mood" label={t("Tính cách / Mood")}>
-            <Select native id="mood-select" className="border-gray-200" options={MOOD_OPTIONS} />
+            <Select
+              native
+              id="mood-select"
+              className="border-gray-200"
+              options={MOOD_OPTIONS}
+              onChange={(v) => patchConfig && patchConfig({ mood: v })}
+            />
           </Field>
         </div>
 
@@ -137,6 +146,7 @@ export const AffiliateConfig = () => {
               id="object-to-personify-input"
               className="border-gray-200"
               placeholder={t("VD: Một quả chuối tươi")}
+              onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
             />
           </Field>
         </div>
@@ -148,6 +158,7 @@ export const AffiliateConfig = () => {
               id="tip-content-input"
               className="border-gray-200"
               placeholder={t("VD: Cách ăn chuối tốt nhất")}
+              onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
             />
           </Field>
         </div>

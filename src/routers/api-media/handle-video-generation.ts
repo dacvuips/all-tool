@@ -44,13 +44,9 @@ export async function handleVideoGeneration(
     context.id
   );
 
-  // Setup SSE headers
-  res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
-  res.setHeader("Connection", "keep-alive");
-  res.flushHeaders();
   // Tao video
-  const { mediaName } = await callAisandboxAPI({
+  const { mediaName } = await callAisandboxVideoAPI({
+    res: res,
     prompt: body.prompt,
     aspectRatio: body.config?.aspectRatio,
     uploadedImageNames,
@@ -70,13 +66,10 @@ export async function handleVideoGeneration(
 
   // Tăng usedQuantity sau khi generate video thành công (atomic $inc, tìm theo API key)
   await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
-
-  res.json({
-    reCaptchaToken: captchaData.captcha,
-  });
 }
 
 interface CallAisandboxParams {
+  res: Response;
   prompt: string;
   aspectRatio?: string;
   uploadedImageNames?: string[];
@@ -87,77 +80,59 @@ interface CallAisandboxParams {
 }
 
 /**
- * Gọi Aisandbox API: build payload từ raw params, gọi API với retry, parse response và trả về mediaName.
+ * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
  */
-export async function callAisandboxAPI(
+export async function callAisandboxVideoAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
-  const {
-    prompt,
-    aspectRatio,
-    uploadedImageNames,
-    recaptchaToken,
-    sessionId,
-    projectId,
-    accessToken,
-  } = params;
+  const { uploadedImageNames } = params;
+  const imageCount = uploadedImageNames?.length || 0;
+
+  // Setup SSE headers
+  params.res.setHeader("Content-Type", "text/event-stream");
+  params.res.setHeader("Cache-Control", "no-cache");
+  params.res.setHeader("Connection", "keep-alive");
+  params.res.flushHeaders();
+
+  if (imageCount === 0) {
+    return callTextOnlyAPI(params);
+  } else if (imageCount === 1) {
+    return callStartImageAPI(params);
+  } else if (imageCount === 2) {
+    return callStartAndEndImageAPI(params);
+  } else {
+    return callReferenceImagesAPI(params);
+  }
+}
+
+// ── Helpers dùng chung ──────────────────────────────────────────────────────
+
+function mapAspectRatio(aspectRatio?: string): string {
+  const input = aspectRatio || "9:16";
+  if (input === "16:9" || input === "landscape") return "VIDEO_ASPECT_RATIO_LANDSCAPE";
+  if (input === "1:1" || input === "square") return "VIDEO_ASPECT_RATIO_SQUARE";
+  return "VIDEO_ASPECT_RATIO_PORTRAIT";
+}
+
+function buildClientContext(params: CallAisandboxParams) {
+  return {
+    projectId: params.projectId,
+    tool: "PINHOLE",
+    userPaygateTier: "PAYGATE_TIER_TWO",
+    sessionId: params.sessionId,
+    recaptchaContext: {
+      token: params.recaptchaToken,
+      applicationType: "RECAPTCHA_APPLICATION_TYPE_WEB",
+    },
+  };
+}
+
+async function sendAndParseResponse(
+  endpoint: string,
+  payload: any,
+  accessToken: string
+): Promise<{ response: any; mediaName: string }> {
   const label = "generation-video";
-
-  // Map aspectRatio sang format aisandbox
-  const aspectRatioInput = aspectRatio || "9:16";
-  let videoAspectRatio = "VIDEO_ASPECT_RATIO_PORTRAIT";
-  if (aspectRatioInput === "16:9" || aspectRatioInput === "landscape") {
-    videoAspectRatio = "VIDEO_ASPECT_RATIO_LANDSCAPE";
-  } else if (aspectRatioInput === "1:1" || aspectRatioInput === "square") {
-    videoAspectRatio = "VIDEO_ASPECT_RATIO_SQUARE";
-  } else if (aspectRatioInput === "9:16" || aspectRatioInput === "portrait") {
-    videoAspectRatio = "VIDEO_ASPECT_RATIO_PORTRAIT";
-  }
-
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
-
-  // Build request object
-  const videoRequest: any = {
-    aspectRatio: videoAspectRatio,
-    seed,
-    textInput: {
-      structuredPrompt: {
-        parts: [{ text: prompt }],
-      },
-    },
-    videoModelKey: "veo_3_1_r2v_fast_portrait_ultra",
-    metadata: {},
-  };
-
-  // Nếu có image đã upload → thêm referenceImages
-  if (uploadedImageNames && uploadedImageNames.length > 0) {
-    videoRequest.referenceImages = uploadedImageNames.map((mediaId) => ({
-      mediaId,
-      imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
-    }));
-  }
-
-  const payload = {
-    mediaGenerationContext: {
-      batchId,
-    },
-    clientContext: {
-      projectId,
-      tool: "PINHOLE",
-      userPaygateTier: "PAYGATE_TIER_TWO",
-      sessionId,
-      recaptchaContext: {
-        token: recaptchaToken,
-        applicationType: "RECAPTCHA_APPLICATION_TYPE_WEB",
-      },
-    },
-    requests: [videoRequest],
-    useV2ModelConfig: true,
-  };
-
-  const endpoint =
-    "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoReferenceImages";
   const resp = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -174,18 +149,11 @@ export async function callAisandboxAPI(
   }
   const response = await resp.json();
 
-  // Log full response for debugging
   logger.info(`[${label}] Full response: ${JSON.stringify(response)}`);
 
-  // Aisandbox API trả về mảng:
-  // [{ operations: [{ operation: { name: "mediaName" }, status: "..." }],
-  //    media: [{ name: "mediaName", ... }] }]
   const result = Array.isArray(response) ? response[0] : response;
   const operations = result?.operations || [];
-  const mediaName =
-    operations[0]?.operation?.name || // aisandbox format
-    result?.media?.[0]?.name || // fallback from media array
-    null;
+  const mediaName = operations[0]?.operation?.name || result?.media?.[0]?.name || null;
 
   if (!mediaName) {
     logger.info(`[${label}] No mediaName found in response`);
@@ -196,6 +164,174 @@ export async function callAisandboxAPI(
 
   logger.info(`[${label}] Extracted mediaName: ${mediaName}`);
   return { response, mediaName };
+}
+
+// ── Case 1: Không có ảnh → Text-to-Video ────────────────────────────────────
+
+/**
+ * Chỉ có prompt, không có ảnh → gọi endpoint batchAsyncGenerateVideoText
+ */
+async function callTextOnlyAPI(
+  params: CallAisandboxParams
+): Promise<{ response: any; mediaName: string }> {
+  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
+  const batchId = crypto.randomUUID();
+  const seed = Math.floor(Math.random() * 1000000);
+
+  const payload = {
+    mediaGenerationContext: {
+      batchId,
+      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
+    },
+    clientContext: buildClientContext(params),
+    requests: [
+      {
+        aspectRatio: videoAspectRatio,
+        seed,
+        textInput: {
+          structuredPrompt: {
+            parts: [{ text: params.prompt }],
+          },
+        },
+        videoModelKey: "veo_3_1_t2v_fast_portrait_ultra",
+        metadata: {},
+      },
+    ],
+    useV2ModelConfig: true,
+  };
+
+  const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoText";
+  return sendAndParseResponse(endpoint, payload, params.accessToken);
+}
+
+// ── Case 2: 1 ảnh → Start Image ─────────────────────────────────────────────
+
+/**
+ * 1 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartImage (startImage)
+ */
+async function callStartImageAPI(
+  params: CallAisandboxParams
+): Promise<{ response: any; mediaName: string }> {
+  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
+  const batchId = crypto.randomUUID();
+  const seed = Math.floor(Math.random() * 1000000);
+
+  const payload = {
+    mediaGenerationContext: {
+      batchId,
+      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
+    },
+    clientContext: buildClientContext(params),
+    requests: [
+      {
+        aspectRatio: videoAspectRatio,
+        seed,
+        textInput: {
+          structuredPrompt: {
+            parts: [{ text: params.prompt }],
+          },
+        },
+        videoModelKey: "veo_3_1_i2v_s_fast_portrait_ultra",
+        metadata: {},
+        startImage: {
+          mediaId: params.uploadedImageNames![0],
+        },
+      },
+    ],
+    useV2ModelConfig: true,
+  };
+
+  const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage";
+  return sendAndParseResponse(endpoint, payload, params.accessToken);
+}
+
+// ── Case 3: 2 ảnh → Start + End Image ───────────────────────────────────────
+
+/**
+ * 2 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartAndEndImage
+ * (startImage = ảnh đầu, endImage = ảnh thứ 2)
+ */
+async function callStartAndEndImageAPI(
+  params: CallAisandboxParams
+): Promise<{ response: any; mediaName: string }> {
+  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
+  const batchId = crypto.randomUUID();
+  const seed = Math.floor(Math.random() * 1000000);
+
+  const payload = {
+    mediaGenerationContext: {
+      batchId,
+      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
+    },
+    clientContext: buildClientContext(params),
+    requests: [
+      {
+        aspectRatio: videoAspectRatio,
+        seed,
+        textInput: {
+          structuredPrompt: {
+            parts: [{ text: params.prompt }],
+          },
+        },
+        videoModelKey: "veo_3_1_i2v_s_fast_portrait_ultra_fl",
+        metadata: {},
+        startImage: {
+          mediaId: params.uploadedImageNames![0],
+        },
+        endImage: {
+          mediaId: params.uploadedImageNames![1],
+        },
+      },
+    ],
+    useV2ModelConfig: true,
+  };
+
+  const endpoint =
+    "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartAndEndImage";
+  return sendAndParseResponse(endpoint, payload, params.accessToken);
+}
+
+// ── Case 4: 3+ ảnh → Reference Images (logic hiện tại) ─────────────────────
+
+/**
+ * 3+ ảnh upload → gọi endpoint batchAsyncGenerateVideoReferenceImages (referenceImages)
+ */
+async function callReferenceImagesAPI(
+  params: CallAisandboxParams
+): Promise<{ response: any; mediaName: string }> {
+  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
+  const batchId = crypto.randomUUID();
+  const seed = Math.floor(Math.random() * 1000000);
+
+  const payload = {
+    mediaGenerationContext: {
+      batchId,
+      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
+    },
+    clientContext: buildClientContext(params),
+    requests: [
+      {
+        aspectRatio: videoAspectRatio,
+        seed,
+        textInput: {
+          structuredPrompt: {
+            parts: [{ text: params.prompt }],
+          },
+        },
+        videoModelKey: "veo_3_1_r2v_fast_portrait_ultra",
+        metadata: {},
+        referenceImages: params.uploadedImageNames!.map((mediaId) => ({
+          mediaId,
+          imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
+        })),
+      },
+    ],
+    useV2ModelConfig: true,
+  };
+
+  const endpoint =
+    "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoReferenceImages";
+  return sendAndParseResponse(endpoint, payload, params.accessToken);
 }
 
 interface PollAndExtractVideoParams {

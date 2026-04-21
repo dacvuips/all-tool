@@ -2,7 +2,10 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callAisandboxAPI, pollAndExtractVideo } from "../../api-media/handle-video-generation";
+import {
+  callAisandboxVideoAPI,
+  pollAndExtractVideo,
+} from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
 import { ActionEnum, checkVideoLimit, incrementVideoCount } from "./_shared";
@@ -44,7 +47,7 @@ export default [
           accessToken,
         } = await fetchCaptchaData({
           type: ActionEnum.VIDEO_GENERATION,
-          logPrefix: "api-media",
+          logPrefix: "generation-video",
         });
         // Upload ảnh lên Google Labs trước nếu có
         const uploadedImageNames = await processAndUploadImages(
@@ -56,25 +59,12 @@ export default [
 
         logger.info(`[generation-video] Gọi Veo 3.1 fast (aisandbox) cho user ${context.id}`);
 
-        // Setup SSE headers
-        res.setHeader("Content-Type", "text/event-stream");
-        res.setHeader("Cache-Control", "no-cache");
-        res.setHeader("Connection", "keep-alive");
-        res.flushHeaders();
-
         const sendSSE = (data: any) => {
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
-        sendSSE({ type: "progress", progress: 5, message: "Đang khởi tạo..." });
-
-        sendSSE({
-          type: "progress",
-          progress: 10,
-          message: "Đã lấy credentials, đang gửi yêu cầu...",
-        });
-
-        const { mediaName } = await callAisandboxAPI({
+        const { mediaName } = await callAisandboxVideoAPI({
+          res: res,
           prompt: body.prompt,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames,
@@ -83,8 +73,6 @@ export default [
           projectId,
           accessToken,
         });
-
-        sendSSE({ type: "progress", progress: 15, message: "Đã gửi yêu cầu, đang chờ xử lý..." });
 
         logger.info(`[generation-video] Polling mediaName: ${mediaName}`);
 

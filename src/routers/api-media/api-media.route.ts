@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { apiMediaTokenService } from "../../libs/dal/apiMediaToken";
 import { ActionEnum } from "../app/affiliate-scene/_shared";
 import { fetchCaptchaData, validateApiKey } from "../helpers/validateApiKey";
+import { handleImageGeneration } from "./handle-image-generation";
 import { handleVideoGeneration } from "./handle-video-generation";
 
 export default [
@@ -23,6 +24,7 @@ export default [
         return handleVideoGeneration(req, res, captchaData, token.key);
       }
       if (type === ActionEnum.IMAGE_GENERATION) {
+        return handleImageGeneration(req, res, captchaData, token.key);
       }
     },
   },

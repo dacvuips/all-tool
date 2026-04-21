@@ -29,10 +29,17 @@ import {
 import CodeBlock, { CodeSample } from "../shared/utilities/code-block/codeBlock";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button, Switch } from "../shared/utilities/form";
+import { TabGroup } from "../shared/utilities/tab/tab-group";
 
 const LIMIT = 10;
 
-const ApiMediaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader?: boolean; onNavigateToPricing?: () => void }) => {
+const ApiMediaPage = ({
+  hideHeader = false,
+  onNavigateToPricing,
+}: {
+  hideHeader?: boolean;
+  onNavigateToPricing?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const toast = useToast();
@@ -225,7 +232,9 @@ const ApiMediaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader?
               <div className="w-px h-5 bg-gray-300" />
               <div className="flex items-center gap-2">
                 <HiShieldCheck className="text-xl text-green-500" />
-                <h1 className="text-base font-bold text-gray-800 m-0">{t("Quản lý API Key Media")}</h1>
+                <h1 className="text-base font-bold text-gray-800 m-0">
+                  {t("Quản lý API Key Media")}
+                </h1>
               </div>
             </div>
 
@@ -716,34 +725,31 @@ const ApiMediaPage = ({ hideHeader = false, onNavigateToPricing }: { hideHeader?
     </div>
   );
 };
-// ===== Default Code Samples =====
-const CODE_SAMPLES: Record<string, any> = {
+// ===== Image Generation Code Samples =====
+const IMAGE_CODE_SAMPLES: Record<string, any> = {
   NodeJS: {
     lang: "javascript",
     icon: "JS",
     iconBg: "bg-yellow-400 text-gray-900",
-    code: (apiKey: string) => `// Get API Media token (Default type: VIDEO_GENERATION)
-fetch('${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media', {
-  method: 'GET',
-  headers: {
-    'x-api-key': '${apiKey}'
-  }
-})
-  .then(response => response.json())
-  .then(data => console.log('Response:', data))
-  .catch(error => console.error('Error:', error));
-
-// With type IMAGE_GENERATION parameter
+    code: (apiKey: string) => `// IMAGE GENERATION
 fetch('${
       typeof window !== "undefined" ? window.location.origin : ""
     }/api/api-media?type=IMAGE_GENERATION', {
   method: 'GET',
   headers: {
-    'x-api-key': '${apiKey}'
-  }
+    'x-api-key': '${apiKey}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    prompt: 'A beautiful sunset over the ocean',
+    images: [],                    // optional: URL hoặc { imageBytes, mimeType }
+    config: {
+      aspectRatio: '9:16'          // '9:16' | '16:9' | '1:1'
+    }
+  })
 })
   .then(response => response.json())
-  .then(data => console.log('Response:', data))
+  .then(data => console.log('Images:', data))
   .catch(error => console.error('Error:', error));`,
   },
   PHP: {
@@ -752,28 +758,23 @@ fetch('${
     iconBg: "bg-indigo-500 text-white",
     code: (apiKey: string) => `<?php
 
-// Get API Media token (Default type: VIDEO_GENERATION)
-$ch = curl_init();
-curl_setopt($ch, CURLOPT_URL, '${
-      typeof window !== "undefined" ? window.location.origin : ""
-    }/api/api-media');
-curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'x-api-key: ${apiKey}'
+// IMAGE GENERATION
+$payload = json_encode([
+    'prompt' => 'A beautiful sunset over the ocean',
+    'images' => [],
+    'config' => ['aspectRatio' => '9:16']
 ]);
-$response = curl_exec($ch);
-curl_close($ch);
-echo "Response: " . $response . PHP_EOL;
-
-// With type IMAGE_GENERATION parameter
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, '${
       typeof window !== "undefined" ? window.location.origin : ""
     }/api/api-media?type=IMAGE_GENERATION');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, [
-    'x-api-key: ${apiKey}'
+    'x-api-key: ${apiKey}',
+    'Content-Type: application/json'
 ]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
 $response = curl_exec($ch);
 curl_close($ch);
 echo "Response: " . $response . PHP_EOL;`,
@@ -784,33 +785,139 @@ echo "Response: " . $response . PHP_EOL;`,
     iconBg: "bg-blue-500 text-yellow-300",
     code: (apiKey: string) => `import requests
 
-# Get API Media token (Default type: VIDEO_GENERATION)
+# IMAGE GENERATION
 response = requests.get(
-    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media',
-    headers={'x-api-key': '\${apiKey}'}
+    '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/api-media?type=IMAGE_GENERATION',
+    headers={
+        'x-api-key': '${apiKey}',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'prompt': 'A beautiful sunset over the ocean',
+        'images': [],
+        'config': {'aspectRatio': '9:16'}
+    }
 )
-print('Response:', response.json())
-
-# With type IMAGE_GENERATION parameter
-response = requests.get(
-    '\${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media?type=IMAGE_GENERATION',
-    headers={'x-api-key': '\${apiKey}'}
-)
-print('Response:', response.json())`,
+print('Images:', response.json())`,
   },
   Curl: {
     lang: "bash",
     icon: ">_",
     iconBg: "bg-gray-700 text-green-400",
-    code: (apiKey: string) => `# Get API Media token (Default type: VIDEO_GENERATION)
-curl -X GET '${typeof window !== "undefined" ? window.location.origin : ""}/api/api-media' \\
-  -H 'x-api-key: ${apiKey}'
-
-# With type IMAGE_GENERATION parameter
+    code: (apiKey: string) => `# IMAGE GENERATION
 curl -X GET '${
       typeof window !== "undefined" ? window.location.origin : ""
     }/api/api-media?type=IMAGE_GENERATION' \\
-  -H 'x-api-key: ${apiKey}'`,
+  -H 'x-api-key: ${apiKey}' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"prompt":"A beautiful sunset over the ocean","images":[],"config":{"aspectRatio":"9:16"}}'`,
+  },
+};
+
+// ===== Video Generation Code Samples =====
+const VIDEO_CODE_SAMPLES: Record<string, any> = {
+  NodeJS: {
+    lang: "javascript",
+    icon: "JS",
+    iconBg: "bg-yellow-400 text-gray-900",
+    code: (apiKey: string) => `// VIDEO GENERATION (SSE Stream)
+fetch('${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/api-media?type=VIDEO_GENERATION', {
+  method: 'GET',
+  headers: {
+    'x-api-key': '${apiKey}',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    prompt: 'A cat playing with a ball in the garden',
+    images: [],                    // optional: URL hoặc { imageBytes, mimeType }
+    config: {
+      aspectRatio: '9:16',         // '9:16' | '16:9' | '1:1'
+      generateAudio: true
+    }
+  })
+})
+  .then(response => {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    function read() {
+      reader.read().then(({ done, value }) => {
+        if (done) return;
+        console.log('SSE:', decoder.decode(value));
+        read();
+      });
+    }
+    read();
+  })
+  .catch(error => console.error('Error:', error));`,
+  },
+  PHP: {
+    lang: "php",
+    icon: "PHP",
+    iconBg: "bg-indigo-500 text-white",
+    code: (apiKey: string) => `<?php
+
+// VIDEO GENERATION (SSE Stream)
+$payload = json_encode([
+    'prompt' => 'A cat playing with a ball in the garden',
+    'images' => [],
+    'config' => ['aspectRatio' => '9:16', 'generateAudio' => true]
+]);
+$ch = curl_init();
+curl_setopt($ch, CURLOPT_URL, '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/api-media?type=VIDEO_GENERATION');
+curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+curl_setopt($ch, CURLOPT_HTTPHEADER, [
+    'x-api-key: ${apiKey}',
+    'Content-Type: application/json'
+]);
+curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
+$response = curl_exec($ch);
+curl_close($ch);
+echo "Response: " . $response . PHP_EOL;`,
+  },
+  Python: {
+    lang: "python",
+    icon: "PY",
+    iconBg: "bg-blue-500 text-yellow-300",
+    code: (apiKey: string) => `import requests
+
+# VIDEO GENERATION (SSE Stream)
+response = requests.get(
+    '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/api-media?type=VIDEO_GENERATION',
+    headers={
+        'x-api-key': '${apiKey}',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'prompt': 'A cat playing with a ball in the garden',
+        'images': [],
+        'config': {'aspectRatio': '9:16', 'generateAudio': True}
+    },
+    stream=True
+)
+for line in response.iter_lines():
+    if line:
+        print('SSE:', line.decode())`,
+  },
+  Curl: {
+    lang: "bash",
+    icon: ">_",
+    iconBg: "bg-gray-700 text-green-400",
+    code: (apiKey: string) => `# VIDEO GENERATION (SSE Stream)
+curl -X GET '${
+      typeof window !== "undefined" ? window.location.origin : ""
+    }/api/api-media?type=VIDEO_GENERATION' \\
+  -H 'x-api-key: ${apiKey}' \\
+  -H 'Content-Type: application/json' \\
+  -d '{"prompt":"A cat playing with a ball","images":[],"config":{"aspectRatio":"9:16","generateAudio":true}}'`,
   },
 };
 
@@ -836,15 +943,22 @@ const ApiKeyGuideDialog = ({
     setTimeout(() => setKeyCopied(false), 2000);
   }, [apiKey]);
 
-  const codeSampleList: CodeSample[] = useMemo(() => {
-    return Object.entries(CODE_SAMPLES).map(([key, value]) => {
-      return {
-        ...value,
-        label: key,
-        code: value.code(apiKey),
-      };
-    });
+  const imageCodeSampleList: CodeSample[] = useMemo(() => {
+    return Object.entries(IMAGE_CODE_SAMPLES).map(([key, value]) => ({
+      ...value,
+      label: key,
+      code: value.code(apiKey),
+    }));
   }, [apiKey]);
+
+  const videoCodeSampleList: CodeSample[] = useMemo(() => {
+    return Object.entries(VIDEO_CODE_SAMPLES).map(([key, value]) => ({
+      ...value,
+      label: key,
+      code: value.code(apiKey),
+    }));
+  }, [apiKey]);
+
   return (
     <Dialog
       isOpen={isOpen}
@@ -883,64 +997,179 @@ const ApiKeyGuideDialog = ({
             </div>
           </div>
 
-          <CodeBlock codeSample={codeSampleList} title={t("Hướng dẫn tích hợp")} />
+          {/* TabGroup: Image / Video */}
+          <TabGroup
+            name="api-media-guide"
+            flex
+            tabClassName="px-4 py-2.5"
+            titleClassName="text-sm font-semibold whitespace-nowrap"
+            bodyClassName="mt-4"
+          >
+            {/* ===== Tab 1: Image Generation ===== */}
+            <TabGroup.Tab label={`🖼️ ${t("Image Generation")}`}>
+              <div className="space-y-4">
+                <CodeBlock codeSample={imageCodeSampleList} title={t("Hướng dẫn tích hợp")} />
 
-          {/* Response Format Info */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              {t("Thông tin phản hồi")}
-            </label>
-            <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-              {/* Header */}
-              <div className="flex items-center gap-2 bg-gray-50 border-b border-gray-100 px-4 py-2.5">
-                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-success  text-4 font-bold">
-                  ✓
-                </span>
-                <span className="text-xs font-semibold text-gray-700">{t("Response")}</span>
-                <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-emerald-50 text-success border border-emerald-200 ">
-                  200 OK
-                </span>
-              </div>
-              {/* Response Body */}
-              <div className="px-4 py-3 bg-white">
-                <div className="rounded-lg bg-gray-900 px-4 py-3 font-mono text-sm overflow-x-auto">
-                  <span className="text-gray-500">{"{"}</span>
-                  {"\n"}
-                  <span className="text-gray-500 ml-4"> </span>
-                  <span className="text-blue-400">"reCaptchaToken"</span>
-                  <span className="text-gray-500">: </span>
-                  <span className="text-green-400">
-                    "0cAFcWeA6iKP40OyvMmF320Erxp0tFr2R0go1Q6pu1G-95PxLvNmY_hZjnmRQz-bXshKOBfJ1C_6yYwlxi..."
-                  </span>
-                  {"\n"}
-                  <span className="text-gray-500">{"}"}</span>
-                </div>
-                {/* Description */}
-                <div className="mt-3 space-y-2">
-                  <div className="flex items-start gap-2.5">
-                    <div className="mt-1 w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
-                    <p className="text-xs text-gray-600 leading-relaxed">
-                      <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">
-                        reCaptchaToken
+                {/* Response Format Info — IMAGE_GENERATION */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    {t("Phản hồi")} — IMAGE_GENERATION
+                  </label>
+                  <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 bg-gray-50 border-b border-gray-100 px-4 py-2.5">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-success text-4 font-bold">
+                        ✓
                       </span>
-                      <span className="mx-1">—</span>
-                      {t(
-                        "Token reCAPTCHA được tạo thành công. Sử dụng token này để xác thực trong các yêu cầu tiếp theo."
-                      )}
-                    </p>
-                  </div>
-                  <div className="flex items-start gap-2.5">
-                    <div className="mt-1 w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-                    <p className="text-xs text-gray-500 leading-relaxed">
-                      {t(
-                        "Token có thời hạn sử dụng giới hạn. Vui lòng tạo token mới nếu token hiện tại đã hết hạn."
-                      )}
-                    </p>
+                      <span className="text-xs font-semibold text-gray-700">{t("Response")}</span>
+                      <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-emerald-50 text-success border border-emerald-200">
+                        200 OK
+                      </span>
+                    </div>
+                    {/* Response Body */}
+                    <div className="px-4 py-3 bg-white">
+                      <div className="rounded-lg bg-gray-900 px-4 py-3 font-mono text-sm overflow-x-auto whitespace-pre">
+                        <span className="text-gray-500">{"{"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  "}</span>
+                        <span className="text-blue-400">"success"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-yellow-300">true</span>
+                        <span className="text-gray-500">,</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  "}</span>
+                        <span className="text-blue-400">"data"</span>
+                        <span className="text-gray-500">{": ["}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"    {"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"      "}</span>
+                        <span className="text-blue-400">"imageBytes"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">"base64_encoded_image_data..."</span>
+                        <span className="text-gray-500">,</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"      "}</span>
+                        <span className="text-blue-400">"mimeType"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">"image/png"</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"    }"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  ]"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"}"}</span>
+                      </div>
+                      {/* Description */}
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-400 flex-shrink-0" />
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">
+                              success
+                            </span>
+                            <span className="mx-1">—</span>
+                            {t("Trạng thái tạo ảnh thành công.")}
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-1 w-1.5 h-1.5 rounded-full bg-orange-400 flex-shrink-0" />
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">
+                              data
+                            </span>
+                            <span className="mx-1">—</span>
+                            {t("Mảng ảnh kết quả. Mỗi item chứa imageBytes (base64) và mimeType.")}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
+            </TabGroup.Tab>
+
+            {/* ===== Tab 2: Video Generation ===== */}
+            <TabGroup.Tab label={`🎬 ${t("Video Generation")}`}>
+              <div className="space-y-4">
+                <CodeBlock codeSample={videoCodeSampleList} title={t("Hướng dẫn tích hợp")} />
+
+                {/* Response Format Info — VIDEO_GENERATION */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    {t("Phản hồi")} — VIDEO_GENERATION
+                  </label>
+                  <div className="rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 bg-gray-50 border-b border-gray-100 px-4 py-2.5">
+                      <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-emerald-500 text-success text-4 font-bold">
+                        ✓
+                      </span>
+                      <span className="text-xs font-semibold text-gray-700">Response</span>
+                      <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-emerald-50 text-success border border-emerald-200">
+                        200 OK
+                      </span>
+                    </div>
+                    {/* Response Body */}
+                    <div className="px-4 py-3 bg-white">
+                      <div className="rounded-lg bg-gray-900 px-4 py-3 font-mono text-sm overflow-x-auto whitespace-pre">
+                        <span className="text-gray-500">{"// SSE Event 2: Done"}</span>
+                        {"\n"}
+                        <span className="text-purple-400">data: </span>
+                        <span className="text-gray-500">{"{"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  "}</span>
+                        <span className="text-blue-400">"type"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">"done"</span>
+                        <span className="text-gray-500">,</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  "}</span>
+                        <span className="text-blue-400">"data"</span>
+                        <span className="text-gray-500">{": {"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"    "}</span>
+                        <span className="text-blue-400">"videoUri"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">"https://..."</span>
+                        <span className="text-gray-500">,</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"    "}</span>
+                        <span className="text-blue-400">"mimeType"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">"video/mp4"</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"  }"}</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"}"}</span>
+                      </div>
+                      {/* Description */}
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-1 w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />
+                          <p className="text-xs text-gray-600 leading-relaxed">
+                            <span className="font-mono font-semibold text-gray-800 bg-gray-100 px-1.5 py-0.5 rounded">
+                              videoUri
+                            </span>
+                            <span className="mx-1">—</span>
+                            {t("URL video đã tạo thành công. Có thể download trực tiếp.")}
+                          </p>
+                        </div>
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-1 w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                          <p className="text-xs text-gray-500 leading-relaxed">
+                            {t(
+                              "Video được trả về qua SSE stream. Theo dõi event type 'done' để nhận kết quả cuối cùng."
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabGroup.Tab>
+          </TabGroup>
         </div>
       </Dialog.Body>
     </Dialog>
