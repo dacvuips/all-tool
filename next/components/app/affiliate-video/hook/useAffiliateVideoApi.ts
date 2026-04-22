@@ -319,10 +319,27 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
       const { sceneId, prompt, aspectRatio = "9:16", onProgress } = params;
 
-      try {
-        // Simulate progress: 0% → 20% immediately (request sent)
-        onProgress?.(10);
+      // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
+      const DURATION_MS = 2 * 60 * 1000; // 2 minutes
+      const INTERVAL_MS = 500; // update every 500ms
+      const startPct = Math.floor(Math.random() * 10) + 1; // 1-10
+      const endPct = 99;
+      const totalSteps = DURATION_MS / INTERVAL_MS;
+      const increment = (endPct - startPct) / totalSteps;
+      let currentPct = startPct;
 
+      onProgress?.(currentPct);
+
+      const progressTimer = setInterval(() => {
+        currentPct += increment;
+        if (currentPct >= endPct) {
+          currentPct = endPct;
+          clearInterval(progressTimer);
+        }
+        onProgress?.(Math.round(currentPct));
+      }, INTERVAL_MS);
+
+      try {
         const res = await fetch("/api/app/generation-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -332,9 +349,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           }),
         });
 
-        onProgress?.(60);
-
         if (!res.ok) {
+          clearInterval(progressTimer);
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
@@ -342,7 +358,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         const result = await res.json();
-        onProgress?.(80);
 
         // Handle both formats: direct array [...] or wrapped { data: [...] }
         const images: GeneratedImageData[] = Array.isArray(result)
@@ -352,6 +367,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           : [];
 
         if (images.length === 0) {
+          clearInterval(progressTimer);
           toast.error("Không nhận được ảnh từ API");
           return undefined;
         }
@@ -360,10 +376,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
         // Persist to IndexedDB
         await imageDB.set(sceneId, imageData);
+
+        // Stop simulated progress and jump to 100%
+        clearInterval(progressTimer);
         onProgress?.(100);
 
         return imageData;
       } catch (err: any) {
+        clearInterval(progressTimer);
         onProgress?.(0);
         console.error("[generateImage] Error:", err);
         throw err;

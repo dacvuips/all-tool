@@ -7,7 +7,7 @@
  * - Download ảnh đã tạo về máy
  * - Download video đã tạo về máy
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { SceneScript } from "../constants";
 import {
   GeneratedImageData,
@@ -68,6 +68,10 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
   const [videoStatusMessage, setVideoStatusMessage] = useState("");
   const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoData | null>(null);
 
+  // ── Refs cho simulated progress timers ──
+  const imageProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const { generateImage, getGeneratedImage, generateVideo, getGeneratedVideo } =
     useAffiliateVideoApi();
   const { batchGeneratingSceneIds, batchGeneratingVideoSceneIds } = useAffiliateVideoContext();
@@ -79,6 +83,62 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
   // Combined flag: either local generation or batch generation
   const isGeneratingImage = generatingImage || isBatchGenerating;
   const isGeneratingVideo = generatingVideo || isBatchGeneratingVideo;
+
+  // ── Helper: bắt đầu giả lập progress ──
+  // Chạy từ random 1-10% → tăng dần đến 99% trong khoảng durationMs
+  const startSimulatedProgress = useCallback(
+    (
+      setProgress: (pct: number) => void,
+      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
+      durationMs: number
+    ) => {
+      // Xóa timer cũ nếu có
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+
+      const startPct = Math.floor(Math.random() * 10) + 1; // random 1-10%
+      setProgress(startPct);
+
+      const intervalMs = 500; // cập nhật mỗi 500ms
+      const totalSteps = durationMs / intervalMs;
+      const incrementPerStep = (99 - startPct) / totalSteps;
+      let current = startPct;
+
+      timerRef.current = setInterval(() => {
+        current += incrementPerStep;
+        if (current >= 99) {
+          current = 99;
+          if (timerRef.current) clearInterval(timerRef.current);
+        }
+        setProgress(Math.floor(current));
+      }, intervalMs);
+    },
+    []
+  );
+
+  // ── Helper: dừng giả lập progress ──
+  const stopSimulatedProgress = useCallback(
+    (
+      setProgress: (pct: number) => void,
+      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
+    ) => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      setProgress(100);
+    },
+    []
+  );
+
+  // ── Cleanup timers khi unmount ──
+  useEffect(() => {
+    return () => {
+      if (imageProgressTimerRef.current) clearInterval(imageProgressTimerRef.current);
+      if (videoProgressTimerRef.current) clearInterval(videoProgressTimerRef.current);
+    };
+  }, []);
 
   // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // Re-check whenever batch generating state changes (image may have been saved)
@@ -99,18 +159,25 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
   // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateImage
   // Gọi API tạo ảnh từ scene.imageGenPrompt.
-  // Cập nhật progress qua callback, lưu kết quả vào state + IndexedDB.
+  // Giả lập progress chạy trong ~2 phút (120s), từ random 1-10% → 99%.
+  // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateImage = async () => {
     if (generatingImage || !scene.imageGenPrompt) return;
     setGeneratingImage(true);
     setImageProgress(0);
 
+    // Bắt đầu giả lập progress (~2 phút)
+    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+
     try {
       const result = await generateImage({
         sceneId: scene.id,
         prompt: scene.imageGenPrompt,
-        onProgress: (pct) => setImageProgress(pct),
+        onProgress: (pct) => {
+          // Nếu server trả progress thật > giả lập thì dùng progress thật
+          setImageProgress((prev) => Math.max(prev, pct));
+        },
       });
 
       if (result) {
@@ -127,6 +194,7 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
     } catch (err) {
       console.error("[handleGenerateImage] Error:", err);
     } finally {
+      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
       setGeneratingImage(false);
     }
   };
@@ -134,14 +202,18 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
   // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateVideo
   // Gọi API tạo video từ scene.motionPrompt + audio + dialogue.
-  // Nếu đã có ảnh (generatedImage) sẽ gửi kèm để dùng image-to-video.
-  // Sử dụng SSE stream để nhận progress và status message.
+  // Giả lập progress chạy trong ~5 phút (300s), từ random 1-10% → 99%.
+  // Khi API trả kết quả (hoặc SSE progress thật), dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateVideo = async () => {
     if (generatingVideo || !scene.motionPrompt) return;
     setGeneratingVideo(true);
     setVideoProgress(0);
     setVideoStatusMessage("");
+
+    // Bắt đầu giả lập progress (~5 phút)
+    startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+
     try {
       const result = await generateVideo({
         sceneId: scene.id,
@@ -149,7 +221,10 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
         images: generatedImage
           ? [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }]
           : undefined,
-        onProgress: (pct) => setVideoProgress(pct),
+        onProgress: (pct) => {
+          // Nếu server trả progress thật > giả lập thì dùng progress thật
+          setVideoProgress((prev) => Math.max(prev, pct));
+        },
         onStatusMessage: (msg) => setVideoStatusMessage(msg),
       });
       if (result) {
@@ -158,6 +233,7 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
     } catch {
       // error already toasted inside generateVideo
     } finally {
+      stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
       setGeneratingVideo(false);
     }
   };

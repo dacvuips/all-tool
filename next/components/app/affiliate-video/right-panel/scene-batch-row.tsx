@@ -331,15 +331,21 @@ export function SceneBatchRow({
                   icon={<HiOutlineArrowDownTray />}
                   placement="bottom"
                 />
-                <Button
-                  onClick={handleGenerateImage}
-                  disabled={generatingImage}
-                  icon={<GenerateAiIcon />}
-                  placement="bottom"
-                  className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tạo lại")}
-                />
+                {generatingImage ? (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                    <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                    <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleGenerateImage}
+                    icon={<GenerateAiIcon />}
+                    placement="bottom"
+                    className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Tạo lại")}
+                  />
+                )}
               </div>
             </div>
           ) : generatingImage ? (
@@ -430,29 +436,28 @@ export function SceneBatchRow({
                   icon={<HiOutlineArrowDownTray />}
                   placement="bottom"
                 />
-                <Button
-                  onClick={handleGenerateVideo}
-                  disabled={generatingVideo}
-                  icon={<GenerateAiIcon />}
-                  placement="bottom"
-                  className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tạo lại")}
-                />
+                {generatingVideo ? (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                    <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                    <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleGenerateVideo}
+                    icon={<GenerateAiIcon />}
+                    placement="bottom"
+                    className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Tạo lại")}
+                  />
+                )}
               </div>
             </div>
           ) : generatingVideo ? (
             /* ── Spinner + progress ── */
-            <div
-              className="relative w-32 rounded-xl border-2 border-purple-300 bg-purple-50"
-              style={{ paddingTop: videoPaddingTop }}
-            >
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
-                <span className="text-purple-600 text-[10px] font-bold mt-0.5">
-                  {videoProgress}%
-                </span>
-              </div>
+            <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
+              <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
+              <span className="text-purple-600 text-[10px] font-bold mt-0.5">{videoProgress}%</span>
             </div>
           ) : (
             /* ── Default create button ── */
