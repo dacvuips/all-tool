@@ -1048,11 +1048,21 @@ const ApiKeyGuideDialog = ({
                         <span className="text-gray-500">: </span>
                         <span className="text-green-400">"base64_encoded_image_data..."</span>
                         <span className="text-gray-500">,</span>
+
                         {"\n"}
                         <span className="text-gray-500">{"      "}</span>
                         <span className="text-blue-400">"mimeType"</span>
                         <span className="text-gray-500">: </span>
                         <span className="text-green-400">"image/png"</span>
+                        <span className="text-gray-500">,</span>
+                        {"\n"}
+                        <span className="text-gray-500">{"      "}</span>
+                        <span className="text-blue-400">"fifeUrl"</span>
+                        <span className="text-gray-500">: </span>
+                        <span className="text-green-400">
+                          "https://flow-content.google/image/85d7ca50-2951-4aa9..."
+                        </span>
+                        <span className="text-gray-500">,</span>
                         {"\n"}
                         <span className="text-gray-500">{"    }"}</span>
                         {"\n"}

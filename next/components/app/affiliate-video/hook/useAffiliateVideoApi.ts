@@ -144,6 +144,7 @@ export interface GeneratedAudioData {
 export interface GeneratedImageData {
   imageBytes: string; // base64
   mimeType: string;
+  fifeUrl: string;
 }
 
 export interface GeneratedVideoData {

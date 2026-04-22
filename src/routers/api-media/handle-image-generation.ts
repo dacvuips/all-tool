@@ -153,6 +153,7 @@ async function sendAndParseResponse(
         return {
           imageBytes: base64,
           mimeType: contentType,
+          fifeUrl,
         };
       }
       // Fallback: trả về toàn bộ object
