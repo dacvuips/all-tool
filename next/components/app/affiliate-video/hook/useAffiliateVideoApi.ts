@@ -248,10 +248,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const err = await res.json().catch(() => ({}));
         const message = err?.message || `Lỗi ${res.status}`;
         toast.error(message);
-        throw new Error(message);
       }
 
-      return res.json();
+      return res?.json();
     },
     [toast]
   );
@@ -354,7 +353,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         const result = await res.json();
@@ -386,7 +384,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         clearInterval(progressTimer);
         onProgress?.(0);
         console.error("[generateImage] Error:", err);
-        throw err;
       }
     },
     [toast, imageDB]
@@ -431,7 +428,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         // Read SSE stream
@@ -492,7 +488,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       } catch (err: any) {
         onProgress?.(0);
         console.error("[generateVideo] Error:", err);
-        throw err;
       }
     },
     [toast, videoDB]
@@ -536,7 +531,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         // Read SSE stream
@@ -597,7 +591,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       } catch (err: any) {
         onProgress?.(0);
         console.error("[extendVideo] Error:", err);
-        throw err;
       }
     },
     [toast, videoDB]
@@ -651,14 +644,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         const result = await res.json();
         return result.data as InsertSceneResult;
       } catch (err: any) {
         console.error("[insertScene] Error:", err);
-        throw err;
       }
     },
     [toast]
@@ -682,14 +673,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         const result = await res.json();
         return result.data as SuggestConfigResult;
       } catch (err: any) {
         console.error("[suggestConfig] Error:", err);
-        throw err;
       }
     },
     [toast]
@@ -711,7 +700,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
-          throw new Error(message);
         }
 
         const result = await res.json();
@@ -728,7 +716,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return audioData;
       } catch (err: any) {
         console.error("[generateAudioTTS] Error:", err);
-        throw err;
       }
     },
     [toast, audioDB]

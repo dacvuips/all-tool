@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../../../lib/providers/global-provider";
 import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, ScriptData, STORE_NAME } from "../constants";
 import { GenerateSceneFromTextParams, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
@@ -75,6 +77,8 @@ export const AffiliateVideoContext = createContext<
 
 export function AffiliateVideoProvider(props) {
   const { generateScene, generateSceneFromText } = useAffiliateVideoApi();
+  const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
   const [searchQuery, setSearchQuery] = useState("");
   const stopRef = useRef(false);
 
@@ -87,7 +91,9 @@ export function AffiliateVideoProvider(props) {
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
   const [batchRunning, setBatchRunning] = useState(false);
   const [batchGeneratingSceneIds, setBatchGeneratingSceneIds] = useState<Set<string>>(new Set());
-  const [batchGeneratingVideoSceneIds, setBatchGeneratingVideoSceneIds] = useState<Set<string>>(new Set());
+  const [batchGeneratingVideoSceneIds, setBatchGeneratingVideoSceneIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const addBatchGeneratingSceneId = useCallback((id: string) => {
     setBatchGeneratingSceneIds((prev) => new Set(prev).add(id));
@@ -156,6 +162,10 @@ export function AffiliateVideoProvider(props) {
   };
 
   const handleSubmit = async (data: AffiliateVideoFormConfig, promptText?: string) => {
+    if (!customer) {
+      setOpenCustomerLoginDialog(true);
+      return;
+    }
     try {
       setScriptTab("script");
       setBatchRunning(true);

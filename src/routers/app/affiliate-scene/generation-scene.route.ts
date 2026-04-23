@@ -33,59 +33,35 @@ export default [
 
         const prompt = `
 
-Before generating scenes, create two fixed anchors:
+Create a consistent multi-scene AI video prompt using:
+{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. Your task is to generate exactly {{batchSize}} cinematic scenes for a short-form video based on the following configuration.
+Create 2 fixed English anchors:
 
-1. CHARACTER ANCHOR:
-Create one fixed, highly detailed character description based on {{objectToPersonify}}.
-This description must remain exactly the same in every scene.
-It must include:
-- face shape and facial features
-- eyes, mouth, expression style
-- body proportions
-- arms, legs, hands, feet
-- outfit, accessories, colors
-- material/texture
-- art style: {{artStyle}}
-- consistent character identity
+CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}
 
-Save it as:
-{{character_fixed_description}}
+ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view
 
-Important rule:
-Do not redesign, reinterpret, recolor, resize, age, simplify, or change the character in any scene.
+- Return valid JSON only. Each scene
+CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
 
-2. ENVIRONMENT ANCHOR:
-Create one fixed background/environment description based on {{category}}.
-This environment must remain exactly the same in every scene.
-It must include:
-- location
-- main background objects
-- lighting
-- color palette
-- atmosphere
-- camera perspective
-- time of day
-- props and spatial layout
+{
+  "topicTitle": "in {{language}}",
+  "artStyle": "{{artStyle}}",
+  "camera": one exact value from CAMERA_TYPE,
+  "cast": [{"name": "in {{language}}", "tag": "main", "description": "CHARACTER_ANCHOR"}],
+  "characterName": "same as main name in {{language}}",
+  "characterBaseDescription": "CHARACTER_ANCHOR",
+  "environment": "ENVIRONMENT_ANCHOR",
+  "voiceGender": "male or female",
+  "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
+  "visualPrompt": "English scene summary",
+  "motionPrompt": "[camera]: camera movement, character action, scene progression",
+  "imageGenPrompt": "Composite image generation prompt built as: CHARACTER_ANCHOR + ", " + [motionPrompt] + ". Setting: " + ENVIRONMENT_ANCHOR + ". " + [artStyle] (in English)",
+  "audio": "voice metadata in {{language}}",
+  "dialogue": "dialogue/narration in {{language}}"
+}
 
-Save it as:
-{{environment_fixed_description}}
-
-Important rule:
-Do not change the location, lighting style, background objects, color palette, or camera perspective unless the scene explicitly requires only a small camera movement.
-
-For every scene:
-- visualPrompt, imagePrompt, and motionPrompt must start with the exact same {{character_fixed_description}}.
-- Then immediately include the exact same {{environment_fixed_description}}.
-- The imagePrompt and videoPrompt must describe the same character, same action, same pose, same background, and same scene moment.
-- Only the character’s pose, facial expression, and action may change between scenes.
-- The character design, outfit, colors, body shape, and background must stay consistent.
-- Use high-definition, consistent character design, cinematic composition.
-- Aspect ratio: {{aspectRatio}}.
-- Story mode: {{storyModeType}}.
-- No text, no logo, no watermark, no subtitles, no written words in image or video.
-- All visualPrompt, motionPrompt, and imagePrompt must be written in advanced English.
-- All dialogue and content instructions must be in {{language}}.
-- Audio: {{gender}} voice, {{mood}} tone, consistent across all scenes.
+CRITICAL RULE: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text. English for prompts/descriptions/environment. {{language}} for title/name/audio/dialogue. Always keep character and environment identical.   
 `;
 
         // Thay thế placeholder trong text

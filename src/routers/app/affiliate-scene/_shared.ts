@@ -200,9 +200,9 @@ export async function callWithKeyRotation<T>(
             break;
           }
           logger.warn(
-            `[${label}] ${keyLabel} bị 503 (lần ${retriesFor503}/${SERVICE_UNAVAILABLE_RETRIES}). Retry sau 3s...`
+            `[${label}] ${keyLabel} bị 503 (lần ${retriesFor503}/${SERVICE_UNAVAILABLE_RETRIES}). Retry sau 1s...`
           );
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           continue;
         }
 
