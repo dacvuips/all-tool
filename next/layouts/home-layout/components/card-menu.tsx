@@ -372,8 +372,11 @@ function AIToolsSection({
   const videoLimit = pkg?.videoLimit ?? 0;
   const imageCount = pkg?.imageCount ?? 0;
   const imageLimit = pkg?.imageLimit ?? 0;
+  const requestCount = pkg?.requestCount ?? 0;
+  const requestLimit = pkg?.requestLimit ?? 0;
   const videoPct = videoLimit > 0 ? Math.min((videoCount / videoLimit) * 100, 100) : 0;
   const imagePct = imageLimit > 0 ? Math.min((imageCount / imageLimit) * 100, 100) : 0;
+  const requestPct = requestLimit > 0 ? Math.min((requestCount / requestLimit) * 100, 100) : 0;
 
   const expiryDate = pkg?.expiryPackageDate;
   const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
@@ -561,6 +564,38 @@ function AIToolsSection({
                     imagePct >= 90
                       ? "linear-gradient(90deg, #F59E0B, #EF4444)"
                       : "linear-gradient(90deg, #34D399, #6EE7B7)",
+                  transition: "width 0.6s ease",
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Request (Generation Text) usage */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
+                📝 {t("Text")}
+              </span>
+              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
+                {requestCount}
+                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {requestLimit}</span>
+              </span>
+            </div>
+            <div
+              className="w-full rounded-full overflow-hidden"
+              style={{
+                height: "6px",
+                background: "rgba(255,255,255,0.1)",
+              }}
+            >
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: `${requestPct}%`,
+                  background:
+                    requestPct >= 90
+                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
+                      : "linear-gradient(90deg, #F472B6, #EC4899)",
                   transition: "width 0.6s ease",
                 }}
               />

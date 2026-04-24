@@ -55,6 +55,8 @@ const customerSchema = new Schema(
         videoLimit: { type: Number, default: 5 },
         imageCount: { type: Number, default: 0 },
         imageLimit: { type: Number, default: 10 },
+        requestCount: { type: Number, default: 0 },
+        requestLimit: { type: Number, default: 2 },
         imageStreamCount: { type: Number, default: 1 },
         videoStreamCount: { type: Number, default: 1 },
         expiryPackageDate: { type: Date },

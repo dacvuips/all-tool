@@ -27,6 +27,7 @@ const PLAN_KEY_MAP: Record<string, string> = {
 const FREE_PACKAGE_DEFAULTS = {
   videoLimit: 5,
   imageLimit: 10,
+  requestLimit: 5,
   imageStreamCount: 1,
   videoStreamCount: 1,
 };
@@ -63,6 +64,8 @@ export default {
           videoLimit: pkg.videoLimit,
           imageCount: pkg.imageCount,
           imageLimit: pkg.imageLimit,
+          requestCount: pkg.requestCount,
+          requestLimit: pkg.requestLimit,
           imageStreamCount: pkg.imageStreamCount,
           videoStreamCount: pkg.videoStreamCount,
           expiryPackageDate: pkg.expiryPackageDate,
@@ -72,6 +75,7 @@ export default {
         let packageConfig: {
           videoLimit: number;
           imageLimit: number;
+          requestLimit: number;
           imageStreamCount: number;
           videoStreamCount: number;
         };
@@ -92,6 +96,7 @@ export default {
           packageConfig = {
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
+            requestLimit: getValue("request-limit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
           };
@@ -102,10 +107,12 @@ export default {
           "googlePackage.subscription": subscription,
           "googlePackage.videoLimit": packageConfig.videoLimit,
           "googlePackage.imageLimit": packageConfig.imageLimit,
+          "googlePackage.requestLimit": packageConfig.requestLimit,
           "googlePackage.imageStreamCount": packageConfig.imageStreamCount,
           "googlePackage.videoStreamCount": packageConfig.videoStreamCount,
           "googlePackage.videoCount": 0,
           "googlePackage.imageCount": 0,
+          "googlePackage.requestCount": 0,
         };
 
         // Tự động tính expiryPackageDate theo loại gói
@@ -140,6 +147,8 @@ export default {
           videoLimit: updatedPkg.videoLimit,
           imageCount: updatedPkg.imageCount,
           imageLimit: updatedPkg.imageLimit,
+          requestCount: updatedPkg.requestCount,
+          requestLimit: updatedPkg.requestLimit,
           imageStreamCount: updatedPkg.imageStreamCount,
           videoStreamCount: updatedPkg.videoStreamCount,
           expiryPackageDate: updatedPkg.expiryPackageDate,
@@ -159,7 +168,11 @@ export default {
 
         // Tạo thông báo tới customer
         const notifyTitle = `Gói dịch vụ đã được cập nhật`;
-        const notifyBody = `Gói của bạn đã được điều chỉnh từ ${beforeSnapshot.subscription || "N/A"} sang ${afterSnapshot.subscription || "N/A"}.\nVideo: ${afterSnapshot.videoLimit}, Ảnh: ${afterSnapshot.imageLimit}.`;
+        const notifyBody = `Gói của bạn đã được điều chỉnh từ ${
+          beforeSnapshot.subscription || "N/A"
+        } sang ${afterSnapshot.subscription || "N/A"}.\nVideo: ${afterSnapshot.videoLimit}, Ảnh: ${
+          afterSnapshot.imageLimit
+        }.`;
         const notify = new NotificationBuilder(notifyTitle, notifyBody)
           .sendTo(NotificationTarget.CUSTOMER, customerId)
           .build();

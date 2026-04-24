@@ -74,6 +74,7 @@ interface PlanConfig {
   plan: SubscriptionPlanEnum;
   videoLimit: number;
   imageLimit: number;
+  requestLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
@@ -120,6 +121,20 @@ const EDITABLE_FIELDS: {
     label: "Ảnh đã dùng",
     icon: <HiPhotograph className="text-base" />,
     iconColor: "text-green-400",
+    type: "number",
+  },
+  {
+    key: "requestLimit",
+    label: "Giới hạn generation text",
+    icon: <RiStackLine className="text-base" />,
+    iconColor: "text-pink-500",
+    type: "number",
+  },
+  {
+    key: "requestCount",
+    label: "Generation text đã dùng",
+    icon: <RiStackLine className="text-base" />,
+    iconColor: "text-pink-400",
     type: "number",
   },
   {
@@ -183,6 +198,7 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
             plan,
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
+            requestLimit: getValue("request-limit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
             price: getValue("price"),
@@ -207,6 +223,8 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
       imageLimit: pkg.imageLimit ?? 0,
       videoCount: pkg.videoCount ?? 0,
       imageCount: pkg.imageCount ?? 0,
+      requestLimit: pkg.requestLimit ?? 0,
+      requestCount: pkg.requestCount ?? 0,
       videoStreamCount: pkg.videoStreamCount ?? 0,
       imageStreamCount: pkg.imageStreamCount ?? 0,
       expiryPackageDate: pkg.expiryPackageDate

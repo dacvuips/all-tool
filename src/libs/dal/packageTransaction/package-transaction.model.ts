@@ -15,6 +15,8 @@ const snapshotSchema = {
   videoLimit: { type: Number },
   imageCount: { type: Number },
   imageLimit: { type: Number },
+  requestCount: { type: Number },
+  requestLimit: { type: Number },
   imageStreamCount: { type: Number },
   videoStreamCount: { type: Number },
   expiryPackageDate: { type: Date },

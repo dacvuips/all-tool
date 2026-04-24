@@ -19,6 +19,8 @@ export interface PackageTransactionSnapshot {
   videoLimit?: number;
   imageCount?: number;
   imageLimit?: number;
+  requestCount?: number;
+  requestLimit?: number;
   imageStreamCount?: number;
   videoStreamCount?: number;
   expiryPackageDate?: string;
@@ -50,6 +52,8 @@ export class PackageTransactionRepository extends CrudRepository<PackageTransact
       videoLimit
       imageCount
       imageLimit
+      requestCount
+      requestLimit
       imageStreamCount
       videoStreamCount
       expiryPackageDate
@@ -60,6 +64,8 @@ export class PackageTransactionRepository extends CrudRepository<PackageTransact
       videoLimit
       imageCount
       imageLimit
+      requestCount
+      requestLimit
       imageStreamCount
       videoStreamCount
       expiryPackageDate

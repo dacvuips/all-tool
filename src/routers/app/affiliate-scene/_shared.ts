@@ -436,6 +436,34 @@ export async function incrementVideoCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": 1 } });
 }
 
+/**
+ * Kiểm tra giới hạn generation text của customer. Throw error 403 nếu vượt quá.
+ */
+export async function checkRequestLimit(customerId: string): Promise<void> {
+  const customer = await CustomerModel.findById(customerId)
+    .select("googlePackage.requestCount googlePackage.requestLimit")
+    .lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+  const currentCount = customer.googlePackage?.requestCount || 0;
+  const limit = customer.googlePackage?.requestLimit || 0;
+  if (currentCount + 1 > limit) {
+    const err: any = new Error(
+      `Bạn đã vượt quá giới hạn generation text (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+/** Tăng requestCount lên 1 sau khi generation text thành công */
+export async function incrementRequestCount(customerId: string): Promise<void> {
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.requestCount": 1 } });
+}
+
 export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;

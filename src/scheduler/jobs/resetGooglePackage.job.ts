@@ -9,18 +9,33 @@ import {
   PackageTransactionSnapshot,
 } from "../../libs/dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../libs/dal/packageTransaction/package-transaction.model";
+import { SettingHelper } from "../../packages/setting-helper";
 import { Agenda } from "../agenda";
 
-/** Giá trị mặc định khi hạ xuống gói Free */
-const FREE_PACKAGE_DEFAULTS = {
-  subscription: SubscriptionPlanEnum.FREE,
-  videoCount: 0,
-  videoLimit: 5,
-  imageCount: 0,
-  imageLimit: 10,
-  imageStreamCount: 1,
-  videoStreamCount: 1,
-};
+/** Lấy thông số gói Free từ Setting (không hardcode) */
+async function loadFreePackageDefaults() {
+  const plan = SubscriptionPlanEnum.FREE;
+  const [videoLimit, imageLimit, requestLimit, imageStreamCount, videoStreamCount] =
+    await SettingHelper.loadMany([
+      `pk-${plan}-video-limit`,
+      `pk-${plan}-image-limit`,
+      `pk-${plan}-request-limit`,
+      `pk-${plan}-image-stream-count`,
+      `pk-${plan}-video-stream-count`,
+    ]);
+
+  return {
+    subscription: SubscriptionPlanEnum.FREE,
+    videoCount: 0,
+    videoLimit: Number(videoLimit) || 5,
+    imageCount: 0,
+    imageLimit: Number(imageLimit) || 10,
+    requestCount: 0,
+    requestLimit: Number(requestLimit) || 5,
+    imageStreamCount: Number(imageStreamCount) || 1,
+    videoStreamCount: Number(videoStreamCount) || 1,
+  };
+}
 
 export class ResetGooglePackageJob {
   static jobName = "ResetGooglePackage";
@@ -34,10 +49,13 @@ export class ResetGooglePackageJob {
     logger.info(`[${ResetGooglePackageJob.jobName}] Started at ${moment(now).format()}`);
 
     try {
-      // Lấy tất cả customer có subscription KHÔNG phải Free và Trial
+      // Lấy thông số gói Free từ settings
+      const freeDefaults = await loadFreePackageDefaults();
+
+      // Lấy tất cả customer có subscription KHÔNG phải Trial (bao gồm cả Free)
       const customers = await CustomerModel.find({
         "googlePackage.subscription": {
-          $nin: [SubscriptionPlanEnum.FREE, SubscriptionPlanEnum.TRIAL],
+          $nin: [SubscriptionPlanEnum.TRIAL],
         },
       }).lean();
 
@@ -52,40 +70,53 @@ export class ResetGooglePackageJob {
       for (const customer of customers) {
         try {
           const pkg = customer.googlePackage || {};
+          const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
           const expiryDate = pkg.expiryPackageDate ? new Date(pkg.expiryPackageDate) : null;
 
-          if (expiryDate && expiryDate > now) {
-            // Gói còn hạn → chỉ reset count về 0, KHÔNG lưu PackageTransact
+          if (isFree || (expiryDate && expiryDate > now)) {
+            // Gói Free hoặc gói còn hạn → chỉ reset count về 0
+            const updateSet: Record<string, any> = {
+              "googlePackage.videoCount": 0,
+              "googlePackage.imageCount": 0,
+              "googlePackage.requestCount": 0,
+            };
+
+            // Nếu là gói Free, đồng bộ lại limit từ settings
+            if (isFree) {
+              updateSet["googlePackage.videoLimit"] = freeDefaults.videoLimit;
+              updateSet["googlePackage.imageLimit"] = freeDefaults.imageLimit;
+              updateSet["googlePackage.requestLimit"] = freeDefaults.requestLimit;
+              updateSet["googlePackage.imageStreamCount"] = freeDefaults.imageStreamCount;
+              updateSet["googlePackage.videoStreamCount"] = freeDefaults.videoStreamCount;
+            }
+
             await CustomerModel.updateOne(
               { _id: customer._id },
-              {
-                $set: {
-                  "googlePackage.videoCount": 0,
-                  "googlePackage.imageCount": 0,
-                },
-              }
+              { $set: updateSet }
             );
 
             logger.info(
-              `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription} (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})`
+              `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription}${isFree ? "" : ` (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})`}`
             );
 
             resetCount++;
           } else {
-            // Gói hết hạn → hạ xuống Free với thông số mặc định
+            // Gói hết hạn → hạ xuống Free với thông số từ settings
             const beforeSnapshot: PackageTransactionSnapshot = {
               subscription: pkg.subscription,
               videoCount: pkg.videoCount,
               videoLimit: pkg.videoLimit,
               imageCount: pkg.imageCount,
               imageLimit: pkg.imageLimit,
+              requestCount: pkg.requestCount,
+              requestLimit: pkg.requestLimit,
               imageStreamCount: pkg.imageStreamCount,
               videoStreamCount: pkg.videoStreamCount,
               expiryPackageDate: pkg.expiryPackageDate,
             };
 
             const afterSnapshot: PackageTransactionSnapshot = {
-              ...FREE_PACKAGE_DEFAULTS,
+              ...freeDefaults,
               expiryPackageDate: undefined,
             };
 
@@ -93,13 +124,15 @@ export class ResetGooglePackageJob {
               { _id: customer._id },
               {
                 $set: {
-                  "googlePackage.subscription": FREE_PACKAGE_DEFAULTS.subscription,
-                  "googlePackage.videoCount": FREE_PACKAGE_DEFAULTS.videoCount,
-                  "googlePackage.videoLimit": FREE_PACKAGE_DEFAULTS.videoLimit,
-                  "googlePackage.imageCount": FREE_PACKAGE_DEFAULTS.imageCount,
-                  "googlePackage.imageLimit": FREE_PACKAGE_DEFAULTS.imageLimit,
-                  "googlePackage.imageStreamCount": FREE_PACKAGE_DEFAULTS.imageStreamCount,
-                  "googlePackage.videoStreamCount": FREE_PACKAGE_DEFAULTS.videoStreamCount,
+                  "googlePackage.subscription": freeDefaults.subscription,
+                  "googlePackage.videoCount": freeDefaults.videoCount,
+                  "googlePackage.videoLimit": freeDefaults.videoLimit,
+                  "googlePackage.imageCount": freeDefaults.imageCount,
+                  "googlePackage.imageLimit": freeDefaults.imageLimit,
+                  "googlePackage.requestCount": freeDefaults.requestCount,
+                  "googlePackage.requestLimit": freeDefaults.requestLimit,
+                  "googlePackage.imageStreamCount": freeDefaults.imageStreamCount,
+                  "googlePackage.videoStreamCount": freeDefaults.videoStreamCount,
                 },
                 $unset: {
                   "googlePackage.expiryPackageDate": "",
@@ -137,3 +170,4 @@ export class ResetGooglePackageJob {
 }
 
 export default ResetGooglePackageJob;
+

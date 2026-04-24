@@ -18,6 +18,8 @@ export type PackageTransactionSnapshot = {
   videoLimit?: number;
   imageCount?: number;
   imageLimit?: number;
+  requestCount?: number;
+  requestLimit?: number;
   imageStreamCount?: number;
   videoStreamCount?: number;
   expiryPackageDate?: Date;

@@ -19,6 +19,8 @@ export default {
       imageLimit: Int
       videoCount: Int
       imageCount: Int
+      requestCount: Int
+      requestLimit: Int
       imageStreamCount: Int
       videoStreamCount: Int
       expiryPackageDate: DateTime
@@ -49,6 +51,8 @@ export default {
           videoLimit: pkg.videoLimit,
           imageCount: pkg.imageCount,
           imageLimit: pkg.imageLimit,
+          requestCount: pkg.requestCount,
+          requestLimit: pkg.requestLimit,
           imageStreamCount: pkg.imageStreamCount,
           videoStreamCount: pkg.videoStreamCount,
           expiryPackageDate: pkg.expiryPackageDate,
@@ -73,6 +77,14 @@ export default {
         if (data.imageCount !== undefined && data.imageCount !== null) {
           updateFields["googlePackage.imageCount"] = data.imageCount;
           changedFields.push(`imageCount: ${pkg.imageCount ?? "N/A"} → ${data.imageCount}`);
+        }
+        if (data.requestCount !== undefined && data.requestCount !== null) {
+          updateFields["googlePackage.requestCount"] = data.requestCount;
+          changedFields.push(`requestCount: ${pkg.requestCount ?? "N/A"} → ${data.requestCount}`);
+        }
+        if (data.requestLimit !== undefined && data.requestLimit !== null) {
+          updateFields["googlePackage.requestLimit"] = data.requestLimit;
+          changedFields.push(`requestLimit: ${pkg.requestLimit ?? "N/A"} → ${data.requestLimit}`);
         }
         if (data.imageStreamCount !== undefined && data.imageStreamCount !== null) {
           updateFields["googlePackage.imageStreamCount"] = data.imageStreamCount;
@@ -112,6 +124,8 @@ export default {
           videoLimit: updatedPkg.videoLimit,
           imageCount: updatedPkg.imageCount,
           imageLimit: updatedPkg.imageLimit,
+          requestCount: updatedPkg.requestCount,
+          requestLimit: updatedPkg.requestLimit,
           imageStreamCount: updatedPkg.imageStreamCount,
           videoStreamCount: updatedPkg.videoStreamCount,
           expiryPackageDate: updatedPkg.expiryPackageDate,

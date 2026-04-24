@@ -19,6 +19,7 @@ export type SubscriptionPlanOption = {
   label: string;
   videoLimit: number;
   imageLimit: number;
+  requestLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
@@ -54,6 +55,8 @@ export type GooglePackage = {
   videoLimit?: number; // Giới hạn video
   imageCount?: number; // Số ảnh đã dùng
   imageLimit?: number; // Giới hạn ảnh
+  requestCount?: number; // Số lần generation text đã dùng
+  requestLimit?: number; // Giới hạn generation text
   imageStreamCount?: number; // Số luồng ảnh đồng thời
   videoStreamCount?: number; // Số luồng video đồng thời
   expiryPackageDate?: Date; // Ngày hết hạn gói

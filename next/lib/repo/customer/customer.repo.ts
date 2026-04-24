@@ -16,6 +16,8 @@ export type GooglePackage = {
   videoLimit?: number;
   imageCount?: number;
   imageLimit?: number;
+  requestCount?: number;
+  requestLimit?: number;
   imageStreamCount?: number;
   videoStreamCount?: number;
   expiryPackageDate?: Date;
@@ -71,6 +73,8 @@ export class CustomerRepository extends CrudRepository<Customer> {
       videoLimit: Int
       imageCount: Int
       imageLimit: Int
+      requestCount: Int
+      requestLimit: Int
       imageStreamCount: Int
       videoStreamCount: Int
       expiryPackageDate: DateTime
@@ -107,6 +111,8 @@ export class CustomerRepository extends CrudRepository<Customer> {
       videoLimit: Int
       imageCount: Int
       imageLimit: Int
+      requestCount: Int
+      requestLimit: Int
       imageStreamCount: Int
       videoStreamCount: Int
       expiryPackageDate: DateTime
@@ -284,6 +290,8 @@ export class CustomerRepository extends CrudRepository<Customer> {
       imageLimit?: number;
       videoCount?: number;
       imageCount?: number;
+      requestCount?: number;
+      requestLimit?: number;
       imageStreamCount?: number;
       videoStreamCount?: number;
       expiryPackageDate?: string;

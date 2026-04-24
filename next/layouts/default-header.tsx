@@ -740,57 +740,38 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
     <>
       <div
         ref={packageRef}
-        className="flex items-center h-8 border border-gray-300 rounded-full bg-gray-50 overflow-hidden text-sm  cursor-default"
+        className="flex items-center h-8 border border-gray-300 rounded-lg gray-50 overflow-hidden text-sm  cursor-default"
       >
-        <span
-          className={`px-2.5 text-gray-700 font-semibold whitespace-nowrap ${
-            !compact ? "border-r border-gray-300" : ""
-          }`}
-        >
+        <span className="px-2.5 text-gray-700 font-semibold whitespace-nowrap">
           {t("Gói")}:{" "}
           <span className="text-gray-900">
             {customer?.googlePackage?.subscription || t("Dùng thử")}
           </span>
         </span>
-        {!compact && (
-          <>
-            <span className="px-2.5 text-gray-600 whitespace-nowrap border-r border-gray-300">
-              Video:{" "}
-              <span className="font-semibold  text-gray-900">
-                {customer?.googlePackage?.videoCount ?? 0}
-              </span>
-              <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
-            </span>
-            <span className="px-2.5 text-gray-600 whitespace-nowrap">
-              {t("Ảnh")}:{" "}
-              <span className="font-semibold   text-gray-900">
-                {customer?.googlePackage?.imageCount ?? 0}
-              </span>
-              <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
-            </span>
-          </>
-        )}
       </div>
       <Popover reference={packageRef} trigger="hover" placement="bottom" arrow>
         <div className="p-2 text-sm space-y-1">
-          {compact && (
-            <>
-              <div className="text-gray-600 whitespace-nowrap">
-                Video:{" "}
-                <span className="font-semibold text-gray-900">
-                  {customer?.googlePackage?.videoCount ?? 0}
-                </span>
-                <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
-              </div>
-              <div className="text-gray-600 whitespace-nowrap">
-                {t("Ảnh")}:{" "}
-                <span className="font-semibold text-gray-900">
-                  {customer?.googlePackage?.imageCount ?? 0}
-                </span>
-                <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
-              </div>
-            </>
-          )}
+          <div className="text-gray-600 whitespace-nowrap">
+            Video:{" "}
+            <span className="font-semibold text-gray-900">
+              {customer?.googlePackage?.videoCount ?? 0}
+            </span>
+            <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
+          </div>
+          <div className="text-gray-600 whitespace-nowrap">
+            {t("Ảnh")}:{" "}
+            <span className="font-semibold text-gray-900">
+              {customer?.googlePackage?.imageCount ?? 0}
+            </span>
+            <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
+          </div>
+          <div className="text-gray-600 whitespace-nowrap">
+            {t("Text")}:{" "}
+            <span className="font-semibold text-gray-900">
+              {customer?.googlePackage?.requestCount ?? 0}
+            </span>
+            <span className="text-gray-400"> /{customer?.googlePackage?.requestLimit ?? 0}</span>
+          </div>
           <div
             className={`whitespace-nowrap ${
               isExpired ? "text-red-600 font-semibold" : "text-gray-700"

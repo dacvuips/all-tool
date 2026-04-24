@@ -26,6 +26,8 @@ class CustomerGetInfoUsecase extends BaseUsecase {
         videoLimit: 0,
         imageCount: 0,
         imageLimit: 0,
+        requestCount: 0,
+        requestLimit: 0,
         imageStreamCount: 0,
         videoStreamCount: 0,
         expiryPackageDate: null,

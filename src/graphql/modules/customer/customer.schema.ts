@@ -120,6 +120,10 @@ const schema = gql`
     imageCount: Int
     "Giới hạn ảnh"
     imageLimit: Int
+    "Số lần generation text đã dùng"
+    requestCount: Int
+    "Giới hạn generation text"
+    requestLimit: Int
     "Số luồng ảnh đồng thời"
     imageStreamCount: Int
     "Số luồng video đồng thời"
@@ -138,6 +142,10 @@ const schema = gql`
     imageCount: Int
     "Giới hạn ảnh"
     imageLimit: Int
+    "Số lần generation text đã dùng"
+    requestCount: Int
+    "Giới hạn generation text"
+    requestLimit: Int
     "Số luồng ảnh đồng thời"
     imageStreamCount: Int
     "Số luồng video đồng thời"

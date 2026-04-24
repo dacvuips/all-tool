@@ -32,6 +32,7 @@ interface PlanConfig {
   plan: SubscriptionPlanEnum;
   videoLimit: number;
   imageLimit: number;
+  requestLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
@@ -133,6 +134,7 @@ export default function PricingPage() {
             plan,
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
+            requestLimit: getValue("request-limit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
             price: getValue("price"),
@@ -158,6 +160,9 @@ export default function PricingPage() {
     features.push(`${t("Tạo tối đa")} ${formatNumber(config.videoLimit)} video / ${t("ngày")}`);
     features.push(
       `${t("Tạo tối đa")} ${formatNumber(config.imageLimit)} ${t("hình ảnh")} / ${t("ngày")}`
+    );
+    features.push(
+      `${t("Tối đa")} ${formatNumber(config.requestLimit)} ${t("lượt generation text")} / ${t("ngày")}`
     );
     features.push(
       `${t("Tối đa")} ${formatNumber(config.videoStreamCount)} ${t("luồng video cùng lúc")}`
