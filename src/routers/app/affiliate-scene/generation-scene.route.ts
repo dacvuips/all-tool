@@ -6,7 +6,7 @@ import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   AffiliateVideoFormConfig,
   callWithKeyRotation,
-  getAdminGeminiClients,
+  getAvailableGeminiClients,
   interpolateTemplate,
 } from "./_shared";
 
@@ -29,7 +29,7 @@ export default [
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        const clients = await getAdminGeminiClients();
+        const clients = await getAvailableGeminiClients();
 
         const prompt = `
 

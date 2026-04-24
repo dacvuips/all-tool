@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import logger from "../../../helpers/logger";
+import redis from "../../../helpers/redis";
 import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
@@ -7,7 +8,12 @@ import { decryptProviderSecret } from "../../../packages/encryption/encrypt-prov
 import { CaptchaResponseData } from "../../helpers/validateApiKey";
 
 const AI_MAX_RETRIES = 5;
-const SERVICE_UNAVAILABLE_RETRIES = 5;
+const REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED = "gemini:daily_quota_exhausted";
+
+export interface GeminiClientEntry {
+  client: InstanceType<typeof GoogleGenAI>;
+  apiKey: string;
+}
 
 /** Generate a simple UUID v4 string */
 export function generateUUID(): string {
@@ -98,6 +104,114 @@ export async function getAdminGeminiClients(): Promise<InstanceType<typeof Googl
   return apiKeys.map((k) => createGeminiClient(k));
 }
 
+// ──────────────── Redis daily quota helpers ────────────────
+
+/**
+ * Tính số giây còn lại cho đến 00:00 Pacific Time (PST/PDT).
+ */
+function getSecondsUntilMidnightPacific(): number {
+  const now = new Date();
+  const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+  const pacificNow = new Date(pacificStr);
+  const h = pacificNow.getHours();
+  const m = pacificNow.getMinutes();
+  const s = pacificNow.getSeconds();
+  const secondsSinceMidnight = h * 3600 + m * 60 + s;
+  const secondsInDay = 24 * 3600;
+  return secondsSinceMidnight === 0 ? secondsInDay : secondsInDay - secondsSinceMidnight;
+}
+
+/**
+ * Kiểm tra xem error có phải lỗi daily quota free-tier (limit: 20) hay không.
+ */
+function isDailyQuotaExhaustedError(err: any): boolean {
+  const msg = (err?.message || "").toString();
+  return (
+    msg.includes("limit: 20") ||
+    msg.includes('"quotaValue":"20"') ||
+    msg.includes('\\"quotaValue\\":\\"20\\"')
+  );
+}
+
+/**
+ * Thêm API key vào danh sách blacklist trên Redis (hết daily quota).
+ * Key sẽ tự động hết hạn vào 00:00 Pacific Time.
+ */
+async function blacklistGeminiKeyForDay(apiKey: string): Promise<void> {
+  try {
+    const ttl = getSecondsUntilMidnightPacific();
+    await redis.sadd(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED, apiKey);
+    await redis.expire(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED, ttl);
+    logger.info(
+      `[blacklistGeminiKey] API key ***${apiKey.slice(
+        -6
+      )} đã bị blacklist ${ttl}s (đến 00:00 Pacific).`
+    );
+  } catch (redisErr: any) {
+    logger.error(`[blacklistGeminiKey] Lỗi Redis: ${redisErr?.message}`);
+  }
+}
+
+/**
+ * Lấy danh sách API keys đang bị blacklist (hết daily quota) từ Redis.
+ */
+export async function getBlacklistedGeminiKeys(): Promise<Set<string>> {
+  try {
+    const members = await redis.smembers(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED);
+    return new Set(members);
+  } catch (redisErr: any) {
+    logger.error(`[getBlacklistedGeminiKeys] Lỗi Redis: ${redisErr?.message}`);
+    return new Set();
+  }
+}
+
+/**
+ * Lấy danh sách Gemini clients còn available (loại bỏ key đã bị blacklist daily quota).
+ * Throw error nếu không còn key nào khả dụng.
+ */
+export async function getAvailableGeminiClients(): Promise<GeminiClientEntry[]> {
+  const credentialDoc = (await credentialService.findOne({
+    key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+    isAdminCredential: true,
+  })) as any;
+  const credential = credentialDoc?._doc;
+  if (!credential?.value) {
+    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
+    err.statusCode = 403;
+    throw err;
+  }
+  const apiKeys = parseMultipleKeys(credential.value);
+  if (apiKeys.length === 0) {
+    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  // Lấy danh sách key bị blacklist từ Redis
+  const blacklistedKeys = await getBlacklistedGeminiKeys();
+  const availableKeys = apiKeys.filter((k) => !blacklistedKeys.has(k));
+
+  if (availableKeys.length === 0) {
+    const err: any = new Error(
+      `Tất cả ${apiKeys.length} API keys đều đã hết daily quota (free tier). Vui lòng đợi đến 00:00 Pacific Time.`
+    );
+    err.statusCode = 429;
+    throw err;
+  }
+
+  logger.info(
+    `[getAvailableGeminiClients] ${availableKeys.length}/${apiKeys.length} keys khả dụng (${blacklistedKeys.size} bị blacklist).`
+  );
+
+  // Xáo trộn ngẫu nhiên
+  for (let i = availableKeys.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [availableKeys[i], availableKeys[j]] = [availableKeys[j], availableKeys[i]];
+  }
+
+  return availableKeys.map((k) => ({ client: createGeminiClient(k), apiKey: k }));
+}
+
 /**
  * (Backward compat) Lấy 1 GoogleGenAI client duy nhất (key đầu tiên).
  */
@@ -157,22 +271,20 @@ function isServiceUnavailableError(err: any): boolean {
 /**
  * Gọi AI API với cơ chế xoay vòng nhiều API key:
  * - Nếu 429 / quota exceeded → nhảy sang API key tiếp theo.
- * - Nếu 503 → retry tối đa SERVICE_UNAVAILABLE_RETRIES lần cho key đó, rồi mới nhảy sang key tiếp.
+ * - Nếu 503 → nhảy sang API key tiếp theo ngay.
  * - Các lỗi khác → throw ngay.
  * - Nếu tất cả key đều thất bại → throw error cuối cùng.
  */
 export async function callWithKeyRotation<T>(
-  clients: InstanceType<typeof GoogleGenAI>[],
+  entries: GeminiClientEntry[],
   fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
   label: string
 ): Promise<T> {
   let lastError: any;
-  for (let keyIdx = 0; keyIdx < clients.length; keyIdx++) {
-    const client = clients[keyIdx];
-    const keyLabel = `key ${keyIdx + 1}/${clients.length}`;
+  for (let keyIdx = 0; keyIdx < entries.length; keyIdx++) {
+    const { client, apiKey } = entries[keyIdx];
+    const keyLabel = `key ${keyIdx + 1}/${entries.length}`;
 
-    // Đối với mỗi key, thử gọi; nếu 503 thì retry tối đa SERVICE_UNAVAILABLE_RETRIES lần
-    let retriesFor503 = 0;
     let shouldTryNextKey = false;
 
     while (true) {
@@ -186,24 +298,18 @@ export async function callWithKeyRotation<T>(
           logger.warn(
             `[${label}] ${keyLabel} bị 429/quota: ${err?.message}. Chuyển sang key tiếp theo.`
           );
+          // Nếu là daily quota exhausted (free tier limit: 20) → blacklist key trên Redis
+          if (isDailyQuotaExhaustedError(err)) {
+            await blacklistGeminiKeyForDay(apiKey);
+          }
           shouldTryNextKey = true;
           break;
         }
 
         if (isServiceUnavailableError(err)) {
-          retriesFor503++;
-          if (retriesFor503 >= SERVICE_UNAVAILABLE_RETRIES) {
-            logger.warn(
-              `[${label}] ${keyLabel} bị 503 sau ${retriesFor503} lần retry. Chuyển sang key tiếp theo.`
-            );
-            shouldTryNextKey = true;
-            break;
-          }
-          logger.warn(
-            `[${label}] ${keyLabel} bị 503 (lần ${retriesFor503}/${SERVICE_UNAVAILABLE_RETRIES}). Retry sau 1s...`
-          );
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-          continue;
+          logger.warn(`[${label}] ${keyLabel} bị 503: ${err?.message}. Chuyển sang key tiếp theo.`);
+          shouldTryNextKey = true;
+          break;
         }
 
         // Lỗi khác (400, 401, 403, 500...) → throw ngay
@@ -216,7 +322,7 @@ export async function callWithKeyRotation<T>(
   }
 
   // Tất cả key đều thất bại
-  logger.error(`[${label}] Tất cả ${clients.length} API key đều thất bại.`);
+  logger.error(`[${label}] Tất cả ${entries.length} API key đều thất bại.`);
   throw lastError;
 }
 

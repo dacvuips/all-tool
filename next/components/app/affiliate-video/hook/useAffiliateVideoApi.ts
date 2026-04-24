@@ -248,9 +248,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const err = await res.json().catch(() => ({}));
         const message = err?.message || `Lỗi ${res.status}`;
         toast.error(message);
+        return undefined;
       }
 
-      return res?.json();
+      return res.json();
     },
     [toast]
   );
@@ -353,6 +354,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         const result = await res.json();
@@ -428,6 +430,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         // Read SSE stream
@@ -531,6 +534,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         // Read SSE stream
@@ -644,6 +648,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         const result = await res.json();
@@ -673,6 +678,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         const result = await res.json();
@@ -700,6 +706,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           toast.error(message);
+          return undefined;
         }
 
         const result = await res.json();
