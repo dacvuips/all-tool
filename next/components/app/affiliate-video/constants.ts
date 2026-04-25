@@ -240,3 +240,8 @@ export const CACHE_KEY = {
   lastScript: "lastScript",
   generateInput: "generateInput",
 };
+
+export enum TAB_TYPE {
+  single = "single",
+  batch = "batch",
+}

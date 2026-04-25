@@ -31,10 +31,15 @@ export default [
 
         const clients = await getAvailableGeminiClients();
 
+        const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
+        const batchSizeInstruction = hasBatchSize
+          ? `Your task is to generate exactly {{batchSize}} cinematic scenes`
+          : `Your task is to generate an appropriate number of cinematic scenes (decide based on the script content, typically 4-8 scenes)`;
+
         const prompt = `
 
 Create a consistent multi-scene AI video prompt using:
-{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. Your task is to generate exactly {{batchSize}} cinematic scenes for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
+{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. ${batchSizeInstruction} for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
 Create 2 fixed English anchors:
 
 CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}

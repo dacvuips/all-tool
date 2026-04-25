@@ -9,6 +9,7 @@ import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { RiCameraLensFill, RiCloseLine, RiLoader4Fill, RiMagicFill } from "react-icons/ri";
 import { Button, Form } from "../../../shared/utilities/form";
+import { TAB_TYPE } from "../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
@@ -70,13 +71,22 @@ const SuggestButton = () => {
 };
 
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
-export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
+export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: TAB_TYPE }) => {
   const { t } = useTranslation();
   const { handleSubmit, defaultVideoConfig } = useAffiliateVideoContext();
 
+  /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
+  const wrappedSubmit = (data: any, promptText?: string) => {
+    if (type === TAB_TYPE.single) {
+      const { batchSize, ...rest } = data;
+      return handleSubmit?.(rest, promptText);
+    }
+    return handleSubmit?.(data, promptText);
+  };
+
   return (
     <Form
-      onSubmit={handleSubmit}
+      onSubmit={wrappedSubmit}
       defaultValues={defaultVideoConfig}
       className="flex flex-col h-full"
     >
@@ -104,7 +114,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="flex-1 min-h-0 overflow-y-auto v-scrollbar bg-white">
-        <AffiliateConfig />
+        <AffiliateConfig type={type} />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

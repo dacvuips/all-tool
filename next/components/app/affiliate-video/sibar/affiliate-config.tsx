@@ -14,12 +14,14 @@ import {
   CATEGORY_OPTIONS,
   LANGUAGE_OPTIONS,
   MOOD_OPTIONS,
+  TAB_TYPE,
 } from "../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { BatchSizeSlider } from "./batch-size-slider";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
   const { t } = useTranslation();
   const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
   return (
@@ -163,22 +165,13 @@ export const AffiliateConfig = () => {
           </Field>
         </div>
 
-        {/* SỐ LƯỢNG VIDEO (batchSize) */}
-        <div>
-          <Field noError name="batchSize" label={t("Số lượng video")}>
-            <Select
-              native
-              id="batch-size-select"
-              className="border-gray-200"
-              options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15].map((n) => ({
-                value: String(n),
-                label: String(n),
-              }))}
-              value={String(videoConfig?.batchSize ?? 1)}
-              onChange={(v) => patchConfig && patchConfig({ batchSize: Number(v) })}
-            />
-          </Field>
-        </div>
+        {/* SỐ LƯỢNG MẸO CẦN TẠO (batchSize) */}
+        {type == TAB_TYPE.batch && (
+          <BatchSizeSlider
+            value={videoConfig?.batchSize ?? 8}
+            onChange={(v) => patchConfig && patchConfig({ batchSize: v })}
+          />
+        )}
       </div>
     </div>
   );
