@@ -15,8 +15,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript } from "../constants";
-import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───
 const IMAGE_CONCURRENCY = 2;
@@ -113,7 +113,15 @@ export function useBatchActions(scenes: SceneScript[]) {
     } finally {
       setTtsGenerating(false);
     }
-  }, [ttsGenerating, dialogueExportText, ttsVoiceName, audioExportText, generateAudioTTS, toast, t]);
+  }, [
+    ttsGenerating,
+    dialogueExportText,
+    ttsVoiceName,
+    audioExportText,
+    generateAudioTTS,
+    toast,
+    t,
+  ]);
 
   const handleDownloadTTSAudio = useCallback(() => {
     if (!ttsAudioUrl) return;
@@ -523,10 +531,12 @@ export function useBatchActions(scenes: SceneScript[]) {
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motionPrompt}`
               : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
-            images: [{
-              imageBytes: existingImage.imageBytes,
-              mimeType: existingImage.mimeType,
-            }],
+            images: [
+              {
+                imageBytes: existingImage.imageBytes,
+                mimeType: existingImage.mimeType,
+              },
+            ],
           });
           completed++;
           setVideoBatchCompleted(completed);
@@ -787,7 +797,6 @@ export function useBatchActions(scenes: SceneScript[]) {
     const headers = [
       t("Cảnh"),
       t("Camera"),
-      t("Visual Prompt"),
       t("Image Gen Prompt"),
       t("Motion Prompt"),
       t("Dialogue"),

@@ -140,6 +140,25 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
     };
   }, []);
 
+  // ── Sync batch generation state with simulated progress ──
+  useEffect(() => {
+    if (isBatchGenerating && !generatingImage) {
+      setImageProgress(0);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+    } else if (!isBatchGenerating && !generatingImage) {
+      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
+    }
+  }, [isBatchGenerating, generatingImage, startSimulatedProgress, stopSimulatedProgress]);
+
+  useEffect(() => {
+    if (isBatchGeneratingVideo && !generatingVideo) {
+      setVideoProgress(0);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+    } else if (!isBatchGeneratingVideo && !generatingVideo) {
+      stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
+    }
+  }, [isBatchGeneratingVideo, generatingVideo, startSimulatedProgress, stopSimulatedProgress]);
+
   // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // Re-check whenever batch generating state changes (image may have been saved)
   useEffect(() => {

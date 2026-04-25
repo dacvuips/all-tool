@@ -281,48 +281,54 @@ export async function callWithKeyRotation<T>(
   label: string
 ): Promise<T> {
   let lastError: any;
-  for (let keyIdx = 0; keyIdx < entries.length; keyIdx++) {
+  const exhaustedKeys = new Set<string>();
+  let keyIdx = 0;
+
+  while (exhaustedKeys.size < entries.length) {
     const { client, apiKey } = entries[keyIdx];
     const keyLabel = `key ${keyIdx + 1}/${entries.length}`;
 
-    let shouldTryNextKey = false;
-
-    while (true) {
-      try {
-        const result = await fn(client);
-        return result;
-      } catch (err: any) {
-        lastError = err;
-
-        if (isRateLimitOrQuotaError(err)) {
-          logger.warn(
-            `[${label}] ${keyLabel} bị 429/quota: ${err?.message}. Chuyển sang key tiếp theo.`
-          );
-          // Nếu là daily quota exhausted (free tier limit: 20) → blacklist key trên Redis
-          if (isDailyQuotaExhaustedError(err)) {
-            await blacklistGeminiKeyForDay(apiKey);
-          }
-          shouldTryNextKey = true;
-          break;
-        }
-
-        if (isServiceUnavailableError(err)) {
-          logger.warn(`[${label}] ${keyLabel} bị 503: ${err?.message}. Chuyển sang key tiếp theo.`);
-          shouldTryNextKey = true;
-          break;
-        }
-
-        // Lỗi khác (400, 401, 403, 500...) → throw ngay
-        logger.error(`[${label}] ${keyLabel} lỗi không thể retry: ${err?.message}`);
-        throw err;
-      }
+    // Bỏ qua nếu key này đã bị giới hạn daily quota
+    if (exhaustedKeys.has(apiKey)) {
+      keyIdx = (keyIdx + 1) % entries.length;
+      continue;
     }
 
-    if (!shouldTryNextKey) break;
+    try {
+      const result = await fn(client);
+      return result;
+    } catch (err: any) {
+      lastError = err;
+
+      if (isRateLimitOrQuotaError(err)) {
+        logger.warn(
+          `[${label}] ${keyLabel} bị 429/quota: ${err?.message}. Chuyển sang key tiếp theo.`
+        );
+        // Nếu là daily quota exhausted (free tier limit: 20) → blacklist key trên Redis
+        if (isDailyQuotaExhaustedError(err)) {
+          await blacklistGeminiKeyForDay(apiKey);
+          exhaustedKeys.add(apiKey);
+        }
+        keyIdx = (keyIdx + 1) % entries.length;
+        continue;
+      }
+
+      if (isServiceUnavailableError(err)) {
+        logger.warn(`[${label}] ${keyLabel} bị 503: ${err?.message}. Chờ 3-6s rồi chuyển sang key tiếp theo.`);
+        const delayMs = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        keyIdx = (keyIdx + 1) % entries.length;
+        continue;
+      }
+
+      // Lỗi khác (400, 401, 403, 500...) → throw ngay
+      logger.error(`[${label}] ${keyLabel} lỗi không thể retry: ${err?.message}`);
+      throw err;
+    }
   }
 
   // Tất cả key đều thất bại
-  logger.error(`[${label}] Tất cả ${entries.length} API key đều thất bại.`);
+  logger.error(`[${label}] Tất cả ${entries.length} API key đều thất bại (hết quota daily).`);
   throw lastError;
 }
 

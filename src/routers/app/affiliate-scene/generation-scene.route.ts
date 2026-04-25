@@ -34,34 +34,33 @@ export default [
         const prompt = `
 
 Create a consistent multi-scene AI video prompt using:
-{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. Your task is to generate exactly {{batchSize}} cinematic scenes for a short-form video based on the following configuration.
+{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. Your task is to generate exactly {{batchSize}} cinematic scenes for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
 Create 2 fixed English anchors:
 
 CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}
 
 ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view
+Generate "visualEffects" as one polished English sentence.
+It must make the scene feel visually rich, magical, and cinematic in a Pixar-like way.
+Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
+Keep it concise, vivid, and scene-specific.
 
 - Return valid JSON only. Each scene
 CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
-
 {
   "topicTitle": "in {{language}}",
   "artStyle": "{{artStyle}}",
   "camera": one exact value from CAMERA_TYPE,
-  "cast": [{"name": "in {{language}}", "tag": "main", "description": "CHARACTER_ANCHOR"}],
   "characterName": "same as main name in {{language}}",
   "characterBaseDescription": "CHARACTER_ANCHOR",
   "environment": "ENVIRONMENT_ANCHOR",
   "voiceGender": "male or female",
   "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "visualPrompt": "English scene summary",
-  "motionPrompt": "[camera]: camera movement, character action, scene progression",
-  "imageGenPrompt": "Composite image generation prompt built as: CHARACTER_ANCHOR + ", " + [motionPrompt] + ". Setting: " + ENVIRONMENT_ANCHOR + ". " + [artStyle] (in English)",
-  "audio": "voice metadata in {{language}}",
-  "dialogue": "dialogue/narration in {{language}}"
+  "motionPrompt": "camera movement, character action, scene progression",   
+  "audio": "voice metada  ta in {{language}}",
+  "dialogue": " dialogue/narration in {{language}}"
 }
-
-CRITICAL RULE: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text. English for prompts/descriptions/environment. {{language}} for title/name/audio/dialogue. Always keep character and environment identical.   
+CRITICAL RULE: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text. Always keep character and environment identical.   
 `;
 
         // Thay thế placeholder trong text
@@ -83,7 +82,46 @@ CRITICAL RULE: Never generate any visible or readable text in the image. Do not 
 
         let parsed: any;
         try {
-          parsed = JSON.parse(response.text || "{}");
+          const rawParsed = JSON.parse(response.text || "{}");
+
+          // Map to the desired structure
+          if (rawParsed.scenes && Array.isArray(rawParsed.scenes)) {
+            parsed = {
+              topicTitle: rawParsed.topicTitle || "",
+              artStyle: rawParsed.artStyle || "",
+              characterName: rawParsed.characterName || "",
+              characterBaseDescription: rawParsed.characterBaseDescription || "",
+              environment: rawParsed.environment || "",
+              voiceGender: rawParsed.voiceGender || "",
+              voiceTone: rawParsed.voiceTone || "",
+              voiceStyle: rawParsed.voiceStyle || "",
+              audioPrompt: rawParsed.audioPrompt || "",
+              cast: rawParsed.cast?.length
+                ? rawParsed.cast
+                : [
+                    {
+                      name: rawParsed.characterName || "",
+                      tag: "main",
+                      description: rawParsed.characterBaseDescription || "",
+                    },
+                  ],
+              scenes: rawParsed.scenes.map((scene: any) => ({
+                sceneNumber: scene.sceneNumber,
+                camera: scene.camera || "",
+                motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
+                  scene.visualEffects || ""
+                }`,
+                imageGenPrompt:
+                  `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
+                  "",
+                audio:
+                  `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+                dialogue: scene.dialogue || "",
+              })),
+            };
+          } else {
+            parsed = rawParsed;
+          }
         } catch {
           parsed = { raw: response.text };
         }

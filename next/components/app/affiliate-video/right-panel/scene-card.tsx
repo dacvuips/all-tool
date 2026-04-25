@@ -181,14 +181,6 @@ export function SceneCard({ scene }: SceneCardProps) {
 
       {/* Prompt blocks */}
       <div className="p-3 space-y-3 ">
-        {/* VISUAL PROMPT */}
-        <PromptBlock
-          type="visualPrompt"
-          label="VISUAL PROMPT"
-          content={scene.visualPrompt}
-          icon={<RiImageFill className="text-orange-500 text-xs " />}
-          headerColor="bg-warning-light text-warning-dark"
-        />
         {/* IMAGE GEN PROMPT */}
         <PromptBlock
           type="image"

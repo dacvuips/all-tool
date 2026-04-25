@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getGeminiClient, retryAICall } from "./_shared";
+import { getAvailableGeminiClients, callWithKeyRotation } from "./_shared";
 
 export default [
   {
@@ -20,7 +20,7 @@ export default [
           language?: string;
         };
 
-        const genAI = await getGeminiClient();
+        const clients = await getAvailableGeminiClients();
 
         const categoryHint = body.category ? `Danh mục: ${body.category}` : "Danh mục: tự chọn";
         const moodHint = body.mood ? `Mood/Tính cách: ${body.mood}` : "";
@@ -56,9 +56,10 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           required: ["objectToPersonify", "tipContent"],
         };
 
-        const result = await retryAICall(
-          () =>
-            genAI.models.generateContent({
+        const result = await callWithKeyRotation(
+          clients,
+          (ai) =>
+            ai.models.generateContent({
               model: "gemini-2.5-flash",
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               config: {

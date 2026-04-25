@@ -129,7 +129,7 @@ export const AffiliateVideoRightPanel = () => {
   // Label tab Batch List kèm số lượng scene
   const sceneCount = scriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
-
+  console.log(scriptData);
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TabGroup
@@ -190,7 +190,7 @@ export const AffiliateVideoRightPanel = () => {
                   📽 {t("Phân Cảnh & Prompt")}
                 </h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {scriptData.scenes.map((scene, i) => (
+                  {scriptData?.scenes?.map((scene, i) => (
                     <SceneCard
                       key={scene.sceneNumber ?? i}
                       scene={{

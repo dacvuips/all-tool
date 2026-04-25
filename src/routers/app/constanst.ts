@@ -11,11 +11,9 @@ export const AffiliateVideoResponseSchema = {
       items: {
         type: Type.OBJECT,
         properties: {
-          name: { type: Type.STRING },
           tag: { type: Type.STRING },
-          description: { type: Type.STRING },
         },
-        required: ["name", "description"],
+        required: ["tag"],
       },
     },
     characterName: { type: Type.STRING },
@@ -31,13 +29,12 @@ export const AffiliateVideoResponseSchema = {
         properties: {
           sceneNumber: { type: Type.INTEGER },
           camera: { type: Type.STRING },
-          visualPrompt: { type: Type.STRING },
-          imageGenPrompt: { type: Type.STRING },
           motionPrompt: { type: Type.STRING },
           audio: { type: Type.STRING },
           dialogue: { type: Type.STRING },
+          visualEffects: { type: Type.STRING },
         },
-        required: ["sceneNumber", "visualPrompt", "imageGenPrompt", "motionPrompt", "dialogue"],
+        required: ["sceneNumber", "motionPrompt", "dialogue", "visualEffects"],
       },
     },
   },
