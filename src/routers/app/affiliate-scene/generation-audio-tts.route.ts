@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getGeminiClient, retryAICall } from "./_shared";
+import { callWithKeyRotation, getAvailableGeminiClients, incrementRequestCount } from "./_shared";
 
 export default [
   {
@@ -27,16 +27,17 @@ export default [
           return res.status(400).json({ message: "Thiếu text để tạo giọng nói" });
         }
 
-        const genAI = await getGeminiClient();
+        const clients = await getAvailableGeminiClients();
 
         const voiceName = body.voiceName || "Kore";
         const textContent = body.stylePrompt ? `${body.stylePrompt}\n\n${body.text}` : body.text;
 
         logger.info(`[generation-tts] Gọi Gemini TTS (voice: ${voiceName}) cho user ${context.id}`);
 
-        const response = await retryAICall(
-          () =>
-            genAI.models.generateContent({
+        const response = await callWithKeyRotation(
+          clients,
+          (ai) =>
+            ai.models.generateContent({
               model: "gemini-2.5-flash-preview-tts",
               contents: [{ role: "user", parts: [{ text: textContent }] }],
               config: {
@@ -96,6 +97,8 @@ export default [
         // Combine header + PCM data → full WAV file
         const wavBuffer = Buffer.concat([new Uint8Array(wavHeader), new Uint8Array(pcmBuffer)]);
         const wavBase64 = wavBuffer.toString("base64");
+
+        await incrementRequestCount(context.id);
 
         res.json({
           success: true,

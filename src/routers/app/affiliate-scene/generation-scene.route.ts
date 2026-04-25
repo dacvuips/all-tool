@@ -8,6 +8,7 @@ import {
   callWithKeyRotation,
   getAvailableGeminiClients,
   interpolateTemplate,
+  incrementRequestCount,
 } from "./_shared";
 
 export default [
@@ -131,6 +132,7 @@ CRITICAL RULE: Never generate any visible or readable text in the image. Do not 
           parsed = { raw: response.text };
         }
 
+        await incrementRequestCount(context.id);
         res.json({ success: true, data: parsed });
       } catch (err: any) {
         logger.error(`[generation-scene] Lỗi: ${err?.message}`);
