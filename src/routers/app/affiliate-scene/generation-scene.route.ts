@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { AffiliateVideoResponseSchema } from "../constanst";
+import { AffiliateVideoResponseSchema, StoryModeTypeEnum } from "../constanst";
 import {
   AffiliateVideoFormConfig,
   callWithKeyRotation,
@@ -35,6 +35,7 @@ export default [
         await checkRequestLimit(context.id);
 
         const clients = await getAvailableGeminiClients();
+        const storyModeTypes = req?.body?.config?.storyModeType;
 
         const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
         const batchSizeInstruction = hasBatchSize
@@ -118,12 +119,18 @@ CRITICAL RULE: Never generate any visible or readable text in the image. Do not 
               scenes: rawParsed.scenes.map((scene: any) => ({
                 sceneNumber: scene.sceneNumber,
                 camera: scene.camera || "",
-                motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
+                motionPrompt: `${
+                  storyModeTypes === StoryModeTypeEnum.prompt_to_video
+                    ? rawParsed.characterBaseDescription
+                    : ""
+                }, [${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
                   scene.visualEffects || ""
                 }`,
                 imageGenPrompt:
-                  `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
-                  "",
+                  storyModeTypes === StoryModeTypeEnum.image_to_video
+                    ? `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
+                      ""
+                    : "",
                 audio:
                   `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
                 dialogue: scene.dialogue || "",

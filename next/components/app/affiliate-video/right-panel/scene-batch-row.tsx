@@ -25,7 +25,7 @@ import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
-import { CharacterItem, SceneScript } from "../constants";
+import { CharacterItem, SceneScript, StoryModeTypeEnum } from "../constants";
 import { useSceneMedia } from "../hook/useSceneMedia";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
@@ -44,6 +44,7 @@ export function SceneBatchRow({
   scene,
   isDisabled,
   isGroupHovered,
+  storyModeType,
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
@@ -54,6 +55,7 @@ export function SceneBatchRow({
   index: number;
   isDisabled: boolean;
   isGroupHovered?: boolean;
+  storyModeType?: StoryModeTypeEnum;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -83,6 +85,7 @@ export function SceneBatchRow({
     handleDownloadVideo,
   } = useSceneMedia({ scene });
   const { videoConfig } = useAffiliateVideoContext();
+  const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
   const videoPaddingTop = videoConfig?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
@@ -240,24 +243,26 @@ export function SceneBatchRow({
       }}
     >
       {/* Image Prompt */}
-      <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        {renderEditablePrompt(
-          "imageGenPrompt",
-          scene.imageGenPrompt,
-          "text-gray-600",
-          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
-            IMAGE PROMPT
-          </span>
-        )}
-        {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
-          <button
-            onClick={() => setExpanded((p) => !p)}
-            className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-          >
-            {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-          </button>
-        )}
-      </td>
+      {!isPromptToVideo && (
+        <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          {renderEditablePrompt(
+            "imageGenPrompt",
+            scene.imageGenPrompt,
+            "text-gray-600",
+            <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
+              IMAGE PROMPT
+            </span>
+          )}
+          {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
+            <button
+              onClick={() => setExpanded((p) => !p)}
+              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
+            >
+              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
+            </button>
+          )}
+        </td>
+      )}
 
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -296,66 +301,68 @@ export function SceneBatchRow({
       </td>
 
       {/* Generated Image */}
-      <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <div className="flex justify-center">
-          {generatedImage ? (
-            /* ── Show generated image thumbnail ── */
-            <div className="relative w-32 h-full group">
-              <Img
-                showImageOnClick
-                src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
-                alt={`Scene ${scene.sceneNumber}`}
-                className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
-                ratio916
-              />
-
-              {/* Re-generate overlay on hover */}
-              <div className="flex gap-2 mt-2  w-full items-center justify-center">
-                <Button
-                  onClick={handleDownloadImage}
-                  className="w-8 rounded-lg h-8 bg-success-light text-success"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tải")}
-                  icon={<HiOutlineArrowDownTray />}
-                  placement="bottom"
+      {!isPromptToVideo && (
+        <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          <div className="flex justify-center">
+            {generatedImage ? (
+              /* ── Show generated image thumbnail ── */
+              <div className="relative w-32 h-full group">
+                <Img
+                  showImageOnClick
+                  src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
+                  alt={`Scene ${scene.sceneNumber}`}
+                  className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
+                  ratio916
                 />
-                {generatingImage ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                    <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                    <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
-                  </div>
-                ) : (
+
+                {/* Re-generate overlay on hover */}
+                <div className="flex gap-2 mt-2  w-full items-center justify-center">
                   <Button
-                    onClick={handleGenerateImage}
-                    icon={<GenerateAiIcon />}
-                    placement="bottom"
-                    className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                    onClick={handleDownloadImage}
+                    className="w-8 rounded-lg h-8 bg-success-light text-success"
                     iconClassName="text-xl font-bold"
-                    tooltip={t("Tạo lại")}
+                    tooltip={t("Tải")}
+                    icon={<HiOutlineArrowDownTray />}
+                    placement="bottom"
                   />
-                )}
+                  {generatingImage ? (
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                      <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                      <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleGenerateImage}
+                      icon={<GenerateAiIcon />}
+                      placement="bottom"
+                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Tạo lại")}
+                    />
+                  )}
+                </div>
               </div>
-            </div>
-          ) : generatingImage ? (
-            /* ── Spinner + progress ── */
-            <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
-              <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
-              <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
-            </div>
-          ) : (
-            /* ── Default create button ── */
-            <button
-              onClick={handleGenerateImage}
-              className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
-            >
-              <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
-              <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
-                {t("Tạo ảnh")}
-              </span>
-            </button>
-          )}
-        </div>
-      </td>
+            ) : generatingImage ? (
+              /* ── Spinner + progress ── */
+              <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
+                <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
+                <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
+              </div>
+            ) : (
+              /* ── Default create button ── */
+              <button
+                onClick={handleGenerateImage}
+                className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+              >
+                <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
+                <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
+                  {t("Tạo ảnh")}
+                </span>
+              </button>
+            )}
+          </div>
+        </td>
+      )}
 
       {/* Generated Video */}
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -451,10 +458,14 @@ export function SceneBatchRow({
             /* ── Default create button ── */
             <button
               onClick={handleGenerateVideo}
-              disabled={!generatedImage}
-              title={!generatedImage ? t("Cần tạo ảnh trước khi tạo video") : undefined}
+              disabled={!isPromptToVideo && !generatedImage}
+              title={
+                !isPromptToVideo && !generatedImage
+                  ? t("Cần tạo ảnh trước khi tạo video")
+                  : undefined
+              }
               className={`relative w-32 h-16 rounded-xl border-2 border-dashed transition-all group ${
-                generatedImage
+                isPromptToVideo || generatedImage
                   ? "border-gray-200 hover:border-purple-300 bg-gray-50 hover:bg-purple-50 cursor-pointer"
                   : "border-gray-100 bg-gray-50 cursor-not-allowed opacity-50"
               }`}
@@ -462,12 +473,16 @@ export function SceneBatchRow({
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <RiVideoFill
                   className={`text-xl mb-0.5 ${
-                    generatedImage ? "text-gray-300 group-hover:text-purple-400" : "text-gray-200"
+                    isPromptToVideo || generatedImage
+                      ? "text-gray-300 group-hover:text-purple-400"
+                      : "text-gray-200"
                   }`}
                 />
                 <span
                   className={`text-xs font-medium ${
-                    generatedImage ? "text-gray-400 group-hover:text-purple-500" : "text-gray-300"
+                    isPromptToVideo || generatedImage
+                      ? "text-gray-400 group-hover:text-purple-500"
+                      : "text-gray-300"
                   }`}
                 >
                   {t("Tạo video")}
@@ -547,6 +562,7 @@ interface SceneRowGroupProps {
   index: number;
   isDisabled: boolean;
   characters: CharacterItem[];
+  storyModeType?: StoryModeTypeEnum;
   onInsert: (
     scene: SceneScript,
     position: InsertPosition,
@@ -562,6 +578,7 @@ export function SceneRowGroup({
   index,
   isDisabled,
   characters,
+  storyModeType,
   onInsert,
   onUpdateScene,
   onToggleDisable,
@@ -603,6 +620,7 @@ export function SceneRowGroup({
         index={index}
         isDisabled={isDisabled}
         isGroupHovered={hovered}
+        storyModeType={storyModeType}
         onMouseEnter={enter}
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}

@@ -9,6 +9,7 @@ import {
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
+  StoryModeTypeEnum,
 } from "../constants";
 import { GenerateSceneFromTextParams, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
@@ -91,6 +92,9 @@ export const AffiliateVideoContext = createContext<
     clearSceneHistory: () => Promise<void>;
     /** Refresh history from IndexedDB */
     refreshSceneHistory: () => Promise<void>;
+
+    storyModeType: StoryModeTypeEnum;
+    setStoryModeType: (storyModeType: StoryModeTypeEnum) => void;
   }>
 >({});
 
@@ -117,6 +121,10 @@ export function AffiliateVideoProvider(props) {
   const [batchGeneratingSceneIds, setBatchGeneratingSceneIds] = useState<Set<string>>(new Set());
   const [batchGeneratingVideoSceneIds, setBatchGeneratingVideoSceneIds] = useState<Set<string>>(
     new Set()
+  );
+
+  const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
+    StoryModeTypeEnum.image_to_video
   );
 
   // ── Scene history state ──
@@ -313,6 +321,10 @@ export function AffiliateVideoProvider(props) {
         selectHistoryItem,
         clearSceneHistory: clearSceneHistoryFn,
         refreshSceneHistory,
+
+        // story mode
+        storyModeType,
+        setStoryModeType,
       }}
     >
       {props.children}

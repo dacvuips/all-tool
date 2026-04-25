@@ -40,3 +40,7 @@ export const AffiliateVideoResponseSchema = {
   },
   required: ["topicTitle", "characterBaseDescription", "scenes"],
 };
+export enum StoryModeTypeEnum {
+  prompt_to_video = "prompt_to_video",
+  image_to_video = "image_to_video",
+}

@@ -57,8 +57,6 @@ export default [
           context.id
         );
 
-        logger.info(`[generation-video] Gọi Veo 3.1 fast (aisandbox) cho user ${context.id}`);
-
         const sendSSE = (data: any) => {
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
@@ -73,8 +71,6 @@ export default [
           projectId,
           accessToken,
         });
-
-        logger.info(`[generation-video] Polling mediaName: ${mediaName}`);
 
         await pollAndExtractVideo({
           mediaName,

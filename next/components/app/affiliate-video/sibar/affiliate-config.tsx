@@ -4,9 +4,12 @@
  * className only – Tailwind CSS, no inline styles, no arbitrary [] values
  * Field names aligned with AffiliateFormConfig interface.
  */
+import { useRouter } from "next/router";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
+import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { Button, Field, Textarea } from "../../../shared/utilities/form";
 import { Select } from "../../../shared/utilities/form/select";
 import {
@@ -15,6 +18,7 @@ import {
   CATEGORY_OPTIONS,
   LANGUAGE_OPTIONS,
   MOOD_OPTIONS,
+  StoryModeTypeEnum,
   TAB_TYPE,
 } from "../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
@@ -24,41 +28,99 @@ import { BatchSizeSlider } from "./batch-size-slider";
 
 export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
   const { t } = useTranslation();
-  const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
+  const router = useRouter();
+  const { videoConfig, patchConfig, storyModeType, setStoryModeType } = useAffiliateVideoContext();
   const formContext = useFormContext();
+
+  // Local state for instant UI feedback; synced from URL param on mount/navigation
+  const initialMode =
+    (router.query.storyModeType as StoryModeTypeEnum) ||
+    storyModeType ||
+    StoryModeTypeEnum.image_to_video;
+  const [currentStoryModeType, setCurrentStoryModeType] = useState<StoryModeTypeEnum>(initialMode);
+
+  // Sync from URL param when it changes (e.g. browser back/forward)
+  useEffect(() => {
+    if (router.query.storyModeType) {
+      const typeFromQuery = router.query.storyModeType as string;
+      if (Object.values(StoryModeTypeEnum).includes(typeFromQuery as any)) {
+        setCurrentStoryModeType(typeFromQuery as StoryModeTypeEnum);
+        if (setStoryModeType) setStoryModeType(typeFromQuery as StoryModeTypeEnum);
+        if (patchConfig) patchConfig({ storyModeType: typeFromQuery as StoryModeTypeEnum });
+        if (formContext) formContext.setValue("storyModeType", typeFromQuery as StoryModeTypeEnum);
+      }
+    }
+  }, [router.query.storyModeType]);
+
   return (
     <div className="flex-1 bg-white">
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
-      {/* <div className="px-4 pt-3 pb-2">
+      <div className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
-          <button
-            onClick={() => setStoryModeType && setStoryModeType("prompt_to_video")}
+          <div
+            onClick={() => {
+              setCurrentStoryModeType(StoryModeTypeEnum.prompt_to_video);
+              if (setStoryModeType) setStoryModeType(StoryModeTypeEnum.prompt_to_video);
+              if (patchConfig) patchConfig({ storyModeType: StoryModeTypeEnum.prompt_to_video });
+              if (formContext)
+                formContext.setValue("storyModeType", StoryModeTypeEnum.prompt_to_video);
+              router.push(
+                {
+                  pathname: router.pathname,
+                  query: { ...router.query, storyModeType: StoryModeTypeEnum.prompt_to_video },
+                },
+                undefined,
+                { shallow: true }
+              );
+            }}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              storyModeType === "prompt_to_video"
+              currentStoryModeType === StoryModeTypeEnum.prompt_to_video
                 ? "bg-white text-gray-800 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
             <RiFilmFill
-              className={storyModeType === "prompt_to_video" ? "text-pink-500" : "text-gray-400"}
+              className={
+                currentStoryModeType === StoryModeTypeEnum.prompt_to_video
+                  ? "text-pink-500"
+                  : "text-gray-400"
+              }
             />
             {t("Prompt to Video")}
-          </button>
-          <button
-            onClick={() => setStoryModeType && setStoryModeType("image_to_video")}
+          </div>
+          <div
+            onClick={() => {
+              setCurrentStoryModeType(StoryModeTypeEnum.image_to_video);
+              if (setStoryModeType) setStoryModeType(StoryModeTypeEnum.image_to_video);
+              if (patchConfig) patchConfig({ storyModeType: StoryModeTypeEnum.image_to_video });
+              if (formContext)
+                formContext.setValue("storyModeType", StoryModeTypeEnum.image_to_video);
+              router.push(
+                {
+                  pathname: router.pathname,
+                  query: { ...router.query, storyModeType: StoryModeTypeEnum.image_to_video },
+                },
+                undefined,
+                { shallow: true }
+              );
+            }}
             className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              storyModeType === "image_to_video"
-                ? "bg-white text-gray-800 shadow-sm"
+              currentStoryModeType === StoryModeTypeEnum.image_to_video
+                ? "bg-white  text-gray-800 shadow-sm"
                 : "text-gray-500 hover:text-gray-700"
             }`}
           >
             <RiCameraLensFill
-              className={storyModeType === "image_to_video" ? "text-pink-500" : "text-gray-400"}
+              className={
+                currentStoryModeType === StoryModeTypeEnum.image_to_video
+                  ? "text-pink-500"
+                  : "text-gray-400"
+              }
             />
             {t("Image to Video")}
-          </button>
+          </div>
         </div>
-      </div> */}
+      </div>
 
       {/* ── Form Fields ── */}
 

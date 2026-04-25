@@ -149,14 +149,11 @@ async function sendAndParseResponse(
   }
   const response = await resp.json();
 
-  logger.info(`[${label}] Full response: ${JSON.stringify(response)}`);
-
   const result = Array.isArray(response) ? response[0] : response;
   const operations = result?.operations || [];
   const mediaName = operations[0]?.operation?.name || result?.media?.[0]?.name || null;
 
   if (!mediaName) {
-    logger.info(`[${label}] No mediaName found in response`);
     const err: any = new Error("Không nhận được operation ID từ API");
     err.statusCode = 500;
     throw err;
@@ -385,8 +382,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
         const operationResult = result?.operations?.[0];
         generationStatus = operationResult?.status || "MEDIA_GENERATION_STATUS_PENDING";
         mediaResult = operationResult;
-        logger.info(`[generation-video] Poll #${pollCount}: status=${generationStatus}`);
-        logger.info(`[generation-video] Poll #${pollCount}: result=${JSON.stringify(mediaResult)}`);
 
         // Nếu status FAILED → dừng polling ngay
         if (generationStatus === "MEDIA_GENERATION_STATUS_FAILED") {
@@ -407,19 +402,13 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
       pollCount >= MAX_POLLS
         ? "Quá thời gian chờ tạo video"
         : `Tạo video thất bại: ${generationStatus}`;
-    logger.info(
-      `[generation-video] Final status: ${generationStatus}, pollCount: ${pollCount}, result: ${JSON.stringify(
-        mediaResult
-      )}`
-    );
+
     // Log error message
     logger.error(`[generation-video] Error message: ${errorMsg}`);
 
     res.end();
     return;
   }
-
-  logger.info(`[generation-video] Completed media result: ${JSON.stringify(mediaResult)}`);
 
   // Extract fifeUrl from operation metadata
   const fifeUrl: string | null = mediaResult?.operation?.metadata?.video?.fifeUrl || null;
@@ -430,8 +419,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     res.end();
     return;
   }
-
-  logger.info(`[generation-video] fifeUrl: ${fifeUrl}`);
 
   // Gửi kết quả video về client qua SSE
   const sendSSE = (data: any) => {

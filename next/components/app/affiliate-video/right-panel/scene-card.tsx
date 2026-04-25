@@ -182,13 +182,15 @@ export function SceneCard({ scene }: SceneCardProps) {
       {/* Prompt blocks */}
       <div className="p-3 space-y-3 ">
         {/* IMAGE GEN PROMPT */}
-        <PromptBlock
-          type="image"
-          label="IMAGE GEN PROMPT (STATIC)"
-          content={scene.imageGenPrompt}
-          icon={<RiImageFill className="text-orange-500 text-xs" />}
-          headerColor="bg-info-light text-info-dark"
-        />
+        {scene.imageGenPrompt && (
+          <PromptBlock
+            type="image"
+            label="IMAGE GEN PROMPT (STATIC)"
+            content={scene.imageGenPrompt}
+            icon={<RiImageFill className="text-orange-500 text-xs" />}
+            headerColor="bg-info-light text-info-dark"
+          />
+        )}
 
         {/* MOTION PROMPT */}
         <PromptBlock

@@ -300,6 +300,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
       const result = await callGenerationSceneApi({ config: data });
+
       if (!result) return undefined;
       const scriptResult: ScriptData = result.data;
 

@@ -272,3 +272,8 @@ export enum TAB_TYPE {
   single = "single",
   batch = "batch",
 }
+
+export enum StoryModeTypeEnum {
+  prompt_to_video = "prompt_to_video",
+  image_to_video = "image_to_video",
+}
