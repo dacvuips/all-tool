@@ -115,21 +115,26 @@ export const IMAGE_STYLES = [
 
 /** Art style options aligned with AffiliateFormConfig.artStyle */
 export const ART_STYLE_OPTIONS = [
-  { value: "pixar", label: "3D Pixar" },
-  { value: "realistic", label: "Chân thực (Realistic)" },
+  { value: "none", label: "Tự do (Không dán đè Style)" },
+  { value: "pixar", label: "3D Pixar Cute" },
   { value: "pixar_realism", label: "Pixar Realism (Nhân hoá)" },
+  { value: "realistic", label: "Chân thực (Realistic)" },
   { value: "crochet", label: "Len Móc (Crochet/Amigurumi)" },
   { value: "clay", label: "Đất Sét (Claymation)" },
   { value: "diorama", label: "Mô hình Tí hon (Diorama)" },
   { value: "lego", label: "Đồ chơi Gạch (LEGO)" },
   { value: "mannequin", label: "Mannequin 3D (Siêu thực)" },
-  { value: "zack_doge", label: "3D Educational (Zack D.Style)" },
+  { value: "zack_doge", label: "3D Educational Simulation (Zack D. Style)" },
   { value: "chalkboard", label: "Bảng Phấn (Chalkboard)" },
-  { value: "2d_minimalist", label: "2D Tối Giản (Minimalist)" },
+  { value: "2d_minimalist", label: "2D Tối Giản (Minimalist Animation)" },
   { value: "stickman", label: "Người Que (Stickman)" },
   { value: "simpsons", label: "Hoạt hình Simpsons" },
-  { value: "business", label: "Giải thích Doanh nghiệp" },
-  { value: "cinematic_dark", label: "Cinematic Dark Surrealism" },
+  { value: "business", label: "Giải thích Doanh nghiệp (Business Explainer)" },
+  { value: "cinematic_dark", label: "Cinematic Dark Surrealism (Siêu thực Đen tối)" },
+  { value: "dark_fantasy", label: "Dark Fantasy Folk Storytelling Digital Painting" },
+  { value: "anime", label: "Hoạt hình Anime (Japanese Anime)" },
+  { value: "game_2d", label: "Game 2D / Casual Mobile Game" },
+  { value: "dark_grotesque", label: "Dark Grotesque Realism (Hài Đen Gây Sốc)" },
 ];
 
 export const LANGUAGE_OPTIONS = [
@@ -138,6 +143,15 @@ export const LANGUAGE_OPTIONS = [
   { value: "zh", label: "🇨🇳 中文", flag: "cn" },
   { value: "ja", label: "🇯🇵 日本語", flag: "jp" },
   { value: "ko", label: "🇰🇷 한국어", flag: "kr" },
+  { value: "hi", label: "🇮🇳 हिन्दी", flag: "hi" },
+  { value: "fr", label: "🇫🇷 Français", flag: "fr" },
+  { value: "de", label: "🇩🇪 Deutsch", flag: "de" },
+  { value: "es", label: "🇪🇸 Español", flag: "es" },
+  { value: "it", label: "🇮🇹 Italiano", flag: "it" },
+  { value: "pt", label: "🇵🇹 Português", flag: "pt" },
+  { value: "ru", label: "🇷🇺 Русский", flag: "ru" },
+  { value: "ar", label: "🇸🇦 العربية", flag: "sa" },
+  { value: "tr", label: "🇹🇷 Türkçe", flag: "tr" },
 ];
 
 export const CATEGORY_OPTIONS = [

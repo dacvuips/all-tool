@@ -7,8 +7,8 @@ import {
   AffiliateVideoFormConfig,
   callWithKeyRotation,
   getAvailableGeminiClients,
-  interpolateTemplate,
   incrementRequestCount,
+  interpolateTemplate,
 } from "./_shared";
 
 export default [
@@ -43,9 +43,9 @@ Create a consistent multi-scene AI video prompt using:
 {{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. ${batchSizeInstruction} for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
 Create 2 fixed English anchors:
 
-CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}
+CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
 
-ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view
+ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view. Save to environment
 Generate "visualEffects" as one polished English sentence.
 It must make the scene feel visually rich, magical, and cinematic in a Pixar-like way.
 Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
