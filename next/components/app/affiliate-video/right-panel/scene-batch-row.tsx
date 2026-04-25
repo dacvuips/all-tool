@@ -223,7 +223,7 @@ export function SceneBatchRow({
   return (
     <tr
       className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top relative ${
-        isDisabled ? "opacity-40" : "hover:bg-gray-50"
+        isDisabled ? "" : "hover:bg-gray-50"
       }`}
       style={
         isGroupHovered && !isDisabled
@@ -240,7 +240,7 @@ export function SceneBatchRow({
       }}
     >
       {/* Image Prompt */}
-      <td className="py-3 px-3">
+      <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         {renderEditablePrompt(
           "imageGenPrompt",
           scene.imageGenPrompt,
@@ -260,7 +260,7 @@ export function SceneBatchRow({
       </td>
 
       {/* Motion + Audio */}
-      <td className="py-3 px-3">
+      <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         {renderEditablePrompt(
           "motionPrompt",
           scene.motionPrompt,
@@ -296,7 +296,7 @@ export function SceneBatchRow({
       </td>
 
       {/* Generated Image */}
-      <td className="py-3 px-3 w-24">
+      <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex justify-center">
           {generatedImage ? (
             /* ── Show generated image thumbnail ── */
@@ -358,7 +358,7 @@ export function SceneBatchRow({
       </td>
 
       {/* Generated Video */}
-      <td className="py-3 px-3 w-24">
+      <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex justify-center">
           {generatedVideo ? (
             /* ── Show generated video thumbnail ── */
@@ -491,12 +491,12 @@ export function SceneBatchRow({
             >
               <Button
                 onClick={() => onToggleDisable(scene.id)}
-                className={`w-6 h-6 rounded-md shadow-sm ${
+                className={`w-6 h-6 rounded-md shadow-sm  ${
                   isDisabled
                     ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
                     : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
                 }`}
-                iconClassName="text-sm"
+                iconClassName="text-sm "
                 icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
                 tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
                 placement="bottom"
@@ -504,11 +504,12 @@ export function SceneBatchRow({
             </div>
             {/* Voice toggle – visible on hover OR when voiceDisable is true */}
             <div
-              className={`transition-opacity duration-200 ${
+              className={`transition-opacity duration-200 font-semibold ${
                 rowHovered || scene.voiceDisable ? "opacity-100" : "opacity-0 pointer-events-none"
               }`}
             >
               <Button
+                disabled={isDisabled}
                 onClick={() => onToggleVoiceDisable(scene.id)}
                 className={`w-6 h-6 rounded-md shadow-sm ${
                   scene.voiceDisable
