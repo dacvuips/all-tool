@@ -4,6 +4,7 @@
  * className only – Tailwind CSS, no inline styles, no arbitrary [] values
  * Field names aligned with AffiliateFormConfig interface.
  */
+import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import { Button, Field, Textarea } from "../../../shared/utilities/form";
@@ -24,6 +25,7 @@ import { BatchSizeSlider } from "./batch-size-slider";
 export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
   const { t } = useTranslation();
   const { videoConfig, patchConfig, setShowAiModal } = useAffiliateVideoContext();
+  const formContext = useFormContext();
   return (
     <div className="flex-1 bg-white">
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
@@ -169,7 +171,10 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
         {type == TAB_TYPE.batch && (
           <BatchSizeSlider
             value={videoConfig?.batchSize ?? 8}
-            onChange={(v) => patchConfig && patchConfig({ batchSize: v })}
+            onChange={(v) => {
+              if (patchConfig) patchConfig({ batchSize: v });
+              if (formContext) formContext.setValue("batchSize", v);
+            }}
           />
         )}
       </div>

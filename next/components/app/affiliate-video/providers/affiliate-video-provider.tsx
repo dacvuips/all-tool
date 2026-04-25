@@ -2,7 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../lib/providers/global-provider";
-import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, ScriptData, STORE_NAME } from "../constants";
+import {
+  AffiliateVideoFormConfig,
+  CACHE_KEY,
+  DB_NAME,
+  SceneHistoryItem,
+  ScriptData,
+  STORE_NAME,
+} from "../constants";
 import { GenerateSceneFromTextParams, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 
@@ -72,11 +79,28 @@ export const AffiliateVideoContext = createContext<
     addBatchGeneratingVideoSceneId: (id: string) => void;
     /** Remove a scene ID from the batch-video-generating set */
     removeBatchGeneratingVideoSceneId: (id: string) => void;
+
+    // ── Scene history ──
+    /** Full history list (newest first) */
+    sceneHistory: SceneHistoryItem[];
+    /** Currently selected history item ID (null = latest / no history) */
+    selectedHistoryId: string | null;
+    /** Select a history item by ID and apply its data */
+    selectHistoryItem: (id: string) => void;
+    /** Clear all scene generation history */
+    clearSceneHistory: () => Promise<void>;
+    /** Refresh history from IndexedDB */
+    refreshSceneHistory: () => Promise<void>;
   }>
 >({});
 
 export function AffiliateVideoProvider(props) {
-  const { generateScene, generateSceneFromText } = useAffiliateVideoApi();
+  const {
+    generateScene,
+    generateSceneFromText,
+    getSceneHistory,
+    clearSceneHistory: clearSceneHistoryApi,
+  } = useAffiliateVideoApi();
   const { customer } = useAuth();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
   const [searchQuery, setSearchQuery] = useState("");
@@ -94,6 +118,10 @@ export function AffiliateVideoProvider(props) {
   const [batchGeneratingVideoSceneIds, setBatchGeneratingVideoSceneIds] = useState<Set<string>>(
     new Set()
   );
+
+  // ── Scene history state ──
+  const [sceneHistory, setSceneHistory] = useState<SceneHistoryItem[]>([]);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
 
   const addBatchGeneratingSceneId = useCallback((id: string) => {
     setBatchGeneratingSceneIds((prev) => new Set(prev).add(id));
@@ -135,7 +163,39 @@ export function AffiliateVideoProvider(props) {
   useEffect(() => {
     getSceneList();
     restoreConfigFromDB();
+    refreshSceneHistory();
   }, []);
+
+  /** Refresh history list from IndexedDB */
+  const refreshSceneHistory = useCallback(async () => {
+    try {
+      const history = await getSceneHistory();
+      setSceneHistory(history);
+    } catch (err) {
+      console.warn("[affiliate-video] Failed to load scene history", err);
+    }
+  }, [getSceneHistory]);
+
+  /** Select a history item by ID and apply its data to scriptData */
+  const selectHistoryItem = useCallback(
+    (id: string) => {
+      const item = sceneHistory.find((h) => h.id === id);
+      if (item) {
+        setSelectedHistoryId(id);
+        setScriptData(item.data);
+        // Also update lastScript so it persists across page reloads
+        scriptDB.set(CACHE_KEY.lastScript, item.data).catch(() => {});
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
+
+  /** Clear all history */
+  const clearSceneHistoryFn = useCallback(async () => {
+    await clearSceneHistoryApi();
+    setSceneHistory([]);
+    setSelectedHistoryId(null);
+  }, [clearSceneHistoryApi]);
 
   const getSceneList = async () => {
     try {
@@ -175,6 +235,8 @@ export function AffiliateVideoProvider(props) {
 
       if (scriptResult) {
         setScriptData(scriptResult);
+        // Refresh history to include the new entry
+        refreshSceneHistory();
       }
       setBatchRunning(false);
       return scriptResult;
@@ -195,6 +257,7 @@ export function AffiliateVideoProvider(props) {
   const patchConfig = (partial: Partial<AffiliateVideoFormConfig>) => {
     setAffiliateVideoFormConfig((prev) => {
       const next = { ...prev, ...partial };
+
       persistConfig(next);
       return next;
     });
@@ -243,6 +306,13 @@ export function AffiliateVideoProvider(props) {
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,
         patchConfig,
+
+        // scene history
+        sceneHistory,
+        selectedHistoryId,
+        selectHistoryItem,
+        clearSceneHistory: clearSceneHistoryFn,
+        refreshSceneHistory,
       }}
     >
       {props.children}

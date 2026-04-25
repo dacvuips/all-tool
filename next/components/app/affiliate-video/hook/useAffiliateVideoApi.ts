@@ -4,13 +4,23 @@
  */
 import { useCallback } from "react";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, ScriptData, STORE_NAME } from "../constants";
+import {
+  AffiliateVideoFormConfig,
+  CACHE_KEY,
+  DB_NAME,
+  SceneHistoryItem,
+  ScriptData,
+  STORE_NAME,
+} from "../constants";
 import { useIndexedDB } from "./useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
 const VIDEO_STORE_NAME = "generated-videos";
 const AUDIO_STORE_NAME = "generated-audio";
+
+/** Max history entries kept in IndexedDB */
+const MAX_SCENE_HISTORY = 50;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -212,6 +222,16 @@ export interface UseAffiliateVideoApiReturn {
    * Lấy audio đã tạo từ IndexedDB theo cacheKey.
    */
   getGeneratedAudio: (cacheKey: string) => Promise<GeneratedAudioData | undefined>;
+
+  /**
+   * Lấy toàn bộ lịch sử generate scene từ IndexedDB.
+   */
+  getSceneHistory: () => Promise<SceneHistoryItem[]>;
+
+  /**
+   * Xóa toàn bộ lịch sử generate scene.
+   */
+  clearSceneHistory: () => Promise<void>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -244,6 +264,38 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── Helper: push a ScriptData into history array in IndexedDB ──
+  const pushToSceneHistory = useCallback(
+    async (scriptResult: ScriptData) => {
+      try {
+        const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
+
+        const now = new Date();
+        const label = `Kịch bản – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: SceneHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: scriptResult,
+        };
+
+        // Prepend newest first, trim to MAX_SCENE_HISTORY
+        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
+        await scriptDB.set(CACHE_KEY.sceneHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push scene history", e);
+      }
+    },
+    [scriptDB]
+  );
+
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
@@ -269,9 +321,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
+      // Push to history (await so provider can read it immediately)
+      await pushToSceneHistory(scriptResult);
+
       return scriptResult;
     },
-    [callGenerationSceneApi, scriptDB]
+    [callGenerationSceneApi, scriptDB, pushToSceneHistory]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
@@ -299,9 +354,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
+      // Push to history (await so provider can read it immediately)
+      await pushToSceneHistory(scriptResult);
+
       return scriptResult;
     },
-    [callGenerationSceneApi, scriptDB]
+    [callGenerationSceneApi, scriptDB, pushToSceneHistory]
   );
 
   // ── generateImage – gọi API tạo ảnh từ prompt ──
@@ -614,6 +672,20 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [audioDB]
   );
 
+  // ── getSceneHistory – lấy lịch sử generate scene ──
+  const getSceneHistory = useCallback(async (): Promise<SceneHistoryItem[]> => {
+    try {
+      return (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
+    } catch {
+      return [];
+    }
+  }, [scriptDB]);
+
+  // ── clearSceneHistory – xóa toàn bộ lịch sử ──
+  const clearSceneHistory = useCallback(async (): Promise<void> => {
+    await scriptDB.set(CACHE_KEY.sceneHistory, []);
+  }, [scriptDB]);
+
   return {
     generateScene,
     generateSceneFromText,
@@ -625,5 +697,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     suggestConfig,
     generateAudioTTS,
     getGeneratedAudio,
+    getSceneHistory,
+    clearSceneHistory,
   };
 }

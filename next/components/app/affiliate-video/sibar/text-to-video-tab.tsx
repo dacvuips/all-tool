@@ -73,15 +73,16 @@ const SuggestButton = () => {
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: TAB_TYPE }) => {
   const { t } = useTranslation();
-  const { handleSubmit, defaultVideoConfig } = useAffiliateVideoContext();
+  const { handleSubmit, defaultVideoConfig, videoConfig } = useAffiliateVideoContext();
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
   const wrappedSubmit = (data: any, promptText?: string) => {
+    const mergedData = { ...data, batchSize: videoConfig?.batchSize ?? 8 };
     if (type === TAB_TYPE.single) {
-      const { batchSize, ...rest } = data;
+      const { batchSize, ...rest } = mergedData;
       return handleSubmit?.(rest, promptText);
     }
-    return handleSubmit?.(data, promptText);
+    return handleSubmit?.(mergedData, promptText);
   };
 
   return (

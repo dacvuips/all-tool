@@ -7,7 +7,13 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiFileCopyLine, RiMusicFill, RiScissorsLine } from "react-icons/ri";
+import {
+  RiDeleteBinLine,
+  RiFileCopyLine,
+  RiHistoryLine,
+  RiMusicFill,
+  RiScissorsLine,
+} from "react-icons/ri";
 import { TabGroup } from "../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
@@ -120,16 +126,61 @@ const TAB_NAMES = ["script", "batch"] as const;
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
   const { t } = useTranslation();
-  const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
-    useAffiliateVideoContext();
+  const {
+    scriptData,
+    scriptTab,
+    setScriptTab,
+    batchList,
+    batchRunning,
+    sceneHistory,
+    selectedHistoryId,
+    selectHistoryItem,
+    clearSceneHistory,
+  } = useAffiliateVideoContext();
 
+  const [confirmClear, setConfirmClear] = useState(false);
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 
   // Label tab Batch List kèm số lượng scene
   const sceneCount = scriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
-  console.log(scriptData);
+
+  const renderHistoryActions = () => (
+    <>
+      <span className="text-[10px] text-gray-400 whitespace-nowrap mr-1">
+        {sceneHistory.length} {t("bản")}
+      </span>
+      {!confirmClear ? (
+        <button
+          onClick={() => setConfirmClear(true)}
+          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
+          title={t("Xóa lịch sử")}
+        >
+          <RiDeleteBinLine className="text-sm" />
+        </button>
+      ) : (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={async () => {
+              if (clearSceneHistory) await clearSceneHistory();
+              setConfirmClear(false);
+            }}
+            className="text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-md cursor-pointer border-0 transition-colors"
+          >
+            {t("Xóa hết")}
+          </button>
+          <button
+            onClick={() => setConfirmClear(false)}
+            className="text-[10px] font-semibold text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md cursor-pointer border-0 bg-transparent transition-colors"
+          >
+            {t("Hủy")}
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <TabGroup
@@ -159,6 +210,46 @@ export const AffiliateVideoRightPanel = () => {
             </div>
           ) : (
             <div className="px-4 py-4">
+              {/* ══ HISTORY DROPDOWN ══ */}
+              {sceneHistory && sceneHistory.length > 0 && (
+                <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 bg-gray-50/50 p-2.5 sm:p-0 sm:bg-transparent rounded-xl border border-gray-100 sm:border-none">
+                  <div className="flex items-center justify-between w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 text-indigo-500">
+                      <RiHistoryLine className="text-sm" />
+                      <span className="text-xs font-semibold whitespace-nowrap">
+                        {t("Lịch sử")}
+                      </span>
+                    </div>
+                    {/* Action buttons (Delete) on mobile */}
+                    <div className="flex items-center gap-1 sm:hidden">
+                      {renderHistoryActions()}
+                    </div>
+                  </div>
+
+                  <select
+                    value={selectedHistoryId || sceneHistory[0]?.id || ""}
+                    onChange={(e) => selectHistoryItem && selectHistoryItem(e.target.value)}
+                    className="w-full sm:flex-1 text-xs bg-white border border-gray-200 rounded-lg px-2.5 py-2 sm:py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all cursor-pointer hover:border-gray-300 appearance-none shadow-sm sm:shadow-none"
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M3 5l3 3 3-3'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "right 8px center",
+                      paddingRight: "24px",
+                    }}
+                  >
+                    {sceneHistory.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                        {item.data?.topicTitle ? ` – ${item.data.topicTitle.slice(0, 40)}` : ""}
+                        {` (${item.data?.scenes?.length || 0} scenes)`}
+                      </option>
+                    ))}
+                  </select>
+
+                  {/* Action buttons (Delete) on Desktop */}
+                  <div className="hidden sm:flex items-center gap-1">{renderHistoryActions()}</div>
+                </div>
+              )}
               {/* Phần nhân vật */}
               <CastSection scriptData={scriptData} />
 

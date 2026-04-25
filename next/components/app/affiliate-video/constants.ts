@@ -239,7 +239,20 @@ export const DB_VERSION = 1;
 export const CACHE_KEY = {
   lastScript: "lastScript",
   generateInput: "generateInput",
+  sceneHistory: "sceneHistory",
 };
+
+/** A single entry in the scene generation history */
+export interface SceneHistoryItem {
+  /** Unique ID for this history entry */
+  id: string;
+  /** Timestamp when the scene was generated */
+  createdAt: number;
+  /** Human-readable label (e.g. "Kịch bản – 25/04 14:52") */
+  label: string;
+  /** The generated script data */
+  data: ScriptData;
+}
 
 export enum TAB_TYPE {
   single = "single",
