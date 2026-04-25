@@ -15,7 +15,6 @@ import {
   RiLoader4Line,
   RiMagicLine,
   RiRefreshLine,
-  RiVideoAddLine,
   RiVideoFill,
   RiVolumeUpLine,
 } from "react-icons/ri";
@@ -82,21 +81,15 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     extendBatchErrors,
     extendStepProgress,
     extendStepMessage,
-    handleExtendAllVideo,
-    handleStopExtendBatch,
 
     // Counts
     pendingImageCount,
     availableImageCount,
     pendingVideoCount,
-    pendingExtendCount,
-    availableExtendCount,
 
     // Downloads
     downloading,
-    downloadingExtended,
     handleDownloadAllImages,
-    handleDownloadExtendedVideos,
 
     // Export
     handleExportPromptCSV,
@@ -173,42 +166,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       label: t("Tạo Lại Video Lỗi"),
       color: "bg-red-500 hover:bg-red-600",
     },
-    {
-      id: "batch-extend-video",
-      icon: extendBatchRunning ? <RiLoader4Line className="animate-spin" /> : <RiVideoAddLine />,
-      label: extendBatchRunning
-        ? `${t("Đang nối")} (${extendBatchCompleted}/${extendBatchTotal})`
-        : `${t("Tạo Video Nối")}${
-            pendingExtendCount != null && pendingExtendCount > 0 ? ` (x${pendingExtendCount})` : ""
-          }`,
-      color: extendBatchRunning ? "bg-primary/70 cursor-wait" : "bg-primary hover:bg-primary-dark",
-      method: handleExtendAllVideo,
-      disabled: extendBatchRunning || videoBatchRunning || batchRunning,
-    },
-    ...(extendBatchRunning
-      ? [
-          {
-            id: "batch-stop-extend",
-            icon: <RiCloseLine />,
-            label: t("Dừng"),
-            color: "bg-red-500 hover:bg-red-600",
-            method: handleStopExtendBatch,
-            disabled: false,
-          },
-        ]
-      : []),
-    {
-      id: "batch-download-extended",
-      icon: downloadingExtended ? <RiLoader4Line className="animate-spin" /> : <RiDownloadLine />,
-      label: downloadingExtended
-        ? t("Đang tải...")
-        : `${t("Tải Video Nối")}${availableExtendCount > 0 ? ` (x${availableExtendCount})` : ""}`,
-      color: downloadingExtended
-        ? "bg-purple-400 cursor-wait"
-        : "bg-purple-500 hover:bg-purple-600",
-      method: handleDownloadExtendedVideos,
-      disabled: downloadingExtended || availableExtendCount === 0,
-    },
+
     {
       id: "batch-export-prompt",
       icon: <RiFileCopyLine />,

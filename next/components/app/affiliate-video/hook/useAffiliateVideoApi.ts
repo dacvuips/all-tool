@@ -187,21 +187,9 @@ export interface UseAffiliateVideoApiReturn {
   generateVideo: (params: GenerateVideoParams) => Promise<GeneratedVideoData | undefined>;
 
   /**
-   * Gọi API nối video (extend) từ video đã tạo.
-   * Sử dụng Veo 3.1 (non-fast) với video input.
-   * Lưu kết quả vào IndexedDB theo sceneId (key: {sceneId}-extended).
-   */
-  extendVideo: (params: ExtendVideoParams) => Promise<GeneratedVideoData | undefined>;
-
-  /**
    * Lấy video đã tạo từ IndexedDB theo sceneId.
    */
   getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoData | undefined>;
-
-  /**
-   * Lấy video nối (extended) từ IndexedDB theo sceneId.
-   */
-  getExtendedVideo: (sceneId: string) => Promise<GeneratedVideoData | undefined>;
 
   /**
    * Gọi API chèn scene mới giữa 2 scene.
@@ -498,122 +486,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast, videoDB]
   );
 
-  // ── extendVideo – gọi API nối video từ video đã tạo (SSE) ──
-  const extendVideo = useCallback(
-    async (params: ExtendVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const {
-        sceneId,
-        prompt,
-        video,
-        image,
-        aspectRatio = "9:16",
-        generateAudio = true,
-        onProgress,
-        onStatusMessage,
-      } = params;
-
-      try {
-        onProgress?.(5);
-        onStatusMessage?.("Đang gửi yêu cầu nối video...");
-
-        const requestBody: any = {
-          prompt: prompt || "Continue the scene naturally",
-          video,
-          config: { aspectRatio, generateAudio },
-        };
-        // Thêm ảnh tham chiếu nếu có
-        if (image) {
-          requestBody.image = image;
-        }
-
-        const res = await fetch("/api/app/extend-video/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
-          return undefined;
-        }
-
-        // Read SSE stream
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          toast.error("Không thể đọc response stream");
-          return undefined;
-        }
-
-        let videoData: GeneratedVideoData | undefined;
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE events from buffer
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // keep incomplete line
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event = JSON.parse(line.slice(6));
-
-              if (event.type === "progress") {
-                onProgress?.(event.progress);
-                if (event.message) onStatusMessage?.(event.message);
-              } else if (event.type === "done") {
-                onProgress?.(100);
-                onStatusMessage?.("Hoàn thành nối video!");
-                videoData = event.data;
-              } else if (event.type === "error") {
-                toast.error(event.message || "Lỗi nối video");
-                throw new Error(event.message);
-              }
-            } catch (parseErr) {
-              // Ignore malformed SSE lines
-            }
-          }
-        }
-
-        if (!videoData) {
-          toast.error("Không nhận được video nối từ API");
-          return undefined;
-        }
-
-        // Attach the aspect ratio used at generation time
-        videoData.aspectRatio = aspectRatio;
-        // Persist to IndexedDB with "-extended" suffix key
-        await videoDB.set(`${sceneId}-extended`, videoData);
-
-        return videoData;
-      } catch (err: any) {
-        onProgress?.(0);
-        console.error("[extendVideo] Error:", err);
-      }
-    },
-    [toast, videoDB]
-  );
-
   // ── getGeneratedVideo – lấy video đã tạo từ IndexedDB ──
   const getGeneratedVideo = useCallback(
     async (sceneId: string): Promise<GeneratedVideoData | undefined> => {
       return videoDB.get(sceneId);
-    },
-    [videoDB]
-  );
-
-  // ── getExtendedVideo – lấy video nối (extended) từ IndexedDB ──
-  const getExtendedVideo = useCallback(
-    async (sceneId: string): Promise<GeneratedVideoData | undefined> => {
-      return videoDB.get(`${sceneId}-extended`);
     },
     [videoDB]
   );
@@ -744,9 +620,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     generateImage,
     getGeneratedImage,
     generateVideo,
-    extendVideo,
     getGeneratedVideo,
-    getExtendedVideo,
     insertScene,
     suggestConfig,
     generateAudioTTS,

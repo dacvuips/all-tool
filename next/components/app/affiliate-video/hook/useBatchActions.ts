@@ -24,15 +24,8 @@ const VIDEO_CONCURRENCY = 2;
 
 export function useBatchActions(scenes: SceneScript[]) {
   const { t } = useTranslation();
-  const {
-    generateImage,
-    generateVideo,
-    extendVideo,
-    getGeneratedImage,
-    getGeneratedVideo,
-    getExtendedVideo,
-    generateAudioTTS,
-  } = useAffiliateVideoApi();
+  const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
+    useAffiliateVideoApi();
   const {
     scriptData,
     addBatchGeneratingSceneId,
@@ -258,24 +251,17 @@ export function useBatchActions(scenes: SceneScript[]) {
 
       // Chain is complete if the LAST scene has an extended video
       const lastScene = scenesWithVideo[scenesWithVideo.length - 1];
-      const lastExt = await getExtendedVideo(lastScene.id);
 
       if (!cancelled) {
-        if (lastExt) {
-          // Chain complete → 1 video sẵn sàng tải
-          setPendingExtendCount(0);
-          setAvailableExtendCount(1);
-        } else {
-          // Chain chưa hoàn thành → cần N-1 bước nối
-          setPendingExtendCount(scenesWithVideo.length - 1);
-          setAvailableExtendCount(0);
-        }
+        // Chain chưa hoàn thành → cần N-1 bước nối
+        setPendingExtendCount(scenesWithVideo.length - 1);
+        setAvailableExtendCount(0);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [scenes, extendBatchRunning, getGeneratedVideo, getExtendedVideo]);
+  }, [scenes, getGeneratedVideo]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── Download states ──
@@ -646,40 +632,6 @@ export function useBatchActions(scenes: SceneScript[]) {
 
         // Lấy ảnh tham chiếu của scene kế tiếp (hướng dẫn nối)
         const sceneImage = await getGeneratedImage(scene.id);
-
-        const result = await extendVideo({
-          sceneId: scene.id,
-          prompt: scene.motionPrompt || "Continue the scene naturally",
-          video: {
-            uri: chainVideo!.videoUri,
-            videoBytes: chainVideo!.videoBytes,
-            mimeType: chainVideo!.mimeType,
-          },
-          // Ảnh tham chiếu của scene kế tiếp
-          ...(sceneImage
-            ? {
-                image: {
-                  imageBytes: sceneImage.imageBytes,
-                  mimeType: sceneImage.mimeType,
-                },
-              }
-            : {}),
-          onProgress: (pct) => setExtendStepProgress(pct),
-          onStatusMessage: (msg) => setExtendStepMessage(msg),
-        });
-
-        if (result) {
-          chainVideo = result; // Dùng kết quả này cho bước tiếp theo
-        } else {
-          // Không có kết quả → chuỗi bị đứt
-          errors++;
-          setExtendBatchErrors(errors);
-          completed++;
-          setExtendBatchCompleted(completed);
-          break;
-        }
-        completed++;
-        setExtendBatchCompleted(completed);
       } catch (err) {
         console.error(
           `[BatchExtendVideo] Chain #${prevScene.sceneNumber}→#${scene.sceneNumber} error:`,
@@ -718,73 +670,6 @@ export function useBatchActions(scenes: SceneScript[]) {
     extendStopRef.current = true;
   };
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ── handleDownloadExtendedVideos: tải video nối cuối cùng (kết quả chain) ──
-  // ═══════════════════════════════════════════════════════════════════
-  const handleDownloadExtendedVideos = useCallback(async () => {
-    if (downloadingExtended) return;
-    setDownloadingExtended(true);
-
-    try {
-      // Tìm video nối cuối cùng (scene cuối trong chuỗi)
-      const eligibleScenes = scenes.filter((s) => !s.disabled);
-      let lastExtended:
-        | { videoUri: string | null; videoBytes: string | null; mimeType: string }
-        | undefined;
-      let firstSceneNumber = 0;
-      let lastSceneNumber = 0;
-
-      // Tìm ngược từ cuối để lấy video chain cuối cùng
-      for (let i = eligibleScenes.length - 1; i >= 0; i--) {
-        const ext = await getExtendedVideo(eligibleScenes[i].id);
-        if (ext) {
-          lastExtended = ext;
-          lastSceneNumber = eligibleScenes[i].sceneNumber;
-          // Tìm scene đầu tiên có video (gốc chain)
-          for (const s of eligibleScenes) {
-            const vid = await getGeneratedVideo(s.id);
-            if (vid) {
-              firstSceneNumber = s.sceneNumber;
-              break;
-            }
-          }
-          break;
-        }
-      }
-
-      if (!lastExtended) {
-        toast.warn(t("Chưa có video nối nào để tải"));
-        setDownloadingExtended(false);
-        return;
-      }
-
-      const fileName = `video-noi-canh-${firstSceneNumber}-den-${lastSceneNumber}`;
-
-      if (lastExtended.videoBytes) {
-        const byteChars = atob(lastExtended.videoBytes);
-        const byteNumbers = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNumbers[i] = byteChars.charCodeAt(i);
-        }
-        const ext = lastExtended.mimeType?.split("/")[1] || "mp4";
-        const blob = new Blob([byteNumbers], { type: lastExtended.mimeType || "video/mp4" });
-        saveAs(blob, `${fileName}.${ext}`);
-      } else if (lastExtended.videoUri) {
-        const response = await fetch(lastExtended.videoUri);
-        const blob = await response.blob();
-        saveAs(blob, `${fileName}.mp4`);
-      }
-
-      toast.success(t("Đã tải video nối thành công!"));
-    } catch (err) {
-      console.error("[handleDownloadExtendedVideos] Error:", err);
-      toast.error(t("Lỗi khi tải video nối"));
-    } finally {
-      setDownloadingExtended(false);
-    }
-  }, [downloadingExtended, scenes, getExtendedVideo, getGeneratedVideo, toast, t]);
-
-  // ═══════════════════════════════════════════════════════════════════
   // ── handleExportPromptCSV: xuất danh sách prompt ra file CSV ──
   // ═══════════════════════════════════════════════════════════════════
   const handleExportPromptCSV = useCallback(() => {
@@ -904,7 +789,6 @@ export function useBatchActions(scenes: SceneScript[]) {
     downloading,
     downloadingExtended,
     handleDownloadAllImages,
-    handleDownloadExtendedVideos,
 
     // Export
     handleExportPromptCSV,
