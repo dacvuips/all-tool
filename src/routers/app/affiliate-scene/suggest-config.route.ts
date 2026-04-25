@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { getAvailableGeminiClients, callWithKeyRotation } from "./_shared";
+import { callWithKeyRotation, checkRequestLimit, getAvailableGeminiClients } from "./_shared";
 
 export default [
   {
@@ -19,7 +19,8 @@ export default [
           mood?: string;
           language?: string;
         };
-
+        // Kiểm tra giới hạn request trước khi tạo
+        await checkRequestLimit(context.id);
         const clients = await getAvailableGeminiClients();
 
         const categoryHint = body.category ? `Danh mục: ${body.category}` : "Danh mục: tự chọn";

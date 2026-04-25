@@ -6,6 +6,7 @@ import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   AffiliateVideoFormConfig,
   callWithKeyRotation,
+  checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
   interpolateTemplate,
@@ -29,6 +30,9 @@ export default [
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
         }
+
+        // Kiểm tra giới hạn request trước khi tạo
+        await checkRequestLimit(context.id);
 
         const clients = await getAvailableGeminiClients();
 

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callWithKeyRotation, getAvailableGeminiClients, incrementRequestCount } from "./_shared";
+import { callWithKeyRotation, checkRequestLimit, getAvailableGeminiClients, incrementRequestCount } from "./_shared";
 
 export default [
   {
@@ -26,6 +26,9 @@ export default [
         if (!body?.text) {
           return res.status(400).json({ message: "Thiếu text để tạo giọng nói" });
         }
+
+        // Kiểm tra giới hạn request trước khi tạo
+        await checkRequestLimit(context.id);
 
         const clients = await getAvailableGeminiClients();
 
