@@ -72,16 +72,6 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     handleCreateAllVideo,
     handleStopVideoBatch,
 
-    // Batch extend video
-    extendBatchRunning,
-    extendBatchDone,
-    extendBatchCurrentSceneLabel,
-    extendBatchTotal,
-    extendBatchCompleted,
-    extendBatchErrors,
-    extendStepProgress,
-    extendStepMessage,
-
     // Counts
     pendingImageCount,
     availableImageCount,
@@ -306,67 +296,6 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                 }}
               />
             </div>
-          </div>
-        )}
-
-        {/* Extend Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
-        {(extendBatchRunning || extendBatchDone) && (
-          <div className="px-3 pb-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span className="flex items-center gap-1 min-w-0">
-                {extendBatchRunning ? (
-                  <>
-                    <span className="whitespace-nowrap">
-                      🔗 {t("Nối chuỗi")}: {extendBatchCurrentSceneLabel || "..."} —{" "}
-                      {extendBatchCompleted}/{extendBatchTotal}
-                    </span>
-                    {extendStepMessage && (
-                      <span className="text-gray-400 truncate ml-1" title={extendStepMessage}>
-                        · {extendStepMessage}
-                      </span>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    ✅ {t("Nối video hoàn thành")} — {extendBatchCompleted}/{extendBatchTotal}
-                  </>
-                )}
-              </span>
-              <span className="flex items-center gap-2">
-                {extendBatchRunning && extendStepProgress > 0 && (
-                  <span className="text-teal-500 font-medium">{extendStepProgress}%</span>
-                )}
-                {extendBatchErrors > 0 && (
-                  <span className="text-red-500">
-                    {extendBatchErrors} {t("lỗi")}
-                  </span>
-                )}
-              </span>
-            </div>
-            {/* Thanh tổng: hiển thị tiến trình theo bước */}
-            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  extendBatchDone && !extendBatchRunning
-                    ? "bg-gradient-to-r from-green-400 to-emerald-500"
-                    : "bg-gradient-to-r from-teal-500 to-cyan-500"
-                }`}
-                style={{
-                  width: `${
-                    extendBatchTotal > 0 ? (extendBatchCompleted / extendBatchTotal) * 100 : 0
-                  }%`,
-                }}
-              />
-            </div>
-            {/* Thanh con: tiến trình SSE của bước hiện tại */}
-            {extendBatchRunning && (
-              <div className="w-full h-1 bg-gray-100 rounded-full overflow-hidden mt-1">
-                <div
-                  className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-400 to-teal-400"
-                  style={{ width: `${extendStepProgress}%` }}
-                />
-              </div>
-            )}
           </div>
         )}
       </div>

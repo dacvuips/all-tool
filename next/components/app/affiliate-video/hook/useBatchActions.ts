@@ -151,23 +151,6 @@ export function useBatchActions(scenes: SceneScript[]) {
   const videoStopRef = useRef(false);
 
   // ═══════════════════════════════════════════════════════════════════
-  // ── Batch extend video state ──
-  // ═══════════════════════════════════════════════════════════════════
-  const [extendBatchRunning, setExtendBatchRunning] = useState(false);
-  const [extendBatchDone, setExtendBatchDone] = useState(false);
-  const [extendBatchCurrentIndex, setExtendBatchCurrentIndex] = useState(-1);
-  const [extendBatchCurrentSceneLabel, setExtendBatchCurrentSceneLabel] = useState("");
-  const [extendBatchTotal, setExtendBatchTotal] = useState(0);
-  const [extendBatchCompleted, setExtendBatchCompleted] = useState(0);
-  const [extendBatchErrors, setExtendBatchErrors] = useState(0);
-  const [extendBatchSkipped, setExtendBatchSkipped] = useState(0);
-  const extendStopRef = useRef(false);
-  const extendEligibleScenesRef = useRef<SceneScript[]>([]);
-  // SSE progress cho bước hiện tại
-  const [extendStepProgress, setExtendStepProgress] = useState(0);
-  const [extendStepMessage, setExtendStepMessage] = useState("");
-
-  // ═══════════════════════════════════════════════════════════════════
   // ── Count scenes without generated image & scenes with generated image ──
   // ═══════════════════════════════════════════════════════════════════
   const [pendingImageCount, setPendingImageCount] = useState<number | null>(null);
@@ -231,7 +214,6 @@ export function useBatchActions(scenes: SceneScript[]) {
   const [availableExtendCount, setAvailableExtendCount] = useState<number>(0);
 
   useEffect(() => {
-    if (extendBatchRunning) return;
     let cancelled = false;
     (async () => {
       // Find scenes that have a generated video (eligible for chaining)
@@ -572,104 +554,6 @@ export function useBatchActions(scenes: SceneScript[]) {
     videoStopRef.current = true;
   };
 
-  // ═══════════════════════════════════════════════════════════════════
-  // ── handleExtendAllVideo: chain mode – nối tuần tự video cảnh 1→2→3→... ──
-  // ═══════════════════════════════════════════════════════════════════
-  const handleExtendAllVideo = async () => {
-    if (extendBatchRunning || videoBatchRunning || batchRunning) return;
-
-    // Lấy tất cả scene có video, giữ đúng thứ tự
-    const eligibleScenes: SceneScript[] = [];
-    for (const s of scenes) {
-      if (s.disabled) continue;
-      const vid = await getGeneratedVideo(s.id);
-      if (vid) eligibleScenes.push(s);
-    }
-    if (eligibleScenes.length < 2) {
-      toast.warn(t("Cần ít nhất 2 cảnh có video để nối"));
-      return;
-    }
-
-    extendEligibleScenesRef.current = eligibleScenes;
-    setExtendBatchRunning(true);
-    // Tổng số bước nối = N-1 (N scenes → N-1 lần extend)
-    setExtendBatchTotal(eligibleScenes.length - 1);
-    setExtendBatchCompleted(0);
-    setExtendBatchErrors(0);
-    setExtendBatchSkipped(0);
-    setExtendBatchCurrentIndex(0);
-    setExtendBatchCurrentSceneLabel("");
-    setExtendStepProgress(0);
-    setExtendStepMessage("");
-    extendStopRef.current = false;
-
-    let completed = 0;
-    let errors = 0;
-
-    // Base: lấy video cảnh đầu tiên làm gốc
-    let chainVideo = await getGeneratedVideo(eligibleScenes[0].id);
-    if (!chainVideo) {
-      toast.error(t("Không tìm thấy video cảnh đầu tiên"));
-      setExtendBatchRunning(false);
-      return;
-    }
-
-    // Nối chuỗi: video cảnh 1 → extend với cảnh 2 → kết quả → extend với cảnh 3 → ...
-    for (let i = 1; i < eligibleScenes.length; i++) {
-      if (extendStopRef.current) break;
-
-      const prevScene = eligibleScenes[i - 1];
-      const scene = eligibleScenes[i];
-
-      // Cập nhật tiến trình
-      setExtendBatchCurrentIndex(i);
-      setExtendBatchCurrentSceneLabel(`#${prevScene.sceneNumber} → #${scene.sceneNumber}`);
-      setExtendStepProgress(0);
-      setExtendStepMessage("");
-
-      try {
-        addBatchGeneratingVideoSceneId(scene.id);
-
-        // Lấy ảnh tham chiếu của scene kế tiếp (hướng dẫn nối)
-        const sceneImage = await getGeneratedImage(scene.id);
-      } catch (err) {
-        console.error(
-          `[BatchExtendVideo] Chain #${prevScene.sceneNumber}→#${scene.sceneNumber} error:`,
-          err
-        );
-        errors++;
-        setExtendBatchErrors(errors);
-        completed++;
-        setExtendBatchCompleted(completed);
-        // Chuỗi bị đứt → không thể tiếp tục
-        break;
-      } finally {
-        removeBatchGeneratingVideoSceneId(scene.id);
-      }
-    }
-
-    setExtendBatchRunning(false);
-    setExtendBatchDone(true);
-    setExtendBatchCurrentIndex(-1);
-    setExtendBatchCurrentSceneLabel("");
-
-    const generated = completed - errors;
-    const totalSteps = eligibleScenes.length - 1;
-    if (extendStopRef.current) {
-      toast.info(`${t("Đã dừng. Nối được")} ${generated}/${totalSteps} ${t("bước")}.`);
-    } else if (errors > 0) {
-      toast.warn(`${t("Lỗi khi nối. Đã nối được")} ${generated}/${totalSteps} ${t("bước")}.`);
-    } else {
-      toast.success(
-        `${t("Đã hoàn thành nối")} ${eligibleScenes.length} ${t("cảnh thành một video liên tục!")}`
-      );
-    }
-  };
-
-  const handleStopExtendBatch = () => {
-    extendStopRef.current = true;
-  };
-
   // ── handleExportPromptCSV: xuất danh sách prompt ra file CSV ──
   // ═══════════════════════════════════════════════════════════════════
   const handleExportPromptCSV = useCallback(() => {
@@ -762,20 +646,6 @@ export function useBatchActions(scenes: SceneScript[]) {
     videoBatchSkipped,
     handleCreateAllVideo,
     handleStopVideoBatch,
-
-    // Batch extend video
-    extendBatchRunning,
-    extendBatchDone,
-    extendBatchCurrentIndex,
-    extendBatchCurrentSceneLabel,
-    extendBatchTotal,
-    extendBatchCompleted,
-    extendBatchErrors,
-    extendBatchSkipped,
-    extendStepProgress,
-    extendStepMessage,
-    handleExtendAllVideo,
-    handleStopExtendBatch,
 
     // Counts
     pendingImageCount,

@@ -40,18 +40,6 @@ const PROMPT_MAX_CHARS = 160;
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface SceneBatchRowProps {
-  scene: SceneScript;
-  index: number;
-  isDisabled: boolean;
-  isGroupHovered?: boolean;
-  onMouseEnter?: () => void;
-  onMouseLeave?: () => void;
-  onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
-  onToggleDisable: (sceneId: string) => void;
-  onToggleVoiceDisable: (sceneId: string) => void;
-}
-
 export function SceneBatchRow({
   scene,
   isDisabled,

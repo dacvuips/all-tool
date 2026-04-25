@@ -9,12 +9,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SceneScript } from "../constants";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import {
   GeneratedImageData,
   GeneratedVideoData,
   useAffiliateVideoApi,
 } from "./useAffiliateVideoApi";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
@@ -236,7 +236,9 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
     try {
       const result = await generateVideo({
         sceneId: scene.id,
-        prompt: `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
+        prompt: scene.voiceDisable
+          ? `[MOTION]${scene.motionPrompt}`
+          : `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
         images: generatedImage
           ? [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }]
           : undefined,

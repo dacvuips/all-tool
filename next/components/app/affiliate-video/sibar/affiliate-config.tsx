@@ -170,7 +170,10 @@ export const AffiliateConfig = () => {
               native
               id="batch-size-select"
               className="border-gray-200"
-              options={[1, 2, 3, 4, 5].map((n) => ({ value: String(n), label: String(n) }))}
+              options={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15].map((n) => ({
+                value: String(n),
+                label: String(n),
+              }))}
               value={String(videoConfig?.batchSize ?? 1)}
               onChange={(v) => patchConfig && patchConfig({ batchSize: Number(v) })}
             />
