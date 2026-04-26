@@ -14,7 +14,7 @@ import JSZip from "jszip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { SceneScript } from "../constants";
+import { SceneScript, StoryModeTypeEnum } from "../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
@@ -33,6 +33,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
   } = useAffiliateVideoContext();
+  const isPromptToVideo = scriptData.storyModeType === StoryModeTypeEnum.prompt_to_video;
   const toast = useToast();
 
   // ═══════════════════════════════════════════════════════════════════
@@ -193,8 +194,11 @@ export function useBatchActions(scenes: SceneScript[]) {
         const vid = await getGeneratedVideo(scene.id);
         if (vid) {
           available++;
+        } else if (isPromptToVideo) {
+          // prompt_to_video mode: no image needed, always pending
+          pending++;
         } else {
-          // Count as pending if it has a generated image OR an imageGenPrompt (image will be auto-generated)
+          // image_to_video mode: count as pending if it has a generated image OR an imageGenPrompt
           const img = await getGeneratedImage(scene.id);
           if (img || scene.imageGenPrompt) pending++;
         }
@@ -207,7 +211,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     return () => {
       cancelled = true;
     };
-  }, [scenes, videoBatchRunning, getGeneratedVideo, getGeneratedImage]);
+  }, [scenes, videoBatchRunning, getGeneratedVideo, getGeneratedImage, isPromptToVideo]);
 
   // ── Count extend chain status ──
   const [pendingExtendCount, setPendingExtendCount] = useState<number | null>(null);
@@ -448,6 +452,38 @@ export function useBatchActions(scenes: SceneScript[]) {
           continue;
         }
 
+        // ── prompt_to_video mode: generate video directly from prompt (no image needed) ──
+        if (isPromptToVideo) {
+          try {
+            addBatchGeneratingVideoSceneId(scene.id);
+            const audioDesc = [
+              scriptData?.voiceGender,
+              scriptData?.voiceStyle,
+              scriptData?.voiceTone,
+            ]
+              .filter(Boolean)
+              .join(", ");
+            await generateVideo({
+              sceneId: scene.id,
+              prompt: scene.voiceDisable
+                ? `[MOTION]${scene.motionPrompt}`
+                : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
+            });
+            completed++;
+            setVideoBatchCompleted(completed);
+          } catch (err) {
+            console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+            errors++;
+            setVideoBatchErrors(errors);
+            completed++;
+            setVideoBatchCompleted(completed);
+          } finally {
+            removeBatchGeneratingVideoSceneId(scene.id);
+          }
+          continue;
+        }
+
+        // ── image_to_video mode: need image first ──
         // If scene has no generated image, try to generate one first
         let existingImage = await getGeneratedImage(scene.id);
         if (!existingImage) {
