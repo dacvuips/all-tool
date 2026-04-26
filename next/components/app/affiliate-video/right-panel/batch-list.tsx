@@ -3,7 +3,7 @@
  * Batch List Panel – danh sách scene dạng bảng
  * className only – Tailwind CSS, no inline styles
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
@@ -324,7 +324,12 @@ interface BatchListPanelProps {
 export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData } = useAffiliateVideoContext();
+  const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
+
+  // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
+  useEffect(() => {
+    setSceneList(scenes);
+  }, [scenes]);
 
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
@@ -553,7 +558,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
           <tbody>
             {sceneList.map((scene, index) => (
               <SceneRowGroup
-                key={scene.id}
+                key={`${selectedHistoryId || 'default'}-${scene.id}`}
                 scene={scene}
                 index={index}
                 isDisabled={!!scene.disabled}

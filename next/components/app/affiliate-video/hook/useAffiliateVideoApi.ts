@@ -320,7 +320,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       scriptDB
         .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
-      console.log(scriptResult);
       // Push to history (await so provider can read it immediately)
       await pushToSceneHistory(scriptResult);
 

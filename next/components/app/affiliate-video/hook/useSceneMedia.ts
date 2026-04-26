@@ -153,6 +153,28 @@ export function useSceneMedia({ scene }: UseSceneMediaParams): UseSceneMediaRetu
     };
   }, []);
 
+  // ── Reset all local states when scene.id changes ──
+  // This ensures stale loading/progress UI is cleared when switching history items
+  useEffect(() => {
+    // Stop any running progress timers
+    if (imageProgressTimerRef.current) {
+      clearInterval(imageProgressTimerRef.current);
+      imageProgressTimerRef.current = null;
+    }
+    if (videoProgressTimerRef.current) {
+      clearInterval(videoProgressTimerRef.current);
+      videoProgressTimerRef.current = null;
+    }
+    // Reset local generating states
+    setGeneratingImage(false);
+    setImageProgress(0);
+    setGeneratedImage(null);
+    setGeneratingVideo(false);
+    setVideoProgress(0);
+    setVideoStatusMessage("");
+    setGeneratedVideo(null);
+  }, [scene.id]);
+
   // ── Sync batch generation state with simulated progress ──
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
