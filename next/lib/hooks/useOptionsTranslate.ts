@@ -4,6 +4,7 @@ import {
   ART_STYLE_OPTIONS,
   CATEGORY_OPTIONS,
   LANGUAGE_OPTIONS,
+  StoryModeTypeEnum,
 } from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
@@ -849,7 +850,7 @@ export const useOptionsTranslation = () => {
     mood: "Vui vẻ",
     language: LANGUAGE_OPTIONS[0].label,
     artStyle: ART_STYLE_OPTIONS[0].label,
-    storyModeType: "image_to_video",
+    storyModeType: StoryModeTypeEnum.image_to_video,
     aspectRatio: "9:16",
     batchSize: 1,
   };
