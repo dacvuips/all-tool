@@ -397,6 +397,11 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     }
   }
 
+  // Gửi kết quả video về client qua SSE
+  const sendSSE = (data: any) => {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+  };
+
   if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
     const errorMsg =
       pollCount >= MAX_POLLS
@@ -406,24 +411,43 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     // Log error message
     logger.error(`[generation-video] Error message: ${errorMsg}`);
 
+    sendSSE({ type: "error", message: errorMsg });
     res.end();
     return;
   }
 
-  // Extract fifeUrl from operation metadata
-  const fifeUrl: string | null = mediaResult?.operation?.metadata?.video?.fifeUrl || null;
+  // Log full mediaResult for debugging
+  logger.info(
+    `[generation-video] Extracting fifeUrl from mediaResult: ${JSON.stringify(mediaResult)}`
+  );
+
+  // Extract fifeUrl from operation metadata – try multiple known paths
+  // because text-to-video and image-to-video APIs may return different structures
+  const metadata = mediaResult?.operation?.metadata;
+  const fifeUrl: string | null =
+    metadata?.video?.fifeUrl ||
+    metadata?.video?.uri ||
+    metadata?.video?.downloadUri ||
+    metadata?.fifeUrl ||
+    metadata?.mediaContent?.uri ||
+    metadata?.mediaContent?.fifeUrl ||
+    mediaResult?.operation?.result?.video?.fifeUrl ||
+    mediaResult?.operation?.result?.fifeUrl ||
+    null;
 
   if (!fifeUrl) {
-    logger.info(`[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`);
+    const errorMsg = "Không tìm thấy URL video trong kết quả API";
+    logger.error(
+      `[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`
+    );
 
+    sendSSE({ type: "error", message: errorMsg });
     res.end();
     return;
   }
 
-  // Gửi kết quả video về client qua SSE
-  const sendSSE = (data: any) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  logger.info(`[generation-video] Found fifeUrl: ${fifeUrl}`);
+
   sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
   sendSSE({
     type: "done",

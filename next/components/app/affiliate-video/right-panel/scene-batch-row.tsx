@@ -396,6 +396,9 @@ export function SceneBatchRow({
                           v.currentTime = 0;
                         }}
                         onClick={() => setShowVideoModal(true)}
+                        onError={(e) => {
+                          console.error("[SceneBatchRow] Video load error:", videoSrc, e);
+                        }}
                       />
                       {/* Play icon overlay */}
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
