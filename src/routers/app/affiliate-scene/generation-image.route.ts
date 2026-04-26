@@ -25,7 +25,7 @@ export default [
           >;
           config?: {
             numberOfImages?: number;
-            aspectRatio?: string;
+            aspectRatio?: "16:9" | "9:16";
           };
         };
 
@@ -59,7 +59,7 @@ export default [
         }
 
         // Tạo payload theo cấu trúc Google Labs API
-
+        console.log(body.config?.aspectRatio);
         await callAisandboxImageAPI({
           res,
           prompt: body.prompt,

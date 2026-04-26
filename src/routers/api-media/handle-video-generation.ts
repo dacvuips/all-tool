@@ -27,7 +27,7 @@ export async function handleVideoGeneration(
       | { imageBytes: string; mimeType?: string } // base64
     >;
     config?: {
-      aspectRatio?: string;
+      aspectRatio?: "16:9" | "9:16";
       generateAudio?: boolean;
     };
   };
@@ -71,7 +71,7 @@ export async function handleVideoGeneration(
 interface CallAisandboxParams {
   res: Response;
   prompt: string;
-  aspectRatio?: string;
+  aspectRatio: "16:9" | "9:16";
   uploadedImageNames?: string[];
   recaptchaToken: string;
   sessionId: string;
@@ -107,11 +107,10 @@ export async function callAisandboxVideoAPI(
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────
 
-function mapAspectRatio(aspectRatio?: string): string {
+function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
   const input = aspectRatio || "9:16";
-  if (input === "16:9" || input === "landscape") return "VIDEO_ASPECT_RATIO_LANDSCAPE";
-  if (input === "1:1" || input === "square") return "VIDEO_ASPECT_RATIO_SQUARE";
-  return "VIDEO_ASPECT_RATIO_PORTRAIT";
+
+  return input === "16:9" ? "VIDEO_ASPECT_RATIO_LANDSCAPE" : "VIDEO_ASPECT_RATIO_PORTRAIT";
 }
 
 function buildClientContext(params: CallAisandboxParams) {
@@ -172,6 +171,7 @@ async function callTextOnlyAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
+
   const batchId = crypto.randomUUID();
   const seed = Math.floor(Math.random() * 1000000);
 
@@ -228,7 +228,7 @@ async function callStartImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_i2v_s_fast_portrait_ultra",
+        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -238,6 +238,7 @@ async function callStartImageAPI(
     useV2ModelConfig: true,
   };
 
+  console.log(payload.requests);
   const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage";
   return sendAndParseResponse(endpoint, payload, params.accessToken);
 }
@@ -270,7 +271,7 @@ async function callStartAndEndImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_i2v_s_fast_portrait_ultra_fl",
+        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -315,7 +316,7 @@ async function callReferenceImagesAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_r2v_fast_portrait_ultra",
+        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
         metadata: {},
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,
@@ -437,9 +438,7 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
 
   if (!fifeUrl) {
     const errorMsg = "Không tìm thấy URL video trong kết quả API";
-    logger.error(
-      `[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`
-    );
+    logger.error(`[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`);
 
     sendSSE({ type: "error", message: errorMsg });
     res.end();

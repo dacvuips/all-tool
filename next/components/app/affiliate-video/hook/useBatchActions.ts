@@ -32,6 +32,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
+    affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
   const isPromptToVideo = scriptData.storyModeType === StoryModeTypeEnum.prompt_to_video;
   const toast = useToast();
@@ -359,6 +360,7 @@ export function useBatchActions(scenes: SceneScript[]) {
           await generateImage({
             sceneId: scene.id,
             prompt: scene.imageGenPrompt,
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
           });
           completed++;
           setBatchCompleted(completed);
@@ -468,6 +470,7 @@ export function useBatchActions(scenes: SceneScript[]) {
               prompt: scene.voiceDisable
                 ? `[MOTION]${scene.motionPrompt}`
                 : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             });
             completed++;
             setVideoBatchCompleted(completed);
@@ -501,6 +504,7 @@ export function useBatchActions(scenes: SceneScript[]) {
             existingImage = await generateImage({
               sceneId: scene.id,
               prompt: scene.imageGenPrompt,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             });
           } catch (imgErr) {
             console.error(
@@ -541,6 +545,7 @@ export function useBatchActions(scenes: SceneScript[]) {
                 mimeType: existingImage.mimeType,
               },
             ],
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
           });
           completed++;
           setVideoBatchCompleted(completed);

@@ -26,7 +26,7 @@ export async function handleImageGeneration(
       | { imageBytes: string; mimeType?: string } // base64
     >;
     config?: {
-      aspectRatio?: string;
+      aspectRatio?: "16:9" | "9:16";
     };
   };
   if (!body?.prompt) {
@@ -61,7 +61,7 @@ export async function handleImageGeneration(
 interface CallAisandboxParams {
   res: Response;
   prompt: string;
-  aspectRatio?: string;
+  aspectRatio?: "16:9" | "9:16";
   uploadedImageNames?: string[];
   recaptchaToken: string;
   sessionId: string;
@@ -84,11 +84,9 @@ export async function callAisandboxImageAPI(params: CallAisandboxParams): Promis
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────
 
-function mapAspectRatio(aspectRatio?: string): string {
+function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
   const input = aspectRatio || "9:16";
-  if (input === "16:9" || input === "landscape") return "IMAGE_ASPECT_RATIO_LANDSCAPE";
-  if (input === "1:1" || input === "square") return "IMAGE_ASPECT_RATIO_SQUARE";
-  return "IMAGE_ASPECT_RATIO_PORTRAIT";
+  return input === "16:9" ? "IMAGE_ASPECT_RATIO_LANDSCAPE" : "IMAGE_ASPECT_RATIO_PORTRAIT";
 }
 function buildClientContext(params: CallAisandboxParams) {
   return {

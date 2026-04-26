@@ -27,7 +27,7 @@ export default [
             | { imageBytes: string; mimeType?: string } // base64
           >;
           config?: {
-            aspectRatio?: string;
+            aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
           };
         };
