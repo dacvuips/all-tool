@@ -8,6 +8,7 @@ import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { RiCameraLensFill, RiCloseLine, RiLoader4Fill, RiMagicFill } from "react-icons/ri";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Button, Form } from "../../../shared/utilities/form";
 import { TAB_TYPE } from "../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
@@ -22,7 +23,7 @@ const SuggestButton = () => {
   const { videoConfig, patchConfig } = useAffiliateVideoContext();
   const formContext = useFormContext();
   const [isLoading, setIsLoading] = useState(false);
-
+  const { customer } = useAuth();
   /** Gọi AI gợi ý cấu hình nhân vật & nội dung mẹo */
 
   const handleSuggestConfig = async () => {
@@ -56,7 +57,7 @@ const SuggestButton = () => {
       outline
       info
       onClick={handleSuggestConfig}
-      disabled={isLoading}
+      disabled={isLoading || !customer}
       className="h-7 px-2"
       icon={
         isLoading ? (
@@ -73,7 +74,8 @@ const SuggestButton = () => {
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: TAB_TYPE }) => {
   const { t } = useTranslation();
-  const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } = useAffiliateVideoContext();
+  const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } =
+    useAffiliateVideoContext();
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
   const wrappedSubmit = (data: any, promptText?: string) => {

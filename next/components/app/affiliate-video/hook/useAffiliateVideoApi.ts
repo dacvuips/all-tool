@@ -4,6 +4,7 @@
  */
 import { useCallback } from "react";
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
@@ -244,7 +245,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
-
+  const { customer } = useAuth();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
     async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string }) => {
@@ -677,17 +678,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
   // ── getSceneHistory – lấy lịch sử generate scene ──
   const getSceneHistory = useCallback(async (): Promise<SceneHistoryItem[]> => {
+    if (!customer?._id) return [];
     try {
       return (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
     } catch {
       return [];
     }
-  }, [scriptDB]);
+  }, [scriptDB, customer?._id]);
 
   // ── clearSceneHistory – xóa toàn bộ lịch sử ──
   const clearSceneHistory = useCallback(async (): Promise<void> => {
+    if (!customer?._id) return;
     await scriptDB.set(CACHE_KEY.sceneHistory, []);
-  }, [scriptDB]);
+  }, [scriptDB, customer?._id]);
 
   return {
     generateScene,

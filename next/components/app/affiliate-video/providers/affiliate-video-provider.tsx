@@ -166,13 +166,15 @@ export function AffiliateVideoProvider(props) {
   } = useOptionsTranslation();
   const [affiliateVideoFormConfig, setAffiliateVideoFormConfig] =
     useState<AffiliateVideoFormConfig>(DEFAULT_VIDEO_CONFIG);
-  console.log(affiliateVideoFormConfig);
+
   // ── On mount: restore last cached script + config from IndexedDB ──
   useEffect(() => {
-    getSceneList();
-    restoreConfigFromDB();
-    refreshSceneHistory();
-  }, []);
+    if (customer?._id) {
+      getSceneList();
+      restoreConfigFromDB();
+      refreshSceneHistory();
+    }
+  }, [customer?._id]);
 
   /** Refresh history list from IndexedDB */
   const refreshSceneHistory = useCallback(async () => {
