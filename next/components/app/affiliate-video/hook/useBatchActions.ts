@@ -19,8 +19,8 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───
-const IMAGE_CONCURRENCY = 2;
-const VIDEO_CONCURRENCY = 2;
+export const IMAGE_CONCURRENCY = 2;
+export const VIDEO_CONCURRENCY = 2;
 
 export function useBatchActions(scenes: SceneScript[]) {
   const { t } = useTranslation();
