@@ -907,6 +907,11 @@ export const useOptionsTranslation = () => {
     { value: "creative", label: t("Sáng tạo & Nghệ sĩ") },
   ];
 
+  const STORY_MODE_OPTIONS = [
+    { value: StoryModeTypeEnum.image_to_video, label: t("Ảnh sang Video") },
+    { value: StoryModeTypeEnum.prompt_to_video, label: t("Prompt sang Video") },
+  ];
+
   return {
     TARGETS,
     TYPE,
@@ -1002,5 +1007,6 @@ export const useOptionsTranslation = () => {
     CAMERA_ANGLES,
     BUILTIN_VOICES,
     CATEGORY_OPTIONS,
+    STORY_MODE_OPTIONS,
   };
 };

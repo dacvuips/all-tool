@@ -3,6 +3,7 @@
  * Hook chứa tất cả các hàm gọi API cho module affiliate-video.
  */
 import { useCallback } from "react";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
@@ -238,6 +239,7 @@ export interface UseAffiliateVideoApiReturn {
 
 export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const toast = useToast();
+  const { STORY_MODE_OPTIONS } = useOptionsTranslation();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
@@ -271,7 +273,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
 
         const now = new Date();
-        const label = `Kịch bản – ${now.toLocaleDateString("vi-VN", {
+        const label = `${
+          STORY_MODE_OPTIONS.find((s) => s.value === scriptResult.storyModeType)?.label
+        } – ${now.toLocaleDateString("vi-VN", {
           day: "2-digit",
           month: "2-digit",
         })} ${now.toLocaleTimeString("vi-VN", {
