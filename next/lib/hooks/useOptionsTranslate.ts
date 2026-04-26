@@ -1,9 +1,6 @@
 import { useTranslation } from "next-i18next";
 import {
   AffiliateVideoFormConfig,
-  ART_STYLE_OPTIONS,
-  CATEGORY_OPTIONS,
-  LANGUAGE_OPTIONS,
   StoryModeTypeEnum,
 } from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
@@ -799,20 +796,6 @@ export const useOptionsTranslation = () => {
     { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
   ];
 
-  // ── Affiliate Video: Category Options (translated) ──
-  const CATEGORY_TRANSLATED_OPTIONS = [
-    { value: "meo_nau_an", label: t("Mẹo Nấu Ăn") },
-    { value: "meo_cuoc_song", label: t("Mẹo Vật Cuộc Sống") },
-    { value: "meo_don_dep", label: t("Mẹo Don Dẹp") },
-    { value: "thu_cong_diy", label: t("Thủ Công & DIY") },
-    { value: "meo_hoc_tap", label: t("Mẹo Học Tập") },
-    { value: "suc_khoe", label: t("Mẹo Sức Khoẻ") },
-    { value: "lam_dep", label: t("Mẹo Làm Đẹp") },
-    { value: "tai_chinh", label: t("Mẹo Tài Chính") },
-    { value: "cong_nghe", label: t("Mẹo Công Nghệ") },
-    { value: "cham_thu_cung", label: t("Mẹo Chăm Thú Cưng") },
-  ];
-
   // ── Affiliate Video: Mood / Tone Options (translated) ──
   const MOOD_TRANSLATED_OPTIONS = [
     { value: "dynamic", label: t("Năng động & Nhiệt tình") },
@@ -826,34 +809,104 @@ export const useOptionsTranslation = () => {
 
   // ── Affiliate Video: Art Style Options (translated) ──
   const ART_STYLE_TRANSLATED_OPTIONS = [
-    { value: "pixar", label: t("3D Pixar") },
-    { value: "realistic", label: t("Chân thực (Realistic)") },
+    { value: "pixar", label: t("3D Pixar Cute") },
     { value: "pixar_realism", label: t("Pixar Realism (Nhân hoá)") },
+    { value: "realistic", label: t("Chân thực (Realistic)") },
     { value: "crochet", label: t("Len Móc (Crochet/Amigurumi)") },
     { value: "clay", label: t("Đất Sét (Claymation)") },
     { value: "diorama", label: t("Mô hình Tí hon (Diorama)") },
     { value: "lego", label: t("Đồ chơi Gạch (LEGO)") },
     { value: "mannequin", label: t("Mannequin 3D (Siêu thực)") },
-    { value: "zack_doge", label: t("3D Educational (Zack D.Style)") },
+    { value: "zack_doge", label: t("3D Educational Simulation (Zack D. Style)") },
     { value: "chalkboard", label: t("Bảng Phấn (Chalkboard)") },
-    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist)") },
+    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist Animation)") },
     { value: "stickman", label: t("Người Que (Stickman)") },
     { value: "simpsons", label: t("Hoạt hình Simpsons") },
-    { value: "business", label: t("Giải thích Doanh nghiệp") },
-    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism") },
+    { value: "business", label: t("Giải thích Doanh nghiệp (Business Explainer)") },
+    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
+    { value: "dark_fantasy", label: t("Dark Fantasy Folk Storytelling Digital Painting") },
+    { value: "anime", label: t("Hoạt hình Anime (Japanese Anime)") },
+    { value: "game_2d", label: t("Game 2D / Casual Mobile Game") },
+    { value: "dark_grotesque", label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
+  ];
+
+  const CATEGORY_OPTIONS = [
+    { value: "meo_nau_an", label: t("Mẹo Nấu Ăn") },
+    { value: "meo_cuoc_song", label: t("Mẹo Vật Cuộc Sống") },
+    { value: "meo_don_dep", label: t("Mẹo Don Dẹp") },
+    { value: "thu_cong_diy", label: t("Thủ Công & DIY") },
+    { value: "meo_hoc_tap", label: t("Mẹo Học Tập") },
+    { value: "suc_khoe", label: t("Mẹo Sức Khoẻ") },
+    { value: "lam_dep", label: t("Mẹo Làm Đẹp") },
+    { value: "tai_chinh", label: t("Mẹo Tài Chính") },
+    { value: "cong_nghe", label: t("Mẹo Công Nghệ") },
+    { value: "cham_thu_cung", label: t("Mẹo Chăm Thú Cưng") },
+  ];
+  const LANGUAGE_OPTIONS = [
+    { value: "vn", label: t("🇻🇳 Tiếng Việt"), flag: "vn" },
+    { value: "en", label: t("🇺🇸 English"), flag: "us" },
+    { value: "zh", label: t("🇨🇳 中文"), flag: "cn" },
+    { value: "ja", label: t("🇯🇵 日本語"), flag: "jp" },
+    { value: "ko", label: t("🇰🇷 한국어"), flag: "kr" },
+    { value: "hi", label: t("🇮🇳 हिन्दी"), flag: "hi" },
+    { value: "fr", label: t("🇫🇷 Français"), flag: "fr" },
+    { value: "de", label: t("🇩🇪 Deutsch"), flag: "de" },
+    { value: "es", label: t("🇪🇸 Español"), flag: "es" },
+    { value: "it", label: t("🇮🇹 Italiano"), flag: "it" },
+    { value: "pt", label: t("🇵🇹 Português"), flag: "pt" },
+    { value: "ru", label: t("🇷🇺 Русский"), flag: "ru" },
+    { value: "ar", label: t("🇸🇦 العربية"), flag: "sa" },
+    { value: "tr", label: t("🇹🇷 Türkçe"), flag: "tr" },
   ];
 
   const DEFAULT_VIDEO_CONFIG: AffiliateVideoFormConfig = {
     category: CATEGORY_OPTIONS[0].label,
-    objectToPersonify: "Một quả chuối tươi",
-    tipContent: "Cách ăn chuối tốt nhất",
-    mood: "Vui vẻ",
+    objectToPersonify: t("Một quả chuối tươi"),
+    tipContent: t("Cách ăn chuối tốt nhất"),
+    mood: t("Vui vẻ"),
     language: LANGUAGE_OPTIONS[0].label,
-    artStyle: ART_STYLE_OPTIONS[0].label,
+    artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
     storyModeType: StoryModeTypeEnum.image_to_video,
     aspectRatio: "9:16",
     batchSize: 1,
   };
+
+  const BUILTIN_VOICES = [
+    { value: "Aoede", label: `Aoede – ${t("Nữ, tươi vui")}` },
+    { value: "Charon", label: `Charon – ${t("Nam, trầm ấm")}` },
+    { value: "Fenrir", label: `Fenrir – ${t("Nam, mạnh mẽ")}` },
+    { value: "Kore", label: `Kore – ${t("Nữ, chuyên nghiệp")}` },
+    { value: "Leda", label: `Leda – ${t("Nữ, nhẹ nhàng")}` },
+    { value: "Orus", label: `Orus – ${t("Nam, điềm tĩnh")}` },
+    { value: "Puck", label: `Puck – ${t("Nam, thú vị")}` },
+    { value: "Zephyr", label: `Zephyr – ${t("Nam, sáng sủa")}` },
+  ];
+  const CAMERA_ANGLES = [
+    t("Cận cảnh"),
+    t("Trung cận"),
+    t("Trung cảnh"),
+    t("Toàn cảnh"),
+    t("Viền cảnh"),
+    t("Góc thấp"),
+    t("Góc cao"),
+    t("Qua vai"),
+    t("Góc nghiêng"),
+    t("Theo dõi"),
+    t("POV"),
+  ];
+
+  /** Art style options aligned with AffiliateFormConfig.artStyle */
+
+  const MOOD_OPTIONS = [
+    { value: "dynamic", label: t("Năng động & Nhiệt tình") },
+    { value: "drama", label: t("Drama & Kịch tính") },
+    { value: "expert", label: t("Chuyên gia khó tính") },
+    { value: "hau_dau", label: t("Hậu đậu & Hài hước") },
+    { value: "zen", label: t("Điềm tính (Zen)") },
+    { value: "thriller", label: t("Kịch tính & Lố lăng") },
+    { value: "creative", label: t("Sáng tạo & Nghệ sĩ") },
+  ];
+
   return {
     TARGETS,
     TYPE,
@@ -942,8 +995,12 @@ export const useOptionsTranslation = () => {
     CAMERA_ANGLE_OPTIONS,
     BUILTIN_VOICE_OPTIONS,
     IMAGE_STYLE_OPTIONS,
-    CATEGORY_TRANSLATED_OPTIONS,
     MOOD_TRANSLATED_OPTIONS,
     ART_STYLE_TRANSLATED_OPTIONS,
+    MOOD_OPTIONS,
+    LANGUAGE_OPTIONS,
+    CAMERA_ANGLES,
+    BUILTIN_VOICES,
+    CATEGORY_OPTIONS,
   };
 };

@@ -15,11 +15,11 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../shared/utilities/form";
 import {
   CACHE_KEY,
-  CAMERA_ANGLES,
   CharacterItem,
   DB_NAME,
   SceneScript,
@@ -65,6 +65,7 @@ function AddSceneModal({
   const [selectedChars, setSelectedChars] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const [audio, setAudio] = useState("");
+  const { CAMERA_ANGLES } = useOptionsTranslation();
   const toggleChar = (id: string) => {
     setSelectedChars((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
   };
@@ -558,7 +559,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
           <tbody>
             {sceneList.map((scene, index) => (
               <SceneRowGroup
-                key={`${selectedHistoryId || 'default'}-${scene.id}`}
+                key={`${selectedHistoryId || "default"}-${scene.id}`}
                 scene={scene}
                 index={index}
                 isDisabled={!!scene.disabled}

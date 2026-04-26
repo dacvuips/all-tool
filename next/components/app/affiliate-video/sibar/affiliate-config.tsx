@@ -10,17 +10,10 @@ import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, Textarea } from "../../../shared/utilities/form";
 import { Select } from "../../../shared/utilities/form/select";
-import {
-  ART_STYLE_OPTIONS,
-  ASPECT_RATIOS,
-  CATEGORY_OPTIONS,
-  LANGUAGE_OPTIONS,
-  MOOD_OPTIONS,
-  StoryModeTypeEnum,
-  TAB_TYPE,
-} from "../constants";
+import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -31,6 +24,8 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
   const router = useRouter();
   const { videoConfig, patchConfig, storyModeType, setStoryModeType } = useAffiliateVideoContext();
   const formContext = useFormContext();
+  const { ART_STYLE_TRANSLATED_OPTIONS, CATEGORY_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } =
+    useOptionsTranslation();
 
   // Local state for instant UI feedback; synced from URL param on mount/navigation
   const initialMode =
@@ -160,7 +155,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
               native
               id="art-style-select"
               className="border-gray-200"
-              options={ART_STYLE_OPTIONS}
+              options={ART_STYLE_TRANSLATED_OPTIONS}
               onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
             />
           </Field>

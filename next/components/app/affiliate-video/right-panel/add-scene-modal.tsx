@@ -15,9 +15,10 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../shared/utilities/form";
-import { CAMERA_ANGLES, CharacterItem, SceneScript } from "../constants";
+import { CharacterItem, SceneScript } from "../constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type InsertPosition = "above" | "below";
@@ -55,6 +56,7 @@ export function AddSceneModal({
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [sceneAudio, setSceneAudio] = useState("");
+  const { CAMERA_ANGLES } = useOptionsTranslation();
 
   /** Toggle nhân vật được chọn */
   const toggleCharacter = (characterId: string) => {

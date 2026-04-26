@@ -18,9 +18,10 @@ import {
   RiVideoFill,
   RiVolumeUpLine,
 } from "react-icons/ri";
+import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button, Input, Select } from "../../../shared/utilities/form";
-import { BUILTIN_VOICES, SceneScript } from "../constants";
+import { SceneScript } from "../constants";
 import { useBatchActions } from "../hook/useBatchActions";
 
 interface BatchActionBarProps {
@@ -29,6 +30,7 @@ interface BatchActionBarProps {
 
 export function BatchActionBar({ scenes }: BatchActionBarProps) {
   const { t } = useTranslation();
+  const { BUILTIN_VOICES } = useOptionsTranslation();
   const {
     // Voice export dialog
     showVoiceExportDialog,
