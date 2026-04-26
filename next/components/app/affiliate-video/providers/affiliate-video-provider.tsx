@@ -324,7 +324,17 @@ export function AffiliateVideoProvider(props) {
 
         // story mode
         storyModeType,
-        setStoryModeType,
+        setStoryModeType: (mode: StoryModeTypeEnum) => {
+          setStoryModeType(mode);
+          // Persist storyModeType into lastScript
+          scriptDB.get(CACHE_KEY.lastScript).then((cached) => {
+            if (cached) {
+              scriptDB
+                .set(CACHE_KEY.lastScript, { ...cached, storyModeType: mode })
+                .catch((e) => console.warn("[affiliate-video] Failed to persist storyModeType", e));
+            }
+          });
+        },
       }}
     >
       {props.children}

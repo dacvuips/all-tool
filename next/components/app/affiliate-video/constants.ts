@@ -49,7 +49,7 @@ export interface AffiliateVideoFormConfig {
   mood: string;
   language: string;
   artStyle: string;
-  storyModeType: StoryModeType;
+  storyModeType: StoryModeTypeEnum;
   aspectRatio: AspectRatio;
   batchSize: number;
 }
@@ -226,6 +226,7 @@ export interface SceneScript {
 }
 
 export interface ScriptData {
+  storyModeType: StoryModeTypeEnum;
   topicTitle: string;
   artStyle: string;
   environment: string;

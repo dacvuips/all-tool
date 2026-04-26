@@ -300,9 +300,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
       const result = await callGenerationSceneApi({ config: data });
-
       if (!result) return undefined;
-      const scriptResult: ScriptData = result.data;
+      const scriptResult: ScriptData = { ...result.data, storyModeType: data.storyModeType };
 
       // Gán id ngẫu nhiên cho từng scene mới
       if (scriptResult?.scenes) {
@@ -317,7 +316,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         .set(CACHE_KEY.generateInput, data)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
-      // Persist script result
+      // Persist script result (include storyModeType)
       scriptDB
         .set(CACHE_KEY.lastScript, scriptResult)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
@@ -350,9 +349,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }));
       }
 
-      // Persist script result
+      // Persist script result (include storyModeType)
       scriptDB
-        .set(CACHE_KEY.lastScript, scriptResult)
+        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType })
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
       // Push to history (await so provider can read it immediately)

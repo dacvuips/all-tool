@@ -318,12 +318,14 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
+  storyModeType: StoryModeTypeEnum;
 }
 
-export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
+export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData, storyModeType } = useAffiliateVideoContext();
+  const { scriptData, setScriptData } = useAffiliateVideoContext();
+
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
 
@@ -499,7 +501,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              {storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
                 <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
                   <div className="flex items-center gap-1">
                     <RiImageFill className="text-xs" />
@@ -513,7 +515,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                   {t("CHUYỂN ĐỘNG & ÂM THANH")}
                 </div>
               </th>
-              {storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
                 <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
                   {t("HÌNH ẢNH")}
                 </th>
@@ -556,7 +558,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 index={index}
                 isDisabled={!!scene.disabled}
                 characters={characters}
-                storyModeType={storyModeType}
+                storyModeType={scriptData.storyModeType}
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}
