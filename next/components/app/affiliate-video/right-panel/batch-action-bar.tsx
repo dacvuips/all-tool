@@ -78,10 +78,15 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     pendingImageCount,
     availableImageCount,
     pendingVideoCount,
+    availableVideoCount,
 
     // Downloads
     downloading,
+    downloadingVideo,
+    downloadLabel,
+    downloadVideoLabel,
     handleDownloadAllImages,
+    handleDownloadAllVideos,
 
     // Export
     handleExportPromptCSV,
@@ -116,7 +121,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       id: "batch-download-img",
       icon: downloading ? <RiLoader4Line className="animate-spin" /> : <RiDownloadLine />,
       label: downloading
-        ? t("Đang tải...")
+        ? `${t("Đang tải")} ${downloadLabel}...`
         : `${t("Tải Ảnh")}${availableImageCount > 0 ? ` (x${availableImageCount})` : ""}`,
       color: downloading ? "bg-blue-400 cursor-wait" : "bg-blue-500 hover:bg-blue-600",
       method: handleDownloadAllImages,
@@ -148,9 +153,13 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       : []),
     {
       id: "batch-download-video",
-      icon: <RiDownloadLine />,
-      label: `${t("Tải Video")} (0)`,
-      color: "bg-indigo-500 hover:bg-indigo-600",
+      icon: downloadingVideo ? <RiLoader4Line className="animate-spin" /> : <RiDownloadLine />,
+      label: downloadingVideo
+        ? `${t("Đang tải")} ${downloadVideoLabel}...`
+        : `${t("Tải Video")}${availableVideoCount > 0 ? ` (x${availableVideoCount})` : ""}`,
+      color: downloadingVideo ? "bg-indigo-400 cursor-wait" : "bg-indigo-500 hover:bg-indigo-600",
+      method: handleDownloadAllVideos,
+      disabled: downloadingVideo || availableVideoCount === 0,
     },
     {
       id: "batch-retry-video",

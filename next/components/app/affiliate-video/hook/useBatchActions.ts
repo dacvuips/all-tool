@@ -10,7 +10,6 @@
  * - Counting pending / available items
  */
 import { saveAs } from "file-saver";
-import JSZip from "jszip";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
@@ -255,9 +254,42 @@ export function useBatchActions(scenes: SceneScript[]) {
   // ═══════════════════════════════════════════════════════════════════
   const [downloadingExtended, setDownloadingExtended] = useState(false);
   const [downloading, setDownloading] = useState(false);
+  const [downloadingVideo, setDownloadingVideo] = useState(false);
+  const [downloadLabel, setDownloadLabel] = useState("");
+  const [downloadVideoLabel, setDownloadVideoLabel] = useState("");
+
+  /** Helper: base64 string → Blob */
+  const base64ToBlob = useCallback((base64: string, mimeType: string): Blob => {
+    const byteChars = atob(base64);
+    const byteNumbers = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      byteNumbers[i] = byteChars.charCodeAt(i);
+    }
+    return new Blob([byteNumbers], { type: mimeType });
+  }, []);
+
+  /** Helper: download a blob and wait for browser to process it */
+  const downloadBlobSequentially = useCallback(
+    async (blob: Blob, fileName: string, waitMs: number) => {
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+
+      // Wait for browser to fully process this download before continuing
+      await new Promise((r) => setTimeout(r, waitMs));
+
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    },
+    []
+  );
 
   // ═══════════════════════════════════════════════════════════════════
-  // ── handleDownloadAllImages: collect all generated images → ZIP → download ──
+  // ── handleDownloadAllImages: download images sequentially one by one ──
   // ═══════════════════════════════════════════════════════════════════
   const handleDownloadAllImages = useCallback(async () => {
     if (downloading || batchRunning) return;
@@ -265,43 +297,113 @@ export function useBatchActions(scenes: SceneScript[]) {
 
     try {
       const eligibleScenes = scenes.filter((s) => !s.disabled);
-      const zip = new JSZip();
-      let count = 0;
 
+      // Pre-collect scenes that have images
+      const scenesWithImages: { scene: typeof eligibleScenes[0]; img: any }[] = [];
       for (const scene of eligibleScenes) {
         const img = await getGeneratedImage(scene.id);
-        if (!img) continue;
-
-        // Decode base64 → binary
-        const byteChars = atob(img.imageBytes);
-        const byteNumbers = new Uint8Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNumbers[i] = byteChars.charCodeAt(i);
-        }
-
-        const ext = img.mimeType.split("/")[1] || "png";
-        const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
-        zip.file(fileName, byteNumbers);
-        count++;
+        if (img) scenesWithImages.push({ scene, img });
       }
 
-      if (count === 0) {
+      if (scenesWithImages.length === 0) {
         toast.warn(t("Chưa có ảnh nào được tạo để tải"));
         setDownloading(false);
+        setDownloadLabel("");
         return;
       }
 
-      const blob = await zip.generateAsync({ type: "blob" });
-      const timestamp = new Date().toISOString().slice(0, 10);
-      saveAs(blob, `batch-images-${timestamp}.zip`);
-      toast.success(`${t("Đã tải")} ${count} ${t("ảnh thành công!")}`);
+      const total = scenesWithImages.length;
+      for (let i = 0; i < total; i++) {
+        const { scene, img } = scenesWithImages[i];
+        setDownloadLabel(`${i + 1}/${total}`);
+
+        const ext = img.mimeType.split("/")[1] || "png";
+        const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
+
+        // Convert base64 → Blob → download, then wait 2s before next
+        const blob = base64ToBlob(img.imageBytes, img.mimeType);
+        await downloadBlobSequentially(blob, fileName, 2000);
+      }
+
+      toast.success(`${t("Đã tải")} ${total} ${t("ảnh thành công!")}`);
     } catch (err) {
       console.error("[handleDownloadAllImages] Error:", err);
       toast.error(t("Lỗi khi tải ảnh hàng loạt"));
     } finally {
       setDownloading(false);
+      setDownloadLabel("");
     }
-  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t, base64ToBlob, downloadBlobSequentially]);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ── handleDownloadAllVideos: download videos sequentially one by one ──
+  // ═══════════════════════════════════════════════════════════════════
+  const handleDownloadAllVideos = useCallback(async () => {
+    if (downloadingVideo || videoBatchRunning) return;
+    setDownloadingVideo(true);
+
+    try {
+      const eligibleScenes = scenes.filter((s) => !s.disabled);
+
+      // Pre-collect scenes that have videos
+      const scenesWithVideos: { scene: typeof eligibleScenes[0]; vid: any }[] = [];
+      for (const scene of eligibleScenes) {
+        const vid = await getGeneratedVideo(scene.id);
+        if (vid && (vid.videoUri || vid.videoBytes)) scenesWithVideos.push({ scene, vid });
+      }
+
+      if (scenesWithVideos.length === 0) {
+        toast.warn(t("Chưa có video nào được tạo để tải"));
+        setDownloadingVideo(false);
+        setDownloadVideoLabel("");
+        return;
+      }
+
+      const total = scenesWithVideos.length;
+      let downloaded = 0;
+
+      for (let i = 0; i < total; i++) {
+        const { scene, vid } = scenesWithVideos[i];
+        setDownloadVideoLabel(`${i + 1}/${total}`);
+
+        const ext = vid.mimeType?.split("/")[1] || "mp4";
+        const fileName = `scene-${scene.sceneNumber}-video.${ext}`;
+
+        let blob: Blob | null = null;
+
+        if (vid.videoUri) {
+          // Fetch entire video content first, then download
+          try {
+            const res = await fetch(vid.videoUri);
+            blob = await res.blob();
+          } catch (fetchErr) {
+            console.error(`[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`, fetchErr);
+            continue;
+          }
+        } else if (vid.videoBytes) {
+          blob = base64ToBlob(vid.videoBytes, vid.mimeType);
+        }
+
+        if (!blob) continue;
+
+        // Download blob and wait 3s before next (videos are larger)
+        await downloadBlobSequentially(blob, fileName, 3000);
+        downloaded++;
+      }
+
+      if (downloaded === 0) {
+        toast.warn(t("Không thể tải video nào"));
+      } else {
+        toast.success(`${t("Đã tải")} ${downloaded} video ${t("thành công!")}`);
+      }
+    } catch (err) {
+      console.error("[handleDownloadAllVideos] Error:", err);
+      toast.error(t("Lỗi khi tải video hàng loạt"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t, base64ToBlob, downloadBlobSequentially]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllImage: worker pool ──
@@ -698,8 +800,12 @@ export function useBatchActions(scenes: SceneScript[]) {
 
     // Downloads
     downloading,
+    downloadingVideo,
+    downloadLabel,
+    downloadVideoLabel,
     downloadingExtended,
     handleDownloadAllImages,
+    handleDownloadAllVideos,
 
     // Export
     handleExportPromptCSV,
