@@ -562,6 +562,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 key={`${selectedHistoryId || "default"}-${scene.id}`}
                 scene={scene}
                 index={index}
+                nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
                 isDisabled={!!scene.disabled}
                 characters={characters}
                 storyModeType={scriptData.storyModeType}

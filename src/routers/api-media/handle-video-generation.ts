@@ -190,7 +190,9 @@ async function callTextOnlyAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_t2v_fast_portrait_ultra",
+        videoModelKey: `veo_3_1_t2v_fast_${
+          params.aspectRatio === "9:16" ? "portrait" : "landscape"
+        }_ultra`,
         metadata: {},
       },
     ],
@@ -228,7 +230,9 @@ async function callStartImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
+        videoModelKey: `veo_3_1_i2v_s_fast_${
+          params.aspectRatio === "9:16" ? "portrait" : "landscape"
+        }_ultra`,
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -271,7 +275,9 @@ async function callStartAndEndImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
+        videoModelKey: `veo_3_1_i2v_s_fast_${
+          params.aspectRatio === "9:16" ? "portrait" : "landscape"
+        }_ultra`,
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -316,7 +322,9 @@ async function callReferenceImagesAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: "veo_3_1_i2v_s_fast_ultra",
+        videoModelKey: `veo_3_1_i2v_s_fast_${
+          params.aspectRatio === "9:16" ? "portrait" : "landscape"
+        }_ultra`,
         metadata: {},
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,

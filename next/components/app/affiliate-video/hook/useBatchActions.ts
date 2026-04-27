@@ -152,6 +152,19 @@ export function useBatchActions(scenes: SceneScript[]) {
   const videoStopRef = useRef(false);
 
   // ═══════════════════════════════════════════════════════════════════
+  // ── Batch extend (stitch) video generation state ──
+  // ═══════════════════════════════════════════════════════════════════
+  const [extendBatchRunning, setExtendBatchRunning] = useState(false);
+  const [extendBatchDone, setExtendBatchDone] = useState(false);
+  const [extendBatchCurrentIndex, setExtendBatchCurrentIndex] = useState(-1);
+  const [extendBatchCurrentSceneLabel, setExtendBatchCurrentSceneLabel] = useState("");
+  const [extendBatchTotal, setExtendBatchTotal] = useState(0);
+  const [extendBatchCompleted, setExtendBatchCompleted] = useState(0);
+  const [extendBatchErrors, setExtendBatchErrors] = useState(0);
+  const [extendBatchSkipped, setExtendBatchSkipped] = useState(0);
+  const extendStopRef = useRef(false);
+
+  // ═══════════════════════════════════════════════════════════════════
   // ── Count scenes without generated image & scenes with generated image ──
   // ═══════════════════════════════════════════════════════════════════
   const [pendingImageCount, setPendingImageCount] = useState<number | null>(null);
@@ -697,6 +710,134 @@ export function useBatchActions(scenes: SceneScript[]) {
     videoStopRef.current = true;
   };
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ── handleCreateAllExtendVideo: batch stitch consecutive scene pairs ──
+  // ═══════════════════════════════════════════════════════════════════
+  const handleCreateAllExtendVideo = async () => {
+    if (extendBatchRunning || videoBatchRunning || batchRunning) return;
+
+    // Eligible scenes: not disabled
+    const eligibleScenes = scenes.filter((s) => !s.disabled);
+    if (eligibleScenes.length < 2) {
+      toast.warn(t("Cần ít nhất 2 cảnh để tạo video nối"));
+      return;
+    }
+
+    // Build pairs: each pair = (scene[i], scene[i+1]) where both have generated images
+    const pairs: { scene: SceneScript; nextScene: SceneScript }[] = [];
+    for (let i = 0; i < eligibleScenes.length - 1; i++) {
+      pairs.push({ scene: eligibleScenes[i], nextScene: eligibleScenes[i + 1] });
+    }
+
+    if (pairs.length === 0) return;
+
+    setExtendBatchRunning(true);
+    setExtendBatchTotal(pairs.length);
+    setExtendBatchCompleted(0);
+    setExtendBatchErrors(0);
+    setExtendBatchSkipped(0);
+    setExtendBatchCurrentIndex(0);
+    setExtendBatchCurrentSceneLabel("");
+    extendStopRef.current = false;
+
+    let completed = 0;
+    let errors = 0;
+    let skipped = 0;
+    let nextIndex = 0;
+
+    const worker = async () => {
+      while (true) {
+        if (extendStopRef.current) return;
+
+        const idx = nextIndex++;
+        if (idx >= pairs.length) return;
+
+        const { scene, nextScene } = pairs[idx];
+        setExtendBatchCurrentIndex(idx);
+        setExtendBatchCurrentSceneLabel(
+          `#${scene.sceneNumber} → #${nextScene.sceneNumber}`
+        );
+
+        // Skip if stitch video already exists for this scene
+        const existingStitch = await getGeneratedVideo(scene.id + "::stitch");
+        if (existingStitch) {
+          skipped++;
+          setExtendBatchSkipped(skipped);
+          completed++;
+          setExtendBatchCompleted(completed);
+          continue;
+        }
+
+        // Need both images
+        const startImage = await getGeneratedImage(scene.id);
+        const endImage = await getGeneratedImage(nextScene.id);
+
+        if (!startImage || !endImage) {
+          // Cannot stitch without both images – skip
+          skipped++;
+          setExtendBatchSkipped(skipped);
+          completed++;
+          setExtendBatchCompleted(completed);
+          continue;
+        }
+
+        try {
+          addBatchGeneratingVideoSceneId(scene.id + "::stitch");
+          const motionPrompt = scene.motionPrompt || "smooth transition between scenes";
+          await generateVideo({
+            sceneId: scene.id + "::stitch",
+            prompt: `[MOTION]${motionPrompt}`,
+            images: [
+              { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
+              { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
+            ],
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+          });
+          completed++;
+          setExtendBatchCompleted(completed);
+        } catch (err) {
+          console.error(
+            `[BatchCreateAllExtendVideo] Scene #${scene.sceneNumber} → #${nextScene.sceneNumber} error:`,
+            err
+          );
+          errors++;
+          setExtendBatchErrors(errors);
+          completed++;
+          setExtendBatchCompleted(completed);
+        } finally {
+          removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
+        }
+      }
+    };
+
+    // Start N workers
+    await Promise.all(Array.from({ length: VIDEO_CONCURRENCY }, () => worker()));
+
+    setExtendBatchRunning(false);
+    setExtendBatchDone(true);
+    setExtendBatchCurrentIndex(-1);
+    setExtendBatchCurrentSceneLabel("");
+
+    const generated = completed - skipped - errors;
+    if (extendStopRef.current) {
+      toast.info(
+        `${t("Đã dừng. Tạo được")} ${generated} video nối, ${skipped} ${t("bỏ qua")}, ${errors} ${t("lỗi")}.`
+      );
+    } else if (errors > 0) {
+      toast.warn(
+        `${t("Hoàn thành! Tạo được")} ${generated} video nối, ${skipped} ${t("bỏ qua")}, ${errors} ${t("lỗi")}.`
+      );
+    } else {
+      toast.success(
+        `${t("Đã hoàn thành! Tạo được")} ${generated} video nối${skipped > 0 ? `, ${skipped} ${t("bỏ qua")}` : ""}.`
+      );
+    }
+  };
+
+  const handleStopExtendBatch = () => {
+    extendStopRef.current = true;
+  };
+
   // ── handleExportPromptCSV: xuất danh sách prompt ra file CSV ──
   // ═══════════════════════════════════════════════════════════════════
   const handleExportPromptCSV = useCallback(() => {
@@ -789,6 +930,18 @@ export function useBatchActions(scenes: SceneScript[]) {
     videoBatchSkipped,
     handleCreateAllVideo,
     handleStopVideoBatch,
+
+    // Batch extend video generation
+    extendBatchRunning,
+    extendBatchDone,
+    extendBatchCurrentIndex,
+    extendBatchCurrentSceneLabel,
+    extendBatchTotal,
+    extendBatchCompleted,
+    extendBatchErrors,
+    extendBatchSkipped,
+    handleCreateAllExtendVideo,
+    handleStopExtendBatch,
 
     // Counts
     pendingImageCount,

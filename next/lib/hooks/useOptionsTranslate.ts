@@ -833,7 +833,7 @@ export const useOptionsTranslation = () => {
   const CATEGORY_OPTIONS = [
     { value: "meo_nau_an", label: t("Mẹo Nấu Ăn") },
     { value: "meo_cuoc_song", label: t("Mẹo Vật Cuộc Sống") },
-    { value: "meo_don_dep", label: t("Mẹo Don Dẹp") },
+    { value: "meo_don_dep", label: t("Mẹo Dọn Dẹp") },
     { value: "thu_cong_diy", label: t("Thủ Công & DIY") },
     { value: "meo_hoc_tap", label: t("Mẹo Học Tập") },
     { value: "suc_khoe", label: t("Mẹo Sức Khoẻ") },

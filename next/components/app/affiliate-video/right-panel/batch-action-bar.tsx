@@ -74,11 +74,24 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     handleCreateAllVideo,
     handleStopVideoBatch,
 
+    // Batch extend video generation
+    extendBatchRunning,
+    extendBatchDone,
+    extendBatchCurrentIndex,
+    extendBatchCurrentSceneLabel,
+    extendBatchTotal,
+    extendBatchCompleted,
+    extendBatchErrors,
+    extendBatchSkipped,
+    handleCreateAllExtendVideo,
+    handleStopExtendBatch,
+
     // Counts
     pendingImageCount,
     availableImageCount,
     pendingVideoCount,
     availableVideoCount,
+    pendingExtendCount,
 
     // Downloads
     downloading,
@@ -147,6 +160,30 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
             label: t("Dừng"),
             color: "bg-red-500 hover:bg-red-600",
             method: handleStopVideoBatch,
+            disabled: false,
+          },
+        ]
+      : []),
+    {
+      id: "batch-create-extend-video",
+      icon: extendBatchRunning ? <RiLoader4Line className="animate-spin" /> : <RiVideoFill />,
+      label: extendBatchRunning
+        ? `${t("Đang tạo")} (${extendBatchCompleted}/${extendBatchTotal})`
+        : `${t("Tạo Video Nối")}${
+            pendingExtendCount != null && pendingExtendCount > 0 ? ` (x${pendingExtendCount})` : ""
+          }`,
+      color: extendBatchRunning ? "bg-yellow-400 cursor-wait" : "bg-yellow-500 hover:bg-yellow-600",
+      method: handleCreateAllExtendVideo,
+      disabled: extendBatchRunning || videoBatchRunning || batchRunning,
+    },
+    ...(extendBatchRunning
+      ? [
+          {
+            id: "batch-stop-extend",
+            icon: <RiCloseLine />,
+            label: t("Dừng"),
+            color: "bg-red-500 hover:bg-red-600",
+            method: handleStopExtendBatch,
             disabled: false,
           },
         ]
@@ -303,6 +340,54 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                 style={{
                   width: `${
                     videoBatchTotal > 0 ? (videoBatchCompleted / videoBatchTotal) * 100 : 0
+                  }%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Extend Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
+        {(extendBatchRunning || extendBatchDone) && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+              <span className="flex items-center gap-1 min-w-0">
+                {extendBatchRunning ? (
+                  <>
+                    <span className="whitespace-nowrap">
+                      🔗 {t("Video Nối")} {extendBatchCurrentSceneLabel || "..."} —{" "}
+                      {extendBatchCompleted}/{extendBatchTotal}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    ✅ {t("Video nối hoàn thành")} — {extendBatchCompleted}/{extendBatchTotal}
+                  </>
+                )}
+              </span>
+              <span className="flex items-center gap-2">
+                {extendBatchSkipped > 0 && (
+                  <span className="text-blue-500">
+                    {extendBatchSkipped} {t("bỏ qua")}
+                  </span>
+                )}
+                {extendBatchErrors > 0 && (
+                  <span className="text-red-500">
+                    {extendBatchErrors} {t("lỗi")}
+                  </span>
+                )}
+              </span>
+            </div>
+            <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${
+                  extendBatchDone && !extendBatchRunning
+                    ? "bg-gradient-to-r from-green-400 to-emerald-500"
+                    : "bg-gradient-to-r from-teal-500 to-cyan-500"
+                }`}
+                style={{
+                  width: `${
+                    extendBatchTotal > 0 ? (extendBatchCompleted / extendBatchTotal) * 100 : 0
                   }%`,
                 }}
               />
