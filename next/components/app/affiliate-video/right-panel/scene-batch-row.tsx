@@ -5,7 +5,7 @@
  * - Responsive: trên mobile hiển thị dạng card
  * Extracted from batch-list.tsx – className only, Tailwind CSS
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
@@ -16,18 +16,24 @@ import {
   RiEyeLine,
   RiEyeOffLine,
   RiFileCopyLine,
+  RiGalleryLine,
   RiImageFill,
   RiLoader4Line,
   RiPencilLine,
   RiSaveLine,
+  RiSearchLine,
+  RiUploadCloud2Line,
   RiVideoFill,
 } from "react-icons/ri";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
-import { Button } from "../../../shared/utilities/form";
+import { Dialog } from "../../../shared/utilities/dialog/dialog";
+import { Button, Input } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
-import { CharacterItem, SceneScript, StoryModeTypeEnum } from "../constants";
+import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../constants";
+import { GeneratedImageData } from "../hook/useAffiliateVideoApi";
+import { useIndexedDB } from "../hook/useIndexedDB";
 import { useSceneMedia } from "../hook/useSceneMedia";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
@@ -77,6 +83,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [copiedField, setCopiedField] = useState<EditField | null>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
+  const [showGalleryDialog, setShowGalleryDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const {
     generatedImage,
     generatingImage,
@@ -89,6 +97,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatingExtendVideo,
     extendVideoProgress,
     handleGenerateImage,
+    handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
@@ -328,7 +337,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className="flex gap-2 mt-2  w-full items-center justify-center">
+                <div className="flex gap-2 mt-2 w-full items-center justify-center flex-wrap">
                   <Button
                     onClick={handleDownloadImage}
                     className="w-8 rounded-lg h-8 bg-success-light text-success"
@@ -352,6 +361,22 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                       tooltip={t("Tạo lại")}
                     />
                   )}
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    icon={<RiUploadCloud2Line />}
+                    placement="bottom"
+                    className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Upload ảnh")}
+                  />
+                  <Button
+                    onClick={() => setShowGalleryDialog(true)}
+                    icon={<RiGalleryLine />}
+                    placement="bottom"
+                    className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Chọn từ Gallery")}
+                  />
                 </div>
               </div>
             ) : generatingImage ? (
@@ -671,6 +696,43 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           </span>
         </div>
       </td>
+      {/* Hidden file input for upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(",")[1];
+            if (base64) {
+              handleSetImage({
+                imageBytes: base64,
+                mimeType: file.type || "image/png",
+                fifeUrl: "",
+              });
+              toast.success(t("Đã upload ảnh thành công"));
+            }
+          };
+          reader.readAsDataURL(file);
+          // Reset input so same file can be re-selected
+          e.target.value = "";
+        }}
+      />
+
+      {/* Gallery Dialog */}
+      <ImageGalleryDialog
+        isOpen={showGalleryDialog}
+        onClose={() => setShowGalleryDialog(false)}
+        onSelect={(imageData) => {
+          handleSetImage(imageData);
+          setShowGalleryDialog(false);
+          toast.success(t("Đã chọn ảnh từ Gallery"));
+        }}
+      />
     </tr>
   );
 });
@@ -772,5 +834,140 @@ export function SceneRowGroup({
         </td>
       </tr>
     </React.Fragment>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ImageGalleryDialog – hiển thị danh sách ảnh từ IndexedDB để chọn
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ImageGalleryDialog({
+  isOpen,
+  onClose,
+  onSelect,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  onSelect: (imageData: GeneratedImageData) => void;
+}) {
+  const { t } = useTranslation();
+  const imageDB = useIndexedDB<GeneratedImageData>("generated-images", DB_NAME.generateImage);
+  const [images, setImages] = useState<{ key: string; data: GeneratedImageData }[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const loadImages = useCallback(async () => {
+    setLoading(true);
+    try {
+      const entries = await imageDB.getAllWithKeys();
+      const items = entries
+        .filter((e) => e.value?.imageBytes)
+        .map((e) => ({
+          key: String(e.key),
+          data: e.value,
+        }))
+        .reverse(); // newest first
+      setImages(items);
+    } catch (err) {
+      console.error("[ImageGalleryDialog] Error loading images:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, [imageDB]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadImages();
+    }
+  }, [isOpen]);
+
+  const filteredImages = searchQuery.trim()
+    ? images.filter((img) => img.key.toLowerCase().includes(searchQuery.toLowerCase()))
+    : images;
+
+  return (
+    <Dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title={t("Chọn ảnh từ Gallery")}
+      width="90vw"
+      maxWidth="800px"
+    >
+      <div className="p-4">
+        {/* Search bar */}
+        <div className="relative mb-4">
+          <Input
+            prefix={<RiSearchLine />}
+            placeholder={t("Tìm theo key...")}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full py-2 pr-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+          />
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-16">
+            <RiLoader4Line className="text-3xl animate-spin text-primary" />
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && filteredImages.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+            <RiImageFill className="mb-3 text-5xl" />
+            <p className="text-base">{t("Chưa có ảnh nào")}</p>
+            <p className="mt-1 text-sm">{t("Ảnh được tạo từ AI sẽ xuất hiện ở đây")}</p>
+          </div>
+        )}
+
+        {/* Grid */}
+        {!loading && filteredImages.length > 0 && (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 max-h-[60vh] overflow-y-auto pr-1">
+            {filteredImages.map((item) => (
+              <div
+                key={item.key}
+                className="relative overflow-hidden transition-all border-2 border-transparent rounded-xl cursor-pointer group hover:border-primary hover:shadow-lg"
+                onClick={() => onSelect(item.data)}
+              >
+                <div className="relative aspect-[9/16] bg-gray-50">
+                  <Img
+                    showImageOnClick
+                    lazyload={false}
+                    src={`data:${item.data.mimeType};base64,${item.data.imageBytes}`}
+                    alt={item.key}
+                    className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
+                    ratio916
+                  />
+
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/30 group-hover:opacity-100 rounded-xl">
+                    <span className="px-3 py-1.5 text-xs font-semibold text-white bg-primary rounded-full shadow-lg">
+                      {t("Chọn ảnh")}
+                    </span>
+                  </div>
+                </div>
+                {/* Key label */}
+                <div className="px-2 py-1.5 bg-white">
+                  <span
+                    className="text-[10px] text-gray-500 truncate block max-w-full"
+                    title={item.key}
+                  >
+                    {item.key}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Total count */}
+        {!loading && filteredImages.length > 0 && (
+          <div className="mt-3 text-sm text-center text-gray-400">
+            {t("Tổng")}: {filteredImages.length} {t("ảnh")}
+          </div>
+        )}
+      </div>
+    </Dialog>
   );
 }

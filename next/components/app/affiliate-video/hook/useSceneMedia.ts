@@ -62,6 +62,8 @@ export interface UseSceneMediaReturn {
   // ── Actions ──
   /** Gọi API tạo ảnh mới từ scene.imageGenPrompt */
   handleGenerateImage: () => Promise<void>;
+  /** Set ảnh thủ công (upload từ máy hoặc chọn từ gallery) */
+  handleSetImage: (imageData: GeneratedImageData) => Promise<void>;
   /** Gọi API tạo video từ scene.motionPrompt + audio + dialogue */
   handleGenerateVideo: (isStitch?: boolean, isPromptToVideo?: boolean) => Promise<void>;
   /** Download ảnh đã tạo về máy (trigger browser download) */
@@ -99,7 +101,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
   const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { generateImage, getGeneratedImage, generateVideo, getGeneratedVideo } =
+  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
     useAffiliateVideoApi();
   const {
     batchGeneratingSceneIdsRef,
@@ -346,6 +348,20 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
   };
 
   // ─────────────────────────────────────────────────────────────────────────
+  // handleSetImage
+  // Set ảnh thủ công (upload từ máy hoặc chọn từ gallery IndexedDB).
+  // Lưu vào IndexedDB theo sceneId và cập nhật state.
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleSetImage = async (imageData: GeneratedImageData) => {
+    try {
+      await saveGeneratedImage(scene.id, imageData);
+      setGeneratedImage(imageData);
+    } catch (err) {
+      console.error("[handleSetImage] Error:", err);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateVideo
   // Gọi API tạo video từ scene.motionPrompt + audio + dialogue.
   // Giả lập progress chạy trong ~5 phút (300s), từ random 1-10% → 99%.
@@ -568,6 +584,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
     extendVideoProgress,
     // Actions
     handleGenerateImage,
+    handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,

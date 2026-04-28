@@ -192,6 +192,11 @@ export interface UseAffiliateVideoApiReturn {
   getGeneratedImage: (sceneId: string) => Promise<GeneratedImageData | undefined>;
 
   /**
+   * Lưu ảnh trực tiếp vào IndexedDB (upload từ máy hoặc chọn từ gallery).
+   */
+  saveGeneratedImage: (sceneId: string, imageData: GeneratedImageData) => Promise<void>;
+
+  /**
    * Gọi API tạo video từ prompt (Veo 3.1 fast).
    * Sử dụng SSE để nhận progress từ server.
    * Lưu kết quả vào IndexedDB theo sceneId.
@@ -455,6 +460,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [imageDB]
   );
 
+  // ── saveGeneratedImage – lưu ảnh trực tiếp vào IndexedDB ──
+  const saveGeneratedImage = useCallback(
+    async (sceneId: string, imageData: GeneratedImageData): Promise<void> => {
+      await imageDB.set(sceneId, imageData);
+    },
+    [imageDB]
+  );
+
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
@@ -701,6 +714,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     generateSceneFromText,
     generateImage,
     getGeneratedImage,
+    saveGeneratedImage,
     generateVideo,
     getGeneratedVideo,
     insertScene,
