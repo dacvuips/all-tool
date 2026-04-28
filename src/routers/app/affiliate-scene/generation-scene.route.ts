@@ -121,9 +121,9 @@ CRITICAL RULE: Never generate any visible or readable text in the image. Do not 
                 camera: scene.camera || "",
                 motionPrompt: `${
                   storyModeTypes === StoryModeTypeEnum.prompt_to_video
-                    ? rawParsed.characterBaseDescription
+                    ? `${rawParsed.characterBaseDescription}, `
                     : ""
-                }, [${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
+                } [${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
                   scene.visualEffects || ""
                 }`,
                 imageGenPrompt:

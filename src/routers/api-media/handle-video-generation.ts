@@ -425,11 +425,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     return;
   }
 
-  // Log full mediaResult for debugging
-  logger.info(
-    `[generation-video] Extracting fifeUrl from mediaResult: ${JSON.stringify(mediaResult)}`
-  );
-
   // Extract fifeUrl from operation metadata – try multiple known paths
   // because text-to-video and image-to-video APIs may return different structures
   const metadata = mediaResult?.operation?.metadata;
@@ -452,8 +447,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     res.end();
     return;
   }
-
-  logger.info(`[generation-video] Found fifeUrl: ${fifeUrl}`);
 
   sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
   sendSSE({
