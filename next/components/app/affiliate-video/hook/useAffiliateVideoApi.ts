@@ -306,7 +306,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
       const result = await callGenerationSceneApi({ config: data });
       if (!result) return undefined;
-      const scriptResult: ScriptData = { ...result.data, storyModeType: data.storyModeType };
+      const scriptResult: ScriptData = {
+        ...result.data,
+        storyModeType: data.storyModeType,
+        aspectRatio: data.aspectRatio,
+      };
 
       // Gán id ngẫu nhiên cho từng scene mới
       if (scriptResult?.scenes) {

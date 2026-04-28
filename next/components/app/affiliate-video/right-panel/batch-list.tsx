@@ -326,7 +326,6 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
   const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
-
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);

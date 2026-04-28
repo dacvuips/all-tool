@@ -42,7 +42,7 @@ const PROMPT_MAX_CHARS = 160;
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function SceneBatchRow({
+export const SceneBatchRow = React.memo(function SceneBatchRow({
   scene,
   isDisabled,
   isGroupHovered,
@@ -84,7 +84,7 @@ export function SceneBatchRow({
     generatedVideo,
     generatingVideo,
     videoProgress,
-    videoStatusMessage,
+
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
@@ -92,11 +92,12 @@ export function SceneBatchRow({
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
-    nextGeneratedImage,
   } = useSceneMedia({ scene, nextSceneId });
-  const { videoConfig } = useAffiliateVideoContext();
+  const { scriptData } = useAffiliateVideoContext();
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
-  const videoPaddingTop = videoConfig?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
+
+  const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -424,7 +425,7 @@ export function SceneBatchRow({
                         videoUrl={videoSrc}
                         isOpen={showVideoModal}
                         onClose={() => setShowVideoModal(false)}
-                        aspectRatio={videoConfig?.aspectRatio}
+                        aspectRatio={scriptData?.aspectRatio}
                       />
                     </>
                   ) : (
@@ -455,7 +456,13 @@ export function SceneBatchRow({
                     </div>
                   ) : (
                     <Button
-                      onClick={() => handleGenerateVideo()}
+                      onClick={() => {
+                        if (!isPromptToVideo && !generatedImage) {
+                          toast.error(t("Cần tạo ảnh trước khi tạo video"));
+                          return;
+                        }
+                        handleGenerateVideo();
+                      }}
                       icon={<GenerateAiIcon />}
                       placement="bottom"
                       className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
@@ -494,7 +501,7 @@ export function SceneBatchRow({
           </div>
 
           {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
-          {!isPromptToVideo && (
+          {!isPromptToVideo && nextSceneId && (
             <div className="flex justify-center w-full">
               {generatedExtendVideo ? (
                 <div className="relative w-32 group">
@@ -543,7 +550,7 @@ export function SceneBatchRow({
                           videoUrl={extVideoSrc}
                           isOpen={showExtendVideoModal}
                           onClose={() => setShowExtendVideoModal(false)}
-                          aspectRatio={videoConfig?.aspectRatio}
+                          aspectRatio={scriptData?.aspectRatio}
                         />
                       </>
                     ) : (
@@ -571,7 +578,7 @@ export function SceneBatchRow({
                         placement="bottom"
                         className="w-8 rounded-lg h-8 bg-teal-100 text-teal-600 hover:bg-teal-200"
                         iconClassName="text-xl font-bold"
-                        tooltip={t("Tạo lại nối")}
+                        tooltip={t("Tạo lại video nối")}
                       />
                     )}
                   </div>
@@ -658,7 +665,7 @@ export function SceneBatchRow({
       </td>
     </tr>
   );
-}
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SceneRowGroup – nhóm row: nút thêm trên + scene row + nút thêm dưới

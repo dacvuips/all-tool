@@ -117,6 +117,7 @@ export interface SceneScript {
   disabled?: boolean;
   voiceDisable?: boolean;
   audio?: string;
+  aspectRatio?: "16:9" | "9:16";
 }
 
 export interface ScriptData {
@@ -129,6 +130,7 @@ export interface ScriptData {
   voiceGender: string;
   voiceTone: string;
   voiceStyle: string;
+  aspectRatio: "16:9" | "9:16";
   scenes: SceneScript[];
 }
 
