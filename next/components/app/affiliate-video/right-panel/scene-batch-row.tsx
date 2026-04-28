@@ -92,12 +92,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
+    handleDownloadExtendVideo,
   } = useSceneMedia({ scene, nextSceneId });
   const { scriptData } = useAffiliateVideoContext();
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
-
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -562,8 +562,16 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                       </div>
                     );
                   })()}
-                  {/* Re-generate extend video */}
+                  {/* Download & Re-generate extend video */}
                   <div className="flex gap-2 mt-2 w-full items-center justify-center">
+                    <Button
+                      onClick={handleDownloadExtendVideo}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="bottom"
+                    />
                     {generatingExtendVideo ? (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
                         <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
@@ -574,11 +582,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     ) : (
                       <Button
                         onClick={() => handleGenerateVideo(true)}
-                        icon={<AiOutlineVideoCameraAdd />}
+                        icon={<GenerateAiIcon />}
                         placement="bottom"
-                        className="w-8 rounded-lg h-8 bg-teal-100 text-teal-600 hover:bg-teal-200"
-                        iconClassName="text-xl font-bold"
                         tooltip={t("Tạo lại video nối")}
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
                       />
                     )}
                   </div>

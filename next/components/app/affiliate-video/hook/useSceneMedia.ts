@@ -68,6 +68,8 @@ export interface UseSceneMediaReturn {
   handleDownloadImage: () => void;
   /** Download video đã tạo về máy (trigger browser download) */
   handleDownloadVideo: () => Promise<void>;
+  /** Download video nối đã tạo về máy (trigger browser download) */
+  handleDownloadExtendVideo: () => Promise<void>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -508,6 +510,47 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
     }
   };
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // handleDownloadExtendVideo
+  // Tương tự handleDownloadVideo nhưng cho video nối (extend/stitch).
+  // Tên file: scene-{sceneNumber}-stitch-video.{ext}
+  // ─────────────────────────────────────────────────────────────────────────
+  const handleDownloadExtendVideo = async () => {
+    if (!generatedExtendVideo) return;
+    try {
+      if (generatedExtendVideo.videoUri) {
+        const res = await fetch(generatedExtendVideo.videoUri);
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `scene-${scene.sceneNumber}-stitch-video.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } else if (generatedExtendVideo.videoBytes) {
+        const byteChars = atob(generatedExtendVideo.videoBytes);
+        const byteNumbers = new Array(byteChars.length);
+        for (let i = 0; i < byteChars.length; i++) {
+          byteNumbers[i] = byteChars.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedExtendVideo.mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        const ext = generatedExtendVideo.mimeType.split("/")[1] || "mp4";
+        a.download = `scene-${scene.sceneNumber}-stitch-video.${ext}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+    } catch (err) {
+      console.error("[handleDownloadExtendVideo] Error:", err);
+    }
+  };
+
   return {
     // Image
     generatedImage,
@@ -528,5 +571,6 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
+    handleDownloadExtendVideo,
   };
 }
