@@ -38,7 +38,7 @@ import { useLocale } from "../lib/providers/locale-provider";
 import { Pagination, QueryInput } from "../lib/repo/crud.repo";
 import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/notification.repo";
 
-import { SettingsModal } from "../components/app/affiliate-video/sibar/text-to-video-modal";
+import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { formatDate, parseNumber } from "../lib/helpers/parser";

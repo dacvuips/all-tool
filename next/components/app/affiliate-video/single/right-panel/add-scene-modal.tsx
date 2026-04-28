@@ -15,10 +15,10 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button } from "../../../shared/utilities/form";
-import { CharacterItem, SceneScript } from "../constants";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../../shared/utilities/form";
+import { CharacterItem, SceneScript } from "../../constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type InsertPosition = "above" | "below";

@@ -15,9 +15,9 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button } from "../../../shared/utilities/form";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../../shared/utilities/form";
 import {
   CACHE_KEY,
   CharacterItem,
@@ -26,7 +26,7 @@ import {
   ScriptData,
   STORE_NAME,
   StoryModeTypeEnum,
-} from "../constants";
+} from "../../constants";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";

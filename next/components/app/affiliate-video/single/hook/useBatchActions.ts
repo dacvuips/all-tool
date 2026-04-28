@@ -12,8 +12,8 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { SceneScript, StoryModeTypeEnum } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { SceneScript, StoryModeTypeEnum } from "../../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
@@ -352,7 +352,16 @@ export function useBatchActions(scenes: SceneScript[]) {
       setDownloading(false);
       setDownloadLabel("");
     }
-  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t, base64ToBlob, downloadBlobSequentially]);
+  }, [
+    downloading,
+    batchRunning,
+    scenes,
+    getGeneratedImage,
+    toast,
+    t,
+    base64ToBlob,
+    downloadBlobSequentially,
+  ]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleDownloadAllVideos: download videos sequentially one by one ──
@@ -396,7 +405,10 @@ export function useBatchActions(scenes: SceneScript[]) {
             const res = await fetch(vid.videoUri);
             blob = await res.blob();
           } catch (fetchErr) {
-            console.error(`[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`, fetchErr);
+            console.error(
+              `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
+              fetchErr
+            );
             continue;
           }
         } else if (vid.videoBytes) {
@@ -422,7 +434,16 @@ export function useBatchActions(scenes: SceneScript[]) {
       setDownloadingVideo(false);
       setDownloadVideoLabel("");
     }
-  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t, base64ToBlob, downloadBlobSequentially]);
+  }, [
+    downloadingVideo,
+    videoBatchRunning,
+    scenes,
+    getGeneratedVideo,
+    toast,
+    t,
+    base64ToBlob,
+    downloadBlobSequentially,
+  ]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllImage: worker pool ──
@@ -760,9 +781,7 @@ export function useBatchActions(scenes: SceneScript[]) {
 
         const { scene, nextScene } = pairs[idx];
         setExtendBatchCurrentIndex(idx);
-        setExtendBatchCurrentSceneLabel(
-          `#${scene.sceneNumber} → #${nextScene.sceneNumber}`
-        );
+        setExtendBatchCurrentSceneLabel(`#${scene.sceneNumber} → #${nextScene.sceneNumber}`);
 
         // Skip if stitch video already exists for this scene
         const existingStitch = await getGeneratedVideo(scene.id + "::stitch");
@@ -827,15 +846,21 @@ export function useBatchActions(scenes: SceneScript[]) {
     const generated = completed - skipped - errors;
     if (extendStopRef.current) {
       toast.info(
-        `${t("Đã dừng. Tạo được")} ${generated} video nối, ${skipped} ${t("bỏ qua")}, ${errors} ${t("lỗi")}.`
+        `${t("Đã dừng. Tạo được")} ${generated} video nối, ${skipped} ${t("bỏ qua")}, ${errors} ${t(
+          "lỗi"
+        )}.`
       );
     } else if (errors > 0) {
       toast.warn(
-        `${t("Hoàn thành! Tạo được")} ${generated} video nối, ${skipped} ${t("bỏ qua")}, ${errors} ${t("lỗi")}.`
+        `${t("Hoàn thành! Tạo được")} ${generated} video nối, ${skipped} ${t(
+          "bỏ qua"
+        )}, ${errors} ${t("lỗi")}.`
       );
     } else {
       toast.success(
-        `${t("Đã hoàn thành! Tạo được")} ${generated} video nối${skipped > 0 ? `, ${skipped} ${t("bỏ qua")}` : ""}.`
+        `${t("Đã hoàn thành! Tạo được")} ${generated} video nối${
+          skipped > 0 ? `, ${skipped} ${t("bỏ qua")}` : ""
+        }.`
       );
     }
   };

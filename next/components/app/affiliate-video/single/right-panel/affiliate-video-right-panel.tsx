@@ -14,7 +14,7 @@ import {
   RiMusicFill,
   RiScissorsLine,
 } from "react-icons/ri";
-import { TabGroup } from "../../../shared/utilities/tab/tab-group";
+import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";

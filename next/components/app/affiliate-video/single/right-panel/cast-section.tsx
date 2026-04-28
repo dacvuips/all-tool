@@ -5,7 +5,7 @@
  */
 import { useState } from "react";
 import { RiCheckLine, RiFileCopyLine, RiUser3Fill } from "react-icons/ri";
-import { ScriptData } from "../constants";
+import { ScriptData } from "../../constants";
 
 interface CastSectionProps {
   scriptData: ScriptData;

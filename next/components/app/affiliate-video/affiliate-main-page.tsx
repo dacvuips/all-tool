@@ -6,13 +6,13 @@
  */
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { RiFileTextLine, RiGridLine, RiShirtLine } from "react-icons/ri";
+import { RiFileCopy2Line, RiFileTextLine, RiGridLine, RiShirtLine } from "react-icons/ri";
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
-import { AffiliateSingleBody } from "./affiliate-video-body";
 import { TAB_TYPE } from "./constants";
+import { AffiliateSingleVideoPage } from "./single/single-video-page";
 
-export default function AffiliateVideo() {
+export default function AffiliateMainPage() {
   const { t } = useTranslation();
   const router = useRouter();
 
@@ -22,16 +22,21 @@ export default function AffiliateVideo() {
       icon: <RiFileTextLine />,
       label: t("Đơn Lẻ"),
       value: "single",
-      component: <AffiliateSingleBody type={TAB_TYPE.single} />,
+      component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
     },
     {
       icon: <RiGridLine />,
       label: t("Hàng Loạt"),
       value: "batch",
-      component: <AffiliateSingleBody type={TAB_TYPE.batch} />,
+      component: <AffiliateSingleVideoPage type={TAB_TYPE.batch} />,
     },
     // { icon: <RiBookOpenLine />, label: t("Cốt Truyện"), value: "story" },
-    // { icon: <RiFileCopyLine />, label: t("Sao Chép"), value: "copy" },
+    {
+      icon: <RiFileCopy2Line />,
+      label: t("Sao Chép"),
+      value: "copy",
+      component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
+    },
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
       icon: <RiShirtLine />,

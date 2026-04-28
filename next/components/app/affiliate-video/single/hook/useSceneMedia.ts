@@ -9,8 +9,8 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { SceneScript } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { SceneScript } from "../../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import {
   GeneratedImageData,
@@ -551,7 +551,9 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
         for (let i = 0; i < byteChars.length; i++) {
           byteNumbers[i] = byteChars.charCodeAt(i);
         }
-        const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedExtendVideo.mimeType });
+        const blob = new Blob([new Uint8Array(byteNumbers)], {
+          type: generatedExtendVideo.mimeType,
+        });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;

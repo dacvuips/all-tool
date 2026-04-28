@@ -3,9 +3,9 @@
  * Hook chứa tất cả các hàm gọi API cho module affiliate-video.
  */
 import { useCallback } from "react";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { useAuth } from "../../../../lib/providers/auth-provider";
-import { useToast } from "../../../../lib/providers/toast-provider";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { useToast } from "../../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -13,7 +13,7 @@ import {
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
-} from "../constants";
+} from "../../constants";
 import { useIndexedDB } from "./useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────

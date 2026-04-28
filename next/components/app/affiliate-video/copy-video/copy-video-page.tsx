@@ -7,9 +7,10 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiMenuLine } from "react-icons/ri";
-import { TAB_TYPE } from "./constants";
-import { AffiliateVideoRightPanel } from "./right-panel/affiliate-video-right-panel";
-import { TextToVideoTab } from "./sibar/text-to-video-tab";
+import { TAB_TYPE } from "../constants";
+import { AffiliateVideoRightPanel } from "../single/right-panel/affiliate-video-right-panel";
+import { TextToVideoTab } from "../single/sibar/text-to-video-tab";
+
 interface AffiliateSingleBodyProps {
   type: TAB_TYPE;
 }

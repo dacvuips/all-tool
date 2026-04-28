@@ -16,12 +16,12 @@ import {
   RiZoomInLine,
   RiZoomOutLine,
 } from "react-icons/ri";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { credentialCustomerService } from "../../../../lib/repo";
-import { AiProviderKeyEnum } from "../../../../lib/repo/product/productApp.repo";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button } from "../../../shared/utilities/form";
-import { MediaType } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { credentialCustomerService } from "../../../../../lib/repo";
+import { AiProviderKeyEnum } from "../../../../../lib/repo/product/productApp.repo";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../../shared/utilities/form";
+import { MediaType } from "../../constants";
 
 /* ═══════════════════════════════════════════════════════════ ZoomModal */
 interface ZoomModalProps {

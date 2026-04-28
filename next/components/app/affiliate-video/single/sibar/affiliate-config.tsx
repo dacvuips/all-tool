@@ -10,10 +10,10 @@ import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Button, Field, Textarea } from "../../../shared/utilities/form";
-import { Select } from "../../../shared/utilities/form/select";
-import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../constants";
+
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
+import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 

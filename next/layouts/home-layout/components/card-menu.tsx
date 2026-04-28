@@ -21,7 +21,7 @@ import {
   RiVideoLine,
 } from "react-icons/ri";
 
-import { SettingsModal } from "../../../components/app/affiliate-video/sibar/text-to-video-modal";
+import { SettingsModal } from "../../../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { Slideout, SlideoutProps } from "../../../components/shared/utilities/dialog/slideout";
 import { Button } from "../../../components/shared/utilities/form";
 import { Img } from "../../../components/shared/utilities/misc";

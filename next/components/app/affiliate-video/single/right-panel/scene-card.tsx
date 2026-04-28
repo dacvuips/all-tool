@@ -13,7 +13,7 @@ import {
   RiImageFill,
   RiVideoFill,
 } from "react-icons/ri";
-import { SceneScript } from "../constants";
+import { SceneScript } from "../../constants";
 
 // ── Camera shot color map ────────────────────────────────────────────────
 const SHOT_COLORS: Record<string, string> = {

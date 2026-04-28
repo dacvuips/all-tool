@@ -1,7 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { useAuth } from "../../../../lib/providers/auth-provider";
-import { useGlobalContext } from "../../../../lib/providers/global-provider";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../../../../lib/providers/global-provider";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -10,7 +10,7 @@ import {
   ScriptData,
   STORE_NAME,
   StoryModeTypeEnum,
-} from "../constants";
+} from "../../constants";
 import { GenerateSceneFromTextParams, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 
@@ -83,7 +83,11 @@ export const AffiliateVideoContext = createContext<
     /** Subscribe to batch generating state changes for a specific scene */
     subscribeBatchState: (
       sceneId: string,
-      callback: (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
+      callback: (
+        generating: boolean,
+        generatingVideo: boolean,
+        generatingExtendVideo: boolean
+      ) => void
     ) => () => void;
 
     // ── Scene history ──
@@ -129,7 +133,10 @@ export function AffiliateVideoProvider(props) {
   const batchGeneratingSceneIdsRef = useRef<Set<string>>(new Set());
   const batchGeneratingVideoSceneIdsRef = useRef<Set<string>>(new Set());
   const batchSubscribersRef = useRef<
-    Map<string, (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void>
+    Map<
+      string,
+      (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
+    >
   >(new Map());
 
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
@@ -158,7 +165,11 @@ export function AffiliateVideoProvider(props) {
   const subscribeBatchState = useCallback(
     (
       sceneId: string,
-      callback: (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
+      callback: (
+        generating: boolean,
+        generatingVideo: boolean,
+        generatingExtendVideo: boolean
+      ) => void
     ) => {
       batchSubscribersRef.current.set(sceneId, callback);
       // Immediately notify with current state
@@ -174,25 +185,37 @@ export function AffiliateVideoProvider(props) {
     []
   );
 
-  const addBatchGeneratingSceneId = useCallback((id: string) => {
-    batchGeneratingSceneIdsRef.current.add(id);
-    notifySubscriber(id);
-  }, [notifySubscriber]);
+  const addBatchGeneratingSceneId = useCallback(
+    (id: string) => {
+      batchGeneratingSceneIdsRef.current.add(id);
+      notifySubscriber(id);
+    },
+    [notifySubscriber]
+  );
 
-  const removeBatchGeneratingSceneId = useCallback((id: string) => {
-    batchGeneratingSceneIdsRef.current.delete(id);
-    notifySubscriber(id);
-  }, [notifySubscriber]);
+  const removeBatchGeneratingSceneId = useCallback(
+    (id: string) => {
+      batchGeneratingSceneIdsRef.current.delete(id);
+      notifySubscriber(id);
+    },
+    [notifySubscriber]
+  );
 
-  const addBatchGeneratingVideoSceneId = useCallback((id: string) => {
-    batchGeneratingVideoSceneIdsRef.current.add(id);
-    notifySubscriber(id);
-  }, [notifySubscriber]);
+  const addBatchGeneratingVideoSceneId = useCallback(
+    (id: string) => {
+      batchGeneratingVideoSceneIdsRef.current.add(id);
+      notifySubscriber(id);
+    },
+    [notifySubscriber]
+  );
 
-  const removeBatchGeneratingVideoSceneId = useCallback((id: string) => {
-    batchGeneratingVideoSceneIdsRef.current.delete(id);
-    notifySubscriber(id);
-  }, [notifySubscriber]);
+  const removeBatchGeneratingVideoSceneId = useCallback(
+    (id: string) => {
+      batchGeneratingVideoSceneIdsRef.current.delete(id);
+      notifySubscriber(id);
+    },
+    [notifySubscriber]
+  );
 
   const {
     DEFAULT_VIDEO_CONFIG,

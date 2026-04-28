@@ -25,13 +25,13 @@ import {
   RiUploadCloud2Line,
   RiVideoFill,
 } from "react-icons/ri";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
-import { VideoDialog } from "../../../shared/common/video-dialog";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button, Input } from "../../../shared/utilities/form";
-import { Img } from "../../../shared/utilities/misc";
-import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
+import { VideoDialog } from "../../../../shared/common/video-dialog";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button, Input } from "../../../../shared/utilities/form";
+import { Img } from "../../../../shared/utilities/misc";
+import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
 import { GeneratedImageData } from "../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { useSceneMedia } from "../hook/useSceneMedia";

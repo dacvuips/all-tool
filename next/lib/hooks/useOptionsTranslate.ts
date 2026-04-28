@@ -828,6 +828,7 @@ export const useOptionsTranslation = () => {
     { value: "anime", label: t("Hoạt hình Anime (Japanese Anime)") },
     { value: "game_2d", label: t("Game 2D / Casual Mobile Game") },
     { value: "dark_grotesque", label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
+    { value: "flat_science", label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)") },
   ];
 
   const CATEGORY_OPTIONS = [
