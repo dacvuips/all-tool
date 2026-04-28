@@ -233,14 +233,10 @@ export function useBatchActions(scenes: SceneScript[]) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // Find scenes that have a generated video (eligible for chaining)
-      const scenesWithVideo: SceneScript[] = [];
-      for (const scene of scenes.filter((s) => !s.disabled)) {
-        const vid = await getGeneratedVideo(scene.id);
-        if (vid) scenesWithVideo.push(scene);
-      }
-
-      if (scenesWithVideo.length < 2) {
+      // Match the actual batch logic: pairs from all eligible (non-disabled) scenes
+      // The last scene is excluded because it can never be the START of a stitch pair
+      const eligibleScenes = scenes.filter((s) => !s.disabled);
+      if (eligibleScenes.length < 2) {
         if (!cancelled) {
           setPendingExtendCount(0);
           setAvailableExtendCount(0);
@@ -248,13 +244,23 @@ export function useBatchActions(scenes: SceneScript[]) {
         return;
       }
 
-      // Chain is complete if the LAST scene has an extended video
-      const lastScene = scenesWithVideo[scenesWithVideo.length - 1];
+      let pending = 0;
+      let available = 0;
+      // Iterate pairs: (scene[0]→scene[1]), (scene[1]→scene[2]), ..., (scene[N-2]→scene[N-1])
+      // Last scene (scene[N-1]) is only used as endImage, never as start → excluded
+      for (let i = 0; i < eligibleScenes.length - 1; i++) {
+        const scene = eligibleScenes[i];
+        const existingStitch = await getGeneratedVideo(scene.id + "::stitch");
+        if (existingStitch) {
+          available++;
+        } else {
+          pending++;
+        }
+      }
 
       if (!cancelled) {
-        // Chain chưa hoàn thành → cần N-1 bước nối
-        setPendingExtendCount(scenesWithVideo.length - 1);
-        setAvailableExtendCount(0);
+        setPendingExtendCount(pending);
+        setAvailableExtendCount(available);
       }
     })();
     return () => {
