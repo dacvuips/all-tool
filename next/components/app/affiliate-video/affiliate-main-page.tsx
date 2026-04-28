@@ -10,6 +10,7 @@ import { RiFileCopy2Line, RiFileTextLine, RiGridLine, RiShirtLine } from "react-
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
+import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
 
 export default function AffiliateMainPage() {
@@ -35,7 +36,7 @@ export default function AffiliateMainPage() {
       icon: <RiFileCopy2Line />,
       label: t("Sao Chép"),
       value: "copy",
-      component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
+      component: <AffiliateCopyVideoPage />,
     },
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {

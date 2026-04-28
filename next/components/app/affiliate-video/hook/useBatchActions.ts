@@ -12,9 +12,10 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../../lib/providers/toast-provider";
-import { SceneScript, StoryModeTypeEnum } from "../../constants";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { useToast } from "../../../../lib/providers/toast-provider";
+import { SceneScript, StoryModeTypeEnum } from "../constants";
+
+import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───

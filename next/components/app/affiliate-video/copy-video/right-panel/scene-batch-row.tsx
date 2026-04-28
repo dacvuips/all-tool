@@ -32,10 +32,11 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
-import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
-import { useIndexedDB } from "../../hook/useIndexedDB";
-import { useSceneMedia } from "../../hook/useSceneMedia";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { GeneratedImageData } from "../hook/useAffiliateVideoApi";
+
+import { useSceneMedia } from "../hook/useSceneMedia";
+
+import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
   } = useSceneMedia({ scene, nextSceneId });
-  const { scriptData } = useAffiliateVideoContext();
+  const { scriptData } = useCopyVideoContext();
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";

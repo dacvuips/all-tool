@@ -9,9 +9,10 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../../lib/providers/toast-provider";
-import { SceneScript } from "../../constants";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { useToast } from "../../../../lib/providers/toast-provider";
+import { SceneScript } from "../constants";
+
+import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import {
   GeneratedImageData,
   GeneratedVideoData,

@@ -42,17 +42,21 @@ export type SpeedMode = "fast" | "relaxed" | "quality";
 export type StoryModeType = "prompt_to_video" | "image_to_video";
 
 /** Affiliate sidebar form configuration */
-export interface AffiliateVideoFormConfig {
+export interface VideoFormBase {
   category: string;
-  objectToPersonify: string;
-  tipContent: string;
   mood: string;
   language: string;
   artStyle: string;
-  storyModeType: StoryModeTypeEnum;
   aspectRatio: AspectRatio;
+}
+export interface AffiliateVideoFormConfig extends VideoFormBase {
+  objectToPersonify: string;
+  tipContent: string;
+  storyModeType: StoryModeTypeEnum;
   batchSize: number;
 }
+
+export interface CopyVideoFormConfig extends VideoFormBase {}
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
 
@@ -140,9 +144,11 @@ export const DB_NAME = {
   generateVideo: "generate-video",
   generateVoice: "generate-voice",
   generateImage: "generate-image",
+  copyVideo: "copy-video",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
+  copyVideo: "copy-video",
 };
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
@@ -151,6 +157,7 @@ export const CACHE_KEY = {
   lastScript: "lastScript",
   generateInput: "generateInput",
   sceneHistory: "sceneHistory",
+  copyVideoHistory: "copyVideoHistory",
 };
 
 /** A single entry in the scene generation history */

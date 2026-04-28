@@ -27,9 +27,10 @@ import {
   STORE_NAME,
   StoryModeTypeEnum,
 } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
+import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
+
 import { useIndexedDB } from "../../hook/useIndexedDB";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { EditField, SceneRowGroup } from "./scene-batch-row";
 
@@ -325,7 +326,7 @@ interface BatchListPanelProps {
 export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
+  const { scriptData, setScriptData, selectedHistoryId } = useCopyVideoContext();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);

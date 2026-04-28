@@ -14,7 +14,7 @@
  */
 
 import { useCallback, useRef } from "react";
-import { DB_NAME_TYPE } from "../../constants";
+import { DB_NAME_TYPE } from "../constants";
 
 // ── Cache: one promise per dbName ────────────────────────────────────────────
 const _dbCache = new Map<string, Promise<IDBDatabase>>();
