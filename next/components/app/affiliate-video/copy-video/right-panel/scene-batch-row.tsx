@@ -349,14 +349,17 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   className="rounded-lg object-cover border border-amber-200 shadow-sm"
                   ratio169
                 />
-                <span className="block text-center text-[9px] text-amber-600 font-medium -mt-2 bg-gray-100 pt-2 rounded-b-md ">
+                <span className="absolute top-1 left-0 px-1 py-0 rounded-r-full text-9 font-bold text-white border-white border bg-success-dark  bg-opacity-70  shadow-sm z-10">
+                  {t("Ảnh gốc")}
+                </span>
+                <span className="block text-center text-9 text-amber-600 font-medium -mt-2 bg-gray-100 pt-2 rounded-b-md ">
                   {scene.timestamp}
                 </span>
               </div>
             ) : (
               <div className="w-20 h-12 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
                 <RiImageFill className="text-gray-300 text-sm" />
-                <span className="text-[8px] text-gray-400">No video</span>
+                <span className="text-[8px] text-gray-400">{t("Không có video")}</span>
               </div>
             )}
           </div>
