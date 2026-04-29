@@ -127,6 +127,34 @@ export interface InsertSceneResult {
   dialogue: string;
 }
 
+export interface InsertCopyVideoSceneParams {
+  /** Mô tả nội dung scene mới */
+  description: string;
+  /** Voiceover / lời thoại gợi ý (tùy chọn) */
+  voiceover?: string;
+  /** Góc máy yêu cầu (tùy chọn) */
+  camera?: string;
+  /** Selected character IDs (tùy chọn) */
+  selectedCharacters?: string[];
+  /** Scene number mới */
+  sceneNumber: number;
+  /** Scene trước (nếu insert below) */
+  prevScene?: any;
+  /** Scene sau (nếu insert above) */
+  nextScene?: any;
+  /** ScriptData context – để lấy character, environment, artStyle */
+  scriptContext?: {
+    cast?: { name: string; tag: string; description: string }[];
+    environment?: string;
+    artStyle?: string;
+    audioPrompt?: string;
+    voiceGender?: string;
+    voiceTone?: string;
+    language?: string;
+    characterDna?: string;
+  };
+}
+
 export interface SuggestConfigParams {
   /** Danh mục hiện tại (tuỳ chọn) */
   category?: string;
@@ -251,9 +279,7 @@ export interface UseAffiliateVideoApiReturn {
    * Gửi video base64 lên server → Gemini phân tích → trả về characters, props, scenes.
    * Tự động lưu kết quả vào IndexedDB.
    */
-  analyzeVideoForCopy: (
-    data: CopyVideoFormConfig
-  ) => Promise<CopyVideoAnalysisData | undefined>;
+  analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────

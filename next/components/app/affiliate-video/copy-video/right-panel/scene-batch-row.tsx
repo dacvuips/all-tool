@@ -31,17 +31,20 @@ import { VideoDialog } from "../../../../shared/common/video-dialog";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
-import { CharacterItem, DB_NAME, SceneScript } from "../../constants";
+import { CharacterItem, CopyVideoScene, DB_NAME } from "../../constants";
 import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
 
-import { useSceneMedia } from "../../hook/useSceneMedia";
-
+import { useCopyVideoSceneMedia } from "../../hook/useCopyVideoSceneMedia";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-export type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio";
+export type EditField =
+  | "visual_prompt"
+  | "motion_description"
+  | "original_content"
+  | "audio_description";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -61,7 +64,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleDisable,
   onToggleVoiceDisable,
 }: {
-  scene: SceneScript;
+  scene: CopyVideoScene;
   index: number;
   nextSceneId?: string;
   isDisabled: boolean;
@@ -102,7 +105,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useSceneMedia({ scene, nextSceneId });
+  } = useCopyVideoSceneMedia({ scene, nextSceneId });
   const { scriptData } = useCopyVideoContext();
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
@@ -113,9 +116,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + "..." : text;
 
   const needsExpand =
-    scene.imageGenPrompt.length > MAX_CHARS ||
-    scene.motionPrompt.length > MAX_CHARS ||
-    (scene.dialogue?.length || 0) > MAX_CHARS;
+    scene.visual_prompt.length > MAX_CHARS ||
+    scene.motion_description.length > MAX_CHARS ||
+    (scene.original_content?.length || 0) > MAX_CHARS;
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
@@ -265,14 +268,14 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {
         <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
           {renderEditablePrompt(
-            "imageGenPrompt",
-            scene.imageGenPrompt,
+            "visual_prompt",
+            scene.visual_prompt,
             "text-gray-600",
             <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
               IMAGE PROMPT
             </span>
           )}
-          {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
+          {editingField !== "visual_prompt" && scene.visual_prompt.length > MAX_CHARS && (
             <button
               onClick={() => setExpanded((p) => !p)}
               className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
@@ -286,37 +289,39 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         {renderEditablePrompt(
-          "motionPrompt",
-          scene.motionPrompt,
+          "motion_description",
+          scene.motion_description,
           "text-teal-700",
           <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">
             [MOTION]:
           </span>
         )}
         {renderEditablePrompt(
-          "audio",
-          scene.audio ?? "",
+          "audio_description",
+          scene.audio_description ?? "",
           "text-purple-700",
           <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [AUDIO]:
           </span>
         )}
         {renderEditablePrompt(
-          "dialogue",
-          scene.dialogue ?? "",
+          "original_content",
+          scene.original_content ?? "",
           "text-green-700 italic",
           <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [DIALOGUE]:
           </span>
         )}
-        {editingField !== "motionPrompt" && editingField !== "dialogue" && needsExpand && (
-          <button
-            onClick={() => setExpanded((p) => !p)}
-            className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-          >
-            {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-          </button>
-        )}
+        {editingField !== "motion_description" &&
+          editingField !== "original_content" &&
+          needsExpand && (
+            <button
+              onClick={() => setExpanded((p) => !p)}
+              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
+            >
+              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
+            </button>
+          )}
       </td>
 
       {/* Generated Image */}
@@ -742,13 +747,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SceneRowGroupProps {
-  scene: SceneScript;
+  scene: CopyVideoScene;
   index: number;
   nextSceneId?: string;
   isDisabled: boolean;
   characters: CharacterItem[];
   onInsert: (
-    scene: SceneScript,
+    scene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;

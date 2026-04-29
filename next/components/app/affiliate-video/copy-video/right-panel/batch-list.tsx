@@ -18,7 +18,7 @@ import {
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../../shared/utilities/form";
-import { CACHE_KEY, CharacterItem, DB_NAME, SceneScript, STORE_NAME } from "../../constants";
+import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
@@ -37,7 +37,7 @@ interface NewSceneData {
 }
 
 interface AddSceneModalProps {
-  targetScene: SceneScript;
+  targetScene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
@@ -80,8 +80,8 @@ function AddSceneModal({
 
   const posLabel =
     position === "above"
-      ? `↑ Chèn phía trên Scene #${targetScene.sceneNumber}`
-      : `↓ Chèn phía dưới Scene #${targetScene.sceneNumber}`;
+      ? `↑ Chèn phía trên Scene #${targetScene.id}`
+      : `↓ Chèn phía dưới Scene #${targetScene.id}`;
 
   return (
     <Dialog
@@ -259,11 +259,11 @@ function AddSceneModal({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AddSceneButtonProps {
-  scene: SceneScript;
+  scene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onInsert: (
-    scene: SceneScript,
+    scene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;
@@ -310,13 +310,13 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 }
 
 interface BatchListPanelProps {
-  scenes: SceneScript[];
+  scenes: CopyVideoScene[];
   characters: CharacterItem[];
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { t } = useTranslation();
-  const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
+  const [sceneList, setSceneList] = useState<CopyVideoScene[]>(scenes);
   const { scriptData, updateScriptData, selectedHistoryId } = useCopyVideoContext();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
@@ -378,7 +378,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   };
 
   const handleInsert = async (
-    targetScene: SceneScript,
+    targetScene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => {
@@ -410,16 +410,15 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           : undefined,
       });
 
-      // Build SceneScript from API result
-      const newScene: SceneScript = {
+      // Build CopyVideoScene from API result
+      const newScene = {
         id: crypto.randomUUID(),
-        sceneNumber: newSceneNumber,
-        camera: result?.camera || data.cameraAngle || "WIDE SHOT",
-        imageGenPrompt: result?.imagePrompt || data.description || "(AI generated)",
-        motionPrompt: result?.motionPrompt || data.description || "(AI generated)",
-        dialogue: result?.dialogue || data.voiceover || "",
-        visualPrompt: result?.visualPrompt || "",
-        audio: result?.audio || data.audio || "",
+        timestamp: "00:00",
+        scene_type: "CHARACTER" as const,
+        visual_prompt: result?.visualPrompt || data.description || "(AI generated)",
+        motion_description: result?.motionPrompt || data.description || "(AI generated)",
+        original_content: result?.dialogue || data.voiceover || "",
+        audio_description: result?.audio || data.audio || "",
       };
 
       // Insert into list and re-number
@@ -427,7 +426,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
         (s, i) => ({ ...s, sceneNumber: i + 1 })
       );
 
-      setSceneList(updated);
+      setSceneList(updated as CopyVideoScene[]);
 
       // Persist to IndexedDB
       try {
@@ -441,15 +440,14 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     } catch (err) {
       console.error("[handleInsert] API error:", err);
       // Fallback: insert scene với dữ liệu từ modal (không có AI)
-      const fallbackScene: SceneScript = {
+      const fallbackScene = {
         id: crypto.randomUUID(),
-        sceneNumber: newSceneNumber,
-        camera: data.cameraAngle || "WIDE SHOT",
-        imageGenPrompt: data.description || "(AI generated)",
-        motionPrompt: data.description || "(AI generated)",
-        dialogue: data.voiceover || "",
-        visualPrompt: "",
-        audio: data.audio || "",
+        timestamp: "00:00",
+        scene_type: "CHARACTER" as const,
+        visual_prompt: data.description || "(AI generated)",
+        motion_description: data.description || "(AI generated)",
+        original_content: data.voiceover || "",
+        audio_description: data.audio || "",
       };
 
       const updated = [

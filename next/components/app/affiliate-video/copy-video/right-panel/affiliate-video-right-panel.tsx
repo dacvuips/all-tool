@@ -284,16 +284,11 @@ export const CopyVideoRightPanel = () => {
           ) : (
             <BatchListPanel
               scenes={(scriptData?.scenes || []).map((s, i) => ({
+                ...s,
                 id: s.id || `scene-${i}`,
                 sceneNumber: i + 1,
-                camera: (s as any).camera || "WIDE SHOT",
-                imageGenPrompt: s.visual_prompt || "",
-                motionPrompt: s.motion_description || "",
-                dialogue: s.original_content || "",
-                visualPrompt: s.visual_prompt || "",
-                disabled: (s as any).disabled ?? false,
-                voiceDisable: (s as any).voiceDisable ?? false,
-                audio: "",
+                disabled: s.disabled ?? false,
+                voiceDisable: s.voiceDisable ?? false,
               }))}
               characters={[]}
             />

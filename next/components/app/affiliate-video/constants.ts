@@ -185,6 +185,9 @@ export interface CopyVideoScene {
   audio_description: string;
   original_content: string;
   translated_content?: string | null;
+  disabled?: boolean;
+  voiceDisable?: boolean;
+  sceneNumber?: number;
 }
 
 export interface CopyVideoAnalysisData {
