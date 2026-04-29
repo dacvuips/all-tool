@@ -11,6 +11,7 @@ import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
 import { CopyVideoFormConfig } from "../../constants";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
+import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -21,9 +22,10 @@ import { AffiliateSubmit } from "./affiliate-submit";
 export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { DEFAULT_VIDEO_CONFIG, copyVideoFormConfig, setBatchRunning, setScriptData, setScriptTab } =
+  const { DEFAULT_VIDEO_CONFIG, copyVideoFormConfig, setBatchRunning, setScriptData, setScriptTab, persistCopyVideoInput } =
     useCopyVideoContext();
   const { analyzeVideoForCopy } = useAffiliateVideoApi();
+  const thumbnailDB = useThumbnailDB();
 
   // ── Submit handler: phân tích video gốc ──
   const handleSubmit = useCallback(
@@ -36,6 +38,8 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       try {
         setScriptTab?.("script");
         setBatchRunning?.(true);
+        // Persist copyVideoInput to IndexedDB on submit
+        persistCopyVideoInput?.();
         const result = await analyzeVideoForCopy(copyVideoFormConfig as CopyVideoFormConfig);
         if (result) {
           setScriptData?.(result);
@@ -44,6 +48,18 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
               count: result.scenes?.length || 0,
             })
           );
+
+          // Extract & save thumbnails to IndexedDB (fire-and-forget)
+          if (copyVideoFormConfig?.sourceVideo?.base64 && result.scenes?.length) {
+            extractAndSaveThumbnails(
+              copyVideoFormConfig.sourceVideo.base64,
+              copyVideoFormConfig.sourceVideo.mimeType,
+              result.scenes,
+              thumbnailDB
+            ).catch((err) =>
+              console.warn("[CopyVideoForm] Failed to extract thumbnails:", err)
+            );
+          }
         }
       } catch (err: any) {
         console.error("[CopyVideoForm] analyzeVideoForCopy error:", err);
@@ -52,7 +68,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [copyVideoFormConfig, analyzeVideoForCopy, setBatchRunning, setScriptData, setScriptTab, toast, t]
+    [copyVideoFormConfig, analyzeVideoForCopy, setBatchRunning, setScriptData, setScriptTab, toast, t, thumbnailDB, persistCopyVideoInput]
   );
 
   return (

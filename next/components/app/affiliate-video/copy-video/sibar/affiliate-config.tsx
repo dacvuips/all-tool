@@ -27,9 +27,6 @@ export const AffiliateConfig = () => {
 
   return (
     <div className="flex-1 bg-white">
-      {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
-      <div className="px-4 pt-3 pb-2"></div>
-
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
@@ -38,6 +35,7 @@ export const AffiliateConfig = () => {
           <VideoUploadPicker
             label={t("Upload Video gốc")}
             maxSizeMB={50}
+            value={copyVideoFormConfig?.sourceVideo || null}
             onSelect={(result) => {
               if (result) {
                 patchConfig && patchConfig({ sourceVideo: result } as any);
@@ -80,6 +78,7 @@ export const AffiliateConfig = () => {
               id="art-style-select"
               className="border-gray-200"
               options={ART_STYLE_TRANSLATED_OPTIONS}
+              value={copyVideoFormConfig?.artStyle}
               onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
             />
           </Field>
@@ -93,6 +92,7 @@ export const AffiliateConfig = () => {
               id="language-select"
               className="border-gray-200"
               options={LANGUAGE_OPTIONS}
+              value={copyVideoFormConfig?.language}
               onChange={(v) => patchConfig && patchConfig({ language: v })}
             />
           </Field>
@@ -106,6 +106,7 @@ export const AffiliateConfig = () => {
               id="mood-select"
               className="border-gray-200"
               options={MOOD_OPTIONS}
+              value={copyVideoFormConfig?.mood}
               onChange={(v) => patchConfig && patchConfig({ mood: v })}
             />
           </Field>

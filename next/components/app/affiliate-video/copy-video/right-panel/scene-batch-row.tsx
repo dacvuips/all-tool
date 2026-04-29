@@ -36,7 +36,7 @@ import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
 
 import { useCopyVideoSceneMedia } from "../../hook/useCopyVideoSceneMedia";
 import { useIndexedDB } from "../../hook/useIndexedDB";
-import { useVideoThumbnail } from "../../hook/useVideoThumbnail";
+import { useSceneThumbnail } from "../../hook/useVideoThumbnail";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -107,13 +107,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
   } = useCopyVideoSceneMedia({ scene, nextSceneId });
-  const { scriptData, copyVideoFormConfig } = useCopyVideoContext();
+  const { scriptData } = useCopyVideoContext();
 
-  // ── Thumbnail from original video at scene timestamp ──
-  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useVideoThumbnail(
-    copyVideoFormConfig?.sourceVideo?.base64,
-    copyVideoFormConfig?.sourceVideo?.mimeType,
-    scene.timestamp
+  // ── Thumbnail from IndexedDB (saved during video analysis) ──
+  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
+    scene.id
   );
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";

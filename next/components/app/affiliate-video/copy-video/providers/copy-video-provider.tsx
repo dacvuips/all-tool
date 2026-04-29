@@ -18,6 +18,8 @@ const COPY_VIDEO_STORE_NAME = STORE_NAME.copyVideo;
 interface CopyVideoContextType {
   copyVideoFormConfig?: CopyVideoFormConfig;
   patchConfig: (partial: Partial<CopyVideoFormConfig>) => void;
+  /** Persist current copyVideoFormConfig to IndexedDB (call on submit only) */
+  persistCopyVideoInput: () => void;
   batchRunning?: boolean;
   setBatchRunning?: (batchRunning: boolean) => void;
   DEFAULT_VIDEO_CONFIG?: CopyVideoFormConfig;
@@ -256,17 +258,18 @@ export function CopyVideoProvider(props) {
     setSelectedHistoryId(null);
   }, [scriptDB]);
 
-  /** Persist config to IndexedDB */
-  const persistConfig = (config: CopyVideoFormConfig) => {
-    scriptDB
-      .set(CACHE_KEY.copyVideoInput, config)
-      .catch((err) => console.warn("[copy-video] Failed to persist config", err));
-  };
+  /** Persist current copyVideoFormConfig to IndexedDB (call on submit only) */
+  const persistCopyVideoInput = useCallback(() => {
+    if (copyVideoFormConfig) {
+      scriptDB
+        .set(CACHE_KEY.copyVideoInput, copyVideoFormConfig)
+        .catch((err) => console.warn("[copy-video] Failed to persist config", err));
+    }
+  }, [copyVideoFormConfig, scriptDB]);
 
   const patchConfig = (partial: Partial<CopyVideoFormConfig>) => {
     setCopyVideoFormConfig((prev) => {
       const next = { ...prev, ...partial };
-      persistConfig(next);
       return next;
     });
   };
@@ -276,6 +279,7 @@ export function CopyVideoProvider(props) {
       value={{
         copyVideoFormConfig,
         patchConfig,
+        persistCopyVideoInput,
         batchRunning,
         setBatchRunning,
         DEFAULT_VIDEO_CONFIG,
