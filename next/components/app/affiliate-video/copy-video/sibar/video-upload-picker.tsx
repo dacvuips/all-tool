@@ -13,8 +13,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BiPlayCircle } from "react-icons/bi";
 import {
+  RiCheckLine,
   RiCloseLine,
   RiDeleteBin6Line,
+  RiEyeLine,
   RiFullscreenLine,
   RiLoader4Line,
   RiSearchLine,
@@ -23,7 +25,7 @@ import {
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { VideoDialog } from "../../../../shared/common/video-dialog";
-import { Button, Label } from "../../../../shared/utilities/form";
+import { Button, Input, Label } from "../../../../shared/utilities/form";
 import { DB_NAME } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 
@@ -87,6 +89,7 @@ export function VideoUploadPicker({
   const [previewSrc, setPreviewSrc] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [showVideoPreview, setShowVideoPreview] = useState(false);
+  const [galleryPreviewSrc, setGalleryPreviewSrc] = useState<string | null>(null);
 
   // IndexedDB for persisting uploaded videos
   const videoDB = useIndexedDB<StoredVideo>(VIDEO_STORE_NAME, VIDEO_DB_NAME);
@@ -237,7 +240,7 @@ export function VideoUploadPicker({
 
   // ── Filtered gallery items ─────────────────────────────────────────────────
 
-  const filteredItems = searchQuery.trim()
+  const filteredItems = searchQuery?.trim()
     ? galleryItems.filter((item) =>
         item.data.fileName.toLowerCase().includes(searchQuery.toLowerCase())
       )
@@ -421,21 +424,23 @@ export function VideoUploadPicker({
             </div>
 
             {/* Search bar */}
-            <div className="px-5 py-3 border-b border-gray-50">
-              <div className="relative">
-                <RiSearchLine className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm" />
-                <input
-                  type="text"
-                  placeholder={t("Tìm theo tên file...")}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
-                />
-              </div>
+            <div
+              className="px-5 py-3 border-b border-gray-50"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.preventDefault();
+              }}
+            >
+              <Input
+                prefix={<RiSearchLine />}
+                placeholder={t("Tìm theo tên file...")}
+                value={searchQuery}
+                onChange={(val) => setSearchQuery(val)}
+                className="w-full text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-200 focus:border-purple-400 transition-all"
+              />
             </div>
 
             {/* Gallery body */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className="flex-1 overflow-y-auto vw-scrool p-5">
               {/* Loading */}
               {galleryLoading && (
                 <div className="flex items-center justify-center py-16">
@@ -454,14 +459,13 @@ export function VideoUploadPicker({
 
               {/* Grid */}
               {!galleryLoading && filteredItems.length > 0 && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3  v-scrollbar max-h-96 overflow-y-auto">
                   {filteredItems.map((item) => {
                     const videoSrc = `data:${item.data.mimeType};base64,${item.data.base64}`;
                     return (
                       <div
                         key={item.key}
-                        className="relative rounded-xl overflow-hidden border-2 border-transparent hover:border-purple-400 cursor-pointer group transition-all hover:shadow-lg bg-gray-50"
-                        onClick={() => handleGallerySelect(item.data)}
+                        className="relative rounded-xl overflow-hidden border-2 border-transparent hover:border-purple-300 group transition-all hover:shadow-lg bg-gray-50"
                       >
                         {/* Video thumbnail */}
                         <div className="relative" style={{ paddingTop: "56.25%" }}>
@@ -482,11 +486,32 @@ export function VideoUploadPicker({
                           <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
                             <BiPlayCircle className="text-white w-10 h-10" />
                           </div>
-                          {/* Select overlay on hover */}
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <span className="px-3 py-1.5 text-xs font-semibold text-white bg-purple-600 rounded-full shadow-lg">
-                              {t("Chọn video")}
-                            </span>
+                          {/* Action buttons overlay on hover */}
+                          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {/* Xem (View/Preview) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setGalleryPreviewSrc(videoSrc);
+                              }}
+                              className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-full shadow-lg cursor-pointer border-0 transition-colors"
+                            >
+                              <RiEyeLine className="text-sm" />
+                              {t("Xem")}
+                            </button>
+                            {/* Chọn (Select) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleGallerySelect(item.data);
+                              }}
+                              className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-full shadow-lg cursor-pointer border-0 transition-colors"
+                            >
+                              <RiCheckLine className="text-sm" />
+                              {t("Chọn")}
+                            </button>
                           </div>
                         </div>
 
@@ -499,7 +524,7 @@ export function VideoUploadPicker({
                             {item.data.fileName}
                           </p>
                           <div className="flex items-center justify-between mt-0.5">
-                            <span className="text-[10px] text-gray-400">
+                            <span className="text-xs truncate max-w-28 text-gray-400">
                               {item.data.fileSizeMB}MB •{" "}
                               {new Date(item.data.uploadedAt).toLocaleDateString()}
                             </span>
@@ -536,6 +561,13 @@ export function VideoUploadPicker({
                 className="text-xs px-3 py-1.5 rounded-lg bg-purple-600 text-white hover:bg-purple-700"
               />
             </div>
+
+            {/* Gallery video preview dialog */}
+            <VideoDialog
+              videoUrl={galleryPreviewSrc}
+              isOpen={!!galleryPreviewSrc}
+              onClose={() => setGalleryPreviewSrc(null)}
+            />
           </div>
         </div>
       )}
