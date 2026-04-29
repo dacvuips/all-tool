@@ -4,21 +4,61 @@
  * - i18n: tất cả text bọc trong t()
  * Light theme – className only, Tailwind CSS
  */
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
-import { Form } from "../../../../shared/utilities/form";
 
+import { Form } from "../../../../shared/utilities/form";
+import { CopyVideoFormConfig } from "../../constants";
+import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
+
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
+  const toast = useToast();
+  const { DEFAULT_VIDEO_CONFIG, copyVideoFormConfig, setBatchRunning, setScriptData, setScriptTab } =
+    useCopyVideoContext();
+  const { analyzeVideoForCopy } = useAffiliateVideoApi();
+
+  // ── Submit handler: phân tích video gốc ──
+  const handleSubmit = useCallback(
+    async (_formData: any) => {
+      if (!copyVideoFormConfig?.sourceVideo?.base64) {
+        toast.error(t("Vui lòng upload video gốc trước khi phân tích"));
+        return;
+      }
+
+      try {
+        setScriptTab?.("script");
+        setBatchRunning?.(true);
+        const result = await analyzeVideoForCopy(copyVideoFormConfig as CopyVideoFormConfig);
+        if (result) {
+          setScriptData?.(result);
+          toast.success(
+            t("Phân tích video thành công! Đã tạo {{count}} cảnh", {
+              count: result.scenes?.length || 0,
+            })
+          );
+        }
+      } catch (err: any) {
+        console.error("[CopyVideoForm] analyzeVideoForCopy error:", err);
+        toast.error(err?.message || t("Lỗi khi phân tích video"));
+      } finally {
+        setBatchRunning?.(false);
+      }
+    },
+    [copyVideoFormConfig, analyzeVideoForCopy, setBatchRunning, setScriptData, setScriptTab, toast, t]
+  );
 
   return (
     <Form
-      // onSubmit={wrappedSubmit}
-      // defaultValues={defaultVideoConfig}
+      onSubmit={handleSubmit}
+      defaultValues={DEFAULT_VIDEO_CONFIG}
       className="flex flex-col h-full"
     >
       {/* ── Header: Tạo Nhân Vật (cố định) ── */}

@@ -31,11 +31,12 @@ import { VideoDialog } from "../../../../shared/common/video-dialog";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
-import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
-import { GeneratedImageData } from "../hook/useAffiliateVideoApi";
+import { CharacterItem, DB_NAME, SceneScript } from "../../constants";
+import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
 
-import { useSceneMedia } from "../hook/useSceneMedia";
+import { useSceneMedia } from "../../hook/useSceneMedia";
 
+import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -53,7 +54,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   scene,
   isDisabled,
   isGroupHovered,
-  storyModeType,
   nextSceneId,
   onMouseEnter,
   onMouseLeave,
@@ -66,7 +66,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   nextSceneId?: string;
   isDisabled: boolean;
   isGroupHovered?: boolean;
-  storyModeType?: StoryModeTypeEnum;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -105,7 +104,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadExtendVideo,
   } = useSceneMedia({ scene, nextSceneId });
   const { scriptData } = useCopyVideoContext();
-  const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -264,7 +262,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       }}
     >
       {/* Image Prompt */}
-      {!isPromptToVideo && (
+      {
         <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
           {renderEditablePrompt(
             "imageGenPrompt",
@@ -283,7 +281,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             </button>
           )}
         </td>
-      )}
+      }
 
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -322,7 +320,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       </td>
 
       {/* Generated Image */}
-      {!isPromptToVideo && (
+      {
         <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
           <div className="flex justify-center">
             {generatedImage ? (
@@ -400,7 +398,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             )}
           </div>
         </td>
-      )}
+      }
 
       {/* Generated Video đơn */}
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -483,7 +481,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   ) : (
                     <Button
                       onClick={() => {
-                        if (!isPromptToVideo && !generatedImage) {
+                        if (!generatedImage) {
                           toast.error(t("Cần tạo ảnh trước khi tạo video"));
                           return;
                         }
@@ -508,7 +506,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             ) : (
               <button
                 onClick={() => {
-                  if (!isPromptToVideo && !generatedImage) {
+                  if (!generatedImage) {
                     toast.error(t("Cần tạo ảnh trước khi tạo video"));
                     return;
                   }
@@ -527,7 +525,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           </div>
 
           {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
-          {!isPromptToVideo && nextSceneId && (
+          {nextSceneId && (
             <div className="flex justify-center w-full">
               {generatedExtendVideo ? (
                 <div className="relative w-32 group">
@@ -749,7 +747,6 @@ interface SceneRowGroupProps {
   nextSceneId?: string;
   isDisabled: boolean;
   characters: CharacterItem[];
-  storyModeType?: StoryModeTypeEnum;
   onInsert: (
     scene: SceneScript,
     position: InsertPosition,
@@ -766,7 +763,6 @@ export function SceneRowGroup({
   nextSceneId,
   isDisabled,
   characters,
-  storyModeType,
   onInsert,
   onUpdateScene,
   onToggleDisable,
@@ -809,7 +805,6 @@ export function SceneRowGroup({
         nextSceneId={nextSceneId}
         isDisabled={isDisabled}
         isGroupHovered={hovered}
-        storyModeType={storyModeType}
         onMouseEnter={enter}
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}

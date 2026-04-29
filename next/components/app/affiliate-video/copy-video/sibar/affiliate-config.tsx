@@ -5,14 +5,12 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useState } from "react";
-import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, Select } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
+import { ASPECT_RATIOS } from "../../constants";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { VideoUploadPicker } from "./video-upload-picker";
 
@@ -22,14 +20,10 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { patchConfig, copyVideoFormConfig } = useCopyVideoContext();
-  const formContext = useFormContext();
-  const { ART_STYLE_TRANSLATED_OPTIONS, CATEGORY_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } =
-    useOptionsTranslation();
+
+  const { ART_STYLE_TRANSLATED_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
 
   // Local state for instant UI feedback; synced from URL param on mount/navigation
-  const initialMode = router.query.storyModeType as StoryModeTypeEnum;
-  StoryModeTypeEnum.image_to_video;
-  const [currentStoryModeType, setCurrentStoryModeType] = useState<StoryModeTypeEnum>(initialMode);
 
   return (
     <div className="flex-1 bg-white">

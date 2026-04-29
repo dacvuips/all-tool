@@ -56,7 +56,9 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   batchSize: number;
 }
 
-export interface CopyVideoFormConfig extends VideoFormBase {}
+export interface CopyVideoFormConfig extends VideoFormBase {
+  sourceVideo?: { base64: string; mimeType: string };
+}
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
 
@@ -158,7 +160,46 @@ export const CACHE_KEY = {
   generateInput: "generateInput",
   sceneHistory: "sceneHistory",
   copyVideoHistory: "copyVideoHistory",
+  lastCopyVideoScript: "lastCopyVideoScript",
+  copyVideoInput: "copyVideoInput",
 };
+
+// ── Copy Video Analysis Types ──────────────────────────────────────────────
+
+export interface CopyVideoCharacter {
+  name: string;
+  description: string;
+}
+
+export interface CopyVideoProp {
+  name: string;
+  description: string;
+}
+
+export interface CopyVideoScene {
+  id: string;
+  timestamp: string;
+  scene_type: "CHARACTER" | "OBJECT";
+  visual_prompt: string;
+  motion_description: string;
+  audio_description: string;
+  original_content: string;
+  translated_content?: string | null;
+}
+
+export interface CopyVideoAnalysisData {
+  characters: CopyVideoCharacter[];
+  props: CopyVideoProp[];
+  scenes: CopyVideoScene[];
+  aspectRatio?: string;
+}
+
+export interface CopyVideoHistoryItem {
+  id: string;
+  createdAt: number;
+  label: string;
+  data: CopyVideoAnalysisData;
+}
 
 /** A single entry in the scene generation history */
 export interface SceneHistoryItem {

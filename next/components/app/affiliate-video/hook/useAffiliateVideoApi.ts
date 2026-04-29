@@ -9,6 +9,9 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
+  CopyVideoAnalysisData,
+  CopyVideoFormConfig,
+  CopyVideoHistoryItem,
   DB_NAME,
   SceneHistoryItem,
   ScriptData,
@@ -21,8 +24,11 @@ const IMAGE_STORE_NAME = "generated-images";
 const VIDEO_STORE_NAME = "generated-videos";
 const AUDIO_STORE_NAME = "generated-audio";
 
+const COPY_VIDEO_STORE_NAME = "copy-video-scripts";
+
 /** Max history entries kept in IndexedDB */
 const MAX_SCENE_HISTORY = 50;
+const MAX_COPY_VIDEO_HISTORY = 50;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -239,6 +245,15 @@ export interface UseAffiliateVideoApiReturn {
    * Xóa toàn bộ lịch sử generate scene.
    */
   clearSceneHistory: () => Promise<void>;
+
+  /**
+   * Gọi API phân tích video gốc (copy-video flow).
+   * Gửi video base64 lên server → Gemini phân tích → trả về characters, props, scenes.
+   * Tự động lưu kết quả vào IndexedDB.
+   */
+  analyzeVideoForCopy: (
+    data: CopyVideoFormConfig
+  ) => Promise<CopyVideoAnalysisData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -250,6 +265,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
+  const copyVideoScriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
   const { customer } = useAuth();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
@@ -340,6 +356,115 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return scriptResult;
     },
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
+  );
+
+  // ── Shared: gọi API /api/app/copy-video-analysis/ ──
+  const callCopyVideoAnalysisApi = useCallback(
+    async (body: {
+      videoBase64: string;
+      mimeType: string;
+      artStyle?: string;
+      language?: string;
+      mood?: string;
+      aspectRatio?: string;
+    }) => {
+      const res = await fetch("/api/app/copy-video-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+
+  // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
+  const pushToCopyVideoHistory = useCallback(
+    async (analysisResult: CopyVideoAnalysisData) => {
+      try {
+        const existing: CopyVideoHistoryItem[] =
+          (await copyVideoScriptDB.get(CACHE_KEY.copyVideoHistory)) || [];
+
+        const now = new Date();
+        const label = `Phân tích video – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: CopyVideoHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: analysisResult,
+        };
+
+        const updated = [newItem, ...existing].slice(0, MAX_COPY_VIDEO_HISTORY);
+        await copyVideoScriptDB.set(CACHE_KEY.copyVideoHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push copy-video history", e);
+      }
+    },
+    [copyVideoScriptDB]
+  );
+
+  // ── analyzeVideoForCopy (copy-video flow – phân tích video gốc) ──
+  const analyzeVideoForCopy = useCallback(
+    async (data: CopyVideoFormConfig): Promise<CopyVideoAnalysisData | undefined> => {
+      if (!data.sourceVideo?.base64) {
+        toast.error("Chưa upload video gốc");
+        return undefined;
+      }
+
+      const result = await callCopyVideoAnalysisApi({
+        videoBase64: data.sourceVideo.base64,
+        mimeType: data.sourceVideo.mimeType,
+        artStyle: data.artStyle,
+        language: data.language,
+        mood: data.mood,
+        aspectRatio: data.aspectRatio,
+      });
+      if (!result) return undefined;
+
+      const analysisResult: CopyVideoAnalysisData = {
+        ...result.data,
+        aspectRatio: data.aspectRatio,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (analysisResult?.scenes) {
+        analysisResult.scenes = analysisResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist config input
+      copyVideoScriptDB
+        .set(CACHE_KEY.copyVideoInput, data)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      // Persist analysis result
+      copyVideoScriptDB
+        .set(CACHE_KEY.lastCopyVideoScript, analysisResult)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      // Push to history
+      await pushToCopyVideoHistory(analysisResult);
+
+      return analysisResult;
+    },
+    [callCopyVideoAnalysisApi, copyVideoScriptDB, pushToCopyVideoHistory, toast]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
@@ -723,5 +848,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getGeneratedAudio,
     getSceneHistory,
     clearSceneHistory,
+    analyzeVideoForCopy,
   };
 }

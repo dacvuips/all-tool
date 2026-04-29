@@ -18,16 +18,8 @@ import {
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../../shared/utilities/form";
-import {
-  CACHE_KEY,
-  CharacterItem,
-  DB_NAME,
-  SceneScript,
-  ScriptData,
-  STORE_NAME,
-  StoryModeTypeEnum,
-} from "../../constants";
-import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
+import { CACHE_KEY, CharacterItem, DB_NAME, SceneScript, STORE_NAME } from "../../constants";
+import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -320,19 +312,18 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
-  storyModeType: StoryModeTypeEnum;
 }
 
-export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
+export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData, selectedHistoryId } = useCopyVideoContext();
+  const { scriptData, updateScriptData, selectedHistoryId } = useCopyVideoContext();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);
   }, [scenes]);
 
-  const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
+  const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
   const { insertScene } = useAffiliateVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
@@ -343,8 +334,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     setSceneList(updated);
     // 2. Persist to IndexedDB by reading current record then merging
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleDisable] Failed to persist to IndexedDB:", err);
     }
@@ -357,8 +351,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     );
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleVoiceDisable] Failed to persist to IndexedDB:", err);
     }
@@ -370,8 +367,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     const updated = sceneList.map((s) => ({ ...s, voiceDisable: !allDisabled }));
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleAllVoiceDisable] Failed to persist to IndexedDB:", err);
     }
@@ -401,19 +401,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
         nextScene,
         scriptContext: scriptData
           ? {
-              cast: scriptData.characterName
-                ? [
-                    {
-                      name: scriptData.characterName,
-                      tag: "main",
-                      description: scriptData.characterBaseDescription || "",
-                    },
-                  ]
-                : undefined,
-              environment: scriptData.environment,
-              artStyle: scriptData.artStyle,
-              voiceGender: scriptData.voiceGender,
-              voiceTone: scriptData.voiceTone,
+              cast: scriptData.characters?.map((c, idx) => ({
+                name: c.name,
+                tag: idx === 0 ? "main" : "supporting",
+                description: c.description || "",
+              })),
             }
           : undefined,
       });
@@ -439,10 +431,10 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
       // Persist to IndexedDB
       try {
-        const current = await db.get(CACHE_KEY.lastScript);
+        const current = await db.get(CACHE_KEY.lastCopyVideoScript);
         const merged = { ...(current ?? scriptData), scenes: updated as any };
-        await db.set(CACHE_KEY.lastScript, merged);
-        setScriptData(merged as any);
+        await db.set(CACHE_KEY.lastCopyVideoScript, merged);
+        updateScriptData?.(merged as any);
       } catch (err) {
         console.error("[handleInsert] Failed to persist to IndexedDB:", err);
       }
@@ -479,8 +471,8 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
     // 3. Persist to IndexedDB asynchronously
     try {
-      await db.set(CACHE_KEY.lastScript, { ...scriptData, scenes: updated as any });
-      setScriptData({ ...scriptData, scenes: updated as any });
+      await db.set(CACHE_KEY.lastCopyVideoScript, { ...scriptData, scenes: updated as any });
+      updateScriptData?.({ ...scriptData, scenes: updated as any });
     } catch (err) {
       console.error("[handleUpdateScene] Failed to persist to IndexedDB:", err);
     }
@@ -507,25 +499,25 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {
                 <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
                   <div className="flex items-center gap-1">
                     <RiImageFill className="text-xs" />
                     {t("PROMPT HÌNH ẢNH")}
                   </div>
                 </th>
-              )}
+              }
               <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
                   {t("CHUYỂN ĐỘNG & ÂM THANH")}
                 </div>
               </th>
-              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {
                 <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
                   {t("HÌNH ẢNH")}
                 </th>
-              )}
+              }
               <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
                 {t("VIDEO")}
               </th>
@@ -565,7 +557,6 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
                 isDisabled={!!scene.disabled}
                 characters={characters}
-                storyModeType={scriptData.storyModeType}
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}

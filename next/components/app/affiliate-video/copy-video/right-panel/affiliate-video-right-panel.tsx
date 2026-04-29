@@ -124,13 +124,12 @@ function EnvironmentPanel({
 const TAB_NAMES = ["script", "batch"] as const;
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
-export const AffiliateVideoRightPanel = () => {
+export const CopyVideoRightPanel = () => {
   const { t } = useTranslation();
   const {
     scriptData,
     scriptTab,
     setScriptTab,
-    batchList,
     batchRunning,
     sceneHistory,
     selectedHistoryId,
@@ -240,7 +239,6 @@ export const AffiliateVideoRightPanel = () => {
                     {sceneHistory.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.label}
-                        {item.data?.topicTitle ? ` – ${item.data.topicTitle.slice(0, 40)}` : ""}
                         {` (${item.data?.scenes?.length || 0} scenes)`}
                       </option>
                     ))}
@@ -253,28 +251,6 @@ export const AffiliateVideoRightPanel = () => {
               {/* Phần nhân vật */}
               <CastSection scriptData={scriptData} />
 
-              {/* Bối cảnh & Âm thanh – responsive grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                  <EnvironmentPanel
-                    environment={{
-                      environment: scriptData.environment,
-                      artStyle: scriptData.artStyle,
-                    }}
-                  />
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm">
-                  <AudioVoicePanel
-                    audioConfig={{
-                      gender: scriptData.voiceGender,
-                      mood: scriptData.voiceTone,
-                      style: scriptData.voiceStyle,
-                      fullPrompt: `${scriptData.voiceGender} · ${scriptData.voiceTone} · ${scriptData.voiceStyle}`,
-                    }}
-                  />
-                </div>
-              </div>
-
               {/* Phần danh sách cảnh */}
               <div className="mb-3">
                 <h3 className="text-base font-bold text-gray-800 mb-3">
@@ -283,15 +259,15 @@ export const AffiliateVideoRightPanel = () => {
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {scriptData?.scenes?.map((scene, i) => (
                     <SceneCard
-                      key={scene.sceneNumber ?? i}
+                      key={scene.id || `scene-${i}`}
                       scene={{
                         id: `scene-${i}`,
-                        sceneNumber: scene.sceneNumber,
-                        camera: (scene.camera as any) || "WIDE SHOT",
-                        imageGenPrompt: scene.imageGenPrompt,
-                        motionPrompt: scene.motionPrompt || "",
-                        dialogue: scene.dialogue || "",
-                        visualPrompt: scene.visualPrompt || "",
+                        sceneNumber: i + 1,
+                        camera: "WIDE SHOT",
+                        imageGenPrompt: scene.visual_prompt || "",
+                        motionPrompt: scene.motion_description || "",
+                        dialogue: scene.original_content || "",
+                        visualPrompt: scene.visual_prompt || "",
                       }}
                     />
                   ))}
@@ -308,18 +284,17 @@ export const AffiliateVideoRightPanel = () => {
           ) : (
             <BatchListPanel
               scenes={(scriptData?.scenes || []).map((s, i) => ({
-                id: (s as any).id || `scene-${i}`,
-                sceneNumber: s.sceneNumber,
-                camera: (s.camera as any) || "WIDE SHOT",
-                imageGenPrompt: s.imageGenPrompt || "",
-                motionPrompt: s.motionPrompt || "",
-                dialogue: s.dialogue || "",
-                visualPrompt: s.visualPrompt || "",
+                id: s.id || `scene-${i}`,
+                sceneNumber: i + 1,
+                camera: (s as any).camera || "WIDE SHOT",
+                imageGenPrompt: s.visual_prompt || "",
+                motionPrompt: s.motion_description || "",
+                dialogue: s.original_content || "",
+                visualPrompt: s.visual_prompt || "",
                 disabled: (s as any).disabled ?? false,
                 voiceDisable: (s as any).voiceDisable ?? false,
-                audio: s.audio || "",
+                audio: "",
               }))}
-              storyModeType={scriptData?.storyModeType}
               characters={[]}
             />
           )}

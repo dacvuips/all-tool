@@ -7,8 +7,8 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiMenuLine } from "react-icons/ri";
-import { AffiliateVideoRightPanel } from "../single/right-panel/affiliate-video-right-panel";
 import { CopyVideoProvider } from "./providers/copy-video-provider";
+import { CopyVideoRightPanel } from "./right-panel/affiliate-video-right-panel";
 import { CopyVideoForm } from "./sibar/copyVideoForm";
 
 interface AffiliateCopyVideoProps {}
@@ -50,7 +50,7 @@ export const AffiliateCopyVideoPage = ({}: AffiliateCopyVideoProps) => {
         </div>
 
         {/* ══ RIGHT PA NEL ══ */}
-        <AffiliateVideoRightPanel />
+        <CopyVideoRightPanel />
       </div>
     </CopyVideoProvider>
   );
