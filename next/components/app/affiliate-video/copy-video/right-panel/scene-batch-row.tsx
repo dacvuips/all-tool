@@ -36,6 +36,7 @@ import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
 
 import { useCopyVideoSceneMedia } from "../../hook/useCopyVideoSceneMedia";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useVideoThumbnail } from "../../hook/useVideoThumbnail";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -106,7 +107,14 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
   } = useCopyVideoSceneMedia({ scene, nextSceneId });
-  const { scriptData } = useCopyVideoContext();
+  const { scriptData, copyVideoFormConfig } = useCopyVideoContext();
+
+  // ── Thumbnail from original video at scene timestamp ──
+  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useVideoThumbnail(
+    copyVideoFormConfig?.sourceVideo?.base64,
+    copyVideoFormConfig?.sourceVideo?.mimeType,
+    scene.timestamp
+  );
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -327,6 +335,33 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {/* Generated Image */}
       {
         <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          {/* Ảnh gốc (Origin Thumbnail) */}
+          <div className="flex flex-col items-center mb-3">
+            {thumbnailLoading ? (
+              <div className="w-20 h-12 rounded-lg border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
+                <RiLoader4Line className="text-amber-500 text-sm animate-spin" />
+              </div>
+            ) : thumbnailOriginImage ? (
+              <div className="relative w-32  group">
+                <Img
+                  showImageOnClick
+                  lazyload={false}
+                  src={thumbnailOriginImage}
+                  alt={`Origin frame - Scene ${scene.sceneNumber}`}
+                  className="rounded-lg object-cover border border-amber-200 shadow-sm"
+                  ratio169
+                />
+                <span className="block text-center text-[9px] text-amber-600 font-medium -mt-2 bg-gray-100 pt-2 rounded-b-md ">
+                  {scene.timestamp}
+                </span>
+              </div>
+            ) : (
+              <div className="w-20 h-12 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
+                <RiImageFill className="text-gray-300 text-sm" />
+                <span className="text-[8px] text-gray-400">No video</span>
+              </div>
+            )}
+          </div>
           <div className="flex justify-center">
             {generatedImage ? (
               /* ── Show generated image thumbnail ── */
@@ -409,7 +444,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex flex-row items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-center w-full">
+          <div className="flex justify-start w-full">
             {generatedVideo ? (
               <div className="relative w-32 group">
                 {(() => {
@@ -531,7 +566,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
           {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
           {nextSceneId && (
-            <div className="flex justify-center w-full">
+            <div className="flex justify-start w-full">
               {generatedExtendVideo ? (
                 <div className="relative w-32 group">
                   {(() => {
@@ -787,7 +822,7 @@ export function SceneRowGroup({
       {index === 0 && (
         <tr onMouseEnter={enter} onMouseLeave={leave}>
           <td
-            colSpan={5}
+            colSpan={6}
             className="p-0 relative overflow-visible"
             style={{ height: 0, lineHeight: 0, border: "none" }}
           >
@@ -820,7 +855,7 @@ export function SceneRowGroup({
       {/* Add BELOW button – absolute positioned, floats between rows */}
       <tr onMouseEnter={enter} onMouseLeave={leave}>
         <td
-          colSpan={5}
+          colSpan={6}
           className="p-0 relative overflow-visible"
           style={{ height: 0, lineHeight: 0, border: "none" }}
         >

@@ -405,7 +405,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex flex-row items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-center w-full">
+          <div className="flex justify-start w-full">
             {generatedVideo ? (
               <div className="relative w-32 group">
                 {(() => {
