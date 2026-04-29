@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { CopyVideoScene } from "../constants";
 
-import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
+import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
 import {
   GeneratedImageData,
   GeneratedVideoData,
@@ -26,6 +26,8 @@ interface UseSceneMediaParams {
   /** Scene hiện tại */
   scene: CopyVideoScene;
   nextSceneId?: string;
+  /** Ảnh gốc (data URL) dùng làm tham chiếu khi tạo ảnh AI */
+  thumbnailOriginImage?: string | null;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -80,6 +82,7 @@ export interface UseSceneMediaReturn {
 export function useCopyVideoSceneMedia({
   scene,
   nextSceneId,
+  thumbnailOriginImage,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
@@ -116,7 +119,7 @@ export function useCopyVideoSceneMedia({
     removeBatchGeneratingVideoSceneId,
     subscribeBatchState,
     scriptData,
-  } = useAffiliateVideoContext();
+  } = useCopyVideoContext();
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -327,10 +330,20 @@ export function useCopyVideoSceneMedia({
     startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
 
     try {
+      // Parse thumbnailOriginImage data URL to extract base64 + mimeType
+      let referenceImage: { imageBytes: string; mimeType: string } | undefined;
+      if (thumbnailOriginImage) {
+        const match = thumbnailOriginImage.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          referenceImage = { mimeType: match[1], imageBytes: match[2] };
+        }
+      }
+      const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
       const result = await generateImage({
         sceneId: scene.id,
-        prompt: scene.visual_prompt,
+        prompt: `${noText}${scene.visual_prompt}`,
         aspectRatio: scriptData?.aspectRatio,
+        referenceImage,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -426,7 +439,7 @@ export function useCopyVideoSceneMedia({
         sceneId: isStitch ? scene.id + "::stitch" : scene.id,
         prompt: scene.voiceDisable
           ? `[MOTION]${scene.motion_description}`
-          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.original_content}`,
+          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.translated_content}`,
         images: imagesArray,
         aspectRatio: scriptData?.aspectRatio,
         onProgress: (pct) => {

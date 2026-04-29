@@ -10,6 +10,7 @@ import {
   STORE_NAME,
 } from "../../constants";
 
+import { useTranslation } from "react-i18next";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -61,11 +62,18 @@ export const CopyVideoContext = createContext<Partial<CopyVideoContextType>>({
 
 export function CopyVideoProvider(props) {
   const { customer } = useAuth();
-  const { DEFAULT_VIDEO_CONFIG } = useOptionsTranslation();
+  const { t } = useTranslation();
+  const { LANGUAGE_OPTIONS, ART_STYLE_TRANSLATED_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
+
+  const DEFAULT_VIDEO_CONFIG: CopyVideoFormConfig = {
+    mood: t("Vui vẻ"),
+    language: LANGUAGE_OPTIONS[0].label,
+    artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
+    aspectRatio: "9:16",
+  };
 
   // ── IndexedDB – shared cache for AI results ──
   const scriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
-
 
   const [batchRunning, setBatchRunning] = useState(false);
   const [copyVideoFormConfig, setCopyVideoFormConfig] =
@@ -84,19 +92,17 @@ export function CopyVideoProvider(props) {
         // 1. Persist as last script for restore-on-revisit
         scriptDB
           .set(CACHE_KEY.lastCopyVideoScript, data)
-          .catch((err) =>
-            console.warn("[copy-video] Failed to persist lastCopyVideoScript", err)
-          );
+          .catch((err) => console.warn("[copy-video] Failed to persist lastCopyVideoScript", err));
 
         // 2. Add to history
         const now = new Date();
         const newItem: CopyVideoHistoryItem = {
           id: `copy-${Date.now()}`,
           createdAt: Date.now(),
-          label: `Kịch bản – ${now.toLocaleDateString("vi-VN")} ${now.toLocaleTimeString(
-            "vi-VN",
-            { hour: "2-digit", minute: "2-digit" }
-          )}`,
+          label: `Kịch bản – ${now.toLocaleDateString("vi-VN")} ${now.toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`,
           data,
         };
         setSceneHistory((prev) => {
@@ -117,9 +123,7 @@ export function CopyVideoProvider(props) {
       if (data) {
         scriptDB
           .set(CACHE_KEY.lastCopyVideoScript, data)
-          .catch((err) =>
-            console.warn("[copy-video] Failed to persist lastCopyVideoScript", err)
-          );
+          .catch((err) => console.warn("[copy-video] Failed to persist lastCopyVideoScript", err));
       }
     },
     [scriptDB]

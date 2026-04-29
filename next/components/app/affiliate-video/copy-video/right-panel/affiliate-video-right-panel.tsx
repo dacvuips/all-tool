@@ -266,7 +266,7 @@ export const CopyVideoRightPanel = () => {
                         camera: "WIDE SHOT",
                         imageGenPrompt: scene.visual_prompt || "",
                         motionPrompt: scene.motion_description || "",
-                        dialogue: scene.original_content || "",
+                        dialogue: `${scene.original_content}\n ${scene.translated_content}` || "",
                         visualPrompt: scene.visual_prompt || "",
                       }}
                     />

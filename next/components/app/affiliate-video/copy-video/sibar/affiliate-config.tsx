@@ -72,7 +72,7 @@ export const AffiliateConfig = () => {
         </div>
         {/* ART STYLE */}
         <div>
-          <Field noError name="artStyle" label={t("Phong cách hình ảnh")}>
+          <Field noError label={t("Phong cách hình ảnh")}>
             <Select
               native
               id="art-style-select"
@@ -86,7 +86,7 @@ export const AffiliateConfig = () => {
 
         {/* NGÔN NGỮ LỜI THOẠI */}
         <div>
-          <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
+          <Field noError label={t("Ngôn ngữ lời thoại")}>
             <Select
               native
               id="language-select"
@@ -100,7 +100,7 @@ export const AffiliateConfig = () => {
 
         {/* MOOD / TÍNH CÁCH */}
         <div>
-          <Field noError name="mood" label={t("Tính cách / Mood")}>
+          <Field noError label={t("Tính cách / Mood")}>
             <Select
               native
               id="mood-select"

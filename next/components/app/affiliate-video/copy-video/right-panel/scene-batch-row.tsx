@@ -89,6 +89,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // ── Thumbnail from IndexedDB (saved during video analysis) ──
+  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
+    scene.id
+  );
+  const { scriptData } = useCopyVideoContext();
   const {
     generatedImage,
     generatingImage,
@@ -106,13 +111,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useCopyVideoSceneMedia({ scene, nextSceneId });
-  const { scriptData } = useCopyVideoContext();
-
-  // ── Thumbnail from IndexedDB (saved during video analysis) ──
-  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
-    scene.id
-  );
+  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage });
 
   const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -312,7 +311,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         )}
         {renderEditablePrompt(
           "original_content",
-          scene.original_content ?? "",
+          ` ${t("Gốc")}: ${scene.original_content ?? ""}\n ${t("Dịch")}: ${
+            scene.translated_content
+          }`,
           "text-green-700 italic",
           <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [DIALOGUE]:

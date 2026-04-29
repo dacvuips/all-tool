@@ -43,7 +43,7 @@ export type StoryModeType = "prompt_to_video" | "image_to_video";
 
 /** Affiliate sidebar form configuration */
 export interface VideoFormBase {
-  category: string;
+  category?: string;
   mood: string;
   language: string;
   artStyle: string;

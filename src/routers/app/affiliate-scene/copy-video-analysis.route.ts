@@ -121,6 +121,7 @@ function buildVideoAnalysisPrompt(opts: {
   const language = opts.language || "Vietnamese";
   const mood = opts.mood || "funny";
   const aspectRatio = opts.aspectRatio || "9:16";
+  console.log(artStyle);
 
   return `
 Bạn là chuyên gia Video Production và AI Animation Director.
@@ -269,6 +270,9 @@ YÊU CẦU CHO TỪNG SCENE
 1. visual_prompt
 
 - Mô tả MỘT khung hình tĩnh.
+Nhân vật theo Style bắt buộc:"${artStyle}"
+Mood / Tính cách nhân vật:"${mood}"
+Aspect ratio:${aspectRatio}
 - Viết bằng tiếng Anh.
 - Expand toàn bộ Character Description và Props Description.
 - Nếu scene_type = "CHARACTER":
@@ -278,9 +282,7 @@ YÊU CẦU CHO TỪNG SCENE
   - Tuyệt đối không nhắc nhân vật.
   - Chỉ tập trung vào vật thể, ánh sáng, bố cục, texture.
   - Sử dụng các effect phù hợp để tăng tính hấp dẫn.
-Style bắt buộc:"${artStyle}"
-Mood / Tính cách nhân vật:"${mood}"
-Aspect ratio:${aspectRatio}
+Art style influence from "${artStyle}" . Visual Storytelling style. 
 
 2. motion_description
 - Viết bằng tiếng Anh.
