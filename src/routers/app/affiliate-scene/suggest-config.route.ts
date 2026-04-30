@@ -61,7 +61,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           clients,
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-2.5-flash",
+              model: "gemini-3-flash-preview",
               contents: [{ role: "user", parts: [{ text: prompt }] }],
               config: {
                 responseMimeType: "application/json",

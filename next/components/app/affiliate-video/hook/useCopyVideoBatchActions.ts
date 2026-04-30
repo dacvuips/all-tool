@@ -13,9 +13,9 @@ import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { CopyVideoScene, StoryModeTypeEnum } from "../constants";
+import { CopyVideoScene } from "../constants";
 
-import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
+import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───
@@ -27,14 +27,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
     useAffiliateVideoApi();
   const {
-    scriptData,
+    copyVideoFormConfig,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
-    affiliateVideoFormConfig,
-  } = useAffiliateVideoContext();
-  const isPromptToVideo = scriptData.storyModeType === StoryModeTypeEnum.prompt_to_video;
+  } = useCopyVideoContext();
+  // Copy-video mode is always image_to_video (no prompt_to_video)
+  const isPromptToVideo = false;
   const toast = useToast();
 
   // ═══════════════════════════════════════════════════════════════════
@@ -54,13 +54,10 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
       .join("\n");
   }, [scenes]);
 
-  /** Aggregate voice profile from scriptData (voiceGender · voiceTone · voiceStyle) */
+  /** Aggregate voice profile – copy-video analysis doesn't have global voice config */
   const audioExportText = useMemo(() => {
-    if (!scriptData) return "";
-    return [scriptData.voiceGender, scriptData.voiceTone, scriptData.voiceStyle]
-      .filter(Boolean)
-      .join(" · ");
-  }, [scriptData]);
+    return "";
+  }, []);
 
   const handleCopyDialogue = useCallback(() => {
     navigator.clipboard.writeText(dialogueExportText).then(() => {
@@ -503,7 +500,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           await generateImage({
             sceneId: scene.id,
             prompt: scene.visual_prompt,
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setBatchCompleted(completed);
@@ -601,19 +598,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         if (isPromptToVideo) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
-            const audioDesc = [
-              scriptData?.voiceGender,
-              scriptData?.voiceStyle,
-              scriptData?.voiceTone,
-            ]
-              .filter(Boolean)
-              .join(", ");
+            const audioDesc = scene.audio_description || "";
             await generateVideo({
               sceneId: scene.id,
               prompt: scene.voiceDisable
                 ? `[MOTION]${scene.motion_description}`
-                : `[MOTION]${scene.motion_description}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.original_content}`,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+                : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+              aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
             completed++;
             setVideoBatchCompleted(completed);
@@ -647,7 +638,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             existingImage = await generateImage({
               sceneId: scene.id,
               prompt: scene.visual_prompt,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
           } catch (imgErr) {
             console.error(
@@ -674,21 +665,19 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id);
-          const audioDesc = [scriptData?.voiceGender, scriptData?.voiceStyle, scriptData?.voiceTone]
-            .filter(Boolean)
-            .join(", ");
+          const audioDesc = scene.audio_description || "";
           await generateVideo({
             sceneId: scene.id,
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.original_content}`,
+              : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
             images: [
               {
                 imageBytes: existingImage.imageBytes,
                 mimeType: existingImage.mimeType,
               },
             ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setVideoBatchCompleted(completed);
@@ -817,7 +806,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
             ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setExtendBatchCompleted(completed);

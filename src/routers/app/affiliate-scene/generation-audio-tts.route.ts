@@ -2,7 +2,12 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callWithKeyRotation, checkRequestLimit, getAvailableGeminiClients, incrementRequestCount } from "./_shared";
+import {
+  callWithKeyRotation,
+  checkRequestLimit,
+  getAvailableGeminiClients,
+  incrementRequestCount,
+} from "./_shared";
 
 export default [
   {
@@ -41,7 +46,7 @@ export default [
           clients,
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-2.5-flash-preview-tts",
+              model: "gemini-3.1-flash-tts-preview",
               contents: [{ role: "user", parts: [{ text: textContent }] }],
               config: {
                 responseModalities: ["AUDIO"],
