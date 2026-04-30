@@ -78,7 +78,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const [expanded, setExpanded] = useState(false);
+
   const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -115,15 +115,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const MAX_CHARS = 160;
 
-  const truncate = (text: string) =>
-    text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + "..." : text;
-
-  const needsExpand =
-    scene.visual_prompt.length > MAX_CHARS ||
-    scene.motion_description.length > MAX_CHARS ||
-    (scene.original_content?.length || 0) > MAX_CHARS;
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
@@ -213,8 +205,20 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         /* ── Display mode ── */
         <div className="relative">
           {labelEl}
-          <span className={`text-xs ${textColor} leading-relaxed pr-14`}>
-            {expanded ? text : truncate(text)}
+          <span
+            className={`text-xs ${textColor} leading-relaxed pr-14 whitespace-pre-line`}
+            style={
+              hoveredField !== field
+                ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical" as any,
+                    overflow: "hidden",
+                  }
+                : {}
+            }
+          >
+            {text}
           </span>
           {/* Action icons – visible when hovering this field's area */}
           <div
@@ -279,14 +283,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             IMAGE PROMPT
           </span>
         )}
-        {editingField !== "visual_prompt" && scene.visual_prompt.length > MAX_CHARS && (
-          <button
-            onClick={() => setExpanded((p) => !p)}
-            className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-          >
-            {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-          </button>
-        )}
+
         {renderEditablePrompt(
           "motion_description",
           scene.motion_description,
@@ -313,16 +310,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             [DIALOGUE]:
           </span>
         )}
-        {editingField !== "motion_description" &&
-          editingField !== "original_content" &&
-          needsExpand && (
-            <button
-              onClick={() => setExpanded((p) => !p)}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-            >
-              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-            </button>
-          )}
+
       </td>
 
       {/* Generated Image */}
