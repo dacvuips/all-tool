@@ -106,7 +106,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const { scriptData } = useAffiliateVideoContext();
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
-  const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const MAX_CHARS = 160;
 
@@ -262,30 +262,25 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         onMouseLeave?.();
       }}
     >
-      {/* Image Prompt */}
-      {!isPromptToVideo && (
-        <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-          {renderEditablePrompt(
-            "imageGenPrompt",
-            scene.imageGenPrompt,
-            "text-gray-600",
-            <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
-              IMAGE PROMPT
-            </span>
-          )}
-          {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
-            <button
-              onClick={() => setExpanded((p) => !p)}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-            >
-              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-            </button>
-          )}
-        </td>
-      )}
-
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        {" "}
+        {renderEditablePrompt(
+          "imageGenPrompt",
+          scene.imageGenPrompt,
+          "text-gray-600",
+          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
+            IMAGE PROMPT
+          </span>
+        )}
+        {editingField !== "imageGenPrompt" && scene.imageGenPrompt.length > MAX_CHARS && (
+          <button
+            onClick={() => setExpanded((p) => !p)}
+            className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
+          >
+            {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
+          </button>
+        )}
         {renderEditablePrompt(
           "motionPrompt",
           scene.motionPrompt,
@@ -337,46 +332,50 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className="flex gap-2 mt-2 w-full items-center justify-center flex-wrap">
-                  <Button
-                    onClick={handleDownloadImage}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="bottom"
-                  />
-                  {generatingImage ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                      <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                      <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
-                    </div>
-                  ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                  <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
                     <Button
-                      onClick={handleGenerateImage}
-                      icon={<GenerateAiIcon />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      onClick={handleDownloadImage}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
                       iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="bottom"
                     />
-                  )}
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    icon={<RiUploadCloud2Line />}
-                    placement="bottom"
-                    className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Upload ảnh")}
-                  />
-                  <Button
-                    onClick={() => setShowGalleryDialog(true)}
-                    icon={<RiGalleryLine />}
-                    placement="bottom"
-                    className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Chọn từ Gallery")}
-                  />
+                    {generatingImage ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                        <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                        <span className="text-pink-600 text-[10px] font-bold">
+                          {imageProgress}%
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={handleGenerateImage}
+                        icon={<GenerateAiIcon />}
+                        placement="bottom"
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
+                        tooltip={t("Tạo lại")}
+                      />
+                    )}
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      icon={<RiUploadCloud2Line />}
+                      placement="bottom"
+                      className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Upload ảnh")}
+                    />
+                    <Button
+                      onClick={() => setShowGalleryDialog(true)}
+                      icon={<RiGalleryLine />}
+                      placement="bottom"
+                      className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Chọn từ Gallery")}
+                    />
+                  </div>
                 </div>
               </div>
             ) : generatingImage ? (
@@ -403,11 +402,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
       {/* Generated Video đơn */}
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <div className="flex flex-row items-center gap-2">
+        <div className="flex flex-col items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-start w-full">
+          <div className="flex justify-center w-full">
             {generatedVideo ? (
-              <div className="relative w-32 group">
+              <div className="relative w-full group">
                 {(() => {
                   const videoSrc =
                     generatedVideo.videoUri ||
@@ -462,39 +461,41 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     </div>
                   );
                 })()}
-                {/* Download & Re-generate buttons */}
-                <div className="flex gap-2 mt-2 w-full items-center justify-center">
-                  <Button
-                    onClick={handleDownloadVideo}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="bottom"
-                  />
-                  {generatingVideo ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                      <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                      <span className="text-purple-600 text-[10px] font-bold">
-                        {videoProgress}%
-                      </span>
-                    </div>
-                  ) : (
+                {/* Download & Re-generate buttons – overlay on hover */}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                  <div className="pointer-events-auto flex gap-2 items-center justify-center">
                     <Button
-                      onClick={() => {
-                        if (!isPromptToVideo && !generatedImage) {
-                          toast.error(t("Cần tạo ảnh trước khi tạo video"));
-                          return;
-                        }
-                        handleGenerateVideo();
-                      }}
-                      icon={<GenerateAiIcon />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      onClick={handleDownloadVideo}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
                       iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="bottom"
                     />
-                  )}
+                    {generatingVideo ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                        <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                        <span className="text-purple-600 text-[10px] font-bold">
+                          {videoProgress}%
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          if (!isPromptToVideo && !generatedImage) {
+                            toast.error(t("Cần tạo ảnh trước khi tạo video"));
+                            return;
+                          }
+                          handleGenerateVideo();
+                        }}
+                        icon={<GenerateAiIcon />}
+                        placement="bottom"
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
+                        tooltip={t("Tạo lại")}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             ) : generatingVideo ? (
@@ -529,7 +530,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           {!isPromptToVideo && nextSceneId && (
             <div className="flex justify-center w-full">
               {generatedExtendVideo ? (
-                <div className="relative w-32 group">
+                <div className="relative w-full group">
                   {(() => {
                     const extVideoSrc =
                       generatedExtendVideo.videoUri ||
@@ -587,33 +588,35 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                       </div>
                     );
                   })()}
-                  {/* Download & Re-generate extend video */}
-                  <div className="flex gap-2 mt-2 w-full items-center justify-center">
-                    <Button
-                      onClick={handleDownloadExtendVideo}
-                      className="w-8 rounded-lg h-8 bg-success-light text-success"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tải")}
-                      icon={<HiOutlineArrowDownTray />}
-                      placement="bottom"
-                    />
-                    {generatingExtendVideo ? (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                        <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                        <span className="text-teal-600 text-[10px] font-bold">
-                          {extendVideoProgress}%
-                        </span>
-                      </div>
-                    ) : (
+                  {/* Download & Re-generate extend video – overlay on hover */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                    <div className="pointer-events-auto flex gap-2 items-center justify-center">
                       <Button
-                        onClick={() => handleGenerateVideo(true)}
-                        icon={<GenerateAiIcon />}
-                        placement="bottom"
-                        tooltip={t("Tạo lại video nối")}
-                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        onClick={handleDownloadExtendVideo}
+                        className="w-8 rounded-lg h-8 bg-success-light text-success"
                         iconClassName="text-xl font-bold"
+                        tooltip={t("Tải")}
+                        icon={<HiOutlineArrowDownTray />}
+                        placement="bottom"
                       />
-                    )}
+                      {generatingExtendVideo ? (
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
+                          <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
+                          <span className="text-teal-600 text-[10px] font-bold">
+                            {extendVideoProgress}%
+                          </span>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => handleGenerateVideo(true)}
+                          icon={<GenerateAiIcon />}
+                          placement="bottom"
+                          tooltip={t("Tạo lại video nối")}
+                          className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                          iconClassName="text-xl font-bold"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : generatingExtendVideo ? (

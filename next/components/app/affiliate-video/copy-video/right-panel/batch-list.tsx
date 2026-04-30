@@ -500,7 +500,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
               <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
-                  {t("CHUYỂN ĐỘNG & ÂM THANH")}
+                  {t("PROMPT")}
                 </div>
               </th>
               {
