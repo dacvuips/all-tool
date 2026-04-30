@@ -395,6 +395,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       language?: string;
       mood?: string;
       aspectRatio?: string;
+      productImages?: string[];
     }) => {
       const res = await fetch("/api/app/copy-video-analysis/", {
         method: "POST",
@@ -461,6 +462,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         language: data.language,
         mood: data.mood,
         aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
       });
       if (!result) return undefined;
 

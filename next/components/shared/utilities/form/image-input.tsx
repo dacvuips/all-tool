@@ -158,7 +158,7 @@ export function ImageInput({
 
   const onAddImage = () => {
     if (url) {
-      let newValue = value.concat(url);
+      let newValue = (value || []).concat(url);
       setValue(newValue);
       setUrl("");
       if (props.onChange) props.onChange(newValue);

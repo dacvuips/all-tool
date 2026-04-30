@@ -58,6 +58,7 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
 
 export interface CopyVideoFormConfig extends VideoFormBase {
   sourceVideo?: { base64: string; mimeType: string };
+  productImages?: string[];
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";

@@ -269,30 +269,24 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         onMouseLeave?.();
       }}
     >
-      {/* Image Prompt */}
-      {
-        <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-          {renderEditablePrompt(
-            "visual_prompt",
-            scene.visual_prompt,
-            "text-gray-600",
-            <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
-              IMAGE PROMPT
-            </span>
-          )}
-          {editingField !== "visual_prompt" && scene.visual_prompt.length > MAX_CHARS && (
-            <button
-              onClick={() => setExpanded((p) => !p)}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-            >
-              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-            </button>
-          )}
-        </td>
-      }
-
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        {renderEditablePrompt(
+          "visual_prompt",
+          scene.visual_prompt,
+          "text-gray-600",
+          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
+            IMAGE PROMPT
+          </span>
+        )}
+        {editingField !== "visual_prompt" && scene.visual_prompt.length > MAX_CHARS && (
+          <button
+            onClick={() => setExpanded((p) => !p)}
+            className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
+          >
+            {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
+          </button>
+        )}
         {renderEditablePrompt(
           "motion_description",
           scene.motion_description,

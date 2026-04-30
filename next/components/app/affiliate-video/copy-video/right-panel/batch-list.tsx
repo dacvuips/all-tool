@@ -497,14 +497,6 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              {
-                <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
-                  <div className="flex items-center gap-1">
-                    <RiImageFill className="text-xs" />
-                    {t("PROMPT HÌNH ẢNH")}
-                  </div>
-                </th>
-              }
               <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />

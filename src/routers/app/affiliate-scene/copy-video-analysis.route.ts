@@ -227,6 +227,7 @@ export default [
           language?: string;
           mood?: string;
           aspectRatio?: string;
+          productImages?: string[];
         };
 
         if (!body?.videoBase64) {
@@ -239,6 +240,13 @@ export default [
         await checkRequestLimit(context.id);
 
         const clients = await getAvailableGeminiClients();
+
+        // Build product image reference text
+        const productImageUrls = body.productImages?.filter(Boolean) || [];
+        const productImageNote =
+          productImageUrls.length > 0
+            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(", ")}`
+            : "";
 
         const response = await callWithKeyRotation(
           clients,
@@ -256,12 +264,13 @@ export default [
                       },
                     },
                     {
-                      text: buildVideoAnalysisPrompt({
-                        artStyle: body.artStyle,
-                        language: body.language,
-                        mood: body.mood,
-                        aspectRatio: body.aspectRatio,
-                      }),
+                      text:
+                        buildVideoAnalysisPrompt({
+                          artStyle: body.artStyle,
+                          language: body.language,
+                          mood: body.mood,
+                          aspectRatio: body.aspectRatio,
+                        }) + productImageNote,
                     },
                   ],
                 },
