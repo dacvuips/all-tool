@@ -26,8 +26,8 @@ export default function startExpressApp() {
   // Compress Response
   app.use(compression());
   // Body Parser
-  app.use(json({ limit: "10mb" }));
-  app.use(urlencoded({ extended: true, limit: "10mb" }));
+  app.use(json({ limit: "50mb" }));
+  app.use(urlencoded({ extended: true, limit: "50mb" }));
   // Config use cookie
   app.use(cookieParser(config.get<string>("secret")));
   // Auto-generate cart session ID if not exists to cookie
@@ -121,11 +121,7 @@ function useHelmet(app: express.Application) {
               "https://upload-image-cyan.vercel.app/api/file/upload-image",
               authDomainFirebase,
             ],
-            formAction: [
-              "'self'",
-              "https://pay-sandbox.sepay.vn",
-              "https://pay.sepay.vn",
-            ],
+            formAction: ["'self'", "https://pay-sandbox.sepay.vn", "https://pay.sepay.vn"],
           },
         },
         noSniff: false,

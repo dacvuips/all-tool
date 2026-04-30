@@ -1,6 +1,7 @@
 import { useTranslation } from "next-i18next";
 import {
   AffiliateVideoFormConfig,
+  ArtStyleMapEnum,
   StoryModeTypeEnum,
 } from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
@@ -809,26 +810,35 @@ export const useOptionsTranslation = () => {
 
   // ── Affiliate Video: Art Style Options (translated) ──
   const ART_STYLE_TRANSLATED_OPTIONS = [
-    { value: "pixar", label: t("3D Pixar Cute") },
-    { value: "pixar_realism", label: t("Pixar Realism (Nhân hoá)") },
-    { value: "realistic", label: t("Chân thực (Realistic)") },
-    { value: "crochet", label: t("Len Móc (Crochet/Amigurumi)") },
-    { value: "clay", label: t("Đất Sét (Claymation)") },
-    { value: "diorama", label: t("Mô hình Tí hon (Diorama)") },
-    { value: "lego", label: t("Đồ chơi Gạch (LEGO)") },
-    { value: "mannequin", label: t("Mannequin 3D (Siêu thực)") },
-    { value: "zack_doge", label: t("3D Educational Simulation (Zack D. Style)") },
-    { value: "chalkboard", label: t("Bảng Phấn (Chalkboard)") },
-    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist Animation)") },
-    { value: "stickman", label: t("Người Que (Stickman)") },
-    { value: "simpsons", label: t("Hoạt hình Simpsons") },
-    { value: "business", label: t("Giải thích Doanh nghiệp (Business Explainer)") },
-    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
-    { value: "dark_fantasy", label: t("Dark Fantasy Folk Storytelling Digital Painting") },
-    { value: "anime", label: t("Hoạt hình Anime (Japanese Anime)") },
-    { value: "game_2d", label: t("Game 2D / Casual Mobile Game") },
-    { value: "dark_grotesque", label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
-    { value: "flat_science", label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)") },
+    { value: ArtStyleMapEnum.PIXAR, label: t("3D Pixar Cute") },
+    { value: ArtStyleMapEnum.PIXAR_REALISTIC, label: t("Pixar Realism (Nhân hoá)") },
+    { value: ArtStyleMapEnum.REALISTIC, label: t("Chân thực (Realistic)") },
+    { value: ArtStyleMapEnum.CROCHET, label: t("Len Móc (Crochet/Amigurumi)") },
+    { value: ArtStyleMapEnum.CLAY, label: t("Đất Sét (Claymation)") },
+    { value: ArtStyleMapEnum.DIORAMA, label: t("Mô hình Tí hon (Diorama)") },
+    { value: ArtStyleMapEnum.LEGO, label: t("Đồ chơi Gạch (LEGO)") },
+    { value: ArtStyleMapEnum.MANNEQUIN, label: t("Mannequin 3D (Siêu thực)") },
+    { value: ArtStyleMapEnum.ZACK_DOGE, label: t("3D Educational Simulation (Zack D. Style)") },
+    { value: ArtStyleMapEnum.CHALKBOARD, label: t("Bảng Phấn (Chalkboard)") },
+    { value: ArtStyleMapEnum.MINIMALIST_2D, label: t("2D Tối Giản (Minimalist Animation)") },
+    { value: ArtStyleMapEnum.STICKMAN, label: t("Người Que (Stickman)") },
+    { value: ArtStyleMapEnum.SIMPSONS, label: t("Hoạt hình Simpsons") },
+    { value: ArtStyleMapEnum.BUSINESS, label: t("Giải thích Doanh nghiệp (Business Explainer)") },
+    {
+      value: ArtStyleMapEnum.CINEMATIC_DARK,
+      label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)"),
+    },
+    {
+      value: ArtStyleMapEnum.DARK_FANTASY,
+      label: t("Dark Fantasy Folk Storytelling Digital Painting"),
+    },
+    { value: ArtStyleMapEnum.ANIME, label: t("Hoạt hình Anime (Japanese Anime)") },
+    { value: ArtStyleMapEnum.GAME_2D, label: t("Game 2D / Casual Mobile Game") },
+    { value: ArtStyleMapEnum.DARK_GROTESQUE, label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
+    {
+      value: ArtStyleMapEnum.FLAT_SCIENCE,
+      label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)"),
+    },
   ];
 
   const CATEGORY_OPTIONS = [

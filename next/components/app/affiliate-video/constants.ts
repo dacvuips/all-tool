@@ -225,3 +225,26 @@ export enum StoryModeTypeEnum {
   prompt_to_video = "prompt_to_video",
   image_to_video = "image_to_video",
 }
+
+export enum ArtStyleMapEnum {
+  PIXAR = "Pixar",
+  PIXAR_REALISTIC = "Pixar_Realistic",
+  REALISTIC = "Realistic",
+  CROCHET = "Crochet",
+  CLAY = "Clay",
+  DIORAMA = "Diorama",
+  LEGO = "Lego",
+  MANNEQUIN = "Mannequin",
+  ZACK_DOGE = "Zack_Doge",
+  CHALKBOARD = "Chalkboard",
+  MINIMALIST_2D = "2D_Minimalist",
+  STICKMAN = "Stickman",
+  SIMPSONS = "Simpsons",
+  BUSINESS = "Business",
+  CINEMATIC_DARK = "Cinematic_Dark",
+  DARK_FANTASY = "Dark_Fantasy",
+  ANIME = "Anime",
+  GAME_2D = "Game_2D",
+  DARK_GROTESQUE = "Dark_Grotesque",
+  FLAT_SCIENCE = "Flat_Science",
+}
