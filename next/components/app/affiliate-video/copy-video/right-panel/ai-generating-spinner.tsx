@@ -3,7 +3,7 @@
  * Shared AI generating spinner – reusable across Script tab & Batch List tab
  */
 import { useTranslation } from "react-i18next";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
+import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
 
 interface AiGeneratingSpinnerProps {
   /** Optional message – defaults to "Đang tạo kịch bản AI..." */

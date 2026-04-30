@@ -4,8 +4,8 @@
  * className only – Tailwind CSS, no inline styles
  */
 import { useTranslation } from "react-i18next";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
-import { Button } from "../../../shared/utilities/form";
+import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
+import { Button } from "../../../../shared/utilities/form";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 export const AffiliateSubmit = () => {

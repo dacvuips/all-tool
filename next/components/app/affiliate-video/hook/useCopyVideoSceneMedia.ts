@@ -10,9 +10,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { SceneScript } from "../constants";
+import { CopyVideoScene } from "../constants";
 
-import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
+import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
 import {
   GeneratedImageData,
   GeneratedVideoData,
@@ -24,8 +24,10 @@ import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "./useBatchActions";
 
 interface UseSceneMediaParams {
   /** Scene hiện tại */
-  scene: SceneScript;
+  scene: CopyVideoScene;
   nextSceneId?: string;
+  /** Ảnh gốc (data URL) dùng làm tham chiếu khi tạo ảnh AI */
+  thumbnailOriginImage?: string | null;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -77,7 +79,11 @@ export interface UseSceneMediaReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseSceneMediaReturn {
+export function useCopyVideoSceneMedia({
+  scene,
+  nextSceneId,
+  thumbnailOriginImage,
+}: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
 
@@ -113,7 +119,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
     removeBatchGeneratingVideoSceneId,
     subscribeBatchState,
     scriptData,
-  } = useAffiliateVideoContext();
+  } = useCopyVideoContext();
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -303,7 +309,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
   // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateImage = async () => {
-    if (generatingImage || !scene.imageGenPrompt) return;
+    if (generatingImage || !scene.visual_prompt) return;
 
     // ── Check concurrency limit ──
     const currentImageGenerating = batchGeneratingSceneIdsRef?.current?.size ?? 0;
@@ -324,10 +330,20 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
     startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
 
     try {
+      // Parse thumbnailOriginImage data URL to extract base64 + mimeType
+      let referenceImage: { imageBytes: string; mimeType: string } | undefined;
+      if (thumbnailOriginImage) {
+        const match = thumbnailOriginImage.match(/^data:([^;]+);base64,(.+)$/);
+        if (match) {
+          referenceImage = { mimeType: match[1], imageBytes: match[2] };
+        }
+      }
+      const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
       const result = await generateImage({
         sceneId: scene.id,
-        prompt: scene.imageGenPrompt,
+        prompt: `${noText}${scene.visual_prompt}`,
         aspectRatio: scriptData?.aspectRatio,
+        referenceImage,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -373,7 +389,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
 
     if (isStitch && generatingExtendVideo) return;
     if (!isStitch && generatingVideo) return;
-    if (!scene.motionPrompt) return;
+    if (!scene.motion_description) return;
 
     // ── Check concurrency limit ──
     const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
@@ -422,8 +438,8 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
       const result = await generateVideo({
         sceneId: isStitch ? scene.id + "::stitch" : scene.id,
         prompt: scene.voiceDisable
-          ? `[MOTION]${scene.motionPrompt}`
-          : `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
+          ? `[MOTION]${scene.motion_description}`
+          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.translated_content}`,
         images: imagesArray,
         aspectRatio: scriptData?.aspectRatio,
         onProgress: (pct) => {

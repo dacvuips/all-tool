@@ -142,6 +142,7 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
     if (!selectedLink || !selectedLink.url) {
       continue;
     }
+
     try {
       const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
       const headers: Record<string, string> = {};
@@ -168,9 +169,7 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
   }
 
   if (!captchaData) {
-    const err: any = new Error(
-      `Tất cả hệ thống captcha hiện tại không khả dụng. Vui lòng thử lại sau ít phút.`
-    );
+    const err: any = new Error(`Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.`);
     err.statusCode = 502;
     throw err;
   }

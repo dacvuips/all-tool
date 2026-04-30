@@ -81,7 +81,7 @@ CRITICAL RULE: Never generate any visible or readable text in the image. Do not 
           clients,
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-2.5-flash",
+              model: "gemini-3-flash-preview",
               contents: interpolatedText,
               config: {
                 responseMimeType: "application/json",

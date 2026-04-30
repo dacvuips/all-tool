@@ -15,21 +15,14 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button } from "../../../shared/utilities/form";
-import {
-  CACHE_KEY,
-  CharacterItem,
-  DB_NAME,
-  SceneScript,
-  ScriptData,
-  STORE_NAME,
-  StoryModeTypeEnum,
-} from "../constants";
-import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
-import { useIndexedDB } from "../hook/useIndexedDB";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../../shared/utilities/form";
+import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
+import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
+
+import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { EditField, SceneRowGroup } from "./scene-batch-row";
 
@@ -44,7 +37,7 @@ interface NewSceneData {
 }
 
 interface AddSceneModalProps {
-  targetScene: SceneScript;
+  targetScene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
@@ -87,8 +80,8 @@ function AddSceneModal({
 
   const posLabel =
     position === "above"
-      ? `↑ Chèn phía trên Scene #${targetScene.sceneNumber}`
-      : `↓ Chèn phía dưới Scene #${targetScene.sceneNumber}`;
+      ? `↑ Chèn phía trên Scene #${targetScene.id}`
+      : `↓ Chèn phía dưới Scene #${targetScene.id}`;
 
   return (
     <Dialog
@@ -266,11 +259,11 @@ function AddSceneModal({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AddSceneButtonProps {
-  scene: SceneScript;
+  scene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onInsert: (
-    scene: SceneScript,
+    scene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;
@@ -317,21 +310,20 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 }
 
 interface BatchListPanelProps {
-  scenes: SceneScript[];
+  scenes: CopyVideoScene[];
   characters: CharacterItem[];
-  storyModeType: StoryModeTypeEnum;
 }
 
-export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
+export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { t } = useTranslation();
-  const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
+  const [sceneList, setSceneList] = useState<CopyVideoScene[]>(scenes);
+  const { scriptData, updateScriptData, selectedHistoryId } = useCopyVideoContext();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);
   }, [scenes]);
 
-  const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
+  const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
   const { insertScene } = useAffiliateVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
@@ -342,8 +334,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     setSceneList(updated);
     // 2. Persist to IndexedDB by reading current record then merging
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleDisable] Failed to persist to IndexedDB:", err);
     }
@@ -356,8 +351,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     );
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleVoiceDisable] Failed to persist to IndexedDB:", err);
     }
@@ -369,15 +367,18 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     const updated = sceneList.map((s) => ({ ...s, voiceDisable: !allDisabled }));
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastCopyVideoScript);
+      await db.set(CACHE_KEY.lastCopyVideoScript, {
+        ...(current ?? scriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleAllVoiceDisable] Failed to persist to IndexedDB:", err);
     }
   };
 
   const handleInsert = async (
-    targetScene: SceneScript,
+    targetScene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => {
@@ -400,33 +401,24 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
         nextScene,
         scriptContext: scriptData
           ? {
-              cast: scriptData.characterName
-                ? [
-                    {
-                      name: scriptData.characterName,
-                      tag: "main",
-                      description: scriptData.characterBaseDescription || "",
-                    },
-                  ]
-                : undefined,
-              environment: scriptData.environment,
-              artStyle: scriptData.artStyle,
-              voiceGender: scriptData.voiceGender,
-              voiceTone: scriptData.voiceTone,
+              cast: scriptData.characters?.map((c, idx) => ({
+                name: c.name,
+                tag: idx === 0 ? "main" : "supporting",
+                description: c.description || "",
+              })),
             }
           : undefined,
       });
 
-      // Build SceneScript from API result
-      const newScene: SceneScript = {
+      // Build CopyVideoScene from API result
+      const newScene = {
         id: crypto.randomUUID(),
-        sceneNumber: newSceneNumber,
-        camera: result?.camera || data.cameraAngle || "WIDE SHOT",
-        imageGenPrompt: result?.imagePrompt || data.description || "(AI generated)",
-        motionPrompt: result?.motionPrompt || data.description || "(AI generated)",
-        dialogue: result?.dialogue || data.voiceover || "",
-        visualPrompt: result?.visualPrompt || "",
-        audio: result?.audio || data.audio || "",
+        timestamp: "00:00",
+        scene_type: "CHARACTER" as const,
+        visual_prompt: result?.visualPrompt || data.description || "(AI generated)",
+        motion_description: result?.motionPrompt || data.description || "(AI generated)",
+        original_content: result?.dialogue || data.voiceover || "",
+        audio_description: result?.audio || data.audio || "",
       };
 
       // Insert into list and re-number
@@ -434,29 +426,28 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
         (s, i) => ({ ...s, sceneNumber: i + 1 })
       );
 
-      setSceneList(updated);
+      setSceneList(updated as CopyVideoScene[]);
 
       // Persist to IndexedDB
       try {
-        const current = await db.get(CACHE_KEY.lastScript);
+        const current = await db.get(CACHE_KEY.lastCopyVideoScript);
         const merged = { ...(current ?? scriptData), scenes: updated as any };
-        await db.set(CACHE_KEY.lastScript, merged);
-        setScriptData(merged as any);
+        await db.set(CACHE_KEY.lastCopyVideoScript, merged);
+        updateScriptData?.(merged as any);
       } catch (err) {
         console.error("[handleInsert] Failed to persist to IndexedDB:", err);
       }
     } catch (err) {
       console.error("[handleInsert] API error:", err);
       // Fallback: insert scene với dữ liệu từ modal (không có AI)
-      const fallbackScene: SceneScript = {
+      const fallbackScene = {
         id: crypto.randomUUID(),
-        sceneNumber: newSceneNumber,
-        camera: data.cameraAngle || "WIDE SHOT",
-        imageGenPrompt: data.description || "(AI generated)",
-        motionPrompt: data.description || "(AI generated)",
-        dialogue: data.voiceover || "",
-        visualPrompt: "",
-        audio: data.audio || "",
+        timestamp: "00:00",
+        scene_type: "CHARACTER" as const,
+        visual_prompt: data.description || "(AI generated)",
+        motion_description: data.description || "(AI generated)",
+        original_content: data.voiceover || "",
+        audio_description: data.audio || "",
       };
 
       const updated = [
@@ -478,8 +469,8 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
     // 3. Persist to IndexedDB asynchronously
     try {
-      await db.set(CACHE_KEY.lastScript, { ...scriptData, scenes: updated as any });
-      setScriptData({ ...scriptData, scenes: updated as any });
+      await db.set(CACHE_KEY.lastCopyVideoScript, { ...scriptData, scenes: updated as any });
+      updateScriptData?.({ ...scriptData, scenes: updated as any });
     } catch (err) {
       console.error("[handleUpdateScene] Failed to persist to IndexedDB:", err);
     }
@@ -506,25 +497,25 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {
                 <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
                   <div className="flex items-center gap-1">
                     <RiImageFill className="text-xs" />
                     {t("PROMPT HÌNH ẢNH")}
                   </div>
                 </th>
-              )}
+              }
               <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
                   {t("CHUYỂN ĐỘNG & ÂM THANH")}
                 </div>
               </th>
-              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
+              {
                 <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
                   {t("HÌNH ẢNH")}
                 </th>
-              )}
+              }
               <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
                 {t("VIDEO")}
               </th>
@@ -564,7 +555,6 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
                 isDisabled={!!scene.disabled}
                 characters={characters}
-                storyModeType={scriptData.storyModeType}
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}

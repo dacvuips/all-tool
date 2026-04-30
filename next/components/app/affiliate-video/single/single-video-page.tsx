@@ -7,14 +7,15 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiMenuLine } from "react-icons/ri";
-import { TAB_TYPE } from "./constants";
+import { TAB_TYPE } from "../constants";
 import { AffiliateVideoRightPanel } from "./right-panel/affiliate-video-right-panel";
 import { TextToVideoTab } from "./sibar/text-to-video-tab";
-interface AffiliateSingleBodyProps {
+
+interface AffiliateSingleVideoPageProps {
   type: TAB_TYPE;
 }
 
-export const AffiliateSingleBody = ({ type }: AffiliateSingleBodyProps) => {
+export const AffiliateSingleVideoPage = ({ type }: AffiliateSingleVideoPageProps) => {
   const { t } = useTranslation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 

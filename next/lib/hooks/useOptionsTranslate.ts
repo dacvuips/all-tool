@@ -1,6 +1,7 @@
 import { useTranslation } from "next-i18next";
 import {
   AffiliateVideoFormConfig,
+  ArtStyleMapEnum,
   StoryModeTypeEnum,
 } from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
@@ -809,25 +810,35 @@ export const useOptionsTranslation = () => {
 
   // ── Affiliate Video: Art Style Options (translated) ──
   const ART_STYLE_TRANSLATED_OPTIONS = [
-    { value: "pixar", label: t("3D Pixar Cute") },
-    { value: "pixar_realism", label: t("Pixar Realism (Nhân hoá)") },
-    { value: "realistic", label: t("Chân thực (Realistic)") },
-    { value: "crochet", label: t("Len Móc (Crochet/Amigurumi)") },
-    { value: "clay", label: t("Đất Sét (Claymation)") },
-    { value: "diorama", label: t("Mô hình Tí hon (Diorama)") },
-    { value: "lego", label: t("Đồ chơi Gạch (LEGO)") },
-    { value: "mannequin", label: t("Mannequin 3D (Siêu thực)") },
-    { value: "zack_doge", label: t("3D Educational Simulation (Zack D. Style)") },
-    { value: "chalkboard", label: t("Bảng Phấn (Chalkboard)") },
-    { value: "2d_minimalist", label: t("2D Tối Giản (Minimalist Animation)") },
-    { value: "stickman", label: t("Người Que (Stickman)") },
-    { value: "simpsons", label: t("Hoạt hình Simpsons") },
-    { value: "business", label: t("Giải thích Doanh nghiệp (Business Explainer)") },
-    { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
-    { value: "dark_fantasy", label: t("Dark Fantasy Folk Storytelling Digital Painting") },
-    { value: "anime", label: t("Hoạt hình Anime (Japanese Anime)") },
-    { value: "game_2d", label: t("Game 2D / Casual Mobile Game") },
-    { value: "dark_grotesque", label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
+    { value: ArtStyleMapEnum.PIXAR, label: t("3D Pixar Cute") },
+    { value: ArtStyleMapEnum.PIXAR_REALISTIC, label: t("Pixar Realism (Nhân hoá)") },
+    { value: ArtStyleMapEnum.REALISTIC, label: t("Chân thực (Realistic)") },
+    { value: ArtStyleMapEnum.CROCHET, label: t("Len Móc (Crochet/Amigurumi)") },
+    { value: ArtStyleMapEnum.CLAY, label: t("Đất Sét (Claymation)") },
+    { value: ArtStyleMapEnum.DIORAMA, label: t("Mô hình Tí hon (Diorama)") },
+    { value: ArtStyleMapEnum.LEGO, label: t("Đồ chơi Gạch (LEGO)") },
+    { value: ArtStyleMapEnum.MANNEQUIN, label: t("Mannequin 3D (Siêu thực)") },
+    { value: ArtStyleMapEnum.ZACK_DOGE, label: t("3D Educational Simulation (Zack D. Style)") },
+    { value: ArtStyleMapEnum.CHALKBOARD, label: t("Bảng Phấn (Chalkboard)") },
+    { value: ArtStyleMapEnum.MINIMALIST_2D, label: t("2D Tối Giản (Minimalist Animation)") },
+    { value: ArtStyleMapEnum.STICKMAN, label: t("Người Que (Stickman)") },
+    { value: ArtStyleMapEnum.SIMPSONS, label: t("Hoạt hình Simpsons") },
+    { value: ArtStyleMapEnum.BUSINESS, label: t("Giải thích Doanh nghiệp (Business Explainer)") },
+    {
+      value: ArtStyleMapEnum.CINEMATIC_DARK,
+      label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)"),
+    },
+    {
+      value: ArtStyleMapEnum.DARK_FANTASY,
+      label: t("Dark Fantasy Folk Storytelling Digital Painting"),
+    },
+    { value: ArtStyleMapEnum.ANIME, label: t("Hoạt hình Anime (Japanese Anime)") },
+    { value: ArtStyleMapEnum.GAME_2D, label: t("Game 2D / Casual Mobile Game") },
+    { value: ArtStyleMapEnum.DARK_GROTESQUE, label: t("Dark Grotesque Realism (Hài Đen Gây Sốc)") },
+    {
+      value: ArtStyleMapEnum.FLAT_SCIENCE,
+      label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)"),
+    },
   ];
 
   const CATEGORY_OPTIONS = [
@@ -843,20 +854,20 @@ export const useOptionsTranslation = () => {
     { value: "cham_thu_cung", label: t("Mẹo Chăm Thú Cưng") },
   ];
   const LANGUAGE_OPTIONS = [
-    { value: "vn", label: t("🇻🇳 Tiếng Việt"), flag: "vn" },
-    { value: "en", label: t("🇺🇸 English"), flag: "us" },
-    { value: "zh", label: t("🇨🇳 中文"), flag: "cn" },
-    { value: "ja", label: t("🇯🇵 日本語"), flag: "jp" },
-    { value: "ko", label: t("🇰🇷 한국어"), flag: "kr" },
-    { value: "hi", label: t("🇮🇳 हिन्दी"), flag: "hi" },
-    { value: "fr", label: t("🇫🇷 Français"), flag: "fr" },
-    { value: "de", label: t("🇩🇪 Deutsch"), flag: "de" },
-    { value: "es", label: t("🇪🇸 Español"), flag: "es" },
-    { value: "it", label: t("🇮🇹 Italiano"), flag: "it" },
-    { value: "pt", label: t("🇵🇹 Português"), flag: "pt" },
-    { value: "ru", label: t("🇷🇺 Русский"), flag: "ru" },
-    { value: "ar", label: t("🇸🇦 العربية"), flag: "sa" },
-    { value: "tr", label: t("🇹🇷 Türkçe"), flag: "tr" },
+    { value: "Vietnamese", label: t("🇻🇳 Tiếng Việt"), flag: "vn" },
+    { value: "English", label: t("🇺🇸 English"), flag: "us" },
+    { value: "Chinese", label: t("🇨🇳 中文"), flag: "cn" },
+    { value: "Japanese", label: t("🇯🇵 日本語"), flag: "jp" },
+    { value: "Korean", label: t("🇰🇷 한국어"), flag: "kr" },
+    { value: "Hindi", label: t("🇮🇳 हिन्दी"), flag: "hi" },
+    { value: "French", label: t("🇫🇷 Français"), flag: "fr" },
+    { value: "German", label: t("🇩🇪 Deutsch"), flag: "de" },
+    { value: "Spanish", label: t("🇪🇸 Español"), flag: "es" },
+    { value: "Italian", label: t("🇮🇹 Italiano"), flag: "it" },
+    { value: "Portuguese", label: t("🇵🇹 Português"), flag: "pt" },
+    { value: "Russian", label: t("🇷🇺 Русский"), flag: "ru" },
+    { value: "Arabic", label: t("🇸🇦 العربية"), flag: "sa" },
+    { value: "Turkish", label: t("🇹🇷 Türkçe"), flag: "tr" },
   ];
 
   const DEFAULT_VIDEO_CONFIG: AffiliateVideoFormConfig = {

@@ -3,13 +3,13 @@
  * Styling: className only (Tailwind) — no inline styles, no style= props.
  */
 
-import AffiliateVideo from "./affiliate-single";
-import { AffiliateVideoProvider } from "./providers/affiliate-video-provider";
+import { default as AffiliateMainPage } from "./affiliate-main-page";
+import { AffiliateVideoProvider } from "./single/providers/affiliate-video-provider";
 
 export default function AffiliateVideoPage() {
   return (
     <AffiliateVideoProvider>
-      <AffiliateVideo />
+      <AffiliateMainPage />
     </AffiliateVideoProvider>
   );
 }

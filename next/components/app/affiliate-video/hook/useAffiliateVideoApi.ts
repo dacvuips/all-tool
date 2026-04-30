@@ -9,6 +9,9 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
+  CopyVideoAnalysisData,
+  CopyVideoFormConfig,
+  CopyVideoHistoryItem,
   DB_NAME,
   SceneHistoryItem,
   ScriptData,
@@ -21,8 +24,11 @@ const IMAGE_STORE_NAME = "generated-images";
 const VIDEO_STORE_NAME = "generated-videos";
 const AUDIO_STORE_NAME = "generated-audio";
 
+const COPY_VIDEO_STORE_NAME = "copy-video-scripts";
+
 /** Max history entries kept in IndexedDB */
 const MAX_SCENE_HISTORY = 50;
+const MAX_COPY_VIDEO_HISTORY = 50;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +46,8 @@ export interface GenerateImageParams {
   prompt: string;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /** Ảnh tham chiếu (base64) gửi kèm prompt để AI tham khảo */
+  referenceImage?: { imageBytes: string; mimeType: string };
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -119,6 +127,34 @@ export interface InsertSceneResult {
   audio: string;
   camera: string;
   dialogue: string;
+}
+
+export interface InsertCopyVideoSceneParams {
+  /** Mô tả nội dung scene mới */
+  description: string;
+  /** Voiceover / lời thoại gợi ý (tùy chọn) */
+  voiceover?: string;
+  /** Góc máy yêu cầu (tùy chọn) */
+  camera?: string;
+  /** Selected character IDs (tùy chọn) */
+  selectedCharacters?: string[];
+  /** Scene number mới */
+  sceneNumber: number;
+  /** Scene trước (nếu insert below) */
+  prevScene?: any;
+  /** Scene sau (nếu insert above) */
+  nextScene?: any;
+  /** ScriptData context – để lấy character, environment, artStyle */
+  scriptContext?: {
+    cast?: { name: string; tag: string; description: string }[];
+    environment?: string;
+    artStyle?: string;
+    audioPrompt?: string;
+    voiceGender?: string;
+    voiceTone?: string;
+    language?: string;
+    characterDna?: string;
+  };
 }
 
 export interface SuggestConfigParams {
@@ -239,6 +275,13 @@ export interface UseAffiliateVideoApiReturn {
    * Xóa toàn bộ lịch sử generate scene.
    */
   clearSceneHistory: () => Promise<void>;
+
+  /**
+   * Gọi API phân tích video gốc (copy-video flow).
+   * Gửi video base64 lên server → Gemini phân tích → trả về characters, props, scenes.
+   * Tự động lưu kết quả vào IndexedDB.
+   */
+  analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -250,6 +293,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
+  const copyVideoScriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
   const { customer } = useAuth();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
@@ -342,6 +386,115 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
   );
 
+  // ── Shared: gọi API /api/app/copy-video-analysis/ ──
+  const callCopyVideoAnalysisApi = useCallback(
+    async (body: {
+      videoBase64: string;
+      mimeType: string;
+      artStyle?: string;
+      language?: string;
+      mood?: string;
+      aspectRatio?: string;
+    }) => {
+      const res = await fetch("/api/app/copy-video-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+
+  // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
+  const pushToCopyVideoHistory = useCallback(
+    async (analysisResult: CopyVideoAnalysisData) => {
+      try {
+        const existing: CopyVideoHistoryItem[] =
+          (await copyVideoScriptDB.get(CACHE_KEY.copyVideoHistory)) || [];
+
+        const now = new Date();
+        const label = `Phân tích video – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: CopyVideoHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: analysisResult,
+        };
+
+        const updated = [newItem, ...existing].slice(0, MAX_COPY_VIDEO_HISTORY);
+        await copyVideoScriptDB.set(CACHE_KEY.copyVideoHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push copy-video history", e);
+      }
+    },
+    [copyVideoScriptDB]
+  );
+
+  // ── analyzeVideoForCopy (copy-video flow – phân tích video gốc) ──
+  const analyzeVideoForCopy = useCallback(
+    async (data: CopyVideoFormConfig): Promise<CopyVideoAnalysisData | undefined> => {
+      if (!data.sourceVideo?.base64) {
+        toast.error("Chưa upload video gốc");
+        return undefined;
+      }
+
+      const result = await callCopyVideoAnalysisApi({
+        videoBase64: data.sourceVideo.base64,
+        mimeType: data.sourceVideo.mimeType,
+        artStyle: data.artStyle,
+        language: data.language,
+        mood: data.mood,
+        aspectRatio: data.aspectRatio,
+      });
+      if (!result) return undefined;
+
+      const analysisResult: CopyVideoAnalysisData = {
+        ...result.data,
+        aspectRatio: data.aspectRatio,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (analysisResult?.scenes) {
+        analysisResult.scenes = analysisResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist config input
+      copyVideoScriptDB
+        .set(CACHE_KEY.copyVideoInput, data)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      // Persist analysis result
+      copyVideoScriptDB
+        .set(CACHE_KEY.lastCopyVideoScript, analysisResult)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      // Push to history
+      await pushToCopyVideoHistory(analysisResult);
+
+      return analysisResult;
+    },
+    [callCopyVideoAnalysisApi, copyVideoScriptDB, pushToCopyVideoHistory, toast]
+  );
+
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
   const generateSceneFromText = useCallback(
     async (params: GenerateSceneFromTextParams): Promise<ScriptData | undefined> => {
@@ -378,7 +531,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateImage – gọi API tạo ảnh từ prompt ──
   const generateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
-      const { sceneId, prompt, aspectRatio = "9:16", onProgress } = params;
+      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, onProgress } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
       const DURATION_MS = 2 * 60 * 1000; // 2 minutes
@@ -401,11 +554,17 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       }, INTERVAL_MS);
 
       try {
+        // Build images array from referenceImage if provided
+        const images = referenceImage
+          ? [{ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType }]
+          : undefined;
+
         const res = await fetch("/api/app/generation-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
+            images,
             config: { numberOfImages: 1, aspectRatio },
           }),
         });
@@ -421,19 +580,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const result = await res.json();
 
         // Handle both formats: direct array [...] or wrapped { data: [...] }
-        const images: GeneratedImageData[] = Array.isArray(result)
+        const resultImages: GeneratedImageData[] = Array.isArray(result)
           ? result
           : Array.isArray(result.data)
           ? result.data
           : [];
 
-        if (images.length === 0) {
+        if (resultImages.length === 0) {
           clearInterval(progressTimer);
           toast.error("Không nhận được ảnh từ API");
           return undefined;
         }
 
-        const imageData = images[0];
+        const imageData = resultImages[0];
 
         // Persist to IndexedDB
         await imageDB.set(sceneId, imageData);
@@ -723,5 +882,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getGeneratedAudio,
     getSceneHistory,
     clearSceneHistory,
+    analyzeVideoForCopy,
   };
 }

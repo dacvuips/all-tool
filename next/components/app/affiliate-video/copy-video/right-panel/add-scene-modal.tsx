@@ -15,10 +15,10 @@ import {
   RiMagicFill,
   RiVideoFill,
 } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button } from "../../../shared/utilities/form";
-import { CharacterItem, SceneScript } from "../constants";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button } from "../../../../shared/utilities/form";
+import { CharacterItem, CopyVideoScene } from "../../constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type InsertPosition = "above" | "below";
@@ -33,7 +33,7 @@ export interface NewSceneData {
 
 // ── AddSceneModal ──────────────────────────────────────────────────────────
 interface AddSceneModalProps {
-  targetScene: SceneScript;
+  targetScene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
@@ -84,8 +84,8 @@ export function AddSceneModal({
   // Label vị trí chèn
   const insertPositionLabel =
     position === "above"
-      ? `↑ ${t("Chèn phía trên Scene")} #${targetScene.sceneNumber}`
-      : `↓ ${t("Chèn phía dưới Scene")} #${targetScene.sceneNumber}`;
+      ? `↑ ${t("Chèn phía trên Scene")} #${targetScene.id}`
+      : `↓ ${t("Chèn phía dưới Scene")} #${targetScene.id}`;
 
   return (
     <Dialog
@@ -262,11 +262,11 @@ export function AddSceneModal({
 // Nút "+" chèn scene giữa các hàng, hiện modal khi click
 
 interface AddSceneButtonProps {
-  scene: SceneScript;
+  scene: CopyVideoScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onInsert: (
-    scene: SceneScript,
+    scene: CopyVideoScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;

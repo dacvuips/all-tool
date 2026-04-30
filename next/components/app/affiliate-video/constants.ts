@@ -42,16 +42,22 @@ export type SpeedMode = "fast" | "relaxed" | "quality";
 export type StoryModeType = "prompt_to_video" | "image_to_video";
 
 /** Affiliate sidebar form configuration */
-export interface AffiliateVideoFormConfig {
-  category: string;
-  objectToPersonify: string;
-  tipContent: string;
+export interface VideoFormBase {
+  category?: string;
   mood: string;
   language: string;
   artStyle: string;
-  storyModeType: StoryModeTypeEnum;
   aspectRatio: AspectRatio;
+}
+export interface AffiliateVideoFormConfig extends VideoFormBase {
+  objectToPersonify: string;
+  tipContent: string;
+  storyModeType: StoryModeTypeEnum;
   batchSize: number;
+}
+
+export interface CopyVideoFormConfig extends VideoFormBase {
+  sourceVideo?: { base64: string; mimeType: string };
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
@@ -140,9 +146,11 @@ export const DB_NAME = {
   generateVideo: "generate-video",
   generateVoice: "generate-voice",
   generateImage: "generate-image",
+  copyVideo: "copy-video",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
+  copyVideo: "copy-video",
 };
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
@@ -151,7 +159,50 @@ export const CACHE_KEY = {
   lastScript: "lastScript",
   generateInput: "generateInput",
   sceneHistory: "sceneHistory",
+  copyVideoHistory: "copyVideoHistory",
+  lastCopyVideoScript: "lastCopyVideoScript",
+  copyVideoInput: "copyVideoInput",
 };
+
+// ── Copy Video Analysis Types ──────────────────────────────────────────────
+
+export interface CopyVideoCharacter {
+  name: string;
+  description: string;
+}
+
+export interface CopyVideoProp {
+  name: string;
+  description: string;
+}
+
+export interface CopyVideoScene {
+  id: string;
+  timestamp: string;
+  scene_type: "CHARACTER" | "OBJECT";
+  visual_prompt: string;
+  motion_description: string;
+  audio_description: string;
+  original_content: string;
+  translated_content?: string | null;
+  disabled?: boolean;
+  voiceDisable?: boolean;
+  sceneNumber?: number;
+}
+
+export interface CopyVideoAnalysisData {
+  characters: CopyVideoCharacter[];
+  props: CopyVideoProp[];
+  scenes: CopyVideoScene[];
+  aspectRatio?: string;
+}
+
+export interface CopyVideoHistoryItem {
+  id: string;
+  createdAt: number;
+  label: string;
+  data: CopyVideoAnalysisData;
+}
 
 /** A single entry in the scene generation history */
 export interface SceneHistoryItem {
@@ -173,4 +224,27 @@ export enum TAB_TYPE {
 export enum StoryModeTypeEnum {
   prompt_to_video = "prompt_to_video",
   image_to_video = "image_to_video",
+}
+
+export enum ArtStyleMapEnum {
+  PIXAR = "Pixar",
+  PIXAR_REALISTIC = "Pixar_Realistic",
+  REALISTIC = "Realistic",
+  CROCHET = "Crochet",
+  CLAY = "Clay",
+  DIORAMA = "Diorama",
+  LEGO = "Lego",
+  MANNEQUIN = "Mannequin",
+  ZACK_DOGE = "Zack_Doge",
+  CHALKBOARD = "Chalkboard",
+  MINIMALIST_2D = "2D_Minimalist",
+  STICKMAN = "Stickman",
+  SIMPSONS = "Simpsons",
+  BUSINESS = "Business",
+  CINEMATIC_DARK = "Cinematic_Dark",
+  DARK_FANTASY = "Dark_Fantasy",
+  ANIME = "Anime",
+  GAME_2D = "Game_2D",
+  DARK_GROTESQUE = "Dark_Grotesque",
+  FLAT_SCIENCE = "Flat_Science",
 }

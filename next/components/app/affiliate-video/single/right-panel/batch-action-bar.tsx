@@ -18,11 +18,11 @@ import {
   RiVideoFill,
   RiVolumeUpLine,
 } from "react-icons/ri";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button, Input, Select } from "../../../shared/utilities/form";
-import { SceneScript } from "../constants";
-import { useBatchActions } from "../hook/useBatchActions";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button, Input, Select } from "../../../../shared/utilities/form";
+import { SceneScript } from "../../constants";
+import { useBatchActions } from "../../hook/useBatchActions";
 
 interface BatchActionBarProps {
   scenes: SceneScript[];

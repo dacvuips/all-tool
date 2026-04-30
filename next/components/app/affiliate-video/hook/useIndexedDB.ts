@@ -178,9 +178,7 @@ export function useIndexedDB<T = unknown>(
 
   const get = useCallback(async (key: IDBValidKey): Promise<T | undefined> => {
     try {
-      return await withRetry<T>(storeRef.current, dbNameRef.current, "readonly", (s) =>
-        s.get(key)
-      );
+      return await withRetry<T>(storeRef.current, dbNameRef.current, "readonly", (s) => s.get(key));
     } catch {
       return undefined;
     }
@@ -193,9 +191,7 @@ export function useIndexedDB<T = unknown>(
   }, []);
 
   const clear = useCallback(async (): Promise<void> => {
-    await withRetry<undefined>(storeRef.current, dbNameRef.current, "readwrite", (s) =>
-      s.clear()
-    );
+    await withRetry<undefined>(storeRef.current, dbNameRef.current, "readwrite", (s) => s.clear());
   }, []);
 
   const getAll = useCallback(async (): Promise<T[]> => {

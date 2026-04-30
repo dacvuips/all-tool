@@ -13,28 +13,28 @@ import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { SceneScript, StoryModeTypeEnum } from "../constants";
+import { CopyVideoScene } from "../constants";
 
-import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
+import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───
 export const IMAGE_CONCURRENCY = 2;
 export const VIDEO_CONCURRENCY = 2;
 
-export function useBatchActions(scenes: SceneScript[]) {
+export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { t } = useTranslation();
   const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
     useAffiliateVideoApi();
   const {
-    scriptData,
+    copyVideoFormConfig,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
-    affiliateVideoFormConfig,
-  } = useAffiliateVideoContext();
-  const isPromptToVideo = scriptData.storyModeType === StoryModeTypeEnum.prompt_to_video;
+  } = useCopyVideoContext();
+  // Copy-video mode is always image_to_video (no prompt_to_video)
+  const isPromptToVideo = false;
   const toast = useToast();
 
   // ═══════════════════════════════════════════════════════════════════
@@ -49,18 +49,15 @@ export function useBatchActions(scenes: SceneScript[]) {
     const eligibleScenes = scenes.filter((s) => !s.disabled);
     if (eligibleScenes.length === 0) return "";
     return eligibleScenes
-      .filter((s) => s.dialogue)
-      .map((s) => `"${s.dialogue}"`)
+      .filter((s) => s.original_content)
+      .map((s) => `"${s.original_content}"`)
       .join("\n");
   }, [scenes]);
 
-  /** Aggregate voice profile from scriptData (voiceGender · voiceTone · voiceStyle) */
+  /** Aggregate voice profile – copy-video analysis doesn't have global voice config */
   const audioExportText = useMemo(() => {
-    if (!scriptData) return "";
-    return [scriptData.voiceGender, scriptData.voiceTone, scriptData.voiceStyle]
-      .filter(Boolean)
-      .join(" · ");
-  }, [scriptData]);
+    return "";
+  }, []);
 
   const handleCopyDialogue = useCallback(() => {
     navigator.clipboard.writeText(dialogueExportText).then(() => {
@@ -175,7 +172,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     if (batchRunning) return;
     let cancelled = false;
     (async () => {
-      const eligible = scenes.filter((s) => !s.disabled && s.imageGenPrompt);
+      const eligible = scenes.filter((s) => !s.disabled && s.visual_prompt);
       let pending = 0;
       let available = 0;
       for (const scene of eligible) {
@@ -201,7 +198,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     if (videoBatchRunning) return;
     let cancelled = false;
     (async () => {
-      const eligible = scenes.filter((s) => !s.disabled && s.motionPrompt);
+      const eligible = scenes.filter((s) => !s.disabled && s.motion_description);
       let pending = 0;
       let available = 0;
       for (const scene of eligible) {
@@ -212,9 +209,9 @@ export function useBatchActions(scenes: SceneScript[]) {
           // prompt_to_video mode: no image needed, always pending
           pending++;
         } else {
-          // image_to_video mode: count as pending if it has a generated image OR an imageGenPrompt
+          // image_to_video mode: count as pending if it has a generated image OR an visual_prompt
           const img = await getGeneratedImage(scene.id);
-          if (img || scene.imageGenPrompt) pending++;
+          if (img || scene.visual_prompt) pending++;
         }
       }
       if (!cancelled) {
@@ -490,7 +487,7 @@ export function useBatchActions(scenes: SceneScript[]) {
         }
 
         // Skip scenes without an image prompt
-        if (!scene.imageGenPrompt) {
+        if (!scene.visual_prompt) {
           skipped++;
           setBatchSkipped(skipped);
           completed++;
@@ -502,8 +499,8 @@ export function useBatchActions(scenes: SceneScript[]) {
           addBatchGeneratingSceneId(scene.id);
           await generateImage({
             sceneId: scene.id,
-            prompt: scene.imageGenPrompt,
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            prompt: scene.visual_prompt,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setBatchCompleted(completed);
@@ -560,8 +557,8 @@ export function useBatchActions(scenes: SceneScript[]) {
   const handleCreateAllVideo = async () => {
     if (videoBatchRunning || batchRunning) return;
 
-    // Filter: not disabled, has motionPrompt
-    const eligibleScenes = scenes.filter((s) => !s.disabled && s.motionPrompt);
+    // Filter: not disabled, has motion_description
+    const eligibleScenes = scenes.filter((s) => !s.disabled && s.motion_description);
     if (eligibleScenes.length === 0) return;
 
     setVideoBatchRunning(true);
@@ -601,19 +598,13 @@ export function useBatchActions(scenes: SceneScript[]) {
         if (isPromptToVideo) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
-            const audioDesc = [
-              scriptData?.voiceGender,
-              scriptData?.voiceStyle,
-              scriptData?.voiceTone,
-            ]
-              .filter(Boolean)
-              .join(", ");
+            const audioDesc = scene.audio_description || "";
             await generateVideo({
               sceneId: scene.id,
               prompt: scene.voiceDisable
-                ? `[MOTION]${scene.motionPrompt}`
-                : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+                ? `[MOTION]${scene.motion_description}`
+                : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+              aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
             completed++;
             setVideoBatchCompleted(completed);
@@ -633,7 +624,7 @@ export function useBatchActions(scenes: SceneScript[]) {
         // If scene has no generated image, try to generate one first
         let existingImage = await getGeneratedImage(scene.id);
         if (!existingImage) {
-          if (!scene.imageGenPrompt) {
+          if (!scene.visual_prompt) {
             // No image and no prompt to generate one – skip
             skipped++;
             setVideoBatchSkipped(skipped);
@@ -646,8 +637,8 @@ export function useBatchActions(scenes: SceneScript[]) {
             addBatchGeneratingSceneId(scene.id);
             existingImage = await generateImage({
               sceneId: scene.id,
-              prompt: scene.imageGenPrompt,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              prompt: scene.visual_prompt,
+              aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
           } catch (imgErr) {
             console.error(
@@ -674,21 +665,19 @@ export function useBatchActions(scenes: SceneScript[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id);
-          const audioDesc = [scriptData?.voiceGender, scriptData?.voiceStyle, scriptData?.voiceTone]
-            .filter(Boolean)
-            .join(", ");
+          const audioDesc = scene.audio_description || "";
           await generateVideo({
             sceneId: scene.id,
             prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motionPrompt}`
-              : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
+              ? `[MOTION]${scene.motion_description}`
+              : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
             images: [
               {
                 imageBytes: existingImage.imageBytes,
                 mimeType: existingImage.mimeType,
               },
             ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setVideoBatchCompleted(completed);
@@ -752,7 +741,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     }
 
     // Build pairs: each pair = (scene[i], scene[i+1]) where both have generated images
-    const pairs: { scene: SceneScript; nextScene: SceneScript }[] = [];
+    const pairs: { scene: CopyVideoScene; nextScene: CopyVideoScene }[] = [];
     for (let i = 0; i < eligibleScenes.length - 1; i++) {
       pairs.push({ scene: eligibleScenes[i], nextScene: eligibleScenes[i + 1] });
     }
@@ -809,15 +798,15 @@ export function useBatchActions(scenes: SceneScript[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
-          const motionPrompt = scene.motionPrompt || "smooth transition between scenes";
+          const motion_description = scene.motion_description || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
-            prompt: `[MOTION]${motionPrompt}`,
+            prompt: `[MOTION]${motion_description}`,
             images: [
               { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
             ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            aspectRatio: copyVideoFormConfig?.aspectRatio,
           });
           completed++;
           setExtendBatchCompleted(completed);
@@ -899,11 +888,10 @@ export function useBatchActions(scenes: SceneScript[]) {
     const rows = enabledScenes.map((s) =>
       [
         String(s.sceneNumber),
-        escapeCSV(s.camera || ""),
-        escapeCSV(s.visualPrompt || ""),
-        escapeCSV(s.imageGenPrompt || ""),
-        escapeCSV(s.motionPrompt || ""),
-        escapeCSV(s.dialogue || ""),
+        escapeCSV(s.visual_prompt || ""),
+        escapeCSV(s.visual_prompt || ""),
+        escapeCSV(s.motion_description || ""),
+        escapeCSV(s.original_content || ""),
       ].join(",")
     );
 
