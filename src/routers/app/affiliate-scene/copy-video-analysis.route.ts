@@ -245,14 +245,16 @@ export default [
         const productImageUrls = body.productImages?.filter(Boolean) || [];
         const productImageNote =
           productImageUrls.length > 0
-            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(", ")}`
+            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(
+                ", "
+              )}`
             : "";
 
         const response = await callWithKeyRotation(
           clients,
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-3-flash-preview",
+              model: "gemini-2.5-flash",
               contents: [
                 {
                   role: "user",

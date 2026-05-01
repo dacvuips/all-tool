@@ -93,7 +93,35 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
     scene.id
   );
-  const { scriptData } = useCopyVideoContext();
+  const { scriptData, copyVideoFormConfig } = useCopyVideoContext();
+
+  // ── Product image selection (per-scene, persisted in IndexedDB) ──
+  const productImages = copyVideoFormConfig?.productImages || [];
+  const selectedProductImagesDB = useIndexedDB<string[]>(
+    "selected-product-images",
+    DB_NAME.copyVideo
+  );
+  const [selectedProductImages, setSelectedProductImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    selectedProductImagesDB.get(scene.id).then((saved) => {
+      if (saved) setSelectedProductImages(saved);
+      else setSelectedProductImages([]);
+    });
+  }, [scene.id]);
+
+  const handleToggleProductImage = useCallback(
+    (imageUrl: string) => {
+      setSelectedProductImages((prev) => {
+        const next = prev.includes(imageUrl)
+          ? prev.filter((url) => url !== imageUrl)
+          : [...prev, imageUrl];
+        selectedProductImagesDB.set(scene.id, next);
+        return next;
+      });
+    },
+    [scene.id, selectedProductImagesDB]
+  );
   const {
     generatedImage,
     generatingImage,
@@ -111,7 +139,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage });
+  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage, selectedProductImages });
 
   const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -311,6 +339,48 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           </span>
         )}
 
+        {/* Product Select Image */}
+        {productImages.length > 0 && (
+          <div className="relative mt-1.5" onMouseEnter={() => setHoveredField(null)}>
+            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">
+              {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
+            </span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {productImages.map((imgUrl, idx) => (
+                <label
+                  key={idx}
+                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                    selectedProductImages.includes(imgUrl)
+                      ? "border-blue-500 shadow-md ring-1 ring-blue-300"
+                      : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"
+                  }`}
+                  style={{ width: 48, height: 48 }}
+                >
+                  <input
+                    type="checkbox"
+                    className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+                    checked={selectedProductImages.includes(imgUrl)}
+                    onChange={() => handleToggleProductImage(imgUrl)}
+                  />
+                  <Img
+                    src={imgUrl}
+                    alt={`Product ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                    lazyload={false}
+                  />
+                  {selectedProductImages.includes(imgUrl) && (
+                    <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                  )}
+                </label>
+              ))}
+            </div>
+            {selectedProductImages.length > 0 && (
+              <span className="text-9 text-blue-500 mt-0.5 block">
+                {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
+              </span>
+            )}
+          </div>
+        )}
       </td>
 
       {/* Generated Image */}

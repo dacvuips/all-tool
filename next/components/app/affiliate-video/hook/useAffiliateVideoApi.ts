@@ -48,6 +48,8 @@ export interface GenerateImageParams {
   aspectRatio?: string;
   /** Ảnh tham chiếu (base64) gửi kèm prompt để AI tham khảo */
   referenceImage?: { imageBytes: string; mimeType: string };
+  /** Ảnh tham chiếu bổ sung (e.g., ảnh sản phẩm được chọn) */
+  additionalImages?: { imageBytes: string; mimeType: string }[];
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -533,7 +535,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateImage – gọi API tạo ảnh từ prompt ──
   const generateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
-      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, onProgress } = params;
+      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, additionalImages, onProgress } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
       const DURATION_MS = 2 * 60 * 1000; // 2 minutes
@@ -556,17 +558,21 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       }, INTERVAL_MS);
 
       try {
-        // Build images array from referenceImage if provided
-        const images = referenceImage
-          ? [{ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType }]
-          : undefined;
+        // Build images array from referenceImage + additionalImages
+        const images: { imageBytes: string; mimeType: string }[] = [];
+        if (referenceImage) {
+          images.push({ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType });
+        }
+        if (additionalImages?.length) {
+          images.push(...additionalImages);
+        }
 
         const res = await fetch("/api/app/generation-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
-            images,
+            images: images.length > 0 ? images : undefined,
             config: { numberOfImages: 1, aspectRatio },
           }),
         });

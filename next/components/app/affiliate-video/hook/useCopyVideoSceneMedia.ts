@@ -28,6 +28,8 @@ interface UseSceneMediaParams {
   nextSceneId?: string;
   /** Ảnh gốc (data URL) dùng làm tham chiếu khi tạo ảnh AI */
   thumbnailOriginImage?: string | null;
+  /** Danh sách URL ảnh sản phẩm được chọn cho scene này */
+  selectedProductImages?: string[];
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -83,6 +85,7 @@ export function useCopyVideoSceneMedia({
   scene,
   nextSceneId,
   thumbnailOriginImage,
+  selectedProductImages,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
@@ -338,12 +341,40 @@ export function useCopyVideoSceneMedia({
           referenceImage = { mimeType: match[1], imageBytes: match[2] };
         }
       }
+
+      // Convert selected product images to base64 for API
+      const additionalImages: { imageBytes: string; mimeType: string }[] = [];
+      if (selectedProductImages?.length) {
+        for (const imgUrl of selectedProductImages) {
+          try {
+            const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (dataMatch) {
+              additionalImages.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
+            } else {
+              const resp = await fetch(imgUrl);
+              const blob = await resp.blob();
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result as string).split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              additionalImages.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
+            }
+          } catch (err) {
+            console.warn("[handleGenerateImage] Failed to convert product image:", imgUrl, err);
+          }
+        }
+      }
+
       const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
+      console.log("[handleGenerateImage] Scene #" + scene.sceneNumber, "id:", scene.id, "prompt:", scene.visual_prompt?.substring(0, 80));
       const result = await generateImage({
         sceneId: scene.id,
         prompt: `${noText}${scene.visual_prompt}`,
         aspectRatio: scriptData?.aspectRatio,
         referenceImage,
+        additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
