@@ -64,6 +64,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onUpdateSelectedProductImages,
 }: {
   scene: CopyVideoScene;
   index: number;
@@ -75,6 +76,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -101,14 +103,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     "selected-product-images",
     DB_NAME.copyVideo
   );
-  const [selectedProductImages, setSelectedProductImages] = useState<string[]>([]);
+  const [selectedProductImages, setSelectedProductImages] = useState<string[]>(
+    scene.selectedProductImages || []
+  );
 
   useEffect(() => {
-    selectedProductImagesDB.get(scene.id).then((saved) => {
-      if (saved) setSelectedProductImages(saved);
-      else setSelectedProductImages([]);
-    });
-  }, [scene.id]);
+    // Prefer scene-level data; fall back to separate DB for backward compat
+    if (scene.selectedProductImages?.length) {
+      setSelectedProductImages(scene.selectedProductImages);
+    } else {
+      selectedProductImagesDB.get(scene.id).then((saved) => {
+        if (saved) setSelectedProductImages(saved);
+        else setSelectedProductImages([]);
+      });
+    }
+  }, [scene.id, scene.selectedProductImages]);
 
   const handleToggleProductImage = useCallback(
     (imageUrl: string) => {
@@ -116,11 +125,14 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         const next = prev.includes(imageUrl)
           ? prev.filter((url) => url !== imageUrl)
           : [...prev, imageUrl];
+        // 1. Keep the legacy per-scene DB in sync
         selectedProductImagesDB.set(scene.id, next);
+        // 2. Persist into copyVideoHistory & lastCopyVideoScript
+        onUpdateSelectedProductImages?.(scene.id, next);
         return next;
       });
     },
-    [scene.id, selectedProductImagesDB]
+    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages]
   );
   const {
     generatedImage,
@@ -857,6 +869,7 @@ interface SceneRowGroupProps {
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }
 
 export function SceneRowGroup({
@@ -869,6 +882,7 @@ export function SceneRowGroup({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onUpdateSelectedProductImages,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -912,6 +926,7 @@ export function SceneRowGroup({
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
         onToggleVoiceDisable={onToggleVoiceDisable}
+        onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 
       {/* Add BELOW button – absolute positioned, floats between rows */}

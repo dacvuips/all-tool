@@ -476,6 +476,33 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     }
   };
 
+  /** Update selectedProductImages for a single scene and persist to IndexedDB */
+  const handleUpdateSelectedProductImages = async (sceneId: string, images: string[]) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, selectedProductImages: images } : s
+    );
+    setSceneList(updated);
+
+    try {
+      // 1. Persist to lastCopyVideoScript
+      const mergedScript = { ...(scriptData ?? {}), scenes: updated as any };
+      await db.set(CACHE_KEY.lastCopyVideoScript, mergedScript);
+
+      // 2. Also update the selected history item in copyVideoHistory
+      if (selectedHistoryId) {
+        const history: any[] = (await db.get(CACHE_KEY.copyVideoHistory)) || [];
+        const updatedHistory = history.map((item: any) =>
+          item.id === selectedHistoryId
+            ? { ...item, data: { ...item.data, scenes: updated as any } }
+            : item
+        );
+        await db.set(CACHE_KEY.copyVideoHistory, updatedHistory);
+      }
+    } catch (err) {
+      console.error("[handleUpdateSelectedProductImages] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   if (sceneList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -551,6 +578,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}
                 onToggleVoiceDisable={handleToggleVoiceDisable}
+                onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
               />
             ))}
           </tbody>
