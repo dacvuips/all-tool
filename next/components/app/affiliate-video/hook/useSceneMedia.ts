@@ -12,12 +12,12 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript } from "../constants";
 
-import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import {
   GeneratedImageData,
   GeneratedVideoData,
   useAffiliateVideoApi,
-} from "./useAffiliateVideoApi";
+} from "../copy-video/hook/useCopyVideoApi";
+import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "./useBatchActions";
 
 // ── Params ─────────────────────────────────────────────────────────────────

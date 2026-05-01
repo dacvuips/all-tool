@@ -11,7 +11,7 @@ import { RiCameraLensFill, RiCloseLine, RiLoader4Fill, RiMagicFill } from "react
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Form } from "../../../../shared/utilities/form";
 import { TAB_TYPE } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
+import { useAffiliateVideoApi } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";

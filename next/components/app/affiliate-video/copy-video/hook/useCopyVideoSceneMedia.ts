@@ -9,16 +9,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { CopyVideoScene } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { CopyVideoScene } from "../../constants";
 
-import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
-import {
-  GeneratedImageData,
-  GeneratedVideoData,
-  useAffiliateVideoApi,
-} from "./useAffiliateVideoApi";
-import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "./useBatchActions";
+import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "../../hook/useBatchActions";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
+import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
@@ -66,7 +62,7 @@ export interface UseSceneMediaReturn {
 
   // ── Actions ──
   /** Gọi API tạo ảnh mới từ scene.imageGenPrompt */
-  handleGenerateImage: () => Promise<void>;
+  handleCopyVideoGenerateImage: () => Promise<void>;
   /** Set ảnh thủ công (upload từ máy hoặc chọn từ gallery) */
   handleSetImage: (imageData: GeneratedImageData) => Promise<void>;
   /** Gọi API tạo video từ scene.motionPrompt + audio + dialogue */
@@ -112,7 +108,7 @@ export function useCopyVideoSceneMedia({
   const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
-    useAffiliateVideoApi();
+    useCopyVideoApi();
   const {
     batchGeneratingSceneIdsRef,
     batchGeneratingVideoSceneIdsRef,
@@ -311,7 +307,7 @@ export function useCopyVideoSceneMedia({
   // Giả lập progress chạy trong ~2 phút (120s), từ random 1-10% → 99%.
   // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
-  const handleGenerateImage = async () => {
+  const handleCopyVideoGenerateImage = async () => {
     if (generatingImage || !scene.visual_prompt) return;
 
     // ── Check concurrency limit ──
@@ -368,7 +364,13 @@ export function useCopyVideoSceneMedia({
       }
 
       const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
-      console.log("[handleGenerateImage] Scene #" + scene.sceneNumber, "id:", scene.id, "prompt:", scene.visual_prompt?.substring(0, 80));
+      console.log(
+        "[handleGenerateImage] Scene #" + scene.sceneNumber,
+        "id:",
+        scene.id,
+        "prompt:",
+        scene.visual_prompt?.substring(0, 80)
+      );
       const result = await generateImage({
         sceneId: scene.id,
         prompt: `${noText}${scene.visual_prompt}`,
@@ -633,7 +635,7 @@ export function useCopyVideoSceneMedia({
     generatingExtendVideo: isGeneratingExtendVideo,
     extendVideoProgress,
     // Actions
-    handleGenerateImage,
+    handleCopyVideoGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,

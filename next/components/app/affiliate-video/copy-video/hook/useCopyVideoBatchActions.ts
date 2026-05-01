@@ -12,12 +12,12 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { CopyVideoScene, DB_NAME } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { CopyVideoScene, DB_NAME } from "../../constants";
 
-import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
-import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
-import { useIndexedDB } from "./useIndexedDB";
+import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
+import { useCopyVideoApi } from "./useCopyVideoApi";
 
 // ─── Concurrency limits ───
 export const IMAGE_CONCURRENCY = 2;
@@ -26,7 +26,7 @@ export const VIDEO_CONCURRENCY = 2;
 export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { t } = useTranslation();
   const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
-    useAffiliateVideoApi();
+    useCopyVideoApi();
   const {
     copyVideoFormConfig,
     addBatchGeneratingSceneId,
@@ -643,7 +643,9 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               sceneId: scene.id,
               prompt: scene.voiceDisable
                 ? `[MOTION]${scene.motion_description}`
-                : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+                : `[MOTION]${scene.motion_description}${
+                    audioDesc ? `, [AUDIO]${audioDesc}` : ""
+                  }, [DIALOGUE]${scene.original_content}`,
               aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
             completed++;
@@ -712,7 +714,9 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             sceneId: scene.id,
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+              : `[MOTION]${scene.motion_description}${
+                  audioDesc ? `, [AUDIO]${audioDesc}` : ""
+                }, [DIALOGUE]${scene.original_content}`,
             images: [
               {
                 imageBytes: existingImage.imageBytes,

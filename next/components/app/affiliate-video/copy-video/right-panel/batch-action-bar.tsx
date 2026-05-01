@@ -22,7 +22,7 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input, Select } from "../../../../shared/utilities/form";
 import { CopyVideoScene } from "../../constants";
-import { useCopyVideoBatchActions } from "../../hook/useCopyVideoBatchActions";
+import { useCopyVideoBatchActions } from "../hook/useCopyVideoBatchActions";
 
 interface BatchActionBarProps {
   scenes: CopyVideoScene[];

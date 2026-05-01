@@ -10,10 +10,10 @@ import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
 
 import { Form } from "../../../../shared/utilities/form";
 import { CopyVideoFormConfig } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
@@ -22,9 +22,15 @@ import { AffiliateSubmit } from "./affiliate-submit";
 export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { DEFAULT_VIDEO_CONFIG, copyVideoFormConfig, setBatchRunning, setScriptData, setScriptTab, persistCopyVideoInput } =
-    useCopyVideoContext();
-  const { analyzeVideoForCopy } = useAffiliateVideoApi();
+  const {
+    DEFAULT_VIDEO_CONFIG,
+    copyVideoFormConfig,
+    setBatchRunning,
+    setScriptData,
+    setScriptTab,
+    persistCopyVideoInput,
+  } = useCopyVideoContext();
+  const { analyzeVideoForCopy } = useCopyVideoApi();
   const thumbnailDB = useThumbnailDB();
 
   // ── Submit handler: phân tích video gốc ──
@@ -56,9 +62,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
               copyVideoFormConfig.sourceVideo.mimeType,
               result.scenes,
               thumbnailDB
-            ).catch((err) =>
-              console.warn("[CopyVideoForm] Failed to extract thumbnails:", err)
-            );
+            ).catch((err) => console.warn("[CopyVideoForm] Failed to extract thumbnails:", err));
           }
         }
       } catch (err: any) {
@@ -68,7 +72,17 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [copyVideoFormConfig, analyzeVideoForCopy, setBatchRunning, setScriptData, setScriptTab, toast, t, thumbnailDB, persistCopyVideoInput]
+    [
+      copyVideoFormConfig,
+      analyzeVideoForCopy,
+      setBatchRunning,
+      setScriptData,
+      setScriptTab,
+      toast,
+      t,
+      thumbnailDB,
+      persistCopyVideoInput,
+    ]
   );
 
   return (

@@ -32,11 +32,11 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, CopyVideoScene, DB_NAME } from "../../constants";
-import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
+import { GeneratedImageData } from "../hook/useCopyVideoApi";
 
-import { useCopyVideoSceneMedia } from "../../hook/useCopyVideoSceneMedia";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../hook/useVideoThumbnail";
+import { useCopyVideoSceneMedia } from "../hook/useCopyVideoSceneMedia";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -145,7 +145,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
-    handleGenerateImage,
+    handleCopyVideoGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
@@ -155,7 +155,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
@@ -461,7 +460,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                       </div>
                     ) : (
                       <Button
-                        onClick={handleGenerateImage}
+                        onClick={handleCopyVideoGenerateImage}
                         icon={<GenerateAiIcon />}
                         placement="bottom"
                         className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
@@ -497,7 +496,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             ) : (
               /* ── Default create button ── */
               <button
-                onClick={handleGenerateImage}
+                onClick={handleCopyVideoGenerateImage}
                 className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
               >
                 <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />

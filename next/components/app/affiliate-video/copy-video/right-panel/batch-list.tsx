@@ -19,9 +19,9 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../../shared/utilities/form";
 import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { EditField, SceneRowGroup } from "./scene-batch-row";
@@ -324,7 +324,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   }, [scenes]);
 
   const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
-  const { insertScene } = useAffiliateVideoApi();
+  const { insertScene } = useCopyVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
   const handleToggleDisable = async (sceneId: string) => {

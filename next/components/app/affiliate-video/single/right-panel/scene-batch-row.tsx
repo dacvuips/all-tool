@@ -32,7 +32,7 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
-import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
+import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
@@ -108,7 +108,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
@@ -277,7 +276,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             IMAGE PROMPT
           </span>
         )}
-
         {renderEditablePrompt(
           "motionPrompt",
           scene.motionPrompt,
@@ -302,7 +300,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             [DIALOGUE]:
           </span>
         )}
-
       </td>
 
       {/* Generated Image */}

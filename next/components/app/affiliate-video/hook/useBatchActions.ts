@@ -15,8 +15,8 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript, StoryModeTypeEnum } from "../constants";
 
+import { useAffiliateVideoApi } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
-import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
 // ─── Concurrency limits ───
 export const IMAGE_CONCURRENCY = 2;
