@@ -11,10 +11,8 @@ import {
   STORE_NAME,
   StoryModeTypeEnum,
 } from "../../constants";
-import {
-  GenerateSceneFromTextParams,
-  useAffiliateVideoApi,
-} from "../../copy-video/hook/useCopyVideoApi";
+import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
+import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 
 /** Key used to persist the last generated script in IndexedDB */

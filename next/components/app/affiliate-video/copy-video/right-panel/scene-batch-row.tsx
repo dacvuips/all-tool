@@ -441,7 +441,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${generatingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingImage ? '' : 'pointer-events-none'}`}>
                   <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
                     <Button
                       onClick={handleDownloadImage}
@@ -571,7 +571,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   );
                 })()}
                 {/* Download & Re-generate buttons – overlay on hover */}
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingVideo ? '' : 'pointer-events-none'}`}>
                   <div className="pointer-events-auto flex gap-2 items-center justify-center">
                     <Button
                       onClick={handleDownloadVideo}
@@ -698,7 +698,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     );
                   })()}
                   {/* Download & Re-generate extend video – overlay on hover */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none">
+                  <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingExtendVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingExtendVideo ? '' : 'pointer-events-none'}`}>
                     <div className="pointer-events-auto flex gap-2 items-center justify-center">
                       <Button
                         onClick={handleDownloadExtendVideo}

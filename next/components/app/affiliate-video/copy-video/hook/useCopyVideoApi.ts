@@ -14,7 +14,6 @@ import {
   CopyVideoHistoryItem,
   DB_NAME,
   SceneHistoryItem,
-  ScriptData,
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
@@ -50,6 +49,8 @@ export interface GenerateImageParams {
   referenceImage?: { imageBytes: string; mimeType: string };
   /** Ảnh tham chiếu bổ sung (e.g., ảnh sản phẩm được chọn) */
   additionalImages?: { imageBytes: string; mimeType: string }[];
+  /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
+  productImages?: string[];
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -210,7 +211,7 @@ export interface UseAffiliateVideoApiReturn {
    * Gọi API tạo ảnh từ imageGenPrompt.
    * Lưu kết quả base64 vào IndexedDB theo sceneId.
    */
-  generateImage: (params: GenerateImageParams) => Promise<GeneratedImageData | undefined>;
+  copyVideoGenerateImage: (params: GenerateImageParams) => Promise<GeneratedImageData | undefined>;
 
   /**
    * Lấy ảnh đã tạo từ IndexedDB theo sceneId.
@@ -285,60 +286,6 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
   const copyVideoScriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
   const { customer } = useAuth();
-  // ── Shared: gọi API /api/app/generation-scene/ ──
-  const callGenerationSceneApi = useCallback(
-    async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string }) => {
-      const res = await fetch("/api/app/generation-scene/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
-        return undefined;
-      }
-
-      return res.json();
-    },
-    [toast]
-  );
-
-  // ── Helper: push a ScriptData into history array in IndexedDB ──
-  const pushToSceneHistory = useCallback(
-    async (scriptResult: ScriptData) => {
-      try {
-        const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
-
-        const now = new Date();
-        const label = `${
-          STORY_MODE_OPTIONS.find((s) => s.value === scriptResult.storyModeType)?.label
-        } – ${now.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-        })} ${now.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`;
-
-        const newItem: SceneHistoryItem = {
-          id: crypto.randomUUID(),
-          createdAt: now.getTime(),
-          label,
-          data: scriptResult,
-        };
-
-        // Prepend newest first, trim to MAX_SCENE_HISTORY
-        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
-        await scriptDB.set(CACHE_KEY.sceneHistory, updated);
-      } catch (e) {
-        console.warn("[affiliate-video-api] Failed to push scene history", e);
-      }
-    },
-    [scriptDB]
-  );
 
   // ── Shared: gọi API /api/app/copy-video-analysis/ ──
   const callCopyVideoAnalysisApi = useCallback(
@@ -452,7 +399,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   );
 
   // ── generateImage – gọi API tạo ảnh từ prompt ──
-  const generateImage = useCallback(
+  const copyVideoGenerateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
       const {
         sceneId,
@@ -460,6 +407,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         aspectRatio = "9:16",
         referenceImage,
         additionalImages,
+        productImages,
         onProgress,
       } = params;
 
@@ -493,12 +441,13 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           images.push(...additionalImages);
         }
 
-        const res = await fetch("/api/app/generation-image/", {
+        const res = await fetch("/api/app/copy-video-generate-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
             images: images.length > 0 ? images : undefined,
+            productImages: productImages?.length ? productImages : undefined,
             config: { numberOfImages: 1, aspectRatio },
           }),
         });
@@ -803,7 +752,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   }, [scriptDB, customer?._id]);
 
   return {
-    generateImage,
+    copyVideoGenerateImage,
     getGeneratedImage,
     saveGeneratedImage,
     generateVideo,

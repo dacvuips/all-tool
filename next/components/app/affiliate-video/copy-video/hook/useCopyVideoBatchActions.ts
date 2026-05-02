@@ -25,8 +25,13 @@ export const VIDEO_CONCURRENCY = 2;
 
 export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { t } = useTranslation();
-  const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
-    useCopyVideoApi();
+  const {
+    copyVideoGenerateImage,
+    generateVideo,
+    getGeneratedImage,
+    getGeneratedVideo,
+    generateAudioTTS,
+  } = useCopyVideoApi();
   const {
     copyVideoFormConfig,
     addBatchGeneratingSceneId,
@@ -535,12 +540,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingSceneId(scene.id);
+          const selectedUrls = await selectedProductImagesDB.get(scene.id);
           const additionalImages = await convertProductImages(scene.id);
-          await generateImage({
+          await copyVideoGenerateImage({
             sceneId: scene.id,
             prompt: scene.visual_prompt,
             aspectRatio: copyVideoFormConfig?.aspectRatio,
             additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+            productImages: selectedUrls?.length ? selectedUrls : undefined,
           });
           completed++;
           setBatchCompleted(completed);
@@ -677,12 +684,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
+            const selectedUrls = await selectedProductImagesDB.get(scene.id);
             const additionalImages = await convertProductImages(scene.id);
-            existingImage = await generateImage({
+            existingImage = await copyVideoGenerateImage({
               sceneId: scene.id,
               prompt: scene.visual_prompt,
               aspectRatio: copyVideoFormConfig?.aspectRatio,
               additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+              productImages: selectedUrls?.length ? selectedUrls : undefined,
             });
           } catch (imgErr) {
             console.error(

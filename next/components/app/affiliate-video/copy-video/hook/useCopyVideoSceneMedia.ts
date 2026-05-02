@@ -107,8 +107,13 @@ export function useCopyVideoSceneMedia({
   const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
-    useCopyVideoApi();
+  const {
+    copyVideoGenerateImage,
+    getGeneratedImage,
+    saveGeneratedImage,
+    generateVideo,
+    getGeneratedVideo,
+  } = useCopyVideoApi();
   const {
     batchGeneratingSceneIdsRef,
     batchGeneratingVideoSceneIdsRef,
@@ -364,19 +369,14 @@ export function useCopyVideoSceneMedia({
       }
 
       const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
-      console.log(
-        "[handleGenerateImage] Scene #" + scene.sceneNumber,
-        "id:",
-        scene.id,
-        "prompt:",
-        scene.visual_prompt?.substring(0, 80)
-      );
-      const result = await generateImage({
+
+      const result = await copyVideoGenerateImage({
         sceneId: scene.id,
         prompt: `${noText}${scene.visual_prompt}`,
         aspectRatio: scriptData?.aspectRatio,
         referenceImage,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+        productImages: selectedProductImages?.length ? selectedProductImages : undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -472,7 +472,9 @@ export function useCopyVideoSceneMedia({
         sceneId: isStitch ? scene.id + "::stitch" : scene.id,
         prompt: scene.voiceDisable
           ? `[MOTION]${scene.motion_description}`
-          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.translated_content}`,
+          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${
+              scene.translated_content || scene.original_content
+            }`,
         images: imagesArray,
         aspectRatio: scriptData?.aspectRatio,
         onProgress: (pct) => {
