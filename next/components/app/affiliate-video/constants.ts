@@ -189,6 +189,7 @@ export interface CopyVideoScene {
   disabled?: boolean;
   voiceDisable?: boolean;
   selectedProductImages?: string[];
+  product_image_prompt?: string;
   sceneNumber?: number;
 }
 

@@ -51,6 +51,8 @@ export interface GenerateImageParams {
   additionalImages?: { imageBytes: string; mimeType: string }[];
   /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
   productImages?: string[];
+  /** Custom prompt cho product images – nếu có sẽ dùng thay prompt mặc định */
+  productImagePrompt?: string;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -408,6 +410,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         referenceImage,
         additionalImages,
         productImages,
+        productImagePrompt,
         onProgress,
       } = params;
 
@@ -448,6 +451,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             prompt,
             images: images.length > 0 ? images : undefined,
             productImages: productImages?.length ? productImages : undefined,
+            productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio },
           }),
         });

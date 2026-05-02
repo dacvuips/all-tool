@@ -45,7 +45,8 @@ export type EditField =
   | "visual_prompt"
   | "motion_description"
   | "original_content"
-  | "audio_description";
+  | "audio_description"
+  | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -389,6 +390,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               <span className="text-9 text-blue-500 mt-0.5 block">
                 {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
               </span>
+            )}
+            {/* Custom product image prompt input */}
+            {selectedProductImages.length > 0 && (
+              <div className="mt-2">
+                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">
+                  {t("Prompt SP")}:
+                </span>
+                <textarea
+                  value={scene.product_image_prompt ?? ""}
+                  onChange={(e) => onUpdateScene(scene.id, "product_image_prompt", e.target.value)}
+                  placeholder={t("Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)")}
+                  rows={2}
+                  className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
+                />
+              </div>
             )}
           </div>
         )}

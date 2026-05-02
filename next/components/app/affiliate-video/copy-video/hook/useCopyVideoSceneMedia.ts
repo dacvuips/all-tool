@@ -377,6 +377,7 @@ export function useCopyVideoSceneMedia({
         referenceImage,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         productImages: selectedProductImages?.length ? selectedProductImages : undefined,
+        productImagePrompt: scene.product_image_prompt || undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
