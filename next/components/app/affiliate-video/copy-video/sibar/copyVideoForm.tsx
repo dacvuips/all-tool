@@ -6,7 +6,7 @@
  */
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
+import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
 
 import { Form } from "../../../../shared/utilities/form";
 import { CopyVideoFormConfig } from "../../constants";
@@ -95,7 +95,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-            <RiCameraLensFill className="text-white text-base" />
+            <RiFileCopy2Line className="text-white text-base" />
           </div>
           <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
         </div>
