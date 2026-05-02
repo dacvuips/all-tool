@@ -196,7 +196,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       ) : (
         /* ── Display mode ── */
         <div className="relative">
-          {labelEl}
           <span
             className={`text-xs ${textColor} leading-relaxed pr-14 whitespace-pre-line`}
             style={
@@ -210,6 +209,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 : {}
             }
           >
+            {labelEl}
             {text}
           </span>
           {/* Action icons – visible when hovering this field's area */}

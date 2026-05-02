@@ -244,7 +244,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       ) : (
         /* ── Display mode ── */
         <div className="relative">
-          {labelEl}
           <span
             className={`text-xs ${textColor} leading-relaxed pr-14 whitespace-pre-line`}
             style={
@@ -258,6 +257,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 : {}
             }
           >
+            {labelEl}
             {text}
           </span>
           {/* Action icons – visible when hovering this field's area */}
@@ -296,7 +296,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   return (
     <tr
-      className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top relative ${
+      className={`border rounded-md border-gray-200   bg-white transition-all duration-200 align-top relative ${
         isDisabled ? "" : "hover:bg-gray-50"
       }`}
       style={
@@ -400,7 +400,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 <textarea
                   value={scene.product_image_prompt ?? ""}
                   onChange={(e) => onUpdateScene(scene.id, "product_image_prompt", e.target.value)}
-                  placeholder={t("Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)")}
+                  placeholder={t(
+                    "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
+                  )}
                   rows={2}
                   className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
                 />
@@ -457,7 +459,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${generatingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingImage ? '' : 'pointer-events-none'}`}>
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${
+                    generatingImage ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingImage ? "" : "pointer-events-none"
+                  }`}
+                >
                   <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
                     <Button
                       onClick={handleDownloadImage}
@@ -587,7 +595,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   );
                 })()}
                 {/* Download & Re-generate buttons – overlay on hover */}
-                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingVideo ? '' : 'pointer-events-none'}`}>
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                    generatingVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingVideo ? "" : "pointer-events-none"
+                  }`}
+                >
                   <div className="pointer-events-auto flex gap-2 items-center justify-center">
                     <Button
                       onClick={handleDownloadVideo}
@@ -714,7 +728,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     );
                   })()}
                   {/* Download & Re-generate extend video – overlay on hover */}
-                  <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingExtendVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingExtendVideo ? '' : 'pointer-events-none'}`}>
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                      generatingExtendVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    } transition-opacity duration-200 z-10 ${
+                      generatingExtendVideo ? "" : "pointer-events-none"
+                    }`}
+                  >
                     <div className="pointer-events-auto flex gap-2 items-center justify-center">
                       <Button
                         onClick={handleDownloadExtendVideo}
