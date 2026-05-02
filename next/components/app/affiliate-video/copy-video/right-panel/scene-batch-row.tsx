@@ -296,7 +296,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   return (
     <tr
-      className={`border rounded-md border-gray-200   bg-white transition-all duration-200 align-top relative ${
+      className={`border-t border-gray-200 border-dashed bg-white transition-colors duration-200 align-top relative ${
         isDisabled ? "" : "hover:bg-gray-50"
       }`}
       style={
