@@ -28,7 +28,7 @@ import {
   GeneratedAudioData,
   GeneratedImageData,
   GeneratedVideoData,
-} from "../../../../app/affiliate-video/hook/useAffiliateVideoApi";
+} from "../../../../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../../../app/affiliate-video/hook/useIndexedDB";
 import { Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";

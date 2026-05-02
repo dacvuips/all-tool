@@ -58,6 +58,7 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
 
 export interface CopyVideoFormConfig extends VideoFormBase {
   sourceVideo?: { base64: string; mimeType: string };
+  productImages?: string[];
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
@@ -187,6 +188,8 @@ export interface CopyVideoScene {
   translated_content?: string | null;
   disabled?: boolean;
   voiceDisable?: boolean;
+  selectedProductImages?: string[];
+  product_image_prompt?: string;
   sceneNumber?: number;
 }
 
@@ -195,6 +198,7 @@ export interface CopyVideoAnalysisData {
   props: CopyVideoProp[];
   scenes: CopyVideoScene[];
   aspectRatio?: string;
+  productImages?: string[];
 }
 
 export interface CopyVideoHistoryItem {

@@ -9,16 +9,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { CopyVideoScene } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { CopyVideoScene } from "../../constants";
 
-import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
-import {
-  GeneratedImageData,
-  GeneratedVideoData,
-  useAffiliateVideoApi,
-} from "./useAffiliateVideoApi";
-import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "./useBatchActions";
+import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "../../hook/useBatchActions";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
+import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
@@ -28,6 +24,8 @@ interface UseSceneMediaParams {
   nextSceneId?: string;
   /** Ảnh gốc (data URL) dùng làm tham chiếu khi tạo ảnh AI */
   thumbnailOriginImage?: string | null;
+  /** Danh sách URL ảnh sản phẩm được chọn cho scene này */
+  selectedProductImages?: string[];
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -64,7 +62,7 @@ export interface UseSceneMediaReturn {
 
   // ── Actions ──
   /** Gọi API tạo ảnh mới từ scene.imageGenPrompt */
-  handleGenerateImage: () => Promise<void>;
+  handleCopyVideoGenerateImage: () => Promise<void>;
   /** Set ảnh thủ công (upload từ máy hoặc chọn từ gallery) */
   handleSetImage: (imageData: GeneratedImageData) => Promise<void>;
   /** Gọi API tạo video từ scene.motionPrompt + audio + dialogue */
@@ -83,6 +81,7 @@ export function useCopyVideoSceneMedia({
   scene,
   nextSceneId,
   thumbnailOriginImage,
+  selectedProductImages,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
@@ -108,8 +107,13 @@ export function useCopyVideoSceneMedia({
   const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
-    useAffiliateVideoApi();
+  const {
+    copyVideoGenerateImage,
+    getGeneratedImage,
+    saveGeneratedImage,
+    generateVideo,
+    getGeneratedVideo,
+  } = useCopyVideoApi();
   const {
     batchGeneratingSceneIdsRef,
     batchGeneratingVideoSceneIdsRef,
@@ -308,7 +312,7 @@ export function useCopyVideoSceneMedia({
   // Giả lập progress chạy trong ~2 phút (120s), từ random 1-10% → 99%.
   // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
-  const handleGenerateImage = async () => {
+  const handleCopyVideoGenerateImage = async () => {
     if (generatingImage || !scene.visual_prompt) return;
 
     // ── Check concurrency limit ──
@@ -338,12 +342,42 @@ export function useCopyVideoSceneMedia({
           referenceImage = { mimeType: match[1], imageBytes: match[2] };
         }
       }
+
+      // Convert selected product images to base64 for API
+      const additionalImages: { imageBytes: string; mimeType: string }[] = [];
+      if (selectedProductImages?.length) {
+        for (const imgUrl of selectedProductImages) {
+          try {
+            const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (dataMatch) {
+              additionalImages.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
+            } else {
+              const resp = await fetch(imgUrl);
+              const blob = await resp.blob();
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result as string).split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              additionalImages.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
+            }
+          } catch (err) {
+            console.warn("[handleGenerateImage] Failed to convert product image:", imgUrl, err);
+          }
+        }
+      }
+
       const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
-      const result = await generateImage({
+
+      const result = await copyVideoGenerateImage({
         sceneId: scene.id,
         prompt: `${noText}${scene.visual_prompt}`,
         aspectRatio: scriptData?.aspectRatio,
         referenceImage,
+        additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+        productImages: selectedProductImages?.length ? selectedProductImages : undefined,
+        productImagePrompt: scene.product_image_prompt || undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -439,7 +473,9 @@ export function useCopyVideoSceneMedia({
         sceneId: isStitch ? scene.id + "::stitch" : scene.id,
         prompt: scene.voiceDisable
           ? `[MOTION]${scene.motion_description}`
-          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.translated_content}`,
+          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${
+              scene.translated_content || scene.original_content
+            }`,
         images: imagesArray,
         aspectRatio: scriptData?.aspectRatio,
         onProgress: (pct) => {
@@ -602,7 +638,7 @@ export function useCopyVideoSceneMedia({
     generatingExtendVideo: isGeneratingExtendVideo,
     extendVideoProgress,
     // Actions
-    handleGenerateImage,
+    handleCopyVideoGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,

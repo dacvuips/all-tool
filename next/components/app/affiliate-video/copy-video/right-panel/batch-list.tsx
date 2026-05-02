@@ -19,9 +19,9 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../../shared/utilities/form";
 import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { EditField, SceneRowGroup } from "./scene-batch-row";
@@ -324,7 +324,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   }, [scenes]);
 
   const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
-  const { insertScene } = useAffiliateVideoApi();
+  const { insertScene } = useCopyVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
   const handleToggleDisable = async (sceneId: string) => {
@@ -476,6 +476,33 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     }
   };
 
+  /** Update selectedProductImages for a single scene and persist to IndexedDB */
+  const handleUpdateSelectedProductImages = async (sceneId: string, images: string[]) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, selectedProductImages: images } : s
+    );
+    setSceneList(updated);
+
+    try {
+      // 1. Persist to lastCopyVideoScript
+      const mergedScript = { ...(scriptData ?? {}), scenes: updated as any };
+      await db.set(CACHE_KEY.lastCopyVideoScript, mergedScript);
+
+      // 2. Also update the selected history item in copyVideoHistory
+      if (selectedHistoryId) {
+        const history: any[] = (await db.get(CACHE_KEY.copyVideoHistory)) || [];
+        const updatedHistory = history.map((item: any) =>
+          item.id === selectedHistoryId
+            ? { ...item, data: { ...item.data, scenes: updated as any } }
+            : item
+        );
+        await db.set(CACHE_KEY.copyVideoHistory, updatedHistory);
+      }
+    } catch (err) {
+      console.error("[handleUpdateSelectedProductImages] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   if (sceneList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -497,18 +524,10 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
           {/* Sticky header */}
           <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
             <tr>
-              {
-                <th className="text-left py-2.5 px-3 text-xs font-bold text-orange  uppercase tracking-wide border-b border-gray-200 w-32">
-                  <div className="flex items-center gap-1">
-                    <RiImageFill className="text-xs" />
-                    {t("PROMPT HÌNH ẢNH")}
-                  </div>
-                </th>
-              }
               <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
                 <div className="flex items-center gap-1">
                   <RiVideoFill className="text-xs" />
-                  {t("CHUYỂN ĐỘNG & ÂM THANH")}
+                  {t("PROMPT")}
                 </div>
               </th>
               {
@@ -559,6 +578,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}
                 onToggleVoiceDisable={handleToggleVoiceDisable}
+                onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
               />
             ))}
           </tbody>

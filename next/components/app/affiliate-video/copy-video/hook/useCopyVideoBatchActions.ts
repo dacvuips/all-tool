@@ -12,11 +12,12 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../lib/providers/toast-provider";
-import { CopyVideoScene } from "../constants";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { CopyVideoScene, DB_NAME } from "../../constants";
 
-import { useCopyVideoContext } from "../copy-video/providers/copy-video-provider";
-import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
+import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useCopyVideoContext } from "../providers/copy-video-provider";
+import { useCopyVideoApi } from "./useCopyVideoApi";
 
 // ─── Concurrency limits ───
 export const IMAGE_CONCURRENCY = 2;
@@ -24,8 +25,13 @@ export const VIDEO_CONCURRENCY = 2;
 
 export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { t } = useTranslation();
-  const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
-    useAffiliateVideoApi();
+  const {
+    copyVideoGenerateImage,
+    generateVideo,
+    getGeneratedImage,
+    getGeneratedVideo,
+    generateAudioTTS,
+  } = useCopyVideoApi();
   const {
     copyVideoFormConfig,
     addBatchGeneratingSceneId,
@@ -36,6 +42,43 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   // Copy-video mode is always image_to_video (no prompt_to_video)
   const isPromptToVideo = false;
   const toast = useToast();
+
+  // ── IndexedDB for selected product images per scene ──
+  const selectedProductImagesDB = useIndexedDB<string[]>(
+    "selected-product-images",
+    DB_NAME.copyVideo
+  );
+
+  /** Helper: convert product image URLs to base64 objects for API */
+  const convertProductImages = useCallback(
+    async (sceneId: string): Promise<{ imageBytes: string; mimeType: string }[]> => {
+      const selected = await selectedProductImagesDB.get(sceneId);
+      if (!selected?.length) return [];
+      const result: { imageBytes: string; mimeType: string }[] = [];
+      for (const imgUrl of selected) {
+        try {
+          const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (dataMatch) {
+            result.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
+          } else {
+            const resp = await fetch(imgUrl);
+            const blob = await resp.blob();
+            const base64 = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve((reader.result as string).split(",")[1]);
+              reader.onerror = reject;
+              reader.readAsDataURL(blob);
+            });
+            result.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
+          }
+        } catch (err) {
+          console.warn("[BatchActions] Failed to convert product image:", imgUrl, err);
+        }
+      }
+      return result;
+    },
+    [selectedProductImagesDB]
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   // ── Voice Export Dialog state ──
@@ -497,10 +540,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingSceneId(scene.id);
-          await generateImage({
+          const selectedUrls = await selectedProductImagesDB.get(scene.id);
+          const additionalImages = await convertProductImages(scene.id);
+          await copyVideoGenerateImage({
             sceneId: scene.id,
             prompt: scene.visual_prompt,
             aspectRatio: copyVideoFormConfig?.aspectRatio,
+            additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+            productImages: selectedUrls?.length ? selectedUrls : undefined,
           });
           completed++;
           setBatchCompleted(completed);
@@ -603,7 +650,9 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               sceneId: scene.id,
               prompt: scene.voiceDisable
                 ? `[MOTION]${scene.motion_description}`
-                : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+                : `[MOTION]${scene.motion_description}${
+                    audioDesc ? `, [AUDIO]${audioDesc}` : ""
+                  }, [DIALOGUE]${scene.original_content}`,
               aspectRatio: copyVideoFormConfig?.aspectRatio,
             });
             completed++;
@@ -635,10 +684,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
-            existingImage = await generateImage({
+            const selectedUrls = await selectedProductImagesDB.get(scene.id);
+            const additionalImages = await convertProductImages(scene.id);
+            existingImage = await copyVideoGenerateImage({
               sceneId: scene.id,
               prompt: scene.visual_prompt,
               aspectRatio: copyVideoFormConfig?.aspectRatio,
+              additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+              productImages: selectedUrls?.length ? selectedUrls : undefined,
             });
           } catch (imgErr) {
             console.error(
@@ -670,7 +723,9 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             sceneId: scene.id,
             prompt: scene.voiceDisable
               ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${scene.original_content}`,
+              : `[MOTION]${scene.motion_description}${
+                  audioDesc ? `, [AUDIO]${audioDesc}` : ""
+                }, [DIALOGUE]${scene.original_content}`,
             images: [
               {
                 imageBytes: existingImage.imageBytes,

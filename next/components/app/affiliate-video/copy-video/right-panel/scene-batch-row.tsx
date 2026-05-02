@@ -32,11 +32,11 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, CopyVideoScene, DB_NAME } from "../../constants";
-import { GeneratedImageData } from "../../hook/useAffiliateVideoApi";
+import { GeneratedImageData } from "../hook/useCopyVideoApi";
 
-import { useCopyVideoSceneMedia } from "../../hook/useCopyVideoSceneMedia";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../hook/useVideoThumbnail";
+import { useCopyVideoSceneMedia } from "../hook/useCopyVideoSceneMedia";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -45,7 +45,8 @@ export type EditField =
   | "visual_prompt"
   | "motion_description"
   | "original_content"
-  | "audio_description";
+  | "audio_description"
+  | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -64,6 +65,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onUpdateSelectedProductImages,
 }: {
   scene: CopyVideoScene;
   index: number;
@@ -75,10 +77,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
-  const [expanded, setExpanded] = useState(false);
+
   const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -94,6 +97,44 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     scene.id
   );
   const { scriptData } = useCopyVideoContext();
+
+  // ── Product image selection (per-scene, persisted in IndexedDB) ──
+  const productImages = scriptData?.productImages || [];
+  const selectedProductImagesDB = useIndexedDB<string[]>(
+    "selected-product-images",
+    DB_NAME.copyVideo
+  );
+  const [selectedProductImages, setSelectedProductImages] = useState<string[]>(
+    scene.selectedProductImages || []
+  );
+
+  useEffect(() => {
+    // Prefer scene-level data; fall back to separate DB for backward compat
+    if (scene.selectedProductImages?.length) {
+      setSelectedProductImages(scene.selectedProductImages);
+    } else {
+      selectedProductImagesDB.get(scene.id).then((saved) => {
+        if (saved) setSelectedProductImages(saved);
+        else setSelectedProductImages([]);
+      });
+    }
+  }, [scene.id, scene.selectedProductImages]);
+
+  const handleToggleProductImage = useCallback(
+    (imageUrl: string) => {
+      setSelectedProductImages((prev) => {
+        const next = prev.includes(imageUrl)
+          ? prev.filter((url) => url !== imageUrl)
+          : [...prev, imageUrl];
+        // 1. Keep the legacy per-scene DB in sync
+        selectedProductImagesDB.set(scene.id, next);
+        // 2. Persist into copyVideoHistory & lastCopyVideoScript
+        onUpdateSelectedProductImages?.(scene.id, next);
+        return next;
+      });
+    },
+    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages]
+  );
   const {
     generatedImage,
     generatingImage,
@@ -105,25 +146,16 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
-    handleGenerateImage,
+    handleCopyVideoGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage });
+  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage, selectedProductImages });
 
-  const videoPaddingTop = scriptData?.aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const MAX_CHARS = 160;
-
-  const truncate = (text: string) =>
-    text.length > MAX_CHARS ? text.slice(0, MAX_CHARS) + "..." : text;
-
-  const needsExpand =
-    scene.visual_prompt.length > MAX_CHARS ||
-    scene.motion_description.length > MAX_CHARS ||
-    (scene.original_content?.length || 0) > MAX_CHARS;
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
@@ -212,9 +244,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       ) : (
         /* ── Display mode ── */
         <div className="relative">
-          {labelEl}
-          <span className={`text-xs ${textColor} leading-relaxed pr-14`}>
-            {expanded ? text : truncate(text)}
+          <span
+            className={`text-xs ${textColor} leading-relaxed pr-14 whitespace-pre-line`}
+            style={
+              hoveredField !== field
+                ? {
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical" as any,
+                    overflow: "hidden",
+                  }
+                : {}
+            }
+          >
+            {labelEl}
+            {text}
           </span>
           {/* Action icons – visible when hovering this field's area */}
           <div
@@ -252,7 +296,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   return (
     <tr
-      className={`border-t border-gray-200 border-dashed bg-white transition-all duration-200 align-top relative ${
+      className={`border-t border-gray-200 border-dashed bg-white transition-colors duration-200 align-top relative ${
         isDisabled ? "" : "hover:bg-gray-50"
       }`}
       style={
@@ -269,30 +313,17 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         onMouseLeave?.();
       }}
     >
-      {/* Image Prompt */}
-      {
-        <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-          {renderEditablePrompt(
-            "visual_prompt",
-            scene.visual_prompt,
-            "text-gray-600",
-            <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
-              IMAGE PROMPT
-            </span>
-          )}
-          {editingField !== "visual_prompt" && scene.visual_prompt.length > MAX_CHARS && (
-            <button
-              onClick={() => setExpanded((p) => !p)}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-            >
-              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-            </button>
-          )}
-        </td>
-      }
-
       {/* Motion + Audio */}
       <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        {renderEditablePrompt(
+          "visual_prompt",
+          scene.visual_prompt,
+          "text-gray-600",
+          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
+            IMAGE PROMPT
+          </span>
+        )}
+
         {renderEditablePrompt(
           "motion_description",
           scene.motion_description,
@@ -319,16 +350,66 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             [DIALOGUE]:
           </span>
         )}
-        {editingField !== "motion_description" &&
-          editingField !== "original_content" &&
-          needsExpand && (
-            <button
-              onClick={() => setExpanded((p) => !p)}
-              className="text-xs text-blue-500 hover:text-blue-700 mt-1 cursor-pointer border-0 bg-transparent font-medium"
-            >
-              {expanded ? "▲ Thu gọn" : "▼ Xem thêm"}
-            </button>
-          )}
+
+        {/* Product Select Image */}
+        {productImages.length > 0 && (
+          <div className="relative mt-1.5" onMouseEnter={() => setHoveredField(null)}>
+            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">
+              {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
+            </span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {productImages.map((imgUrl, idx) => (
+                <label
+                  key={idx}
+                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                    selectedProductImages.includes(imgUrl)
+                      ? "border-blue-500 shadow-md ring-1 ring-blue-300"
+                      : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"
+                  }`}
+                  style={{ width: 48, height: 48 }}
+                >
+                  <input
+                    type="checkbox"
+                    className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+                    checked={selectedProductImages.includes(imgUrl)}
+                    onChange={() => handleToggleProductImage(imgUrl)}
+                  />
+                  <Img
+                    src={imgUrl}
+                    alt={`Product ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                    lazyload={false}
+                  />
+                  {selectedProductImages.includes(imgUrl) && (
+                    <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                  )}
+                </label>
+              ))}
+            </div>
+            {selectedProductImages.length > 0 && (
+              <span className="text-9 text-blue-500 mt-0.5 block">
+                {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
+              </span>
+            )}
+            {/* Custom product image prompt input */}
+            {selectedProductImages.length > 0 && (
+              <div className="mt-2">
+                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">
+                  {t("Prompt SP")}:
+                </span>
+                <textarea
+                  value={scene.product_image_prompt ?? ""}
+                  onChange={(e) => onUpdateScene(scene.id, "product_image_prompt", e.target.value)}
+                  placeholder={t(
+                    "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
+                  )}
+                  rows={2}
+                  className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </td>
 
       {/* Generated Image */}
@@ -378,46 +459,56 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className="flex gap-2 mt-2 w-full items-center justify-center flex-wrap">
-                  <Button
-                    onClick={handleDownloadImage}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="bottom"
-                  />
-                  {generatingImage ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                      <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                      <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
-                    </div>
-                  ) : (
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${
+                    generatingImage ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingImage ? "" : "pointer-events-none"
+                  }`}
+                >
+                  <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
                     <Button
-                      onClick={handleGenerateImage}
-                      icon={<GenerateAiIcon />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      onClick={handleDownloadImage}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
                       iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="bottom"
                     />
-                  )}
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    icon={<RiUploadCloud2Line />}
-                    placement="bottom"
-                    className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Upload ảnh")}
-                  />
-                  <Button
-                    onClick={() => setShowGalleryDialog(true)}
-                    icon={<RiGalleryLine />}
-                    placement="bottom"
-                    className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Chọn từ Gallery")}
-                  />
+                    {generatingImage ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                        <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                        <span className="text-pink-600 text-[10px] font-bold">
+                          {imageProgress}%
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={handleCopyVideoGenerateImage}
+                        icon={<GenerateAiIcon />}
+                        placement="bottom"
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
+                        tooltip={t("Tạo lại")}
+                      />
+                    )}
+                    <Button
+                      onClick={() => fileInputRef.current?.click()}
+                      icon={<RiUploadCloud2Line />}
+                      placement="bottom"
+                      className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Upload ảnh")}
+                    />
+                    <Button
+                      onClick={() => setShowGalleryDialog(true)}
+                      icon={<RiGalleryLine />}
+                      placement="bottom"
+                      className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Chọn từ Gallery")}
+                    />
+                  </div>
                 </div>
               </div>
             ) : generatingImage ? (
@@ -429,7 +520,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             ) : (
               /* ── Default create button ── */
               <button
-                onClick={handleGenerateImage}
+                onClick={handleCopyVideoGenerateImage}
                 className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
               >
                 <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
@@ -444,11 +535,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
       {/* Generated Video đơn */}
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <div className="flex flex-row items-center gap-2">
+        <div className="flex flex-col items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-start w-full">
+          <div className="flex justify-center w-full">
             {generatedVideo ? (
-              <div className="relative w-32 group">
+              <div className="relative w-full group">
                 {(() => {
                   const videoSrc =
                     generatedVideo.videoUri ||
@@ -503,39 +594,47 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     </div>
                   );
                 })()}
-                {/* Download & Re-generate buttons */}
-                <div className="flex gap-2 mt-2 w-full items-center justify-center">
-                  <Button
-                    onClick={handleDownloadVideo}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="bottom"
-                  />
-                  {generatingVideo ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                      <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                      <span className="text-purple-600 text-[10px] font-bold">
-                        {videoProgress}%
-                      </span>
-                    </div>
-                  ) : (
+                {/* Download & Re-generate buttons – overlay on hover */}
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                    generatingVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingVideo ? "" : "pointer-events-none"
+                  }`}
+                >
+                  <div className="pointer-events-auto flex gap-2 items-center justify-center">
                     <Button
-                      onClick={() => {
-                        if (!generatedImage) {
-                          toast.error(t("Cần tạo ảnh trước khi tạo video"));
-                          return;
-                        }
-                        handleGenerateVideo();
-                      }}
-                      icon={<GenerateAiIcon />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      onClick={handleDownloadVideo}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
                       iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="bottom"
                     />
-                  )}
+                    {generatingVideo ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                        <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                        <span className="text-purple-600 text-[10px] font-bold">
+                          {videoProgress}%
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          if (!generatedImage) {
+                            toast.error(t("Cần tạo ảnh trước khi tạo video"));
+                            return;
+                          }
+                          handleGenerateVideo();
+                        }}
+                        icon={<GenerateAiIcon />}
+                        placement="bottom"
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
+                        tooltip={t("Tạo lại")}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
             ) : generatingVideo ? (
@@ -568,9 +667,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
           {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
           {nextSceneId && (
-            <div className="flex justify-start w-full">
+            <div className="flex justify-center w-full">
               {generatedExtendVideo ? (
-                <div className="relative w-32 group">
+                <div className="relative w-full group">
                   {(() => {
                     const extVideoSrc =
                       generatedExtendVideo.videoUri ||
@@ -628,33 +727,41 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                       </div>
                     );
                   })()}
-                  {/* Download & Re-generate extend video */}
-                  <div className="flex gap-2 mt-2 w-full items-center justify-center">
-                    <Button
-                      onClick={handleDownloadExtendVideo}
-                      className="w-8 rounded-lg h-8 bg-success-light text-success"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tải")}
-                      icon={<HiOutlineArrowDownTray />}
-                      placement="bottom"
-                    />
-                    {generatingExtendVideo ? (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                        <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                        <span className="text-teal-600 text-[10px] font-bold">
-                          {extendVideoProgress}%
-                        </span>
-                      </div>
-                    ) : (
+                  {/* Download & Re-generate extend video – overlay on hover */}
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                      generatingExtendVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    } transition-opacity duration-200 z-10 ${
+                      generatingExtendVideo ? "" : "pointer-events-none"
+                    }`}
+                  >
+                    <div className="pointer-events-auto flex gap-2 items-center justify-center">
                       <Button
-                        onClick={() => handleGenerateVideo(true)}
-                        icon={<GenerateAiIcon />}
-                        placement="bottom"
-                        tooltip={t("Tạo lại video nối")}
-                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        onClick={handleDownloadExtendVideo}
+                        className="w-8 rounded-lg h-8 bg-success-light text-success"
                         iconClassName="text-xl font-bold"
+                        tooltip={t("Tải")}
+                        icon={<HiOutlineArrowDownTray />}
+                        placement="bottom"
                       />
-                    )}
+                      {generatingExtendVideo ? (
+                        <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
+                          <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
+                          <span className="text-teal-600 text-[10px] font-bold">
+                            {extendVideoProgress}%
+                          </span>
+                        </div>
+                      ) : (
+                        <Button
+                          onClick={() => handleGenerateVideo(true)}
+                          icon={<GenerateAiIcon />}
+                          placement="bottom"
+                          tooltip={t("Tạo lại video nối")}
+                          className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                          iconClassName="text-xl font-bold"
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : generatingExtendVideo ? (
@@ -797,6 +904,7 @@ interface SceneRowGroupProps {
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }
 
 export function SceneRowGroup({
@@ -809,6 +917,7 @@ export function SceneRowGroup({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onUpdateSelectedProductImages,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -852,6 +961,7 @@ export function SceneRowGroup({
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
         onToggleVoiceDisable={onToggleVoiceDisable}
+        onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 
       {/* Add BELOW button – absolute positioned, floats between rows */}

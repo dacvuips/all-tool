@@ -6,14 +6,14 @@
  */
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
+import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
 
 import { Form } from "../../../../shared/utilities/form";
 import { CopyVideoFormConfig } from "../../constants";
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
@@ -22,9 +22,15 @@ import { AffiliateSubmit } from "./affiliate-submit";
 export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { DEFAULT_VIDEO_CONFIG, copyVideoFormConfig, setBatchRunning, setScriptData, setScriptTab, persistCopyVideoInput } =
-    useCopyVideoContext();
-  const { analyzeVideoForCopy } = useAffiliateVideoApi();
+  const {
+    DEFAULT_VIDEO_CONFIG,
+    copyVideoFormConfig,
+    setBatchRunning,
+    setScriptData,
+    setScriptTab,
+    persistCopyVideoInput,
+  } = useCopyVideoContext();
+  const { analyzeVideoForCopy } = useCopyVideoApi();
   const thumbnailDB = useThumbnailDB();
 
   // ── Submit handler: phân tích video gốc ──
@@ -56,9 +62,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
               copyVideoFormConfig.sourceVideo.mimeType,
               result.scenes,
               thumbnailDB
-            ).catch((err) =>
-              console.warn("[CopyVideoForm] Failed to extract thumbnails:", err)
-            );
+            ).catch((err) => console.warn("[CopyVideoForm] Failed to extract thumbnails:", err));
           }
         }
       } catch (err: any) {
@@ -68,7 +72,17 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [copyVideoFormConfig, analyzeVideoForCopy, setBatchRunning, setScriptData, setScriptTab, toast, t, thumbnailDB, persistCopyVideoInput]
+    [
+      copyVideoFormConfig,
+      analyzeVideoForCopy,
+      setBatchRunning,
+      setScriptData,
+      setScriptTab,
+      toast,
+      t,
+      thumbnailDB,
+      persistCopyVideoInput,
+    ]
   );
 
   return (
@@ -81,7 +95,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-            <RiCameraLensFill className="text-white text-base" />
+            <RiFileCopy2Line className="text-white text-base" />
           </div>
           <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
         </div>

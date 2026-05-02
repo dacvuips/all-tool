@@ -6,7 +6,13 @@
  */
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { RiFileCopy2Line, RiFileTextLine, RiGridLine, RiShirtLine } from "react-icons/ri";
+import {
+  RiBookOpenLine,
+  RiFileCopy2Line,
+  RiFileTextLine,
+  RiGridLine,
+  RiShirtLine,
+} from "react-icons/ri";
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
@@ -40,10 +46,16 @@ export default function AffiliateMainPage() {
     },
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
+      icon: <RiBookOpenLine />,
+      label: t("Review Sản Phẩm"),
+      value: "product-review",
+      component: <>{"Đang phát triển"}</>,
+    },
+    {
       icon: <RiShirtLine />,
       label: t("Thời Trang"),
       value: "thoi-trang",
-      component: <>{"Đang phát tiển"}</>,
+      component: <>{"Đang phát triển"}</>,
     },
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
     // { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },

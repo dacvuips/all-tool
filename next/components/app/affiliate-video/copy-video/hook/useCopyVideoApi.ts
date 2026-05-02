@@ -3,9 +3,9 @@
  * Hook chứa tất cả các hàm gọi API cho module affiliate-video.
  */
 import { useCallback } from "react";
-import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
-import { useAuth } from "../../../../lib/providers/auth-provider";
-import { useToast } from "../../../../lib/providers/toast-provider";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { useToast } from "../../../../../lib/providers/toast-provider";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -14,10 +14,9 @@ import {
   CopyVideoHistoryItem,
   DB_NAME,
   SceneHistoryItem,
-  ScriptData,
   STORE_NAME,
-} from "../constants";
-import { useIndexedDB } from "./useIndexedDB";
+} from "../../constants";
+import { useIndexedDB } from "../../hook/useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -50,6 +49,10 @@ export interface GenerateImageParams {
   referenceImage?: { imageBytes: string; mimeType: string };
   /** Ảnh tham chiếu bổ sung (e.g., ảnh sản phẩm được chọn) */
   additionalImages?: { imageBytes: string; mimeType: string }[];
+  /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
+  productImages?: string[];
+  /** Custom prompt cho product images – nếu có sẽ dùng thay prompt mặc định */
+  productImagePrompt?: string;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -207,22 +210,10 @@ export interface GeneratedVideoData {
 
 export interface UseAffiliateVideoApiReturn {
   /**
-   * Gọi API tạo scene từ config form (flow cũ).
-   * Tự động lưu kết quả vào IndexedDB.
-   */
-  generateScene: (data: AffiliateVideoFormConfig) => Promise<ScriptData | undefined>;
-
-  /**
-   * Gọi API tạo scene bằng đoạn text / prompt tự do.
-   * Text sẽ được gửi thẳng lên server, server interpolate placeholder rồi gọi Gemini.
-   */
-  generateSceneFromText: (params: GenerateSceneFromTextParams) => Promise<ScriptData | undefined>;
-
-  /**
    * Gọi API tạo ảnh từ imageGenPrompt.
    * Lưu kết quả base64 vào IndexedDB theo sceneId.
    */
-  generateImage: (params: GenerateImageParams) => Promise<GeneratedImageData | undefined>;
+  copyVideoGenerateImage: (params: GenerateImageParams) => Promise<GeneratedImageData | undefined>;
 
   /**
    * Lấy ảnh đã tạo từ IndexedDB theo sceneId.
@@ -288,7 +279,7 @@ export interface UseAffiliateVideoApiReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
+export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   const toast = useToast();
   const { STORY_MODE_OPTIONS } = useOptionsTranslation();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
@@ -297,96 +288,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
   const copyVideoScriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
   const { customer } = useAuth();
-  // ── Shared: gọi API /api/app/generation-scene/ ──
-  const callGenerationSceneApi = useCallback(
-    async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string }) => {
-      const res = await fetch("/api/app/generation-scene/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
-        return undefined;
-      }
-
-      return res.json();
-    },
-    [toast]
-  );
-
-  // ── Helper: push a ScriptData into history array in IndexedDB ──
-  const pushToSceneHistory = useCallback(
-    async (scriptResult: ScriptData) => {
-      try {
-        const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.sceneHistory)) || [];
-
-        const now = new Date();
-        const label = `${
-          STORY_MODE_OPTIONS.find((s) => s.value === scriptResult.storyModeType)?.label
-        } – ${now.toLocaleDateString("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-        })} ${now.toLocaleTimeString("vi-VN", {
-          hour: "2-digit",
-          minute: "2-digit",
-        })}`;
-
-        const newItem: SceneHistoryItem = {
-          id: crypto.randomUUID(),
-          createdAt: now.getTime(),
-          label,
-          data: scriptResult,
-        };
-
-        // Prepend newest first, trim to MAX_SCENE_HISTORY
-        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
-        await scriptDB.set(CACHE_KEY.sceneHistory, updated);
-      } catch (e) {
-        console.warn("[affiliate-video-api] Failed to push scene history", e);
-      }
-    },
-    [scriptDB]
-  );
-
-  // ── generateScene (flow cũ – từ config form) ──
-  const generateScene = useCallback(
-    async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
-      const result = await callGenerationSceneApi({ config: data });
-      if (!result) return undefined;
-      const scriptResult: ScriptData = {
-        ...result.data,
-        storyModeType: data.storyModeType,
-        aspectRatio: data.aspectRatio,
-      };
-
-      // Gán id ngẫu nhiên cho từng scene mới
-      if (scriptResult?.scenes) {
-        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
-          ...scene,
-          id: crypto.randomUUID(),
-        }));
-      }
-
-      // Persist config input
-      scriptDB
-        .set(CACHE_KEY.generateInput, data)
-        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
-
-      // Persist script result (include storyModeType)
-      scriptDB
-        .set(CACHE_KEY.lastScript, scriptResult)
-        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
-      // Push to history (await so provider can read it immediately)
-      await pushToSceneHistory(scriptResult);
-
-      return scriptResult;
-    },
-    [callGenerationSceneApi, scriptDB, pushToSceneHistory]
-  );
 
   // ── Shared: gọi API /api/app/copy-video-analysis/ ──
   const callCopyVideoAnalysisApi = useCallback(
@@ -471,6 +372,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const analysisResult: CopyVideoAnalysisData = {
         ...result.data,
         aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới
@@ -499,43 +401,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [callCopyVideoAnalysisApi, copyVideoScriptDB, pushToCopyVideoHistory, toast]
   );
 
-  // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
-  const generateSceneFromText = useCallback(
-    async (params: GenerateSceneFromTextParams): Promise<ScriptData | undefined> => {
-      const { text, config = {} } = params;
-
-      const result = await callGenerationSceneApi({
-        config,
-        text,
-      });
-      if (!result) return undefined;
-      const scriptResult: ScriptData = result.data;
-
-      // Gán id ngẫu nhiên cho từng scene mới
-      if (scriptResult?.scenes) {
-        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
-          ...scene,
-          id: crypto.randomUUID(),
-        }));
-      }
-
-      // Persist script result (include storyModeType)
-      scriptDB
-        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType })
-        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
-
-      // Push to history (await so provider can read it immediately)
-      await pushToSceneHistory(scriptResult);
-
-      return scriptResult;
-    },
-    [callGenerationSceneApi, scriptDB, pushToSceneHistory]
-  );
-
   // ── generateImage – gọi API tạo ảnh từ prompt ──
-  const generateImage = useCallback(
+  const copyVideoGenerateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
-      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, additionalImages, onProgress } = params;
+      const {
+        sceneId,
+        prompt,
+        aspectRatio = "9:16",
+        referenceImage,
+        additionalImages,
+        productImages,
+        productImagePrompt,
+        onProgress,
+      } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
       const DURATION_MS = 2 * 60 * 1000; // 2 minutes
@@ -567,12 +445,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           images.push(...additionalImages);
         }
 
-        const res = await fetch("/api/app/generation-image/", {
+        const res = await fetch("/api/app/copy-video-generate-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             prompt,
             images: images.length > 0 ? images : undefined,
+            productImages: productImages?.length ? productImages : undefined,
+            productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio },
           }),
         });
@@ -877,9 +757,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   }, [scriptDB, customer?._id]);
 
   return {
-    generateScene,
-    generateSceneFromText,
-    generateImage,
+    copyVideoGenerateImage,
     getGeneratedImage,
     saveGeneratedImage,
     generateVideo,
