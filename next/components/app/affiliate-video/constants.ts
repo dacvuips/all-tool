@@ -198,6 +198,7 @@ export interface CopyVideoAnalysisData {
   props: CopyVideoProp[];
   scenes: CopyVideoScene[];
   aspectRatio?: string;
+  productImages?: string[];
 }
 
 export interface CopyVideoHistoryItem {

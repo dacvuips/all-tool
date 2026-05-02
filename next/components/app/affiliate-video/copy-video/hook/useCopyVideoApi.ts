@@ -372,6 +372,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
       const analysisResult: CopyVideoAnalysisData = {
         ...result.data,
         aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới

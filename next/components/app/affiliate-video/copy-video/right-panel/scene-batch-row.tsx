@@ -96,10 +96,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
     scene.id
   );
-  const { scriptData, copyVideoFormConfig } = useCopyVideoContext();
+  const { scriptData } = useCopyVideoContext();
 
   // ── Product image selection (per-scene, persisted in IndexedDB) ──
-  const productImages = copyVideoFormConfig?.productImages || [];
+  const productImages = scriptData?.productImages || [];
   const selectedProductImagesDB = useIndexedDB<string[]>(
     "selected-product-images",
     DB_NAME.copyVideo

@@ -43,7 +43,9 @@ export default [
         const defaultProductImageNote = `\nQUAN TRỌNG: Có hình ảnh tham chiếu sản phẩm được đính kèm. Bạn PHẢI đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay`;
         const productImageNote =
           productImageUrls.length > 0
-            ? (body.productImagePrompt ? `\n${body.productImagePrompt}` : defaultProductImageNote)
+            ? body.productImagePrompt
+              ? `\n${body.productImagePrompt}`
+              : defaultProductImageNote
             : "";
         // Lấy captcha + credentials từ Cliproxy API
         const {
