@@ -22,11 +22,14 @@ import {
   RiPencilLine,
   RiSaveLine,
   RiSearchLine,
+  RiText,
   RiUploadCloud2Line,
   RiVideoFill,
 } from "react-icons/ri";
+
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
+import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
 import { VideoDialog } from "../../../../shared/common/video-dialog";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
@@ -59,6 +62,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onToggleNoText,
 }: {
   scene: SceneScript;
   index: number;
@@ -71,6 +75,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onToggleNoText: (sceneId: string) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -102,7 +107,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useSceneMedia({ scene, nextSceneId });
+  } = useSceneMedia({ scene, nextSceneId, noText: scene.noText });
   const { scriptData } = useAffiliateVideoContext();
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
@@ -319,7 +324,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 />
 
                 {/* Re-generate overlay on hover */}
-                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${generatingImage ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingImage ? '' : 'pointer-events-none'}`}>
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${
+                    generatingImage ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingImage ? "" : "pointer-events-none"
+                  }`}
+                >
                   <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
                     <Button
                       onClick={handleDownloadImage}
@@ -449,7 +460,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   );
                 })()}
                 {/* Download & Re-generate buttons – overlay on hover */}
-                <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingVideo ? '' : 'pointer-events-none'}`}>
+                <div
+                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                    generatingVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                  } transition-opacity duration-200 z-10 ${
+                    generatingVideo ? "" : "pointer-events-none"
+                  }`}
+                >
                   <div className="pointer-events-auto flex gap-2 items-center justify-center">
                     <Button
                       onClick={handleDownloadVideo}
@@ -576,7 +593,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     );
                   })()}
                   {/* Download & Re-generate extend video – overlay on hover */}
-                  <div className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${generatingExtendVideo ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200 z-10 ${generatingExtendVideo ? '' : 'pointer-events-none'}`}>
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
+                      generatingExtendVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                    } transition-opacity duration-200 z-10 ${
+                      generatingExtendVideo ? "" : "pointer-events-none"
+                    }`}
+                  >
                     <div className="pointer-events-auto flex gap-2 items-center justify-center">
                       <Button
                         onClick={handleDownloadExtendVideo}
@@ -658,9 +681,28 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             {/* Voice toggle – visible on hover OR when voiceDisable is true */}
             <div
               className={`transition-opacity duration-200 font-semibold ${
-                rowHovered || scene.voiceDisable ? "opacity-100" : "opacity-0 pointer-events-none"
+                rowHovered || scene.noText || scene.voiceDisable
+                  ? "opacity-100"
+                  : "opacity-0 pointer-events-none"
               }`}
             >
+              <Button
+                disabled={isDisabled}
+                onClick={() => onToggleNoText(scene.id)}
+                className={`w-6 h-6 rounded-md shadow-sm ${
+                  scene.noText
+                    ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+                    : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
+                }`}
+                iconClassName="text-sm"
+                icon={scene.noText ? <RiText /> : <NoTextIcon />}
+                tooltip={
+                  scene.noText
+                    ? t("Đang cho phép hiển thị 'text' trong ảnh")
+                    : t("Không cho phép hiển thị 'text' trong ảnh")
+                }
+                placement="bottom"
+              />
               <Button
                 disabled={isDisabled}
                 onClick={() => onToggleVoiceDisable(scene.id)}
@@ -747,6 +789,7 @@ interface SceneRowGroupProps {
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onToggleNoText: (sceneId: string) => void;
 }
 
 export function SceneRowGroup({
@@ -760,6 +803,7 @@ export function SceneRowGroup({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onToggleNoText,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -804,6 +848,7 @@ export function SceneRowGroup({
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
         onToggleVoiceDisable={onToggleVoiceDisable}
+        onToggleNoText={onToggleNoText}
       />
 
       {/* Add BELOW button – absolute positioned, floats between rows */}

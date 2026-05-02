@@ -123,6 +123,7 @@ export interface SceneScript {
   dialogue: string;
   disabled?: boolean;
   voiceDisable?: boolean;
+  noText?: boolean;
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
 }
@@ -188,6 +189,7 @@ export interface CopyVideoScene {
   translated_content?: string | null;
   disabled?: boolean;
   voiceDisable?: boolean;
+  noText?: boolean;
   selectedProductImages?: string[];
   product_image_prompt?: string;
   sceneNumber?: number;

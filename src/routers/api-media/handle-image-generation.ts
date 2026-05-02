@@ -67,6 +67,7 @@ interface CallAisandboxParams {
   sessionId: string;
   projectId: string;
   accessToken: string;
+  noText?: boolean;
 }
 
 /**

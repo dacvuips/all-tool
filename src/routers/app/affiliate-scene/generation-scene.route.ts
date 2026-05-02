@@ -71,7 +71,7 @@ CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angl
   "audio": "voice metada  ta in {{language}}",
   "dialogue": " dialogue/narration in {{language}}"
 }
-CRITICAL RULE: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text. Always keep character and environment identical.   
+CRITICAL RULE: Always keep character and environment identical.   
 `;
 
         // Thay thế placeholder trong text

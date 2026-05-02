@@ -22,11 +22,13 @@ import {
   RiPencilLine,
   RiSaveLine,
   RiSearchLine,
+  RiText,
   RiUploadCloud2Line,
   RiVideoFill,
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
+import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
 import { VideoDialog } from "../../../../shared/common/video-dialog";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
@@ -65,6 +67,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onToggleNoText,
   onUpdateSelectedProductImages,
 }: {
   scene: CopyVideoScene;
@@ -77,6 +80,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onToggleNoText: (sceneId: string) => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }) {
   const { t } = useTranslation();
@@ -142,17 +146,22 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedVideo,
     generatingVideo,
     videoProgress,
-
+    handleCopyVideoGenerateImage,
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
-    handleCopyVideoGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useCopyVideoSceneMedia({ scene, nextSceneId, thumbnailOriginImage, selectedProductImages });
+  } = useCopyVideoSceneMedia({
+    scene,
+    nextSceneId,
+    thumbnailOriginImage,
+    selectedProductImages,
+    noText: scene.noText,
+  });
 
   const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -821,6 +830,23 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             >
               <Button
                 disabled={isDisabled}
+                onClick={() => onToggleNoText(scene.id)}
+                className={`w-6 h-6 rounded-md shadow-sm ${
+                  scene.noText
+                    ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+                }`}
+                iconClassName="text-sm"
+                icon={scene.noText ? <RiText /> : <NoTextIcon />}
+                tooltip={
+                  scene.noText
+                    ? t("Đang cho phép hiển thị 'text' trong ảnh")
+                    : t("Không cho phép hiển thị 'text' trong ảnh")
+                }
+                placement="bottom"
+              />
+              <Button
+                disabled={isDisabled}
                 onClick={() => onToggleVoiceDisable(scene.id)}
                 className={`w-6 h-6 rounded-md shadow-sm ${
                   scene.voiceDisable
@@ -896,6 +922,7 @@ interface SceneRowGroupProps {
   nextSceneId?: string;
   isDisabled: boolean;
   characters: CharacterItem[];
+  onToggleNoText: (sceneId: string) => void;
   onInsert: (
     scene: CopyVideoScene,
     position: InsertPosition,
@@ -917,6 +944,7 @@ export function SceneRowGroup({
   onUpdateScene,
   onToggleDisable,
   onToggleVoiceDisable,
+  onToggleNoText,
   onUpdateSelectedProductImages,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
@@ -961,6 +989,7 @@ export function SceneRowGroup({
         onUpdateScene={onUpdateScene}
         onToggleDisable={onToggleDisable}
         onToggleVoiceDisable={onToggleVoiceDisable}
+        onToggleNoText={onToggleNoText}
         onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 

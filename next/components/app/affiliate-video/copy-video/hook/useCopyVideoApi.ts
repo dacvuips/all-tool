@@ -55,6 +55,7 @@ export interface GenerateImageParams {
   productImagePrompt?: string;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
+  noText?: boolean;
 }
 
 export interface GenerateVideoParams {
@@ -413,6 +414,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         productImages,
         productImagePrompt,
         onProgress,
+        noText = false,
       } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
@@ -454,6 +456,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             productImages: productImages?.length ? productImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio },
+            noText: noText,
           }),
         });
 

@@ -13,6 +13,7 @@ import {
   RiImageFill,
   RiLoader4Line,
   RiMagicFill,
+  RiText,
   RiVideoFill,
 } from "react-icons/ri";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
@@ -32,6 +33,8 @@ import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
+
+import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
 import { EditField, SceneRowGroup } from "./scene-batch-row";
 
 type InsertPosition = "above" | "below";
@@ -377,6 +380,31 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     }
   };
 
+  /** Toggle noText state on a single scene and persist to IndexedDB */
+  const handleToggleNoText = async (sceneId: string) => {
+    const updated = sceneList.map((s) => (s.id === sceneId ? { ...s, noText: !s.noText } : s));
+    setSceneList(updated);
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleToggleNoText] Failed to persist to IndexedDB:", err);
+    }
+  };
+
+  /** Toggle noText for ALL scenes at once */
+  const handleToggleAllNoText = async () => {
+    const allDisabled = sceneList.every((s) => s.noText);
+    const updated = sceneList.map((s) => ({ ...s, noText: !allDisabled }));
+    setSceneList(updated);
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleToggleAllNoText] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   const handleInsert = async (
     targetScene: SceneScript,
     position: InsertPosition,
@@ -522,28 +550,46 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 {t("VIDEO")}
               </th>
               <th className="border-b border-gray-200 w-0 p-0">
-                <Button
-                  onClick={handleToggleAllVoiceDisable}
-                  className={`w-6 h-6 rounded-md shadow-sm ${
-                    sceneList.every((s) => s.voiceDisable)
-                      ? "text-red-500 bg-red-50 hover:bg-red-100"
-                      : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-                  }`}
-                  iconClassName="text-sm"
-                  icon={
-                    sceneList.every((s) => s.voiceDisable) ? (
-                      <MdVoiceOverOff />
-                    ) : (
-                      <MdRecordVoiceOver />
-                    )
-                  }
-                  tooltip={
-                    sceneList.every((s) => s.voiceDisable)
-                      ? t("Bật thoại tất cả")
-                      : t("Tắt thoại tất cả")
-                  }
-                  placement="bottom"
-                />
+                <div className="flex flex-col gap-1 items-center justify-center">
+                  <Button
+                    onClick={handleToggleAllNoText}
+                    className={`w-6 h-6 rounded-md shadow-sm ${
+                      sceneList.every((s) => s.noText)
+                        ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+                        : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
+                    }`}
+                    iconClassName="text-sm"
+                    icon={sceneList.every((s) => s.noText) ? <RiText /> : <NoTextIcon />}
+                    tooltip={
+                      sceneList.every((s) => s.noText)
+                        ? t("Đang cho phép hiển thị 'text' trong tất cả")
+                        : t("Không cho phép hiển thị 'text' trong tất cả")
+                    }
+                    placement="bottom"
+                  />
+                  <Button
+                    onClick={handleToggleAllVoiceDisable}
+                    className={`w-6 h-6 rounded-md shadow-sm ${
+                      sceneList.every((s) => s.voiceDisable)
+                        ? "text-red-500 bg-red-50 hover:bg-red-100"
+                        : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+                    }`}
+                    iconClassName="text-sm"
+                    icon={
+                      sceneList.every((s) => s.voiceDisable) ? (
+                        <MdVoiceOverOff />
+                      ) : (
+                        <MdRecordVoiceOver />
+                      )
+                    }
+                    tooltip={
+                      sceneList.every((s) => s.voiceDisable)
+                        ? t("Bật thoại tất cả")
+                        : t("Tắt thoại tất cả")
+                    }
+                    placement="bottom"
+                  />
+                </div>
               </th>
             </tr>
           </thead>
@@ -562,6 +608,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}
                 onToggleVoiceDisable={handleToggleVoiceDisable}
+                onToggleNoText={handleToggleNoText}
               />
             ))}
           </tbody>

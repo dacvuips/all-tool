@@ -23,6 +23,7 @@ interface UseSceneMediaParams {
   /** Scene hiện tại */
   scene: SceneScript;
   nextSceneId?: string;
+  noText?: boolean;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -74,7 +75,7 @@ export interface UseSceneMediaReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseSceneMediaReturn {
+export function useSceneMedia({ scene, nextSceneId, noText }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
 
@@ -325,6 +326,7 @@ export function useSceneMedia({ scene, nextSceneId }: UseSceneMediaParams): UseS
         sceneId: scene.id,
         prompt: scene.imageGenPrompt,
         aspectRatio: scriptData?.aspectRatio,
+        noText,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));

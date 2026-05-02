@@ -29,6 +29,7 @@ export default [
             numberOfImages?: number;
             aspectRatio?: "16:9" | "9:16";
           };
+          noText?: boolean;
         };
 
         if (!body?.prompt) {
@@ -47,6 +48,13 @@ export default [
               ? `\n${body.productImagePrompt}`
               : defaultProductImageNote
             : "";
+
+        // Tạo payload theo cấu trúc Google Labs API
+
+        const noTextStr = !body.noText
+          ? `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`
+          : "";
+
         // Lấy captcha + credentials từ Cliproxy API
         const {
           captcha: recaptchaToken,
@@ -82,7 +90,7 @@ export default [
 
         await callAisandboxImageAPI({
           res,
-          prompt: body.prompt + productImageNote,
+          prompt: body.prompt + productImageNote + noTextStr,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames: [...uploadedImageNames, ...productImageNames],
 

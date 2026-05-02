@@ -26,6 +26,8 @@ interface UseSceneMediaParams {
   thumbnailOriginImage?: string | null;
   /** Danh sách URL ảnh sản phẩm được chọn cho scene này */
   selectedProductImages?: string[];
+  /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
+  noText?: boolean;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ export function useCopyVideoSceneMedia({
   nextSceneId,
   thumbnailOriginImage,
   selectedProductImages,
+  noText,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
@@ -368,11 +371,14 @@ export function useCopyVideoSceneMedia({
         }
       }
 
-      const noText = `Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`;
+      const noTextStr = noText
+        ? `\nIMPORTANT: Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`
+        : "";
 
       const result = await copyVideoGenerateImage({
         sceneId: scene.id,
-        prompt: `${noText}${scene.visual_prompt}`,
+        prompt: `${scene.visual_prompt}`,
+        noText: noText,
         aspectRatio: scriptData?.aspectRatio,
         referenceImage,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,

@@ -26,6 +26,7 @@ export default [
           config?: {
             numberOfImages?: number;
             aspectRatio?: "16:9" | "9:16";
+            noText?: boolean;
           };
         };
 
@@ -59,10 +60,14 @@ export default [
         }
 
         // Tạo payload theo cấu trúc Google Labs API
-        console.log(body.config?.aspectRatio);
+
+        const noTextStr = !body.config?.noText
+          ? `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`
+          : "";
+
         await callAisandboxImageAPI({
           res,
-          prompt: body.prompt,
+          prompt: `${body.prompt}${noTextStr}`,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames,
           recaptchaToken,

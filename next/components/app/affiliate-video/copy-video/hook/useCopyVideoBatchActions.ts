@@ -548,6 +548,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             aspectRatio: copyVideoFormConfig?.aspectRatio,
             additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
             productImages: selectedUrls?.length ? selectedUrls : undefined,
+            noText: scene.noText,
           });
           completed++;
           setBatchCompleted(completed);
@@ -692,6 +693,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               aspectRatio: copyVideoFormConfig?.aspectRatio,
               additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
               productImages: selectedUrls?.length ? selectedUrls : undefined,
+              noText: scene.noText,
             });
           } catch (imgErr) {
             console.error(

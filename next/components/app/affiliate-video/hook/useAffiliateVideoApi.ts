@@ -50,6 +50,8 @@ export interface GenerateImageParams {
   referenceImage?: { imageBytes: string; mimeType: string };
   /** Ảnh tham chiếu bổ sung (e.g., ảnh sản phẩm được chọn) */
   additionalImages?: { imageBytes: string; mimeType: string }[];
+  /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
+  noText?: boolean;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
 }
@@ -535,7 +537,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateImage – gọi API tạo ảnh từ prompt ──
   const generateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
-      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, additionalImages, onProgress } = params;
+      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, additionalImages, noText, onProgress } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
       const DURATION_MS = 2 * 60 * 1000; // 2 minutes
@@ -573,7 +575,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body: JSON.stringify({
             prompt,
             images: images.length > 0 ? images : undefined,
-            config: { numberOfImages: 1, aspectRatio },
+            config: { numberOfImages: 1, aspectRatio, noText },
           }),
         });
 
