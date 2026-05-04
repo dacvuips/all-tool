@@ -32,6 +32,15 @@ const MAX_COPY_VIDEO_HISTORY = 50;
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+/** Public object to personify item (no prompt field) */
+export interface ObjectToPersonifyPublic {
+  id: string;
+  name: string;
+  imageUrl: string;
+  code: string;
+  isActive: boolean;
+}
+
 export interface GenerateSceneFromTextParams {
   /** Đoạn text / prompt gửi trực tiếp đến API */
   text: string;
@@ -291,6 +300,12 @@ export interface UseAffiliateVideoApiReturn {
    * Gọi API generate style description text từ images.
    */
   generateStyleText: (images: string[]) => Promise<string>;
+
+  /**
+   * Lấy danh sách ObjectToPersonify đang active từ GraphQL.
+   * Trả về danh sách KHÔNG có prompt (dành cho customer).
+   */
+  getActiveObjectToPersonifyList: () => Promise<ObjectToPersonifyPublic[]>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -914,6 +929,38 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── getActiveObjectToPersonifyList – lấy danh sách nhân vật nhân hoá active từ GraphQL ──
+  const getActiveObjectToPersonifyList = useCallback(
+    async (): Promise<ObjectToPersonifyPublic[]> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `query { getActiveObjectToPersonifyList { id name imageUrl code isActive } }`,
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[getActiveObjectToPersonifyList] HTTP error:", res.status);
+          return [];
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[getActiveObjectToPersonifyList] GraphQL errors:", json.errors);
+          return [];
+        }
+
+        return (json.data?.getActiveObjectToPersonifyList || []) as ObjectToPersonifyPublic[];
+      } catch (err: any) {
+        console.error("[getActiveObjectToPersonifyList] Error:", err);
+        return [];
+      }
+    },
+    []
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -930,5 +977,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     clearSceneHistory,
     analyzeVideoForCopy,
     generateStyleText,
+    getActiveObjectToPersonifyList,
   };
 }
