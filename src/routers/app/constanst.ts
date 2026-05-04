@@ -66,6 +66,7 @@ export enum ArtStyleMapEnum {
   GAME_2D = "Game_2D",
   DARK_GROTESQUE = "Dark_Grotesque",
   FLAT_SCIENCE = "Flat_Science",
+  MINECRAFT = "Minecraft",
 }
 
 export const ArtStyleMap: Array<{
@@ -151,5 +152,9 @@ export const ArtStyleMap: Array<{
   {
     value: ArtStyleMapEnum.FLAT_SCIENCE,
     des: "2D flat educational science cartoon illustration style. Infographic aesthetic, clean vector-like outlines, simple shapes, no realism, no complex textures. Soft pastel color palette (light blues, greens, pale yellows) with moderate contrast. Minimal soft shading, flat lighting, no cinematic lighting. Characters, animals, and environments (like laboratories, nature, biology, DNA) are stylized, simplified, friendly, and highly informative. Similar to biology textbook diagrams or educational explainer animations.",
+  },
+  {
+    value: ArtStyleMapEnum.MINECRAFT,
+    des: "A comprehensive world entirely constructed in Minecraft aesthetic. Every element, including humans, animals, landscape, and objects, is composed of perfect 3D cubic voxels and rigid blocks.Characters & Mobs: Humans and animals have rectangular limbs, boxy heads, and stiff joints, featuring 8-bit low-resolution skin textures. Environment: The terrain is a grid-based system with stepped hills, cubic trees with pixelated leaf blocks, and perfectly square clouds in a vibrant blue sky. Water is represented as semi-transparent blue cuboids. Architecture & Items: Buildings are made of identifiable material blocks like cobblestone, oak planks, and glass cubes. Handheld items are flat 2D pixel-art extrusions or small 3D blocky models.Technical Style: Professional Voxel Art, no smooth curves, sharp 90-degree edges, 16x16 or 32x32 texture density feel, ray-traced lighting (RTX shaders), soft global illumination, vibrant saturation, high-fidelity blocky rendering, 8k resolution.",
   },
 ];

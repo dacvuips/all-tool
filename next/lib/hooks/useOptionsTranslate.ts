@@ -839,6 +839,7 @@ export const useOptionsTranslation = () => {
       value: ArtStyleMapEnum.FLAT_SCIENCE,
       label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)"),
     },
+    { value: ArtStyleMapEnum.MINECRAFT, label: t("Thế giới khối vuông (Minecraft)") },
   ];
 
   const CATEGORY_OPTIONS = [

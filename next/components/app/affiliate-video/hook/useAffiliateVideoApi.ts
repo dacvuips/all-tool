@@ -286,6 +286,11 @@ export interface UseAffiliateVideoApiReturn {
    * Tự động lưu kết quả vào IndexedDB.
    */
   analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
+
+  /**
+   * Gọi API generate style description text từ images.
+   */
+  generateStyleText: (images: string[]) => Promise<string>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -537,7 +542,15 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateImage – gọi API tạo ảnh từ prompt ──
   const generateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
-      const { sceneId, prompt, aspectRatio = "9:16", referenceImage, additionalImages, noText, onProgress } = params;
+      const {
+        sceneId,
+        prompt,
+        aspectRatio = "9:16",
+        referenceImage,
+        additionalImages,
+        noText,
+        onProgress,
+      } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
       const DURATION_MS = 2 * 60 * 1000; // 2 minutes
@@ -878,6 +891,29 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     await scriptDB.set(CACHE_KEY.sceneHistory, []);
   }, [scriptDB, customer?._id]);
 
+  // ── generateStyleText – gọi API tạo mô tả phong cách từ AI ──
+  const generateStyleText = useCallback(
+    async (images: string[]): Promise<string> => {
+      const res = await fetch("/api/app/generate-style-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images }),
+      });
+      console.log(res);
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        throw new Error(message);
+      }
+
+      const data = await res.json();
+      return data?.text || data?.result || "";
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -893,5 +929,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getSceneHistory,
     clearSceneHistory,
     analyzeVideoForCopy,
+    generateStyleText,
   };
 }

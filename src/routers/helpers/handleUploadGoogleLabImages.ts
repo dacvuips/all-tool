@@ -36,7 +36,7 @@ function getMimeTypeFromUrl(url: string, contentType?: string): string {
  * Fetch ảnh từ URL và chuyển thành base64 string.
  * Trả về { imageBytes (base64), mimeType }.
  */
-async function fetchImageAsBase64(url: string): Promise<{ imageBytes: string; mimeType: string }> {
+export async function fetchImageAsBase64(url: string): Promise<{ imageBytes: string; mimeType: string }> {
   logger.info(`[processImages] Đang fetch ảnh từ URL: ${url}`);
   const resp = await fetch(url);
   if (!resp.ok) {

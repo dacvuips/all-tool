@@ -14,6 +14,8 @@ import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
+
+import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -202,14 +204,11 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
 
         {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
         <div>
-          <Field noError name="objectToPersonify" label={t("Nhân hoá đồ vật")}>
-            <Textarea
-              id="object-to-personify-input"
-              className="border-gray-200"
-              placeholder={t("VD: Một quả chuối tươi")}
-              onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
-            />
-          </Field>
+          <ObjectPersonifyPickerDialog
+            name="objectToPersonify"
+            value={videoConfig?.objectToPersonify}
+            onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
+          />
         </div>
 
         {/* NỘI DUNG MẸO (tipContent) */}

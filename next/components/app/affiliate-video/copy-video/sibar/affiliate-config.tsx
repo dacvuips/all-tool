@@ -111,7 +111,11 @@ export const AffiliateConfig = () => {
         {/* Ảnh sản phẩm */}
 
         <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
-          <ImageInput multi value={copyVideoFormConfig?.productImages} onChange={(v) => patchConfig && patchConfig({ productImages: v })} />
+          <ImageInput
+            multi
+            value={copyVideoFormConfig?.productImages}
+            onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+          />
         </Field>
       </div>
     </div>

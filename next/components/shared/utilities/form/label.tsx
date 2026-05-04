@@ -1,7 +1,7 @@
 import { FaAsterisk, FaInfoCircle } from "react-icons/fa";
 
 interface PropsType extends ReactProps {
-  text: string;
+  text: string | JSX.Element;
   description?: string;
   htmlFor?: string;
   tooltip?: string;

@@ -253,4 +253,5 @@ export enum ArtStyleMapEnum {
   GAME_2D = "Game_2D",
   DARK_GROTESQUE = "Dark_Grotesque",
   FLAT_SCIENCE = "Flat_Science",
+  MINECRAFT = "Minecraft",
 }

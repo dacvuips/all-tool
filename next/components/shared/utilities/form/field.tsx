@@ -1,15 +1,15 @@
+import DOMPurify from "dompurify";
 import { Children, cloneElement, MouseEventHandler, useEffect, useMemo, useState } from "react";
 import { Controller, useFormContext, useFormState } from "react-hook-form";
 import { Button, Label, Validation } from ".";
 import { useMemoCompare } from "../../../../lib/hooks/useMemoCompare";
 import { useUUID } from "../../../../lib/hooks/useUUID";
 import { useFormPropsContext } from "./form";
-import DOMPurify from "dompurify";
 
 export interface FieldProps extends ReactProps {
   name?: string;
   namePrefix?: string;
-  label?: string;
+  label?: string | JSX.Element;
   labelClassName?: string;
   tooltip?: string;
   error?: string;

@@ -174,7 +174,7 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
     1. 'visual_prompt':
        - Mô tả MỘT khung hình tĩnh.
        - Expand toàn bộ mô tả Character & Props (VERBATIM).
-       - Phong cách: ${findDesArtStyle}.
+       - Phong cách bắt buộc: ${findDesArtStyle}.
        - Tỉ lệ: ${aspectRatio} 
        - Bắt buộc thêm hiệu ứng thị giác, phù hợp với môi trường, cảnh vật, và nhân vật. Ví dụ: ánh sáng, màu sắc, hiệu ứng không khí, hiệu ứng chuyển động của nhân vật và cảnh vật,...
        - Ngôn ngữ: Tiếng Anh.
