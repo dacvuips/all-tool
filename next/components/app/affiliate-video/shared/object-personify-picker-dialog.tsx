@@ -10,11 +10,11 @@
  *  - Dialog shows a grid of server-managed ObjectToPersonify items (image + name)
  *  - Prompt field is NOT shown to customers
  *  - Click to select → sets name display + code as value
- *  - Also supports creating custom objects stored locally in IndexedDB
- *  - A Select dropdown to pick previously saved custom objects
+ *  - Customer can create custom objects saved via GraphQL API (with customerId)
+ *  - "Nhân vật của tôi" section shows customer's own characters with delete option
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CgSpinner } from "react-icons/cg";
@@ -23,6 +23,7 @@ import {
   RiArrowDropLeftLine,
   RiArrowLeftLine,
   RiBookletLine,
+  RiDeleteBin6Line,
   RiEdit2Line,
 } from "react-icons/ri";
 import { uploadImage } from "../../../../lib/helpers/image";
@@ -30,28 +31,10 @@ import { uploadImage } from "../../../../lib/helpers/image";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import {
-  Button,
-  Field,
-  ImageInput,
-  Input,
-  Label,
-  Select,
-  Textarea,
-} from "../../../shared/utilities/form";
-import { DB_NAME } from "../constants";
+import { Button, Field, ImageInput, Input, Label, Textarea } from "../../../shared/utilities/form";
 import { ObjectToPersonifyPublic, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
-import { useIndexedDB } from "../hook/useIndexedDB";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-
-export interface CustomPersonifyObject {
-  id: string;
-  name: string;
-  prompt: string;
-  images: string[];
-  createdAt: number;
-}
 
 export interface ObjectPersonifyPickerDialogProps {
   /** Current objectToPersonify value */
@@ -68,11 +51,6 @@ export interface ObjectPersonifyPickerDialogProps {
   name?: string;
 }
 
-// ── DB constants ───────────────────────────────────────────────────────────
-
-const CUSTOM_OBJECT_STORE = "custom-personify-objects";
-const CUSTOM_OBJECT_DB = DB_NAME.generateImage || "generate-image";
-
 const DEFAULT_PROMPT = `SYS Style Prompt Generator, Please describe the character in the image in the most detailed and complete manner possible (skin tone, hair color, description of eyes, nose, mouth, eyebrows, skin wrinkles, clothing stitching, accessories, dimensions, materials, colors of all parts, style, lighting, atmosphere, effects, 8k resolution, etc.). Do not use abbreviations, do not add creative elements, and describe every single part of the character.`;
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -87,8 +65,14 @@ export function ObjectPersonifyPickerDialog({
 }: ObjectPersonifyPickerDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
-  const { generateStyleText, generateImage, getActiveObjectToPersonifyList } =
-    useAffiliateVideoApi();
+  const {
+    generateStyleText,
+    generateImage,
+    getActiveObjectToPersonifyList,
+    getCustomerObjectToPersonifyList,
+    createCustomerObjectToPersonify,
+    deleteCustomerObjectToPersonify,
+  } = useAffiliateVideoApi();
 
   // ── Dialog state ──
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -106,34 +90,20 @@ export function ObjectPersonifyPickerDialog({
   // ── Loading states ──
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 
-  // ── Server-managed objects ──
+  // ── Server-managed objects (system) ──
   const [serverObjects, setServerObjects] = useState<ObjectToPersonifyPublic[]>([]);
   const [isLoadingServer, setIsLoadingServer] = useState(false);
+
+  // ── Customer's own objects ──
+  const [customerObjects, setCustomerObjects] = useState<ObjectToPersonifyPublic[]>([]);
+  const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
 
   // ── Selected display name (for showing in the input) ──
   const [selectedDisplayName, setSelectedDisplayName] = useState("");
 
-  // ── Custom objects from IndexedDB ──
-  const [customObjects, setCustomObjects] = useState<CustomPersonifyObject[]>([]);
-
-  const db = useIndexedDB<CustomPersonifyObject>(CUSTOM_OBJECT_STORE, CUSTOM_OBJECT_DB);
-
-  // ── Load custom objects on mount ──
-  useEffect(() => {
-    loadCustomObjects();
-  }, []);
-
-  const loadCustomObjects = useCallback(async () => {
-    try {
-      const all = await db.getAll();
-      setCustomObjects(all || []);
-    } catch {
-      setCustomObjects([]);
-    }
-  }, [db]);
-
-  // ── Load server objects when dialog opens ──
+  // ── Load server objects (system) ──
   const loadServerObjects = useCallback(async () => {
     setIsLoadingServer(true);
     try {
@@ -146,11 +116,18 @@ export function ObjectPersonifyPickerDialog({
     }
   }, [getActiveObjectToPersonifyList]);
 
-  // ── Build options from custom objects ──
-  const customOptions = customObjects.map((o) => ({
-    value: `custom_${o.id}`,
-    label: `✨ ${o.name}`,
-  }));
+  // ── Load customer objects ──
+  const loadCustomerObjects = useCallback(async () => {
+    setIsLoadingCustomer(true);
+    try {
+      const items = await getCustomerObjectToPersonifyList();
+      setCustomerObjects(items);
+    } catch {
+      setCustomerObjects([]);
+    } finally {
+      setIsLoadingCustomer(false);
+    }
+  }, [getCustomerObjectToPersonifyList]);
 
   // ── Reset form ──
   const resetForm = () => {
@@ -168,6 +145,7 @@ export function ObjectPersonifyPickerDialog({
     resetForm();
     setIsDialogOpen(true);
     loadServerObjects();
+    loadCustomerObjects();
   };
 
   // ── Generate object description via API ──
@@ -234,43 +212,8 @@ export function ObjectPersonifyPickerDialog({
     }
   };
 
-  // ── Save to IndexedDB ──
-  const saveCustomObject = useCallback(
-    async (obj: CustomPersonifyObject) => {
-      try {
-        await db.set(obj.id, obj);
-        await loadCustomObjects();
-      } catch (err) {
-        console.error("[ObjectPersonifyPickerDialog] saveCustomObject error:", err);
-        throw err;
-      }
-    },
-    [db, loadCustomObjects]
-  );
-
-  // ── Handle select change (custom objects from IndexedDB) ──
-  const handleSelectChange = (v: string) => {
-    if (!v) {
-      // Cleared selection
-      if (onChange) onChange("");
-      setSelectedDisplayName("");
-      return;
-    }
-
-    // Check if it's a custom object
-    if (v.startsWith("custom_")) {
-      const objId = v.replace("custom_", "");
-      const obj = customObjects.find((o) => o.id === objId);
-      if (obj && onChange) {
-        // Use the object's name as the value for objectToPersonify
-        onChange(obj.name);
-        setSelectedDisplayName(obj.name);
-      }
-    }
-  };
-
-  // ── Handle server object selection ──
-  const handleSelectServerObject = (item: ObjectToPersonifyPublic) => {
+  // ── Handle server/customer object selection ──
+  const handleSelectObject = (item: ObjectToPersonifyPublic) => {
     if (onChange) {
       // Pass the code as the objectToPersonify value
       onChange(item.code);
@@ -279,7 +222,32 @@ export function ObjectPersonifyPickerDialog({
     setIsDialogOpen(false);
   };
 
-  // ── Submit handler (custom object) ──
+  // ── Handle delete customer object ──
+  const handleDeleteCustomerObject = async (e: React.MouseEvent, item: ObjectToPersonifyPublic) => {
+    e.stopPropagation(); // Prevent card click (selection)
+    if (!confirm(t("Bạn có chắc muốn xoá nhân vật này?"))) return;
+
+    setIsDeletingId(item.id);
+    try {
+      const success = await deleteCustomerObjectToPersonify(item.id);
+      if (success) {
+        toast.success(t("Đã xoá nhân vật"));
+        // Remove from local state
+        setCustomerObjects((prev) => prev.filter((o) => o.id !== item.id));
+        // If currently selected, clear selection
+        if (value === item.code) {
+          if (onChange) onChange("");
+          setSelectedDisplayName("");
+        }
+      }
+    } catch {
+      toast.error(t("Không thể xoá nhân vật"));
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
+  // ── Submit handler (custom object → GraphQL API) ──
   const handleSubmit = async () => {
     // Validation
     if (!objectName.trim()) {
@@ -293,28 +261,26 @@ export function ObjectPersonifyPickerDialog({
 
     setIsSaving(true);
     try {
-      // Include the AI-generated image URL alongside reference images
-      const allImages = objectImageUrl ? [objectImageUrl, ...objectImages] : objectImages;
-
-      const newObj: CustomPersonifyObject = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      const result = await createCustomerObjectToPersonify({
         name: objectName.trim(),
         prompt: objectPrompt.trim(),
-        images: allImages,
-        createdAt: Date.now(),
-      };
+        imageUrl: objectImageUrl || undefined,
+      });
 
-      await saveCustomObject(newObj);
+      if (result) {
+        // Auto-select the new custom object
+        if (onChange) {
+          onChange(result.code);
+        }
+        setSelectedDisplayName(result.name);
 
-      // Auto-select the new custom object → set name as value
-      if (onChange) {
-        onChange(newObj.name);
+        // Add to local customer objects list
+        setCustomerObjects((prev) => [result, ...prev]);
+
+        toast.success(t("Đã lưu nhân vật tùy chỉnh"));
+        setIsDialogOpen(false);
+        resetForm();
       }
-      setSelectedDisplayName(newObj.name);
-
-      toast.success(t("Đã lưu đồ vật tùy chỉnh"));
-      setIsDialogOpen(false);
-      resetForm();
     } catch {
       toast.error(t("Không thể lưu. Vui lòng thử lại."));
     } finally {
@@ -325,23 +291,111 @@ export function ObjectPersonifyPickerDialog({
   // ── Validation flags ──
   const canSubmit = objectName.trim().length > 0 && objectPrompt.trim().length > 0;
 
+  const isLoading = isLoadingServer || isLoadingCustomer;
+
+  // ── Render object card (shared between system & customer grids) ──
+  const renderObjectCard = (item: ObjectToPersonifyPublic, options?: { showDelete?: boolean }) => {
+    const isSelected = value === item.code;
+    const isDeleting = isDeletingId === item.id;
+
+    return (
+      <div
+        key={item.id}
+        onClick={() => handleSelectObject(item)}
+        className={`
+          group relative cursor-pointer rounded-xl overflow-hidden
+          border-2 transition-all duration-200 hover:shadow-lg hover:scale-[1.02]
+          ${
+            isSelected
+              ? "border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200"
+              : "border-gray-200 hover:border-blue-300"
+          }
+          ${isDeleting ? "opacity-50 pointer-events-none" : ""}
+        `}
+      >
+        {/* Image */}
+        <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+          {item.imageUrl ? (
+            <img
+              src={item.imageUrl}
+              alt={item.name}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-4xl text-gray-300">
+              🎭
+            </div>
+          )}
+        </div>
+
+        {/* Name overlay */}
+        <div
+          className={`
+          px-2 py-2 text-center transition-colors duration-200
+          ${isSelected ? "bg-blue-50" : "bg-white group-hover:bg-blue-50/50"}
+        `}
+        >
+          <span
+            className={`
+            text-xs font-medium line-clamp-2 leading-tight
+            ${isSelected ? "text-blue-700" : "text-gray-700 group-hover:text-blue-600"}
+          `}
+          >
+            {item.name}
+          </span>
+        </div>
+
+        {/* Selected checkmark */}
+        {isSelected && (
+          <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
+            <svg
+              className="w-3 h-3 text-white"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={3}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        )}
+
+        {/* Delete button (customer objects only) */}
+        {options?.showDelete && (
+          <button
+            type="button"
+            onClick={(e) => handleDeleteCustomerObject(e, item)}
+            className="absolute top-1.5 left-1.5 w-6 h-6 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+            title={t("Xoá nhân vật")}
+          >
+            {isDeleting ? (
+              <CgSpinner className="animate-spin text-white text-xs" />
+            ) : (
+              <RiDeleteBin6Line className="text-white text-xs" />
+            )}
+          </button>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
-      {/* ── Field with pen icon + Textarea ── */}
+      {/* ── Field with pen icon + Input ── */}
       <Field
         noError={noError}
         name={name}
         label={
-          <span className="flex items-center gap-1.5">
+          <span className="flex items-center gap-1.5 justify-between w-full">
             {label || t("Nhân hoá đồ vật")}
-            <button
-              type="button"
+            <Button
+              outline
+              info
               onClick={openDialog}
-              className="inline-flex items-center justify-center w-5 h-5 rounded hover:bg-blue-100 transition-colors text-gray-500 hover:text-blue-600"
-              title={t("Chọn nhân vật nhân hoá")}
-            >
-              <RiEdit2Line className="text-sm" />
-            </button>
+              className="px-1 h-6"
+              text={t("Mẫu")}
+              icon={<RiEdit2Line className="text-sm" />}
+            />
           </span>
         }
       >
@@ -356,16 +410,6 @@ export function ObjectPersonifyPickerDialog({
               setSelectedDisplayName(v);
             }}
           />
-          {/* Quick-pick from saved custom objects */}
-          {customOptions.length > 0 && (
-            <Select
-              native
-              id="object-personify-select"
-              className="border-gray-200"
-              options={[{ value: "", label: t("-- Chọn đồ vật đã lưu --") }, ...customOptions]}
-              onChange={handleSelectChange}
-            />
-          )}
         </div>
       </Field>
 
@@ -379,7 +423,7 @@ export function ObjectPersonifyPickerDialog({
       >
         <Dialog.Body>
           <div className=" ">
-            {/* ── Server Objects Grid ── */}
+            {/* ── Back button when creating ── */}
             <div
               className={`flex items-center gap-2  w-full ${
                 showImageInput ? "justify-start" : "justify-end"
@@ -394,93 +438,52 @@ export function ObjectPersonifyPickerDialog({
                 />
               )}
             </div>
+
+            {/* ── Lists (system + customer objects) ── */}
             {!showImageInput &&
-              (isLoadingServer ? (
+              (isLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <CgSpinner className="animate-spin text-2xl text-blue-500" />
                   <span className="ml-2 text-sm text-gray-500">{t("Đang tải...")}</span>
                 </div>
-              ) : serverObjects.length > 0 ? (
-                <div className="w-full">
-                  <Label
-                    text={t("Danh sách nhân vật có sẵn")}
-                    className="text-sm font-semibold text-gray-700 mb-3"
-                  />
-                  <div className="grid grid-cols-3 gap-3 max-h-[400px] overflow-y-auto pr-1">
-                    {serverObjects.map((item) => {
-                      const isSelected = value === item.code;
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => handleSelectServerObject(item)}
-                          className={`
-                            group relative cursor-pointer rounded-xl overflow-hidden
-                            border-2 transition-all duration-200 hover:shadow-lg hover:scale-[1.02]
-                            ${
-                              isSelected
-                                ? "border-blue-500 shadow-md shadow-blue-100 ring-2 ring-blue-200"
-                                : "border-gray-200 hover:border-blue-300"
-                            }
-                          `}
-                        >
-                          {/* Image */}
-                          <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
-                            {item.imageUrl ? (
-                              <img
-                                src={item.imageUrl}
-                                alt={item.name}
-                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center text-4xl text-gray-300">
-                                🎭
-                              </div>
-                            )}
-                          </div>
+              ) : (
+                <div className="w-full space-y-4">
+                  {/* ── Customer Objects Section ("Nhân vật của tôi") ── */}
+                  {customerObjects.length > 0 && (
+                    <div>
+                      <Label
+                        text={t("Nhân vật của tôi")}
+                        className="text-sm font-semibold text-purple-700 mb-3"
+                      />
+                      <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1">
+                        {customerObjects.map((item) =>
+                          renderObjectCard(item, { showDelete: true })
+                        )}
+                      </div>
+                    </div>
+                  )}
 
-                          {/* Name overlay */}
-                          <div
-                            className={`
-                            px-2 py-2 text-center transition-colors duration-200
-                            ${isSelected ? "bg-blue-50" : "bg-white group-hover:bg-blue-50/50"}
-                          `}
-                          >
-                            <span
-                              className={`
-                              text-xs font-medium line-clamp-2 leading-tight
-                              ${
-                                isSelected
-                                  ? "text-blue-700"
-                                  : "text-gray-700 group-hover:text-blue-600"
-                              }
-                            `}
-                            >
-                              {item.name}
-                            </span>
-                          </div>
+                  {/* ── Server Objects Section ("Nhân vật có sẵn") ── */}
+                  {serverObjects.length > 0 && (
+                    <div>
+                      <Label
+                        text={t("Danh sách nhân vật có sẵn")}
+                        className="text-sm font-semibold text-gray-700 mb-3"
+                      />
+                      <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1">
+                        {serverObjects.map((item) => renderObjectCard(item))}
+                      </div>
+                    </div>
+                  )}
 
-                          {/* Selected checkmark */}
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center shadow-sm">
-                              <svg
-                                className="w-3 h-3 text-white"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                                strokeWidth={3}
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                  {/* Empty state */}
+                  {serverObjects.length === 0 && customerObjects.length === 0 && (
+                    <div className="text-center py-6 text-sm text-gray-400">
+                      {t("Chưa có nhân vật nhân hoá nào")}
+                    </div>
+                  )}
+
+                  {/* ── Create new button ── */}
                   <div className="w-full mt-4 flex items-center justify-center  ">
                     <Button
                       primary
@@ -490,10 +493,6 @@ export function ObjectPersonifyPickerDialog({
                       onClick={() => setShowImageInput(!showImageInput)}
                     />
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-6 text-sm text-gray-400">
-                  {t("Chưa có nhân vật nhân hoá nào")}
                 </div>
               ))}
 
@@ -611,6 +610,7 @@ export function ObjectPersonifyPickerDialog({
                     <div className="flex items-center gap-2">
                       <Button
                         info={!showPrompt}
+                        disabled={isGenerating || isGeneratingImage}
                         onClick={() => setShowPrompt(!showPrompt)}
                         className={`px-2 whitespace-nowrap rounded-lg ${
                           showPrompt ? "text-danger" : ""

@@ -306,6 +306,25 @@ export interface UseAffiliateVideoApiReturn {
    * Trả về danh sách KHÔNG có prompt (dành cho customer).
    */
   getActiveObjectToPersonifyList: () => Promise<ObjectToPersonifyPublic[]>;
+
+  /**
+   * Lấy danh sách nhân vật tùy chỉnh của customer hiện tại.
+   */
+  getCustomerObjectToPersonifyList: () => Promise<ObjectToPersonifyPublic[]>;
+
+  /**
+   * Customer tạo nhân vật tùy chỉnh mới.
+   */
+  createCustomerObjectToPersonify: (data: {
+    name: string;
+    prompt?: string;
+    imageUrl?: string;
+  }) => Promise<ObjectToPersonifyPublic | undefined>;
+
+  /**
+   * Customer xoá nhân vật tùy chỉnh của mình.
+   */
+  deleteCustomerObjectToPersonify: (id: string) => Promise<boolean>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -959,6 +978,113 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     }
   }, []);
 
+  // ── getCustomerObjectToPersonifyList – lấy danh sách nhân vật tùy chỉnh của customer ──
+  const getCustomerObjectToPersonifyList = useCallback(async (): Promise<
+    ObjectToPersonifyPublic[]
+  > => {
+    try {
+      const res = await fetch("/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `query { getCustomerObjectToPersonifyList { id name imageUrl code isActive } }`,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error("[getCustomerObjectToPersonifyList] HTTP error:", res.status);
+        return [];
+      }
+
+      const json = await res.json();
+      if (json.errors?.length) {
+        console.error("[getCustomerObjectToPersonifyList] GraphQL errors:", json.errors);
+        return [];
+      }
+
+      return (json.data?.getCustomerObjectToPersonifyList || []) as ObjectToPersonifyPublic[];
+    } catch (err: any) {
+      console.error("[getCustomerObjectToPersonifyList] Error:", err);
+      return [];
+    }
+  }, []);
+
+  // ── createCustomerObjectToPersonify – customer tạo nhân vật tùy chỉnh ──
+  const createCustomerObjectToPersonify = useCallback(
+    async (data: {
+      name: string;
+      prompt?: string;
+      imageUrl?: string;
+    }): Promise<ObjectToPersonifyPublic | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerObject($data: CreateCustomerObjectToPersonifyInput!) {
+              createCustomerObjectToPersonify(data: $data) { id name imageUrl code isActive }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerObjectToPersonify] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerObjectToPersonify] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo nhân vật");
+          return undefined;
+        }
+
+        return json.data?.createCustomerObjectToPersonify as ObjectToPersonifyPublic;
+      } catch (err: any) {
+        console.error("[createCustomerObjectToPersonify] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── deleteCustomerObjectToPersonify – customer xoá nhân vật tùy chỉnh ──
+  const deleteCustomerObjectToPersonify = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerObject($id: ID!) {
+              deleteCustomerObjectToPersonify(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerObjectToPersonify] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerObjectToPersonify] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá nhân vật");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerObjectToPersonify] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -976,5 +1102,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     analyzeVideoForCopy,
     generateStyleText,
     getActiveObjectToPersonifyList,
+    getCustomerObjectToPersonifyList,
+    createCustomerObjectToPersonify,
+    deleteCustomerObjectToPersonify,
   };
 }

@@ -6,6 +6,8 @@ const schema = gql`
     getOneObjectToPersonify(id: ID!): ObjectToPersonify
     "Lấy danh sách nhân vật nhân hoá đang active (dành cho customer)"
     getActiveObjectToPersonifyList: [ObjectToPersonifyPublic]
+    "Lấy danh sách nhân vật tùy chỉnh của customer hiện tại"
+    getCustomerObjectToPersonifyList: [ObjectToPersonifyPublic]
     # Add Query
   }
 
@@ -13,7 +15,20 @@ const schema = gql`
     createObjectToPersonify(data: CreateObjectToPersonifyInput!): ObjectToPersonify
     updateObjectToPersonify(id: ID!, data: UpdateObjectToPersonifyInput!): ObjectToPersonify
     deleteOneObjectToPersonify(id: ID!): ObjectToPersonify
+    "Customer tạo nhân vật tùy chỉnh (tự động gán customerId)"
+    createCustomerObjectToPersonify(data: CreateCustomerObjectToPersonifyInput!): ObjectToPersonifyPublic
+    "Customer xoá nhân vật tùy chỉnh của mình"
+    deleteCustomerObjectToPersonify(id: ID!): ObjectToPersonifyPublic
     # Add Mutation
+  }
+
+  input CreateCustomerObjectToPersonifyInput {
+    "Tên nhân vật nhân hoá"
+    name: String!
+    "Prompt mô tả nhân vật"
+    prompt: String
+    "URL ảnh đại diện"
+    imageUrl: String
   }
 
   input CreateObjectToPersonifyInput {
