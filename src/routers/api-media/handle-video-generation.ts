@@ -54,6 +54,8 @@ export async function handleVideoGeneration(
     sessionId: captchaData.sessionId,
     projectId: captchaData.ProjectID,
     accessToken: captchaData.accessToken,
+    batchId: crypto.randomUUID(),
+    Seed: captchaData.Seed,
   });
 
   await pollAndExtractVideo({
@@ -77,6 +79,9 @@ interface CallAisandboxParams {
   sessionId: string;
   projectId: string;
   accessToken: string;
+  useRelaxedModel?: boolean;
+  batchId?: string;
+  Seed?: string;
 }
 
 /**
@@ -111,6 +116,13 @@ function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
   const input = aspectRatio || "9:16";
 
   return input === "16:9" ? "VIDEO_ASPECT_RATIO_LANDSCAPE" : "VIDEO_ASPECT_RATIO_PORTRAIT";
+}
+
+function buildVideoModelKey(params: CallAisandboxParams): string {
+  const base = `veo_3_1_t2v_fast_${
+    params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
+  }_relaxed`;
+  return base;
 }
 
 function buildClientContext(params: CallAisandboxParams) {
@@ -172,8 +184,8 @@ async function callTextOnlyAPI(
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
 
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
 
   const payload = {
     mediaGenerationContext: {
@@ -190,9 +202,7 @@ async function callTextOnlyAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: `veo_3_1_i2v_s_fast_${
-          params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
-        }`,
+        videoModelKey: buildVideoModelKey(params),
         metadata: {},
       },
     ],
@@ -212,13 +222,13 @@ async function callStartImageAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
 
   const payload = {
     mediaGenerationContext: {
       batchId,
-      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
+      // audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
     },
     clientContext: buildClientContext(params),
     requests: [
@@ -230,9 +240,7 @@ async function callStartImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: `veo_3_1_i2v_s_fast_${
-          params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
-        }`,
+        videoModelKey: buildVideoModelKey(params),
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -242,7 +250,6 @@ async function callStartImageAPI(
     useV2ModelConfig: true,
   };
 
-  console.log(payload.requests);
   const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage";
   return sendAndParseResponse(endpoint, payload, params.accessToken);
 }
@@ -275,9 +282,7 @@ async function callStartAndEndImageAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: `veo_3_1_i2v_s_fast_${
-          params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
-        }`,
+        videoModelKey: buildVideoModelKey(params),
         metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
@@ -322,9 +327,7 @@ async function callReferenceImagesAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: `veo_3_1_i2v_s_fast_${
-          params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
-        }`,
+        videoModelKey: buildVideoModelKey(params),
         metadata: {},
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,

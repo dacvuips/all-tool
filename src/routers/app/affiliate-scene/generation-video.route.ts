@@ -45,6 +45,7 @@ export default [
           sessionId,
           ProjectID: projectId,
           accessToken,
+          Seed,
         } = await fetchCaptchaData({
           type: ActionEnum.VIDEO_GENERATION,
           logPrefix: "generation-video",
@@ -70,6 +71,8 @@ export default [
           sessionId,
           projectId,
           accessToken,
+          Seed,
+          batchId: crypto.randomUUID(),
         });
 
         await pollAndExtractVideo({

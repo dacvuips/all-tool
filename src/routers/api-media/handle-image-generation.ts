@@ -52,6 +52,8 @@ export async function handleImageGeneration(
     sessionId: captchaData.sessionId,
     projectId: captchaData.ProjectID,
     accessToken: captchaData.accessToken,
+    batchId: crypto.randomUUID(),
+    Seed: captchaData.Seed,
   });
 
   // Tăng usedQuantity sau khi generate image thành công (atomic $inc, tìm theo API key)
@@ -68,6 +70,8 @@ interface CallAisandboxParams {
   projectId: string;
   accessToken: string;
   noText?: boolean;
+  batchId?: string;
+  Seed?: string;
 }
 
 /**
@@ -165,8 +169,8 @@ async function sendAndParseResponse(
 
 async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
   const imageAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
   const clientContext = buildClientContext(params);
 
   const payload = {
@@ -195,8 +199,8 @@ async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
 
 async function callImageToImageAPI(params: CallAisandboxParams): Promise<void> {
   const imageAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
   const clientContext = buildClientContext(params);
 
   const payload = {
