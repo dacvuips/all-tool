@@ -299,7 +299,7 @@ export interface UseAffiliateVideoApiReturn {
   /**
    * Gọi API generate style description text từ images.
    */
-  generateStyleText: (images: string[]) => Promise<string>;
+  generateStyleText: (images: string[], prompt?: string) => Promise<string>;
 
   /**
    * Lấy danh sách ObjectToPersonify đang active từ GraphQL.
@@ -908,13 +908,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
   // ── generateStyleText – gọi API tạo mô tả phong cách từ AI ──
   const generateStyleText = useCallback(
-    async (images: string[]): Promise<string> => {
+    async (images: string[], prompt?: string): Promise<string> => {
       const res = await fetch("/api/app/generate-style-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images }),
+        body: JSON.stringify({ images, prompt }),
       });
-      console.log(res);
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -923,43 +922,42 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         throw new Error(message);
       }
 
-      const data = await res.json();
-      return data?.text || data?.result || "";
+      const result = await res.json();
+      return result?.data?.text || result?.text || result?.data?.result || result?.result || "";
     },
     [toast]
   );
 
   // ── getActiveObjectToPersonifyList – lấy danh sách nhân vật nhân hoá active từ GraphQL ──
-  const getActiveObjectToPersonifyList = useCallback(
-    async (): Promise<ObjectToPersonifyPublic[]> => {
-      try {
-        const res = await fetch("/graphql", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: `query { getActiveObjectToPersonifyList { id name imageUrl code isActive } }`,
-          }),
-        });
+  const getActiveObjectToPersonifyList = useCallback(async (): Promise<
+    ObjectToPersonifyPublic[]
+  > => {
+    try {
+      const res = await fetch("/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `query { getActiveObjectToPersonifyList { id name imageUrl code isActive } }`,
+        }),
+      });
 
-        if (!res.ok) {
-          console.error("[getActiveObjectToPersonifyList] HTTP error:", res.status);
-          return [];
-        }
-
-        const json = await res.json();
-        if (json.errors?.length) {
-          console.error("[getActiveObjectToPersonifyList] GraphQL errors:", json.errors);
-          return [];
-        }
-
-        return (json.data?.getActiveObjectToPersonifyList || []) as ObjectToPersonifyPublic[];
-      } catch (err: any) {
-        console.error("[getActiveObjectToPersonifyList] Error:", err);
+      if (!res.ok) {
+        console.error("[getActiveObjectToPersonifyList] HTTP error:", res.status);
         return [];
       }
-    },
-    []
-  );
+
+      const json = await res.json();
+      if (json.errors?.length) {
+        console.error("[getActiveObjectToPersonifyList] GraphQL errors:", json.errors);
+        return [];
+      }
+
+      return (json.data?.getActiveObjectToPersonifyList || []) as ObjectToPersonifyPublic[];
+    } catch (err: any) {
+      console.error("[getActiveObjectToPersonifyList] Error:", err);
+      return [];
+    }
+  }, []);
 
   return {
     generateScene,

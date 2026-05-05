@@ -36,8 +36,11 @@ export default [
 
         const body = req.body as {
           images?: string[];
+          prompt?: string;
         };
-        const prompt = `
+        const prompt =
+          body.prompt ||
+          `
 Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: Phân tích các bức ảnh được gửi lên và từ phân tích ấy hãy tạo cho tôi 1 prompt để tôi có thể điều chỉnh style của hình ảnh theo phong cách của các bức ảnh đó. Quan trọng mô tả thật chi tiết (con người , cảnh vật , đồ vật, con thú , vật phẩm, đường nét, chất liệu, màu sắc, ánh sáng, và tất cả các chi tiết khác) giống với các bức ảnh được gửi lên, mục đích là tạo ra ảnh có phong cách giống như các bức ảnh được gửi lên. kết quả là Prompt tổng thể chi tiết nhất .
 Trả về kết quả JSON theo cấu trúc đã định nghĩa.
 `;
@@ -60,7 +63,7 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
           clients,
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-2.5-flash",
+              model: "gemini-3-flash-preview",
               contents: [
                 {
                   role: "user",

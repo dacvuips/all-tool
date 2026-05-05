@@ -27,6 +27,8 @@ const schema = gql`
     code: String!
     "Trạng thái hoạt động"
     isActive: Boolean
+    "ID khách hàng sở hữu"
+    customerId: ID
   }
 
   input UpdateObjectToPersonifyInput {
@@ -40,6 +42,8 @@ const schema = gql`
     code: String
     "Trạng thái hoạt động"
     isActive: Boolean
+    "ID khách hàng sở hữu"
+    customerId: ID
   }
 
   "Đầy đủ thông tin (admin/staff)"
@@ -58,6 +62,8 @@ const schema = gql`
     code: String
     "Trạng thái hoạt động"
     isActive: Boolean
+    "ID khách hàng sở hữu"
+    customerId: ID
   }
 
   "Thông tin công khai cho customer (KHÔNG có prompt)"

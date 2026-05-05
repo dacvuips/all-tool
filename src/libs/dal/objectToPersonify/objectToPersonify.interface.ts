@@ -11,4 +11,6 @@ export type IObjectToPersonify = TimestampEntity & {
   code?: string;
   /** Trạng thái hoạt động */
   isActive?: boolean;
+  /** ID khách hàng sở hữu */
+  customerId?: string;
 };

@@ -320,6 +320,13 @@ const useSidebarMenuConstants = () => {
         },
 
         {
+          title: t("Nhân vật"),
+          path: "/admin/management/object-to-personify",
+          icon: <RiUserStarLine />,
+          scope: SCOPES.VIEW_CUSTOMER,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Banner"),
           path: "/admin/management/banners",
           icon: <RiLayoutTop2Line />,
