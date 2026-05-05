@@ -340,7 +340,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const { customer } = useAuth();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
-    async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string }) => {
+    async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string; objectToPersonifyCode?: string }) => {
       const res = await fetch("/api/app/generation-scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -396,7 +396,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
-      const result = await callGenerationSceneApi({ config: data });
+      const result = await callGenerationSceneApi({ config: data, objectToPersonifyCode: data.objectToPersonify });
       if (!result) return undefined;
       const scriptResult: ScriptData = {
         ...result.data,
@@ -548,6 +548,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({
         config,
         text,
+        objectToPersonifyCode: config.objectToPersonify,
       });
       if (!result) return undefined;
       const scriptResult: ScriptData = result.data;

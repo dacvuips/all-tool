@@ -11,6 +11,7 @@ import {
   incrementRequestCount,
   interpolateTemplate,
 } from "./_shared";
+import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 
 export default [
   {
@@ -25,6 +26,7 @@ export default [
         const body = req.body as {
           config: AffiliateVideoFormConfig;
           text: string;
+          objectToPersonifyCode?: string;
         };
 
         if (!body?.config) {
@@ -33,6 +35,23 @@ export default [
 
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
+
+        // ── Resolve objectToPersonify prompt from DB ──
+        if (body.objectToPersonifyCode) {
+          const objectDoc = await ObjectToPersonifyModel.findOne({
+            code: body.objectToPersonifyCode,
+          }).lean();
+          if (objectDoc) {
+            // System object (no customerId) → must be active
+            if (!objectDoc.customerId && !objectDoc.isActive) {
+              return res.status(400).json({ message: "Nhân vật không còn hoạt động" });
+            }
+            // Replace config value with the actual prompt from DB
+            if (objectDoc.prompt) {
+              body.config.objectToPersonify = objectDoc.prompt;
+            }
+          }
+        }
 
         const clients = await getAvailableGeminiClients();
         const storyModeTypes = req?.body?.config?.storyModeType;

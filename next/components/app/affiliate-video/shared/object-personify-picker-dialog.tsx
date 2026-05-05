@@ -32,6 +32,7 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button, Field, ImageInput, Input, Label, Textarea } from "../../../shared/utilities/form";
+import { Img } from "../../../shared/utilities/misc";
 import { ObjectToPersonifyPublic, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -316,7 +317,8 @@ export function ObjectPersonifyPickerDialog({
         {/* Image */}
         <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
           {item.imageUrl ? (
-            <img
+            <Img
+              showImageOnClick
               src={item.imageUrl}
               alt={item.name}
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
@@ -420,6 +422,9 @@ export function ObjectPersonifyPickerDialog({
         title={t("Chọn nhân vật nhân hoá")}
         width="640px"
         maxWidth="95vw"
+        onOverlayClick={() => {
+          // Tắt overlay click
+        }}
       >
         <Dialog.Body>
           <div className=" ">
@@ -432,7 +437,7 @@ export function ObjectPersonifyPickerDialog({
               {showImageInput && (
                 <Button
                   icon={<RiArrowLeftLine />}
-                  text={t("Quay lại")}
+                  text={t("Quay lại danh sách")}
                   className="px-0 h-8"
                   onClick={() => setShowImageInput(!showImageInput)}
                 />
@@ -514,7 +519,7 @@ export function ObjectPersonifyPickerDialog({
                               placeholder={t("Link Ảnh nhân vật nhân hóa")}
                             />
                             {isGeneratingImage && (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 rounded-lg z-10">
+                              <div className="absolute top-20 inset-0 flex flex-col items-center justify-center bg-white/70 rounded-lg z-10">
                                 <CgSpinner className="animate-spin text-2xl text-blue-500" />
                                 <span className="mt-2 text-sm text-blue-500 font-medium">
                                   {t("Đang tạo ảnh nhân vật từ AI...")}
@@ -547,7 +552,7 @@ export function ObjectPersonifyPickerDialog({
                               onChange={(v) => setObjectPrompt(v)}
                             />
                             {isGenerating && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg">
+                              <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg top-5">
                                 <div className="flex items-center gap-2 text-sm text-blue-500">
                                   <CgSpinner className="animate-spin text-lg" />
                                   {t("Đang tạo prompt...")}
