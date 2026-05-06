@@ -129,7 +129,7 @@ export function ImageInput({
         }
         let res = await Promise.all(tasks);
         let images = res.map((x) => x.link);
-        const newImages = [...(value as string[]), ...images];
+        const newImages = [...((value as string[]) || []), ...images];
         setValue(newImages);
         if (props.onChange) props.onChange(newImages);
       } catch (err) {
