@@ -80,7 +80,13 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
   const wrappedSubmit = (data: any, promptText?: string) => {
-    const mergedData = { ...data, batchSize: videoConfig?.batchSize ?? 8, storyModeType };
+    // Merge objectToPersonifyCode from provider state – react-hook-form doesn't track this field
+    const mergedData = {
+      ...data,
+      batchSize: videoConfig?.batchSize ?? 8,
+      storyModeType,
+      objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
+    };
     if (type === TAB_TYPE.single) {
       const { batchSize, ...rest } = mergedData;
       return handleSubmit?.(rest, promptText);

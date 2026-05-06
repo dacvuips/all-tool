@@ -3,6 +3,7 @@ import logger from "../../../helpers/logger";
 import redis from "../../../helpers/redis";
 import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
+import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
 import { CaptchaResponseData } from "../../helpers/validateApiKey";
@@ -314,7 +315,9 @@ export async function callWithKeyRotation<T>(
       }
 
       if (isServiceUnavailableError(err)) {
-        logger.warn(`[${label}] ${keyLabel} bị 503: ${err?.message}. Chờ 3-6s rồi chuyển sang key tiếp theo.`);
+        logger.warn(
+          `[${label}] ${keyLabel} bị 503: ${err?.message}. Chờ 3-6s rồi chuyển sang key tiếp theo.`
+        );
         const delayMs = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         keyIdx = (keyIdx + 1) % entries.length;
@@ -468,6 +471,37 @@ export async function checkRequestLimit(customerId: string): Promise<void> {
 /** Tăng requestCount lên 1 sau khi generation text thành công */
 export async function incrementRequestCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.requestCount": 1 } });
+}
+
+/**
+ * Resolve objectToPersonify prompt from DB.
+ * - Nếu FE chưa gửi objectToPersonify → dùng objectDoc.prompt
+ * - Nếu FE gửi objectToPersonify khác objectDoc.name → dùng objectDoc.name
+ * - Nếu FE gửi objectToPersonify trùng objectDoc.name → dùng objectDoc.prompt (hiện tại)
+ */
+export async function resolveObjectToPersonifyPrompt(opts: {
+  objectToPersonifyCode?: string;
+  objectToPersonify?: string;
+}): Promise<{ prompt?: string; error?: { status: number; message: string } }> {
+  if (!opts.objectToPersonifyCode) {
+    return { prompt: opts.objectToPersonify };
+  }
+
+  const objectDoc = await ObjectToPersonifyModel.findOne({
+    code: opts.objectToPersonifyCode,
+  }).lean();
+
+  if (!objectDoc) {
+    return { prompt: opts.objectToPersonify };
+  }
+
+  // Nếu FE gửi objectToPersonify và khác objectDoc.name → dùng objectDoc.name
+  if (opts.objectToPersonify && opts.objectToPersonify !== objectDoc.name) {
+    return { prompt: opts.objectToPersonify };
+  }
+
+  // FE chưa gửi hoặc trùng objectDoc.name → dùng objectDoc.prompt (current behavior)
+  return { prompt: objectDoc.prompt || opts.objectToPersonify };
 }
 
 export interface AffiliateVideoFormConfig {

@@ -2,7 +2,7 @@ import { Type } from "@google/genai";
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
-import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
+
 import { Context } from "../../../libs/graphql";
 import { ArtStyleMap } from "../constanst";
 import {
@@ -10,6 +10,7 @@ import {
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
+  resolveObjectToPersonifyPrompt,
 } from "./_shared";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
@@ -128,7 +129,7 @@ function buildVideoAnalysisPrompt(opts: {
   const findDesArtStyle = ArtStyleMap.find((item) => item.value === artStyle)?.des;
 
   const objectToPersonifySection = opts.objectToPersonifyPrompt
-    ? `\n\n*** NHÂN VẬT NHÂN HOÁ (OBJECT TO PERSONIFY) ***\nNhân vật chính trong video cần được thể hiện dưới dạng nhân hoá từ vật thể sau. Hãy sử dụng mô tả này làm Visual DNA chính cho nhân vật:\n${opts.objectToPersonifyPrompt}\n`
+    ? `${opts.objectToPersonifyPrompt}`
     : "";
 
   return `
@@ -184,7 +185,8 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
        - Tỉ lệ: ${aspectRatio} 
        - Bắt buộc thêm hiệu ứng thị giác, phù hợp với môi trường, cảnh vật, và nhân vật. Ví dụ: ánh sáng, màu sắc, hiệu ứng không khí, hiệu ứng chuyển động của nhân vật và cảnh vật,...
        - Ngôn ngữ: Tiếng Anh.
-       ${objectToPersonifySection}  
+       - Nhân vật nhân hoá bắt buộc: ${objectToPersonifySection}  
+       - Mood:${opts.mood}
 
     2. 'motion_description' (Cho Animator/Runway Gen-2):
        - Mô tả chuyển động phải dùng TÊN NHÂN VẬT cụ thể.
@@ -206,13 +208,14 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
 
     *** CELEBRITY / PUBLIC FIGURE BYPASS (CRITICAL — HIGHEST PRIORITY) ***
     Image AI BLOCKS generation of real celebrities, politicians, and public figures by name.
+    ${objectToPersonifySection}
     If the video contains ANY recognizable real person (politician, celebrity, athlete, influencer, historical figure), you MUST:
     1. NEVER use their real full name in visual_prompt or any image-related field.
     2. REPLACE the name with an ABBREVIATED ALIAS (e.g., "Donald Trump" → "Mr. Dn", "Elon Musk" → "Mr. El").
     3. ALWAYS include a DETAILED PHYSICAL DESCRIPTION (40-60 words) of the person's actual appearance instead.
     4. In original_content and translated_content (dialogue), you MAY use the real name.
     5. In the characters array, use the alias as "name" and provide the full physical description as "description".
-    
+    6. Nếu có yêu cầu về nhân vật nhân hoá (objectToPersonify), hãy ưu tiên xử lý objectToPersonify và sử dụng mô tả đó làm Visual DNA cho nhân vật, thay thế hoàn toàn việc xử lý thông tin nhân vật thông thường, giữ đồ vật và môi trường xung quanh như video gốc chỉ thây đổi "Nhân Vật" (objectToPersonify).
 
 Trả về kết quả JSON theo cấu trúc đã định nghĩa (bao gồm danh sách 'characters', 'props' và 'scenes').
 `;
@@ -237,6 +240,7 @@ export default [
           aspectRatio?: string;
           productImages?: string[];
           objectToPersonifyCode?: string;
+          objectToPersonify?: string;
         };
 
         if (!body?.videoBase64) {
@@ -250,19 +254,16 @@ export default [
         const clients = await getAvailableGeminiClients();
 
         // ── Resolve objectToPersonify prompt from DB ──
-        let objectToPersonifyPrompt: string | undefined;
-        if (body.objectToPersonifyCode) {
-          const objectDoc = await ObjectToPersonifyModel.findOne({
-            code: body.objectToPersonifyCode,
-          }).lean();
-          if (objectDoc) {
-            if (!objectDoc.customerId && !objectDoc.isActive) {
-              return res.status(400).json({ message: "Nhân vật không còn hoạt động" });
-            }
-            if (objectDoc.prompt) {
-              objectToPersonifyPrompt = objectDoc.prompt;
-            }
-          }
+        const { prompt: objectToPersonifyPrompt, error: objectError } =
+          await resolveObjectToPersonifyPrompt({
+            objectToPersonifyCode: body.objectToPersonifyCode,
+            objectToPersonify: body.objectToPersonify,
+          });
+        if (objectError) {
+          return res.status(objectError.status).json({ message: objectError.message });
+        }
+        if (objectToPersonifyPrompt) {
+          body.objectToPersonify = objectToPersonifyPrompt;
         }
 
         // Build product image reference text

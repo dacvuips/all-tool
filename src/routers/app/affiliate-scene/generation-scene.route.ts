@@ -10,8 +10,8 @@ import {
   getAvailableGeminiClients,
   incrementRequestCount,
   interpolateTemplate,
+  resolveObjectToPersonifyPrompt,
 } from "./_shared";
-import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 
 export default [
   {
@@ -37,20 +37,17 @@ export default [
         await checkRequestLimit(context.id);
 
         // ── Resolve objectToPersonify prompt from DB ──
-        if (body.objectToPersonifyCode) {
-          const objectDoc = await ObjectToPersonifyModel.findOne({
-            code: body.objectToPersonifyCode,
-          }).lean();
-          if (objectDoc) {
-            // System object (no customerId) → must be active
-            if (!objectDoc.customerId && !objectDoc.isActive) {
-              return res.status(400).json({ message: "Nhân vật không còn hoạt động" });
-            }
-            // Replace config value with the actual prompt from DB
-            if (objectDoc.prompt) {
-              body.config.objectToPersonify = objectDoc.prompt;
-            }
-          }
+        const { prompt: resolvedPersonifyPrompt, error: objectError } =
+          await resolveObjectToPersonifyPrompt({
+            objectToPersonifyCode: body.objectToPersonifyCode,
+            objectToPersonify: body.config.objectToPersonify,
+          });
+
+        if (objectError) {
+          return res.status(objectError.status).json({ message: objectError.message });
+        }
+        if (resolvedPersonifyPrompt) {
+          body.config.objectToPersonify = resolvedPersonifyPrompt;
         }
 
         const clients = await getAvailableGeminiClients();

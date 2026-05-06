@@ -300,6 +300,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
       mood?: string;
       aspectRatio?: string;
       productImages?: string[];
+      objectToPersonify?: string;
       objectToPersonifyCode?: string;
     }) => {
       const res = await fetch("/api/app/copy-video-analysis/", {
@@ -368,7 +369,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
-        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        objectToPersonify: data.objectToPersonify,
+        objectToPersonifyCode: data.objectToPersonifyCode,
       });
       if (!result) return undefined;
 
