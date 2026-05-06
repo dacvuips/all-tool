@@ -318,6 +318,9 @@ export const AffiliateVideoRightPanel = () => {
                 disabled: (s as any).disabled ?? false,
                 voiceDisable: (s as any).voiceDisable ?? false,
                 audio: s.audio || "",
+                noText: (s as any).noText ?? false,
+                product_image_prompt: (s as any).product_image_prompt ?? "",
+                selectedProductImages: (s as any).selectedProductImages ?? [],
               }))}
               storyModeType={scriptData?.storyModeType}
               characters={[]}

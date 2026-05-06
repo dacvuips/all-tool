@@ -42,7 +42,12 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-export type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio" | "product_image_prompt";
+export type EditField =
+  | "imageGenPrompt"
+  | "motionPrompt"
+  | "dialogue"
+  | "audio"
+  | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -352,7 +357,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             [DIALOGUE]:
           </span>
         )}
-
         {/* Product Select Image */}
         {productImages.length > 0 && (
           <div className="relative mt-1.5" onMouseEnter={() => setHoveredField(null)}>
