@@ -514,6 +514,20 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     }
   };
 
+  /** Update selected product images for a scene and persist to IndexedDB */
+  const handleUpdateSelectedProductImages = async (sceneId: string, images: string[]) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, selectedProductImages: images } : s
+    );
+    setSceneList(updated);
+    try {
+      const current = await db.get(CACHE_KEY.lastScript);
+      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+    } catch (err) {
+      console.error("[handleUpdateSelectedProductImages] Failed to persist to IndexedDB:", err);
+    }
+  };
+
   if (sceneList.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -609,6 +623,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 onToggleDisable={handleToggleDisable}
                 onToggleVoiceDisable={handleToggleVoiceDisable}
                 onToggleNoText={handleToggleNoText}
+                onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
               />
             ))}
           </tbody>

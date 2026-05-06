@@ -23,6 +23,8 @@ interface UseSceneMediaParams {
   /** Scene hiện tại */
   scene: SceneScript;
   nextSceneId?: string;
+  /** Danh sách URL ảnh sản phẩm được chọn cho scene này */
+  selectedProductImages?: string[];
   noText?: boolean;
 }
 
@@ -75,7 +77,7 @@ export interface UseSceneMediaReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useSceneMedia({ scene, nextSceneId, noText }: UseSceneMediaParams): UseSceneMediaReturn {
+export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noText }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
 
@@ -322,11 +324,39 @@ export function useSceneMedia({ scene, nextSceneId, noText }: UseSceneMediaParam
     startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
 
     try {
+      // Convert selected product images to base64 for API
+      const additionalImages: { imageBytes: string; mimeType: string }[] = [];
+      if (selectedProductImages?.length) {
+        for (const imgUrl of selectedProductImages) {
+          try {
+            const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
+            if (dataMatch) {
+              additionalImages.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
+            } else {
+              const resp = await fetch(imgUrl);
+              const blob = await resp.blob();
+              const base64 = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve((reader.result as string).split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+              });
+              additionalImages.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
+            }
+          } catch (err) {
+            console.warn("[handleGenerateImage] Failed to convert product image:", imgUrl, err);
+          }
+        }
+      }
+
       const result = await generateImage({
         sceneId: scene.id,
         prompt: scene.imageGenPrompt,
         aspectRatio: scriptData?.aspectRatio,
         noText,
+        additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
+        productImages: selectedProductImages?.length ? selectedProductImages : undefined,
+        productImagePrompt: scene.product_image_prompt || undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));

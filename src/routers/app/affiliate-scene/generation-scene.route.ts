@@ -27,6 +27,7 @@ export default [
           config: AffiliateVideoFormConfig;
           text: string;
           objectToPersonifyCode?: string;
+          productImages?: string[];
         };
 
         if (!body?.config) {
@@ -49,6 +50,15 @@ export default [
         if (resolvedPersonifyPrompt) {
           body.config.objectToPersonify = resolvedPersonifyPrompt;
         }
+
+        // Build product image reference text
+        const productImageUrls = body.productImages?.filter(Boolean) || [];
+        const productImageNote =
+          productImageUrls.length > 0
+            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(
+                ", "
+              )}`
+            : "";
 
         const clients = await getAvailableGeminiClients();
         const storyModeTypes = req?.body?.config?.storyModeType;
@@ -91,7 +101,7 @@ CRITICAL RULE: Always keep character and environment identical.
 `;
 
         // Thay thế placeholder trong text
-        const interpolatedText = interpolateTemplate(body.text || prompt, body.config);
+        const interpolatedText = interpolateTemplate(body.text || prompt, body.config) + productImageNote;
 
         const response = await callWithKeyRotation(
           clients,

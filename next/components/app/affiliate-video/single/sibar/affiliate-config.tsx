@@ -12,7 +12,7 @@ import { BsFile } from "react-icons/bs";
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
-import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -223,6 +223,16 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
             />
           </Field>
         </div>
+
+        {/* Ảnh sản phẩm */}
+
+        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+          <ImageInput
+            multi
+            value={videoConfig?.productImages}
+            onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+          />
+        </Field>
 
         {/* SỐ LƯỢNG MẸO CẦN TẠO (batchSize) */}
         {type == TAB_TYPE.batch && (

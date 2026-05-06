@@ -504,6 +504,8 @@ export function useBatchActions(scenes: SceneScript[]) {
             sceneId: scene.id,
             prompt: scene.imageGenPrompt,
             aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            productImages: scene.selectedProductImages?.length ? scene.selectedProductImages : undefined,
+            productImagePrompt: scene.product_image_prompt || undefined,
           });
           completed++;
           setBatchCompleted(completed);
@@ -648,6 +650,8 @@ export function useBatchActions(scenes: SceneScript[]) {
               sceneId: scene.id,
               prompt: scene.imageGenPrompt,
               aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              productImages: scene.selectedProductImages?.length ? scene.selectedProductImages : undefined,
+              productImagePrompt: scene.product_image_prompt || undefined,
             });
           } catch (imgErr) {
             console.error(

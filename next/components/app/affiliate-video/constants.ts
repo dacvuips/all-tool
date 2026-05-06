@@ -55,6 +55,7 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
+  productImages?: string[];
 }
 
 export interface CopyVideoFormConfig extends VideoFormBase {
@@ -129,6 +130,8 @@ export interface SceneScript {
   noText?: boolean;
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
+  selectedProductImages?: string[];
+  product_image_prompt?: string;
 }
 
 export interface ScriptData {
@@ -143,6 +146,7 @@ export interface ScriptData {
   voiceStyle: string;
   aspectRatio: "16:9" | "9:16";
   scenes: SceneScript[];
+  productImages?: string[];
 }
 
 export const DB_NAME = {

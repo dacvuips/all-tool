@@ -42,7 +42,7 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-export type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio";
+export type EditField = "imageGenPrompt" | "motionPrompt" | "dialogue" | "audio" | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -63,6 +63,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleDisable,
   onToggleVoiceDisable,
   onToggleNoText,
+  onUpdateSelectedProductImages,
 }: {
   scene: SceneScript;
   index: number;
@@ -76,6 +77,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -90,6 +92,52 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Product image selection (per-scene, persisted in IndexedDB) ──
+  const { scriptData, affiliateVideoFormConfig } = useAffiliateVideoContext();
+  const productImages = scriptData?.productImages || affiliateVideoFormConfig?.productImages || [];
+  const selectedProductImagesDB = useIndexedDB<string[]>(
+    "selected-product-images",
+    DB_NAME.generateScene
+  );
+  const [selectedProductImages, setSelectedProductImages] = useState<string[]>(
+    scene.selectedProductImages || []
+  );
+
+  useEffect(() => {
+    // Prefer scene-level data; fall back to separate DB for backward compat
+    if (scene.selectedProductImages?.length) {
+      setSelectedProductImages(scene.selectedProductImages);
+    } else {
+      selectedProductImagesDB.get(scene.id).then((saved) => {
+        if (saved) setSelectedProductImages(saved);
+        else setSelectedProductImages([]);
+      });
+    }
+  }, [scene.id, scene.selectedProductImages]);
+
+  const handleToggleProductImage = useCallback(
+    (imageUrl: string) => {
+      setSelectedProductImages((prev) => {
+        const next = prev.includes(imageUrl)
+          ? prev.filter((url) => url !== imageUrl)
+          : [...prev, imageUrl];
+        // 1. Keep the legacy per-scene DB in sync
+        selectedProductImagesDB.set(scene.id, next);
+        // 2. Persist into sceneHistory & lastScript
+        onUpdateSelectedProductImages?.(scene.id, next);
+        return next;
+      });
+    },
+    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages]
+  );
+
+  // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
+  const [localProductPrompt, setLocalProductPrompt] = useState(scene.product_image_prompt ?? "");
+  useEffect(() => {
+    setLocalProductPrompt(scene.product_image_prompt ?? "");
+  }, [scene.id, scene.product_image_prompt]);
+
   const {
     generatedImage,
     generatingImage,
@@ -107,8 +155,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
-  } = useSceneMedia({ scene, nextSceneId, noText: scene.noText });
-  const { scriptData } = useAffiliateVideoContext();
+  } = useSceneMedia({ scene, nextSceneId, selectedProductImages, noText: scene.noText });
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
   const videoPaddingTop = "56.25%";
@@ -304,6 +351,67 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
             [DIALOGUE]:
           </span>
+        )}
+
+        {/* Product Select Image */}
+        {productImages.length > 0 && (
+          <div className="relative mt-1.5" onMouseEnter={() => setHoveredField(null)}>
+            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">
+              {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
+            </span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {productImages.map((imgUrl, idx) => (
+                <label
+                  key={idx}
+                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                    selectedProductImages.includes(imgUrl)
+                      ? "border-blue-500 shadow-md ring-1 ring-blue-300"
+                      : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"
+                  }`}
+                  style={{ width: 48, height: 48 }}
+                >
+                  <input
+                    type="checkbox"
+                    className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+                    checked={selectedProductImages.includes(imgUrl)}
+                    onChange={() => handleToggleProductImage(imgUrl)}
+                  />
+                  <Img
+                    src={imgUrl}
+                    alt={`Product ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                    lazyload={false}
+                  />
+                  {selectedProductImages.includes(imgUrl) && (
+                    <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                  )}
+                </label>
+              ))}
+            </div>
+            {selectedProductImages.length > 0 && (
+              <span className="text-9 text-blue-500 mt-0.5 block">
+                {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
+              </span>
+            )}
+            {/* Custom product image prompt input */}
+            {selectedProductImages.length > 0 && (
+              <div className="mt-2">
+                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">
+                  {t("Prompt SP")}:
+                </span>
+                <textarea
+                  value={localProductPrompt}
+                  onChange={(e) => setLocalProductPrompt(e.target.value)}
+                  onBlur={() => onUpdateScene(scene.id, "product_image_prompt", localProductPrompt)}
+                  placeholder={t(
+                    "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
+                  )}
+                  rows={2}
+                  className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
+                />
+              </div>
+            )}
+          </div>
         )}
       </td>
 
@@ -790,6 +898,7 @@ interface SceneRowGroupProps {
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
+  onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }
 
 export function SceneRowGroup({
@@ -804,6 +913,7 @@ export function SceneRowGroup({
   onToggleDisable,
   onToggleVoiceDisable,
   onToggleNoText,
+  onUpdateSelectedProductImages,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -849,6 +959,7 @@ export function SceneRowGroup({
         onToggleDisable={onToggleDisable}
         onToggleVoiceDisable={onToggleVoiceDisable}
         onToggleNoText={onToggleNoText}
+        onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 
       {/* Add BELOW button – absolute positioned, floats between rows */}

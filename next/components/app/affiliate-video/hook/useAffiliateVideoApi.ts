@@ -59,6 +59,10 @@ export interface GenerateImageParams {
   referenceImage?: { imageBytes: string; mimeType: string };
   /** Ảnh tham chiếu bổ sung (e.g., ảnh sản phẩm được chọn) */
   additionalImages?: { imageBytes: string; mimeType: string }[];
+  /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
+  productImages?: string[];
+  /** Custom prompt cho product images – nếu có sẽ dùng thay prompt mặc định */
+  productImagePrompt?: string;
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
   noText?: boolean;
   /** Callback nhận progress 0-100 */
@@ -344,6 +348,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       config: Partial<AffiliateVideoFormConfig>;
       text?: string;
       objectToPersonifyCode?: string;
+      productImages?: string[];
     }) => {
       const res = await fetch("/api/app/generation-scene/", {
         method: "POST",
@@ -403,12 +408,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({
         config: data,
         objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        productImages: data.productImages,
       });
       if (!result) return undefined;
       const scriptResult: ScriptData = {
         ...result.data,
         storyModeType: data.storyModeType,
         aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới
@@ -558,9 +565,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         config,
         text,
         objectToPersonifyCode: config.objectToPersonify?.trim() ? config.objectToPersonifyCode : undefined,
+        productImages: config.productImages,
       });
       if (!result) return undefined;
-      const scriptResult: ScriptData = result.data;
+      const scriptResult: ScriptData = { ...result.data, productImages: config.productImages };
 
       // Gán id ngẫu nhiên cho từng scene mới
       if (scriptResult?.scenes) {
@@ -572,7 +580,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       // Persist script result (include storyModeType)
       scriptDB
-        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType })
+        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType, productImages: config.productImages })
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
       // Push to history (await so provider can read it immediately)
@@ -592,6 +600,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         aspectRatio = "9:16",
         referenceImage,
         additionalImages,
+        productImages,
+        productImagePrompt,
         noText,
         onProgress,
       } = params;
@@ -632,6 +642,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body: JSON.stringify({
             prompt,
             images: images.length > 0 ? images : undefined,
+            productImages: productImages?.length ? productImages : undefined,
+            productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio, noText },
           }),
         });

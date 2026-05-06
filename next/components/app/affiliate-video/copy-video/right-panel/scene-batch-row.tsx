@@ -139,6 +139,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     },
     [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages]
   );
+
+  // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
+  const [localProductPrompt, setLocalProductPrompt] = useState(scene.product_image_prompt ?? "");
+  useEffect(() => {
+    setLocalProductPrompt(scene.product_image_prompt ?? "");
+  }, [scene.id, scene.product_image_prompt]);
+
   const {
     generatedImage,
     generatingImage,
@@ -407,8 +414,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   {t("Prompt SP")}:
                 </span>
                 <textarea
-                  value={scene.product_image_prompt ?? ""}
-                  onChange={(e) => onUpdateScene(scene.id, "product_image_prompt", e.target.value)}
+                  value={localProductPrompt}
+                  onChange={(e) => setLocalProductPrompt(e.target.value)}
+                  onBlur={() => onUpdateScene(scene.id, "product_image_prompt", localProductPrompt)}
                   placeholder={t(
                     "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
                   )}

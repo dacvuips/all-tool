@@ -166,6 +166,7 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
       }
 
       captchaData = await captchaResp.json();
+
       break;
     } catch (err: any) {
       lastError = err;
