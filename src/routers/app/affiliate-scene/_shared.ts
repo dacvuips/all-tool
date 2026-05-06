@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import logger from "../../../helpers/logger";
 import redis from "../../../helpers/redis";
+import { ForbiddenError } from "../../../libs/core";
 import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
@@ -272,10 +273,12 @@ function isServiceUnavailableError(err: any): boolean {
 /**
  * Gọi AI API với cơ chế xoay vòng nhiều API key:
  * - Nếu 429 / quota exceeded → nhảy sang API key tiếp theo.
- * - Nếu 503 → nhảy sang API key tiếp theo ngay.
+ * - Nếu 503 → chờ 6-10s rồi nhảy sang API key tiếp theo.
  * - Các lỗi khác → throw ngay.
- * - Nếu tất cả key đều thất bại → throw error cuối cùng.
+ * - Tối đa thử 5 key. Nếu quá 5 key → throw error ngay.
  */
+const MAX_KEY_RETRIES = 5;
+
 export async function callWithKeyRotation<T>(
   entries: GeminiClientEntry[],
   fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
@@ -284,6 +287,7 @@ export async function callWithKeyRotation<T>(
   let lastError: any;
   const exhaustedKeys = new Set<string>();
   let keyIdx = 0;
+  let attempts = 0;
 
   while (exhaustedKeys.size < entries.length) {
     const { client, apiKey } = entries[keyIdx];
@@ -295,6 +299,14 @@ export async function callWithKeyRotation<T>(
       continue;
     }
 
+    // Giới hạn tối đa 5 key thử
+    if (attempts >= MAX_KEY_RETRIES) {
+      logger.error(`[${label}] Đã thử ${MAX_KEY_RETRIES} key nhưng đều thất bại. Dừng retry.`);
+      throw new ForbiddenError(`Google AI hiện đang quá tải. Vui lòng thử lại sau 2-3 phút.`);
+    }
+
+    attempts++;
+
     try {
       const result = await fn(client);
       return result;
@@ -303,7 +315,7 @@ export async function callWithKeyRotation<T>(
 
       if (isRateLimitOrQuotaError(err)) {
         logger.warn(
-          `[${label}] ${keyLabel} bị 429/quota: ${err?.message}. Chuyển sang key tiếp theo.`
+          `[${label}] ${keyLabel} bị 429/quota (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chuyển sang key tiếp theo.`
         );
         // Nếu là daily quota exhausted (free tier limit: 20) → blacklist key trên Redis
         if (isDailyQuotaExhaustedError(err)) {
@@ -316,9 +328,9 @@ export async function callWithKeyRotation<T>(
 
       if (isServiceUnavailableError(err)) {
         logger.warn(
-          `[${label}] ${keyLabel} bị 503: ${err?.message}. Chờ 3-6s rồi chuyển sang key tiếp theo.`
+          `[${label}] ${keyLabel} bị 503 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 6-10s rồi chuyển sang key tiếp theo.`
         );
-        const delayMs = Math.floor(Math.random() * (6000 - 3000 + 1)) + 3000;
+        const delayMs = Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         keyIdx = (keyIdx + 1) % entries.length;
         continue;

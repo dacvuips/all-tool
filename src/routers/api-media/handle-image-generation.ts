@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import logger from "../../helpers/logger";
+import { ForbiddenError } from "../../libs/core";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
 import { retryAICall } from "../app/affiliate-scene/_shared";
@@ -121,6 +122,11 @@ async function sendAndParseResponse(
     });
     if (!resp.ok) {
       const errText = await resp.text();
+      if (resp.status === 403) {
+        throw new ForbiddenError(
+          `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
+        );
+      }
       const err: any = new Error(`Google Labs API error ${resp.status}: ${errText}`);
       err.statusCode = resp.status;
       throw err;
