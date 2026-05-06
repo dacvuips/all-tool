@@ -340,7 +340,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const { customer } = useAuth();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
-    async (body: { config: Partial<AffiliateVideoFormConfig>; text?: string; objectToPersonifyCode?: string }) => {
+    async (body: {
+      config: Partial<AffiliateVideoFormConfig>;
+      text?: string;
+      objectToPersonifyCode?: string;
+    }) => {
       const res = await fetch("/api/app/generation-scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -396,7 +400,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
-      const result = await callGenerationSceneApi({ config: data, objectToPersonifyCode: data.objectToPersonify });
+      const result = await callGenerationSceneApi({
+        config: data,
+        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+      });
       if (!result) return undefined;
       const scriptResult: ScriptData = {
         ...result.data,
@@ -439,6 +446,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       mood?: string;
       aspectRatio?: string;
       productImages?: string[];
+      objectToPersonifyCode?: string;
     }) => {
       const res = await fetch("/api/app/copy-video-analysis/", {
         method: "POST",
@@ -506,6 +514,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
+        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
       });
       if (!result) return undefined;
 
@@ -548,7 +557,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({
         config,
         text,
-        objectToPersonifyCode: config.objectToPersonify,
+        objectToPersonifyCode: config.objectToPersonify?.trim() ? config.objectToPersonifyCode : undefined,
       });
       if (!result) return undefined;
       const scriptResult: ScriptData = result.data;

@@ -51,6 +51,7 @@ export interface VideoFormBase {
 }
 export interface AffiliateVideoFormConfig extends VideoFormBase {
   objectToPersonify: string;
+  objectToPersonifyCode?: string;
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
@@ -59,6 +60,8 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
 export interface CopyVideoFormConfig extends VideoFormBase {
   sourceVideo?: { base64: string; mimeType: string };
   productImages?: string[];
+  objectToPersonify: string;
+  objectToPersonifyCode?: string;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";

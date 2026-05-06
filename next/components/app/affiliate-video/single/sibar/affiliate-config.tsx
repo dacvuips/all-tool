@@ -208,6 +208,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
             name="objectToPersonify"
             value={videoConfig?.objectToPersonify}
             onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
+            onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
           />
         </div>
 

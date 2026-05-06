@@ -11,6 +11,7 @@ import { BsFile } from "react-icons/bs";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
+import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { VideoUploadPicker } from "./video-upload-picker";
 
@@ -20,7 +21,7 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { patchConfig, copyVideoFormConfig } = useCopyVideoContext();
-
+  console.log(copyVideoFormConfig);
   const { ART_STYLE_TRANSLATED_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
 
   // Local state for instant UI feedback; synced from URL param on mount/navigation
@@ -107,7 +108,15 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ mood: v })}
           />
         </Field>
-
+        {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
+        <div>
+          <ObjectPersonifyPickerDialog
+            name="objectToPersonify"
+            value={copyVideoFormConfig?.objectToPersonify}
+            onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
+            onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
+          />
+        </div>
         {/* Ảnh sản phẩm */}
 
         <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>

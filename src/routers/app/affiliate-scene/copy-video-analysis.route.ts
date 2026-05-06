@@ -2,6 +2,7 @@ import { Type } from "@google/genai";
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { Context } from "../../../libs/graphql";
 import { ArtStyleMap } from "../constanst";
 import {
@@ -117,6 +118,7 @@ function buildVideoAnalysisPrompt(opts: {
   language?: string;
   mood?: string;
   aspectRatio?: string;
+  objectToPersonifyPrompt?: string;
 }): string {
   const artStyle = opts.artStyle || "Realistic";
   const language = opts.language || "Vietnamese";
@@ -124,6 +126,10 @@ function buildVideoAnalysisPrompt(opts: {
   const aspectRatio = opts.aspectRatio || "9:16";
 
   const findDesArtStyle = ArtStyleMap.find((item) => item.value === artStyle)?.des;
+
+  const objectToPersonifySection = opts.objectToPersonifyPrompt
+    ? `\n\n*** NHÂN VẬT NHÂN HOÁ (OBJECT TO PERSONIFY) ***\nNhân vật chính trong video cần được thể hiện dưới dạng nhân hoá từ vật thể sau. Hãy sử dụng mô tả này làm Visual DNA chính cho nhân vật:\n${opts.objectToPersonifyPrompt}\n`
+    : "";
 
   return `
 Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: Phân tích video và tạo kịch bản chi tiết để tái tạo lại video này (Video-to-Video generation script).
@@ -178,6 +184,7 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
        - Tỉ lệ: ${aspectRatio} 
        - Bắt buộc thêm hiệu ứng thị giác, phù hợp với môi trường, cảnh vật, và nhân vật. Ví dụ: ánh sáng, màu sắc, hiệu ứng không khí, hiệu ứng chuyển động của nhân vật và cảnh vật,...
        - Ngôn ngữ: Tiếng Anh.
+       ${objectToPersonifySection}  
 
     2. 'motion_description' (Cho Animator/Runway Gen-2):
        - Mô tả chuyển động phải dùng TÊN NHÂN VẬT cụ thể.
@@ -206,6 +213,7 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
     4. In original_content and translated_content (dialogue), you MAY use the real name.
     5. In the characters array, use the alias as "name" and provide the full physical description as "description".
     
+
 Trả về kết quả JSON theo cấu trúc đã định nghĩa (bao gồm danh sách 'characters', 'props' và 'scenes').
 `;
 }
@@ -228,6 +236,7 @@ export default [
           mood?: string;
           aspectRatio?: string;
           productImages?: string[];
+          objectToPersonifyCode?: string;
         };
 
         if (!body?.videoBase64) {
@@ -238,8 +247,23 @@ export default [
 
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
-
         const clients = await getAvailableGeminiClients();
+
+        // ── Resolve objectToPersonify prompt from DB ──
+        let objectToPersonifyPrompt: string | undefined;
+        if (body.objectToPersonifyCode) {
+          const objectDoc = await ObjectToPersonifyModel.findOne({
+            code: body.objectToPersonifyCode,
+          }).lean();
+          if (objectDoc) {
+            if (!objectDoc.customerId && !objectDoc.isActive) {
+              return res.status(400).json({ message: "Nhân vật không còn hoạt động" });
+            }
+            if (objectDoc.prompt) {
+              objectToPersonifyPrompt = objectDoc.prompt;
+            }
+          }
+        }
 
         // Build product image reference text
         const productImageUrls = body.productImages?.filter(Boolean) || [];
@@ -272,6 +296,7 @@ export default [
                           language: body.language,
                           mood: body.mood,
                           aspectRatio: body.aspectRatio,
+                          objectToPersonifyPrompt,
                         }) + productImageNote,
                     },
                   ],

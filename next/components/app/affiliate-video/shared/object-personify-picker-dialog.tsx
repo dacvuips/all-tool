@@ -42,6 +42,8 @@ export interface ObjectPersonifyPickerDialogProps {
   value?: string;
   /** Fired when the user picks a custom object or types free text */
   onChange?: (value: string) => void;
+  /** Fired when the user picks a custom object – passes the code for API */
+  onCodeChange?: (code: string) => void;
   /** Callback to set display name separately (optional) */
   onNameChange?: (name: string) => void;
   /** Field label override */
@@ -59,6 +61,7 @@ const DEFAULT_PROMPT = `SYS Style Prompt Generator, Please describe the characte
 export function ObjectPersonifyPickerDialog({
   value,
   onChange,
+  onCodeChange,
   onNameChange,
   label,
   noError = true,
@@ -216,8 +219,12 @@ export function ObjectPersonifyPickerDialog({
   // ── Handle server/customer object selection ──
   const handleSelectObject = (item: ObjectToPersonifyPublic) => {
     if (onChange) {
-      // Pass the code as the objectToPersonify value
-      onChange(item.code);
+      // Pass the name as the objectToPersonify display value
+      onChange(item.name);
+    }
+    if (onCodeChange) {
+      // Pass the code as objectToPersonifyCode for API
+      onCodeChange(item.code);
     }
     setSelectedDisplayName(item.name);
     setIsDialogOpen(false);
@@ -271,7 +278,10 @@ export function ObjectPersonifyPickerDialog({
       if (result) {
         // Auto-select the new custom object
         if (onChange) {
-          onChange(result.code);
+          onChange(result.name);
+        }
+        if (onCodeChange) {
+          onCodeChange(result.code);
         }
         setSelectedDisplayName(result.name);
 
@@ -410,6 +420,8 @@ export function ObjectPersonifyPickerDialog({
             onChange={(v) => {
               if (onChange) onChange(v);
               setSelectedDisplayName(v);
+              // If user clears the input, also clear the code
+              if (!v?.trim() && onCodeChange) onCodeChange("");
             }}
           />
         </div>

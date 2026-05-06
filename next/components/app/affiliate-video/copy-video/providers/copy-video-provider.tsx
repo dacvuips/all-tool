@@ -70,6 +70,7 @@ export function CopyVideoProvider(props) {
     language: LANGUAGE_OPTIONS[0].label,
     artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
     aspectRatio: "9:16",
+    objectToPersonify: "",
   };
 
   // ── IndexedDB – shared cache for AI results ──

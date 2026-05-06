@@ -154,6 +154,14 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
 
       if (!captchaResp.ok) {
         const errText = await captchaResp.text();
+        // On 403, skip to next API key
+        if (captchaResp.status === 403) {
+          lastError = new Error(`Captcha API error 403: ${errText}`);
+          console.warn(
+            `[${logPrefix}] Link ${selectedLink?.url} bị 403. Chuyển sang key tiếp theo...`
+          );
+          continue;
+        }
         throw new Error(`Captcha API error ${captchaResp.status}: ${errText}`);
       }
 
