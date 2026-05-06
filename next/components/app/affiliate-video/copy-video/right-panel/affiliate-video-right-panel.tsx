@@ -192,6 +192,23 @@ export const CopyVideoRightPanel = () => {
         bodyClassName="flex-1 overflow-y-auto v-scrollbar"
         className="bg-white"
       >
+        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
+        <TabGroup.Tab label={batchTabLabel}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <BatchListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                ...s,
+                id: s.id || `scene-${i}`,
+                sceneNumber: i + 1,
+                disabled: s.disabled ?? false,
+                voiceDisable: s.voiceDisable ?? false,
+              }))}
+              characters={[]}
+            />
+          )}
+        </TabGroup.Tab>
         {/* ── Tab: Kịch Bản (Script) ── */}
         <TabGroup.Tab label={t("Kịch Bản")}>
           {batchRunning ? (
@@ -274,24 +291,6 @@ export const CopyVideoRightPanel = () => {
                 </div>
               </div>
             </div>
-          )}
-        </TabGroup.Tab>
-
-        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={batchTabLabel}>
-          {batchRunning ? (
-            <AiGeneratingSpinner />
-          ) : (
-            <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
-              characters={[]}
-            />
           )}
         </TabGroup.Tab>
       </TabGroup>

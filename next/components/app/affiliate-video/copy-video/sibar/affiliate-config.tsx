@@ -21,7 +21,7 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const router = useRouter();
   const { patchConfig, copyVideoFormConfig } = useCopyVideoContext();
-  console.log(copyVideoFormConfig);
+
   const { ART_STYLE_TRANSLATED_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
 
   // Local state for instant UI feedback; synced from URL param on mount/navigation

@@ -193,6 +193,32 @@ export const AffiliateVideoRightPanel = () => {
         bodyClassName="flex-1 overflow-y-auto v-scrollbar"
         className="bg-white"
       >
+        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
+        <TabGroup.Tab label={batchTabLabel}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <BatchListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                id: (s as any).id || `scene-${i}`,
+                sceneNumber: s.sceneNumber,
+                camera: (s.camera as any) || "WIDE SHOT",
+                imageGenPrompt: s.imageGenPrompt || "",
+                motionPrompt: s.motionPrompt || "",
+                dialogue: s.dialogue || "",
+                visualPrompt: s.visualPrompt || "",
+                disabled: (s as any).disabled ?? false,
+                voiceDisable: (s as any).voiceDisable ?? false,
+                audio: s.audio || "",
+                noText: (s as any).noText ?? false,
+                product_image_prompt: (s as any).product_image_prompt ?? "",
+                selectedProductImages: (s as any).selectedProductImages ?? [],
+              }))}
+              storyModeType={scriptData?.storyModeType}
+              characters={[]}
+            />
+          )}
+        </TabGroup.Tab>
         {/* ── Tab: Kịch Bản (Script) ── */}
         <TabGroup.Tab label={t("Kịch Bản")}>
           {batchRunning ? (
@@ -298,33 +324,6 @@ export const AffiliateVideoRightPanel = () => {
                 </div>
               </div>
             </div>
-          )}
-        </TabGroup.Tab>
-
-        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={batchTabLabel}>
-          {batchRunning ? (
-            <AiGeneratingSpinner />
-          ) : (
-            <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                id: (s as any).id || `scene-${i}`,
-                sceneNumber: s.sceneNumber,
-                camera: (s.camera as any) || "WIDE SHOT",
-                imageGenPrompt: s.imageGenPrompt || "",
-                motionPrompt: s.motionPrompt || "",
-                dialogue: s.dialogue || "",
-                visualPrompt: s.visualPrompt || "",
-                disabled: (s as any).disabled ?? false,
-                voiceDisable: (s as any).voiceDisable ?? false,
-                audio: s.audio || "",
-                noText: (s as any).noText ?? false,
-                product_image_prompt: (s as any).product_image_prompt ?? "",
-                selectedProductImages: (s as any).selectedProductImages ?? [],
-              }))}
-              storyModeType={scriptData?.storyModeType}
-              characters={[]}
-            />
           )}
         </TabGroup.Tab>
       </TabGroup>

@@ -79,8 +79,6 @@ export default [
           );
         }
 
-        console.log("productImageUrls", uploadedImageNames);
-
         // Tạo payload theo cấu trúc Google Labs API
 
         const noTextStr = !body.config?.noText
