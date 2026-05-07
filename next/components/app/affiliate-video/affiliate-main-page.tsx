@@ -8,7 +8,6 @@ import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import { RiBookOpenLine, RiFileCopy2Line, RiFileTextLine, RiGridLine } from "react-icons/ri";
 
-import { HiTrendingUp } from "react-icons/hi";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
@@ -41,7 +40,11 @@ export default function AffiliateMainPage() {
     },
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
-      icon: <HiTrendingUp />,
+      icon: (
+        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+          {"Hot 🔥"}
+        </div>
+      ),
       label: t("Trending"),
       value: "trending",
       component: <>{"Đang phát triển"}</>,
