@@ -1,0 +1,16 @@
+import { TimestampEntity } from "../../core";
+
+export type ITrending = TimestampEntity & {
+  /** Tên trending */
+  name?: string;
+  /** Danh sách URL ảnh */
+  imageUrls?: string[];
+  /** Prompt mô tả */
+  prompt?: string;
+  /** Trạng thái hoạt động */
+  isActive?: boolean;
+  /** ID khách hàng sở hữu */
+  customerId?: string;
+  /** Số lượt sử dụng */
+  count?: number;
+};
