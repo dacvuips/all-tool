@@ -9,6 +9,7 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   TrendingCategoryPublicItem,
   TrendingCategoryService,
+  TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
 import {
   AffiliateVideoFormConfig,
@@ -49,6 +50,7 @@ export interface ObjectToPersonifyPublic {
 export type {
   TrendingCategoryPublicItem,
   TrendingPublicItem,
+  TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
 
 export interface GenerateSceneFromTextParams {
@@ -341,9 +343,18 @@ export interface UseAffiliateVideoApiReturn {
   deleteCustomerObjectToPersonify: (id: string) => Promise<boolean>;
 
   /**
-   * Lấy danh sách TrendingCategory đang active kèm trending items.
+   * Lấy danh sách TrendingCategory đang active.
    */
   getActiveTrendingCategoryList: () => Promise<TrendingCategoryPublicItem[]>;
+
+  /**
+   * Lấy danh sách trending items theo category ID, có phân trang.
+   */
+  getTrendingsByCategoryId: (
+    categoryId: string,
+    page?: number,
+    limit?: number
+  ) => Promise<TrendingsByCategoryResult>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -1132,10 +1143,18 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
-  // ── getActiveTrendingCategoryList – lấy danh sách trending category active kèm trending items ──
+  // ── getActiveTrendingCategoryList – lấy danh sách trending category active ──
   const getActiveTrendingCategoryList = useCallback(async () => {
     return TrendingCategoryService.getActiveTrendingCategoryList();
   }, []);
+
+  // ── getTrendingsByCategoryId – lấy trending items theo category ID, phân trang ──
+  const getTrendingsByCategoryId = useCallback(
+    async (categoryId: string, page: number = 1, limit: number = 10) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(categoryId, page, limit);
+    },
+    []
+  );
 
   return {
     generateScene,
@@ -1158,5 +1177,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     createCustomerObjectToPersonify,
     deleteCustomerObjectToPersonify,
     getActiveTrendingCategoryList,
+    getTrendingsByCategoryId,
   };
 }

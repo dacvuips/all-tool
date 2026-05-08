@@ -27,6 +27,13 @@ export interface TrendingCategoryPublicItem {
   trendingItems: TrendingPublicItem[];
 }
 
+/** Paginated trending items result */
+export interface TrendingsByCategoryResult {
+  data: TrendingPublicItem[];
+  total: number;
+  pagination?: { limit?: number; page?: number; total?: number };
+}
+
 export class TrendingCategoryRepository extends CrudRepository<TrendingCategory> {
   apiName: string = "TrendingCategory";
   displayName: string = t("danh mục trending");
@@ -52,13 +59,13 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
   `);
 
   /**
-   * Lấy danh sách TrendingCategory đang active kèm trending items đã resolve.
+   * Lấy danh sách TrendingCategory đang active (chỉ category info, không kèm items).
    * Dùng custom query `getActiveTrendingCategoryList` (public, customer-accessible).
    */
   async getActiveTrendingCategoryList(): Promise<TrendingCategoryPublicItem[]> {
     try {
       const result = await this.query({
-        query: `getActiveTrendingCategoryList { id name isHot priority trendingItems { id name imageUrls prompt count } }`,
+        query: `getActiveTrendingCategoryList { id name isHot priority }`,
         options: {
           fetchPolicy: "network-only",
         },
@@ -68,6 +75,41 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     } catch (err) {
       console.error("[getActiveTrendingCategoryList] Error:", err);
       return [];
+    }
+  }
+
+  /**
+   * Lấy danh sách trending items theo category ID, có phân trang.
+   * Dùng standard CrudRepository.getAll() với apiName override → getTrendingsByCategoryId(q:...)
+   */
+  async getTrendingsByCategoryId(
+    categoryId: string,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<TrendingsByCategoryResult> {
+    try {
+      const result = await this.getAll({
+        apiName: "getTrendingsByCategoryId",
+        query: {
+          page,
+          limit,
+          filter: {
+            trendingCategoryIds: { $in: [categoryId] },
+            isActive: true,
+          },
+          order: { count: -1 },
+        },
+        fragment: `id name imageUrls prompt count`,
+        cache: false,
+      });
+      return {
+        data: (result.data || []) as any as TrendingPublicItem[],
+        total: result.total || 0,
+        pagination: result.pagination,
+      };
+    } catch (err) {
+      console.error("[getTrendingsByCategoryId] Error:", err);
+      return { data: [], total: 0 };
     }
   }
 }

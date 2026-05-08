@@ -6,6 +6,8 @@ const schema = gql`
     getOneTrendingCategory(id: ID!): TrendingCategory
     "Lấy danh sách danh mục trending đang active (dành cho customer)"
     getActiveTrendingCategoryList: [TrendingCategoryPublic]
+    "Lấy danh sách trending theo category ID, có phân trang"
+    getTrendingsByCategoryId(q: QueryGetListInput): TrendingPageData
     # Add Query
   }
 
@@ -65,7 +67,7 @@ const schema = gql`
     pagination: Pagination
   }
 
-  "Thông tin công khai cho customer (bao gồm danh sách trending đã resolve)"
+  "Thông tin công khai cho customer"
   type TrendingCategoryPublic {
     id: String
     "Tên danh mục trending"
@@ -89,6 +91,13 @@ const schema = gql`
     prompt: String
     "Số lượt sử dụng"
     count: Int
+  }
+
+  "Kết quả phân trang trending theo category"
+  type TrendingsByCategoryResult {
+    data: [TrendingPublic]
+    total: Int
+    pagination: Pagination
   }
 `;
 

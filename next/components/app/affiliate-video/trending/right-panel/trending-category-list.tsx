@@ -1,6 +1,7 @@
 /**
  * trending-category-list.tsx
  * Hiển thị danh sách trending categories + trending items theo từng category.
+ * Mỗi category load trending items riêng với phân trang (getTrendingsByCategoryId).
  * Giao diện professional: accordion-style categories, grid card items
  * Tailwind CSS, i18n, dùng component có sẵn trong source.
  */
@@ -8,16 +9,10 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CgSpinner } from "react-icons/cg";
-import {
-  RiArrowDownSLine,
-  RiArrowUpSLine,
-  RiFireFill,
-  RiRefreshLine,
-  RiFileCopyLine,
-  RiEyeLine,
-} from "react-icons/ri";
+import { RiEyeLine, RiFileCopyLine, RiFireFill, RiRefreshLine } from "react-icons/ri";
 
 import { Img } from "../../../../shared/utilities/misc";
+import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
 import {
   TrendingCategoryPublicItem,
   TrendingPublicItem,
@@ -25,8 +20,17 @@ import {
 } from "../../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
+// ── Constants ────────────────────────────────────────────────────────────────
+const ITEMS_PER_PAGE = 5;
+
 // ── TrendingCard – hiển thị 1 trending item ──────────────────────────────
-const TrendingCard = ({ item, onUsePrompt }: { item: TrendingPublicItem; onUsePrompt: (prompt: string) => void }) => {
+const TrendingCard = ({
+  item,
+  onUsePrompt,
+}: {
+  item: TrendingPublicItem;
+  onUsePrompt: (prompt: string) => void;
+}) => {
   const { t } = useTranslation();
   const [showPrompt, setShowPrompt] = useState(false);
   const firstImage = item.imageUrls?.[0];
@@ -57,7 +61,7 @@ const TrendingCard = ({ item, onUsePrompt }: { item: TrendingPublicItem; onUsePr
         )}
 
         {/* Hover overlay with action buttons */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-end p-2">
+        <div className="  flex items-end p-2">
           <div className="flex gap-1.5 w-full">
             <button
               onClick={(e) => {
@@ -109,10 +113,9 @@ const TrendingCard = ({ item, onUsePrompt }: { item: TrendingPublicItem; onUsePr
   );
 };
 
-// ── CategorySection – accordion cho 1 category ─────────────────────────
+// ── CategorySection – hiển thị 1 category với trending items phân trang ──
 const CategorySection = ({
   category,
-  defaultExpanded = false,
   onUsePrompt,
 }: {
   category: TrendingCategoryPublicItem;
@@ -120,62 +123,100 @@ const CategorySection = ({
   onUsePrompt: (prompt: string) => void;
 }) => {
   const { t } = useTranslation();
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const { getTrendingsByCategoryId } = useAffiliateVideoApi();
 
-  const itemCount = category.trendingItems?.length || 0;
+  const [items, setItems] = useState<TrendingPublicItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  const loadItems = useCallback(
+    async (pageNum: number) => {
+      setIsLoading(true);
+      try {
+        const result = await getTrendingsByCategoryId(category.id, pageNum, ITEMS_PER_PAGE);
+        setItems(result.data);
+        setTotal(result.total);
+      } catch {
+        setItems([]);
+        setTotal(0);
+      } finally {
+        setIsLoading(false);
+        setHasLoaded(true);
+      }
+    },
+    [getTrendingsByCategoryId, category.id]
+  );
+
+  // Auto-load on mount
+  useEffect(() => {
+    if (!hasLoaded) {
+      loadItems(1);
+    }
+  }, [hasLoaded, loadItems]);
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      setPage(newPage);
+      loadItems(newPage);
+    },
+    [loadItems]
+  );
 
   return (
-    <div className="rounded-xl overflow-hidden border border-gray-200 bg-white">
+    <div className="rounded-xl overflow-hidden   ">
       {/* Category header */}
-      <button
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`w-full flex items-center justify-between px-3 py-2.5 bg-gradient-to-r transition-all duration-200 cursor-pointer border-0 ${
-          isExpanded
-            ? "from-blue-50 to-indigo-50"
-            : "from-gray-50 to-gray-50 hover:from-blue-50/50 hover:to-indigo-50/50"
-        }`}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          {category.isHot && (
-            <span className="flex-shrink-0 flex items-center justify-center w-5 h-5 bg-gradient-to-br from-orange-400 to-red-500 rounded-full">
-              <RiFireFill className="text-white text-[10px]" />
-            </span>
-          )}
-          <h3 className="text-sm font-bold text-gray-800 m-0 truncate">
-            {category.name}
-          </h3>
-          <span className="flex-shrink-0 text-[10px] font-medium text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
-            {itemCount}
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-bold text-gray-800 m-0 truncate">{category.name}</h3>
+        {total > 0 && (
+          <span className="text-[10px] text-gray-400 font-medium ml-2 shrink-0">
+            {total} {t("trending")}
           </span>
-        </div>
+        )}
+      </div>
 
-        <div className="flex-shrink-0 text-gray-400">
-          {isExpanded ? (
-            <RiArrowUpSLine className="text-lg" />
-          ) : (
-            <RiArrowDownSLine className="text-lg" />
-          )}
+      {/* Loading state */}
+      {isLoading && !hasLoaded && (
+        <div className="flex items-center justify-center py-6">
+          <CgSpinner className="animate-spin text-xl text-blue-400 mr-2" />
+          <span className="text-xs text-gray-400">{t("Đang tải...")}</span>
         </div>
-      </button>
+      )}
 
       {/* Trending items grid */}
-      {isExpanded && (
-        <div className="p-3">
-          {itemCount > 0 ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              {category.trendingItems.map((item) => (
-                <TrendingCard
-                  key={item.id}
-                  item={item}
-                  onUsePrompt={onUsePrompt}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-6 text-xs text-gray-400">
-              {t("Chưa có trending nào trong danh mục này")}
+      {hasLoaded && items.length > 0 && (
+        <>
+          <div
+            className={`grid grid-cols-2 xs:grid-cols-3 sm:grid-cols-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 xs:gap-2.5 ${
+              isLoading ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            {items.map((item) => (
+              <TrendingCard key={item.id} item={item} onUsePrompt={onUsePrompt} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {total > ITEMS_PER_PAGE && (
+            <div className="flex justify-center mt-3">
+              <PaginationComponent
+                limit={ITEMS_PER_PAGE}
+                page={page}
+                total={total}
+                onPageChange={handlePageChange}
+                visiblePageCount={5}
+                hasDots
+              />
             </div>
           )}
+        </>
+      )}
+
+      {/* Empty state */}
+      {hasLoaded && !isLoading && items.length === 0 && (
+        <div className="text-center py-6 text-xs text-gray-400">
+          {t("Chưa có trending nào trong danh mục này")}
         </div>
       )}
     </div>
@@ -226,7 +267,9 @@ export const TrendingCategoryList = () => {
     return (
       <div className="flex flex-col items-center justify-center py-16">
         <CgSpinner className="animate-spin text-3xl text-blue-500 mb-3" />
-        <span className="text-sm text-gray-500 font-medium">{t("Đang tải danh sách trending...")}</span>
+        <span className="text-sm text-gray-500 font-medium">
+          {t("Đang tải danh sách trending...")}
+        </span>
       </div>
     );
   }
@@ -256,16 +299,18 @@ export const TrendingCategoryList = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2.5 border-b border-gray-100 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center">
-            <RiFireFill className="text-white text-xs" />
+      <div className="flex items-center justify-between px-2 xs:px-3 py-2 xs:py-2.5 border-b border-gray-100 flex-shrink-0">
+        <div className="flex items-center gap-1.5 xs:gap-2">
+          <div className="w-5 h-5 xs:w-6 xs:h-6 rounded-lg bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center">
+            <RiFireFill className="text-white text-[10px] xs:text-xs" />
           </div>
-          <h2 className="text-sm font-bold text-gray-800 m-0">{t("Trending Prompts")}</h2>
+          <h2 className="text-xs xs:text-sm font-bold text-gray-800 m-0">
+            {t("Trending Prompts")}
+          </h2>
         </div>
         <button
           onClick={loadCategories}
-          className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
+          className="p-1 xs:p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
           title={t("Làm mới")}
         >
           <RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />
@@ -273,7 +318,7 @@ export const TrendingCategoryList = () => {
       </div>
 
       {/* Categories list */}
-      <div className="flex-1 overflow-y-auto v-scrollbar p-3 space-y-2.5">
+      <div className="flex-1 overflow-y-auto v-scrollbar p-2 xs:p-3 space-y-2 xs:space-y-2.5">
         {categories.map((cat, index) => (
           <CategorySection
             key={cat.id}

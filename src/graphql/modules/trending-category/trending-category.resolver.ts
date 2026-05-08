@@ -16,51 +16,26 @@ const Query = {
   getActiveTrendingCategoryList: async (root: any, args: any, context: Context) => {
     context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
 
-    // Lấy danh sách danh mục đang active, sắp xếp theo priority
+    // Lấy danh sách danh mục đang active, sắp xếp theo priority (chỉ metadata, không kèm items)
     const categories = await trendingCategoryService.findAll({
       filter: { isActive: true },
       order: { priority: -1 },
-      limit: 100,
+      limit: 5,
     });
 
-    // Resolve trending items cho từng category
-    const result = await Promise.all(
-      (categories || []).map(async (cat: any) => {
-        const doc = cat._doc || cat;
-        let trendingItems: any[] = [];
-
-        if (doc.trendingIds?.length) {
-          // Lấy các trending active theo IDs
-          const items = await trendingService.findAll({
-            filter: {
-              trendingCategoryIds: { $in: [doc.id] },
-              isActive: true,
-            },
-            limit: 200,
-          });
-          trendingItems = (items || []).map((item: any) => {
-            const t = item._doc || item;
-            return {
-              id: t._id,
-              name: t.name,
-              imageUrls: t.imageUrls || [],
-              prompt: t.prompt,
-              count: t.count || 0,
-            };
-          });
-        }
-
-        return {
-          id: doc._id,
-          name: doc.name,
-          isHot: doc.isHot,
-          priority: doc.priority,
-          trendingItems,
-        };
-      })
-    );
-
-    return result;
+    return (categories || []).map((cat: any) => {
+      const doc = cat._doc || cat;
+      return {
+        id: doc._id,
+        name: doc.name,
+        isHot: doc.isHot,
+        priority: doc.priority,
+      };
+    });
+  },
+  getTrendingsByCategoryId: async (root: any, args: any, context: Context) => {
+    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+    return trendingService.fetch(args.q);
   },
 };
 
