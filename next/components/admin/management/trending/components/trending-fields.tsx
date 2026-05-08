@@ -21,6 +21,9 @@ export function TrendingFields() {
       <Field name="des" label={t("Mô tả")} cols={12}>
         <Textarea />
       </Field>
+      <Field name="price" label={t("Giá tiền")} cols={6}>
+        <Input number />
+      </Field>
       <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
         <Select
           multi

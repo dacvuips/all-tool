@@ -9,16 +9,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CgSpinner } from "react-icons/cg";
-import {
-  RiEyeLine,
-  RiFileCopyLine,
-  RiFireFill,
-  RiFireLine,
-  RiRefreshLine,
-  RiSearchLine,
-} from "react-icons/ri";
+import { RiEyeLine, RiFireFill, RiFireLine, RiRefreshLine, RiSearchLine } from "react-icons/ri";
 
-import { BsBookmarkStarFill } from "react-icons/bs";
+import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
+import { parseNumber } from "../../../../../lib/helpers/parser";
 import { Button } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
@@ -61,9 +55,9 @@ const TrendingCard = ({
   const hashtags = useMemo(() => extractHashtags(item.prompt), [item.prompt]);
 
   return (
-    <div className="group relative rounded-xl overflow-hidden bg-white p-1.5 gap-2  transition-all duration-300 border border-primary-dark  flex flex-col">
+    <div className="group relative rounded-xl  overflow-hidden bg-white p-1.5 gap-2  transition-all duration-300 border border-primary-dark  flex flex-col hover:shadow-2xl cursor-pointer hover:shadow-primary-100 hover:border-success-dark hover:border-2">
       {/* Image */}
-      <div className="aspect-[4/3] bg-gradient-to-br from-[#0f1923] to-[#1a2332] overflow-hidden relative">
+      <div className="aspect-[4/3]  overflow-hidden relative">
         {firstImage ? (
           <Img
             lazyload={false}
@@ -77,8 +71,16 @@ const TrendingCard = ({
           <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">
             🎬
           </div>
-        )}
+        )}{" "}
+        <div
+          className={`text-lg absolute -bottom-0.5 -left-0.5 p-1    bg-white rounded-l-none rounded-br-none  rounded-tr-xl font-semibold ${
+            item.price === 0 ? "text-success" : "text-red-500"
+          }`}
+        >
+          {item.price === 0 ? t("Miễn phí") : parseNumber(item.price, "VND")}
+        </div>
       </div>
+
       <Button
         onClick={(e) => {
           e.stopPropagation();
@@ -111,8 +113,8 @@ const TrendingCard = ({
             outline
             info
             className="rounded-lg px-1 h-7 whitespace-nowrap font-normal text-10"
-            text={t("Sao chép")}
-            icon={<RiFileCopyLine className="text-14 " />}
+            text={t("Dùng ngay")}
+            icon={<BsMagic className="text-14 " />}
           ></Button>
         </div>
       </div>
@@ -140,10 +142,6 @@ const TrendingCard = ({
         <span className="flex items-center gap-1 text-[10px] text-gray-500">
           <RiEyeLine className="text-gray-500 text-xs" />0
         </span>
-        {/* Hashtags */}
-        {hashtags.length > 0 && (
-          <span className="text-[10px] text-blue-400/60 truncate">{hashtags.join(" ")}</span>
-        )}
       </div>
     </div>
   );

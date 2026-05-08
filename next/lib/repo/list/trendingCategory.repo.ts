@@ -16,6 +16,7 @@ export interface TrendingPublicItem {
   imageUrls: string[];
   prompt: string;
   count: number;
+  price: number;
 }
 
 /** Public trending category with resolved trending items */
@@ -101,7 +102,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           },
           order: { count: -1 },
         },
-        fragment: `id name imageUrls prompt count`,
+        fragment: `id name imageUrls prompt count price`,
         cache: false,
       });
       return {
