@@ -353,7 +353,8 @@ export interface UseAffiliateVideoApiReturn {
   getTrendingsByCategoryId: (
     categoryId: string,
     page?: number,
-    limit?: number
+    limit?: number,
+    search?: string
   ) => Promise<TrendingsByCategoryResult>;
 }
 
@@ -1150,8 +1151,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
   // ── getTrendingsByCategoryId – lấy trending items theo category ID, phân trang ──
   const getTrendingsByCategoryId = useCallback(
-    async (categoryId: string, page: number = 1, limit: number = 10) => {
-      return TrendingCategoryService.getTrendingsByCategoryId(categoryId, page, limit);
+    async (categoryId: string, page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(categoryId, page, limit, search);
     },
     []
   );

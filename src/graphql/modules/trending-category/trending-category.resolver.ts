@@ -20,7 +20,7 @@ const Query = {
     const categories = await trendingCategoryService.findAll({
       filter: { isActive: true },
       order: { priority: -1 },
-      limit: 5,
+      limit: 50,
     });
 
     return (categories || []).map((cat: any) => {

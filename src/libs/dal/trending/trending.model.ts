@@ -24,6 +24,7 @@ const trendingSchema = new Schema(
 trendingSchema.index({ isActive: 1 });
 trendingSchema.index({ customerId: 1 });
 trendingSchema.index({ count: -1 });
+trendingSchema.index({ name: "text" });
 
 export const TrendingModel = MainConnection.model<ITrending>("Trending", trendingSchema);
 

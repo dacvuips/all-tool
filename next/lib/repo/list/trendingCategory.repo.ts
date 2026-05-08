@@ -85,7 +85,8 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
   async getTrendingsByCategoryId(
     categoryId: string,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    search?: string
   ): Promise<TrendingsByCategoryResult> {
     try {
       const result = await this.getAll({
@@ -93,6 +94,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
         query: {
           page,
           limit,
+          search: search || undefined,
           filter: {
             trendingCategoryIds: { $in: [categoryId] },
             isActive: true,
