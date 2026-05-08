@@ -8,6 +8,7 @@ export interface Trending extends BaseModel {
   isActive: boolean;
   customerId: string;
   count: number;
+  trendingCategoryIds: string[];
 }
 
 export class TrendingRepository extends CrudRepository<Trending> {
@@ -23,6 +24,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     isActive: Boolean
     customerId: ID
     count: Int
+    trendingCategoryIds: [ID]
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -34,6 +36,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     isActive: Boolean
     customerId: ID
     count: Int
+    trendingCategoryIds: [ID]
   `);
 }
 

@@ -334,6 +334,13 @@ const useSidebarMenuConstants = () => {
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
         {
+          title: t("Danh mục Trending"),
+          path: "/admin/management/trending-category",
+          icon: <RiBarChartLine />,
+          scope: SCOPES.VIEW_CUSTOMER,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Banner"),
           path: "/admin/management/banners",
           icon: <RiLayoutTop2Line />,

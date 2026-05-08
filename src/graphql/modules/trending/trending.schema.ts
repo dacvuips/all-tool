@@ -27,6 +27,8 @@ const schema = gql`
     customerId: ID
     "Số lượt sử dụng"
     count: Int
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
   }
 
   input UpdateTrendingInput {
@@ -42,6 +44,8 @@ const schema = gql`
     customerId: ID
     "Số lượt sử dụng"
     count: Int
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
   }
 
   type Trending {
@@ -61,6 +65,8 @@ const schema = gql`
     customerId: ID
     "Số lượt sử dụng"
     count: Int
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
   }
 
   type TrendingPageData {

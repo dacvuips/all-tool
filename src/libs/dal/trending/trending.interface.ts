@@ -13,4 +13,6 @@ export type ITrending = TimestampEntity & {
   customerId?: string;
   /** Số lượt sử dụng */
   count?: number;
+  /** Danh sách ID danh mục trending */
+  trendingCategoryIds?: string[];
 };

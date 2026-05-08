@@ -12,6 +12,7 @@ import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
+import { TrendingPage } from "./trending/trending-page";
 
 export default function AffiliateMainPage() {
   const { t } = useTranslation();
@@ -47,7 +48,7 @@ export default function AffiliateMainPage() {
       ),
       label: t("Trending"),
       value: "trending",
-      component: <>{"Đang phát triển"}</>,
+      component: <TrendingPage />,
     },
     {
       icon: <RiBookOpenLine />,

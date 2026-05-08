@@ -13,6 +13,7 @@ const trendingSchema = new Schema(
     isActive: { type: Boolean, default: true },
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
     count: { type: Number, default: 0 },
+    trendingCategoryIds: { type: [{ type: Schema.Types.ObjectId, ref: "TrendingCategory" }], default: [] },
   },
   { timestamps: true }
 );

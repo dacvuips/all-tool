@@ -1,5 +1,7 @@
 import { useTranslation } from "react-i18next";
+import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { Field, ImageInput, Input, Textarea } from "../../../../shared/utilities/form";
+import { Select } from "../../../../shared/utilities/form/select";
 import { Switch } from "../../../../shared/utilities/form/switch";
 
 export function TrendingFields() {
@@ -15,6 +17,20 @@ export function TrendingFields() {
       </Field>
       <Field name="prompt" label={t("Prompt mô tả")} cols={12}>
         <Textarea />
+      </Field>
+      <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
+        <Select
+          multi
+          autocompletePromise={(props) =>
+            TrendingCategoryService.getAllAutocompletePromise(props, {
+              fragment: "id name",
+              parseOption: (data) => ({
+                value: data.id,
+                label: data.name,
+              }),
+            })
+          }
+        />
       </Field>
       <Field name="count" label={t("Số lượt sử dụng")} cols={6}>
         <Input number />

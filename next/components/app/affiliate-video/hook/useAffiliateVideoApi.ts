@@ -7,6 +7,10 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
+  TrendingCategoryPublicItem,
+  TrendingCategoryService,
+} from "../../../../lib/repo/list/trendingCategory.repo";
+import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
   CopyVideoAnalysisData,
@@ -40,6 +44,12 @@ export interface ObjectToPersonifyPublic {
   code: string;
   isActive: boolean;
 }
+
+/** Public trending types – re-exported from repo */
+export type {
+  TrendingCategoryPublicItem,
+  TrendingPublicItem,
+} from "../../../../lib/repo/list/trendingCategory.repo";
 
 export interface GenerateSceneFromTextParams {
   /** Đoạn text / prompt gửi trực tiếp đến API */
@@ -329,6 +339,11 @@ export interface UseAffiliateVideoApiReturn {
    * Customer xoá nhân vật tùy chỉnh của mình.
    */
   deleteCustomerObjectToPersonify: (id: string) => Promise<boolean>;
+
+  /**
+   * Lấy danh sách TrendingCategory đang active kèm trending items.
+   */
+  getActiveTrendingCategoryList: () => Promise<TrendingCategoryPublicItem[]>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -407,7 +422,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
       const result = await callGenerationSceneApi({
         config: data,
-        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: data.objectToPersonify?.trim()
+          ? data.objectToPersonifyCode
+          : undefined,
         productImages: data.productImages,
       });
       if (!result) return undefined;
@@ -521,7 +538,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
-        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: data.objectToPersonify?.trim()
+          ? data.objectToPersonifyCode
+          : undefined,
       });
       if (!result) return undefined;
 
@@ -564,7 +583,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({
         config,
         text,
-        objectToPersonifyCode: config.objectToPersonify?.trim() ? config.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: config.objectToPersonify?.trim()
+          ? config.objectToPersonifyCode
+          : undefined,
         productImages: config.productImages,
       });
       if (!result) return undefined;
@@ -580,7 +601,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       // Persist script result (include storyModeType)
       scriptDB
-        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType, productImages: config.productImages })
+        .set(CACHE_KEY.lastScript, {
+          ...scriptResult,
+          storyModeType: config.storyModeType,
+          productImages: config.productImages,
+        })
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
       // Push to history (await so provider can read it immediately)
@@ -1107,6 +1132,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── getActiveTrendingCategoryList – lấy danh sách trending category active kèm trending items ──
+  const getActiveTrendingCategoryList = useCallback(async () => {
+    return TrendingCategoryService.getActiveTrendingCategoryList();
+  }, []);
+
   return {
     generateScene,
     generateSceneFromText,
@@ -1127,5 +1157,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getCustomerObjectToPersonifyList,
     createCustomerObjectToPersonify,
     deleteCustomerObjectToPersonify,
+    getActiveTrendingCategoryList,
   };
 }
