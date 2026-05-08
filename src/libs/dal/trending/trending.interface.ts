@@ -15,4 +15,12 @@ export type ITrending = TimestampEntity & {
   count?: number;
   /** Danh sách ID danh mục trending */
   trendingCategoryIds?: string[];
+  /** Giá */
+  price?: number;
+  /** Trạng thái xuất bản */
+  isPublish?: boolean;
+  /** Số lượt sử dụng theo tháng */
+  monthlyCount?: number;
+  /** Mô tả */
+  des?: string;
 };

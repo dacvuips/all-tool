@@ -17,6 +17,10 @@ const trendingSchema = new Schema(
       type: [{ type: Schema.Types.ObjectId, ref: "TrendingCategory" }],
       default: [],
     },
+    price: { type: Number, default: 0 },
+    isPublish: { type: Boolean, default: false },
+    monthlyCount: { type: Number, default: 0 },
+    des: { type: String },
   },
   { timestamps: true }
 );

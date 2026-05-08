@@ -29,6 +29,14 @@ const schema = gql`
     count: Int
     "Danh sách ID danh mục trending"
     trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Số lượt sử dụng theo tháng"
+    monthlyCount: Int
+    "Mô tả"
+    des: String
   }
 
   input UpdateTrendingInput {
@@ -46,6 +54,14 @@ const schema = gql`
     count: Int
     "Danh sách ID danh mục trending"
     trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Số lượt sử dụng theo tháng"
+    monthlyCount: Int
+    "Mô tả"
+    des: String
   }
 
   type Trending {
@@ -67,6 +83,14 @@ const schema = gql`
     count: Int
     "Danh sách ID danh mục trending"
     trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Số lượt sử dụng theo tháng"
+    monthlyCount: Int
+    "Mô tả"
+    des: String
   }
 
   type TrendingPageData {

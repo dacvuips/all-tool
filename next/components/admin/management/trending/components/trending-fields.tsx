@@ -18,6 +18,9 @@ export function TrendingFields() {
       <Field name="prompt" label={t("Prompt mô tả")} cols={12}>
         <Textarea />
       </Field>
+      <Field name="des" label={t("Mô tả")} cols={12}>
+        <Textarea />
+      </Field>
       <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
         <Select
           multi

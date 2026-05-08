@@ -10,8 +10,6 @@ import { useTranslation } from "react-i18next";
 
 import { CgSpinner } from "react-icons/cg";
 import {
-  RiBookmarkFill,
-  RiBookmarkLine,
   RiEyeLine,
   RiFileCopyLine,
   RiFireFill,
@@ -20,6 +18,7 @@ import {
   RiSearchLine,
 } from "react-icons/ri";
 
+import { BsBookmarkStarFill } from "react-icons/bs";
 import { Button } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
@@ -80,24 +79,30 @@ const TrendingCard = ({
           </div>
         )}
       </div>
-
+      <Button
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsBookmarked(!isBookmarked);
+        }}
+        className="absolute top-2 right-2 z-10 p-0.5"
+        tooltip={t("Đánh dấu")}
+        icon={
+          isBookmarked ? (
+            <BsBookmarkStarFill className="text-20 text-success" />
+          ) : (
+            <BsBookmarkStarFill className="text-20" />
+          )
+        }
+      />
       {/* Title row: Name + Bookmark + Copy */}
-      <div className=" flex items-start gap-2">
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setIsBookmarked(!isBookmarked);
-            }}
-            className="p-0.5 text-gray-400 hover:text-amber-400 transition-colors cursor-pointer border-0 bg-transparent"
-            title={t("Đánh dấu")}
-          >
-            {isBookmarked ? (
-              <RiBookmarkFill className="text-sm text-amber-400" />
-            ) : (
-              <RiBookmarkLine className="text-sm" />
-            )}
-          </button>
+      <div className=" flex items-start gap-2 w-full">
+        <div className="flex items-center gap-1.5 justify-between min-w-0 flex-1">
+          {/* Category tag */}
+          {categoryName && (
+            <div className="bg-white bg-opacity-70 font-semibold px-1 py-0.5 text-emerald-400 text-base rounded-md border min-w-0 truncate">
+              🌿 {categoryName}
+            </div>
+          )}
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -105,27 +110,20 @@ const TrendingCard = ({
             }}
             outline
             info
-            className="rounded-lg px-1 h-7"
-          >
-            <RiFileCopyLine className="text-xs" />
-            {t("Sao chép")}
-          </Button>
+            className="rounded-lg px-1 h-7 whitespace-nowrap font-normal text-10"
+            text={t("Sao chép")}
+            icon={<RiFileCopyLine className="text-14 " />}
+          ></Button>
         </div>
       </div>
 
-      {/* Category tag */}
-      {categoryName && (
-        <div className=" ">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold rounded-md border border-emerald-500/20">
-            🌿 {categoryName}
-          </span>
-        </div>
-      )}
-      <h4 className="flex-1  font-bold text-primary line-clamp-1 leading-snug m-0">{item.name}</h4>
+      <div className="flex-1  font-bold text-primary line-clamp-1 leading-snug m-0  items-center pl-1">
+        {item.name}
+      </div>
       {/* Prompt section (dark, max 3 lines) */}
       {item.prompt && (
-        <div className=" mb-2.5   bg-white rounded-lg border border-gray-200">
-          <p className="text-[11px] text-gray-400 leading-relaxed line-clamp-3 m-0 overflow-ellipsis text-ellipsis-2 px-1">
+        <div className=" bg-white rounded-lg border border-gray-200">
+          <p className="text-12 text-gray-400 leading-relaxed line-clamp-3 m-0 max-w-full overflow-ellipsis text-ellipsis-2 px-1">
             {item.prompt}
           </p>
         </div>
