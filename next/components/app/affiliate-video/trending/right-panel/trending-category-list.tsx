@@ -140,12 +140,14 @@ const CategorySection = ({
   categoryId,
   searchText,
   onUseTrending,
+  loadCategories,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
   onUseTrending: (trendingId: string) => void;
+  loadCategories: () => void;
 }) => {
   const { t } = useTranslation();
   const { getTrendingsByCategoryId } = useAffiliateVideoApi();
@@ -206,14 +208,18 @@ const CategorySection = ({
     <div className="rounded-xl overflow-hidden">
       {/* Category header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-100 m-0 truncate">
-          {category?.name || t("Tất cả")}
-        </h3>
-        {total > 0 && (
-          <span className="text-[10px] text-gray-500 font-medium ml-2 shrink-0">
-            {total} {t("Prompt")}
-          </span>
-        )}
+        <Button
+          onClick={loadCategories}
+          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
+          tooltip={t("Làm mới")}
+          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
+        />
+        <Button
+          onClick={loadCategories}
+          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
+          tooltip={t("Làm mới")}
+          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
+        />
       </div>
 
       {/* Loading state */}
@@ -318,15 +324,6 @@ const CategoryTabBar = ({
             </button>
           );
         })}
-      </div>
-      {/* Header */}
-      <div className="flex items-center justify-between   flex-shrink-0">
-        <Button
-          onClick={loadCategories}
-          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
-          tooltip={t("Làm mới")}
-          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
-        />
       </div>
     </div>
   );
@@ -480,6 +477,7 @@ export const TrendingCategoryList = () => {
             key="__all__"
             searchText={debouncedSearch}
             onUseTrending={handleUseTrending}
+            loadCategories={loadCategories}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -489,6 +487,7 @@ export const TrendingCategoryList = () => {
               defaultExpanded={index === 0}
               searchText={debouncedSearch}
               onUseTrending={handleUseTrending}
+              loadCategories={loadCategories}
             />
           ))
         )}
