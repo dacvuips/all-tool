@@ -35,7 +35,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
       <div className="relative w-full">
         <input
           type="range"
-          min={2}
+          min={1}
           max={30}
           step={1}
           value={localValue}
@@ -43,8 +43,8 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
           className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-purple-200 accent-purple-600 focus:outline-none"
           style={{
             background: `linear-gradient(to right, #9333ea 0%, #9333ea ${
-              ((localValue - 2) / 28) * 100
-            }%, #e9d5ff ${((localValue - 2) / 28) * 100}%, #e9d5ff 100%)`,
+              ((localValue - 1) / 29) * 100
+            }%, #e9d5ff ${((localValue - 1) / 29) * 100}%, #e9d5ff 100%)`,
           }}
         />
         {/* Custom thumb styles using tailwind arbitrary variants since standard classes might not fully style the thumb in all browsers */}
@@ -77,7 +77,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
       </div>
 
       <div className="flex justify-between text-purple-400 text-xs mt-2 font-medium">
-        <span>2</span>
+        <span>1</span>
         <span>10</span>
         <span>20</span>
         <span>30</span>

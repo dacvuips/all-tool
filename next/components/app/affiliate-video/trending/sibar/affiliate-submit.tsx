@@ -23,7 +23,7 @@ export const AffiliateSubmit = () => {
         id="create-video-btn"
         disabled={batchRunning}
         primary
-        text={batchRunning ? t("Đang tạo...") : t("Tạo Cảnh")}
+        text={batchRunning ? t("Đang tạo...") : t("Tạo ngay")}
         isLoading={batchRunning}
         icon={<GenerateAiIcon />}
       />

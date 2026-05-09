@@ -78,7 +78,6 @@ export const AffiliateVideoRightPanel = () => {
         bodyClassName="flex-1 overflow-y-auto v-scrollbar"
         className="bg-white"
       >
-        {" "}
         {/* ── Tab: Danh sách Prompt (Trending) ── */}
         <TabGroup.Tab label={t("Danh sách Prompt")}>
           <TrendingCategoryList />

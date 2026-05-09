@@ -13,7 +13,7 @@ import { RiEyeLine, RiFireFill, RiFireLine, RiRefreshLine, RiSearchLine } from "
 
 import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
 import { parseNumber } from "../../../../../lib/helpers/parser";
-import { Button } from "../../../../shared/utilities/form";
+import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
 import {
@@ -124,8 +124,8 @@ const TrendingCard = ({
       </div>
       {/* Prompt section (dark, max 3 lines) */}
       {item.prompt && (
-        <div className=" bg-white rounded-lg border border-gray-200">
-          <p className="text-12 text-gray-400 leading-relaxed line-clamp-3 m-0 max-w-full overflow-ellipsis text-ellipsis-2 px-1">
+        <div className=" bg-white rounded-lg border border-gray-200 border-dashed">
+          <p className="text-12 text-gray-400 leading-relaxed line-clamp-3 m-0 max-w-full overflow-ellipsis text-ellipsis-2 px-2  ">
             {item.prompt}
           </p>
         </div>
@@ -279,10 +279,14 @@ const CategoryTabBar = ({
   categories,
   activeId,
   onSelect,
+  loadCategories,
+  isLoading,
 }: {
   categories: TrendingCategoryPublicItem[];
   activeId: string;
   onSelect: (id: string) => void;
+  loadCategories: () => void;
+  isLoading: boolean;
 }) => {
   const { t } = useTranslation();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -293,10 +297,10 @@ const CategoryTabBar = ({
   }, [categories, t]);
 
   return (
-    <div className="relative flex-shrink-0">
+    <div className="relative flex-shrink-0 flex flex-row gap-2 items-center">
       <div
         ref={scrollRef}
-        className="flex items-center gap-1.5 overflow-x-auto v-scrollbar pb-1 px-0.5"
+        className="flex items-center gap-1.5 overflow-x-auto v-scrollbar py-1 border w-full bg-white rounded-full px-1.5"
         style={{ scrollbarWidth: "thin" }}
       >
         {tabs.map((tab) => {
@@ -321,6 +325,15 @@ const CategoryTabBar = ({
           );
         })}
       </div>
+      {/* Header */}
+      <div className="flex items-center justify-between   flex-shrink-0">
+        <Button
+          onClick={loadCategories}
+          className=" px-3 transition-all cursor-pointer border rounded-full bg-white"
+          tooltip={t("Làm mới")}
+          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
+        />
+      </div>
     </div>
   );
 };
@@ -328,7 +341,6 @@ const CategoryTabBar = ({
 // ── SearchInput – ô tìm kiếm trending theo name ─────────────────────────
 const SearchInput = ({ value, onChange }: { value: string; onChange: (val: string) => void }) => {
   const { t } = useTranslation();
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -341,15 +353,12 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
 
   return (
     <div className="relative flex-shrink-0">
-      <RiSearchLine className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none" />
-      <input
-        type="text"
+      <Input
         value={value}
         onChange={handleChange}
+        prefix={<RiSearchLine />}
         placeholder={t("Tìm kiếm trending...")}
-        className="w-full pl-8 pr-3 py-1.5 text-xs text-gray-200 bg-[#1a2332] border border-[#2a3a4a] rounded-lg
-          focus:outline-none focus:border-blue-500/50 focus:bg-[#1e2a3a] focus:ring-1 focus:ring-blue-500/20
-          placeholder:text-gray-600 transition-all duration-200"
+        controlClassName="!text-sm border border-gray-300 rounded-full bg-white focus:border-blue-500 focus:ring-blue-500 focus:ring-1"
       />
     </div>
   );
@@ -359,7 +368,7 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
   const { getActiveTrendingCategoryList } = useAffiliateVideoApi();
-  const { handleSubmit, affiliateVideoFormConfig } = useAffiliateVideoContext();
+  const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -405,14 +414,17 @@ export const TrendingCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng prompt" → gọi handleSubmit với prompt text
+  // Khi user click "Dùng ngay" → gắn prompt vào tipContent trong sidebar config
   const handleUsePrompt = useCallback(
     (prompt: string) => {
-      if (handleSubmit && affiliateVideoFormConfig) {
-        handleSubmit(affiliateVideoFormConfig, prompt);
+      if (patchConfig) {
+        patchConfig({ tipContent: prompt });
+      }
+      if (setPendingPrompt) {
+        setPendingPrompt(prompt);
       }
     },
-    [handleSubmit, affiliateVideoFormConfig]
+    [patchConfig, setPendingPrompt]
   );
 
   // ── Loading state ──
@@ -451,17 +463,6 @@ export const TrendingCategoryList = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#0f1923]">
-      {/* Header */}
-      <div className="flex items-center justify-between px-2 xs:px-3 py-2 xs:py-2.5 border-b border-[#1a2332] flex-shrink-0">
-        <button
-          onClick={loadCategories}
-          className="p-1 xs:p-1.5 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
-          title={t("Làm mới")}
-        >
-          <RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />
-        </button>
-      </div>
-
       {/* Category tabs + Search */}
       <div className="px-2 xs:px-3 pt-2 space-y-2 flex-shrink-0">
         {/* Tab bar */}
@@ -469,6 +470,8 @@ export const TrendingCategoryList = () => {
           categories={categories}
           activeId={activeCategoryId}
           onSelect={setActiveCategoryId}
+          loadCategories={loadCategories}
+          isLoading={isLoading}
         />
 
         {/* Search input */}

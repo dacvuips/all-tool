@@ -105,6 +105,10 @@ export const AffiliateVideoContext = createContext<
 
     storyModeType: StoryModeTypeEnum;
     setStoryModeType: (storyModeType: StoryModeTypeEnum) => void;
+
+    /** Pending prompt set by "Dùng ngay" button, consumed by AffiliateConfig */
+    pendingPrompt: string | null;
+    setPendingPrompt: (prompt: string | null) => void;
   }>
 >({});
 
@@ -147,6 +151,9 @@ export function AffiliateVideoProvider(props) {
   // ── Scene history state ──
   const [sceneHistory, setSceneHistory] = useState<SceneHistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+
+  // Pending prompt: bridge between TrendingCategoryList and AffiliateConfig
+  const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -401,6 +408,10 @@ export function AffiliateVideoProvider(props) {
             }
           });
         },
+
+        // pending prompt
+        pendingPrompt,
+        setPendingPrompt,
       }}
     >
       {props.children}

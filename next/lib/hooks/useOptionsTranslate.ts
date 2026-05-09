@@ -810,6 +810,7 @@ export const useOptionsTranslation = () => {
 
   // ── Affiliate Video: Art Style Options (translated) ──
   const ART_STYLE_TRANSLATED_OPTIONS = [
+    { value: "", label: t("Mặc định") },
     { value: ArtStyleMapEnum.PIXAR, label: t("3D Pixar Cute") },
     { value: ArtStyleMapEnum.PIXAR_REALISTIC, label: t("Pixar Realism (Nhân hoá)") },
     { value: ArtStyleMapEnum.REALISTIC, label: t("Chân thực (Realistic)") },

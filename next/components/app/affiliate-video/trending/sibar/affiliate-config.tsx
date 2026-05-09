@@ -9,13 +9,11 @@ import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
-import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
 
-import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -24,8 +22,23 @@ import { BatchSizeSlider } from "./batch-size-slider";
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const router = useRouter();
-  const { videoConfig, patchConfig, storyModeType, setStoryModeType } = useAffiliateVideoContext();
+  const {
+    videoConfig,
+    patchConfig,
+    storyModeType,
+    setStoryModeType,
+    pendingPrompt,
+    setPendingPrompt,
+  } = useAffiliateVideoContext();
   const formContext = useFormContext();
+
+  // Khi nhận pendingPrompt từ "Dùng ngay" → cập nhật react-hook-form value
+  useEffect(() => {
+    if (pendingPrompt && formContext) {
+      formContext.setValue("tipContent", pendingPrompt);
+      if (setPendingPrompt) setPendingPrompt(null);
+    }
+  }, [pendingPrompt]);
   const { ART_STYLE_TRANSLATED_OPTIONS, CATEGORY_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } =
     useOptionsTranslation();
 
@@ -51,74 +64,6 @@ export const AffiliateConfig = () => {
 
   return (
     <div className="flex-1 bg-white">
-      {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
-      <div className="px-4 pt-3 pb-2">
-        <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
-          <div
-            onClick={() => {
-              setCurrentStoryModeType(StoryModeTypeEnum.prompt_to_video);
-              if (setStoryModeType) setStoryModeType(StoryModeTypeEnum.prompt_to_video);
-              if (patchConfig) patchConfig({ storyModeType: StoryModeTypeEnum.prompt_to_video });
-              if (formContext)
-                formContext.setValue("storyModeType", StoryModeTypeEnum.prompt_to_video);
-              router.push(
-                {
-                  pathname: router.pathname,
-                  query: { ...router.query, storyModeType: StoryModeTypeEnum.prompt_to_video },
-                },
-                undefined,
-                { shallow: true }
-              );
-            }}
-            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              currentStoryModeType === StoryModeTypeEnum.prompt_to_video
-                ? "bg-white text-gray-800 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <RiFilmFill
-              className={
-                currentStoryModeType === StoryModeTypeEnum.prompt_to_video
-                  ? "text-pink-500"
-                  : "text-gray-400"
-              }
-            />
-            {t("Prompt to Video")}
-          </div>
-          <div
-            onClick={() => {
-              setCurrentStoryModeType(StoryModeTypeEnum.image_to_video);
-              if (setStoryModeType) setStoryModeType(StoryModeTypeEnum.image_to_video);
-              if (patchConfig) patchConfig({ storyModeType: StoryModeTypeEnum.image_to_video });
-              if (formContext)
-                formContext.setValue("storyModeType", StoryModeTypeEnum.image_to_video);
-              router.push(
-                {
-                  pathname: router.pathname,
-                  query: { ...router.query, storyModeType: StoryModeTypeEnum.image_to_video },
-                },
-                undefined,
-                { shallow: true }
-              );
-            }}
-            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-              currentStoryModeType === StoryModeTypeEnum.image_to_video
-                ? "bg-white  text-gray-800 shadow-sm"
-                : "text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <RiCameraLensFill
-              className={
-                currentStoryModeType === StoryModeTypeEnum.image_to_video
-                  ? "text-pink-500"
-                  : "text-gray-400"
-              }
-            />
-            {t("Image to Video")}
-          </div>
-        </div>
-      </div>
-
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
@@ -176,48 +121,14 @@ export const AffiliateConfig = () => {
           </Field>
         </div>
 
-        {/* CHỦ ĐỀ / DANH MỤC */}
-        <div>
-          <Field noError name="category" label={t("Chủ đề / Danh mục")}>
-            <Select
-              native
-              id="category-select"
-              className="border-gray-200"
-              options={CATEGORY_OPTIONS}
-              onChange={(v) => patchConfig && patchConfig({ category: v })}
-            />
-          </Field>
-        </div>
-
-        {/* MOOD / TÍNH CÁCH */}
-        <div>
-          <Field noError name="mood" label={t("Tính cách / Mood")}>
-            <Select
-              native
-              id="mood-select"
-              className="border-gray-200"
-              options={MOOD_OPTIONS}
-              onChange={(v) => patchConfig && patchConfig({ mood: v })}
-            />
-          </Field>
-        </div>
-
-        {/* NHÂN HOÁ ĐỒ VẬT (objectToPersonify) */}
-        <div>
-          <ObjectPersonifyPickerDialog
-            name="objectToPersonify"
-            value={videoConfig?.objectToPersonify}
-            onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
-            onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
-          />
-        </div>
-
         {/* NỘI DUNG MẸO (tipContent) */}
         <div>
-          <Field noError name="tipContent" label={t("Nội dung mẹo")}>
+          <Field noError name="tipContent" label={t("Prompt")}>
             <Textarea
+              maxRows={4}
               id="tip-content-input"
               className="border-gray-200"
+              value={videoConfig?.tipContent || ""}
               placeholder={t("VD: Cách ăn chuối tốt nhất")}
               onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
             />
@@ -226,7 +137,7 @@ export const AffiliateConfig = () => {
 
         {/* Ảnh sản phẩm */}
 
-        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+        <Field noError label={t("Ảnh tham chiếu (tùy chọn)")}>
           <ImageInput
             multi
             value={videoConfig?.productImages}
