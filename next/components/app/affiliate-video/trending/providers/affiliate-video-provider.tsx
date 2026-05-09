@@ -307,7 +307,7 @@ export function AffiliateVideoProvider(props) {
       return;
     }
     try {
-      setScriptTab("script");
+      setScriptTab("batch");
       setBatchRunning(true);
       const scriptResult = promptText
         ? await generateSceneFromText({ text: promptText, config: data })

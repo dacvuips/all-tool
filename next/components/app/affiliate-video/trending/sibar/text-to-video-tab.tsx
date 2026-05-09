@@ -102,7 +102,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
             <RiCameraLensFill className="text-white text-base" />
           </div>
-          <span className="text-base font-bold text-gray-800">{t("Tạo Nhân Vật")}</span>
+          <span className="text-base font-bold text-gray-800">{t("Trending Prompt")}</span>
         </div>
         <div className="flex items-center gap-1">
           <SuggestButton />

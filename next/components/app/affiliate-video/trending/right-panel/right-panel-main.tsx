@@ -13,6 +13,7 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";
 import { TrendingCategoryList } from "./trending-category-list";
+import { TrendingPromptRank } from "./trending-prompt-rank";
 
 // ── Tab index mapping ────────────────────────────────────────────────────
 const TAB_NAMES = ["script", "batch"] as const;
@@ -107,6 +108,9 @@ export const AffiliateVideoRightPanel = () => {
               characters={[]}
             />
           )}
+        </TabGroup.Tab>
+        <TabGroup.Tab label={t("Bảng xếp hạng prompt")}>
+          <TrendingPromptRank />
         </TabGroup.Tab>
       </TabGroup>
     </div>
