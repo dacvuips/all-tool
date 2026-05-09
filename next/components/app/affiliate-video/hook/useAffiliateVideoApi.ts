@@ -356,6 +356,11 @@ export interface UseAffiliateVideoApiReturn {
     limit?: number,
     search?: string
   ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy prompt của trending theo ID.
+   */
+  getTrendingPromptById: (trendingId: string) => Promise<string | null>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -1157,6 +1162,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
+  // ── getTrendingPromptById – lấy prompt của trending theo ID ──
+  const getTrendingPromptById = useCallback(
+    async (trendingId: string): Promise<string | null> => {
+      return TrendingCategoryService.getTrendingPromptById(trendingId);
+    },
+    []
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -1179,5 +1192,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     deleteCustomerObjectToPersonify,
     getActiveTrendingCategoryList,
     getTrendingsByCategoryId,
+    getTrendingPromptById,
   };
 }

@@ -23,4 +23,6 @@ export type ITrending = TimestampEntity & {
   monthlyCount?: number;
   /** Mô tả */
   des?: string;
+  /** Prompt ngắn (150 ký tự đầu) */
+  promptShort?: string;
 };

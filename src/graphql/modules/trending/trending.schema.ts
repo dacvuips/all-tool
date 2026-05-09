@@ -4,6 +4,8 @@ const schema = gql`
   extend type Query {
     getAllTrending(q: QueryGetListInput): TrendingPageData
     getOneTrending(id: ID!): Trending
+    "Lấy prompt của trending theo ID (dành cho customer)"
+    getTrendingPromptById(id: ID!): TrendingPromptResult
     # Add Query
   }
 
@@ -91,12 +93,20 @@ const schema = gql`
     monthlyCount: Int
     "Mô tả"
     des: String
+    "Prompt ngắn (150 ký tự đầu)"
+    promptShort: String
   }
 
   type TrendingPageData {
     data: [Trending]
     total: Int
     pagination: Pagination
+  }
+
+  "Kết quả trả về prompt của trending"
+  type TrendingPromptResult {
+    id: String
+    prompt: String
   }
 `;
 

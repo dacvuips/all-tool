@@ -27,32 +27,19 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 const ITEMS_PER_PAGE = 5;
 const ALL_CATEGORY_ID = "__all__";
 
-/** Extract hashtags from prompt text */
-const extractHashtags = (prompt: string): string[] => {
-  if (!prompt) return [];
-  const words = prompt.split(/\s+/);
-  // Take some meaningful words and create hashtags
-  const keywords = words
-    .filter((w) => w.length > 3 && /^[a-zA-ZÀ-ỹ]/.test(w))
-    .slice(0, 3)
-    .map((w) => `#${w.replace(/[^a-zA-ZÀ-ỹ0-9]/g, "")}`);
-  return keywords;
-};
-
 // ── TrendingCard – hiển thị 1 trending item (dark theme) ─────────────────
 const TrendingCard = ({
   item,
   categoryName,
-  onUsePrompt,
+  onUseTrending,
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUsePrompt: (prompt: string) => void;
+  onUseTrending: (trendingId: string) => void;
 }) => {
   const { t } = useTranslation();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const firstImage = item.imageUrls?.[0];
-  const hashtags = useMemo(() => extractHashtags(item.prompt), [item.prompt]);
 
   return (
     <div className="group relative rounded-xl  overflow-hidden bg-white p-1.5 gap-2  transition-all duration-300 border border-primary-dark  flex flex-col hover:shadow-2xl cursor-pointer hover:shadow-primary-100 hover:border-success-dark hover:border-2">
@@ -108,7 +95,7 @@ const TrendingCard = ({
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              onUsePrompt(item.prompt || item.name);
+              onUseTrending(item.id);
             }}
             outline
             info
@@ -123,10 +110,10 @@ const TrendingCard = ({
         {item.name}
       </div>
       {/* Prompt section (dark, max 3 lines) */}
-      {item.prompt && (
+      {item.promptShort && (
         <div className=" bg-white rounded-lg border border-gray-200 border-dashed">
           <p className="text-12 text-gray-400 leading-relaxed line-clamp-3 m-0 max-w-full overflow-ellipsis text-ellipsis-2 px-2  ">
-            {item.prompt}
+            {item.promptShort}
           </p>
         </div>
       )}
@@ -151,12 +138,12 @@ const TrendingCard = ({
 const CategorySection = ({
   category,
   searchText,
-  onUsePrompt,
+  onUseTrending,
 }: {
   category: TrendingCategoryPublicItem;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUsePrompt: (prompt: string) => void;
+  onUseTrending: (trendingId: string) => void;
 }) => {
   const { t } = useTranslation();
   const { getTrendingsByCategoryId } = useAffiliateVideoApi();
@@ -243,7 +230,7 @@ const CategorySection = ({
                 key={item.id}
                 item={item}
                 categoryName={category.name}
-                onUsePrompt={onUsePrompt}
+                onUseTrending={onUseTrending}
               />
             ))}
           </div>
@@ -367,7 +354,7 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
 // ── TrendingCategoryList – main component ───────────────────────────────
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
-  const { getActiveTrendingCategoryList } = useAffiliateVideoApi();
+  const { getActiveTrendingCategoryList, getTrendingPromptById } = useAffiliateVideoApi();
   const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
@@ -414,9 +401,11 @@ export const TrendingCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → gắn prompt vào tipContent trong sidebar config
-  const handleUsePrompt = useCallback(
-    (prompt: string) => {
+  // Khi user click "Dùng ngay" → gọi backend lấy prompt theo trending ID → gắn vào config
+  const handleUseTrending = useCallback(
+    async (trendingId: string) => {
+      const prompt = await getTrendingPromptById(trendingId);
+      if (!prompt) return;
       if (patchConfig) {
         patchConfig({ tipContent: prompt });
       }
@@ -424,7 +413,7 @@ export const TrendingCategoryList = () => {
         setPendingPrompt(prompt);
       }
     },
-    [patchConfig, setPendingPrompt]
+    [getTrendingPromptById, patchConfig, setPendingPrompt]
   );
 
   // ── Loading state ──
@@ -486,7 +475,7 @@ export const TrendingCategoryList = () => {
             category={cat}
             defaultExpanded={index === 0}
             searchText={debouncedSearch}
-            onUsePrompt={handleUsePrompt}
+            onUseTrending={handleUseTrending}
           />
         ))}
       </div>

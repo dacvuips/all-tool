@@ -21,6 +21,7 @@ const trendingSchema = new Schema(
     isPublish: { type: Boolean, default: false },
     monthlyCount: { type: Number, default: 0 },
     des: { type: String },
+    promptShort: { type: String },
   },
   { timestamps: true }
 );

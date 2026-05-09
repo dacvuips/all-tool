@@ -17,6 +17,7 @@ export interface TrendingPublicItem {
   prompt: string;
   count: number;
   price: number;
+  promptShort: string;
 }
 
 /** Public trending category with resolved trending items */
@@ -102,7 +103,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           },
           order: { count: -1 },
         },
-        fragment: `id name imageUrls prompt count price`,
+        fragment: `id name imageUrls prompt count price promptShort`,
         cache: false,
       });
       return {
@@ -113,6 +114,27 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     } catch (err) {
       console.error("[getTrendingsByCategoryId] Error:", err);
       return { data: [], total: 0 };
+    }
+  }
+
+  /**
+   * Lấy prompt của trending theo ID.
+   * Gọi custom query `getTrendingPromptById(id)` → trả về prompt string.
+   */
+  async getTrendingPromptById(trendingId: string): Promise<string | null> {
+    try {
+      const result = await this.query({
+        query: `getTrendingPromptById(id: "${trendingId}") { id prompt }`,
+        options: {
+          fetchPolicy: "network-only",
+        },
+      });
+      this.handleError(result);
+      const data = result.data?.["g0"];
+      return data?.prompt || null;
+    } catch (err) {
+      console.error("[getTrendingPromptById] Error:", err);
+      return null;
     }
   }
 }

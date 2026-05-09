@@ -13,6 +13,7 @@ export interface Trending extends BaseModel {
   isPublish: boolean;
   monthlyCount: number;
   des: string;
+  promptShort: string;
 }
 
 export class TrendingRepository extends CrudRepository<Trending> {
@@ -23,8 +24,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     createdAt: DateTime
     updatedAt: DateTime
     name: String
-    imageUrls: [String]
-    prompt: String
+    imageUrls: [String] 
     isActive: Boolean
     customerId: ID
     count: Int
@@ -33,14 +33,14 @@ export class TrendingRepository extends CrudRepository<Trending> {
     isPublish: Boolean
     monthlyCount: Int
     des: String
+    promptShort: String
   `);
   fullFragment: string = this.parseFragment(`
     id: String
     createdAt: DateTime
     updatedAt: DateTime
     name: String
-    imageUrls: [String]
-    prompt: String
+    imageUrls: [String] 
     isActive: Boolean
     customerId: ID
     count: Int
@@ -49,6 +49,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     isPublish: Boolean
     monthlyCount: Int
     des: String
+    promptShort: String
   `);
 }
 
