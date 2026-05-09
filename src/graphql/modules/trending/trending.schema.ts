@@ -6,6 +6,8 @@ const schema = gql`
     getOneTrending(id: ID!): Trending
     "Lấy prompt của trending theo ID (dành cho customer)"
     getTrendingPromptById(id: ID!): TrendingPromptResult
+    "Lấy danh sách trending do chính customer hiện tại tạo"
+    getCustomerTrendingList(q: QueryGetListInput): TrendingPageData
     # Add Query
   }
 
@@ -13,7 +15,47 @@ const schema = gql`
     createTrending(data: CreateTrendingInput!): Trending
     updateTrending(id: ID!, data: UpdateTrendingInput!): Trending
     deleteOneTrending(id: ID!): Trending
+    "Customer tạo trending mới (tự động gán customerId)"
+    createCustomerTrending(data: CreateCustomerTrendingInput!): Trending
+    "Customer sửa trending của mình"
+    updateCustomerTrending(id: ID!, data: UpdateCustomerTrendingInput!): Trending
+    "Customer xoá trending của mình"
+    deleteCustomerTrending(id: ID!): Trending
     # Add Mutation
+  }
+
+  input CreateCustomerTrendingInput {
+    "Tên trending"
+    name: String!
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+  }
+
+  input UpdateCustomerTrendingInput {
+    "Tên trending"
+    name: String
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
   }
 
   input CreateTrendingInput {

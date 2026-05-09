@@ -18,6 +18,8 @@ export interface TrendingPublicItem {
   count: number;
   price: number;
   promptShort: string;
+  des: string;
+  isPublish: boolean;
 }
 
 /** Public trending category with resolved trending items */
@@ -34,6 +36,17 @@ export interface TrendingsByCategoryResult {
   data: TrendingPublicItem[];
   total: number;
   pagination?: { limit?: number; page?: number; total?: number };
+}
+
+/** Input data for creating/updating customer trending */
+export interface CustomerTrendingInput {
+  name: string;
+  prompt?: string;
+  imageUrls?: string[];
+  des?: string;
+  isPublish?: boolean;
+  trendingCategoryIds?: string[];
+  price?: number;
 }
 
 export class TrendingCategoryRepository extends CrudRepository<TrendingCategory> {
@@ -136,6 +149,37 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     } catch (err) {
       console.error("[getTrendingPromptById] Error:", err);
       return null;
+    }
+  }
+
+  /**
+   * Lấy danh sách trending do chính customer hiện tại tạo, có phân trang.
+   */
+  async getCustomerTrendingList(
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    try {
+      const result = await this.getAll({
+        apiName: "getCustomerTrendingList",
+        query: {
+          page,
+          limit,
+          search: search || undefined,
+          order: { createdAt: -1 },
+        },
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt`,
+        cache: false,
+      });
+      return {
+        data: (result.data || []) as any as TrendingPublicItem[],
+        total: result.total || 0,
+        pagination: result.pagination,
+      };
+    } catch (err) {
+      console.error("[getCustomerTrendingList] Error:", err);
+      return { data: [], total: 0 };
     }
   }
 }

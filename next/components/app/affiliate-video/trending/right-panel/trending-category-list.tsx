@@ -9,14 +9,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CgSpinner } from "react-icons/cg";
-import { RiEyeLine, RiFireFill, RiFireLine, RiRefreshLine, RiSearchLine } from "react-icons/ri";
+import {
+  RiAddLine,
+  RiDeleteBin6Line,
+  RiEdit2Line,
+  RiEyeLine,
+  RiFileList3Line,
+  RiFireFill,
+  RiFireLine,
+  RiRefreshLine,
+  RiSearchLine,
+} from "react-icons/ri";
 
 import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
 import { parseNumber } from "../../../../../lib/helpers/parser";
-import { Button, Input } from "../../../../shared/utilities/form";
+import { useAlert } from "../../../../../lib/providers/alert-provider";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { NotifyText } from "../../../../shared/common/notify-text";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import {
+  Button,
+  Field,
+  Form,
+  ImageInput,
+  Input,
+  Switch,
+  Textarea,
+} from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
 import {
+  CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingPublicItem,
   useAffiliateVideoApi,
@@ -26,16 +49,23 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 // ── Constants ────────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 5;
 const ALL_CATEGORY_ID = "__all__";
+const MY_TRENDING_ID = "__my__";
 
 // ── TrendingCard – hiển thị 1 trending item (dark theme) ─────────────────
 const TrendingCard = ({
   item,
   categoryName,
   onUseTrending,
+  onEdit,
+  onDelete,
+  onShowInfo,
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
   onUseTrending: (trendingId: string) => void;
+  onEdit?: (item: TrendingPublicItem) => void;
+  onDelete?: (item: TrendingPublicItem) => void;
+  onShowInfo?: (item: TrendingPublicItem) => void;
 }) => {
   const { t } = useTranslation();
   const [isBookmarked, setIsBookmarked] = useState(false);
@@ -83,6 +113,31 @@ const TrendingCard = ({
           )
         }
       />
+
+      {/* Edit/Delete buttons for customer's own items */}
+      {onEdit && onDelete && (
+        <div className="absolute top-2 left-2 z-10 flex p-1  gap-2 opacity-100 transition-opacity border bg-white bg-opacity-80 rounded-lg border-white  ">
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(item);
+            }}
+            className="px-0 h-7"
+            tooltip={t("Sửa")}
+            icon={<RiEdit2Line className="text-lg text-blue-500" />}
+          />
+          <Button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(item);
+            }}
+            className="px-0 h-7"
+            tooltip={t("Xoá")}
+            icon={<RiDeleteBin6Line className="text-lg text-red-500" />}
+          />
+        </div>
+      )}
+
       {/* Title row: Name + Bookmark + Copy */}
       <div className=" flex items-start gap-2 w-full">
         <div className="flex items-center gap-1.5 justify-between min-w-0 flex-1">
@@ -92,17 +147,31 @@ const TrendingCard = ({
               🌿 {categoryName}
             </div>
           )}
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              onUseTrending(item.id);
-            }}
-            outline
-            info
-            className="rounded-lg px-1 h-7 whitespace-nowrap font-normal text-10"
-            text={t("Dùng ngay")}
-            icon={<BsMagic className="text-14 " />}
-          ></Button>
+          <div className="flex items-center gap-1">
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onUseTrending(item.id);
+              }}
+              outline
+              info
+              className="rounded-lg px-1 h-7 whitespace-nowrap font-normal text-10"
+              text={t("Dùng ngay")}
+              icon={<BsMagic className="text-14 " />}
+            ></Button>
+            {/* Info button */}
+            {(item.des || onShowInfo) && (
+              <Button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onShowInfo) onShowInfo(item);
+                }}
+                className="rounded-full p-0.5 h-7 w-7  border bg-white hover:bg-blue-50"
+                tooltip={t("Xem hướng dẫn")}
+                icon={<RiFileList3Line className="text-20 text-blue-400" />}
+              />
+            )}
+          </div>
         </div>
       </div>
 
@@ -141,6 +210,8 @@ const CategorySection = ({
   searchText,
   onUseTrending,
   loadCategories,
+  onShowInfo,
+  onOpenCreate,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
@@ -148,6 +219,8 @@ const CategorySection = ({
   searchText?: string;
   onUseTrending: (trendingId: string) => void;
   loadCategories: () => void;
+  onShowInfo?: (item: TrendingPublicItem) => void;
+  onOpenCreate?: () => void;
 }) => {
   const { t } = useTranslation();
   const { getTrendingsByCategoryId } = useAffiliateVideoApi();
@@ -207,18 +280,19 @@ const CategorySection = ({
   return (
     <div className="rounded-xl overflow-hidden">
       {/* Category header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-end gap-2 mb-2">
         <Button
           onClick={loadCategories}
           className="px-3 transition-all cursor-pointer border rounded-full bg-white"
           tooltip={t("Làm mới")}
           icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
-        />
+        />{" "}
         <Button
-          onClick={loadCategories}
-          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
-          tooltip={t("Làm mới")}
-          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
+          primary
+          onClick={() => onOpenCreate?.()}
+          className="px-3 rounded-full whitespace-nowrap h-9"
+          text={t("Tạo mới")}
+          icon={<RiAddLine className="text-sm" />}
         />
       </div>
 
@@ -244,6 +318,7 @@ const CategorySection = ({
                 item={item}
                 categoryName={category?.name}
                 onUseTrending={onUseTrending}
+                onShowInfo={onShowInfo}
               />
             ))}
           </div>
@@ -293,7 +368,8 @@ const CategoryTabBar = ({
 
   const tabs = useMemo(() => {
     const allTab = { id: ALL_CATEGORY_ID, name: t("Tất cả"), isHot: false };
-    return [allTab, ...categories.map((c) => ({ id: c.id, name: c.name, isHot: c.isHot }))];
+    const myTab = { id: MY_TRENDING_ID, name: t("Của tôi"), isHot: false };
+    return [allTab, myTab, ...categories.map((c) => ({ id: c.id, name: c.name, isHot: c.isHot }))];
   }, [categories, t]);
 
   return (
@@ -355,10 +431,404 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
   );
 };
 
+// ── DescriptionInfoDialog – Dialog hiển thị mô tả (des) ─────────────────
+const DescriptionInfoDialog = ({
+  isOpen,
+  onClose,
+  item,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  item: TrendingPublicItem | null;
+}) => {
+  const { t } = useTranslation();
+  if (!item) return null;
+  return (
+    <Dialog
+      slideFromBottom="none"
+      isOpen={isOpen}
+      onClose={onClose}
+      title={item.name}
+      width="480px"
+      maxWidth="95vw"
+    >
+      <Dialog.Body>
+        <div className="space-y-3 py-2">
+          {item.des ? (
+            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+              {item.des}
+            </div>
+          ) : (
+            <div className="text-sm text-gray-400 italic">{t("Chưa có mô tả")}</div>
+          )}
+        </div>
+      </Dialog.Body>
+    </Dialog>
+  );
+};
+
+// ── CreateEditTrendingDialog – Dialog tạo/sửa trending ───────────────────
+const CreateEditTrendingDialog = ({
+  isOpen,
+  onClose,
+  editItem,
+  categories,
+  onSave,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  editItem: TrendingPublicItem | null;
+  categories: TrendingCategoryPublicItem[];
+  onSave: (data: CustomerTrendingInput, id?: string) => Promise<boolean>;
+}) => {
+  const { t } = useTranslation();
+  const [name, setName] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [des, setDes] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [isPublish, setIsPublish] = useState(false);
+  const [price, setPrice] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Reset form when dialog opens/editItem changes
+  useEffect(() => {
+    if (isOpen) {
+      if (editItem) {
+        setName(editItem.name || "");
+        setPrompt(editItem.prompt || "");
+        setDes(editItem.des || "");
+        setImageUrls(editItem.imageUrls || []);
+        setIsPublish(editItem.isPublish || false);
+        setPrice(editItem.price || 0);
+      } else {
+        setName("");
+        setPrompt("");
+        setDes("");
+        setImageUrls([]);
+        setIsPublish(false);
+        setPrice(0);
+      }
+    }
+  }, [isOpen, editItem]);
+
+  const handleSubmit = async () => {
+    if (!name.trim()) return;
+    setIsSaving(true);
+    try {
+      const data: CustomerTrendingInput = {
+        name: name.trim(),
+        prompt: prompt.trim() || undefined,
+        des: des.trim() || undefined,
+        imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
+        isPublish,
+        price,
+      };
+      const ok = await onSave(data, editItem?.id);
+      if (ok) onClose();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <Form
+      dialog
+      isOpen={isOpen}
+      onClose={onClose}
+      title={editItem ? t("Sửa prompt") : t("Tạo prompt")}
+      width="560px"
+      maxWidth="95vw"
+      onOverlayClick={() => {}}
+    >
+      <Dialog.Body>
+        <div className="space-y-3 py-2">
+          <NotifyText
+            color="green"
+            text={t(
+              "Prompt của bạn được nhiều người dùng và được lên top thì bạn sẽ được nâng cấp gói hoặc một khoản tiền thưởng tương ứng với giá trị."
+            )}
+          />{" "}
+          <NotifyText
+            color="indigo"
+            text={t("Hãy đưa ra những prompt hay, độc đáo để kiếm thêm thu nhập ngay bạn nhé!")}
+          />
+          <Field label={t("Danh sách ảnh")}>
+            <ImageInput
+              multi
+              cover
+              value={imageUrls}
+              onChange={(v) => setImageUrls(v as string[])}
+              cols={3}
+            />
+          </Field>
+          <Field label={t("Tên prompt")} required>
+            <Input value={name} onChange={setName} placeholder={t("Nhập tên prompt...")} />
+          </Field>
+          <Field label={t("Prompt")}>
+            <Textarea
+              value={prompt}
+              onChange={setPrompt}
+              placeholder={t("Nhập prompt mô tả...")}
+              maxRows={6}
+            />
+          </Field>
+          <Field label={t("Hướng dẫn sử dụng prompt")}>
+            <Textarea
+              value={des}
+              onChange={setDes}
+              placeholder={t("Nhập hướng dẫn chi tiết...")}
+              maxRows={4}
+            />
+          </Field>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">{t("Công khai")}</span>
+            <Switch value={isPublish} onChange={setIsPublish} />
+          </div>
+          <NotifyText
+            color="pink"
+            text={t(
+              "Lưu ý: Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
+            )}
+          />
+        </div>
+        <div className="flex items-center justify-end gap-2 w-full">
+          <Button text={t("Huỷ")} outline className="rounded-lg" onClick={onClose} />
+          <Button
+            primary
+            text={editItem ? t("Cập nhật") : t("Tạo mới")}
+            className="rounded-lg"
+            onClick={handleSubmit}
+            disabled={!name.trim() || isSaving}
+            isLoading={isSaving}
+          />
+        </div>
+      </Dialog.Body>
+    </Form>
+  );
+};
+
+// ── CustomerTrendingSection – danh sách trending của customer ─────────────
+const CustomerTrendingSection = ({
+  searchText,
+  onUseTrending,
+  onOpenCreate,
+  categories,
+}: {
+  searchText?: string;
+  onUseTrending: (trendingId: string) => void;
+  onOpenCreate: () => void;
+  categories: TrendingCategoryPublicItem[];
+}) => {
+  const { t } = useTranslation();
+  const Alert = useAlert();
+  const toast = useToast();
+  const {
+    getCustomerTrendingList,
+    updateCustomerTrending,
+    deleteCustomerTrending,
+    createCustomerTrending,
+  } = useAffiliateVideoApi();
+
+  const [items, setItems] = useState<TrendingPublicItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Dialog states
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editItem, setEditItem] = useState<TrendingPublicItem | null>(null);
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
+  const [infoItem, setInfoItem] = useState<TrendingPublicItem | null>(null);
+
+  const loadItems = useCallback(
+    async (pageNum: number, search?: string) => {
+      setIsLoading(true);
+      try {
+        const result = await getCustomerTrendingList(pageNum, ITEMS_PER_PAGE, search || undefined);
+        setItems(result.data);
+        setTotal(result.total);
+      } catch {
+        setItems([]);
+        setTotal(0);
+      } finally {
+        setIsLoading(false);
+        setHasLoaded(true);
+      }
+    },
+    [getCustomerTrendingList]
+  );
+
+  useEffect(() => {
+    setPage(1);
+    setHasLoaded(false);
+  }, [searchText]);
+
+  useEffect(() => {
+    if (!hasLoaded) {
+      loadItems(1, searchText);
+    }
+  }, [hasLoaded, loadItems, searchText]);
+
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      setPage(newPage);
+      loadItems(newPage, searchText);
+    },
+    [loadItems, searchText]
+  );
+
+  const handleEdit = (item: TrendingPublicItem) => {
+    setEditItem(item);
+    setEditDialogOpen(true);
+  };
+
+  const handleDelete = async (item: TrendingPublicItem) => {
+    const confirmed = await Alert.danger(
+      t("Xác nhận xoá"),
+      t("Bạn có chắc muốn xoá trending này?")
+    );
+    if (!confirmed) return;
+    const ok = await deleteCustomerTrending(item.id);
+    if (ok) {
+      toast.success(t("Đã xoá trending"));
+      loadItems(page, searchText);
+    }
+  };
+
+  const handleShowInfo = (item: TrendingPublicItem) => {
+    setInfoItem(item);
+    setInfoDialogOpen(true);
+  };
+
+  const handleSave = async (data: CustomerTrendingInput, id?: string): Promise<boolean> => {
+    if (id) {
+      const result = await updateCustomerTrending(id, data);
+      if (result) {
+        toast.success(t("Đã cập nhật trending"));
+        loadItems(page, searchText);
+        return true;
+      }
+      return false;
+    } else {
+      const result = await createCustomerTrending(data);
+      if (result) {
+        toast.success(t("Đã tạo trending mới"));
+        loadItems(1, searchText);
+        setPage(1);
+        return true;
+      }
+      return false;
+    }
+  };
+
+  return (
+    <div className="rounded-xl overflow-hidden">
+      {/* Header with Create button */}
+      <div className="flex items-center justify-end gap-2 mb-2">
+        <Button
+          onClick={() => loadItems(page, searchText)}
+          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
+          tooltip={t("Làm mới")}
+          icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
+        />
+        <Button
+          primary
+          onClick={onOpenCreate}
+          className="px-3 rounded-full"
+          text={t("Tạo mới")}
+          icon={<RiAddLine className="text-sm" />}
+        />
+      </div>
+
+      {/* Loading */}
+      {isLoading && !hasLoaded && (
+        <div className="flex items-center justify-center py-6">
+          <CgSpinner className="animate-spin text-xl text-blue-400 mr-2" />
+          <span className="text-xs text-gray-500">{t("Đang tải...")}</span>
+        </div>
+      )}
+
+      {/* Grid */}
+      {hasLoaded && items.length > 0 && (
+        <>
+          <div
+            className={`grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 ${
+              isLoading ? "opacity-50 pointer-events-none" : ""
+            }`}
+          >
+            {items.map((item) => (
+              <TrendingCard
+                key={item.id}
+                item={item}
+                onUseTrending={onUseTrending}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+                onShowInfo={handleShowInfo}
+              />
+            ))}
+          </div>
+
+          {total > ITEMS_PER_PAGE && (
+            <div className="flex justify-center mt-3">
+              <PaginationComponent
+                limit={ITEMS_PER_PAGE}
+                page={page}
+                total={total}
+                onPageChange={handlePageChange}
+                visiblePageCount={5}
+                hasDots
+              />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Empty */}
+      {hasLoaded && !isLoading && items.length === 0 && (
+        <div className="text-center py-10">
+          <div className="text-gray-400 text-sm mb-3">{t("Bạn chưa tạo trending nào")}</div>
+          <Button
+            primary
+            onClick={onOpenCreate}
+            text={t("Tạo trending đầu tiên")}
+            icon={<RiAddLine />}
+            className="rounded-lg"
+          />
+        </div>
+      )}
+
+      {/* Edit Dialog */}
+      <CreateEditTrendingDialog
+        isOpen={editDialogOpen}
+        onClose={() => {
+          setEditDialogOpen(false);
+          setEditItem(null);
+        }}
+        editItem={editItem}
+        categories={categories}
+        onSave={handleSave}
+      />
+
+      {/* Info Dialog */}
+      <DescriptionInfoDialog
+        isOpen={infoDialogOpen}
+        onClose={() => {
+          setInfoDialogOpen(false);
+          setInfoItem(null);
+        }}
+        item={infoItem}
+      />
+    </div>
+  );
+};
+
 // ── TrendingCategoryList – main component ───────────────────────────────
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
-  const { getActiveTrendingCategoryList, getTrendingPromptById } = useAffiliateVideoApi();
+  const toast = useToast();
+  const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
+    useAffiliateVideoApi();
   const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
@@ -368,6 +838,13 @@ export const TrendingCategoryList = () => {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  // Create dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+
+  // Info dialog state (for non-customer items)
+  const [infoDialogOpen, setInfoDialogOpen] = useState(false);
+  const [infoItem, setInfoItem] = useState<TrendingPublicItem | null>(null);
 
   // Debounce search input
   useEffect(() => {
@@ -401,7 +878,7 @@ export const TrendingCategoryList = () => {
 
   // Visible categories based on active tab
   const visibleCategories = useMemo(() => {
-    if (activeCategoryId === ALL_CATEGORY_ID) return [];
+    if (activeCategoryId === ALL_CATEGORY_ID || activeCategoryId === MY_TRENDING_ID) return [];
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
@@ -418,6 +895,27 @@ export const TrendingCategoryList = () => {
       }
     },
     [getTrendingPromptById, patchConfig, setPendingPrompt]
+  );
+
+  // Handle info button click for non-customer cards
+  const handleShowInfo = useCallback((item: TrendingPublicItem) => {
+    setInfoItem(item);
+    setInfoDialogOpen(true);
+  }, []);
+
+  // Handle create from dialog
+  const handleCreateSave = useCallback(
+    async (data: CustomerTrendingInput): Promise<boolean> => {
+      const result = await createCustomerTrending(data);
+      if (result) {
+        toast.success(t("Đã tạo trending mới"));
+        // Switch to "Của tôi" tab to see the new item
+        setActiveCategoryId(MY_TRENDING_ID);
+        return true;
+      }
+      return false;
+    },
+    [createCustomerTrending, toast, t]
   );
 
   // ── Loading state ──
@@ -458,7 +956,7 @@ export const TrendingCategoryList = () => {
     <div className="flex flex-col h-full bg-[#0f1923]">
       {/* Categories list */}
       <div className="flex-1 overflow-y-auto v-scrollbar p-2 xs:p-3 space-y-4">
-        {/* Category tabs + Search */}
+        {/* Category tabs + Search + Create button */}
         <div>
           {/* Tab bar */}
           <CategoryTabBar
@@ -469,15 +967,30 @@ export const TrendingCategoryList = () => {
             isLoading={isLoading}
           />
 
-          {/* Search input */}
-          <SearchInput value={searchInput} onChange={setSearchInput} />
+          {/* Search input + Create button */}
+          <div className="flex items-center gap-2 mt-1">
+            <div className="flex-1">
+              <SearchInput value={searchInput} onChange={setSearchInput} />
+            </div>
+          </div>
         </div>
-        {activeCategoryId === ALL_CATEGORY_ID ? (
+
+        {/* "Của tôi" tab → CustomerTrendingSection */}
+        {activeCategoryId === MY_TRENDING_ID ? (
+          <CustomerTrendingSection
+            searchText={debouncedSearch}
+            onUseTrending={handleUseTrending}
+            onOpenCreate={() => setCreateDialogOpen(true)}
+            categories={categories}
+          />
+        ) : activeCategoryId === ALL_CATEGORY_ID ? (
           <CategorySection
             key="__all__"
             searchText={debouncedSearch}
             onUseTrending={handleUseTrending}
             loadCategories={loadCategories}
+            onShowInfo={handleShowInfo}
+            onOpenCreate={() => setCreateDialogOpen(true)}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -488,10 +1001,31 @@ export const TrendingCategoryList = () => {
               searchText={debouncedSearch}
               onUseTrending={handleUseTrending}
               loadCategories={loadCategories}
+              onShowInfo={handleShowInfo}
+              onOpenCreate={() => setCreateDialogOpen(true)}
             />
           ))
         )}
       </div>
+
+      {/* Create Dialog (from header button) */}
+      <CreateEditTrendingDialog
+        isOpen={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+        editItem={null}
+        categories={categories}
+        onSave={async (data) => handleCreateSave(data)}
+      />
+
+      {/* Info Dialog (for non-customer items) */}
+      <DescriptionInfoDialog
+        isOpen={infoDialogOpen}
+        onClose={() => {
+          setInfoDialogOpen(false);
+          setInfoItem(null);
+        }}
+        item={infoItem}
+      />
     </div>
   );
 };

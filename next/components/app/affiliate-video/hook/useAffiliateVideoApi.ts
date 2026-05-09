@@ -7,6 +7,7 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
+  CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingCategoryService,
   TrendingsByCategoryResult,
@@ -48,6 +49,7 @@ export interface ObjectToPersonifyPublic {
 
 /** Public trending types – re-exported from repo */
 export type {
+  CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingPublicItem,
   TrendingsByCategoryResult,
@@ -361,6 +363,30 @@ export interface UseAffiliateVideoApiReturn {
    * Lấy prompt của trending theo ID.
    */
   getTrendingPromptById: (trendingId: string) => Promise<string | null>;
+
+  /**
+   * Lấy danh sách trending do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerTrendingList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Customer tạo trending mới.
+   */
+  createCustomerTrending: (data: CustomerTrendingInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa trending của mình.
+   */
+  updateCustomerTrending: (id: string, data: Partial<CustomerTrendingInput>) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá trending của mình.
+   */
+  deleteCustomerTrending: (id: string) => Promise<boolean>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -1170,6 +1196,122 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
+  // ── getCustomerTrendingList – lấy danh sách trending của customer ──
+  const getCustomerTrendingList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getCustomerTrendingList(page, limit, search);
+    },
+    []
+  );
+
+  // ── createCustomerTrending – customer tạo trending mới ──
+  const createCustomerTrending = useCallback(
+    async (data: CustomerTrendingInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerTrending($data: CreateCustomerTrendingInput!) {
+              createCustomerTrending(data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerTrending] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo trending");
+          return undefined;
+        }
+
+        return json.data?.createCustomerTrending;
+      } catch (err: any) {
+        console.error("[createCustomerTrending] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── updateCustomerTrending – customer sửa trending của mình ──
+  const updateCustomerTrending = useCallback(
+    async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerTrending($id: ID!, $data: UpdateCustomerTrendingInput!) {
+              updateCustomerTrending(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerTrending] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa trending");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerTrending;
+      } catch (err: any) {
+        console.error("[updateCustomerTrending] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── deleteCustomerTrending – customer xoá trending của mình ──
+  const deleteCustomerTrending = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerTrending($id: ID!) {
+              deleteCustomerTrending(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerTrending] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá trending");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerTrending] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -1193,5 +1335,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getActiveTrendingCategoryList,
     getTrendingsByCategoryId,
     getTrendingPromptById,
+    getCustomerTrendingList,
+    createCustomerTrending,
+    updateCustomerTrending,
+    deleteCustomerTrending,
   };
 }
