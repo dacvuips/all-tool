@@ -64,7 +64,7 @@ export default function AffiliateMainPage() {
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-amber-50"
-      style={{ height: "calc(100vh - 10px)" }}
+      style={{ height: "calc(100vh - 175px)" }}
     >
       {/* ══ TOP NAV – thanh điều hướng chính ══ */}
       <TabGroup

@@ -220,6 +220,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
               className="border-gray-200"
               placeholder={t("VD: Cách ăn chuối tốt nhất")}
               onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
+              maxRows={4}
             />
           </Field>
         </div>

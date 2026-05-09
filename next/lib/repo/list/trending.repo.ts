@@ -34,6 +34,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     monthlyCount: Int
     des: String
     promptShort: String
+    prompt: String
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -50,6 +51,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     monthlyCount: Int
     des: String
     promptShort: String
+    prompt: String
   `);
 }
 

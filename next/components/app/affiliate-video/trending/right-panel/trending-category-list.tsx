@@ -137,10 +137,12 @@ const TrendingCard = ({
 // ── CategorySection – hiển thị 1 category với trending items phân trang ──
 const CategorySection = ({
   category,
+  categoryId,
   searchText,
   onUseTrending,
 }: {
-  category: TrendingCategoryPublicItem;
+  category?: TrendingCategoryPublicItem;
+  categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
   onUseTrending: (trendingId: string) => void;
@@ -154,12 +156,15 @@ const CategorySection = ({
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
 
+  // Use explicit categoryId prop if provided, otherwise fall back to category.id
+  const effectiveCategoryId = categoryId ?? category?.id;
+
   const loadItems = useCallback(
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
         const result = await getTrendingsByCategoryId(
-          category.id,
+          effectiveCategoryId,
           pageNum,
           ITEMS_PER_PAGE,
           search || undefined
@@ -174,7 +179,7 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getTrendingsByCategoryId, category.id, searchText]
+    [getTrendingsByCategoryId, effectiveCategoryId, searchText]
   );
 
   // Auto-load on mount and when search changes
@@ -201,10 +206,12 @@ const CategorySection = ({
     <div className="rounded-xl overflow-hidden">
       {/* Category header */}
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-bold text-gray-100 m-0 truncate">{category.name}</h3>
+        <h3 className="text-sm font-bold text-gray-100 m-0 truncate">
+          {category?.name || t("Tất cả")}
+        </h3>
         {total > 0 && (
           <span className="text-[10px] text-gray-500 font-medium ml-2 shrink-0">
-            {total} {t("trending")}
+            {total} {t("Prompt")}
           </span>
         )}
       </div>
@@ -229,7 +236,7 @@ const CategorySection = ({
               <TrendingCard
                 key={item.id}
                 item={item}
-                categoryName={category.name}
+                categoryName={category?.name}
                 onUseTrending={onUseTrending}
               />
             ))}
@@ -287,7 +294,7 @@ const CategoryTabBar = ({
     <div className="relative flex-shrink-0 flex flex-row gap-2 items-center">
       <div
         ref={scrollRef}
-        className="flex items-center gap-1.5 overflow-x-auto v-scrollbar py-1 border w-full bg-white rounded-full px-1.5"
+        className="flex items-center gap-1.5 overflow-x-auto v-scrollbar py-1 w-full pb-2 no-scrollbar   rounded-lg px-1.5"
         style={{ scrollbarWidth: "thin" }}
       >
         {tabs.map((tab) => {
@@ -296,17 +303,17 @@ const CategoryTabBar = ({
             <button
               key={tab.id}
               onClick={() => onSelect(tab.id)}
-              className={`
-                flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium
-                whitespace-nowrap transition-all duration-200 cursor-pointer border-0
+              className={` 
+                flex items-center gap-1 px-3 py-1.5 rounded-full text-xs  bg-white
+                whitespace-nowrap font-semibold transition-all duration-200 cursor-pointer  
                 ${
                   isActive
                     ? "bg-blue-500 text-white shadow-sm shadow-blue-500/30"
-                    : "bg-[#1a2332] text-gray-400 hover:bg-[#243040] hover:text-gray-200 border border-[#2a3a4a]"
+                    : "  text-gray   hover:text-gray-200 border border-gray-200"
                 }
               `}
             >
-              {tab.isHot && <RiFireFill className="text-orange-400 text-[11px]" />}
+              {tab.isHot && <RiFireFill className="text-orange text-12 " />}
               {tab.name}
             </button>
           );
@@ -316,7 +323,7 @@ const CategoryTabBar = ({
       <div className="flex items-center justify-between   flex-shrink-0">
         <Button
           onClick={loadCategories}
-          className=" px-3 transition-all cursor-pointer border rounded-full bg-white"
+          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
           tooltip={t("Làm mới")}
           icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
         />
@@ -344,8 +351,8 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
         value={value}
         onChange={handleChange}
         prefix={<RiSearchLine />}
-        placeholder={t("Tìm kiếm trending...")}
-        controlClassName="!text-sm border border-gray-300 rounded-full bg-white focus:border-blue-500 focus:ring-blue-500 focus:ring-1"
+        placeholder={t("Tìm kiếm...")}
+        className="rounded-full"
       />
     </div>
   );
@@ -397,7 +404,7 @@ export const TrendingCategoryList = () => {
 
   // Visible categories based on active tab
   const visibleCategories = useMemo(() => {
-    if (activeCategoryId === ALL_CATEGORY_ID) return categories;
+    if (activeCategoryId === ALL_CATEGORY_ID) return [];
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
@@ -452,32 +459,39 @@ export const TrendingCategoryList = () => {
 
   return (
     <div className="flex flex-col h-full bg-[#0f1923]">
-      {/* Category tabs + Search */}
-      <div className="px-2 xs:px-3 pt-2 space-y-2 flex-shrink-0">
-        {/* Tab bar */}
-        <CategoryTabBar
-          categories={categories}
-          activeId={activeCategoryId}
-          onSelect={setActiveCategoryId}
-          loadCategories={loadCategories}
-          isLoading={isLoading}
-        />
-
-        {/* Search input */}
-        <SearchInput value={searchInput} onChange={setSearchInput} />
-      </div>
-
       {/* Categories list */}
       <div className="flex-1 overflow-y-auto v-scrollbar p-2 xs:p-3 space-y-4">
-        {visibleCategories.map((cat, index) => (
+        {/* Category tabs + Search */}
+        <div>
+          {/* Tab bar */}
+          <CategoryTabBar
+            categories={categories}
+            activeId={activeCategoryId}
+            onSelect={setActiveCategoryId}
+            loadCategories={loadCategories}
+            isLoading={isLoading}
+          />
+
+          {/* Search input */}
+          <SearchInput value={searchInput} onChange={setSearchInput} />
+        </div>
+        {activeCategoryId === ALL_CATEGORY_ID ? (
           <CategorySection
-            key={cat.id}
-            category={cat}
-            defaultExpanded={index === 0}
+            key="__all__"
             searchText={debouncedSearch}
             onUseTrending={handleUseTrending}
           />
-        ))}
+        ) : (
+          visibleCategories.map((cat, index) => (
+            <CategorySection
+              key={cat.id}
+              category={cat}
+              defaultExpanded={index === 0}
+              searchText={debouncedSearch}
+              onUseTrending={handleUseTrending}
+            />
+          ))
+        )}
       </div>
     </div>
   );

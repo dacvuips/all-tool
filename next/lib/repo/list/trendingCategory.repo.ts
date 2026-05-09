@@ -85,25 +85,26 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
    * Dùng standard CrudRepository.getAll() với apiName override → getTrendingsByCategoryId(q:...)
    */
   async getTrendingsByCategoryId(
-    categoryId: string,
+    categoryId?: string,
     page: number = 1,
     limit: number = 10,
     search?: string
   ): Promise<TrendingsByCategoryResult> {
     try {
+      const filter: any = { isActive: true };
+      if (categoryId) {
+        filter.trendingCategoryIds = { $in: [categoryId] };
+      }
       const result = await this.getAll({
         apiName: "getTrendingsByCategoryId",
         query: {
           page,
           limit,
           search: search || undefined,
-          filter: {
-            trendingCategoryIds: { $in: [categoryId] },
-            isActive: true,
-          },
+          filter,
           order: { count: -1 },
         },
-        fragment: `id name imageUrls prompt count price promptShort`,
+        fragment: `id name imageUrls  count price promptShort trendingCategoryIds`,
         cache: false,
       });
       return {
