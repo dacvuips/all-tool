@@ -20,6 +20,7 @@ export interface TrendingPublicItem {
   promptShort: string;
   des: string;
   isPublish: boolean;
+  monthlyCount: number;
 }
 
 /** Public trending category with resolved trending items */
@@ -169,7 +170,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           search: search || undefined,
           order: { createdAt: -1 },
         },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt`,
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount`,
         cache: false,
       });
       return {
@@ -179,6 +180,39 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
       };
     } catch (err) {
       console.error("[getCustomerTrendingList] Error:", err);
+      return { data: [], total: 0 };
+    }
+  }
+
+  /**
+   * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
+   * Dùng cho Trending Prompt Rank table.
+   */
+  async getTrendingRank(
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    try {
+      const result = await this.getAll({
+        apiName: "getTrendingsByCategoryId",
+        query: {
+          page,
+          limit,
+          search: search || undefined,
+          filter: { isActive: true, isPublish: true },
+          order: { monthlyCount: -1 },
+        },
+        fragment: `id name imageUrls count price promptShort monthlyCount`,
+        cache: false,
+      });
+      return {
+        data: (result.data || []) as any as TrendingPublicItem[],
+        total: result.total || 0,
+        pagination: result.pagination,
+      };
+    } catch (err) {
+      console.error("[getTrendingRank] Error:", err);
       return { data: [], total: 0 };
     }
   }

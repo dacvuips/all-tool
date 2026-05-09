@@ -19,6 +19,7 @@ import {
   RiFireLine,
   RiRefreshLine,
   RiSearchLine,
+  RiUserHeartFill,
 } from "react-icons/ri";
 
 import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
@@ -368,7 +369,16 @@ const CategoryTabBar = ({
 
   const tabs = useMemo(() => {
     const allTab = { id: ALL_CATEGORY_ID, name: t("Tất cả"), isHot: false };
-    const myTab = { id: MY_TRENDING_ID, name: t("Của tôi"), isHot: false };
+    const myTab = {
+      id: MY_TRENDING_ID,
+      name: (
+        <div className="whitespace-nowrap gap-1 flex">
+          <RiUserHeartFill />
+          {t("Của tôi")}
+        </div>
+      ),
+      isHot: false,
+    };
     return [allTab, myTab, ...categories.map((c) => ({ id: c.id, name: c.name, isHot: c.isHot }))];
   }, [categories, t]);
 
@@ -411,9 +421,9 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
+      const val = e;
       // Update input immediately
-      onChange(val);
+      onChange(val as any);
     },
     [onChange]
   );
@@ -422,6 +432,7 @@ const SearchInput = ({ value, onChange }: { value: string; onChange: (val: strin
     <div className="relative flex-shrink-0">
       <Input
         value={value}
+        clearable
         onChange={handleChange}
         prefix={<RiSearchLine />}
         placeholder={t("Tìm kiếm...")}

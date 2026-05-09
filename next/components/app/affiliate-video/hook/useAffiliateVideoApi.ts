@@ -387,6 +387,15 @@ export interface UseAffiliateVideoApiReturn {
    * Customer xoá trending của mình.
    */
   deleteCustomerTrending: (id: string) => Promise<boolean>;
+
+  /**
+   * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
+   */
+  getTrendingRank: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -1204,6 +1213,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
+  // ── getTrendingRank – bảng xếp hạng trending theo monthlyCount ──
+  const getTrendingRank = useCallback(
+    async (page: number = 1, limit: number = 20, search?: string) => {
+      return TrendingCategoryService.getTrendingRank(page, limit, search);
+    },
+    []
+  );
+
   // ── createCustomerTrending – customer tạo trending mới ──
   const createCustomerTrending = useCallback(
     async (data: CustomerTrendingInput): Promise<any | undefined> => {
@@ -1339,5 +1356,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     createCustomerTrending,
     updateCustomerTrending,
     deleteCustomerTrending,
+    getTrendingRank,
   };
 }
