@@ -67,6 +67,10 @@ export enum ArtStyleMapEnum {
   DARK_GROTESQUE = "Dark_Grotesque",
   FLAT_SCIENCE = "Flat_Science",
   MINECRAFT = "Minecraft",
+  PENCIL_SKETCH = "Pencil_Sketch",
+  WATERCOLOR = "Watercolor",
+  RENAISSANCE = "Renaissance",
+  CRAYON = "Crayon",
 }
 
 export const ArtStyleMap: Array<{
@@ -156,5 +160,21 @@ export const ArtStyleMap: Array<{
   {
     value: ArtStyleMapEnum.MINECRAFT,
     des: "A comprehensive world entirely constructed in Minecraft aesthetic. Every element, including humans, animals, landscape, and objects, is composed of perfect 3D cubic voxels and rigid blocks.Characters & Mobs: Humans and animals have rectangular limbs, boxy heads, and stiff joints, featuring 8-bit low-resolution skin textures. Environment: The terrain is a grid-based system with stepped hills, cubic trees with pixelated leaf blocks, and perfectly square clouds in a vibrant blue sky. Water is represented as semi-transparent blue cuboids. Architecture & Items: Buildings are made of identifiable material blocks like cobblestone, oak planks, and glass cubes. Handheld items are flat 2D pixel-art extrusions or small 3D blocky models.Technical Style: Professional Voxel Art, no smooth curves, sharp 90-degree edges, 16x16 or 32x32 texture density feel, ray-traced lighting (RTX shaders), soft global illumination, vibrant saturation, high-fidelity blocky rendering, 8k resolution.",
+  },
+  {
+    value: ArtStyleMapEnum.PENCIL_SKETCH,
+    des: "Pure black-and-white pencil sketch style, created entirely with graphite pencil on white paper. Absolutely no colors, no color tint, no watercolor, no paint, no digital coloring, and no colored lighting. Only monochrome tones ranging from deep black to pure white with natural gray pencil shading. Visible graphite texture, rough hand-drawn pencil strokes, cross-hatching, hatching, scribbled sketch lines, and realistic sketch imperfections. Traditional artist sketchbook appearance with detailed contour lines and layered shading. Strong contrast between white paper and dark graphite marks. Raw unfinished drawing aesthetic, realistic pencil pressure variation, soft smudging, eraser marks, and construction guidelines visible. Entire image must look like a manually drawn graphite illustration using only black pencil on white paper. High quality, 8k,No color, no colored lighting, no watercolor, no painting, no digital art coloring, no vibrant tones, no markers, no ink wash, no sepia, no brown paper, no background colors, no neon, no 3D render, no glossy effect, no saturated elements.",
+  },
+  {
+    value: ArtStyleMapEnum.WATERCOLOR,
+    des: "Masterpiece watercolor painting in the style of master watercolor artists. Transparent layers of pure watercolor washes without any dark outlines, ink, gouache, pencil lines, or digital effects. Soft diffused lighting, glowing colors, painterly textures with visible brush strokes. Rich vibrant saturated colors. The medium should look like natural wet-on-wet watercolor on cold-press textured paper, with paper fibers visible. High quality, 8k.Pure wet-on-wet watercolor painting, absolutely no ink outlines, no pencil lines, no black lines, no dark edges, no gouache, no paint, no digital coloring, no mixed media, no unnatural colors, no glossy finish, no 3D render, no unnatural glow, no artificial saturation, no photoshop effects, no mixed media, no digital enhancement. Pure smooth watercolor washes only.",
+  },
+  {
+    value: ArtStyleMapEnum.RENAISSANCE,
+    des: "Classic Renaissance oil painting in the style of Leonardo da Vinci, Raphael, and Michelangelo. Warm golden lighting, soft sfumato transitions, realistic human anatomy, classical composition with triangular arrangements, rich drapery fabrics, and an earthy color palette of deep reds, golds, browns, and soft blues. Shallow depth of field with soft focus background, subtle skin glow, smooth porcelain-like skin texture with no visible brush strokes, and a timeless museum quality aesthetic. 8k resolution, masterfully painted oil on canvas, gallery lighting, hyper-realistic skin with perfect oil paint texture, subtle varnish glow, dramatic chiaroscuro lighting that emphasizes depth and form, no modern elements, no 3D render, no CGI, no digital art, no plastic skin, no glossy surface, no airbrushed skin, no flat colors, no neon colors, no bright colors, no harsh lighting, no cartoon style, no animation.",
+  },
+  {
+    value: ArtStyleMapEnum.CRAYON,
+    des: "Vibrant children's crayon drawing style, characterized by thick bold strokes, rich waxy textures, and playful uneven shading. The entire scene should look hand-drawn with crayon on white paper, featuring bright saturated colors, visible crayon marks, and a childlike perspective. Colors should have a slightly textured, opaque quality typical of wax crayons, with some areas showing the paper grain beneath. The overall aesthetic is energetic, colorful, and charmingly imperfect, capturing the look of a classic art project created by a child. 8k resolution, natural crayon texture, vibrant saturated colors, visible crayon strokes, hand-drawn quality, paper texture visible, playful energetic feel, bright lighting, no digital effects, no 3D render, no plastic texture, no smooth gradients, no airbrushed look, no glossy finish, no watercolor, no marker, no pastel, no oil paint, no chalk, no pencil, no ink.",
   },
 ];

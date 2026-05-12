@@ -201,7 +201,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           page,
           limit,
           search: search || undefined,
-          filter: { isActive: true, isPublish: true },
+          filter: { isActive: true },
           order: { monthlyCount: -1 },
         },
         fragment: `id name imageUrls count price promptShort monthlyCount`,
