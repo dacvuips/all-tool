@@ -40,6 +40,7 @@ export type SpeedMode = "fast" | "relaxed" | "quality";
 /** Full video generation configuration */
 
 export type StoryModeType = "prompt_to_video" | "image_to_video";
+export type TrendingModeType = "single_variant" | "story_script";
 
 /** Affiliate sidebar form configuration */
 export interface VideoFormBase {
@@ -56,6 +57,15 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
   productImages?: string[];
+}
+
+export interface TrendingVideoFormConfig extends VideoFormBase {
+  tipContent: string;
+  batchSize: number;
+  productImages?: string[];
+  trendingModeType: TrendingModeTypeEnum;
+  /** ID của trending item đang được sử dụng (nếu user chọn "Dùng ngay") */
+  promptId?: string;
 }
 
 export interface CopyVideoFormConfig extends VideoFormBase {
@@ -149,6 +159,21 @@ export interface ScriptData {
   productImages?: string[];
 }
 
+export interface TrendingScriptData {
+  trendingModeType: TrendingModeTypeEnum;
+  topicTitle: string;
+  artStyle: string;
+  environment: string;
+  characterName: string;
+  characterBaseDescription: string;
+  voiceGender: string;
+  voiceTone: string;
+  voiceStyle: string;
+  aspectRatio: "16:9" | "9:16";
+  scenes: SceneScript[];
+  productImages?: string[];
+}
+
 export const DB_NAME = {
   generateScene: "generate-scene",
   generateScript: "generate-script",
@@ -171,6 +196,9 @@ export const CACHE_KEY = {
   copyVideoHistory: "copyVideoHistory",
   lastCopyVideoScript: "lastCopyVideoScript",
   copyVideoInput: "copyVideoInput",
+  lastTrendingScript: "lastTrendingScript",
+  trendingInput: "trendingInput",
+  trendingHistory: "trendingHistory",
 };
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
@@ -228,16 +256,51 @@ export interface SceneHistoryItem {
   /** The generated script data */
   data: ScriptData;
 }
+export interface TrendingHistoryItem {
+  /** Unique ID for this history entry */
+  id: string;
+  /** Timestamp when the scene was generated */
+  createdAt: number;
+  /** Human-readable label (e.g. "Kịch bản – 25/04 14:52") */
+  label: string;
+  /** The generated script data */
+  data: TrendingScriptData;
+}
 
 export enum TAB_TYPE {
   single = "single",
   batch = "batch",
 }
 
+/**
+ * Chế độ tạo nội dung:
+ * - single_variant: Tab "Đơn Lẻ" – tạo nhiều phiên bản khác nhau từ 1 prompt gốc,
+ *   không sáng tạo thêm, hình ảnh không lệch so với prompt gốc.
+ * - story_script: Tab "Cốt truyện/kịch bản" – tạo nhiều phân cảnh liên quan
+ *   tạo thành cốt truyện mạch lạc, có thể sáng tạo dựa trên chủ đề prompt.
+ */
 export enum StoryModeTypeEnum {
   prompt_to_video = "prompt_to_video",
   image_to_video = "image_to_video",
 }
+export enum TrendingModeTypeEnum {
+  single_variant = "single_variant",
+  story_script = "story_script",
+}
+
+/** Tiêu đề hiển thị trên BatchSizeSlider tuỳ theo mode */
+export const BATCH_SIZE_LABELS: Record<TrendingModeTypeEnum, string> = {
+  [TrendingModeTypeEnum.single_variant]: "Số phiên bản",
+  [TrendingModeTypeEnum.story_script]: "Số phân cảnh",
+};
+
+/** Mô tả phụ hiển thị bên dưới slider tuỳ theo mode */
+export const BATCH_SIZE_DESCRIPTIONS: Record<TrendingModeTypeEnum, string> = {
+  [TrendingModeTypeEnum.single_variant]:
+    "AI sẽ viết lại prompt gốc thành {count} phiên bản khác nhau, giữ nguyên ý nghĩa.",
+  [TrendingModeTypeEnum.story_script]:
+    "AI sẽ sáng tạo {count} phân cảnh liên kết thành cốt truyện mạch lạc.",
+};
 
 export enum ArtStyleMapEnum {
   PIXAR = "Pixar",

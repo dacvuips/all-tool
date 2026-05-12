@@ -84,7 +84,9 @@ export async function handleImageGeneration(
     } catch (err: any) {
       if (err.isCaptchaError || err.statusCode === 403) {
         lastCaptchaError = true;
-        logger.warn(`[generation-image] Link ${selectedLink.url} bị lỗi Captcha/403. Thử link tiếp theo...`);
+        logger.warn(
+          `[generation-image] Link ${selectedLink.url} bị lỗi Captcha/403. Thử link tiếp theo...`
+        );
         continue;
       }
       throw err;
@@ -92,9 +94,7 @@ export async function handleImageGeneration(
   }
 
   if (lastCaptchaError) {
-    throw new ForbiddenError(
-      `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
-    );
+    throw new ForbiddenError(`Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`);
   } else {
     throw new Error(`Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.`);
   }
@@ -161,7 +161,6 @@ async function sendAndParseResponse(
     });
     if (!resp.ok) {
       const errText = await resp.text();
-      
       let isCaptchaError = false;
       if (resp.status === 403) {
         try {
@@ -180,7 +179,9 @@ async function sendAndParseResponse(
       }
 
       if (isCaptchaError) {
-        const err: any = new Error(`Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`);
+        const err: any = new Error(
+          `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
+        );
         err.isCaptchaError = true;
         err.statusCode = 403;
         throw err;

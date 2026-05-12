@@ -3,6 +3,8 @@ import {
   AffiliateVideoFormConfig,
   ArtStyleMapEnum,
   StoryModeTypeEnum,
+  TrendingModeTypeEnum,
+  TrendingVideoFormConfig,
 } from "../../components/app/affiliate-video/constants";
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
@@ -810,6 +812,7 @@ export const useOptionsTranslation = () => {
 
   // ── Affiliate Video: Art Style Options (translated) ──
   const ART_STYLE_TRANSLATED_OPTIONS = [
+    { value: "", label: t("Mặc định") },
     { value: ArtStyleMapEnum.PIXAR, label: t("3D Pixar Cute") },
     { value: ArtStyleMapEnum.PIXAR_REALISTIC, label: t("Pixar Realism (Nhân hoá)") },
     { value: ArtStyleMapEnum.REALISTIC, label: t("Chân thực (Realistic)") },
@@ -883,6 +886,16 @@ export const useOptionsTranslation = () => {
     batchSize: 1,
   };
 
+  const DEFAULT_TRENDING_VIDEO_CONFIG: TrendingVideoFormConfig = {
+    tipContent: "",
+    mood: t("Vui vẻ"),
+    language: LANGUAGE_OPTIONS[0].label,
+    artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
+    trendingModeType: TrendingModeTypeEnum.single_variant,
+    aspectRatio: "9:16",
+    batchSize: 1,
+  };
+
   const BUILTIN_VOICES = [
     { value: "Aoede", label: `Aoede – ${t("Nữ, tươi vui")}` },
     { value: "Charon", label: `Charon – ${t("Nam, trầm ấm")}` },
@@ -922,6 +935,10 @@ export const useOptionsTranslation = () => {
   const STORY_MODE_OPTIONS = [
     { value: StoryModeTypeEnum.image_to_video, label: t("Ảnh sang Video") },
     { value: StoryModeTypeEnum.prompt_to_video, label: t("Prompt sang Video") },
+  ];
+  const TRENDING_MODE_OPTIONS = [
+    { value: TrendingModeTypeEnum.single_variant, label: t("Prompt Đơn Lẻ") },
+    { value: TrendingModeTypeEnum.story_script, label: t("Cốt truyện/kịch bản") },
   ];
 
   return {
@@ -1020,5 +1037,7 @@ export const useOptionsTranslation = () => {
     BUILTIN_VOICES,
     CATEGORY_OPTIONS,
     STORY_MODE_OPTIONS,
+    TRENDING_MODE_OPTIONS,
+    DEFAULT_TRENDING_VIDEO_CONFIG,
   };
 };

@@ -7,6 +7,12 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
+  CustomerTrendingInput,
+  TrendingCategoryPublicItem,
+  TrendingCategoryService,
+  TrendingsByCategoryResult,
+} from "../../../../lib/repo/list/trendingCategory.repo";
+import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
   CopyVideoAnalysisData,
@@ -16,6 +22,9 @@ import {
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
+  TrendingHistoryItem,
+  TrendingScriptData,
+  TrendingVideoFormConfig,
 } from "../constants";
 import { useIndexedDB } from "./useIndexedDB";
 
@@ -41,11 +50,24 @@ export interface ObjectToPersonifyPublic {
   isActive: boolean;
 }
 
+/** Public trending types – re-exported from repo */
+export type {
+  CustomerTrendingInput,
+  TrendingCategoryPublicItem,
+  TrendingPublicItem,
+  TrendingsByCategoryResult,
+} from "../../../../lib/repo/list/trendingCategory.repo";
+
 export interface GenerateSceneFromTextParams {
   /** Đoạn text / prompt gửi trực tiếp đến API */
   text: string;
   /** Config (tuỳ chọn) – nếu không truyền sẽ dùng object rỗng */
   config?: Partial<AffiliateVideoFormConfig>;
+}
+export interface GenerateTrendingParams {
+  /** Đoạn text / prompt gửi trực tiếp đến API */
+  /** Config (tuỳ chọn) – nếu không truyền sẽ dùng object rỗng */
+  config?: Partial<TrendingScriptData>;
 }
 
 export interface GenerateImageParams {
@@ -329,13 +351,77 @@ export interface UseAffiliateVideoApiReturn {
    * Customer xoá nhân vật tùy chỉnh của mình.
    */
   deleteCustomerObjectToPersonify: (id: string) => Promise<boolean>;
+
+  /**
+   * Lấy danh sách TrendingCategory đang active.
+   */
+  getActiveTrendingCategoryList: () => Promise<TrendingCategoryPublicItem[]>;
+
+  /**
+   * Lấy danh sách trending items theo category ID, có phân trang.
+   */
+  getTrendingsByCategoryId: (
+    categoryId?: string,
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy prompt của trending theo ID.
+   */
+  getTrendingPromptById: (trendingId: string) => Promise<string | null>;
+
+  /**
+   * Lấy danh sách trending do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerTrendingList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Customer tạo trending mới.
+   */
+  createCustomerTrending: (data: CustomerTrendingInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa trending của mình.
+   */
+  updateCustomerTrending: (
+    id: string,
+    data: Partial<CustomerTrendingInput>
+  ) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá trending của mình.
+   */
+  deleteCustomerTrending: (id: string) => Promise<boolean>;
+
+  /**
+   * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
+   */
+  getTrendingRank: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  generateTrendingSingle: (
+    data: TrendingVideoFormConfig
+  ) => Promise<TrendingScriptData | undefined>;
+
+  getTrendingSceneHistory: () => Promise<TrendingHistoryItem[]>;
+  clearTrendingHistory: () => Promise<void>;
+  generateTrendingScene: (data: TrendingVideoFormConfig) => Promise<TrendingScriptData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
 export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const toast = useToast();
-  const { STORY_MODE_OPTIONS } = useOptionsTranslation();
+  const { STORY_MODE_OPTIONS, TRENDING_MODE_OPTIONS } = useOptionsTranslation();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
@@ -351,6 +437,29 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       productImages?: string[];
     }) => {
       const res = await fetch("/api/app/generation-scene/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+  const callGenerationTrendingApi = useCallback(
+    async (body: {
+      config: Partial<TrendingVideoFormConfig>;
+      promptId?: string;
+      productImages?: string[];
+    }) => {
+      const res = await fetch("/api/app/generation-trending/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -402,12 +511,48 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [scriptDB]
   );
 
+  // ── Helper: push a ScriptData into history array in IndexedDB ──
+  const pushToTrendingHistory = useCallback(
+    async (scriptResult: TrendingScriptData) => {
+      try {
+        const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.trendingHistory)) || [];
+
+        const now = new Date();
+        const label = `${
+          TRENDING_MODE_OPTIONS.find((s) => s.value === scriptResult.trendingModeType)?.label
+        } – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: TrendingHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: scriptResult,
+        };
+
+        // Prepend newest first, trim to MAX_SCENE_HISTORY
+        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
+        await scriptDB.set(CACHE_KEY.trendingHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push scene history", e);
+      }
+    },
+    [scriptDB]
+  );
+
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
       const result = await callGenerationSceneApi({
         config: data,
-        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: data.objectToPersonify?.trim()
+          ? data.objectToPersonifyCode
+          : undefined,
         productImages: data.productImages,
       });
       if (!result) return undefined;
@@ -441,6 +586,46 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return scriptResult;
     },
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
+  );
+
+  const generateTrendingScene = useCallback(
+    async (data: TrendingVideoFormConfig): Promise<TrendingScriptData | undefined> => {
+      const result = await callGenerationTrendingApi({
+        config: data,
+        promptId: data.promptId,
+        productImages: data.productImages,
+      });
+      if (!result) return undefined;
+      const scriptResult: TrendingScriptData = {
+        ...result.data,
+        trendingModeType: data.trendingModeType,
+        aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist config input
+      scriptDB
+        .set(CACHE_KEY.trendingInput, data)
+        .catch((e) => console.warn("[generateTrendingScene] IndexedDB write error", e));
+
+      // Persist script result (include storyModeType)
+      scriptDB
+        .set(CACHE_KEY.lastTrendingScript, scriptResult)
+        .catch((e) => console.warn("[generateTrendingScene] IndexedDB write error", e));
+      // Push to history (await so provider can read it immediately)
+      await pushToTrendingHistory(scriptResult);
+
+      return scriptResult;
+    },
+    [callGenerationSceneApi, scriptDB, pushToTrendingHistory]
   );
 
   // ── Shared: gọi API /api/app/copy-video-analysis/ ──
@@ -521,7 +706,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
-        objectToPersonifyCode: data.objectToPersonify?.trim() ? data.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: data.objectToPersonify?.trim()
+          ? data.objectToPersonifyCode
+          : undefined,
       });
       if (!result) return undefined;
 
@@ -564,7 +751,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationSceneApi({
         config,
         text,
-        objectToPersonifyCode: config.objectToPersonify?.trim() ? config.objectToPersonifyCode : undefined,
+        objectToPersonifyCode: config.objectToPersonify?.trim()
+          ? config.objectToPersonifyCode
+          : undefined,
         productImages: config.productImages,
       });
       if (!result) return undefined;
@@ -580,7 +769,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       // Persist script result (include storyModeType)
       scriptDB
-        .set(CACHE_KEY.lastScript, { ...scriptResult, storyModeType: config.storyModeType, productImages: config.productImages })
+        .set(CACHE_KEY.lastScript, {
+          ...scriptResult,
+          storyModeType: config.storyModeType,
+          productImages: config.productImages,
+        })
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
       // Push to history (await so provider can read it immediately)
@@ -589,6 +782,45 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return scriptResult;
     },
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
+  );
+
+  // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
+  const generateTrendingSingle = useCallback(
+    async (data: TrendingVideoFormConfig): Promise<TrendingScriptData | undefined> => {
+      const result = await callGenerationTrendingApi({
+        config: data,
+        promptId: data.promptId,
+        productImages: data.productImages,
+      });
+      if (!result) return undefined;
+      const scriptResult: TrendingScriptData = {
+        ...result.data,
+        productImages: data.productImages,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist script result (include storyModeType)
+      scriptDB
+        .set(CACHE_KEY.lastTrendingScript, {
+          ...scriptResult,
+          trendingModeType: data.trendingModeType,
+          productImages: data.productImages,
+        })
+        .catch((e) => console.warn("[trending -api] IndexedDB write error", e));
+
+      // Push to history (await so provider can read it immediately)
+      await pushToTrendingHistory(scriptResult);
+
+      return scriptResult;
+    },
+    [callGenerationTrendingApi, scriptDB, pushToTrendingHistory]
   );
 
   // ── generateImage – gọi API tạo ảnh từ prompt ──
@@ -941,10 +1173,26 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     }
   }, [scriptDB, customer?._id]);
 
+  // ── getSceneHistory – lấy lịch sử generate scene ──
+  const getTrendingSceneHistory = useCallback(async (): Promise<TrendingHistoryItem[]> => {
+    if (!customer?._id) return [];
+    try {
+      return (await scriptDB.get(CACHE_KEY.trendingHistory)) || [];
+    } catch {
+      return [];
+    }
+  }, [scriptDB, customer?._id]);
+
   // ── clearSceneHistory – xóa toàn bộ lịch sử ──
   const clearSceneHistory = useCallback(async (): Promise<void> => {
     if (!customer?._id) return;
     await scriptDB.set(CACHE_KEY.sceneHistory, []);
+  }, [scriptDB, customer?._id]);
+
+  // ── clearSceneHistory – xóa toàn bộ lịch sử ──
+  const clearTrendingHistory = useCallback(async (): Promise<void> => {
+    if (!customer?._id) return;
+    await scriptDB.set(CACHE_KEY.trendingHistory, []);
   }, [scriptDB, customer?._id]);
 
   // ── generateStyleText – gọi API tạo mô tả phong cách từ AI ──
@@ -1107,6 +1355,148 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── getActiveTrendingCategoryList – lấy danh sách trending category active ──
+  const getActiveTrendingCategoryList = useCallback(async () => {
+    return TrendingCategoryService.getActiveTrendingCategoryList();
+  }, []);
+
+  // ── getTrendingsByCategoryId – lấy trending items theo category ID, phân trang ──
+  const getTrendingsByCategoryId = useCallback(
+    async (categoryId?: string, page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(categoryId, page, limit, search);
+    },
+    []
+  );
+
+  // ── getTrendingPromptById – lấy prompt của trending theo ID ──
+  const getTrendingPromptById = useCallback(async (trendingId: string): Promise<string | null> => {
+    return TrendingCategoryService.getTrendingPromptById(trendingId);
+  }, []);
+
+  // ── getCustomerTrendingList – lấy danh sách trending của customer ──
+  const getCustomerTrendingList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getCustomerTrendingList(page, limit, search);
+    },
+    []
+  );
+
+  // ── getTrendingRank – bảng xếp hạng trending theo monthlyCount ──
+  const getTrendingRank = useCallback(
+    async (page: number = 1, limit: number = 20, search?: string) => {
+      return TrendingCategoryService.getTrendingRank(page, limit, search);
+    },
+    []
+  );
+
+  // ── createCustomerTrending – customer tạo trending mới ──
+  const createCustomerTrending = useCallback(
+    async (data: CustomerTrendingInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerTrending($data: CreateCustomerTrendingInput!) {
+              createCustomerTrending(data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerTrending] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo trending");
+          return undefined;
+        }
+
+        return json.data?.createCustomerTrending;
+      } catch (err: any) {
+        console.error("[createCustomerTrending] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── updateCustomerTrending – customer sửa trending của mình ──
+  const updateCustomerTrending = useCallback(
+    async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerTrending($id: ID!, $data: UpdateCustomerTrendingInput!) {
+              updateCustomerTrending(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerTrending] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa trending");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerTrending;
+      } catch (err: any) {
+        console.error("[updateCustomerTrending] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── deleteCustomerTrending – customer xoá trending của mình ──
+  const deleteCustomerTrending = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerTrending($id: ID!) {
+              deleteCustomerTrending(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerTrending] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerTrending] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá trending");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerTrending] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -1127,5 +1517,17 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getCustomerObjectToPersonifyList,
     createCustomerObjectToPersonify,
     deleteCustomerObjectToPersonify,
+    getActiveTrendingCategoryList,
+    getTrendingsByCategoryId,
+    getTrendingPromptById,
+    getCustomerTrendingList,
+    createCustomerTrending,
+    updateCustomerTrending,
+    deleteCustomerTrending,
+    getTrendingRank,
+    generateTrendingSingle,
+    generateTrendingScene,
+    getTrendingSceneHistory,
+    clearTrendingHistory,
   };
 }

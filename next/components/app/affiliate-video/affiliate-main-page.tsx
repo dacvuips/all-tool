@@ -6,18 +6,13 @@
  */
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import {
-  RiBookOpenLine,
-  RiFileCopy2Line,
-  RiFileTextLine,
-  RiGridLine,
-  RiShirtLine,
-} from "react-icons/ri";
+import { RiBookOpenLine, RiFileCopy2Line, RiFileTextLine, RiGridLine } from "react-icons/ri";
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
+import { TrendingPage } from "./trending/trending-page";
 
 export default function AffiliateMainPage() {
   const { t } = useTranslation();
@@ -46,17 +41,22 @@ export default function AffiliateMainPage() {
     },
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
+      icon: (
+        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+          {"Hot 🔥"}
+        </div>
+      ),
+      label: t("Trending"),
+      value: "trending",
+      component: <TrendingPage />,
+    },
+    {
       icon: <RiBookOpenLine />,
       label: t("Review Sản Phẩm"),
       value: "product-review",
       component: <>{"Đang phát triển"}</>,
     },
-    {
-      icon: <RiShirtLine />,
-      label: t("Thời Trang"),
-      value: "thoi-trang",
-      component: <>{"Đang phát triển"}</>,
-    },
+
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
     // { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },
   ];
@@ -64,7 +64,7 @@ export default function AffiliateMainPage() {
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-amber-50"
-      style={{ height: "calc(100vh - 10px)" }}
+      style={{ height: "calc(100vh - 175px)" }}
     >
       {/* ══ TOP NAV – thanh điều hướng chính ══ */}
       <TabGroup
