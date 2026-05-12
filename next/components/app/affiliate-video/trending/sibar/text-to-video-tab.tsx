@@ -41,7 +41,6 @@ const SuggestButton = () => {
         formContext?.setValue("tipContent", result.tipContent);
         // Lưu vào provider state + IndexedDB
         patchConfig?.({
-          objectToPersonify: result.objectToPersonify,
           tipContent: result.tipContent,
         });
       }
@@ -74,7 +73,7 @@ const SuggestButton = () => {
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
-  const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } =
+  const { handleSubmit, defaultVideoConfig, videoConfig, trendingModeType } =
     useAffiliateVideoContext();
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
@@ -83,9 +82,9 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
     const mergedData = {
       ...data,
       batchSize: videoConfig?.batchSize ?? 8,
-      storyModeType,
-      objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
+      trendingModeType,
       productImages: videoConfig?.productImages,
+      promptId: videoConfig?.promptId,
     };
     return handleSubmit?.(mergedData, promptText);
   };

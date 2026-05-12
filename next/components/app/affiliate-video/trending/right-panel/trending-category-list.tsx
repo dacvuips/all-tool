@@ -26,6 +26,7 @@ import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
 import { parseNumber } from "../../../../../lib/helpers/parser";
 import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { NotifyText } from "../../../../shared/common/notify-text";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import {
@@ -34,6 +35,7 @@ import {
   Form,
   ImageInput,
   Input,
+  Select,
   Switch,
   Textarea,
 } from "../../../../shared/utilities/form";
@@ -127,15 +129,17 @@ const TrendingCard = ({
             tooltip={t("Sửa")}
             icon={<RiEdit2Line className="text-lg text-blue-500" />}
           />
-          <Button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(item);
-            }}
-            className="px-0 h-7"
-            tooltip={t("Xoá")}
-            icon={<RiDeleteBin6Line className="text-lg text-red-500" />}
-          />
+          {!item.isActive && (
+            <Button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(item);
+              }}
+              className="px-0 h-7"
+              tooltip={t("Xóa")}
+              icon={<RiDeleteBin6Line className="text-lg text-red-500" />}
+            />
+          )}
         </div>
       )}
 
@@ -575,7 +579,7 @@ const CreateEditTrendingDialog = ({
           <Field label={t("Tên prompt")} required>
             <Input value={name} onChange={setName} placeholder={t("Nhập tên prompt...")} />
           </Field>
-          <Field label={t("Prompt")}>
+          <Field label={t("Prompt")} required>
             <Textarea
               value={prompt}
               onChange={setPrompt}
@@ -589,6 +593,25 @@ const CreateEditTrendingDialog = ({
               onChange={setDes}
               placeholder={t("Nhập hướng dẫn chi tiết...")}
               maxRows={4}
+            />
+          </Field>
+          <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
+            <Select
+              multi
+              autocompletePromise={(props) =>
+                TrendingCategoryService.getAllAutocompletePromise(props, {
+                  query: {
+                    filter: {
+                      isActive: true,
+                    },
+                  },
+                  fragment: "id name",
+                  parseOption: (data) => ({
+                    value: data.id,
+                    label: data.name,
+                  }),
+                })
+              }
             />
           </Field>
           <div className="flex items-center gap-3">
@@ -609,7 +632,7 @@ const CreateEditTrendingDialog = ({
             text={editItem ? t("Cập nhật") : t("Tạo mới")}
             className="rounded-lg"
             onClick={handleSubmit}
-            disabled={!name.trim() || isSaving}
+            disabled={!name.trim() || !prompt.trim() || isSaving}
             isLoading={isSaving}
           />
         </div>
@@ -622,12 +645,10 @@ const CreateEditTrendingDialog = ({
 const CustomerTrendingSection = ({
   searchText,
   onUseTrending,
-  onOpenCreate,
   categories,
 }: {
   searchText?: string;
   onUseTrending: (trendingId: string) => void;
-  onOpenCreate: () => void;
   categories: TrendingCategoryPublicItem[];
 }) => {
   const { t } = useTranslation();
@@ -745,7 +766,10 @@ const CustomerTrendingSection = ({
         />
         <Button
           primary
-          onClick={onOpenCreate}
+          onClick={() => {
+            setEditItem(null);
+            setEditDialogOpen(true);
+          }}
           className="px-3 rounded-full"
           text={t("Tạo mới")}
           icon={<RiAddLine className="text-sm" />}
@@ -801,7 +825,10 @@ const CustomerTrendingSection = ({
           <div className="text-gray-400 text-sm mb-3">{t("Bạn chưa tạo trending nào")}</div>
           <Button
             primary
-            onClick={onOpenCreate}
+            onClick={() => {
+              setEditItem(null);
+              setEditDialogOpen(true);
+            }}
             text={t("Tạo trending đầu tiên")}
             icon={<RiAddLine />}
             className="rounded-lg"
@@ -899,7 +926,7 @@ export const TrendingCategoryList = () => {
       const prompt = await getTrendingPromptById(trendingId);
       if (!prompt) return;
       if (patchConfig) {
-        patchConfig({ tipContent: prompt });
+        patchConfig({ tipContent: prompt, promptId: trendingId } as any);
       }
       if (setPendingPrompt) {
         setPendingPrompt(prompt);
@@ -991,7 +1018,6 @@ export const TrendingCategoryList = () => {
           <CustomerTrendingSection
             searchText={debouncedSearch}
             onUseTrending={handleUseTrending}
-            onOpenCreate={() => setCreateDialogOpen(true)}
             categories={categories}
           />
         ) : activeCategoryId === ALL_CATEGORY_ID ? (

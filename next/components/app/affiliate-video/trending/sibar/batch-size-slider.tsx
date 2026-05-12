@@ -1,37 +1,64 @@
+/**
+ * batch-size-slider.tsx
+ * Slider chọn số lượng phiên bản / phân cảnh cần tạo.
+ * Nhận label + description động tuỳ theo chế độ (Đơn Lẻ / Cốt truyện).
+ */
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { BsLayers } from "react-icons/bs";
 
 interface BatchSizeSliderProps {
+  /** Giá trị hiện tại */
   value: number;
+  /** Callback khi giá trị thay đổi */
   onChange: (value: number) => void;
+  /** Tiêu đề hiển thị (VD: "Số phiên bản" hoặc "Số phân cảnh") */
+  label?: string;
+  /** Mô tả phụ bên dưới slider – dùng {count} làm placeholder cho giá trị */
+  description?: string;
 }
 
-export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChange }) => {
+export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
+  value,
+  onChange,
+  label,
+  description,
+}) => {
   const { t } = useTranslation();
 
   const [localValue, setLocalValue] = React.useState(value);
 
-  // Sync local state if parent value changes externally
+  // Đồng bộ state nội bộ khi giá trị từ parent thay đổi
   React.useEffect(() => {
     setLocalValue(value);
   }, [value]);
 
+  /** Xử lý khi user kéo slider */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
     setLocalValue(val);
     onChange(val);
   };
 
+  // Tiêu đề mặc định nếu không truyền prop label
+  const displayLabel = label || t("Số lượng phân cảnh");
+
+  // Mô tả mặc định nếu không truyền prop description
+  const displayDescription =
+    description?.replace("{count}", String(value)) ||
+    `${t("AI sẽ tự nghĩ ra")} ${value} ${t("ý tưởng khác nhau dựa trên chủ đề bạn chọn.")}`;
+
   return (
     <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+      {/* Tiêu đề + icon */}
       <div className="flex justify-between items-center mb-4 text-purple-900">
         <h3 className="font-semibold text-sm uppercase tracking-wide">
-          {t("Số lượng phân cảnh")}: {localValue}
+          {t(displayLabel)}: {localValue}
         </h3>
         <BsLayers className="text-purple-700 text-lg" />
       </div>
 
+      {/* Thanh slider */}
       <div className="relative w-full">
         <input
           type="range"
@@ -47,7 +74,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
             }%, #e9d5ff ${((localValue - 1) / 29) * 100}%, #e9d5ff 100%)`,
           }}
         />
-        {/* Custom thumb styles using tailwind arbitrary variants since standard classes might not fully style the thumb in all browsers */}
+        {/* Custom thumb styles – đảm bảo hiển thị đúng trên mọi trình duyệt */}
         <style
           dangerouslySetInnerHTML={{
             __html: `
@@ -76,6 +103,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
         />
       </div>
 
+      {/* Các mốc giá trị */}
       <div className="flex justify-between text-purple-400 text-xs mt-2 font-medium">
         <span>1</span>
         <span>10</span>
@@ -83,9 +111,8 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
         <span>30</span>
       </div>
 
-      <p className="text-purple-600 text-xs italic mt-3 leading-relaxed">
-        *{t("AI sẽ tự nghĩ ra")} {value} {t("ý tưởng khác nhau dựa trên chủ đề bạn chọn.")}
-      </p>
+      {/* Mô tả phụ */}
+      <p className="text-purple-600 text-xs italic mt-3 leading-relaxed">*{displayDescription}</p>
     </div>
   );
 };

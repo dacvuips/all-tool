@@ -1,19 +1,25 @@
 /**
- * affiliate-config.tsx
- * Sidebar form: Tạo Nhân Vật – light theme, cream/white background
- * className only – Tailwind CSS, no inline styles, no arbitrary [] values
- * Field names aligned with AffiliateFormConfig interface.
+ * affiliate-config.tsx (trending)
+ * Sidebar form cấu hình: chọn mode, tỉ lệ, phong cách, prompt, v.v.
+ * Light theme – className only, Tailwind CSS
+ * Field names khớp với AffiliateVideoFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
+import {
+  ASPECT_RATIOS,
+  BATCH_SIZE_DESCRIPTIONS,
+  BATCH_SIZE_LABELS,
+  TrendingModeTypeEnum,
+} from "../../constants";
 
+import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -25,8 +31,8 @@ export const AffiliateConfig = () => {
   const {
     videoConfig,
     patchConfig,
-    storyModeType,
-    setStoryModeType,
+    trendingModeType,
+    setTrendingModeType,
     pendingPrompt,
     setPendingPrompt,
   } = useAffiliateVideoContext();
@@ -42,29 +48,95 @@ export const AffiliateConfig = () => {
   const { ART_STYLE_TRANSLATED_OPTIONS, CATEGORY_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } =
     useOptionsTranslation();
 
-  // Local state for instant UI feedback; synced from URL param on mount/navigation
+  // State nội bộ để UI phản hồi ngay khi chuyển tab; đồng bộ từ URL khi mount/navigation
   const initialMode =
-    (router.query.storyModeType as StoryModeTypeEnum) ||
-    storyModeType ||
-    StoryModeTypeEnum.image_to_video;
-  const [currentStoryModeType, setCurrentStoryModeType] = useState<StoryModeTypeEnum>(initialMode);
+    (router.query.trendingModeType as TrendingModeTypeEnum) ||
+    trendingModeType ||
+    TrendingModeTypeEnum.story_script;
+  const [currentStoryModeType, setCurrentStoryModeType] =
+    useState<TrendingModeTypeEnum>(initialMode);
 
-  // Sync from URL param when it changes (e.g. browser back/forward)
+  // Đồng bộ từ URL param khi thay đổi (VD: browser back/forward)
   useEffect(() => {
-    if (router.query.storyModeType) {
-      const typeFromQuery = router.query.storyModeType as string;
-      if (Object.values(StoryModeTypeEnum).includes(typeFromQuery as any)) {
-        setCurrentStoryModeType(typeFromQuery as StoryModeTypeEnum);
-        if (setStoryModeType) setStoryModeType(typeFromQuery as StoryModeTypeEnum);
-        if (patchConfig) patchConfig({ storyModeType: typeFromQuery as StoryModeTypeEnum });
-        if (formContext) formContext.setValue("storyModeType", typeFromQuery as StoryModeTypeEnum);
+    if (router.query.trendingModeType) {
+      const typeFromQuery = router.query.trendingModeType as string;
+      if (Object.values(TrendingModeTypeEnum).includes(typeFromQuery as any)) {
+        setCurrentStoryModeType(typeFromQuery as TrendingModeTypeEnum);
+        if (setTrendingModeType) setTrendingModeType(typeFromQuery as TrendingModeTypeEnum);
+        if (patchConfig) patchConfig({ trendingModeType: typeFromQuery as TrendingModeTypeEnum });
+        if (formContext)
+          formContext.setValue("trendingModeType", typeFromQuery as TrendingModeTypeEnum);
       }
     }
-  }, [router.query.storyModeType]);
+  }, [router.query.trendingModeType]);
+
+  /**
+   * Hàm dùng chung khi chuyển đổi tab mode (Đơn Lẻ / Cốt truyện).
+   * Cập nhật: state nội bộ, provider, form context, URL query param.
+   */
+  const handleModeChange = useCallback(
+    (mode: TrendingModeTypeEnum) => {
+      setCurrentStoryModeType(mode);
+      if (setTrendingModeType) setTrendingModeType(mode);
+      if (patchConfig) patchConfig({ trendingModeType: mode });
+      if (formContext) formContext.setValue("trendingModeType", mode);
+      router.push(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, trendingModeType: mode },
+        },
+        undefined,
+        { shallow: true }
+      );
+    },
+    [setTrendingModeType, patchConfig, formContext, router]
+  );
 
   return (
     <div className="flex-1 bg-white">
-      {/* ── Form Fields ── */}
+      {/* ── Chuyển đổi Mode: Đơn Lẻ / Cốt truyện ── */}
+      <div className="px-4 pt-3 pb-2">
+        <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
+          {/* Tab "Đơn Lẻ" */}
+          <div
+            onClick={() => handleModeChange(TrendingModeTypeEnum.single_variant)}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+              currentStoryModeType === TrendingModeTypeEnum.single_variant
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <RiFilmFill
+              className={
+                currentStoryModeType === TrendingModeTypeEnum.single_variant
+                  ? "text-pink-500"
+                  : "text-gray-400"
+              }
+            />
+            {t("Đơn Lẻ")}
+          </div>
+          {/* Tab "Cốt truyện/kịch bản" */}
+          <div
+            onClick={() => handleModeChange(TrendingModeTypeEnum.story_script)}
+            className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+              currentStoryModeType === TrendingModeTypeEnum.story_script
+                ? "bg-white text-gray-800 shadow-sm"
+                : "text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            <RiCameraLensFill
+              className={
+                currentStoryModeType === TrendingModeTypeEnum.story_script
+                  ? "text-pink-500"
+                  : "text-gray-400"
+              }
+            />
+            {t("Cốt truyện/kịch bản")}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Các trường cấu hình ── */}
 
       <div className="px-4 pb-4 space-y-3">
         {/* TỈ LỆ KHUNG HÌNH */}
@@ -95,7 +167,7 @@ export const AffiliateConfig = () => {
             </div>
           </Field>
         </div>
-        {/* ART STYLE */}
+        {/* PHONG CÁCH HÌNH ẢNH */}
         <div>
           <Field noError name="artStyle" label={t("Phong cách hình ảnh")}>
             <Select
@@ -121,7 +193,7 @@ export const AffiliateConfig = () => {
           </Field>
         </div>
 
-        {/* NỘI DUNG MẸO (tipContent) */}
+        {/* NỘI DUNG PROMPT */}
         <div>
           <Field noError name="tipContent" label={t("Prompt")}>
             <Textarea
@@ -135,9 +207,9 @@ export const AffiliateConfig = () => {
           </Field>
         </div>
 
-        {/* Ảnh sản phẩm */}
+        {/* ẢNH THAM CHIẾU (tuỳ chọn) */}
 
-        <Field noError label={t("Ảnh tham chiếu (tùy chọn)")}>
+        <Field noError label={t(" Ảnh sản phẩm tham chiếu (tùy chọn)")}>
           <ImageInput
             multi
             value={videoConfig?.productImages}
@@ -145,13 +217,15 @@ export const AffiliateConfig = () => {
           />
         </Field>
 
-        {/* SỐ LƯỢNG MẸO CẦN TẠO (batchSize) */}
+        {/* SLIDER SỐ LƯỢNG – label & mô tả thay đổi theo mode */}
         <BatchSizeSlider
           value={videoConfig?.batchSize ?? 8}
           onChange={(v) => {
             if (patchConfig) patchConfig({ batchSize: v });
             if (formContext) formContext.setValue("batchSize", v);
           }}
+          label={BATCH_SIZE_LABELS[currentStoryModeType]}
+          description={BATCH_SIZE_DESCRIPTIONS[currentStoryModeType]}
         />
       </div>
     </div>

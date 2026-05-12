@@ -24,9 +24,8 @@ import {
   CharacterItem,
   DB_NAME,
   SceneScript,
-  ScriptData,
   STORE_NAME,
-  StoryModeTypeEnum,
+  TrendingScriptData,
 } from "../../constants";
 
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
@@ -323,19 +322,19 @@ function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButto
 interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
-  storyModeType: StoryModeTypeEnum;
 }
 
-export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
+export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<SceneScript[]>(scenes);
-  const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
+  const { trendingScriptData, setTrendingScriptData, selectedHistoryId } =
+    useAffiliateVideoContext();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);
   }, [scenes]);
 
-  const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
+  const db = useIndexedDB<TrendingScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
 
   /** Toggle disabled state on a scene and persist to IndexedDB */
@@ -346,8 +345,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     setSceneList(updated);
     // 2. Persist to IndexedDB by reading current record then merging
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleDisable] Failed to persist to IndexedDB:", err);
     }
@@ -360,8 +362,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     );
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleVoiceDisable] Failed to persist to IndexedDB:", err);
     }
@@ -373,8 +378,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     const updated = sceneList.map((s) => ({ ...s, voiceDisable: !allDisabled }));
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleAllVoiceDisable] Failed to persist to IndexedDB:", err);
     }
@@ -385,8 +393,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     const updated = sceneList.map((s) => (s.id === sceneId ? { ...s, noText: !s.noText } : s));
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleNoText] Failed to persist to IndexedDB:", err);
     }
@@ -398,8 +409,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     const updated = sceneList.map((s) => ({ ...s, noText: !allDisabled }));
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleToggleAllNoText] Failed to persist to IndexedDB:", err);
     }
@@ -427,21 +441,21 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
         sceneNumber: newSceneNumber,
         prevScene,
         nextScene,
-        scriptContext: scriptData
+        scriptContext: trendingScriptData
           ? {
-              cast: scriptData.characterName
+              cast: trendingScriptData.characterName
                 ? [
                     {
-                      name: scriptData.characterName,
+                      name: trendingScriptData.characterName,
                       tag: "main",
-                      description: scriptData.characterBaseDescription || "",
+                      description: trendingScriptData.characterBaseDescription || "",
                     },
                   ]
                 : undefined,
-              environment: scriptData.environment,
-              artStyle: scriptData.artStyle,
-              voiceGender: scriptData.voiceGender,
-              voiceTone: scriptData.voiceTone,
+              environment: trendingScriptData.environment,
+              artStyle: trendingScriptData.artStyle,
+              voiceGender: trendingScriptData.voiceGender,
+              voiceTone: trendingScriptData.voiceTone,
             }
           : undefined,
       });
@@ -467,10 +481,10 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
       // Persist to IndexedDB
       try {
-        const current = await db.get(CACHE_KEY.lastScript);
-        const merged = { ...(current ?? scriptData), scenes: updated as any };
-        await db.set(CACHE_KEY.lastScript, merged);
-        setScriptData(merged as any);
+        const current = await db.get(CACHE_KEY.lastTrendingScript);
+        const merged = { ...(current ?? trendingScriptData), scenes: updated as any };
+        await db.set(CACHE_KEY.lastTrendingScript, merged);
+        setTrendingScriptData(merged as any);
       } catch (err) {
         console.error("[handleInsert] Failed to persist to IndexedDB:", err);
       }
@@ -507,8 +521,8 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
     // 3. Persist to IndexedDB asynchronously
     try {
-      await db.set(CACHE_KEY.lastScript, { ...scriptData, scenes: updated as any });
-      setScriptData({ ...scriptData, scenes: updated as any });
+      await db.set(CACHE_KEY.lastTrendingScript, { ...trendingScriptData, scenes: updated as any });
+      setTrendingScriptData({ ...trendingScriptData, scenes: updated as any });
     } catch (err) {
       console.error("[handleUpdateScene] Failed to persist to IndexedDB:", err);
     }
@@ -521,8 +535,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     );
     setSceneList(updated);
     try {
-      const current = await db.get(CACHE_KEY.lastScript);
-      await db.set(CACHE_KEY.lastScript, { ...(current ?? scriptData), scenes: updated as any });
+      const current = await db.get(CACHE_KEY.lastTrendingScript);
+      await db.set(CACHE_KEY.lastTrendingScript, {
+        ...(current ?? trendingScriptData),
+        scenes: updated as any,
+      });
     } catch (err) {
       console.error("[handleUpdateSelectedProductImages] Failed to persist to IndexedDB:", err);
     }
@@ -555,11 +572,11 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                   {t("PROMPT")}
                 </div>
               </th>
-              {scriptData.storyModeType !== StoryModeTypeEnum.prompt_to_video && (
-                <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
-                  {t("HÌNH ẢNH")}
-                </th>
-              )}
+
+              <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
+                {t("HÌNH ẢNH")}
+              </th>
+
               <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
                 {t("VIDEO")}
               </th>
@@ -617,7 +634,6 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
                 nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
                 isDisabled={!!scene.disabled}
                 characters={characters}
-                storyModeType={scriptData.storyModeType}
                 onInsert={handleInsert}
                 onUpdateScene={handleUpdateScene}
                 onToggleDisable={handleToggleDisable}

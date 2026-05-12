@@ -21,6 +21,7 @@ export interface TrendingPublicItem {
   des: string;
   isPublish: boolean;
   monthlyCount: number;
+  isActive: boolean;
 }
 
 /** Public trending category with resolved trending items */
@@ -118,7 +119,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           filter,
           order: { count: -1 },
         },
-        fragment: `id name imageUrls  count price promptShort trendingCategoryIds`,
+        fragment: `id name imageUrls  count price promptShort trendingCategoryIds isPublish isActive`,
         cache: false,
       });
       return {
@@ -170,7 +171,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           search: search || undefined,
           order: { createdAt: -1 },
         },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount`,
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive`,
         cache: false,
       });
       return {

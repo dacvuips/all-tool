@@ -5,11 +5,11 @@ import { Context } from "../../../libs/graphql";
 
 const Query = {
   getAllTrendingCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
     return trendingCategoryService.fetch(args.q);
   },
   getOneTrendingCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
     const { id } = args;
     return await trendingCategoryService.findOne({ _id: id });
   },

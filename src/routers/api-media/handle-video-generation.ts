@@ -119,9 +119,7 @@ function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
 }
 
 function buildVideoModelKey(params: CallAisandboxParams): string {
-  const base = `veo_3_1_t2v_fast_${
-    params.aspectRatio === "9:16" ? "portrait_ultra" : "ultra"
-  }_relaxed`;
+  const base = `veo_3_1_t2v_lite`;
   return base;
 }
 

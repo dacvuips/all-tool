@@ -21,15 +21,21 @@ const TAB_NAMES = ["script", "batch"] as const;
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
   const { t } = useTranslation();
-  const { scriptData, scriptTab, setScriptTab, batchRunning, sceneHistory, clearSceneHistory } =
-    useAffiliateVideoContext();
+  const {
+    trendingScriptData,
+    scriptTab,
+    setScriptTab,
+    batchRunning,
+    sceneHistory,
+    clearSceneHistory,
+  } = useAffiliateVideoContext();
 
   const [confirmClear, setConfirmClear] = useState(false);
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 
   // Label tab Batch List kèm số lượng scene
-  const sceneCount = scriptData?.scenes?.length ?? 0;
+  const sceneCount = trendingScriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
 
   const renderHistoryActions = () => (
@@ -89,7 +95,7 @@ export const AffiliateVideoRightPanel = () => {
             <AiGeneratingSpinner />
           ) : (
             <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
+              scenes={(trendingScriptData?.scenes || []).map((s, i) => ({
                 id: (s as any).id || `scene-${i}`,
                 sceneNumber: s.sceneNumber,
                 camera: (s.camera as any) || "WIDE SHOT",
@@ -104,7 +110,6 @@ export const AffiliateVideoRightPanel = () => {
                 product_image_prompt: (s as any).product_image_prompt ?? "",
                 selectedProductImages: (s as any).selectedProductImages ?? [],
               }))}
-              storyModeType={scriptData?.storyModeType}
               characters={[]}
             />
           )}

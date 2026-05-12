@@ -22,6 +22,9 @@ import {
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
+  TrendingHistoryItem,
+  TrendingScriptData,
+  TrendingVideoFormConfig,
 } from "../constants";
 import { useIndexedDB } from "./useIndexedDB";
 
@@ -60,6 +63,11 @@ export interface GenerateSceneFromTextParams {
   text: string;
   /** Config (tuỳ chọn) – nếu không truyền sẽ dùng object rỗng */
   config?: Partial<AffiliateVideoFormConfig>;
+}
+export interface GenerateTrendingParams {
+  /** Đoạn text / prompt gửi trực tiếp đến API */
+  /** Config (tuỳ chọn) – nếu không truyền sẽ dùng object rỗng */
+  config?: Partial<TrendingScriptData>;
 }
 
 export interface GenerateImageParams {
@@ -381,7 +389,10 @@ export interface UseAffiliateVideoApiReturn {
   /**
    * Customer sửa trending của mình.
    */
-  updateCustomerTrending: (id: string, data: Partial<CustomerTrendingInput>) => Promise<any | undefined>;
+  updateCustomerTrending: (
+    id: string,
+    data: Partial<CustomerTrendingInput>
+  ) => Promise<any | undefined>;
 
   /**
    * Customer xoá trending của mình.
@@ -396,13 +407,21 @@ export interface UseAffiliateVideoApiReturn {
     limit?: number,
     search?: string
   ) => Promise<TrendingsByCategoryResult>;
+
+  generateTrendingSingle: (
+    data: TrendingVideoFormConfig
+  ) => Promise<TrendingScriptData | undefined>;
+
+  getTrendingSceneHistory: () => Promise<TrendingHistoryItem[]>;
+  clearTrendingHistory: () => Promise<void>;
+  generateTrendingScene: (data: TrendingVideoFormConfig) => Promise<TrendingScriptData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
 export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const toast = useToast();
-  const { STORY_MODE_OPTIONS } = useOptionsTranslation();
+  const { STORY_MODE_OPTIONS, TRENDING_MODE_OPTIONS } = useOptionsTranslation();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const imageDB = useIndexedDB<GeneratedImageData>(IMAGE_STORE_NAME, DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>(VIDEO_STORE_NAME, DB_NAME.generateVideo);
@@ -418,6 +437,29 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       productImages?: string[];
     }) => {
       const res = await fetch("/api/app/generation-scene/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+  const callGenerationTrendingApi = useCallback(
+    async (body: {
+      config: Partial<TrendingVideoFormConfig>;
+      promptId?: string;
+      productImages?: string[];
+    }) => {
+      const res = await fetch("/api/app/generation-trending/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -469,6 +511,40 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [scriptDB]
   );
 
+  // ── Helper: push a ScriptData into history array in IndexedDB ──
+  const pushToTrendingHistory = useCallback(
+    async (scriptResult: TrendingScriptData) => {
+      try {
+        const existing: SceneHistoryItem[] = (await scriptDB.get(CACHE_KEY.trendingHistory)) || [];
+
+        const now = new Date();
+        const label = `${
+          TRENDING_MODE_OPTIONS.find((s) => s.value === scriptResult.trendingModeType)?.label
+        } – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: TrendingHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: scriptResult,
+        };
+
+        // Prepend newest first, trim to MAX_SCENE_HISTORY
+        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
+        await scriptDB.set(CACHE_KEY.trendingHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push scene history", e);
+      }
+    },
+    [scriptDB]
+  );
+
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
@@ -510,6 +586,46 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return scriptResult;
     },
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
+  );
+
+  const generateTrendingScene = useCallback(
+    async (data: TrendingVideoFormConfig): Promise<TrendingScriptData | undefined> => {
+      const result = await callGenerationTrendingApi({
+        config: data,
+        promptId: data.promptId,
+        productImages: data.productImages,
+      });
+      if (!result) return undefined;
+      const scriptResult: TrendingScriptData = {
+        ...result.data,
+        trendingModeType: data.trendingModeType,
+        aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist config input
+      scriptDB
+        .set(CACHE_KEY.trendingInput, data)
+        .catch((e) => console.warn("[generateTrendingScene] IndexedDB write error", e));
+
+      // Persist script result (include storyModeType)
+      scriptDB
+        .set(CACHE_KEY.lastTrendingScript, scriptResult)
+        .catch((e) => console.warn("[generateTrendingScene] IndexedDB write error", e));
+      // Push to history (await so provider can read it immediately)
+      await pushToTrendingHistory(scriptResult);
+
+      return scriptResult;
+    },
+    [callGenerationSceneApi, scriptDB, pushToTrendingHistory]
   );
 
   // ── Shared: gọi API /api/app/copy-video-analysis/ ──
@@ -666,6 +782,45 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return scriptResult;
     },
     [callGenerationSceneApi, scriptDB, pushToSceneHistory]
+  );
+
+  // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
+  const generateTrendingSingle = useCallback(
+    async (data: TrendingVideoFormConfig): Promise<TrendingScriptData | undefined> => {
+      const result = await callGenerationTrendingApi({
+        config: data,
+        promptId: data.promptId,
+        productImages: data.productImages,
+      });
+      if (!result) return undefined;
+      const scriptResult: TrendingScriptData = {
+        ...result.data,
+        productImages: data.productImages,
+      };
+
+      // Gán id ngẫu nhiên cho từng scene mới
+      if (scriptResult?.scenes) {
+        scriptResult.scenes = scriptResult.scenes.map((scene) => ({
+          ...scene,
+          id: crypto.randomUUID(),
+        }));
+      }
+
+      // Persist script result (include storyModeType)
+      scriptDB
+        .set(CACHE_KEY.lastTrendingScript, {
+          ...scriptResult,
+          trendingModeType: data.trendingModeType,
+          productImages: data.productImages,
+        })
+        .catch((e) => console.warn("[trending -api] IndexedDB write error", e));
+
+      // Push to history (await so provider can read it immediately)
+      await pushToTrendingHistory(scriptResult);
+
+      return scriptResult;
+    },
+    [callGenerationTrendingApi, scriptDB, pushToTrendingHistory]
   );
 
   // ── generateImage – gọi API tạo ảnh từ prompt ──
@@ -1018,10 +1173,26 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     }
   }, [scriptDB, customer?._id]);
 
+  // ── getSceneHistory – lấy lịch sử generate scene ──
+  const getTrendingSceneHistory = useCallback(async (): Promise<TrendingHistoryItem[]> => {
+    if (!customer?._id) return [];
+    try {
+      return (await scriptDB.get(CACHE_KEY.trendingHistory)) || [];
+    } catch {
+      return [];
+    }
+  }, [scriptDB, customer?._id]);
+
   // ── clearSceneHistory – xóa toàn bộ lịch sử ──
   const clearSceneHistory = useCallback(async (): Promise<void> => {
     if (!customer?._id) return;
     await scriptDB.set(CACHE_KEY.sceneHistory, []);
+  }, [scriptDB, customer?._id]);
+
+  // ── clearSceneHistory – xóa toàn bộ lịch sử ──
+  const clearTrendingHistory = useCallback(async (): Promise<void> => {
+    if (!customer?._id) return;
+    await scriptDB.set(CACHE_KEY.trendingHistory, []);
   }, [scriptDB, customer?._id]);
 
   // ── generateStyleText – gọi API tạo mô tả phong cách từ AI ──
@@ -1198,12 +1369,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   );
 
   // ── getTrendingPromptById – lấy prompt của trending theo ID ──
-  const getTrendingPromptById = useCallback(
-    async (trendingId: string): Promise<string | null> => {
-      return TrendingCategoryService.getTrendingPromptById(trendingId);
-    },
-    []
-  );
+  const getTrendingPromptById = useCallback(async (trendingId: string): Promise<string | null> => {
+    return TrendingCategoryService.getTrendingPromptById(trendingId);
+  }, []);
 
   // ── getCustomerTrendingList – lấy danh sách trending của customer ──
   const getCustomerTrendingList = useCallback(
@@ -1357,5 +1525,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     updateCustomerTrending,
     deleteCustomerTrending,
     getTrendingRank,
+    generateTrendingSingle,
+    generateTrendingScene,
+    getTrendingSceneHistory,
+    clearTrendingHistory,
   };
 }

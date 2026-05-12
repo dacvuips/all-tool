@@ -61,7 +61,6 @@ const Mutation = {
     return await trendingService.create({
       ...data,
       customerId,
-      isActive: true,
     });
   },
   updateCustomerTrending: async (root: any, args: any, context: Context) => {

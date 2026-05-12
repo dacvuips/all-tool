@@ -38,9 +38,7 @@ export function TrendingFields() {
           }
         />
       </Field>
-      <Field name="count" label={t("Số lượt sử dụng")} cols={6}>
-        <Input number />
-      </Field>
+
       <Field name="isActive" label={t("Kích hoạt")} cols={6}>
         <Switch />
       </Field>

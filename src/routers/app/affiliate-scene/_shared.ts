@@ -25,7 +25,10 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
-
+export enum TrendingModeTypeEnum {
+  single_variant = "single_variant",
+  story_script = "story_script",
+}
 /**
  * Helper: Gọi lại AI API tối đa AI_MAX_RETRIES lần nếu có lỗi.
  * Chỉ throw error nếu tất cả các lần gọi đều thất bại.
@@ -528,10 +531,28 @@ export interface AffiliateVideoFormConfig {
   batchSize: number;
 }
 
+export interface TrendingVideoFormConfig {
+  tipContent: string;
+  batchSize: number;
+  productImages?: string[];
+  trendingModeType: TrendingModeTypeEnum;
+  category?: string;
+  mood: string;
+  language: string;
+  artStyle: string;
+  aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+  promptId: string;
+}
 /**
  * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config
  */
 export function interpolateTemplate(text: string, config: AffiliateVideoFormConfig): string {
+  return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    const value = (config as any)[key];
+    return value !== undefined && value !== null ? `"${String(value)}"` : "";
+  });
+}
+export function interpolateTrendingTemplate(text: string, config: TrendingVideoFormConfig): string {
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = (config as any)[key];
     return value !== undefined && value !== null ? `"${String(value)}"` : "";

@@ -10,7 +10,7 @@ const trendingSchema = new Schema(
     name: { type: String, required: true },
     imageUrls: { type: [String], default: [] },
     prompt: { type: String },
-    isActive: { type: Boolean, default: true },
+    isActive: { type: Boolean, default: false },
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
     count: { type: Number, default: 0 },
     trendingCategoryIds: {
