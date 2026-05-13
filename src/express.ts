@@ -95,7 +95,7 @@ function useHelmet(app: express.Application) {
         contentSecurityPolicy: {
           directives: {
             defaultSrc: ["'self'"],
-            mediaSrc: ["'self'", "blob:"],
+            mediaSrc: ["'self'", "blob:", "data:", "https://flow-content.google"],
             imgSrc: ["'self'", "https:", "data:", "i.imgur.com", "http"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
