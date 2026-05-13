@@ -38,6 +38,17 @@ function parseTimestamp(ts: string): number {
   return 0;
 }
 
+/** Convert a base64 string + mimeType into a Blob URL (same-origin, CSP-safe). */
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+  const byteChars = atob(base64);
+  const byteNumbers = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([byteNumbers], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
 /** Extract the start time from a timestamp range like "00:05 - 00:10" */
 function getStartTimeFromRange(timestampRange: string): number {
   if (!timestampRange) return 0;
@@ -80,7 +91,7 @@ export function useVideoThumbnail(
     setLoading(true);
 
     const seekTime = getStartTimeFromRange(timestamp);
-    const videoSrc = `data:${mimeType};base64,${videoBase64}`;
+    const videoSrc = base64ToBlobUrl(videoBase64, mimeType);
 
     const video = document.createElement("video");
     video.preload = "auto";
@@ -100,6 +111,7 @@ export function useVideoThumbnail(
       video.pause();
       video.removeAttribute("src");
       video.load(); // release resources
+      URL.revokeObjectURL(videoSrc);
     };
 
     const onError = () => {
@@ -206,7 +218,7 @@ export async function extractAndSaveThumbnails(
 ): Promise<void> {
   if (!videoBase64 || !mimeType || !scenes?.length) return;
 
-  const videoSrc = `data:${mimeType};base64,${videoBase64}`;
+  const videoSrc = base64ToBlobUrl(videoBase64, mimeType);
 
   // Create a single offscreen video element and wait for it to load
   const video = document.createElement("video");
@@ -239,6 +251,7 @@ export async function extractAndSaveThumbnails(
   video.pause();
   video.removeAttribute("src");
   video.load();
+  URL.revokeObjectURL(videoSrc);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@
  *
  * Tailwind CSS className only — no inline styles.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BiPlayCircle } from "react-icons/bi";
 import {
@@ -66,6 +66,19 @@ interface StoredVideo {
 
 const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-matroska"];
 const ACCEPTED_EXTENSIONS = ".mp4,.webm,.mov,.mkv";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Convert a base64 string + mimeType into a Blob URL (same-origin, CSP-safe). */
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+  const byteChars = atob(base64);
+  const byteNumbers = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([byteNumbers], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -246,11 +259,37 @@ export function VideoUploadPicker({
       )
     : galleryItems;
 
-  // ── Video preview src ──────────────────────────────────────────────────────
+  // ── Video preview src (Blob URL — CSP-safe, no data: URI) ─────────────────
 
-  const selectedVideoSrc = selectedVideo
-    ? `data:${selectedVideo.mimeType};base64,${selectedVideo.base64}`
-    : null;
+  const selectedVideoSrc = useMemo(() => {
+    if (!selectedVideo?.base64) return null;
+    return base64ToBlobUrl(selectedVideo.base64, selectedVideo.mimeType);
+  }, [selectedVideo?.base64, selectedVideo?.mimeType]);
+
+  // Revoke blob URL when it changes or component unmounts
+  useEffect(() => {
+    return () => {
+      if (selectedVideoSrc) URL.revokeObjectURL(selectedVideoSrc);
+    };
+  }, [selectedVideoSrc]);
+
+  // ── Gallery blob URLs (memoized + auto-revoked) ───────────────────────────
+
+  const galleryBlobUrls = useMemo(() => {
+    if (!showGallery) return new Map<string, string>();
+    const map = new Map<string, string>();
+    filteredItems.forEach((item) => {
+      map.set(item.key, base64ToBlobUrl(item.data.base64, item.data.mimeType));
+    });
+    return map;
+  }, [showGallery, filteredItems]);
+
+  // Revoke gallery blob URLs when they change or gallery closes
+  useEffect(() => {
+    return () => {
+      galleryBlobUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [galleryBlobUrls]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -461,7 +500,7 @@ export function VideoUploadPicker({
               {!galleryLoading && filteredItems.length > 0 && (
                 <div className="grid grid-cols-2 gap-3  v-scrollbar max-h-96 overflow-y-auto">
                   {filteredItems.map((item) => {
-                    const videoSrc = `data:${item.data.mimeType};base64,${item.data.base64}`;
+                    const videoSrc = galleryBlobUrls.get(item.key) || "";
                     return (
                       <div
                         key={item.key}
