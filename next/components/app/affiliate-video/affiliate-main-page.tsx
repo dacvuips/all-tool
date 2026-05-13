@@ -20,6 +20,17 @@ export default function AffiliateMainPage() {
 
   /** Các tab chế độ tạo video */
   const navigationTabs = [
+    // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
+    {
+      icon: (
+        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+          {"Hot 🔥"}
+        </div>
+      ),
+      label: t("Trending"),
+      value: "trending",
+      component: <TrendingPage />,
+    },
     {
       icon: <RiFileTextLine />,
       label: t("Đơn Lẻ"),
@@ -39,17 +50,7 @@ export default function AffiliateMainPage() {
       value: "copy",
       component: <AffiliateCopyVideoPage />,
     },
-    // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
-    {
-      icon: (
-        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
-          {"Hot 🔥"}
-        </div>
-      ),
-      label: t("Trending"),
-      value: "trending",
-      component: <TrendingPage />,
-    },
+
     {
       icon: <RiBookOpenLine />,
       label: t("Review Sản Phẩm"),

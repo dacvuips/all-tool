@@ -324,4 +324,8 @@ export enum ArtStyleMapEnum {
   DARK_GROTESQUE = "Dark_Grotesque",
   FLAT_SCIENCE = "Flat_Science",
   MINECRAFT = "Minecraft",
+  PENCIL_SKETCH = "Pencil_Sketch",
+  WATERCOLOR = "Watercolor",
+  RENAISSANCE = "Renaissance",
+  CRAYON = "Crayon",
 }

@@ -34,7 +34,7 @@ export function useBatchActions(scenes: SceneScript[]) {
     removeBatchGeneratingVideoSceneId,
     affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
-  const isPromptToVideo = scriptData.storyModeType === StoryModeTypeEnum.prompt_to_video;
+  const isPromptToVideo = scriptData?.storyModeType === StoryModeTypeEnum.prompt_to_video;
   const toast = useToast();
 
   // ═══════════════════════════════════════════════════════════════════

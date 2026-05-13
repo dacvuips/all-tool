@@ -797,6 +797,10 @@ export const useOptionsTranslation = () => {
     { value: "simpsons", label: t("Hoạt hình Simpsons") },
     { value: "business", label: t("Giải thích Doanh nghiệp (Business Explainer)") },
     { value: "cinematic_dark", label: t("Cinematic Dark Surrealism (Siêu thực Đen tối)") },
+    { value: "dark_grotesque", label: t("Dark Grotesque") },
+    { value: "flat_science", label: t("Flat Science") },
+    { value: "minecraft", label: t("Minecraft") },
+    { value: "pencil_sketch", label: t("Phác thảo bút chì (Pencil Sketch)") },
   ];
 
   // ── Affiliate Video: Mood / Tone Options (translated) ──
@@ -843,6 +847,10 @@ export const useOptionsTranslation = () => {
       label: t("Hoạt hình Khoa học Phẳng (Educational Flat Science)"),
     },
     { value: ArtStyleMapEnum.MINECRAFT, label: t("Thế giới khối vuông (Minecraft)") },
+    { value: ArtStyleMapEnum.PENCIL_SKETCH, label: t("Phác họa bút chì (Pencil Sketch)") },
+    { value: ArtStyleMapEnum.WATERCOLOR, label: t("Tranh màu nước (Watercolor)") },
+    { value: ArtStyleMapEnum.RENAISSANCE, label: t("Thời kỳ Phục hưng (Renaissance)") },
+    { value: ArtStyleMapEnum.CRAYON, label: t("Tranh màu sáp (Crayon)") },
   ];
 
   const CATEGORY_OPTIONS = [
