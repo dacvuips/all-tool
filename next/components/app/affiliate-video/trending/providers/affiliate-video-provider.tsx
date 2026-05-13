@@ -64,8 +64,8 @@ export const AffiliateVideoContext = createContext<
     // ── Script data ──
     scriptData: ScriptData | null;
     setScriptData: (data: ScriptData | null) => void;
-    scriptTab: "script" | "batch";
-    setScriptTab: (tab: "script" | "batch") => void;
+    scriptTab: "script" | "batch" | "prompt-rank";
+    setScriptTab: (tab: "script" | "batch" | "prompt-rank") => void;
     batchList: string[];
     setBatchList: (list: string[]) => void;
     handleSubmit: (data: TrendingVideoFormConfig, promptText?: string) => void;
@@ -137,7 +137,7 @@ export function AffiliateVideoProvider(props) {
 
   // ── Script / Batch state ──
   const [trendingScriptData, setTrendingScriptData] = useState<TrendingScriptData | null>(null);
-  const [scriptTab, setScriptTab] = useState<"script" | "batch">("script");
+  const [scriptTab, setScriptTab] = useState<"script" | "batch" | "prompt-rank">("script");
   const [batchList, setBatchList] = useState<string[]>(["Kịch bản 1"]);
   const [batchRunning, setBatchRunning] = useState(false);
   // ── Batch generating state: refs + per-scene subscriptions ──
@@ -392,6 +392,9 @@ export function AffiliateVideoProvider(props) {
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,
         patchConfig,
+        defaultVideoConfig: affiliateVideoFormConfig,
+        affiliateVideoFormConfig,
+        setAffiliateVideoFormConfig: updateAffiliateVideoFormConfig,
 
         // scene history
 

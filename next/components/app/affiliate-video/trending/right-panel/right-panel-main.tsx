@@ -16,7 +16,7 @@ import { TrendingCategoryList } from "./trending-category-list";
 import { TrendingPromptRank } from "./trending-prompt-rank";
 
 // ── Tab index mapping ────────────────────────────────────────────────────
-const TAB_NAMES = ["script", "batch"] as const;
+const TAB_NAMES = ["script", "batch", "prompt-rank"] as const;
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = () => {
