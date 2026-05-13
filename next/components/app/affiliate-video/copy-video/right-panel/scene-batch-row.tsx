@@ -433,7 +433,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {
         <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
           {/* Ảnh gốc (Origin Thumbnail) */}
-          <div className="flex flex-col items-center mb-3">
+          <div className="flex flex-col mb-3">
             {thumbnailLoading ? (
               <div className="w-20 h-12 rounded-lg border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
                 <RiLoader4Line className="text-amber-500 text-sm animate-spin" />
@@ -462,72 +462,63 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               </div>
             )}
           </div>
-          <div className="flex justify-center">
+          <div className="flex items-start gap-1.5">
             {generatedImage ? (
-              /* ── Show generated image thumbnail ── */
-              <div className="relative w-32 h-full group">
-                <Img
-                  showImageOnClick
-                  lazyload={false}
-                  src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
-                  alt={`Scene ${scene.sceneNumber}`}
-                  className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
-                  ratio916
-                />
-
-                {/* Re-generate overlay on hover */}
-                <div
-                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-md ${
-                    generatingImage ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                  } transition-opacity duration-200 z-10 ${
-                    generatingImage ? "" : "pointer-events-none"
-                  }`}
-                >
-                  <div className="pointer-events-auto flex gap-2 flex-wrap items-center justify-center">
-                    <Button
-                      onClick={handleDownloadImage}
-                      className="w-8 rounded-lg h-8 bg-success-light text-success"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tải")}
-                      icon={<HiOutlineArrowDownTray />}
-                      placement="bottom"
-                    />
-                    {generatingImage ? (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                        <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                        <span className="text-pink-600 text-[10px] font-bold">
-                          {imageProgress}%
-                        </span>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={handleCopyVideoGenerateImage}
-                        icon={<GenerateAiIcon />}
-                        placement="bottom"
-                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                        iconClassName="text-xl font-bold"
-                        tooltip={t("Tạo lại")}
-                      />
-                    )}
-                    <Button
-                      onClick={() => fileInputRef.current?.click()}
-                      icon={<RiUploadCloud2Line />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Upload ảnh")}
-                    />
-                    <Button
-                      onClick={() => setShowGalleryDialog(true)}
-                      icon={<RiGalleryLine />}
-                      placement="bottom"
-                      className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Chọn từ Gallery")}
-                    />
-                  </div>
+              /* ── Show generated image thumbnail + buttons to the right ── */
+              <>
+                <div className="relative w-32 shrink-0">
+                  <Img
+                    showImageOnClick
+                    lazyload={false}
+                    src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
+                    alt={`Scene ${scene.sceneNumber}`}
+                    className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
+                    ratio916
+                  />
                 </div>
-              </div>
+                {/* Action buttons – vertical column to the right */}
+                <div className="flex flex-col gap-1.5 items-center">
+                  <Button
+                    onClick={handleDownloadImage}
+                    className="w-8 rounded-lg h-8 bg-success-light text-success"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Tải")}
+                    icon={<HiOutlineArrowDownTray />}
+                    placement="right"
+                  />
+                  {generatingImage ? (
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                      <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                      <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={handleCopyVideoGenerateImage}
+                      icon={<GenerateAiIcon />}
+                      placement="right"
+                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Tạo lại")}
+                    />
+                  )}
+                  <Button
+                    onClick={() => fileInputRef.current?.click()}
+                    icon={<RiUploadCloud2Line />}
+                    placement="right"
+                    className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Upload ảnh")}
+                  />
+                  <Button
+                    onClick={() => setShowGalleryDialog(true)}
+                    icon={<RiGalleryLine />}
+                    placement="right"
+                    className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Chọn từ Gallery")}
+                  />
+                </div>
+              </>
             ) : generatingImage ? (
               /* ── Spinner + progress ── */
               <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
@@ -554,106 +545,100 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex flex-col items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-center w-full">
+          <div className="flex items-start gap-1.5 w-full">
             {generatedVideo ? (
-              <div className="relative w-full group">
-                {(() => {
-                  const videoSrc =
-                    generatedVideo.videoUri ||
-                    (generatedVideo.videoBytes
-                      ? `data:${generatedVideo.mimeType};base64,${generatedVideo.videoBytes}`
-                      : null);
-                  return videoSrc ? (
-                    <>
-                      <div
-                        className="relative w-full rounded-xl overflow-hidden border-2 border-purple-300 shadow-sm"
-                        style={{ paddingTop: videoPaddingTop }}
-                      >
-                        <video
-                          src={videoSrc}
-                          className="absolute inset-0 w-full h-full object-cover cursor-pointer"
-                          muted
-                          loop
-                          playsInline
-                          preload="metadata"
-                          onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                          onMouseLeave={(e) => {
-                            const v = e.target as HTMLVideoElement;
-                            v.pause();
-                            v.currentTime = 0;
-                          }}
-                          onClick={() => setShowVideoModal(true)}
-                          onError={(e) => {
-                            console.error("[SceneBatchRow] Video load error:", videoSrc, e);
-                          }}
-                        />
-                        {/* Play icon overlay */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                          <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-                            <BiPlayCircle className="text-white w-12 h-12" />
+              <>
+                <div className="relative w-32 shrink-0 group">
+                  {(() => {
+                    const videoSrc =
+                      generatedVideo.videoUri ||
+                      (generatedVideo.videoBytes
+                        ? `data:${generatedVideo.mimeType};base64,${generatedVideo.videoBytes}`
+                        : null);
+                    return videoSrc ? (
+                      <>
+                        <div
+                          className="relative w-full rounded-xl overflow-hidden border-2 border-purple-300 shadow-sm"
+                          style={{ paddingTop: videoPaddingTop }}
+                        >
+                          <video
+                            src={videoSrc}
+                            className="absolute inset-0 w-full h-full object-cover cursor-pointer"
+                            muted
+                            loop
+                            playsInline
+                            preload="metadata"
+                            onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                            onMouseLeave={(e) => {
+                              const v = e.target as HTMLVideoElement;
+                              v.pause();
+                              v.currentTime = 0;
+                            }}
+                            onClick={() => setShowVideoModal(true)}
+                            onError={(e) => {
+                              console.error("[SceneBatchRow] Video load error:", videoSrc, e);
+                            }}
+                          />
+                          {/* Play icon overlay */}
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
+                            <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
+                              <BiPlayCircle className="text-white w-12 h-12" />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      {/* Fullscreen video modal */}
-                      <VideoDialog
-                        videoUrl={videoSrc}
-                        isOpen={showVideoModal}
-                        onClose={() => setShowVideoModal(false)}
-                        aspectRatio={scriptData?.aspectRatio}
-                      />
-                    </>
-                  ) : (
-                    <div
-                      className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
-                      style={{ paddingTop: videoPaddingTop }}
-                    >
-                      <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
-                    </div>
-                  );
-                })()}
-                {/* Download & Re-generate buttons – overlay on hover */}
-                <div
-                  className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
-                    generatingVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                  } transition-opacity duration-200 z-10 ${
-                    generatingVideo ? "" : "pointer-events-none"
-                  }`}
-                >
-                  <div className="pointer-events-auto flex gap-2 items-center justify-center">
-                    <Button
-                      onClick={handleDownloadVideo}
-                      className="w-8 rounded-lg h-8 bg-success-light text-success"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tải")}
-                      icon={<HiOutlineArrowDownTray />}
-                      placement="bottom"
-                    />
-                    {generatingVideo ? (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                        <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                        <span className="text-purple-600 text-[10px] font-bold">
-                          {videoProgress}%
-                        </span>
-                      </div>
+                        {/* Fullscreen video modal */}
+                        <VideoDialog
+                          videoUrl={videoSrc}
+                          isOpen={showVideoModal}
+                          onClose={() => setShowVideoModal(false)}
+                          aspectRatio={scriptData?.aspectRatio}
+                        />
+                      </>
                     ) : (
-                      <Button
-                        onClick={() => {
-                          if (!generatedImage) {
-                            toast.error(t("Cần tạo ảnh trước khi tạo video"));
-                            return;
-                          }
-                          handleGenerateVideo();
-                        }}
-                        icon={<GenerateAiIcon />}
-                        placement="bottom"
-                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                        iconClassName="text-xl font-bold"
-                        tooltip={t("Tạo lại")}
-                      />
-                    )}
-                  </div>
+                      <div
+                        className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
+                        style={{ paddingTop: videoPaddingTop }}
+                      >
+                        <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
+                      </div>
+                    );
+                  })()}
                 </div>
-              </div>
+                {/* Action buttons – vertical column to the right */}
+                <div className="flex flex-col gap-1.5 ">
+                  <Button
+                    onClick={handleDownloadVideo}
+                    className="w-8 rounded-lg h-8 bg-success-light text-success"
+                    iconClassName="text-xl font-bold"
+                    tooltip={t("Tải")}
+                    icon={<HiOutlineArrowDownTray />}
+                    placement="right"
+                  />
+                  {generatingVideo ? (
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                      <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                      <span className="text-purple-600 text-[10px] font-bold">
+                        {videoProgress}%
+                      </span>
+                    </div>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        if (!generatedImage) {
+                          toast.error(t("Cần tạo ảnh trước khi tạo video"));
+                          return;
+                        }
+                        handleGenerateVideo();
+                      }}
+                      icon={<GenerateAiIcon />}
+                      placement="right"
+                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Tạo lại")}
+                    />
+                  )}
+                </div>
+              </>
             ) : generatingVideo ? (
               <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
                 <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
@@ -684,103 +669,97 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
           {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
           {nextSceneId && (
-            <div className="flex justify-center w-full">
+            <div className="flex items-start gap-1.5 w-full">
               {generatedExtendVideo ? (
-                <div className="relative w-full group">
-                  {(() => {
-                    const extVideoSrc =
-                      generatedExtendVideo.videoUri ||
-                      (generatedExtendVideo.videoBytes
-                        ? `data:${generatedExtendVideo.mimeType};base64,${generatedExtendVideo.videoBytes}`
-                        : null);
-                    return extVideoSrc ? (
-                      <>
-                        <div
-                          className="relative w-full rounded-xl overflow-hidden border-2 border-teal-300 shadow-sm"
-                          style={{ paddingTop: videoPaddingTop }}
-                        >
-                          <video
-                            src={extVideoSrc}
-                            className="absolute inset-0 w-full h-full object-cover cursor-pointer"
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                            onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                            onMouseLeave={(e) => {
-                              const v = e.target as HTMLVideoElement;
-                              v.pause();
-                              v.currentTime = 0;
-                            }}
-                            onClick={() => setShowExtendVideoModal(true)}
-                            onError={(e) => {
-                              console.error(
-                                "[SceneBatchRow] Extend video load error:",
-                                extVideoSrc,
-                                e
-                              );
-                            }}
-                          />
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                            <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-                              <BiPlayCircle className="text-white w-12 h-12" />
+                <>
+                  <div className="relative w-32 shrink-0 group">
+                    {(() => {
+                      const extVideoSrc =
+                        generatedExtendVideo.videoUri ||
+                        (generatedExtendVideo.videoBytes
+                          ? `data:${generatedExtendVideo.mimeType};base64,${generatedExtendVideo.videoBytes}`
+                          : null);
+                      return extVideoSrc ? (
+                        <>
+                          <div
+                            className="relative w-full rounded-xl overflow-hidden border-2 border-teal-300 shadow-sm"
+                            style={{ paddingTop: videoPaddingTop }}
+                          >
+                            <video
+                              src={extVideoSrc}
+                              className="absolute inset-0 w-full h-full object-cover cursor-pointer"
+                              muted
+                              loop
+                              playsInline
+                              preload="metadata"
+                              onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
+                              onMouseLeave={(e) => {
+                                const v = e.target as HTMLVideoElement;
+                                v.pause();
+                                v.currentTime = 0;
+                              }}
+                              onClick={() => setShowExtendVideoModal(true)}
+                              onError={(e) => {
+                                console.error(
+                                  "[SceneBatchRow] Extend video load error:",
+                                  extVideoSrc,
+                                  e
+                                );
+                              }}
+                            />
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
+                              <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
+                                <BiPlayCircle className="text-white w-12 h-12" />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                        {/* Fullscreen extend video modal */}
-                        <VideoDialog
-                          videoUrl={extVideoSrc}
-                          isOpen={showExtendVideoModal}
-                          onClose={() => setShowExtendVideoModal(false)}
-                          aspectRatio={scriptData?.aspectRatio}
-                        />
-                      </>
-                    ) : (
-                      <div
-                        className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50"
-                        style={{ paddingTop: videoPaddingTop }}
-                      >
-                        <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
-                      </div>
-                    );
-                  })()}
-                  {/* Download & Re-generate extend video – overlay on hover */}
-                  <div
-                    className={`absolute inset-0 flex items-center justify-center bg-black/40 rounded-xl ${
-                      generatingExtendVideo ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                    } transition-opacity duration-200 z-10 ${
-                      generatingExtendVideo ? "" : "pointer-events-none"
-                    }`}
-                  >
-                    <div className="pointer-events-auto flex gap-2 items-center justify-center">
-                      <Button
-                        onClick={handleDownloadExtendVideo}
-                        className="w-8 rounded-lg h-8 bg-success-light text-success"
-                        iconClassName="text-xl font-bold"
-                        tooltip={t("Tải")}
-                        icon={<HiOutlineArrowDownTray />}
-                        placement="bottom"
-                      />
-                      {generatingExtendVideo ? (
-                        <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                          <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                          <span className="text-teal-600 text-[10px] font-bold">
-                            {extendVideoProgress}%
-                          </span>
-                        </div>
+                          {/* Fullscreen extend video modal */}
+                          <VideoDialog
+                            videoUrl={extVideoSrc}
+                            isOpen={showExtendVideoModal}
+                            onClose={() => setShowExtendVideoModal(false)}
+                            aspectRatio={scriptData?.aspectRatio}
+                          />
+                        </>
                       ) : (
-                        <Button
-                          onClick={() => handleGenerateVideo(true)}
-                          icon={<GenerateAiIcon />}
-                          placement="bottom"
-                          tooltip={t("Tạo lại video nối")}
-                          className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                          iconClassName="text-xl font-bold"
-                        />
-                      )}
-                    </div>
+                        <div
+                          className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50"
+                          style={{ paddingTop: videoPaddingTop }}
+                        >
+                          <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
+                        </div>
+                      );
+                    })()}
                   </div>
-                </div>
+                  {/* Action buttons – vertical column to the right */}
+                  <div className="flex flex-col gap-1.5 items-center">
+                    <Button
+                      onClick={handleDownloadExtendVideo}
+                      className="w-8 rounded-lg h-8 bg-success-light text-success"
+                      iconClassName="text-xl font-bold"
+                      tooltip={t("Tải")}
+                      icon={<HiOutlineArrowDownTray />}
+                      placement="right"
+                    />
+                    {generatingExtendVideo ? (
+                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
+                        <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
+                        <span className="text-teal-600 text-[10px] font-bold">
+                          {extendVideoProgress}%
+                        </span>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleGenerateVideo(true)}
+                        icon={<GenerateAiIcon />}
+                        placement="right"
+                        tooltip={t("Tạo lại video nối")}
+                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
+                        iconClassName="text-xl font-bold"
+                      />
+                    )}
+                  </div>
+                </>
               ) : generatingExtendVideo ? (
                 <div className="w-16 h-16 rounded-xl border-2 border-teal-300 bg-teal-50 flex flex-col items-center justify-center">
                   <RiLoader4Line className="text-teal-500 text-xl animate-spin" />
