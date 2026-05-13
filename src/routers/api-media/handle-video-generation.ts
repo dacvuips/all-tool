@@ -413,17 +413,14 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   };
 
   if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
-    const errorMsg =
-      pollCount >= MAX_POLLS
-        ? "Quá thời gian chờ tạo video"
-        : `Tạo video thất bại: ${generationStatus}`;
+    const errorMsg = "Tạo video thất bại vui lòng tạo lại";
 
     // Log error message
-    logger.error(`[generation-video] Error message: ${errorMsg}`);
+    logger.error(`[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`);
 
     sendSSE({ type: "error", message: errorMsg });
     res.end();
-    return;
+    throw new Error(errorMsg);
   }
 
   // Extract fifeUrl from operation metadata – try multiple known paths
