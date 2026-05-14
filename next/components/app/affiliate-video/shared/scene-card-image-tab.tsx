@@ -119,9 +119,9 @@ export function SceneCardImageTab({
       {/* ── Generated Image section ── */}
       <div className="flex items-center justify-center gap-2 group">
         {generatedImage ? (
-          <>
-            {/* Ảnh đã generate + action buttons overlay */}
-            <div className="relative w-full min-h-20 group">
+          <div className="flex flex-col gap-1.5 items-center w-full">
+            {/* Ảnh đã generate */}
+            <div className="w-full min-h-20">
               <Img
                 showImageOnClick
                 lazyload={false}
@@ -130,55 +130,54 @@ export function SceneCardImageTab({
                 className="rounded-md object-cover border border-dashed border-green-300 shadow-sm"
                 ratio916
               />
-
-              {/* Action buttons overlay bên phải ảnh */}
-              <div className="absolute top-1 right-1 flex flex-col gap-1.5 items-center hover-fly-up z-10">
-                {/* Tải ảnh */}
-                <Button
-                  onClick={onDownloadImage}
-                  className="w-8 rounded-lg h-8 bg-success-light text-success"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tải")}
-                  icon={<HiOutlineArrowDownTray />}
-                  placement="right"
-                />
-                {/* Tạo lại / progress */}
-                {generatingImage ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                    <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                    <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
-                  </div>
-                ) : (
-                  <Button
-                    onClick={onGenerateImage}
-                    icon={<GenerateAiIcon />}
-                    placement="right"
-                    className="w-8 rounded-lg h-8 bg-orange-light text-orange"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tạo lại")}
-                  />
-                )}
-                {/* Upload ảnh */}
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  icon={<RiUploadCloud2Line />}
-                  placement="right"
-                  className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Upload ảnh")}
-                />
-                {/* Gallery */}
-                <Button
-                  onClick={onOpenGallery}
-                  icon={<RiGalleryLine />}
-                  placement="right"
-                  className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Chọn từ Gallery")}
-                />
-              </div>
             </div>
-          </>
+            {/* Action buttons bên dưới ảnh */}
+            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+              {/* Tải ảnh */}
+              <Button
+                onClick={onDownloadImage}
+                className="w-8 rounded-lg h-8 bg-success-light text-success"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Tải")}
+                icon={<HiOutlineArrowDownTray />}
+                placement="bottom"
+              />
+              {/* Tạo lại / progress */}
+              {generatingImage ? (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
+                  <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                  <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
+                </div>
+              ) : (
+                <Button
+                  onClick={onGenerateImage}
+                  icon={<GenerateAiIcon />}
+                  placement="bottom"
+                  className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tạo lại")}
+                />
+              )}
+              {/* Upload ảnh */}
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                icon={<RiUploadCloud2Line />}
+                placement="bottom"
+                className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Upload ảnh")}
+              />
+              {/* Gallery */}
+              <Button
+                onClick={onOpenGallery}
+                icon={<RiGalleryLine />}
+                placement="bottom"
+                className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Chọn từ Gallery")}
+              />
+            </div>
+          </div>
         ) : generatingImage ? (
           /* ── Spinner + progress khi chưa có ảnh ── */
           <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">

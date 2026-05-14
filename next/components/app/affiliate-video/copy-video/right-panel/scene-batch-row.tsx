@@ -341,13 +341,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     >
       {/* ── Card Header ── */}
       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
-        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white">
-          #{scene.sceneNumber}
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white whitespace-nowrap mr-1">
+          {`${t("Cảnh")} #${scene.sceneNumber}`}
         </span>
         <div className="flex items-center gap-1">
           <Button
             onClick={() => onToggleDisable(scene.id)}
-            className={`w-6 h-6 rounded-md shadow-sm ${
+            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
               isDisabled
                 ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
                 : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
@@ -360,7 +360,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           <Button
             disabled={isDisabled}
             onClick={() => onToggleNoText(scene.id)}
-            className={`w-6 h-6 rounded-md shadow-sm ${
+            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
               scene.noText
                 ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
                 : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
@@ -377,7 +377,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           <Button
             disabled={isDisabled}
             onClick={() => onToggleVoiceDisable(scene.id)}
-            className={`w-6 h-6 rounded-md shadow-sm ${
+            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
               scene.voiceDisable
                 ? "text-red-500 bg-red-50 hover:bg-red-100"
                 : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"

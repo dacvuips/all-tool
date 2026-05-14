@@ -92,9 +92,9 @@ export function SceneCardVideoTab({
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
       <div className="flex items-center justify-center gap-2 group">
         {generatedVideo ? (
-          <>
-            {/* ── Video preview + action buttons overlay ── */}
-            <div className="relative w-full min-h-20 group">
+          <div className="flex flex-col gap-1.5 items-center w-full">
+            {/* ── Video preview ── */}
+            <div className="w-full min-h-20">
               {videoSrc ? (
                 <>
                   {/* Video container 16:9 */}
@@ -144,37 +144,36 @@ export function SceneCardVideoTab({
                   <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
                 </div>
               )}
-
-              {/* Action buttons overlay bên phải video */}
-              <div className="absolute top-1 right-1 flex flex-col gap-1.5 items-center hover-fly-up z-10">
-                {/* Tải video */}
-                <Button
-                  onClick={onDownloadVideo}
-                  className="w-8 rounded-lg h-8 bg-success-light text-success"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tải")}
-                  icon={<HiOutlineArrowDownTray />}
-                  placement="right"
-                />
-                {/* Tạo lại / progress */}
-                {generatingVideo ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                    <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                    <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
-                  </div>
-                ) : (
-                  <Button
-                    onClick={handleClickGenerate}
-                    icon={<GenerateAiIcon />}
-                    placement="right"
-                    className="w-8 rounded-lg h-8 bg-orange-light text-orange"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tạo lại")}
-                  />
-                )}
-              </div>
             </div>
-          </>
+            {/* Action buttons bên dưới video */}
+            <div className="flex flex-row gap-1.5 items-center justify-center">
+              {/* Tải video */}
+              <Button
+                onClick={onDownloadVideo}
+                className="w-8 rounded-lg h-8 bg-success-light text-success"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Tải")}
+                icon={<HiOutlineArrowDownTray />}
+                placement="bottom"
+              />
+              {/* Tạo lại / progress */}
+              {generatingVideo ? (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                  <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                  <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleClickGenerate}
+                  icon={<GenerateAiIcon />}
+                  placement="bottom"
+                  className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                  iconClassName="text-xl font-bold"
+                  tooltip={t("Tạo lại")}
+                />
+              )}
+            </div>
+          </div>
         ) : generatingVideo ? (
           /* ── Spinner khi đang generate ── */
           <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">

@@ -11,7 +11,7 @@ import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { RiImageFill } from "react-icons/ri";
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
-export type SceneTabKey = "image" | "video" | "extend";
+export type SceneTabKey = "image" | "video" | "extend" | "high-quality";
 
 interface TabDef {
   key: SceneTabKey;
@@ -93,12 +93,12 @@ export function SceneCardTabs({
   return (
     <div className="flex flex-col">
       {/* ── Tab bar ── */}
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none">
+      <div className="flex items-center  px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none">
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
+            className={`flex items-center gap-1 px-1 py-1 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
               currentTab === tab.key ? tab.activeClass : tab.inactiveClass
             }`}
           >

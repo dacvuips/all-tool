@@ -87,9 +87,9 @@ export function SceneCardExtendVideoTab({
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
       <div className="flex items-center justify-center gap-2 group">
         {generatedExtendVideo ? (
-          <>
-            {/* ── Extend video preview + action buttons overlay ── */}
-            <div className="relative w-full min-h-20 group">
+          <div className="flex flex-col gap-1.5 items-center w-full">
+            {/* ── Extend video preview ── */}
+            <div className="w-full min-h-20">
               {extVideoSrc ? (
                 <>
                   {/* Video container 16:9 */}
@@ -143,39 +143,38 @@ export function SceneCardExtendVideoTab({
                   <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
                 </div>
               )}
-
-              {/* Action buttons overlay bên phải video */}
-              <div className="absolute top-1 right-1 flex flex-col gap-1.5 items-center hover-fly-up z-10">
-                {/* Tải extend video */}
-                <Button
-                  onClick={onDownloadExtendVideo}
-                  className="w-8 rounded-lg h-8 bg-success-light text-success"
-                  iconClassName="text-xl font-bold"
-                  tooltip={t("Tải")}
-                  icon={<HiOutlineArrowDownTray />}
-                  placement="right"
-                />
-                {/* Tạo lại / progress */}
-                {generatingExtendVideo ? (
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                    <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                    <span className="text-teal-600 text-[10px] font-bold">
-                      {extendVideoProgress}%
-                    </span>
-                  </div>
-                ) : (
-                  <Button
-                    onClick={onGenerateExtendVideo}
-                    icon={<GenerateAiIcon />}
-                    placement="right"
-                    tooltip={t("Tạo lại video nối")}
-                    className="w-8 rounded-lg h-8 bg-orange-light text-orange"
-                    iconClassName="text-xl font-bold"
-                  />
-                )}
-              </div>
             </div>
-          </>
+            {/* Action buttons bên dưới video */}
+            <div className="flex flex-row gap-1.5 items-center justify-center">
+              {/* Tải extend video */}
+              <Button
+                onClick={onDownloadExtendVideo}
+                className="w-8 rounded-lg h-8 bg-success-light text-success"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Tải")}
+                icon={<HiOutlineArrowDownTray />}
+                placement="bottom"
+              />
+              {/* Tạo lại / progress */}
+              {generatingExtendVideo ? (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
+                  <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
+                  <span className="text-teal-600 text-[10px] font-bold">
+                    {extendVideoProgress}%
+                  </span>
+                </div>
+              ) : (
+                <Button
+                  onClick={onGenerateExtendVideo}
+                  icon={<GenerateAiIcon />}
+                  placement="bottom"
+                  tooltip={t("Tạo lại video nối")}
+                  className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                  iconClassName="text-xl font-bold"
+                />
+              )}
+            </div>
+          </div>
         ) : generatingExtendVideo ? (
           /* ── Spinner khi đang generate ── */
           <div className="w-16 h-16 rounded-xl border-2 border-teal-300 bg-teal-50 flex flex-col items-center justify-center">
