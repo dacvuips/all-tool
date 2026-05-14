@@ -26,6 +26,10 @@ import {
   RiUploadCloud2Line,
   RiVideoFill,
 } from "react-icons/ri";
+import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
+import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
+import { SceneCardTabs } from "../../shared/scene-card-tabs";
+import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
 import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
@@ -61,6 +65,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   scene,
   isDisabled,
   isGroupHovered,
+  hideImageColumn,
   nextSceneId,
   onMouseEnter,
   onMouseLeave,
@@ -75,6 +80,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   nextSceneId?: string;
   isDisabled: boolean;
   isGroupHovered?: boolean;
+  hideImageColumn?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -311,590 +317,68 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   );
 
   return (
-    <tr
-      className={`border-t border-gray-200 border-dashed bg-white transition-colors duration-200 align-top relative ${
-        isDisabled ? "" : "hover:bg-gray-50"
-      }`}
-      style={
-        isGroupHovered && !isDisabled
-          ? { outline: "1px dashed #a855f7", outlineOffset: "-1px" }
-          : undefined
-      }
-      onMouseEnter={() => {
-        setRowHovered(true);
-        onMouseEnter?.();
-      }}
-      onMouseLeave={() => {
-        setRowHovered(false);
-        onMouseLeave?.();
-      }}
+    <div
+      className={`rounded-xl border bg-white shadow-sm transition-all duration-200 overflow-hidden ${
+        isDisabled ? "opacity-60" : "hover:shadow-md"
+      } ${isGroupHovered && !isDisabled ? "ring-1 ring-purple-300" : ""}`}
+      onMouseEnter={() => { setRowHovered(true); onMouseEnter?.(); }}
+      onMouseLeave={() => { setRowHovered(false); onMouseLeave?.(); }}
     >
-      {/* Motion + Audio */}
-      <td className={`py-3 px-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        {renderEditablePrompt(
-          "visual_prompt",
-          scene.visual_prompt,
-          "text-gray-600",
-          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
-            IMAGE PROMPT
-          </span>
-        )}
-
-        {renderEditablePrompt(
-          "motion_description",
-          scene.motion_description,
-          "text-teal-700",
-          <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">
-            [MOTION]:
-          </span>
-        )}
-        {renderEditablePrompt(
-          "audio_description",
-          scene.audio_description ?? "",
-          "text-purple-700",
-          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
-            [AUDIO]:
-          </span>
-        )}
-        {renderEditablePrompt(
-          "original_content",
-          ` ${t("Gốc")}: ${scene.original_content ?? ""}\n ${t("Dịch")}: ${
-            scene.translated_content
-          }`,
-          "text-green-700 italic",
-          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
-            [DIALOGUE]:
-          </span>
-        )}
-
-        {/* Product Select Image */}
+      {/* ── Card Header ── */}
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+        <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white">#{scene.sceneNumber}</span>
+        <div className="flex items-center gap-1">
+          <Button onClick={() => onToggleDisable(scene.id)}
+            className={`w-6 h-6 rounded-md shadow-sm ${isDisabled ? "text-blue-500 bg-blue-50 hover:bg-blue-100" : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"}`}
+            iconClassName="text-sm" icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
+            tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")} placement="bottom" />
+          <Button disabled={isDisabled} onClick={() => onToggleNoText(scene.id)}
+            className={`w-6 h-6 rounded-md shadow-sm ${scene.noText ? "text-blue-500 bg-blue-50 hover:bg-blue-100" : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"}`}
+            iconClassName="text-sm" icon={scene.noText ? <RiText /> : <NoTextIcon />}
+            tooltip={scene.noText ? t("Đang cho phép hiển thị 'text' trong ảnh") : t("Không cho phép hiển thị 'text' trong ảnh")} placement="bottom" />
+          <Button disabled={isDisabled} onClick={() => onToggleVoiceDisable(scene.id)}
+            className={`w-6 h-6 rounded-md shadow-sm ${scene.voiceDisable ? "text-red-500 bg-red-50 hover:bg-red-100" : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"}`}
+            iconClassName="text-sm" icon={scene.voiceDisable ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
+            tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")} placement="bottom" />
+        </div>
+      </div>
+      {/* ── Prompt section ── */}
+      <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        {renderEditablePrompt("visual_prompt", scene.visual_prompt, "text-gray-600",
+          <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">IMAGE PROMPT</span>)}
+        {renderEditablePrompt("motion_description", scene.motion_description, "text-teal-700",
+          <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">[MOTION]:</span>)}
+        {renderEditablePrompt("audio_description", scene.audio_description ?? "", "text-purple-700",
+          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">[AUDIO]:</span>)}
+        {renderEditablePrompt("original_content", scene.original_content ?? "", "text-green-700 italic",
+          <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">[DIALOGUE]:</span>)}
         {productImages.length > 0 && (
           <div className="relative mt-1.5" onMouseEnter={() => setHoveredField(null)}>
-            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">
-              {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
-            </span>
+            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">{`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}</span>
             <div className="flex flex-wrap gap-1.5 mt-1">
               {productImages.map((imgUrl, idx) => (
-                <label
-                  key={idx}
-                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${
-                    selectedProductImages.includes(imgUrl)
-                      ? "border-blue-500 shadow-md ring-1 ring-blue-300"
-                      : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"
-                  }`}
-                  style={{ width: 48, height: 48 }}
-                >
-                  <input
-                    type="checkbox"
-                    className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer"
-                    checked={selectedProductImages.includes(imgUrl)}
-                    onChange={() => handleToggleProductImage(imgUrl)}
-                  />
-                  <Img
-                    src={imgUrl}
-                    alt={`Product ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                    lazyload={false}
-                  />
-                  {selectedProductImages.includes(imgUrl) && (
-                    <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
-                  )}
-                </label>
-              ))}
+                <label key={idx} className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${selectedProductImages.includes(imgUrl) ? "border-blue-500 shadow-md ring-1 ring-blue-300" : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"}`} style={{ width: 48, height: 48 }}>
+                  <input type="checkbox" className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer" checked={selectedProductImages.includes(imgUrl)} onChange={() => handleToggleProductImage(imgUrl)} />
+                  <Img src={imgUrl} alt={`Product ${idx + 1}`} className="w-full h-full object-cover" lazyload={false} />
+                  {selectedProductImages.includes(imgUrl) && (<div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />)}
+                </label>))}
             </div>
-            {selectedProductImages.length > 0 && (
-              <span className="text-9 text-blue-500 mt-0.5 block">
-                {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
-              </span>
-            )}
-            {/* Custom product image prompt input */}
+            {selectedProductImages.length > 0 && (<span className="text-9 text-blue-500 mt-0.5 block">{t("Đã chọn")} {selectedProductImages.length}/{productImages.length}</span>)}
             {selectedProductImages.length > 0 && (
               <div className="mt-2">
-                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">
-                  {t("Prompt SP")}:
-                </span>
-                <textarea
-                  value={localProductPrompt}
-                  onChange={(e) => setLocalProductPrompt(e.target.value)}
-                  onBlur={() => onUpdateScene(scene.id, "product_image_prompt", localProductPrompt)}
-                  placeholder={t(
-                    "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
-                  )}
-                  rows={2}
-                  className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
-                />
-              </div>
-            )}
-          </div>
-        )}
-      </td>
-
-      {/* Generated Image */}
-      {
-        <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-          {/* Ảnh gốc (Origin Thumbnail) */}
-          <div className="flex flex-col mb-3">
-            {thumbnailLoading ? (
-              <div className="w-20 h-12 rounded-lg border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
-                <RiLoader4Line className="text-amber-500 text-sm animate-spin" />
-              </div>
-            ) : thumbnailOriginImage ? (
-              <div className="relative w-32  group">
-                <Img
-                  showImageOnClick
-                  lazyload={false}
-                  src={thumbnailOriginImage}
-                  alt={`Origin frame - Scene ${scene.sceneNumber}`}
-                  className="rounded-lg object-cover border border-amber-200 shadow-sm"
-                  ratio169
-                />
-                <span className="absolute top-1 left-0 px-1 py-0 rounded-r-full text-9 font-bold text-white border-white border bg-success-dark  bg-opacity-70  shadow-sm z-10">
-                  {t("Ảnh gốc")}
-                </span>
-                <span className="block text-center text-9 text-amber-600 font-medium -mt-2 bg-gray-100 pt-2 rounded-b-md ">
-                  {scene.timestamp}
-                </span>
-              </div>
-            ) : (
-              <div className="w-20 h-12 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex flex-col items-center justify-center">
-                <RiImageFill className="text-gray-300 text-sm" />
-                <span className="text-[8px] text-gray-400">{t("Không có video")}</span>
-              </div>
-            )}
-          </div>
-          <div className="flex items-start gap-1.5">
-            {generatedImage ? (
-              /* ── Show generated image thumbnail + buttons to the right ── */
-              <>
-                <div className="relative w-32 shrink-0">
-                  <Img
-                    showImageOnClick
-                    lazyload={false}
-                    src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
-                    alt={`Scene ${scene.sceneNumber}`}
-                    className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
-                    ratio916
-                  />
-                </div>
-                {/* Action buttons – vertical column to the right */}
-                <div className="flex flex-col gap-1.5 items-center">
-                  <Button
-                    onClick={handleDownloadImage}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="right"
-                  />
-                  {generatingImage ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                      <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
-                      <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={handleCopyVideoGenerateImage}
-                      icon={<GenerateAiIcon />}
-                      placement="right"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
-                    />
-                  )}
-                  <Button
-                    onClick={() => fileInputRef.current?.click()}
-                    icon={<RiUploadCloud2Line />}
-                    placement="right"
-                    className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Upload ảnh")}
-                  />
-                  <Button
-                    onClick={() => setShowGalleryDialog(true)}
-                    icon={<RiGalleryLine />}
-                    placement="right"
-                    className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Chọn từ Gallery")}
-                  />
-                </div>
-              </>
-            ) : generatingImage ? (
-              /* ── Spinner + progress ── */
-              <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
-                <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
-                <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
-              </div>
-            ) : (
-              /* ── Default create button ── */
-              <button
-                onClick={handleCopyVideoGenerateImage}
-                className="w-32 h-16 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
-              >
-                <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
-                <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
-                  {t("Tạo ảnh")}
-                </span>
-              </button>
-            )}
-          </div>
-        </td>
-      }
-
-      {/* Generated Video đơn */}
-      <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <div className="flex flex-col items-center gap-2">
-          {/* ── Video đơn ── */}
-          <div className="flex items-start gap-1.5 w-full">
-            {generatedVideo ? (
-              <>
-                <div className="relative w-32 shrink-0 group">
-                  {(() => {
-                    const videoSrc =
-                      generatedVideo.videoUri ||
-                      (generatedVideo.videoBytes
-                        ? `data:${generatedVideo.mimeType};base64,${generatedVideo.videoBytes}`
-                        : null);
-                    return videoSrc ? (
-                      <>
-                        <div
-                          className="relative w-full rounded-xl overflow-hidden border-2 border-purple-300 shadow-sm"
-                          style={{ paddingTop: videoPaddingTop }}
-                        >
-                          <video
-                            src={videoSrc}
-                            className="absolute inset-0 w-full h-full object-cover cursor-pointer"
-                            muted
-                            loop
-                            playsInline
-                            preload="metadata"
-                            onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                            onMouseLeave={(e) => {
-                              const v = e.target as HTMLVideoElement;
-                              v.pause();
-                              v.currentTime = 0;
-                            }}
-                            onClick={() => setShowVideoModal(true)}
-                            onError={(e) => {
-                              console.error("[SceneBatchRow] Video load error:", videoSrc, e);
-                            }}
-                          />
-                          {/* Play icon overlay */}
-                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                            <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-                              <BiPlayCircle className="text-white w-12 h-12" />
-                            </div>
-                          </div>
-                        </div>
-                        {/* Fullscreen video modal */}
-                        <VideoDialog
-                          videoUrl={videoSrc}
-                          isOpen={showVideoModal}
-                          onClose={() => setShowVideoModal(false)}
-                          aspectRatio={scriptData?.aspectRatio}
-                        />
-                      </>
-                    ) : (
-                      <div
-                        className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
-                        style={{ paddingTop: videoPaddingTop }}
-                      >
-                        <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
-                      </div>
-                    );
-                  })()}
-                </div>
-                {/* Action buttons – vertical column to the right */}
-                <div className="flex flex-col gap-1.5 ">
-                  <Button
-                    onClick={handleDownloadVideo}
-                    className="w-8 rounded-lg h-8 bg-success-light text-success"
-                    iconClassName="text-xl font-bold"
-                    tooltip={t("Tải")}
-                    icon={<HiOutlineArrowDownTray />}
-                    placement="right"
-                  />
-                  {generatingVideo ? (
-                    <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                      <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                      <span className="text-purple-600 text-[10px] font-bold">
-                        {videoProgress}%
-                      </span>
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={() => {
-                        if (!generatedImage) {
-                          toast.error(t("Cần tạo ảnh trước khi tạo video"));
-                          return;
-                        }
-                        handleGenerateVideo();
-                      }}
-                      icon={<GenerateAiIcon />}
-                      placement="right"
-                      className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tạo lại")}
-                    />
-                  )}
-                </div>
-              </>
-            ) : generatingVideo ? (
-              <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
-                <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
-                <span className="text-purple-600 text-[10px] font-bold mt-0.5">
-                  {videoProgress}%
-                </span>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  if (!generatedImage) {
-                    toast.error(t("Cần tạo ảnh trước khi tạo video"));
-                    return;
-                  }
-                  handleGenerateVideo();
-                }}
-                className="relative w-32 h-16 rounded-xl border-2 border-dashed transition-all group border-gray-200 hover:bg-purple-50 bg-gray-50 hover:border-purple-200 cursor-pointer text-purple-500"
-              >
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <AiOutlineVideoCamera className="text-xl mb-0.5 text-gray-300 group-hover:text-purple-400" />
-                  <span className="text-xs font-medium text-gray-400 group-hover:text-purple-500">
-                    {t("Tạo video đơn")}
-                  </span>
-                </div>
-              </button>
-            )}
-          </div>
-
-          {/* ── Video nối (extend) – hoàn toàn độc lập ── */}
-          {nextSceneId && (
-            <div className="flex items-start gap-1.5 w-full">
-              {generatedExtendVideo ? (
-                <>
-                  <div className="relative w-32 shrink-0 group">
-                    {(() => {
-                      const extVideoSrc =
-                        generatedExtendVideo.videoUri ||
-                        (generatedExtendVideo.videoBytes
-                          ? `data:${generatedExtendVideo.mimeType};base64,${generatedExtendVideo.videoBytes}`
-                          : null);
-                      return extVideoSrc ? (
-                        <>
-                          <div
-                            className="relative w-full rounded-xl overflow-hidden border-2 border-teal-300 shadow-sm"
-                            style={{ paddingTop: videoPaddingTop }}
-                          >
-                            <video
-                              src={extVideoSrc}
-                              className="absolute inset-0 w-full h-full object-cover cursor-pointer"
-                              muted
-                              loop
-                              playsInline
-                              preload="metadata"
-                              onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                              onMouseLeave={(e) => {
-                                const v = e.target as HTMLVideoElement;
-                                v.pause();
-                                v.currentTime = 0;
-                              }}
-                              onClick={() => setShowExtendVideoModal(true)}
-                              onError={(e) => {
-                                console.error(
-                                  "[SceneBatchRow] Extend video load error:",
-                                  extVideoSrc,
-                                  e
-                                );
-                              }}
-                            />
-                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                              <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
-                                <BiPlayCircle className="text-white w-12 h-12" />
-                              </div>
-                            </div>
-                          </div>
-                          {/* Fullscreen extend video modal */}
-                          <VideoDialog
-                            videoUrl={extVideoSrc}
-                            isOpen={showExtendVideoModal}
-                            onClose={() => setShowExtendVideoModal(false)}
-                            aspectRatio={scriptData?.aspectRatio}
-                          />
-                        </>
-                      ) : (
-                        <div
-                          className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50"
-                          style={{ paddingTop: videoPaddingTop }}
-                        >
-                          <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  {/* Action buttons – vertical column to the right */}
-                  <div className="flex flex-col gap-1.5 items-center">
-                    <Button
-                      onClick={handleDownloadExtendVideo}
-                      className="w-8 rounded-lg h-8 bg-success-light text-success"
-                      iconClassName="text-xl font-bold"
-                      tooltip={t("Tải")}
-                      icon={<HiOutlineArrowDownTray />}
-                      placement="right"
-                    />
-                    {generatingExtendVideo ? (
-                      <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                        <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                        <span className="text-teal-600 text-[10px] font-bold">
-                          {extendVideoProgress}%
-                        </span>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => handleGenerateVideo(true)}
-                        icon={<GenerateAiIcon />}
-                        placement="right"
-                        tooltip={t("Tạo lại video nối")}
-                        className="w-8 rounded-lg h-8 bg-orange-light  text-orange"
-                        iconClassName="text-xl font-bold"
-                      />
-                    )}
-                  </div>
-                </>
-              ) : generatingExtendVideo ? (
-                <div className="w-16 h-16 rounded-xl border-2 border-teal-300 bg-teal-50 flex flex-col items-center justify-center">
-                  <RiLoader4Line className="text-teal-500 text-xl animate-spin" />
-                  <span className="text-teal-600 text-[10px] font-bold mt-0.5">
-                    {extendVideoProgress}%
-                  </span>
-                </div>
-              ) : (
-                <button
-                  onClick={() => handleGenerateVideo(true)}
-                  className="relative w-32 h-16 shrink-0 rounded-xl border-2 border-dashed transition-all group border-gray-200 hover:border-primary-dark bg-gray-50 hover:bg-primary-light cursor-pointer"
-                >
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <AiOutlineVideoCameraAdd className="text-xl mb-0.5 text-primary group-hover:text-teal-400" />
-                    <span className="text-xs font-medium text-primary group-hover:text-teal-500">
-                      {t("Tạo video nối")}
-                    </span>
-                  </div>
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      </td>
-
-      {/* Right-side overlay: eye + voice + scene number */}
-      <td className="p-0 w-0" style={{ position: "relative" }}>
-        <div className="absolute right-2 top-2 bottom-2 flex flex-col items-center justify-between z-10">
-          {/* Top group: eye + voice buttons */}
-          <div className="flex flex-col items-center gap-1">
-            {/* Eye toggle – visible on hover or when disabled */}
-            <div
-              className={`transition-opacity duration-200 ${
-                rowHovered || isDisabled ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <Button
-                onClick={() => onToggleDisable(scene.id)}
-                className={`w-6 h-6 rounded-md shadow-sm  ${
-                  isDisabled
-                    ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-                }`}
-                iconClassName="text-sm "
-                icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
-                tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
-                placement="bottom"
-              />
-            </div>
-            {/* Voice toggle – visible on hover OR when voiceDisable is true */}
-            <div
-              className={`transition-opacity duration-200 font-semibold ${
-                rowHovered || scene.voiceDisable ? "opacity-100" : "opacity-0 pointer-events-none"
-              }`}
-            >
-              <Button
-                disabled={isDisabled}
-                onClick={() => onToggleNoText(scene.id)}
-                className={`w-6 h-6 rounded-md shadow-sm ${
-                  scene.noText
-                    ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-                }`}
-                iconClassName="text-sm"
-                icon={scene.noText ? <RiText /> : <NoTextIcon />}
-                tooltip={
-                  scene.noText
-                    ? t("Đang cho phép hiển thị 'text' trong ảnh")
-                    : t("Không cho phép hiển thị 'text' trong ảnh")
-                }
-                placement="bottom"
-              />
-              <Button
-                disabled={isDisabled}
-                onClick={() => onToggleVoiceDisable(scene.id)}
-                className={`w-6 h-6 rounded-md shadow-sm ${
-                  scene.voiceDisable
-                    ? "text-red-500 bg-red-50 hover:bg-red-100"
-                    : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-                }`}
-                iconClassName="text-sm"
-                icon={scene.voiceDisable ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
-                tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
-                placement="bottom"
-              />
-            </div>
-          </div>
-          {/* Scene number badge – bottom, visible on hover */}
-          <span
-            className={`text-lg font-extrabold text-gray-300 transition-opacity duration-200 ${
-              rowHovered || isDisabled ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            #{scene.sceneNumber}
-          </span>
-        </div>
-      </td>
-      {/* Hidden file input for upload */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(",")[1];
-            if (base64) {
-              handleSetImage({
-                imageBytes: base64,
-                mimeType: file.type || "image/png",
-                fifeUrl: "",
-              });
-              toast.success(t("Đã upload ảnh thành công"));
-            }
-          };
-          reader.readAsDataURL(file);
-          // Reset input so same file can be re-selected
-          e.target.value = "";
-        }}
-      />
-
-      {/* Gallery Dialog */}
-      <ImageGalleryDialog
-        isOpen={showGalleryDialog}
-        onClose={() => setShowGalleryDialog(false)}
-        onSelect={(imageData) => {
-          handleSetImage(imageData);
-          setShowGalleryDialog(false);
-          toast.success(t("Đã chọn ảnh từ Gallery"));
-        }}
-      />
-    </tr>
+                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">{t("Prompt SP")}:</span>
+                <textarea value={localProductPrompt} onChange={(e) => setLocalProductPrompt(e.target.value)} onBlur={() => onUpdateScene(scene.id, "product_image_prompt", localProductPrompt)} placeholder={t("Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)")} rows={2} className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed" />
+              </div>)}
+          </div>)}
+      </div>
+      {/* ── Media tabs ── */}
+      <SceneCardTabs hideImageTab={!!hideImageColumn} hideExtendTab={!nextSceneId}
+        renderImageTab={() => (<SceneCardImageTab generatedImage={generatedImage} generatingImage={generatingImage} imageProgress={imageProgress} sceneNumber={scene.sceneNumber} isDisabled={isDisabled} onGenerateImage={handleCopyVideoGenerateImage} onDownloadImage={handleDownloadImage} onSetImage={handleSetImage} onOpenGallery={() => setShowGalleryDialog(true)} originThumbnailUrl={thumbnailOriginImage} originThumbnailLoading={thumbnailLoading} sceneTimestamp={scene.timestamp} />)}
+        renderVideoTab={() => (<SceneCardVideoTab generatedVideo={generatedVideo} generatingVideo={generatingVideo} videoProgress={videoProgress} isDisabled={isDisabled} hasImage={!!generatedImage} aspectRatio={scriptData?.aspectRatio} onImageRequired={() => toast.error(t("Cần tạo ảnh trước khi tạo video"))} onGenerateVideo={() => handleGenerateVideo()} onDownloadVideo={handleDownloadVideo} />)}
+        renderExtendTab={() => (<SceneCardExtendVideoTab generatedExtendVideo={generatedExtendVideo} generatingExtendVideo={generatingExtendVideo} extendVideoProgress={extendVideoProgress} isDisabled={isDisabled} nextSceneId={nextSceneId} aspectRatio={scriptData?.aspectRatio} onGenerateExtendVideo={() => handleGenerateVideo(true)} onDownloadExtendVideo={handleDownloadExtendVideo} />)} />
+      <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const file = e.target.files?.[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { const base64 = (reader.result as string).split(",")[1]; if (base64) { handleSetImage({ imageBytes: base64, mimeType: file.type || "image/png", fifeUrl: "" }); toast.success(t("Đã upload ảnh thành công")); } }; reader.readAsDataURL(file); e.target.value = ""; }} />
+      <ImageGalleryDialog isOpen={showGalleryDialog} onClose={() => setShowGalleryDialog(false)} onSelect={(imageData) => { handleSetImage(imageData); setShowGalleryDialog(false); toast.success(t("Đã chọn ảnh từ Gallery")); }} />
+    </div>
   );
 });
 
@@ -909,6 +393,7 @@ interface SceneRowGroupProps {
   nextSceneId?: string;
   isDisabled: boolean;
   characters: CharacterItem[];
+  hideImageColumn?: boolean;
   onToggleNoText: (sceneId: string) => void;
   onInsert: (
     scene: CopyVideoScene,
@@ -938,33 +423,22 @@ export function SceneRowGroup({
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
 
-  const addBtnAbsClass = `absolute left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
-    hovered ? "opacity-100" : "opacity-0 pointer-events-none"
-  }`;
-
   return (
-    <React.Fragment>
-      {/* Add ABOVE button – chỉ hiện trước scene đầu tiên, absolute positioned */}
+    <div
+      className="relative group"
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+    >
+      {/* Add ABOVE button – centered on top border, only visible on hover */}
       {index === 0 && (
-        <tr onMouseEnter={enter} onMouseLeave={leave}>
-          <td
-            colSpan={6}
-            className="p-0 relative overflow-visible"
-            style={{ height: 0, lineHeight: 0, border: "none" }}
-          >
-            <div className={addBtnAbsClass} style={{ top: "50%", transform: "translateY(-50%)" }}>
-              <AddSceneButton
-                scene={scene}
-                position="above"
-                characters={characters}
-                onInsert={onInsert}
-              />
-            </div>
-          </td>
-        </tr>
+        <div className={`absolute -top-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
+          hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+        }`}>
+          <AddSceneButton scene={scene} position="above" characters={characters} onInsert={onInsert} />
+        </div>
       )}
 
-      {/* Scene data row – highlighted w0ith colored border on hover */}
+      {/* Scene data row */}
       <SceneBatchRow
         scene={scene}
         index={index}
@@ -980,24 +454,13 @@ export function SceneRowGroup({
         onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 
-      {/* Add BELOW button – absolute positioned, floats between rows */}
-      <tr onMouseEnter={enter} onMouseLeave={leave}>
-        <td
-          colSpan={6}
-          className="p-0 relative overflow-visible"
-          style={{ height: 0, lineHeight: 0, border: "none" }}
-        >
-          <div className={addBtnAbsClass} style={{ top: "50%", transform: "translateY(-50%)" }}>
-            <AddSceneButton
-              scene={scene}
-              position="below"
-              characters={characters}
-              onInsert={onInsert}
-            />
-          </div>
-        </td>
-      </tr>
-    </React.Fragment>
+      {/* Add BELOW button – centered on bottom border, only visible on hover */}
+      <div className={`absolute -bottom-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
+        hovered ? "opacity-100" : "opacity-0 pointer-events-none"
+      }`}>
+        <AddSceneButton scene={scene} position="below" characters={characters} onInsert={onInsert} />
+      </div>
+    </div>
   );
 }
 

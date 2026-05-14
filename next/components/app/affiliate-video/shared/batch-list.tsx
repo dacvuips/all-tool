@@ -204,93 +204,82 @@ export function SharedBatchListPanel({
       {/* Action buttons bar */}
       <ActionBarComponent scenes={sceneList} />
 
-      {/* Scrollable table */}
-      <div className="flex-1 overflow-auto v-scrollbar">
-        <table className="w-full border-collapse text-sm">
-          {/* Sticky header */}
-          <thead className="bg-gray-50 sticky top-0 z-20 shadow-sm">
-            <tr>
-              <th className="text-left py-2.5 px-3 text-xs font-bold text-teal uppercase tracking-wide border-b border-gray-200 w-32">
-                <div className="flex items-center gap-1">
-                  <RiVideoFill className="text-xs" />
-                  {t("PROMPT")}
-                </div>
-              </th>
+      {/* ── Sticky global toggle bar ── */}
+      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center gap-3">
+        {/* Scene count label */}
+        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide">
+          <RiVideoFill className="text-sm text-teal-500" />
+          {sceneList.length} {t("Cảnh")}
+        </div>
 
-              {!hideImageColumn && (
-                <th className="text-center py-2.5 px-3 text-xs font-bold text-purple-600 uppercase tracking-wide border-b border-gray-200">
-                  {t("HÌNH ẢNH")}
-                </th>
-              )}
+        {/* Spacer */}
+        <div className="flex-1" />
 
-              <th className="text-center py-2.5 px-3 text-xs font-bold text-indigo-600 uppercase tracking-wide border-b border-gray-200">
-                {t("VIDEO")}
-              </th>
-              <th className="border-b border-gray-200 w-0 p-0">
-                <div className="flex flex-col gap-1 items-center justify-center">
-                  <Button
-                    onClick={handleToggleAllNoText}
-                    className={`w-6 h-6 rounded-md shadow-sm ${
-                      sceneList.every((s) => s.noText)
-                        ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                        : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
-                    }`}
-                    iconClassName="text-sm"
-                    icon={sceneList.every((s) => s.noText) ? <RiText /> : <NoTextIcon />}
-                    tooltip={
-                      sceneList.every((s) => s.noText)
-                        ? t("Đang cho phép hiển thị 'text' trong tất cả")
-                        : t("Không cho phép hiển thị 'text' trong tất cả")
-                    }
-                    placement="bottom"
-                  />
-                  <Button
-                    onClick={handleToggleAllVoiceDisable}
-                    className={`w-6 h-6 rounded-md shadow-sm ${
-                      sceneList.every((s) => s.voiceDisable)
-                        ? "text-red-500 bg-red-50 hover:bg-red-100"
-                        : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-                    }`}
-                    iconClassName="text-sm"
-                    icon={
-                      sceneList.every((s) => s.voiceDisable) ? (
-                        <MdVoiceOverOff />
-                      ) : (
-                        <MdRecordVoiceOver />
-                      )
-                    }
-                    tooltip={
-                      sceneList.every((s) => s.voiceDisable)
-                        ? t("Bật thoại tất cả")
-                        : t("Tắt thoại tất cả")
-                    }
-                    placement="bottom"
-                  />
-                </div>
-              </th>
-            </tr>
-          </thead>
+        {/* Toggle all NoText */}
+        <Button
+          onClick={handleToggleAllNoText}
+          className={`w-7 h-7 rounded-lg shadow-sm ${
+            sceneList.every((s) => s.noText)
+              ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
+              : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
+          }`}
+          iconClassName="text-sm"
+          icon={sceneList.every((s) => s.noText) ? <RiText /> : <NoTextIcon />}
+          tooltip={
+            sceneList.every((s) => s.noText)
+              ? t("Đang cho phép hiển thị 'text' trong tất cả")
+              : t("Không cho phép hiển thị 'text' trong tất cả")
+          }
+          placement="bottom"
+        />
 
-          <tbody>
-            {sceneList.map((scene, index) => (
-              <SceneRowComponent
-                key={`${selectedHistoryId || "default"}-${scene.id}`}
-                scene={scene}
-                index={index}
-                nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
-                isDisabled={!!scene.disabled}
-                characters={characters}
-                onInsert={handleInsert}
-                onUpdateScene={handleUpdateScene}
-                onToggleDisable={handleToggleDisable}
-                onToggleVoiceDisable={handleToggleVoiceDisable}
-                onToggleNoText={handleToggleNoText}
-                onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
-                {...sceneRowExtraProps}
-              />
-            ))}
-          </tbody>
-        </table>
+        {/* Toggle all VoiceDisable */}
+        <Button
+          onClick={handleToggleAllVoiceDisable}
+          className={`w-7 h-7 rounded-lg shadow-sm ${
+            sceneList.every((s) => s.voiceDisable)
+              ? "text-red-500 bg-red-50 hover:bg-red-100"
+              : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
+          }`}
+          iconClassName="text-sm"
+          icon={
+            sceneList.every((s) => s.voiceDisable) ? (
+              <MdVoiceOverOff />
+            ) : (
+              <MdRecordVoiceOver />
+            )
+          }
+          tooltip={
+            sceneList.every((s) => s.voiceDisable)
+              ? t("Bật thoại tất cả")
+              : t("Tắt thoại tất cả")
+          }
+          placement="bottom"
+        />
+      </div>
+
+      {/* ── Scrollable card grid – responsive columns ── */}
+      <div className="flex-1 overflow-auto v-scrollbar p-2 sm:p-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+        {sceneList.map((scene, index) => (
+          <SceneRowComponent
+            key={`${selectedHistoryId || "default"}-${scene.id}`}
+            scene={scene}
+            index={index}
+            nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
+            isDisabled={!!scene.disabled}
+            characters={characters}
+            hideImageColumn={hideImageColumn}
+            onInsert={handleInsert}
+            onUpdateScene={handleUpdateScene}
+            onToggleDisable={handleToggleDisable}
+            onToggleVoiceDisable={handleToggleVoiceDisable}
+            onToggleNoText={handleToggleNoText}
+            onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+            {...sceneRowExtraProps}
+          />
+        ))}
+        </div>
       </div>
     </div>
   );

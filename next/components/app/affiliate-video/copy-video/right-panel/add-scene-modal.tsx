@@ -295,7 +295,7 @@ export function AddSceneButton({ scene, position, characters, onInsert }: AddSce
         />
       )}
       <div
-        className="flex items-center justify-center py-1 relative"
+        className="relative inline-flex items-center justify-center"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
