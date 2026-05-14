@@ -351,3 +351,23 @@
   left: 50%; /* adjusts the element 50% from the left */
   transform: translateX(-50%);
 }
+
+/* Hover fly-up: ẩn mặc định, bay lên khi hover vào parent .group */
+.hover-fly-up {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.2s ease;
+}
+.group:hover > .hover-fly-up,
+.group:hover > * > .hover-fly-up {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hover parent hide: ẩn khi hover vào parent .group */
+.hover-parent-hide {
+  transition: opacity 0.2s ease;
+}
+.group:hover .hover-parent-hide {
+  opacity: 0;
+}

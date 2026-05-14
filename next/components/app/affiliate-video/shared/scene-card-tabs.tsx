@@ -27,22 +27,22 @@ const TABS: TabDef[] = [
   {
     key: "image",
     icon: <RiImageFill className="text-sm" />,
-    labelKey: "Hình ảnh",
-    activeClass: "bg-pink-500 text-white shadow-md",
+    labelKey: "Ảnh",
+    activeClass: "bg-pink-500 text-white shadow-sm",
     inactiveClass: "text-gray-500 hover:text-pink-500 hover:bg-pink-50",
   },
   {
     key: "video",
     icon: <AiOutlineVideoCamera className="text-sm" />,
-    labelKey: "Video đơn",
-    activeClass: "bg-purple-500 text-white shadow-md",
+    labelKey: "Video",
+    activeClass: "bg-purple-500 text-white shadow-sm",
     inactiveClass: "text-gray-500 hover:text-purple-500 hover:bg-purple-50",
   },
   {
     key: "extend",
     icon: <AiOutlineVideoCameraAdd className="text-sm" />,
     labelKey: "Video nối",
-    activeClass: "bg-teal-500 text-white shadow-md",
+    activeClass: "bg-primary text-white shadow-sm",
     inactiveClass: "text-gray-500 hover:text-teal-500 hover:bg-teal-50",
   },
 ];
@@ -57,6 +57,10 @@ export interface SceneCardTabsProps {
   renderImageTab: () => React.ReactNode;
   renderVideoTab: () => React.ReactNode;
   renderExtendTab: () => React.ReactNode;
+  /** Prompt nằm trong tab Image (hiển thị sau media) */
+  renderImagePrompt?: () => React.ReactNode;
+  /** Prompt nằm trong tab Video & Video nối (hiển thị sau media) */
+  renderVideoPrompts?: () => React.ReactNode;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -67,6 +71,8 @@ export function SceneCardTabs({
   renderImageTab,
   renderVideoTab,
   renderExtendTab,
+  renderImagePrompt,
+  renderVideoPrompts,
 }: SceneCardTabsProps) {
   const { t } = useTranslation();
 
@@ -92,7 +98,7 @@ export function SceneCardTabs({
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
               currentTab === tab.key ? tab.activeClass : tab.inactiveClass
             }`}
           >
@@ -104,9 +110,24 @@ export function SceneCardTabs({
 
       {/* ── Tab content ── */}
       <div className="p-2 sm:p-3">
-        {currentTab === "image" && !hideImageTab && renderImageTab()}
-        {currentTab === "video" && renderVideoTab()}
-        {currentTab === "extend" && !hideExtendTab && renderExtendTab()}
+        {currentTab === "image" && !hideImageTab && (
+          <>
+            {renderImageTab()}
+            {renderImagePrompt && <div className="mt-2">{renderImagePrompt()}</div>}
+          </>
+        )}
+        {currentTab === "video" && (
+          <>
+            {renderVideoTab()}
+            {renderVideoPrompts && <div className="mt-2">{renderVideoPrompts()}</div>}
+          </>
+        )}
+        {currentTab === "extend" && !hideExtendTab && (
+          <>
+            {renderExtendTab()}
+            {renderVideoPrompts && <div className="mt-2">{renderVideoPrompts()}</div>}
+          </>
+        )}
       </div>
     </div>
   );

@@ -37,7 +37,13 @@ export interface SharedBatchListPanelProps {
   /** Called to build a new scene via AI API. Should handle errors internally
    *  and return a fallback scene on failure. */
   onBuildInsertedScene: (
-    data: { description: string; voiceover: string; cameraAngle: string; selectedCharacters: string[]; audio: string },
+    data: {
+      description: string;
+      voiceover: string;
+      cameraAngle: string;
+      selectedCharacters: string[];
+      audio: string;
+    },
     sceneNumber: number,
     prevScene?: any,
     nextScene?: any
@@ -140,7 +146,13 @@ export function SharedBatchListPanel({
   const handleInsert = async (
     targetScene: any,
     position: "above" | "below",
-    data: { description: string; voiceover: string; cameraAngle: string; selectedCharacters: string[]; audio: string }
+    data: {
+      description: string;
+      voiceover: string;
+      cameraAngle: string;
+      selectedCharacters: string[];
+      audio: string;
+    }
   ) => {
     const idx = sceneList.findIndex((s) => s.id === targetScene.id);
     const insertAt = position === "above" ? idx : idx + 1;
@@ -227,8 +239,8 @@ export function SharedBatchListPanel({
           icon={sceneList.every((s) => s.noText) ? <RiText /> : <NoTextIcon />}
           tooltip={
             sceneList.every((s) => s.noText)
-              ? t("Đang cho phép hiển thị 'text' trong tất cả")
-              : t("Không cho phép hiển thị 'text' trong tất cả")
+              ? t("Đang cho phép hiển thị 'Chữ' trong tất cả")
+              : t("Không cho phép hiển thị 'Chữ' trong tất cả")
           }
           placement="bottom"
         />
@@ -242,17 +254,9 @@ export function SharedBatchListPanel({
               : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
           }`}
           iconClassName="text-sm"
-          icon={
-            sceneList.every((s) => s.voiceDisable) ? (
-              <MdVoiceOverOff />
-            ) : (
-              <MdRecordVoiceOver />
-            )
-          }
+          icon={sceneList.every((s) => s.voiceDisable) ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
           tooltip={
-            sceneList.every((s) => s.voiceDisable)
-              ? t("Bật thoại tất cả")
-              : t("Tắt thoại tất cả")
+            sceneList.every((s) => s.voiceDisable) ? t("Bật thoại tất cả") : t("Tắt thoại tất cả")
           }
           placement="bottom"
         />
@@ -261,24 +265,24 @@ export function SharedBatchListPanel({
       {/* ── Scrollable card grid – responsive columns ── */}
       <div className="flex-1 overflow-auto v-scrollbar p-2 sm:p-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-        {sceneList.map((scene, index) => (
-          <SceneRowComponent
-            key={`${selectedHistoryId || "default"}-${scene.id}`}
-            scene={scene}
-            index={index}
-            nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
-            isDisabled={!!scene.disabled}
-            characters={characters}
-            hideImageColumn={hideImageColumn}
-            onInsert={handleInsert}
-            onUpdateScene={handleUpdateScene}
-            onToggleDisable={handleToggleDisable}
-            onToggleVoiceDisable={handleToggleVoiceDisable}
-            onToggleNoText={handleToggleNoText}
-            onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
-            {...sceneRowExtraProps}
-          />
-        ))}
+          {sceneList.map((scene, index) => (
+            <SceneRowComponent
+              key={`${selectedHistoryId || "default"}-${scene.id}`}
+              scene={scene}
+              index={index}
+              nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
+              isDisabled={!!scene.disabled}
+              characters={characters}
+              hideImageColumn={hideImageColumn}
+              onInsert={handleInsert}
+              onUpdateScene={handleUpdateScene}
+              onToggleDisable={handleToggleDisable}
+              onToggleVoiceDisable={handleToggleVoiceDisable}
+              onToggleNoText={handleToggleNoText}
+              onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+              {...sceneRowExtraProps}
+            />
+          ))}
         </div>
       </div>
     </div>

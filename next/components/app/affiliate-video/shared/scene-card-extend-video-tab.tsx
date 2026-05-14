@@ -6,7 +6,7 @@
  * Tái sử dụng cho: single, trending, copy-video modules
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
@@ -85,15 +85,18 @@ export function SceneCardExtendVideoTab({
 
   return (
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-      <div className="flex items-start gap-2">
+      <div className="flex items-center justify-center gap-2 group">
         {generatedExtendVideo ? (
           <>
-            {/* ── Extend video preview ── */}
-            <div className="relative flex-1 max-w-xs shrink-0 group">
+            {/* ── Extend video preview + action buttons overlay ── */}
+            <div className="relative w-full min-h-20 group">
               {extVideoSrc ? (
                 <>
                   {/* Video container 16:9 */}
-                  <div className="relative w-full rounded-xl overflow-hidden border-2 border-teal-300 shadow-sm aspect-video">
+                  <div
+                    className="relative w-full rounded-xl overflow-hidden border-2 border-teal-300 shadow-sm"
+                    style={{ paddingTop: "56.25%" }}
+                  >
                     <video
                       src={extVideoSrc}
                       className="absolute inset-0 w-full h-full object-cover cursor-pointer"
@@ -117,8 +120,8 @@ export function SceneCardExtendVideoTab({
                       }}
                     />
                     {/* Play icon overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black/20 opacity-100 group-hover:opacity-0 transition-opacity">
-                      <div className="w-10 h-10 rounded-full bg-white/80 flex items-center justify-center">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black bg-opacity-20 opacity-100 hover-parent-hide transition-opacity">
+                      <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
                         <BiPlayCircle className="text-white w-12 h-12" />
                       </div>
                     </div>
@@ -133,41 +136,44 @@ export function SceneCardExtendVideoTab({
                 </>
               ) : (
                 /* Video placeholder */
-                <div className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50 aspect-video">
+                <div
+                  className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50"
+                  style={{ paddingTop: "56.25%" }}
+                >
                   <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
                 </div>
               )}
-            </div>
 
-            {/* Action buttons bên phải video */}
-            <div className="flex flex-col gap-1.5 items-center">
-              {/* Tải extend video */}
-              <Button
-                onClick={onDownloadExtendVideo}
-                className="w-8 rounded-lg h-8 bg-success-light text-success"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Tải")}
-                icon={<HiOutlineArrowDownTray />}
-                placement="right"
-              />
-              {/* Tạo lại / progress */}
-              {generatingExtendVideo ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                  <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                  <span className="text-teal-600 text-[10px] font-bold">
-                    {extendVideoProgress}%
-                  </span>
-                </div>
-              ) : (
+              {/* Action buttons overlay bên phải video */}
+              <div className="absolute top-1 right-1 flex flex-col gap-1.5 items-center hover-fly-up z-10">
+                {/* Tải extend video */}
                 <Button
-                  onClick={onGenerateExtendVideo}
-                  icon={<GenerateAiIcon />}
-                  placement="right"
-                  tooltip={t("Tạo lại video nối")}
-                  className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                  onClick={onDownloadExtendVideo}
+                  className="w-8 rounded-lg h-8 bg-success-light text-success"
                   iconClassName="text-xl font-bold"
+                  tooltip={t("Tải")}
+                  icon={<HiOutlineArrowDownTray />}
+                  placement="right"
                 />
-              )}
+                {/* Tạo lại / progress */}
+                {generatingExtendVideo ? (
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
+                    <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
+                    <span className="text-teal-600 text-[10px] font-bold">
+                      {extendVideoProgress}%
+                    </span>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={onGenerateExtendVideo}
+                    icon={<GenerateAiIcon />}
+                    placement="right"
+                    tooltip={t("Tạo lại video nối")}
+                    className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                    iconClassName="text-xl font-bold"
+                  />
+                )}
+              </div>
             </div>
           </>
         ) : generatingExtendVideo ? (
