@@ -505,7 +505,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <td className={`py-3 px-3 w-24 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <div className="flex flex-col items-center gap-2">
           {/* ── Video đơn ── */}
-          <div className="flex justify-center w-full">
+          <div className="flex justify-start w-full gap-1.5">
             {generatedVideo ? (
               <>
                 <div className="relative w-32 shrink-0 group">
@@ -577,7 +577,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   {generatingVideo ? (
                     <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
                       <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                      <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
+                      <span className="text-purple-600 text-[10px] font-bold">
+                        {videoProgress}%
+                      </span>
                     </div>
                   ) : (
                     <Button
@@ -702,7 +704,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                     {generatingExtendVideo ? (
                       <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
                         <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                        <span className="text-teal-600 text-[10px] font-bold">{extendVideoProgress}%</span>
+                        <span className="text-teal-600 text-[10px] font-bold">
+                          {extendVideoProgress}%
+                        </span>
                       </div>
                     ) : (
                       <Button
@@ -719,7 +723,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               ) : generatingExtendVideo ? (
                 <div className="w-16 h-16 rounded-xl border-2 border-teal-300 bg-teal-50 flex flex-col items-center justify-center">
                   <RiLoader4Line className="text-teal-500 text-xl animate-spin" />
-                  <span className="text-teal-600 text-[10px] font-bold mt-0.5">{extendVideoProgress}%</span>
+                  <span className="text-teal-600 text-[10px] font-bold mt-0.5">
+                    {extendVideoProgress}%
+                  </span>
                 </div>
               ) : (
                 <button
