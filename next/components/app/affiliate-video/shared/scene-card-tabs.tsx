@@ -93,7 +93,7 @@ export function SceneCardTabs({
   return (
     <div className="flex flex-col">
       {/* ── Tab bar ── */}
-      <div className="flex items-center  px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none">
+      <div className="flex items-center  px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none justify-center">
         {visibleTabs.map((tab) => (
           <button
             key={tab.key}

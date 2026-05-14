@@ -10,6 +10,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
+import { BsMagic } from "react-icons/bs";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
@@ -171,6 +172,24 @@ export function SceneCardVideoTab({
                   iconClassName="text-xl font-bold"
                   tooltip={t("Tạo lại")}
                 />
+              )}
+              {/* Tạo lại / progress */}
+              {generatingVideo ? (
+                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
+                  <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
+                  <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
+                </div>
+              ) : (
+                <Button
+                  onClick={handleClickGenerate}
+                  icon={<BsMagic />}
+                  placement="bottom"
+                  className="px-1 rounded-lg h-8 bg-orange-light text-orange text-10"
+                  iconClassName="text-xl font-bold ml-1"
+                  tooltip={t("Tạo Video chất lượng cao")}
+                >
+                  {t("Chất lượng")}
+                </Button>
               )}
             </div>
           </div>
