@@ -224,14 +224,14 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
   return (
     <>
       <div className="flex flex-col border-b border-gray-100 bg-white flex-shrink-0">
-        <div className="flex items-center gap-2 p-3 flex-wrap ">
+        <div className="flex items-center gap-2 p-3 flex-nowrap overflow-x-auto  ">
           {actions.map((action) => (
             <button
               key={action.id}
               id={action.id}
               onClick={action.method}
               disabled={action.disabled}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${action.color}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold whitespace-nowrap cursor-pointer border-0 transition-colors  disabled:cursor-not-allowed ${action.color}`}
             >
               {action.icon}
               {action.label}
