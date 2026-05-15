@@ -11,7 +11,7 @@ export function useSEO(
     openGraph: {
       type: "website",
       locale: "vi_VN",
-      site_name: "StoreMMO - Trang trung gian giao dịch hàng đầu - giải pháp giao dịch",
+      site_name: "Viet Theo Veo 3 - Free Generate Video AI - Image AI",
       title,
       description: data.description,
       images: [

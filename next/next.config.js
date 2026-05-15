@@ -36,8 +36,8 @@ const nextConfig = {
     version: process.env.npm_package_version,
     firebaseView: config.get("firebase.webConfig"),
     seo: {
-      title: "StoreMMO - Leading MMO Trading Solution",
-      siteName: "StoreMMO - Leading MMO Trading Solution",
+      title: "Viet Theo Veo 3 - Leading MMO Trading Solution",
+      siteName: "Viet Theo Veo 3 - Leading MMO Trading Solution",
     },
     upload: {
       uploadImageApiLink: config.get("upload.uploadImageApiLink"),

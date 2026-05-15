@@ -20,7 +20,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
 
   const seo = await useSEO(post?.title, {
     image: post?.featureImage || "/assets/img/logo-small.png",
-    description: post?.excerpt || `"StoreMMO | ${i18n?.t("bài viết")}`,
+    description: post?.excerpt || `"Viet Theo Veo 3 | ${i18n?.t("bài viết")}`,
   });
   const initTranslationsProps = await getTranslationProps(context.locale, ["common"]);
 

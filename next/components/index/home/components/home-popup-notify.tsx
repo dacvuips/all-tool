@@ -70,7 +70,7 @@ export function HomePopupNotify() {
                   screenMd ? "text-24" : "text-20"
                 } `}
               >
-                {t("Chào mừng đến với StoreMMO")}
+                {t("Chào mừng đến với Viet Theo Veo 3")}
               </div>
             )}
             <div className={`my-3  text-accent ${screenMd ? "text-20" : "text-16"} `}>
