@@ -62,8 +62,8 @@ export async function handleVideoGeneration(
     mediaName,
     accessToken: captchaData.accessToken,
     customerId: context.id,
-
     res,
+    headers: captchaData.Headers,
   });
 
   // Tăng usedQuantity sau khi generate video thành công (atomic $inc, tìm theo API key)
@@ -346,6 +346,7 @@ interface PollAndExtractVideoParams {
   accessToken: string;
   customerId: string;
   res: Response;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -353,7 +354,7 @@ interface PollAndExtractVideoParams {
  * extract video data và gửi kết quả qua SSE.
  */
 export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<void> {
-  const { mediaName, accessToken, customerId, res } = params;
+  const { mediaName, accessToken, customerId, res, headers } = params;
 
   // Poll media endpoint until video generation completes
   const MAX_POLLS = 360; // max ~30 minutes (5s * 360)
@@ -373,6 +374,7 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${accessToken}`,
+            ...(headers || {}),
           },
           body: JSON.stringify({
             operations: [
@@ -416,7 +418,9 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     const errorMsg = "Tạo video thất bại vui lòng tạo lại";
 
     // Log error message
-    logger.error(`[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`);
+    logger.error(
+      `[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`
+    );
 
     sendSSE({ type: "error", message: errorMsg });
     res.end();

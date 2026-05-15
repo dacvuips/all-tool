@@ -46,6 +46,7 @@ export default [
           ProjectID: projectId,
           accessToken,
           Seed,
+          Headers,
         } = await fetchCaptchaData({
           type: ActionEnum.VIDEO_GENERATION,
           logPrefix: "generation-video",
@@ -80,6 +81,7 @@ export default [
           accessToken,
           customerId: context.id,
           res,
+          headers: Headers,
         });
         await incrementVideoCount(context.id);
       } catch (err: any) {

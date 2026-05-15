@@ -52,7 +52,7 @@ export function HomePopupNotify() {
             </div>
           ) : (
             <AuthDialogHeader
-              title={t("Chào mừng đến với StoreMMO")}
+              title={t("Chào mừng đến với Việt Theo Veo 3")}
               subtitle={``}
               onClose={() => {}}
               noCloseButton={false}

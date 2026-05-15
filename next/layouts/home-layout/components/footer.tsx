@@ -21,14 +21,16 @@ export function Footer({ className, ...props }: ReactProps) {
 
               <div className="flex flex-row ">
                 <span className="text-sm font-bold text-accent">
-                  {t("Generate Image - Video - AI")}
+                  {t("Free Generate Image - Video - AI")}
                 </span>
               </div>
               <div className="flex flex-col  items-center justify-center ">
                 <div className="max-w-3xl text-center text-12 text-accent">
-                  {t("Hãy tham gia cùng chúng mình để tạo ra hàng triệu video - ảnh mỗi ngày nhé.")}
+                  {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
                 </div>
-                <div className="text-center text-12 text-accent">{`Zalo: 037.7733.100`}</div>
+                <div className="text-center text-12 text-accent">
+                  {`Zalo: 097.352.2962 - 037.7733.100`}
+                </div>
               </div>
               <div className="flex flex-col items-center">
                 <div className="flex flex-col items-center justify-center ">
@@ -72,16 +74,14 @@ export function Footer({ className, ...props }: ReactProps) {
               <div>
                 <div className="flex flex-row ">
                   <span className="text-sm font-bold text-accent">
-                    {t("Generate Image - Video - AI")}
+                    {t("Free Generate Image - Video - AI")}
                   </span>
                 </div>
                 <div className="flex flex-col   justify-center ">
                   <span className=" text-12 text-accent">
-                    {t(
-                      "Hãy tham gia cùng chúng mình để tạo ra hàng triệu video - ảnh mỗi ngày nhé."
-                    )}
+                    {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
                   </span>
-                  <p className="text-12   text-accent">{`Zalo: 037.7733.100`}</p>
+                  <p className="text-12   text-accent">{`Zalo: 097.352.2962 - 037.7733.100`}</p>
                 </div>
               </div>
             </div>

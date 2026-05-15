@@ -96,7 +96,7 @@ const ResetPasswordField = () => {
   return (
     <>
       <AuthDialogHeader
-        title={t("Chào mừng đến với StoreMMO")}
+        title={t("Chào mừng đến với Việt Theo Veo 3")}
         subtitle={t("Nhập mật khẩu mới của bạn")}
         noCloseButton={false}
       />

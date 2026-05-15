@@ -116,7 +116,7 @@ export const CustomerLoginEmailTab = ({ ...props }: Props) => {
       >
         <div className="p-5">
           <AuthDialogHeader
-            title={t("Chào mừng đến với StoreMMO")}
+            title={t("Chào mừng đến với Việt Theo Veo 3")}
             subtitle={`${
               forgotPassQuery
                 ? t("Nhập email của bạn để lấy lại mật khẩu")

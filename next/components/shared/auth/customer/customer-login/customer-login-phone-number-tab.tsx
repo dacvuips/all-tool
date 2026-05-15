@@ -129,7 +129,7 @@ export const CustomerLoginPhoneNumberTab = ({ ...props }: Props) => {
 
         <div className="p-5">
           <AuthDialogHeader
-            title={t("Chào mừng đến với StoreMMO")}
+            title={t("Chào mừng đến với Việt Theo Veo 3")}
             subtitle={`${
               forgotPassQuery
                 ? t("Nhập mã OTP từ điện thoại để đổi mật khẩu")

@@ -100,7 +100,7 @@ export function SceneCardVideoTab({
                 <>
                   {/* Video container 16:9 */}
                   <div
-                    className="relative w-full rounded-xl overflow-hidden border-2 border-purple-300 shadow-sm"
+                    className="relative w-full rounded-md overflow-hidden border-2 border-purple-300 shadow-sm"
                     style={{ paddingTop: "56.25%" }}
                   >
                     <video
@@ -122,7 +122,7 @@ export function SceneCardVideoTab({
                       }}
                     />
                     {/* Play icon overlay */}
-                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-xl bg-black bg-opacity-20 opacity-100 hover-parent-hide transition-opacity">
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-sm bg-black bg-opacity-20 opacity-100 hover-parent-hide transition-opacity">
                       <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
                         <BiPlayCircle className="text-white w-12 h-12" />
                       </div>

@@ -23,7 +23,9 @@ export const TrendingPage = ({}: TrendingPageProps) => {
         {/* ══ NÚT MỞ SIDEBAR (chỉ hiện trên mobile) ══ */}
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className="md:hidden fixed bottom-16 left-4 z-50 w-12 h-12 rounded-full bg-red-500 text-white shadow-lg flex items-center justify-center cursor-pointer border-0 hover:bg-red-600 transition-colors"
+          className={`md:hidden fixed top-1/2 -translate-y-1/2 left-0 z-100 w-7 h-14 rounded-r-lg bg-white shadow-lg flex items-center justify-center cursor-pointer   hover:bg-gray-200 transition-colors border ${
+            isSidebarOpen ? "hidden" : ""
+          }`}
           title={t("Mở cấu hình")}
         >
           <RiMenuLine className="text-xl" />
@@ -42,7 +44,7 @@ export const TrendingPage = ({}: TrendingPageProps) => {
           className={`
             flex-shrink-0 flex flex-col border-r border-gray-200 overflow-hidden bg-white
             md:relative md:w-80 md:translate-x-0
-            transform fixed inset-y-0 left-0 z-50 w-80 transition-transform duration-300
+            transform fixed inset-y-0 left-0 z-50 w-80 pt-14 md:pt-0 transition-transform duration-300
             ${isSidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"}
           `}
         >
