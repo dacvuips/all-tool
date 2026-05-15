@@ -11,6 +11,7 @@ import { CgSpinner } from "react-icons/cg";
 import { RiFireFill, RiMedalFill, RiRefreshLine, RiSearchLine, RiTrophyFill } from "react-icons/ri";
 
 import { parseNumber } from "../../../../../lib/helpers/parser";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
@@ -231,7 +232,7 @@ const RankSearchInput = ({
 export const TrendingPromptRank = ({}: {}) => {
   const { t } = useTranslation();
   const { getTrendingRank } = useAffiliateVideoApi();
-
+  const { customer } = useAuth();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -303,6 +304,16 @@ export const TrendingPromptRank = ({}: {}) => {
   }, []);
 
   const topItem = items[0];
+
+  if (!customer) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <span className="text-sm text-gray-400 font-medium">
+          {t("Vui lòng đăng nhập để sử dụng tính năng này")}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full bg-[#0f1923]">

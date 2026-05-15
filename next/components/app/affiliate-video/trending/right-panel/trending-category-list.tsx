@@ -25,6 +25,7 @@ import {
 import { BsBookmarkStarFill, BsMagic } from "react-icons/bs";
 import { parseNumber } from "../../../../../lib/helpers/parser";
 import { useAlert } from "../../../../../lib/providers/alert-provider";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { NotifyText } from "../../../../shared/common/notify-text";
@@ -865,6 +866,7 @@ const CustomerTrendingSection = ({
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
   const toast = useToast();
+  const { customer } = useAuth();
   const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
     useAffiliateVideoApi();
   const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
@@ -967,7 +969,15 @@ export const TrendingCategoryList = () => {
       </div>
     );
   }
-
+  if (!customer) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <span className="text-sm text-gray-400 font-medium">
+          {t("Vui lòng đăng nhập để sử dụng tính năng này")}
+        </span>
+      </div>
+    );
+  }
   // ── Empty state ──
   if (hasLoaded && categories.length === 0) {
     return (

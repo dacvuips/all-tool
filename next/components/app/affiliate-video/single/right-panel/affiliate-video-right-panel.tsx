@@ -14,6 +14,7 @@ import {
   RiMusicFill,
   RiScissorsLine,
 } from "react-icons/ri";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
@@ -137,7 +138,7 @@ export const AffiliateVideoRightPanel = () => {
     selectHistoryItem,
     clearSceneHistory,
   } = useAffiliateVideoContext();
-
+  const { customer } = useAuth();
   const [confirmClear, setConfirmClear] = useState(false);
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
@@ -221,7 +222,13 @@ export const AffiliateVideoRightPanel = () => {
         </TabGroup.Tab>
         {/* ── Tab: Kịch Bản (Script) ── */}
         <TabGroup.Tab label={t("Kịch Bản")}>
-          {batchRunning ? (
+          {!customer ? (
+            <div className="flex flex-col items-center justify-center py-16">
+              <span className="text-sm text-gray-400 font-medium">
+                {t("Vui lòng đăng nhập để sử dụng tính năng này")}
+              </span>
+            </div>
+          ) : batchRunning ? (
             <AiGeneratingSpinner />
           ) : !scriptData ? (
             /* Trạng thái trống */

@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import { RiText, RiVideoFill } from "react-icons/ri";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
 import { CharacterItem } from "../constants";
@@ -77,7 +78,7 @@ export function SharedBatchListPanel({
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
-
+  const { customer } = useAuth();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);
@@ -198,6 +199,16 @@ export function SharedBatchListPanel({
       console.error("[handleUpdateSelectedProductImages] Failed to persist:", err);
     }
   };
+
+  if (!customer) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <span className="text-sm text-gray-400 font-medium">
+          {t("Vui lòng đăng nhập để sử dụng tính năng này")}
+        </span>
+      </div>
+    );
+  }
 
   // ── Empty state ──
   if (sceneList.length === 0) {
