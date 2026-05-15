@@ -559,7 +559,7 @@ export function CheckoutPaymentForm() {
                   </>
                 }
                 onClick={handleCheckout}
-                disabled={isLoading || !selectedPlan}
+                disabled={isLoading || !selectedPlan || true}
               />
             )}
           </div>
