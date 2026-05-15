@@ -19,7 +19,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
   const post = await PostModel.findOne({ slug }, "_id title excerpt featureImage");
 
   const seo = await useSEO(post?.title, {
-    image: post?.featureImage || "/assets/img/logo-vuong.png",
+    image: post?.featureImage || "/assets/img/logo-small.png",
     description: post?.excerpt || `"StoreMMO | ${i18n?.t("bài viết")}`,
   });
   const initTranslationsProps = await getTranslationProps(context.locale, ["common"]);

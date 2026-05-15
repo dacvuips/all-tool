@@ -48,7 +48,7 @@ export function LoginPage() {
               await login(data);
             }}
           >
-            <img className="w-32 h-auto py-4 mx-auto" src="/assets/img/logo.png" />
+            <img className="w-44 h-auto py-4 mx-auto" src="/assets/img/logo-full.png" />
             <h2 className="mb-4 text-xl font-semibold text-center text-gray-700 uppercase">
               {t("Đăng nhập Admin")}
             </h2>
@@ -56,7 +56,7 @@ export function LoginPage() {
               <Input
                 className="rounded-full h-14"
                 placeholder={t("Email / Tên đăng nhập")}
-                autoFocus 
+                autoFocus
                 suffix={<RiUser3Line />}
               />
             </Field>
