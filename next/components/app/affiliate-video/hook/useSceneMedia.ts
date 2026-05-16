@@ -15,7 +15,7 @@ import { SceneScript } from "../constants";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
-import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "./useBatchActions";
+import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
@@ -80,6 +80,9 @@ export interface UseSceneMediaReturn {
 export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noText }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
+
+  // ── Lấy concurrency limits từ plan của user ───
+  const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
 
   // ── State ──
   const [generatingImage, setGeneratingImage] = useState(false);

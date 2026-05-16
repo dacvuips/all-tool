@@ -11,8 +11,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene } from "../../constants";
+import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
-import { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } from "../../hook/useBatchActions";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
 
@@ -88,6 +88,9 @@ export function useCopyVideoSceneMedia({
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
   const toast = useToast();
+
+  // ── Lấy concurrency limits từ plan của user ───
+  const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
 
   // ── State ──
   const [generatingImage, setGeneratingImage] = useState(false);
