@@ -12,12 +12,12 @@ export default function Page(props) {
       <NextSeo
         openGraph={{
           url: "https://aitipmart.site",
-          title: t("AI Tip Mart - Công Cụ AI Miễn Phí"),
-          description: t("AI Tip Mart - Công Cụ AI Miễn Phí"),
+          title: t("Viet Theo Veo - Công Cụ AI Miễn Phí"),
+          description: t("Viet Theo Veo - Công Cụ AI Miễn Phí"),
           images: [{ url: "/assets/img/logo-icon.png" }],
         }}
-        description={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
-        title={t("AI Tip Mart - Công Cụ AI Miễn Phí")}
+        description={t("Viet Theo Veo - Công Cụ AI Miễn Phí")}
+        title={t("Viet Theo Veo - Công Cụ AI Miễn Phí")}
       />
       <RecaptchaTabLayout defaultTab={0} />
     </>

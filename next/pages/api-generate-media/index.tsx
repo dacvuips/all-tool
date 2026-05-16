@@ -12,12 +12,12 @@ export default function Page(props) {
       <NextSeo
         openGraph={{
           url: "https://aitipmart.site",
-          title: t("AI Tip Mart - API Video"),
-          description: t("AI Tip Mart - API Video"),
+          title: t("Viet Theo Veo - API Video"),
+          description: t("Viet Theo Veo - API Video"),
           images: [{ url: "/assets/img/logo-icon.png" }],
         }}
-        description={t("AI Tip Mart - API Video")}
-        title={t("AI Tip Mart - API Video")}
+        description={t("Viet Theo Veo - API Video")}
+        title={t("Viet Theo Veo - API Video")}
       />
       <ApiMediaTabLayout defaultTab={0} />
     </>

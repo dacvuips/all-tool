@@ -41,6 +41,7 @@ import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/n
 import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
+import { NotifyDropdown } from "../components/shared/common/notify-dropdown";
 import { formatDate, parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
@@ -585,7 +586,9 @@ export function NotifiCationDropdown() {
         trigger="click"
         placement="bottom-end"
         hideOnClickOutside={false}
-      ></Popover>
+      >
+        <NotifyDropdown loadAll={loadAll} pagination={pagination} items={items} />
+      </Popover>
     </div>
   );
 }

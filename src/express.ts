@@ -112,6 +112,7 @@ function useHelmet(app: express.Application) {
               "https://api.vietqr.io/v2/lookup",
               "https://upload-image-cyan.vercel.app/api/file/upload-image",
               "https://generativelanguage.googleapis.com",
+              "https://flow-content.google",
             ],
             frameSrc: [
               "'self'",

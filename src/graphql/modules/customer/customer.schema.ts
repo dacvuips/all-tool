@@ -2,12 +2,12 @@ import { gql } from "apollo-server-express";
 
 const schema = gql`
   enum SubscriptionPlanEnum {
-    Free
-    Trial
-    Basic
-    Standard
-    Professional
-    Unlimited
+    free
+    trial
+    basic
+    standard
+    professional
+    unlimited
   }
 
   extend type Query {
