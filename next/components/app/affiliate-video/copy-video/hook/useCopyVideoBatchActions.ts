@@ -13,15 +13,16 @@ import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { CopyVideoScene, DB_NAME } from "../../constants";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { useCopyVideoApi } from "./useCopyVideoApi";
 
-// ─── Concurrency limits ───
-export const IMAGE_CONCURRENCY = 2;
-export const VIDEO_CONCURRENCY = 2;
+// ─── Concurrency limits (fallback defaults) ───
+export const DEFAULT_IMAGE_CONCURRENCY = 2;
+export const DEFAULT_VIDEO_CONCURRENCY = 2;
 
 export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const { t } = useTranslation();
@@ -42,6 +43,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   // Copy-video mode is always image_to_video (no prompt_to_video)
   const isPromptToVideo = false;
   const toast = useToast();
+
+  // ─── Lấy concurrency limits từ plan của user ───
+  const { customer } = useAuth();
+  const IMAGE_CONCURRENCY =
+    customer?.googlePackage?.imageStreamCount || DEFAULT_IMAGE_CONCURRENCY;
+  const VIDEO_CONCURRENCY =
+    customer?.googlePackage?.videoStreamCount || DEFAULT_VIDEO_CONCURRENCY;
 
   // ── IndexedDB for selected product images per scene ──
   const selectedProductImagesDB = useIndexedDB<string[]>(

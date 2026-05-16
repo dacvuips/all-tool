@@ -13,14 +13,15 @@ import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { SceneScript, StoryModeTypeEnum } from "../constants";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 
-// ─── Concurrency limits ───
-export const IMAGE_CONCURRENCY = 2;
-export const VIDEO_CONCURRENCY = 2;
+// ─── Concurrency limits (fallback defaults) ───
+export const DEFAULT_IMAGE_CONCURRENCY = 2;
+export const DEFAULT_VIDEO_CONCURRENCY = 2;
 
 export function useBatchActions(scenes: SceneScript[]) {
   const { t } = useTranslation();
@@ -36,6 +37,13 @@ export function useBatchActions(scenes: SceneScript[]) {
   } = useAffiliateVideoContext();
   const isPromptToVideo = scriptData?.storyModeType === StoryModeTypeEnum.prompt_to_video;
   const toast = useToast();
+
+  // ─── Lấy concurrency limits từ plan của user ───
+  const { customer } = useAuth();
+  const IMAGE_CONCURRENCY =
+    customer?.googlePackage?.imageStreamCount || DEFAULT_IMAGE_CONCURRENCY;
+  const VIDEO_CONCURRENCY =
+    customer?.googlePackage?.videoStreamCount || DEFAULT_VIDEO_CONCURRENCY;
 
   // ═══════════════════════════════════════════════════════════════════
   // ── Voice Export Dialog state ──
