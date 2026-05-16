@@ -32,7 +32,7 @@ import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
-import { SceneCardTabs } from "../../shared/scene-card-tabs";
+import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
@@ -59,6 +59,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   storyModeType,
   hideImageColumn,
   nextSceneId,
+  forcedTab,
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
@@ -74,6 +75,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   isGroupHovered?: boolean;
   storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
+  /** Tab được ép chọn đồng loạt từ bên ngoài */
+  forcedTab?: SceneTabKey | null;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -450,6 +453,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <SceneCardTabs
         hideImageTab={isPromptToVideo || !!hideImageColumn}
         hideExtendTab={isPromptToVideo || !nextSceneId}
+        forcedTab={forcedTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
           video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },
@@ -592,6 +596,7 @@ interface SceneRowGroupProps {
   characters: CharacterItem[];
   storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
+  forcedTab?: SceneTabKey | null;
   onInsert: (
     scene: SceneScript,
     position: InsertPosition,
@@ -611,6 +616,7 @@ export function SceneRowGroup({
   isDisabled,
   characters,
   storyModeType,
+  forcedTab,
   onInsert,
   onUpdateScene,
   onToggleDisable,
@@ -648,6 +654,7 @@ export function SceneRowGroup({
         isDisabled={isDisabled}
         isGroupHovered={hovered}
         storyModeType={storyModeType}
+        forcedTab={forcedTab}
         onMouseEnter={enter}
         onMouseLeave={leave}
         onUpdateScene={onUpdateScene}

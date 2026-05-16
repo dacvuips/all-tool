@@ -28,7 +28,7 @@ import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, CopyVideoScene, DB_NAME } from "../../constants";
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
-import { SceneCardTabs } from "../../shared/scene-card-tabs";
+import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { GeneratedImageData } from "../hook/useCopyVideoApi";
 
@@ -59,6 +59,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   isGroupHovered,
   hideImageColumn,
   nextSceneId,
+  forcedTab,
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
@@ -73,6 +74,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   isDisabled: boolean;
   isGroupHovered?: boolean;
   hideImageColumn?: boolean;
+  /** Tab được ép chọn đồng loạt từ bên ngoài */
+  forcedTab?: SceneTabKey | null;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -454,6 +457,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <SceneCardTabs
         hideImageTab={!!hideImageColumn}
         hideExtendTab={!nextSceneId}
+        forcedTab={forcedTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
           video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },
@@ -594,6 +598,7 @@ interface SceneRowGroupProps {
   isDisabled: boolean;
   characters: CharacterItem[];
   hideImageColumn?: boolean;
+  forcedTab?: SceneTabKey | null;
   onToggleNoText: (sceneId: string) => void;
   onInsert: (
     scene: CopyVideoScene,
@@ -612,6 +617,7 @@ export function SceneRowGroup({
   nextSceneId,
   isDisabled,
   characters,
+  forcedTab,
   onInsert,
   onUpdateScene,
   onToggleDisable,
@@ -653,6 +659,7 @@ export function SceneRowGroup({
           nextSceneId={nextSceneId}
           isDisabled={isDisabled}
           isGroupHovered={hovered}
+          forcedTab={forcedTab}
           onMouseEnter={enter}
           onMouseLeave={leave}
           onUpdateScene={onUpdateScene}

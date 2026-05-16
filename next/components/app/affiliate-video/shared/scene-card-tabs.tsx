@@ -5,7 +5,7 @@
  * Tab state lưu per-scene (mỗi card quản lý tab riêng)
  * className only – Tailwind CSS, no arbitrary values
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { RiImageFill, RiLoader4Line } from "react-icons/ri";
@@ -73,6 +73,8 @@ export interface SceneCardTabsProps {
   renderVideoPrompts?: () => React.ReactNode;
   /** Trạng thái loading/done hiển thị lên nút tab */
   tabStatus?: Partial<Record<SceneTabKey, TabStatus>>;
+  /** Ép chọn tab từ bên ngoài (dùng cho "chuyển tab đồng loạt") */
+  forcedTab?: SceneTabKey | null;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -86,6 +88,7 @@ export function SceneCardTabs({
   renderImagePrompt,
   renderVideoPrompts,
   tabStatus,
+  forcedTab,
 }: SceneCardTabsProps) {
   const { t } = useTranslation();
 
@@ -99,6 +102,14 @@ export function SceneCardTabs({
   // Default tab: image nếu có, nếu không thì video
   const defaultTab = visibleTabs[0]?.key || "video";
   const [activeTab, setActiveTab] = useState<SceneTabKey>(defaultTab);
+
+  // Khi forcedTab thay đổi từ bên ngoài, tự động chuyển tab nội bộ
+  useEffect(() => {
+    if (forcedTab && visibleTabs.find((t) => t.key === forcedTab)) {
+      setActiveTab(forcedTab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forcedTab]);
 
   // Nếu active tab bị ẩn, chuyển về tab đầu tiên
   const currentTab = visibleTabs.find((t) => t.key === activeTab) ? activeTab : defaultTab;

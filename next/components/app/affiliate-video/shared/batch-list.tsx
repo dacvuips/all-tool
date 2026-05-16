@@ -6,12 +6,14 @@
  */
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
-import { RiText, RiVideoFill } from "react-icons/ri";
+import { RiImageFill, RiText, RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
 import { CharacterItem } from "../constants";
+import { SceneTabKey } from "./scene-card-tabs";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -78,6 +80,7 @@ export function SharedBatchListPanel({
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
+  const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(null);
   const { customer } = useAuth();
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
@@ -238,6 +241,32 @@ export function SharedBatchListPanel({
         {/* Spacer */}
         <div className="flex-1" />
 
+        {/* ── Global tab selector ── */}
+        <div className="flex items-center gap-1">
+          <div className="relative">
+            <select
+              value={globalTab || ""}
+              onChange={(e) => setGlobalTab((e.target.value as SceneTabKey) || null)}
+              className="appearance-none text-xs font-semibold pl-6 pr-5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm cursor-pointer outline-none hover:border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+            >
+              <option value="image">{t("Ảnh")}</option>
+              <option value="video">{t("Video")}</option>
+              <option value="extend">{t("Video nối")}</option>
+            </select>
+            {/* icon tương ứng với lựa chọn hiện tại */}
+            <span className="absolute left-1.5 top-2 -translate-y-1/2 pointer-events-none flex items-center">
+              {globalTab === "image" && <RiImageFill className="w-3 h-3 text-pink-500" />}
+              {globalTab === "video" && (
+                <AiOutlineVideoCamera className="w-3 h-3 text-purple-500" />
+              )}
+              {globalTab === "extend" && (
+                <AiOutlineVideoCameraAdd className="w-3 h-3 text-primary" />
+              )}
+              {!globalTab && <RiVideoFill className="w-3 h-3 text-gray-400" />}
+            </span>
+          </div>
+        </div>
+
         {/* Toggle all NoText */}
         <Button
           onClick={handleToggleAllNoText}
@@ -291,6 +320,7 @@ export function SharedBatchListPanel({
               onToggleVoiceDisable={handleToggleVoiceDisable}
               onToggleNoText={handleToggleNoText}
               onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+              forcedTab={globalTab}
               {...sceneRowExtraProps}
             />
           ))}
