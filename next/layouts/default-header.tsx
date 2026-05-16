@@ -126,7 +126,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
               <div className="mr-6 logo min-w-12">
                 <Link href={"/"}>
                   <img
-                    src={"/assets/img/logo-full.png"}
+                    src={"/assets/img/logo-full-1.png"}
                     className="object-contain min-w-28 sm:w-20 lg:w-36"
                     alt="logo"
                   />
@@ -355,7 +355,9 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
             <div className="flex flex-row gap-2 items-center">
               <Link href="/" className="block">
                 <img
-                  src={`${screenXs ? "/assets/img/logo-full.png" : "/assets/img/logo-small.png"}`}
+                  src={`${
+                    screenXs ? "/assets/img/logo-full-1.png" : "/assets/img/logo-small-1.png"
+                  }`}
                   className="object-contain w-14 h-14 min-w-14 xs:min-w-36 xs:w-36"
                 />
               </Link>

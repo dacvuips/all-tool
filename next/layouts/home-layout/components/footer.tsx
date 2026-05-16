@@ -17,7 +17,7 @@ export function Footer({ className, ...props }: ReactProps) {
         <div className="pt-2 pb-4 bg-white">
           <div className="mx-4 ">
             <div className="flex flex-col items-center ">
-              <img src="/assets/img/logo-full.png" className="object-cover py-1 w-44" alt="" />
+              <img src="/assets/img/logo-full-1.png" className="object-cover py-1 w-44" alt="" />
 
               <div className="flex flex-row ">
                 <span className="text-sm font-bold text-accent">
@@ -70,7 +70,7 @@ export function Footer({ className, ...props }: ReactProps) {
         <div className="pt-2 pb-4 bg-white ">
           <div className="main-container ">
             <div className="flex items-start gap-5">
-              <img src="/assets/img/logo-full.png" className="object-cover py-1 w-44" alt="" />
+              <img src="/assets/img/logo-full-1.png" className="object-cover py-1 w-44" alt="" />
               <div>
                 <div className="flex flex-row ">
                   <span className="text-sm font-bold text-accent">

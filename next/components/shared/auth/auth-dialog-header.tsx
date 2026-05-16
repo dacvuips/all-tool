@@ -30,7 +30,7 @@ export function AuthDialogHeader({
           />
         )}
         <img
-          src="/assets/img/logo-full.png"
+          src="/assets/img/logo-full-1.png"
           className={`object-contain cursor-pointer ${screenLg ? "w-60" : "w-44"} `}
           style={{ margin: "0 auto" }}
           onClick={() => router.push("/")}

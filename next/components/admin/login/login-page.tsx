@@ -48,7 +48,7 @@ export function LoginPage() {
               await login(data);
             }}
           >
-            <img className="w-44 h-auto py-4 mx-auto" src="/assets/img/logo-full.png" />
+            <img className="w-44 h-auto py-4 mx-auto" src="/assets/img/logo-full-1.png" />
             <h2 className="mb-4 text-xl font-semibold text-center text-gray-700 uppercase">
               {t("Đăng nhập Admin")}
             </h2>

@@ -4,7 +4,7 @@ export const DOMAIN = config.get<string>("domain");
 
 export const EMAIL_CONFIG = config.get<{ from: string }>("email");
 
-export const LOGO_URL = DOMAIN + "/assets/img/logo-full.png";
+export const LOGO_URL = DOMAIN + "/assets/img/logo-full-1.png";
 export const SHOP_URL = DOMAIN + "/shop";
 
 export const PARTNER_FEE_CONFIG = config.get<
