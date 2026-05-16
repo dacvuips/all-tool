@@ -450,6 +450,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <SceneCardTabs
         hideImageTab={isPromptToVideo || !!hideImageColumn}
         hideExtendTab={isPromptToVideo || !nextSceneId}
+        tabStatus={{
+          image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
+          video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },
+          extend: {
+            loading: generatingExtendVideo,
+            progress: extendVideoProgress,
+            done: !!generatedExtendVideo,
+          },
+        }}
         renderImageTab={() => (
           <SceneCardImageTab
             generatedImage={generatedImage}

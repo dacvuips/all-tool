@@ -15,6 +15,7 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
@@ -23,6 +24,7 @@ import { BatchSizeSlider } from "./batch-size-slider";
 
 export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
   const { t } = useTranslation();
+  const { customer } = useAuth();
   const router = useRouter();
   const { videoConfig, patchConfig, storyModeType, setStoryModeType } = useAffiliateVideoContext();
   const formContext = useFormContext();
@@ -232,6 +234,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
             multi
             value={videoConfig?.productImages}
             onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+            readOnly={!customer}
           />
         </Field>
 

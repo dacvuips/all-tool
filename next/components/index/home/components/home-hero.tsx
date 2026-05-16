@@ -56,7 +56,7 @@ export function HomeHero() {
           className="inline-flex items-center gap-2.5 px-6 py-3 rounded-full text-sm sm:text-base font-semibold transition-all duration-300 border border-gray-300 text-gray-700 bg-white hover:border-primary hover:text-primary hover:shadow-md"
         >
           <GenerateAiIcon className="text-lg" />
-          <span>{t("Bắt đàu miễn phí")}</span>
+          <span>{t("Bắt đầu miễn phí")}</span>
         </Link>
       </div>
     </section>

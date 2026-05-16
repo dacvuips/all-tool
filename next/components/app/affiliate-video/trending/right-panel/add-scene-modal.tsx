@@ -3,7 +3,7 @@
  * Modal thêm cảnh mới + nút "+" chèn scene giữa các cảnh
  * Extracted from batch-list.tsx – className only, Tailwind CSS
  */
-import { useState } from "react";
+import React, { CSSProperties, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
@@ -274,11 +274,30 @@ interface AddSceneButtonProps {
 
 export function AddSceneButton({ scene, position, characters, onInsert }: AddSceneButtonProps) {
   const { t } = useTranslation();
-  const [isHovered, setIsHovered] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [tooltipStyle, setTooltipStyle] = useState<CSSProperties>({ opacity: 0, pointerEvents: "none" });
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   // Tooltip text
   const tooltipText = position === "above" ? t("Thêm cảnh phía trên") : t("Thêm cảnh phía dưới");
+
+  const showTooltip = () => {
+    const rect = btnRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    setTooltipStyle({
+      position: "fixed",
+      top: rect.top - 8,
+      left: rect.left + rect.width / 2,
+      transform: "translate(-50%, -100%)",
+      opacity: 1,
+      pointerEvents: "none",
+      zIndex: 9999,
+    });
+  };
+
+  const hideTooltip = () => {
+    setTooltipStyle((s) => ({ ...s, opacity: 0, pointerEvents: "none" }));
+  };
 
   return (
     <>
@@ -294,24 +313,22 @@ export function AddSceneButton({ scene, position, characters, onInsert }: AddSce
           }}
         />
       )}
+      {/* Tooltip portal – fixed so it's never clipped by overflow-hidden parents */}
       <div
-        className="relative inline-flex items-center justify-center"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        className="bg-gray-800 text-white text-xs font-medium px-2.5 py-1 rounded-lg whitespace-nowrap shadow-lg transition-opacity duration-150"
+        style={tooltipStyle}
       >
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center cursor-pointer shadow-md transition-all hover:scale-110 z-10"
-        >
-          <RiAddLine className="text-xs" />
-        </button>
-        {/* Tooltip */}
-        {isHovered && (
-          <div className="absolute top-full mt-1 left-1/2 -translate-x-1/2 bg-gray-800 text-white text-xs font-medium px-2.5 py-1 rounded-lg whitespace-nowrap z-20 shadow-lg pointer-events-none">
-            {tooltipText}
-          </div>
-        )}
+        {tooltipText}
       </div>
+      <button
+        ref={btnRef}
+        onClick={() => setIsModalOpen(true)}
+        onMouseEnter={showTooltip}
+        onMouseLeave={hideTooltip}
+        className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center cursor-pointer shadow-md transition-all hover:scale-110 z-10 relative"
+      >
+        <RiAddLine className="text-xs" />
+      </button>
     </>
   );
 }

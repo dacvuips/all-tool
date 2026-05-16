@@ -162,7 +162,9 @@ export default function PricingPage() {
       `${t("Tạo tối đa")} ${formatNumber(config.imageLimit)} ${t("hình ảnh")} / ${t("ngày")}`
     );
     features.push(
-      `${t("Tối đa")} ${formatNumber(config.requestLimit)} ${t("lượt generation text")} / ${t("ngày")}`
+      `${t("Tối đa")} ${formatNumber(config.requestLimit)} ${t("lượt generation text")} / ${t(
+        "ngày"
+      )}`
     );
     features.push(
       `${t("Tối đa")} ${formatNumber(config.videoStreamCount)} ${t("luồng video cùng lúc")}`
@@ -308,7 +310,7 @@ export default function PricingPage() {
           {/* Commission Tiers */}
           <div className="pricing-referral__tiers">
             <div className="pricing-referral__tier">
-              <span className="pricing-referral__tier-percent">10%</span>
+              <span className="pricing-referral__tier-percent">20%</span>
               <span className="pricing-referral__tier-label">
                 {t("Hoa hồng cho mỗi đơn hàng kích hoạt thành công")}
               </span>
@@ -330,7 +332,7 @@ export default function PricingPage() {
       {/* Contact Footer */}
       <div className="pricing-contact">
         <p className="pricing-contact__line">
-          {t("Liên hệ hỗ trợ:")} <strong>Zalo: 037.7733.100</strong>
+          {t("Liên hệ hỗ trợ:")} <strong>Zalo: 097.352.2962 - 037.7733.100</strong>
         </p>
         <p className="pricing-contact__line pricing-contact__line--sub">
           {t("Thanh toán qua chuyển khoản ngân hàng hoặc ví điện tử.")}

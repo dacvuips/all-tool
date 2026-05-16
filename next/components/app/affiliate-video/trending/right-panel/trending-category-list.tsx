@@ -72,6 +72,8 @@ const TrendingCard = ({
   onShowInfo?: (item: TrendingPublicItem) => void;
 }) => {
   const { t } = useTranslation();
+  const toast = useToast();
+  const { customer } = useAuth();
   const [isBookmarked, setIsBookmarked] = useState(false);
   const firstImage = item.imageUrls?.[0];
 
@@ -157,7 +159,8 @@ const TrendingCard = ({
             <Button
               onClick={(e) => {
                 e.stopPropagation();
-                onUseTrending(item.id);
+                if (!customer) toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
+                else onUseTrending(item.id);
               }}
               outline
               info
@@ -230,7 +233,8 @@ const CategorySection = ({
 }) => {
   const { t } = useTranslation();
   const { getTrendingsByCategoryId } = useAffiliateVideoApi();
-
+  const { customer } = useAuth();
+  const toast = useToast();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -295,10 +299,17 @@ const CategorySection = ({
         />{" "}
         <Button
           primary
-          onClick={() => onOpenCreate?.()}
+          onClick={() => {
+            if (!customer) {
+              toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
+              return;
+            }
+            onOpenCreate?.();
+          }}
           className="px-3 rounded-full whitespace-nowrap h-9"
           text={t("Tạo mới")}
           icon={<RiAddLine className="text-sm" />}
+          disabled={!customer}
         />
       </div>
 
@@ -498,6 +509,7 @@ const CreateEditTrendingDialog = ({
   onSave: (data: CustomerTrendingInput, id?: string) => Promise<boolean>;
 }) => {
   const { t } = useTranslation();
+  const { customer } = useAuth();
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState("");
   const [des, setDes] = useState("");
@@ -633,7 +645,7 @@ const CreateEditTrendingDialog = ({
             text={editItem ? t("Cập nhật") : t("Tạo mới")}
             className="rounded-lg"
             onClick={handleSubmit}
-            disabled={!name.trim() || !prompt.trim() || isSaving}
+            disabled={!name.trim() || !prompt.trim() || isSaving || !customer}
             isLoading={isSaving}
           />
         </div>
@@ -661,7 +673,7 @@ const CustomerTrendingSection = ({
     deleteCustomerTrending,
     createCustomerTrending,
   } = useAffiliateVideoApi();
-
+  const { customer } = useAuth();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -774,6 +786,7 @@ const CustomerTrendingSection = ({
           className="px-3 rounded-full"
           text={t("Tạo mới")}
           icon={<RiAddLine className="text-sm" />}
+          disabled={!customer}
         />
       </div>
 
@@ -833,6 +846,7 @@ const CustomerTrendingSection = ({
             text={t("Tạo trending đầu tiên")}
             icon={<RiAddLine />}
             className="rounded-lg"
+            disabled={!customer}
           />
         </div>
       )}
@@ -866,7 +880,6 @@ const CustomerTrendingSection = ({
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { customer } = useAuth();
   const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
     useAffiliateVideoApi();
   const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
@@ -969,15 +982,7 @@ export const TrendingCategoryList = () => {
       </div>
     );
   }
-  if (!customer) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <span className="text-sm text-gray-400 font-medium">
-          {t("Vui lòng đăng nhập để sử dụng tính năng này")}
-        </span>
-      </div>
-    );
-  }
+
   // ── Empty state ──
   if (hasLoaded && categories.length === 0) {
     return (

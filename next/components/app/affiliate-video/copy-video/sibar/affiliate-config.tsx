@@ -4,11 +4,11 @@
  * className only – Tailwind CSS, no inline styles, no arbitrary [] values
  * Field names aligned with AffiliateFormConfig interface.
  */
-import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, ImageInput, Select } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -19,7 +19,7 @@ import { VideoUploadPicker } from "./video-upload-picker";
 
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
-  const router = useRouter();
+  const { customer } = useAuth();
   const { patchConfig, copyVideoFormConfig } = useCopyVideoContext();
 
   const { ART_STYLE_TRANSLATED_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
@@ -124,6 +124,7 @@ export const AffiliateConfig = () => {
             multi
             value={copyVideoFormConfig?.productImages}
             onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+            readOnly={!customer}
           />
         </Field>
       </div>

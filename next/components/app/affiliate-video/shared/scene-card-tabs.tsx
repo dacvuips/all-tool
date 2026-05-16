@@ -8,10 +8,20 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
-import { RiImageFill } from "react-icons/ri";
+import { RiImageFill, RiLoader4Line } from "react-icons/ri";
 
 // ── Tab definitions ──────────────────────────────────────────────────────────
 export type SceneTabKey = "image" | "video" | "extend" | "high-quality";
+
+/** Trạng thái loading/done cho mỗi tab */
+export interface TabStatus {
+  /** Đang generate */
+  loading?: boolean;
+  /** Giá trị progress 0–100 (hiển thị khi loading) */
+  progress?: number;
+  /** Đã có media (ảnh / video) → hiển thị dấu tích xanh */
+  done?: boolean;
+}
 
 interface TabDef {
   key: SceneTabKey;
@@ -43,7 +53,7 @@ const TABS: TabDef[] = [
     icon: <AiOutlineVideoCameraAdd className="text-sm" />,
     labelKey: "Video nối",
     activeClass: "bg-primary text-white shadow-sm",
-    inactiveClass: "text-gray-500 hover:text-teal-500 hover:bg-teal-50",
+    inactiveClass: "text-gray-500 hover:text-primary hover:bg-primary-light ",
   },
 ];
 
@@ -61,6 +71,8 @@ export interface SceneCardTabsProps {
   renderImagePrompt?: () => React.ReactNode;
   /** Prompt nằm trong tab Video & Video nối (hiển thị sau media) */
   renderVideoPrompts?: () => React.ReactNode;
+  /** Trạng thái loading/done hiển thị lên nút tab */
+  tabStatus?: Partial<Record<SceneTabKey, TabStatus>>;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -73,6 +85,7 @@ export function SceneCardTabs({
   renderExtendTab,
   renderImagePrompt,
   renderVideoPrompts,
+  tabStatus,
 }: SceneCardTabsProps) {
   const { t } = useTranslation();
 
@@ -93,19 +106,48 @@ export function SceneCardTabs({
   return (
     <div className="flex flex-col">
       {/* ── Tab bar ── */}
-      <div className="flex items-center  px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none justify-center gap-0.5">
-        {visibleTabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1 px-1 py-1 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
-              currentTab === tab.key ? tab.activeClass : tab.inactiveClass
-            }`}
-          >
-            {tab.icon}
-            <span className="">{t(tab.labelKey)}</span>
-          </button>
-        ))}
+      <div className="flex items-center px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none justify-center gap-0.5">
+        {visibleTabs.map((tab) => {
+          const status = tabStatus?.[tab.key];
+          const isLoading = !!status?.loading;
+          const isDone = !isLoading && !!status?.done;
+          const progress = status?.progress;
+          const isActive = currentTab === tab.key;
+
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`relative flex items-center gap-1 px-1 py-1 w-full justify-center rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
+                isActive ? tab.activeClass : tab.inactiveClass
+              }`}
+            >
+              {/* Icon / Spinner */}
+              {isLoading ? <RiLoader4Line className="text-sm animate-spin" /> : tab.icon}
+
+              <span>{t(tab.labelKey)}</span>
+
+              {/* Progress label khi loading */}
+              {isLoading && progress != null && (
+                <span className="text-[10px] font-bold opacity-90 leading-none">
+                  {Math.round(progress)}%
+                </span>
+              )}
+
+              {/* Dấu tích xanh khi done – góc trên phải */}
+              {isDone && (
+                <span
+                  data-tooltip="Hoàn thành"
+                  data-placement="top"
+                  className="absolute -top-1 -right-0.5 flex items-center justify-center border-dashed border w-4 h-4 rounded-full bg-white text-success shadow-sm"
+                  style={{ fontSize: 9, lineHeight: 1 }}
+                >
+                  ✓
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Tab content ── */}

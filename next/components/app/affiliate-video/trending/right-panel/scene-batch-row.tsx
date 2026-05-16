@@ -447,6 +447,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <SceneCardTabs
         hideImageTab={isPromptToVideo || !!hideImageColumn}
         hideExtendTab={isPromptToVideo || !nextSceneId}
+        tabStatus={{
+          image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
+          video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },
+          extend: {
+            loading: generatingExtendVideo,
+            progress: extendVideoProgress,
+            done: !!generatedExtendVideo,
+          },
+        }}
         renderImageTab={() => (
           <SceneCardImageTab
             generatedImage={generatedImage}
@@ -608,7 +617,11 @@ export function SceneRowGroup({
   const leave = () => setHovered(false);
 
   return (
-    <div className="relative group" onMouseEnter={enter} onMouseLeave={leave}>
+    <div
+      className="relative group flex flex-col"
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+    >
       {/* Add ABOVE button – centered on top border, only visible on hover */}
       {index === 0 && (
         <div
@@ -625,26 +638,28 @@ export function SceneRowGroup({
         </div>
       )}
 
-      {/* Scene data row */}
-      <SceneBatchRow
-        scene={scene}
-        index={index}
-        nextSceneId={nextSceneId}
-        isDisabled={isDisabled}
-        isGroupHovered={hovered}
-        storyModeType={storyModeType}
-        onMouseEnter={enter}
-        onMouseLeave={leave}
-        onUpdateScene={onUpdateScene}
-        onToggleDisable={onToggleDisable}
-        onToggleVoiceDisable={onToggleVoiceDisable}
-        onToggleNoText={onToggleNoText}
-        onUpdateSelectedProductImages={onUpdateSelectedProductImages}
-      />
+      {/* Scene data row – flex-1 so it fills the grid cell height */}
+      <div className="flex-1">
+        <SceneBatchRow
+          scene={scene}
+          index={index}
+          nextSceneId={nextSceneId}
+          isDisabled={isDisabled}
+          isGroupHovered={hovered}
+          storyModeType={storyModeType}
+          onMouseEnter={enter}
+          onMouseLeave={leave}
+          onUpdateScene={onUpdateScene}
+          onToggleDisable={onToggleDisable}
+          onToggleVoiceDisable={onToggleVoiceDisable}
+          onToggleNoText={onToggleNoText}
+          onUpdateSelectedProductImages={onUpdateSelectedProductImages}
+        />
+      </div>
 
-      {/* Add BELOW button – centered on bottom border, only visible on hover */}
+      {/* Add BELOW button – always at the bottom of the group, only visible on hover */}
       <div
-        className={`absolute -bottom-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
+        className={`flex justify-center py-1.5 transition-all duration-200 ${
           hovered ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >

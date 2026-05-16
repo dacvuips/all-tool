@@ -14,8 +14,6 @@ const Query = {
     return await trendingCategoryService.findOne({ _id: id });
   },
   getActiveTrendingCategoryList: async (root: any, args: any, context: Context) => {
-    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
-
     // Lấy danh sách danh mục đang active, sắp xếp theo priority (chỉ metadata, không kèm items)
     const categories = await trendingCategoryService.findAll({
       filter: { isActive: true },
@@ -34,7 +32,6 @@ const Query = {
     });
   },
   getTrendingsByCategoryId: async (root: any, args: any, context: Context) => {
-    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
     return trendingService.fetch(args.q);
   },
 };

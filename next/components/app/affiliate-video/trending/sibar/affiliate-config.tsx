@@ -20,6 +20,7 @@ import {
 } from "../../constants";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -27,6 +28,7 @@ import { BatchSizeSlider } from "./batch-size-slider";
 
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
+  const { customer } = useAuth();
   const router = useRouter();
   const {
     videoConfig,
@@ -209,11 +211,12 @@ export const AffiliateConfig = () => {
 
         {/* ẢNH THAM CHIẾU (tuỳ chọn) */}
 
-        <Field noError label={t(" Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
           <ImageInput
             multi
             value={videoConfig?.productImages}
             onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+            readOnly={!customer}
           />
         </Field>
 
