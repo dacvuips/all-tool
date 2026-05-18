@@ -7,6 +7,13 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import {
+  ArtStyleCategoryPublicItem,
+  ArtStyleCategoryService,
+  ArtStylePublicItem,
+  ArtStylesByCategoryResult,
+  CustomerArtStyleInput,
+} from "../../../../lib/repo/list/artStyleCategory.repo";
+import {
   CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingCategoryService,
@@ -57,6 +64,14 @@ export type {
   TrendingPublicItem,
   TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
+
+/** Public art style types – re-exported from repo */
+export type {
+  ArtStyleCategoryPublicItem,
+  ArtStylePublicItem,
+  ArtStylesByCategoryResult,
+  CustomerArtStyleInput,
+} from "../../../../lib/repo/list/artStyleCategory.repo";
 
 export interface GenerateSceneFromTextParams {
   /** Đoạn text / prompt gửi trực tiếp đến API */
@@ -415,6 +430,55 @@ export interface UseAffiliateVideoApiReturn {
   getTrendingSceneHistory: () => Promise<TrendingHistoryItem[]>;
   clearTrendingHistory: () => Promise<void>;
   generateTrendingScene: (data: TrendingVideoFormConfig) => Promise<TrendingScriptData | undefined>;
+
+  // ── Art Style APIs ──
+
+  /**
+   * Lấy danh sách ArtStyleCategory đang active.
+   */
+  getActiveArtStyleCategoryList: () => Promise<ArtStyleCategoryPublicItem[]>;
+
+  /**
+   * Lấy danh sách art style items theo category ID, có phân trang.
+   */
+  getArtStylesByCategoryId: (
+    categoryId?: string,
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<ArtStylesByCategoryResult>;
+
+  /**
+   * Lấy prompt của art style theo ID.
+   */
+  getArtStylePromptById: (artStyleId: string) => Promise<string | null>;
+
+  /**
+   * Lấy danh sách art style do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerArtStyleList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<ArtStylesByCategoryResult>;
+
+  /**
+   * Customer tạo art style mới.
+   */
+  createCustomerArtStyle: (data: CustomerArtStyleInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa art style của mình.
+   */
+  updateCustomerArtStyle: (
+    id: string,
+    data: Partial<CustomerArtStyleInput>
+  ) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá art style của mình.
+   */
+  deleteCustomerArtStyle: (id: string) => Promise<boolean>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -1497,6 +1561,142 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  // ── Art Style APIs ──────────────────────────────────────────────────────
+
+  // ── getActiveArtStyleCategoryList – lấy danh sách art style category active ──
+  const getActiveArtStyleCategoryList = useCallback(async () => {
+    return ArtStyleCategoryService.getActiveArtStyleCategoryList();
+  }, []);
+
+  // ── getArtStylesByCategoryId – lấy art style items theo category ID, phân trang ──
+  const getArtStylesByCategoryId = useCallback(
+    async (categoryId?: string, page: number = 1, limit: number = 10, search?: string) => {
+      return ArtStyleCategoryService.getArtStylesByCategoryId(categoryId, page, limit, search);
+    },
+    []
+  );
+
+  // ── getArtStylePromptById – lấy prompt của art style theo ID ──
+  const getArtStylePromptById = useCallback(async (artStyleId: string): Promise<string | null> => {
+    return ArtStyleCategoryService.getArtStylePromptById(artStyleId);
+  }, []);
+
+  // ── getCustomerArtStyleList – lấy danh sách art style của customer ──
+  const getCustomerArtStyleList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return ArtStyleCategoryService.getCustomerArtStyleList(page, limit, search);
+    },
+    []
+  );
+
+  // ── createCustomerArtStyle – customer tạo art style mới ──
+  const createCustomerArtStyle = useCallback(
+    async (data: CustomerArtStyleInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerArtStyle($data: CreateCustomerArtStyleInput!) {
+              createCustomerArtStyle(data: $data) { id name imageUrls prompt des isPublish price count promptShort artStyleCategoryIds }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerArtStyle] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerArtStyle] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo art style");
+          return undefined;
+        }
+
+        return json.data?.createCustomerArtStyle;
+      } catch (err: any) {
+        console.error("[createCustomerArtStyle] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── updateCustomerArtStyle – customer sửa art style của mình ──
+  const updateCustomerArtStyle = useCallback(
+    async (id: string, data: Partial<CustomerArtStyleInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerArtStyle($id: ID!, $data: UpdateCustomerArtStyleInput!) {
+              updateCustomerArtStyle(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort artStyleCategoryIds }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerArtStyle] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerArtStyle] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa art style");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerArtStyle;
+      } catch (err: any) {
+        console.error("[updateCustomerArtStyle] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── deleteCustomerArtStyle – customer xoá art style của mình ──
+  const deleteCustomerArtStyle = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerArtStyle($id: ID!) {
+              deleteCustomerArtStyle(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerArtStyle] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerArtStyle] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá art style");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerArtStyle] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
   return {
     generateScene,
     generateSceneFromText,
@@ -1529,5 +1729,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     generateTrendingScene,
     getTrendingSceneHistory,
     clearTrendingHistory,
+    getActiveArtStyleCategoryList,
+    getArtStylesByCategoryId,
+    getArtStylePromptById,
+    getCustomerArtStyleList,
+    createCustomerArtStyle,
+    updateCustomerArtStyle,
+    deleteCustomerArtStyle,
   };
 }

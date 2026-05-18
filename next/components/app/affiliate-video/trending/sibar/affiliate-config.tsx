@@ -12,6 +12,7 @@ import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import {
   ASPECT_RATIOS,
   BATCH_SIZE_DESCRIPTIONS,
@@ -171,15 +172,11 @@ export const AffiliateConfig = () => {
         </div>
         {/* PHONG CÁCH HÌNH ẢNH */}
         <div>
-          <Field noError name="artStyle" label={t("Phong cách hình ảnh")}>
-            <Select
-              native
-              id="art-style-select"
-              className="border-gray-200"
-              options={ART_STYLE_TRANSLATED_OPTIONS}
-              onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
-            />
-          </Field>
+          <ArtStylePickerDialog
+            name="artStyle"
+            value={videoConfig?.artStyle}
+            onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+          />
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}

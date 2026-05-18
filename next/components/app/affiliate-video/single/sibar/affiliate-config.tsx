@@ -13,6 +13,7 @@ import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -154,15 +155,11 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
         </div>
         {/* ART STYLE */}
         <div>
-          <Field noError name="artStyle" label={t("Phong cách hình ảnh")}>
-            <Select
-              native
-              id="art-style-select"
-              className="border-gray-200"
-              options={ART_STYLE_TRANSLATED_OPTIONS}
-              onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
-            />
-          </Field>
+          <ArtStylePickerDialog
+            name="artStyle"
+            value={videoConfig?.artStyle}
+            onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+          />
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}

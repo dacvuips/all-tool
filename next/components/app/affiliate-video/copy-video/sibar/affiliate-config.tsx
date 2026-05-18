@@ -10,6 +10,7 @@ import { BsFile } from "react-icons/bs";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, ImageInput, Select } from "../../../../shared/utilities/form";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ASPECT_RATIOS } from "../../constants";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -72,16 +73,11 @@ export const AffiliateConfig = () => {
 
         {/* ART STYLE */}
 
-        <Field noError label={t("Phong cách hình ảnh")}>
-          <Select
-            native
-            id="art-style-select"
-            className="border-gray-200"
-            options={ART_STYLE_TRANSLATED_OPTIONS}
-            value={copyVideoFormConfig?.artStyle}
-            onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
-          />
-        </Field>
+        <ArtStylePickerDialog
+          name="artStyle"
+          value={copyVideoFormConfig?.artStyle}
+          onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+        />
 
         {/* NGÔN NGỮ LỜI THOẠI */}
 

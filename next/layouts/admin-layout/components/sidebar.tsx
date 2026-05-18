@@ -341,6 +341,20 @@ const useSidebarMenuConstants = () => {
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
         {
+          title: t("Phong cách hình ảnh"),
+          path: "/admin/management/art-style",
+          icon: <RiBarChartLine />,
+          scope: SCOPES.VIEW_CUSTOMER,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
+          title: t("Danh mục Phong cách hình ảnh"),
+          path: "/admin/management/art-style-category",
+          icon: <RiBarChartLine />,
+          scope: SCOPES.VIEW_CUSTOMER,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Banner"),
           path: "/admin/management/banners",
           icon: <RiLayoutTop2Line />,

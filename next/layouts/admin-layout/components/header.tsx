@@ -38,7 +38,7 @@ export function Header({ ...props }: PropsType) {
           className="flex items-center px-6 py-3 h-full text-xl font-bold uppercase text-primary"
         >
           <img className="object-contain w-auto h-full" src="/assets/img/logo-full-1.png" />
-          <div className="mx-4">{"Viet Theo Veo 3"}</div>
+          <div className="mx-4">{"Admin"}</div>
         </Link>
         {/* <div className="flex items-center space-x-4 w-full h-full">
         {(breadcrumbs || linkAdress)

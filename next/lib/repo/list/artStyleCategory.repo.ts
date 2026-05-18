@@ -1,16 +1,16 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
-export interface TrendingCategory extends BaseModel {
+export interface ArtStyleCategory extends BaseModel {
   name: string;
   isHot: boolean;
   isActive: boolean;
-  trendingIds: string[];
+  artStyleIds: string[];
   priority: number;
 }
 
-/** Public trending item for customer */
-export interface TrendingPublicItem {
+/** Public art style item for customer */
+export interface ArtStylePublicItem {
   id: string;
   name: string;
   imageUrls: string[];
@@ -24,36 +24,36 @@ export interface TrendingPublicItem {
   isActive: boolean;
 }
 
-/** Public trending category with resolved trending items */
-export interface TrendingCategoryPublicItem {
+/** Public art style category with resolved art style items */
+export interface ArtStyleCategoryPublicItem {
   id: string;
   name: string;
   isHot: boolean;
   priority: number;
-  trendingItems: TrendingPublicItem[];
+  artStyleItems: ArtStylePublicItem[];
 }
 
-/** Paginated trending items result */
-export interface TrendingsByCategoryResult {
-  data: TrendingPublicItem[];
+/** Paginated art style items result */
+export interface ArtStylesByCategoryResult {
+  data: ArtStylePublicItem[];
   total: number;
   pagination?: { limit?: number; page?: number; total?: number };
 }
 
-/** Input data for creating/updating customer trending */
-export interface CustomerTrendingInput {
+/** Input data for creating/updating customer art style */
+export interface CustomerArtStyleInput {
   name: string;
   prompt?: string;
   imageUrls?: string[];
   des?: string;
   isPublish?: boolean;
-  trendingCategoryIds?: string[];
+  artStyleCategoryIds?: string[];
   price?: number;
 }
 
-export class TrendingCategoryRepository extends CrudRepository<TrendingCategory> {
-  apiName: string = "TrendingCategory";
-  displayName: string = t("danh mục trending");
+export class ArtStyleCategoryRepository extends CrudRepository<ArtStyleCategory> {
+  apiName: string = "ArtStyleCategory";
+  displayName: string = t("danh mục art style");
   shortFragment: string = this.parseFragment(`
     id: String
     createdAt: DateTime
@@ -61,7 +61,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     name: String
     isHot: Boolean
     isActive: Boolean
-    trendingIds: [ID]
+    artStyleIds: [ID]
     priority: Int
   `);
   fullFragment: string = this.parseFragment(`
@@ -71,47 +71,46 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     name: String
     isHot: Boolean
     isActive: Boolean
-    trendingIds: [ID]
+    artStyleIds: [ID]
     priority: Int
   `);
 
   /**
-   * Lấy danh sách TrendingCategory đang active (chỉ category info, không kèm items).
-   * Dùng custom query `getActiveTrendingCategoryList` (public, customer-accessible).
+   * Lấy danh sách ArtStyleCategory đang active (chỉ category info, không kèm items).
+   * Dùng custom query `getActiveArtStyleCategoryList` (public, customer-accessible).
    */
-  async getActiveTrendingCategoryList(): Promise<TrendingCategoryPublicItem[]> {
+  async getActiveArtStyleCategoryList(): Promise<ArtStyleCategoryPublicItem[]> {
     try {
       const result = await this.query({
-        query: `getActiveTrendingCategoryList { id name isHot priority }`,
+        query: `getActiveArtStyleCategoryList { id name isHot priority }`,
         options: {
           fetchPolicy: "network-only",
         },
       });
       this.handleError(result);
-      return (result.data?.["g0"] || []) as TrendingCategoryPublicItem[];
+      return (result.data?.["g0"] || []) as ArtStyleCategoryPublicItem[];
     } catch (err) {
-      console.error("[getActiveTrendingCategoryList] Error:", err);
+      console.error("[getActiveArtStyleCategoryList] Error:", err);
       return [];
     }
   }
 
   /**
-   * Lấy danh sách trending items theo category ID, có phân trang.
-   * Dùng standard CrudRepository.getAll() với apiName override → getTrendingsByCategoryId(q:...)
+   * Lấy danh sách art style items theo category ID, có phân trang.
    */
-  async getTrendingsByCategoryId(
+  async getArtStylesByCategoryId(
     categoryId?: string,
     page: number = 1,
     limit: number = 10,
     search?: string
-  ): Promise<TrendingsByCategoryResult> {
+  ): Promise<ArtStylesByCategoryResult> {
     try {
       const filter: any = { isActive: true };
       if (categoryId) {
-        filter.trendingCategoryIds = { $in: [categoryId] };
+        filter.artStyleCategoryIds = { $in: [categoryId] };
       }
       const result = await this.getAll({
-        apiName: "getTrendingsByCategoryId",
+        apiName: "getArtStylesByCategoryId",
         query: {
           page,
           limit,
@@ -119,28 +118,28 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           filter,
           order: { count: -1 },
         },
-        fragment: `id name imageUrls  count price promptShort trendingCategoryIds isPublish isActive`,
+        fragment: `id name imageUrls  count price promptShort artStyleCategoryIds isPublish isActive`,
         cache: false,
       });
       return {
-        data: (result.data || []) as any as TrendingPublicItem[],
+        data: (result.data || []) as any as ArtStylePublicItem[],
         total: result.total || 0,
         pagination: result.pagination,
       };
     } catch (err) {
-      console.error("[getTrendingsByCategoryId] Error:", err);
+      console.error("[getArtStylesByCategoryId] Error:", err);
       return { data: [], total: 0 };
     }
   }
 
   /**
-   * Lấy prompt của trending theo ID.
-   * Gọi custom query `getTrendingPromptById(id)` → trả về prompt string.
+   * Lấy prompt của art style theo ID.
+   * Gọi custom query `getArtStylePromptById(id)` → trả về prompt string.
    */
-  async getTrendingPromptById(trendingId: string): Promise<string | null> {
+  async getArtStylePromptById(artStyleId: string): Promise<string | null> {
     try {
       const result = await this.query({
-        query: `getTrendingPromptById(id: "${trendingId}") { id prompt }`,
+        query: `getArtStylePromptById(id: "${artStyleId}") { id prompt }`,
         options: {
           fetchPolicy: "network-only",
         },
@@ -149,58 +148,53 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
       const data = result.data?.["g0"];
       return data?.prompt || null;
     } catch (err) {
-      console.error("[getTrendingPromptById] Error:", err);
+      console.error("[getArtStylePromptById] Error:", err);
       return null;
     }
   }
 
   /**
-   * Lấy danh sách trending do chính customer hiện tại tạo, có phân trang.
+   * Lấy danh sách art style do chính customer hiện tại tạo, có phân trang.
    */
-  async getCustomerTrendingList(
+  async getCustomerArtStyleList(
     page: number = 1,
     limit: number = 10,
     search?: string
-  ): Promise<TrendingsByCategoryResult> {
+  ): Promise<ArtStylesByCategoryResult> {
     try {
       const result = await this.getAll({
-        apiName: "getCustomerTrendingList",
+        apiName: "getCustomerArtStyleList",
         query: {
-          filter: {
-            isPublish: true,
-            isActive: true,
-          },
           page,
           limit,
           search: search || undefined,
           order: { createdAt: -1 },
         },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive`,
+        fragment: `id name imageUrls prompt count price promptShort des isPublish artStyleCategoryIds createdAt monthlyCount isActive`,
         cache: false,
       });
       return {
-        data: (result.data || []) as any as TrendingPublicItem[],
+        data: (result.data || []) as any as ArtStylePublicItem[],
         total: result.total || 0,
         pagination: result.pagination,
       };
     } catch (err) {
-      console.error("[getCustomerTrendingList] Error:", err);
+      console.error("[getCustomerArtStyleList] Error:", err);
       return { data: [], total: 0 };
     }
   }
 
   /**
-   * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
-   * Dùng cho Trending Prompt Rank table.
+   * Lấy bảng xếp hạng art style theo monthlyCount (giảm dần).
    */
-  async getTrendingRank(
+  async getArtStyleRank(
     page: number = 1,
     limit: number = 20,
     search?: string
-  ): Promise<TrendingsByCategoryResult> {
+  ): Promise<ArtStylesByCategoryResult> {
     try {
       const result = await this.getAll({
-        apiName: "getTrendingsByCategoryId",
+        apiName: "getArtStylesByCategoryId",
         query: {
           page,
           limit,
@@ -212,15 +206,15 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
         cache: false,
       });
       return {
-        data: (result.data || []) as any as TrendingPublicItem[],
+        data: (result.data || []) as any as ArtStylePublicItem[],
         total: result.total || 0,
         pagination: result.pagination,
       };
     } catch (err) {
-      console.error("[getTrendingRank] Error:", err);
+      console.error("[getArtStyleRank] Error:", err);
       return { data: [], total: 0 };
     }
   }
 }
 
-export const TrendingCategoryService = new TrendingCategoryRepository();
+export const ArtStyleCategoryService = new ArtStyleCategoryRepository();
