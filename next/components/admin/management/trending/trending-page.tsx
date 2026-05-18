@@ -1,9 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import {
-  Trending,
-  TrendingService,
-} from "../../../../lib/repo/list/trending.repo";
+import { Trending, TrendingService } from "../../../../lib/repo/list/trending.repo";
 
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
@@ -17,10 +14,7 @@ export function TrendingPage() {
 
   return (
     <Card>
-      <DataTable<Trending>
-        crudService={TrendingService}
-        order={{ createdAt: -1 }}
-      >
+      <DataTable<Trending> crudService={TrendingService} order={{ createdAt: -1 }}>
         <DataTable.Header>
           <DataTable.Title />
           <DataTable.Buttons>
@@ -59,32 +53,50 @@ export function TrendingPage() {
                 <DataTable.Column
                   label={t("Tên trending")}
                   render={(item: Trending) => (
-                    <DataTable.CellText
-                      value={item.name}
-                      className="font-semibold"
-                    />
+                    <DataTable.CellText value={item.name} className="font-semibold" />
                   )}
                 />
                 <DataTable.Column
                   label={t("Prompt")}
                   render={(item: Trending) => (
-                    <DataTable.CellText
-                      value={item.prompt}
-                      className="max-w-xs truncate"
-                    />
+                    <DataTable.CellText value={item.prompt} className="max-w-xs truncate" />
                   )}
                 />
                 <DataTable.Column
                   center
                   label={t("Lượt dùng")}
-                  render={(item: Trending) => (
-                    <DataTable.CellNumber value={item.count} />
-                  )}
+                  render={(item: Trending) => <DataTable.CellNumber value={item.count} />}
                 />
                 <DataTable.Column
                   label={t("Customer ID")}
+                  render={(item: Trending) => <DataTable.CellText value={item.customerId} />}
+                />
+                <DataTable.Column
+                  center
+                  label={t("Công khai")}
                   render={(item: Trending) => (
-                    <DataTable.CellText value={item.customerId} />
+                    <DataTable.CellText
+                      className="flex justify-center"
+                      value={
+                        <Switch
+                          dependent
+                          value={item.isPublish}
+                          onChange={async () => {
+                            try {
+                              const res = await TrendingService.update({
+                                id: item.id,
+                                data: { isPublish: !item.isPublish },
+                              });
+                              changeRowData(item, "isPublish", res.isPublish);
+                              toast.success(t("Cập nhật trạng thái thành công"));
+                            } catch (err) {
+                              changeRowData(item, "isPublish", item.isPublish);
+                              toast.error(t("Cập nhật trạng thái thất bại"));
+                            }
+                          }}
+                        />
+                      }
+                    />
                   )}
                 />
                 <DataTable.Column
@@ -118,10 +130,7 @@ export function TrendingPage() {
                 <DataTable.Column
                   label={t("Ngày tạo")}
                   render={(item: Trending) => (
-                    <DataTable.CellDate
-                      value={item.createdAt}
-                      format="dd/MM/yyyy"
-                    />
+                    <DataTable.CellDate value={item.createdAt} format="dd/MM/yyyy" />
                   )}
                 />
                 <DataTable.Column
@@ -130,11 +139,7 @@ export function TrendingPage() {
                   render={(item: Trending) => (
                     <>
                       <DataTable.CellButton value={item} isEditButton />
-                      <DataTable.CellButton
-                        hoverDanger
-                        value={item}
-                        isDeleteButton
-                      />
+                      <DataTable.CellButton hoverDanger value={item} isDeleteButton />
                     </>
                   )}
                 />
@@ -142,11 +147,7 @@ export function TrendingPage() {
             </>
           )}
         </DataTable.Consumer>
-        <DataTable.Form
-          grid
-          width={650}
-          slideFromBottom="none"
-        >
+        <DataTable.Form grid width={650} slideFromBottom="none">
           <TrendingFields />
         </DataTable.Form>
         <DataTable.Pagination />
