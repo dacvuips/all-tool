@@ -3,17 +3,17 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../../lib/providers/global-provider";
 import {
-  AffiliateVideoFormConfig,
-  CACHE_KEY,
-  DB_NAME,
-  SceneHistoryItem,
-  ScriptData,
-  STORE_NAME,
-  StoryModeTypeEnum,
-  TrendingHistoryItem,
-  TrendingModeTypeEnum,
-  TrendingScriptData,
-  TrendingVideoFormConfig,
+    AffiliateVideoFormConfig,
+    CACHE_KEY,
+    DB_NAME,
+    SceneHistoryItem,
+    ScriptData,
+    STORE_NAME,
+    StoryModeTypeEnum,
+    TrendingHistoryItem,
+    TrendingModeTypeEnum,
+    TrendingScriptData,
+    TrendingVideoFormConfig,
 } from "../../constants";
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
@@ -117,10 +117,16 @@ export const AffiliateVideoContext = createContext<
     setPendingPrompt: (prompt: string | null) => void;
     trendingScriptData: TrendingScriptData | null;
     setTrendingScriptData: (data: TrendingScriptData | null) => void;
+
+    /** Open the left sidebar (mobile) – triggered by "Dùng ngay" */
+    openSidebar: () => void;
   }>
 >({});
 
-export function AffiliateVideoProvider(props) {
+export function AffiliateVideoProvider(props: {
+  children: React.ReactNode;
+  openSidebar?: () => void;
+}) {
   const {
     generateTrendingScene,
     generateTrendingSingle,
@@ -433,6 +439,9 @@ export function AffiliateVideoProvider(props) {
         handleSubmit,
         trendingScriptData,
         setTrendingScriptData,
+
+        // sidebar
+        openSidebar: props.openSidebar || (() => {}),
       }}
     >
       {props.children}

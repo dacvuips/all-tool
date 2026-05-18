@@ -18,12 +18,12 @@ export const TrendingPage = ({}: TrendingPageProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <AffiliateVideoProvider>
+    <AffiliateVideoProvider openSidebar={() => setIsSidebarOpen(true)}>
       <div className="flex flex-1 overflow-hidden relative">
         {/* ══ NÚT MỞ SIDEBAR (chỉ hiện trên mobile) ══ */}
         <button
           onClick={() => setIsSidebarOpen(true)}
-          className={`md:hidden fixed top-1/2 -translate-y-1/2 left-0 z-100 w-7 h-14 rounded-r-lg bg-white shadow-lg flex items-center justify-center cursor-pointer   hover:bg-gray-200 transition-colors border ${
+          className={`md:hidden fixed top-1/2 -translate-y-1/2 -left-0.5 z-100 w-7 h-14 text-white rounded-r-lg bg-primary shadow-lg flex items-center justify-center cursor-pointer   hover:bg-gray-200 hover:text-gray-800 transition-colors border ${
             isSidebarOpen ? "hidden" : ""
           }`}
           title={t("Mở cấu hình")}

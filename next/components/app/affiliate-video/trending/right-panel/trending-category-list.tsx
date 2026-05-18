@@ -882,7 +882,7 @@ export const TrendingCategoryList = () => {
   const toast = useToast();
   const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
     useAffiliateVideoApi();
-  const { patchConfig, setPendingPrompt } = useAffiliateVideoContext();
+  const { patchConfig, setPendingPrompt, openSidebar } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -946,8 +946,11 @@ export const TrendingCategoryList = () => {
       if (setPendingPrompt) {
         setPendingPrompt(prompt);
       }
+      if (openSidebar) {
+        openSidebar();
+      }
     },
-    [getTrendingPromptById, patchConfig, setPendingPrompt]
+    [getTrendingPromptById, patchConfig, setPendingPrompt, openSidebar]
   );
 
   // Handle info button click for non-customer cards
