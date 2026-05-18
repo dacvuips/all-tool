@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import logger from "../../../helpers/logger";
 import redis from "../../../helpers/redis";
 import { ForbiddenError } from "../../../libs/core";
+import { ArtStyleModel } from "../../../libs/dal/art-style/art-style.model";
 import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
@@ -519,6 +520,32 @@ export async function resolveObjectToPersonifyPrompt(opts: {
   return { prompt: objectDoc.prompt || opts.objectToPersonify };
 }
 
+/**
+ * Resolve artStyle prompt from DB.
+ * - Nếu FE gửi artStyleId (art style ID) → lookup prompt từ DB
+ * - Nếu không tìm thấy → giữ nguyên artStyle name từ FE
+ */
+export async function resolveArtStylePrompt(opts: {
+  artStyleId?: string;
+  artStyle?: string;
+}): Promise<{ prompt?: string }> {
+  if (!opts.artStyleId) {
+    return { prompt: opts.artStyle };
+  }
+
+  try {
+    const artStyleDoc = await ArtStyleModel.findById(opts.artStyleId).lean();
+    if (!artStyleDoc) {
+      return { prompt: opts.artStyle };
+    }
+
+    // Nếu có prompt trong DB → dùng prompt đó, ngược lại giữ artStyle name
+    return { prompt: artStyleDoc.prompt || opts.artStyle };
+  } catch {
+    return { prompt: opts.artStyle };
+  }
+}
+
 export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;
@@ -529,6 +556,7 @@ export interface AffiliateVideoFormConfig {
   storyModeType: "prompt_to_video" | "image_to_video";
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
   batchSize: number;
+  artStyleId?: string;
 }
 
 export interface TrendingVideoFormConfig {
@@ -542,6 +570,7 @@ export interface TrendingVideoFormConfig {
   artStyle: string;
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
   promptId: string;
+  artStyleId?: string;
 }
 /**
  * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config

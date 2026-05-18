@@ -85,6 +85,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
       trendingModeType,
       productImages: videoConfig?.productImages,
       promptId: videoConfig?.promptId,
+      artStyleId: videoConfig?.artStyleId,
     };
     return handleSubmit?.(mergedData, promptText);
   };

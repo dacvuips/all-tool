@@ -498,6 +498,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       config: Partial<AffiliateVideoFormConfig>;
       text?: string;
       objectToPersonifyCode?: string;
+      artStyleId?: string;
       productImages?: string[];
     }) => {
       const res = await fetch("/api/app/generation-scene/", {
@@ -521,6 +522,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     async (body: {
       config: Partial<TrendingVideoFormConfig>;
       promptId?: string;
+      artStyleId?: string;
       productImages?: string[];
     }) => {
       const res = await fetch("/api/app/generation-trending/", {
@@ -617,6 +619,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         objectToPersonifyCode: data.objectToPersonify?.trim()
           ? data.objectToPersonifyCode
           : undefined,
+        artStyleId: data.artStyleId || undefined,
         productImages: data.productImages,
       });
       if (!result) return undefined;
@@ -657,6 +660,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationTrendingApi({
         config: data,
         promptId: data.promptId,
+        artStyleId: data.artStyleId || undefined,
         productImages: data.productImages,
       });
       if (!result) return undefined;
@@ -703,6 +707,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       aspectRatio?: string;
       productImages?: string[];
       objectToPersonifyCode?: string;
+      artStyleId?: string;
     }) => {
       const res = await fetch("/api/app/copy-video-analysis/", {
         method: "POST",
@@ -773,6 +778,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         objectToPersonifyCode: data.objectToPersonify?.trim()
           ? data.objectToPersonifyCode
           : undefined,
+        artStyleId: data.artStyleId || undefined,
       });
       if (!result) return undefined;
 
@@ -818,6 +824,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         objectToPersonifyCode: config.objectToPersonify?.trim()
           ? config.objectToPersonifyCode
           : undefined,
+        artStyleId: config.artStyleId || undefined,
         productImages: config.productImages,
       });
       if (!result) return undefined;
@@ -854,6 +861,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationTrendingApi({
         config: data,
         promptId: data.promptId,
+        artStyleId: data.artStyleId || undefined,
         productImages: data.productImages,
       });
       if (!result) return undefined;

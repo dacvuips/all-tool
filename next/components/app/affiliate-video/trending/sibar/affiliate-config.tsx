@@ -176,6 +176,7 @@ export const AffiliateConfig = () => {
             name="artStyle"
             value={videoConfig?.artStyle}
             onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+            onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
           />
         </div>
 

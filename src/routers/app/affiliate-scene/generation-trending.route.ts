@@ -10,6 +10,7 @@ import {
   getAvailableGeminiClients,
   incrementRequestCount,
   interpolateTrendingTemplate,
+  resolveArtStylePrompt,
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
 } from "./_shared";
@@ -35,6 +36,15 @@ export default [
 
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
+
+        // ── Resolve artStyle prompt from DB ──
+        const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
+          artStyleId: body.config.artStyleId,
+          artStyle: body.config.artStyle,
+        });
+        if (resolvedArtStylePrompt) {
+          body.config.artStyle = resolvedArtStylePrompt;
+        }
 
         // Build product image reference text
         const productImageUrls = body.productImages?.filter(Boolean) || [];

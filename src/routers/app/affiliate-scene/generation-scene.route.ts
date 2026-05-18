@@ -10,6 +10,7 @@ import {
   getAvailableGeminiClients,
   incrementRequestCount,
   interpolateTemplate,
+  resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
 
@@ -49,6 +50,16 @@ export default [
         }
         if (resolvedPersonifyPrompt) {
           body.config.objectToPersonify = resolvedPersonifyPrompt;
+        }
+
+        // ── Resolve artStyle prompt from DB ──
+        const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
+          artStyleId: body.config.artStyleId,
+          artStyle: body.config.artStyle,
+        });
+
+        if (resolvedArtStylePrompt) {
+          body.config.artStyle = resolvedArtStylePrompt;
         }
 
         // Build product image reference text
@@ -101,8 +112,9 @@ CRITICAL RULE: Always keep character and environment identical.
 `;
 
         // Thay thế placeholder trong text
-        const interpolatedText = interpolateTemplate(body.text || prompt, body.config) + productImageNote;
-
+        const interpolatedText =
+          interpolateTemplate(body.text || prompt, body.config) + productImageNote;
+        console.log(interpolatedText);
         const response = await callWithKeyRotation(
           clients,
           (ai) =>

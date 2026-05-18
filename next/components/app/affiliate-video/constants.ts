@@ -48,6 +48,7 @@ export interface VideoFormBase {
   mood: string;
   language: string;
   artStyle: string;
+  artStyleId?: string;
   aspectRatio: AspectRatio;
 }
 export interface AffiliateVideoFormConfig extends VideoFormBase {

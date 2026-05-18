@@ -10,8 +10,8 @@ import { BsFile } from "react-icons/bs";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, ImageInput, Select } from "../../../../shared/utilities/form";
-import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ASPECT_RATIOS } from "../../constants";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { VideoUploadPicker } from "./video-upload-picker";
@@ -77,6 +77,7 @@ export const AffiliateConfig = () => {
           name="artStyle"
           value={copyVideoFormConfig?.artStyle}
           onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+          onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
         />
 
         {/* NGÔN NGỮ LỜI THOẠI */}

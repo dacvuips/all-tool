@@ -86,6 +86,7 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
       batchSize: videoConfig?.batchSize ?? 8,
       storyModeType,
       objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
+      artStyleId: videoConfig?.artStyleId,
       productImages: videoConfig?.productImages,
     };
     if (type === TAB_TYPE.single) {

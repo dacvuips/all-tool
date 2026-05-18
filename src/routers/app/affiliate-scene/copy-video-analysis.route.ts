@@ -10,6 +10,7 @@ import {
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
+  resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
 
@@ -241,6 +242,7 @@ export default [
           productImages?: string[];
           objectToPersonifyCode?: string;
           objectToPersonify?: string;
+          artStyleId?: string;
         };
 
         if (!body?.videoBase64) {
@@ -264,6 +266,15 @@ export default [
         }
         if (objectToPersonifyPrompt) {
           body.objectToPersonify = objectToPersonifyPrompt;
+        }
+
+        // ── Resolve artStyle prompt from DB ──
+        const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
+          artStyleId: body.artStyleId,
+          artStyle: body.artStyle,
+        });
+        if (resolvedArtStylePrompt) {
+          body.artStyle = resolvedArtStylePrompt;
         }
 
         // Build product image reference text

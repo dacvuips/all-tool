@@ -67,7 +67,7 @@ const ArtStyleCard = ({
   onShowInfo,
 }: {
   item: ArtStylePublicItem;
-  onUse: (id: string) => void;
+  onUse: (id: string, name: string) => void;
   onEdit?: (item: ArtStylePublicItem) => void;
   onDelete?: (item: ArtStylePublicItem) => void;
   onShowInfo?: (item: ArtStylePublicItem) => void;
@@ -127,7 +127,7 @@ const ArtStyleCard = ({
             <Button
               onClick={(e: any) => {
                 e.stopPropagation();
-                onUse(item.id);
+                onUse(item.id, item.name);
               }}
               outline
               info
@@ -427,7 +427,7 @@ const CustomerArtStyleSection = ({
   categories,
 }: {
   searchText?: string;
-  onUseArtStyle: (artStyleId: string) => void;
+  onUseArtStyle: (artStyleId: string, name: string) => void;
   categories: ArtStyleCategoryPublicItem[];
 }) => {
   const { t } = useTranslation();
@@ -739,18 +739,15 @@ export function ArtStylePickerDialog({
   };
 
   const handleUse = useCallback(
-    async (artStyleId: string) => {
+    async (artStyleId: string, artStyleName: string) => {
       const prompt = await getArtStylePromptById(artStyleId);
-      const item = items.find((i) => i.id === artStyleId);
-      if (item) {
-        setSelectedName(item.name);
-        if (onChange) onChange(item.name);
-        if (onCodeChange) onCodeChange(artStyleId);
-      }
+      setSelectedName(artStyleName);
+      if (onChange) onChange(artStyleName);
+      if (onCodeChange) onCodeChange(artStyleId);
       setIsDialogOpen(false);
       if (prompt) toast.success(t("Ðã chọn phong cách hình ảnh"));
     },
-    [getArtStylePromptById, items, onChange, onCodeChange, toast, t]
+    [onChange, onCodeChange]
   );
 
   const handlePageChange = useCallback(
