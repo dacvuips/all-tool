@@ -777,7 +777,8 @@ export function ArtStylePickerDialog({
           </span>
         }
       >
-        <Input
+        <Textarea
+          maxRows={3}
           id="art-style-input"
           className="border-gray-200"
           placeholder={t("VD: Anime, Realistic...")}

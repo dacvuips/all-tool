@@ -88,7 +88,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   return (
     <Form
       onSubmit={handleSubmit}
-      defaultValues={DEFAULT_VIDEO_CONFIG}
+      defaultValues={copyVideoFormConfig}
       className="flex flex-col h-full"
     >
       {/* ── Header: Tạo Nhân Vật (cố định) ── */}

@@ -114,7 +114,7 @@ CRITICAL RULE: Always keep character and environment identical.
         // Thay thế placeholder trong text
         const interpolatedText =
           interpolateTemplate(body.text || prompt, body.config) + productImageNote;
-        console.log(interpolatedText);
+
         const response = await callWithKeyRotation(
           clients,
           (ai) =>

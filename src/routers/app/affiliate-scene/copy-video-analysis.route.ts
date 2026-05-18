@@ -4,7 +4,6 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 
 import { Context } from "../../../libs/graphql";
-import { ArtStyleMap } from "../constanst";
 import {
   callWithKeyRotation,
   checkRequestLimit,
@@ -127,8 +126,6 @@ function buildVideoAnalysisPrompt(opts: {
   const mood = opts.mood || "funny";
   const aspectRatio = opts.aspectRatio || "9:16";
 
-  const findDesArtStyle = ArtStyleMap.find((item) => item.value === artStyle)?.des;
-
   const objectToPersonifySection = opts.objectToPersonifyPrompt
     ? `${opts.objectToPersonifyPrompt}`
     : "";
@@ -182,7 +179,7 @@ Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: 
     1. 'visual_prompt':
        - Mô tả MỘT khung hình tĩnh.
        - Expand toàn bộ mô tả Character & Props (VERBATIM).
-       - Phong cách bắt buộc: ${findDesArtStyle}.
+       - Phong cách bắt buộc: ${artStyle}.
        - Tỉ lệ: ${aspectRatio} 
        - Bắt buộc thêm hiệu ứng thị giác, phù hợp với môi trường, cảnh vật, và nhân vật. Ví dụ: ánh sáng, màu sắc, hiệu ứng không khí, hiệu ứng chuyển động của nhân vật và cảnh vật,...
        - Ngôn ngữ: Tiếng Anh.
@@ -285,6 +282,14 @@ export default [
                 ", "
               )}`
             : "";
+        const text =
+          buildVideoAnalysisPrompt({
+            artStyle: body.artStyle,
+            language: body.language,
+            mood: body.mood,
+            aspectRatio: body.aspectRatio,
+            objectToPersonifyPrompt,
+          }) + productImageNote;
 
         const response = await callWithKeyRotation(
           clients,
@@ -302,14 +307,7 @@ export default [
                       },
                     },
                     {
-                      text:
-                        buildVideoAnalysisPrompt({
-                          artStyle: body.artStyle,
-                          language: body.language,
-                          mood: body.mood,
-                          aspectRatio: body.aspectRatio,
-                          objectToPersonifyPrompt,
-                        }) + productImageNote,
+                      text,
                     },
                   ],
                 },
