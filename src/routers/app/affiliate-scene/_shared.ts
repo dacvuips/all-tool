@@ -7,7 +7,10 @@ import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
-import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
+import {
+  decryptProviderSecret,
+  encryptProviderSecret,
+} from "../../../packages/encryption/encrypt-provider";
 import { CaptchaResponseData } from "../../helpers/validateApiKey";
 
 const AI_MAX_RETRIES = 5;
@@ -128,6 +131,75 @@ function getSecondsUntilMidnightPacific(): number {
 }
 
 /**
+ * Kiểm tra xem error có phải lỗi 403 CONSUMER_SUSPENDED (key bị Google suspend vĩnh viễn).
+ */
+function isConsumerSuspendedError(err: any): boolean {
+  const numericCode = err?.code || err?.statusCode || err?.httpCode;
+  const msg = (err?.message || "").toString();
+  return (
+    (numericCode === 403 || Number(err?.status) === 403 || msg.includes("403")) &&
+    (msg.includes("CONSUMER_SUSPENDED") || msg.includes("has been suspended"))
+  );
+}
+
+/**
+ * Xóa API key bị CONSUMER_SUSPENDED khỏi danh sách credential trong DB.
+ * Đọc credential hiện tại, giải mã, loại bỏ key bị suspended, mã hóa lại và lưu vào DB.
+ */
+async function removeSuspendedKeyFromDB(suspendedApiKey: string): Promise<void> {
+  try {
+    const credentialDoc = (await credentialService.findOne({
+      key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
+      isAdminCredential: true,
+    })) as any;
+    const credential = credentialDoc?._doc;
+    if (!credential?.value) return;
+
+    const decryptedValue = decryptProviderSecret(credential.value);
+    if (!decryptedValue) return;
+
+    // Tách danh sách key, loại bỏ key bị suspended
+    const allKeys = decryptedValue
+      .split(/[,\n]+/)
+      .map((k: string) => k.trim())
+      .filter((k: string) => k.length > 0);
+
+    const remainingKeys = allKeys.filter((k: string) => k !== suspendedApiKey);
+
+    if (remainingKeys.length === allKeys.length) {
+      // Key không tìm thấy trong danh sách (có thể đã bị xóa trước đó)
+      return;
+    }
+
+    if (remainingKeys.length === 0) {
+      logger.error(
+        `[removeSuspendedKeyFromDB] Không thể xóa key ***${suspendedApiKey.slice(
+          -6
+        )} vì đây là key cuối cùng.`
+      );
+      return;
+    }
+
+    // Mã hóa lại danh sách key mới (không có key bị suspended) và cập nhật DB
+    const newValue = remainingKeys.join(",");
+    const encryptedNewValue = encryptProviderSecret(newValue);
+
+    await credentialService.model.updateOne(
+      { _id: credential._id },
+      { $set: { value: encryptedNewValue } }
+    );
+
+    logger.warn(
+      `[removeSuspendedKeyFromDB] Đã xóa API key ***${suspendedApiKey.slice(
+        -6
+      )} khỏi DB (CONSUMER_SUSPENDED). Còn lại ${remainingKeys.length}/${allKeys.length} keys.`
+    );
+  } catch (dbErr: any) {
+    logger.error(`[removeSuspendedKeyFromDB] Lỗi khi cập nhật DB: ${dbErr?.message}`);
+  }
+}
+
+/**
  * Kiểm tra xem error có phải lỗi daily quota free-tier (limit: 20) hay không.
  */
 function isDailyQuotaExhaustedError(err: any): boolean {
@@ -193,7 +265,7 @@ export async function getAvailableGeminiClients(): Promise<GeminiClientEntry[]> 
     throw err;
   }
 
-  // Lấy danh sách key bị blacklist từ Redis
+  // Lấy danh sách key bị blacklist từ Redis (daily quota)
   const blacklistedKeys = await getBlacklistedGeminiKeys();
   const availableKeys = apiKeys.filter((k) => !blacklistedKeys.has(k));
 
@@ -206,7 +278,7 @@ export async function getAvailableGeminiClients(): Promise<GeminiClientEntry[]> 
   }
 
   logger.info(
-    `[getAvailableGeminiClients] ${availableKeys.length}/${apiKeys.length} keys khả dụng (${blacklistedKeys.size} bị blacklist).`
+    `[getAvailableGeminiClients] ${availableKeys.length}/${apiKeys.length} keys khả dụng (${blacklistedKeys.size} hết quota).`
   );
 
   // Xáo trộn ngẫu nhiên
@@ -326,6 +398,16 @@ export async function callWithKeyRotation<T>(
           await blacklistGeminiKeyForDay(apiKey);
           exhaustedKeys.add(apiKey);
         }
+        keyIdx = (keyIdx + 1) % entries.length;
+        continue;
+      }
+
+      if (isConsumerSuspendedError(err)) {
+        logger.warn(
+          `[${label}] ${keyLabel} bị CONSUMER_SUSPENDED (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Xóa khỏi DB và chuyển sang key tiếp theo.`
+        );
+        await removeSuspendedKeyFromDB(apiKey);
+        exhaustedKeys.add(apiKey);
         keyIdx = (keyIdx + 1) % entries.length;
         continue;
       }
