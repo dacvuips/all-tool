@@ -3,7 +3,12 @@ import logger from "../../helpers/logger";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
-import { buildThrottleError, classify429Error, retryWithThrottleGate, videoThrottleGate } from "../helpers/retry-throttle";
+import {
+  buildThrottleError,
+  classify429Error,
+  retryWithThrottleGate,
+  videoThrottleGate,
+} from "../helpers/retry-throttle";
 import { CaptchaResponseData } from "../helpers/validateApiKey";
 
 /**
@@ -96,12 +101,6 @@ export async function callAisandboxVideoAPI(
 ): Promise<{ response: any; mediaName: string }> {
   const { uploadedImageNames } = params;
   const imageCount = uploadedImageNames?.length || 0;
-
-  // Setup SSE headers — đặt 1 lần ở đây để mọi retry không phải re-flush.
-  params.res.setHeader("Content-Type", "text/event-stream");
-  params.res.setHeader("Cache-Control", "no-cache");
-  params.res.setHeader("Connection", "keep-alive");
-  params.res.flushHeaders();
 
   return retryWithThrottleGate(
     () => {
