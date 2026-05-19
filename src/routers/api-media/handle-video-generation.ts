@@ -3,6 +3,7 @@ import logger from "../../helpers/logger";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
+import { buildThrottleError, classify429Error, retryWithThrottleGate, videoThrottleGate } from "../helpers/retry-throttle";
 import { CaptchaResponseData } from "../helpers/validateApiKey";
 
 /**
@@ -86,6 +87,9 @@ interface CallAisandboxParams {
 
 /**
  * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
+ * Dùng ThrottleGate (Redis-coordinated) để:
+ * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
+ * - Khi không bị throttle → bay tự do, không giới hạn concurrency.
  */
 export async function callAisandboxVideoAPI(
   params: CallAisandboxParams
@@ -93,21 +97,26 @@ export async function callAisandboxVideoAPI(
   const { uploadedImageNames } = params;
   const imageCount = uploadedImageNames?.length || 0;
 
-  // Setup SSE headers
+  // Setup SSE headers — đặt 1 lần ở đây để mọi retry không phải re-flush.
   params.res.setHeader("Content-Type", "text/event-stream");
   params.res.setHeader("Cache-Control", "no-cache");
   params.res.setHeader("Connection", "keep-alive");
   params.res.flushHeaders();
 
-  if (imageCount === 0) {
-    return callTextOnlyAPI(params);
-  } else if (imageCount === 1) {
-    return callStartImageAPI(params);
-  } else if (imageCount === 2) {
-    return callStartAndEndImageAPI(params);
-  } else {
-    return callReferenceImagesAPI(params);
-  }
+  return retryWithThrottleGate(
+    () => {
+      if (imageCount === 0) {
+        return callTextOnlyAPI(params);
+      } else if (imageCount === 1) {
+        return callStartImageAPI(params);
+      } else if (imageCount === 2) {
+        return callStartAndEndImageAPI(params);
+      } else {
+        return callReferenceImagesAPI(params);
+      }
+    },
+    { label: "generation-video", gate: videoThrottleGate }
+  );
 }
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────
@@ -151,6 +160,18 @@ async function sendAndParseResponse(
     body: JSON.stringify(payload),
   });
   if (!resp.ok) {
+    // 429 throttle → throw throttle error để retryOnThrottle bắt và retry tự động.
+    if (resp.status === 429) {
+      const { isThrottle, errText } = await classify429Error(resp);
+      if (isThrottle) {
+        logger.warn(`[${label}] Bị throttle 429 (PUBLIC_ERROR_USER_REQUESTS_THROTTLED).`);
+        throw buildThrottleError(`Aisandbox API throttle (429): ${errText.slice(0, 200)}`);
+      }
+      const err: any = new Error(`Aisandbox API error 429: ${errText}`);
+      err.statusCode = 429;
+      throw err;
+    }
+
     const errText = await resp.text();
     const err: any = new Error(`Aisandbox API error ${resp.status}: ${errText}`);
     err.statusCode = resp.status;

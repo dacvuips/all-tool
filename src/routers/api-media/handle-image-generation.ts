@@ -3,8 +3,8 @@ import logger from "../../helpers/logger";
 import { ForbiddenError } from "../../libs/core";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
-import { retryAICall } from "../app/affiliate-scene/_shared";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
+import { buildThrottleError, classify429Error, retryWithThrottleGate, imageThrottleGate } from "../helpers/retry-throttle";
 import { CaptchaResponseData, getApiSetting } from "../helpers/validateApiKey";
 
 /**
@@ -116,15 +116,23 @@ interface CallAisandboxParams {
 
 /**
  * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
+ * Dùng ThrottleGate (Redis-coordinated) để:
+ * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
+ * - Khi không bị throttle → bay tự do, không giới hạn concurrency.
  */
 export async function callAisandboxImageAPI(params: CallAisandboxParams): Promise<void> {
   const { uploadedImageNames } = params;
   const imageCount = uploadedImageNames?.length || 0;
-  if (imageCount === 0) {
-    await callTextOnlyAPI(params);
-  } else {
-    await callImageToImageAPI(params);
-  }
+  await retryWithThrottleGate(
+    async () => {
+      if (imageCount === 0) {
+        await callTextOnlyAPI(params);
+      } else {
+        await callImageToImageAPI(params);
+      }
+    },
+    { label: "generation-image", gate: imageThrottleGate }
+  );
 }
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────
@@ -150,49 +158,60 @@ async function sendAndParseResponse(
   payload: any,
   accessToken: string
 ): Promise<void> {
-  const apiRes = await retryAICall(async () => {
-    const resp = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!resp.ok) {
-      const errText = await resp.text();
-      let isCaptchaError = false;
-      if (resp.status === 403) {
-        try {
-          const errJson = JSON.parse(errText);
-          if (
-            errJson?.error?.message?.includes("reCAPTCHA") ||
-            errJson?.error?.details?.some((d: any) => d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
-          ) {
-            isCaptchaError = true;
-          }
-        } catch (e) {
-          if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
-            isCaptchaError = true;
-          }
-        }
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!resp.ok) {
+    // Phát hiện 429 throttle → throw throttle error để retryOnThrottle bắt và retry.
+    if (resp.status === 429) {
+      const { isThrottle, errText } = await classify429Error(resp);
+      if (isThrottle) {
+        logger.warn(`[generation-image] Bị throttle 429 (PUBLIC_ERROR_USER_REQUESTS_THROTTLED).`);
+        throw buildThrottleError(`Google Labs API throttle (429): ${errText.slice(0, 200)}`);
       }
-
-      if (isCaptchaError) {
-        const err: any = new Error(
-          `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
-        );
-        err.isCaptchaError = true;
-        err.statusCode = 403;
-        throw err;
-      }
-
-      const err: any = new Error(`Google Labs API error ${resp.status}: ${errText}`);
-      err.statusCode = resp.status;
+      // 429 khác throttle (ví dụ daily quota khác) → throw thường, không retry.
+      const err: any = new Error(`Google Labs API error 429: ${errText}`);
+      err.statusCode = 429;
       throw err;
     }
-    return resp.json();
-  }, "generation-image");
+
+    const errText = await resp.text();
+    let isCaptchaError = false;
+    if (resp.status === 403) {
+      try {
+        const errJson = JSON.parse(errText);
+        if (
+          errJson?.error?.message?.includes("reCAPTCHA") ||
+          errJson?.error?.details?.some((d: any) => d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
+        ) {
+          isCaptchaError = true;
+        }
+      } catch (e) {
+        if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
+          isCaptchaError = true;
+        }
+      }
+    }
+
+    if (isCaptchaError) {
+      const err: any = new Error(
+        `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
+      );
+      err.isCaptchaError = true;
+      err.statusCode = 403;
+      throw err;
+    }
+
+    const err: any = new Error(`Google Labs API error ${resp.status}: ${errText}`);
+    err.statusCode = resp.status;
+    throw err;
+  }
+  const apiRes = await resp.json();
 
   // Extract images từ response Google Labs
   // Response trả về { media: [{ image: { generatedImage: { fifeUrl: "..." } } }] }
