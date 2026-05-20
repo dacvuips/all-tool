@@ -4,7 +4,12 @@ import { ForbiddenError } from "../../libs/core";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
-import { buildThrottleError, classify429Error, retryWithThrottleGate, imageThrottleGate } from "../helpers/retry-throttle";
+import {
+  buildThrottleError,
+  classify429Error,
+  imageThrottleGate,
+  retryWithThrottleGate,
+} from "../helpers/retry-throttle";
 import { CaptchaResponseData, getApiSetting } from "../helpers/validateApiKey";
 
 /**
@@ -76,6 +81,7 @@ export async function handleImageGeneration(
         accessToken: currentCaptchaData.accessToken,
         batchId: crypto.randomUUID(),
         Seed: currentCaptchaData.Seed,
+        headers: currentCaptchaData.Headers,
       });
 
       // Tăng usedQuantity sau khi generate image thành công (atomic $inc, tìm theo API key)
@@ -112,6 +118,7 @@ interface CallAisandboxParams {
   noText?: boolean;
   batchId?: string;
   Seed?: string;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -156,13 +163,15 @@ async function sendAndParseResponse(
   res: Response,
   endpoint: string,
   payload: any,
-  accessToken: string
+  accessToken: string,
+  headers?: Record<string, string>
 ): Promise<void> {
   const resp = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
+      ...(headers || {}),
     },
     body: JSON.stringify(payload),
   });
@@ -279,10 +288,10 @@ async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
   };
 
   const endpoint = `https://aisandbox-pa.googleapis.com/v1/projects/${params.projectId}/flowMedia:batchGenerateImages`;
-  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken);
+  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken, params.headers);
 }
 
-async function callImageToImageAPI(params: CallAisandboxParams): Promise<void> {
+export async function callImageToImageAPI(params: CallAisandboxParams): Promise<void> {
   const imageAspectRatio = mapAspectRatio(params.aspectRatio);
   const batchId = params.batchId;
   const seed = params.Seed;
@@ -312,5 +321,5 @@ async function callImageToImageAPI(params: CallAisandboxParams): Promise<void> {
   };
 
   const endpoint = `https://aisandbox-pa.googleapis.com/v1/projects/${params.projectId}/flowMedia:batchGenerateImages`;
-  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken);
+  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken, params.headers);
 }

@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callAisandboxImageAPI } from "../../api-media/handle-image-generation";
+import { callImageToImageAPI } from "../../api-media/handle-image-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
 import { ActionEnum, checkImageLimit, incrementImageCount } from "./_shared";
@@ -10,7 +10,7 @@ import { ActionEnum, checkImageLimit, incrementImageCount } from "./_shared";
 export default [
   {
     method: "post",
-    path: "/api/app/generation-image/",
+    path: "/api/app/generation-element-image/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -23,13 +23,8 @@ export default [
             | string // URL ảnh
             | { imageBytes: string; mimeType?: string } // base64
           >;
-          productImages?: string[];
-          productImagePrompt?: string;
-          config?: {
-            numberOfImages?: number;
-            aspectRatio?: "16:9" | "9:16";
-            noText?: boolean;
-          };
+          aspectRatio?: "16:9" | "9:16";
+          noText?: boolean;
         };
 
         if (!body?.prompt) {
@@ -38,15 +33,6 @@ export default [
 
         // Kiểm tra giới hạn ảnh trước khi tạo
         await checkImageLimit(context.id);
-        // Build product image reference note to append to prompt
-        const productImageUrls = body.productImages?.filter(Boolean) || [];
-        const defaultProductImageNote = `\nQUAN TRỌNG: Có hình ảnh tham chiếu sản phẩm được đính kèm. Bạn PHẢI đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay`;
-        const productImageNote =
-          productImageUrls.length > 0
-            ? body.productImagePrompt
-              ? `\n${body.productImagePrompt}`
-              : defaultProductImageNote
-            : "";
 
         // Lấy captcha + credentials từ Cliproxy API
         const {
@@ -69,34 +55,24 @@ export default [
             projectId,
             context.id
           );
-        } // Upload product images lên Google Labs nếu có
-        let productImageNames: string[] = [];
-        if (productImageUrls.length > 0) {
-          productImageNames = await processAndUploadImages(
-            productImageUrls,
-            accessToken,
-            projectId,
-            context.id
-          );
         }
-
         // Tạo payload theo cấu trúc Google Labs API
 
-        const noTextStr = !body.config?.noText
+        const noTextStr = !body?.noText
           ? `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`
           : "";
-
-        await callAisandboxImageAPI({
+        const params = {
           res,
-          prompt: `${body.prompt} ${productImageNote} ${noTextStr}`,
-          aspectRatio: body.config?.aspectRatio,
-          uploadedImageNames: [...uploadedImageNames, ...productImageNames],
+          prompt: `${body.prompt} ${noTextStr}`,
+          aspectRatio: body.aspectRatio,
+          uploadedImageNames: uploadedImageNames,
           recaptchaToken,
           sessionId,
           projectId,
           accessToken,
           headers: Headers,
-        });
+        };
+        await callImageToImageAPI(params);
 
         // Tạo ảnh thành công → tăng imageCount
         await incrementImageCount(context.id);

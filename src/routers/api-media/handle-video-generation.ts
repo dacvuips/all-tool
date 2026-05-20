@@ -62,6 +62,7 @@ export async function handleVideoGeneration(
     accessToken: captchaData.accessToken,
     batchId: crypto.randomUUID(),
     Seed: captchaData.Seed,
+    headers: captchaData.Headers,
   });
 
   await pollAndExtractVideo({
@@ -88,6 +89,7 @@ interface CallAisandboxParams {
   useRelaxedModel?: boolean;
   batchId?: string;
   Seed?: string;
+  headers?: Record<string, string>;
 }
 
 /**
@@ -147,7 +149,8 @@ function buildClientContext(params: CallAisandboxParams) {
 async function sendAndParseResponse(
   endpoint: string,
   payload: any,
-  accessToken: string
+  accessToken: string,
+  headers?: Record<string, string>
 ): Promise<{ response: any; mediaName: string }> {
   const label = "generation-video";
   const resp = await fetch(endpoint, {
@@ -155,6 +158,7 @@ async function sendAndParseResponse(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
+      ...(headers || {}),
     },
     body: JSON.stringify(payload),
   });
@@ -197,7 +201,7 @@ async function sendAndParseResponse(
 /**
  * Chỉ có prompt, không có ảnh → gọi endpoint batchAsyncGenerateVideoText
  */
-async function callTextOnlyAPI(
+export async function callTextOnlyAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
@@ -228,7 +232,7 @@ async function callTextOnlyAPI(
   };
 
   const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoText";
-  return sendAndParseResponse(endpoint, payload, params.accessToken);
+  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
 // ── Case 2: 1 ảnh → Start Image ─────────────────────────────────────────────
@@ -269,7 +273,7 @@ async function callStartImageAPI(
   };
 
   const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage";
-  return sendAndParseResponse(endpoint, payload, params.accessToken);
+  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
 // ── Case 3: 2 ảnh → Start + End Image ───────────────────────────────────────
@@ -282,8 +286,8 @@ async function callStartAndEndImageAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
 
   const payload = {
     mediaGenerationContext: {
@@ -315,7 +319,7 @@ async function callStartAndEndImageAPI(
 
   const endpoint =
     "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartAndEndImage";
-  return sendAndParseResponse(endpoint, payload, params.accessToken);
+  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
 // ── Case 4: 3+ ảnh → Reference Images (logic hiện tại) ─────────────────────
@@ -323,12 +327,12 @@ async function callStartAndEndImageAPI(
 /**
  * 3+ ảnh upload → gọi endpoint batchAsyncGenerateVideoReferenceImages (referenceImages)
  */
-async function callReferenceImagesAPI(
+export async function callReferenceImagesAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = crypto.randomUUID();
-  const seed = Math.floor(Math.random() * 1000000);
+  const batchId = params.batchId;
+  const seed = params.Seed;
 
   const payload = {
     mediaGenerationContext: {
@@ -346,7 +350,6 @@ async function callReferenceImagesAPI(
           },
         },
         videoModelKey: buildVideoModelKey(params),
-        metadata: {},
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,
           imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
@@ -358,7 +361,7 @@ async function callReferenceImagesAPI(
 
   const endpoint =
     "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoReferenceImages";
-  return sendAndParseResponse(endpoint, payload, params.accessToken);
+  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
 interface PollAndExtractVideoParams {

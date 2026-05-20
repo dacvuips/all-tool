@@ -76,6 +76,21 @@ export interface CopyVideoFormConfig extends VideoFormBase {
   objectToPersonifyCode?: string;
 }
 
+export interface ElementFormImage {
+  fifeUrl: string;
+  imageBytes: string;
+  mimeType: string;
+  name: string;
+}
+
+export interface ElementFormConfig {
+  prompt: string;
+  artStyleImg?: ElementFormImage;
+  objectImg?: ElementFormImage;
+  itemImg?: ElementFormImage;
+  aspectRatio: AspectRatio;
+}
+
 export type OpStatus = "idle" | "loading" | "done" | "error";
 
 /** A single prompt item in the Step 2 result list */
@@ -182,10 +197,12 @@ export const DB_NAME = {
   generateVoice: "generate-voice",
   generateImage: "generate-image",
   copyVideo: "copy-video",
+  generateElement: "generate-element",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
   copyVideo: "copy-video",
+  generateElement: "generate-element",
 };
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
@@ -200,6 +217,9 @@ export const CACHE_KEY = {
   lastTrendingScript: "lastTrendingScript",
   trendingInput: "trendingInput",
   trendingHistory: "trendingHistory",
+  lastElementScript: "lastElementScript",
+  elementInput: "elementInput",
+  elementHistory: "elementHistory",
 };
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
@@ -227,6 +247,8 @@ export interface CopyVideoScene {
   voiceDisable?: boolean;
   noText?: boolean;
   selectedProductImages?: string[];
+  /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
+  elementImageSlots?: (ElementFormImage | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
 }
@@ -239,11 +261,41 @@ export interface CopyVideoAnalysisData {
   productImages?: string[];
 }
 
+export interface ElementAnalysisData {
+  scenes: ElementScene[];
+  aspectRatio?: string;
+}
+
+export interface ElementHistoryItem {
+  id: string;
+  createdAt: number;
+  label: string;
+  data: ElementAnalysisData;
+}
 export interface CopyVideoHistoryItem {
   id: string;
   createdAt: number;
   label: string;
   data: CopyVideoAnalysisData;
+}
+
+export interface ElementScene {
+  id: string;
+  timestamp: string;
+  scene_type: "CHARACTER" | "OBJECT";
+  visual_prompt: string;
+  motion_description: string;
+  audio_description: string;
+  original_content: string;
+  translated_content?: string | null;
+  disabled?: boolean;
+  voiceDisable?: boolean;
+  noText?: boolean;
+  selectedProductImages?: string[];
+  /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
+  elementImageSlots?: (ElementFormImage | undefined)[];
+  product_image_prompt?: string;
+  sceneNumber?: number;
 }
 
 /** A single entry in the scene generation history */

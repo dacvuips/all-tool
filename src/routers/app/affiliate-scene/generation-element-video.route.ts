@@ -3,7 +3,8 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
-  callAisandboxVideoAPI,
+  callReferenceImagesAPI,
+  callTextOnlyAPI,
   pollAndExtractVideo,
 } from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
@@ -13,7 +14,7 @@ import { ActionEnum, checkVideoLimit, incrementVideoCount } from "./_shared";
 export default [
   {
     method: "post",
-    path: "/api/app/generation-video/",
+    path: "/api/app/generation-element-video/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -63,7 +64,7 @@ export default [
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
 
-        const { mediaName } = await callAisandboxVideoAPI({
+        const params = {
           res: res,
           prompt: body.prompt,
           aspectRatio: body.config?.aspectRatio,
@@ -75,7 +76,12 @@ export default [
           Seed,
           batchId: crypto.randomUUID(),
           headers: Headers,
-        });
+        };
+
+        const { mediaName } =
+          uploadedImageNames.length > 0
+            ? await callReferenceImagesAPI(params)
+            : await callTextOnlyAPI(params);
 
         await pollAndExtractVideo({
           mediaName,

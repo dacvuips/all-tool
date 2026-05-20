@@ -203,10 +203,29 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Update element image slots (3 ô ảnh tham chiếu) + derived product image URLs */
+  const handleUpdateElementImageSlots = async (
+    sceneId: string,
+    slots: any[],
+    imageUrls: string[]
+  ) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId
+        ? { ...s, elementImageSlots: slots, selectedProductImages: imageUrls }
+        : s
+    );
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleUpdateElementImageSlots] Failed to persist:", err);
+    }
+  };
+
   if (!customer) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <span className="text-sm text-gray-400 font-medium">
+      <div className="flex flex-col justify-center items-center py-16">
+        <span className="text-sm font-medium text-gray-400">
           {t("Vui lòng đăng nhập để sử dụng tính năng này")}
         </span>
       </div>
@@ -216,9 +235,9 @@ export function SharedBatchListPanel({
   // ── Empty state ──
   if (sceneList.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-        <RiVideoFill className="text-5xl mb-3 opacity-30" />
-        <div className="text-sm font-medium text-gray-500 mb-1">{t("Chưa có scene nào")}</div>
+      <div className="flex flex-col justify-center items-center py-20 text-gray-400">
+        <RiVideoFill className="mb-3 text-5xl opacity-30" />
+        <div className="mb-1 text-sm font-medium text-gray-500">{t("Chưa có scene nào")}</div>
         <div className="text-xs text-gray-400">{t("Chuyển sang tab Kịch Bản để tạo nội dung")}</div>
       </div>
     );
@@ -226,12 +245,12 @@ export function SharedBatchListPanel({
 
   // ── Render ──
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex overflow-hidden flex-col h-full">
       {/* Action buttons bar */}
       <ActionBarComponent scenes={sceneList} />
 
       {/* ── Sticky global toggle bar ── */}
-      <div className="sticky top-0 z-20 bg-gray-50 border-b border-gray-200 px-3 py-2 flex items-center gap-3">
+      <div className="flex sticky top-0 z-20 gap-3 items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
         {/* Scene count label */}
         <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide">
           <RiVideoFill className="text-sm text-teal-500" />
@@ -242,12 +261,12 @@ export function SharedBatchListPanel({
         <div className="flex-1" />
 
         {/* ── Global tab selector ── */}
-        <div className="flex items-center gap-1">
+        <div className="flex gap-1 items-center">
           <div className="relative">
             <select
               value={globalTab || ""}
               onChange={(e) => setGlobalTab((e.target.value as SceneTabKey) || null)}
-              className="appearance-none text-xs font-semibold pl-6 pr-5 py-1 rounded-lg border border-gray-200 bg-white text-gray-600 shadow-sm cursor-pointer outline-none hover:border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/30 transition-colors"
+              className="py-1 pr-5 pl-6 text-xs font-semibold text-gray-600 bg-white rounded-lg border border-gray-200 shadow-sm transition-colors appearance-none cursor-pointer outline-none hover:border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/30"
             >
               <option value="image">{t("Ảnh")}</option>
               <option value="video">{t("Video")}</option>
@@ -303,8 +322,8 @@ export function SharedBatchListPanel({
       </div>
 
       {/* ── Scrollable card grid – responsive columns ── */}
-      <div className="flex-1 overflow-auto v-scrollbar p-2 sm:p-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+      <div className="overflow-auto flex-1 p-2 v-scrollbar sm:p-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
           {sceneList.map((scene, index) => (
             <SceneRowComponent
               key={`${selectedHistoryId || "default"}-${scene.id}`}
@@ -320,6 +339,7 @@ export function SharedBatchListPanel({
               onToggleVoiceDisable={handleToggleVoiceDisable}
               onToggleNoText={handleToggleNoText}
               onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+              onUpdateElementImageSlots={handleUpdateElementImageSlots}
               forcedTab={globalTab}
               {...sceneRowExtraProps}
             />

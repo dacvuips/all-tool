@@ -44,7 +44,16 @@ export function TabGroup({
   const [tabs, setTabs] = useState<
     { label: string; subtitle?: string; count?: number; child: JSX.Element }[]
   >([]);
-  const [selectedIndex, setSelectedIndex] = useState(index);
+  const isControlled = index !== undefined;
+  const [selectedIndex, setSelectedIndex] = useState(index ?? 0);
+  /** Optimistic index while controlled parent is catching up after click */
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
+
+  const activeIndex = isControlled
+    ? pendingIndex !== null
+      ? pendingIndex
+      : index!
+    : selectedIndex;
 
   useEffect(() => {
     const tabs = [];
@@ -63,32 +72,35 @@ export function TabGroup({
   }, [props.children]);
 
   useEffect(() => {
-    if (selectedIndex !== undefined && inkbarRef.current && tabs[selectedIndex]) {
-      if (name) sessionStorage.setItem("tab-group-" + name, selectedIndex.toString());
-      const el = document.getElementById(id + "-" + selectedIndex);
+    if (activeIndex !== undefined && inkbarRef.current && tabs[activeIndex]) {
+      if (name && !isControlled) {
+        sessionStorage.setItem("tab-group-" + name, activeIndex.toString());
+      }
+      const el = document.getElementById(id + "-" + activeIndex);
       if (el) {
         inkbarRef.current.style.width = el.offsetWidth - 16 + "px";
         inkbarRef.current.style.left = el.offsetLeft + 8 + "px";
       }
     }
-  }, [inkbarRef.current, tabs, selectedIndex]);
+  }, [inkbarRef.current, tabs, activeIndex]);
 
   useEffect(() => {
     if (index !== undefined) {
       setSelectedIndex(index);
+      setPendingIndex(null);
     } else {
-      const index = name ? sessionStorage.getItem("tab-group-" + name) : 0;
-      setSelectedIndex(Number(index || 0));
+      const stored = name ? sessionStorage.getItem("tab-group-" + name) : null;
+      setSelectedIndex(Number(stored || 0));
     }
   }, [index]);
 
   useEffect(() => {
-    if (selectedIndex >= 0) {
-      const el = document.getElementById(`${id}-${index}`);
+    if (activeIndex >= 0) {
+      const el = document.getElementById(`${id}-${activeIndex}`);
       el?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
       checkArrow();
     }
-  }, [selectedIndex]);
+  }, [activeIndex]);
 
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(false);
@@ -155,12 +167,16 @@ export function TabGroup({
                   key={index}
                   id={id + "-" + index}
                   className={`cursor-pointer relative flex flex-col items-center ${
-                    selectedIndex == index
+                    activeIndex == index
                       ? `text-gray-800 ${activeClassName}`
                       : "text-gray-600 hover:text-gray-800"
                   } ${flex ? "flex-1" : ""} ${tabClassName}`}
                   onClick={() => {
-                    setSelectedIndex(index);
+                    if (isControlled) {
+                      setPendingIndex(index);
+                    } else {
+                      setSelectedIndex(index);
+                    }
                     if (props.onChange) props.onChange(index);
                   }}
                 >
@@ -179,7 +195,7 @@ export function TabGroup({
             </div>
           </div>
           <div className={`${bodyClassName}`} style={bodyStyle}>
-            {tabs[selectedIndex]?.child}
+            {tabs[activeIndex]?.child}
           </div>
         </>
       )}
