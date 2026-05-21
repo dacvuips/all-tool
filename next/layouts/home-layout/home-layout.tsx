@@ -2,8 +2,6 @@ import { useRouter } from "next/router";
 import { useState } from "react";
 import { CheckoutProvider } from "../../components/index/checkout/provider/checkout-provider";
 import { HomeProvider } from "../../components/index/home/provider/home-provider";
-import { ChatProvider } from "../../components/shared/chat/chat-provider";
-import { ChatWidget } from "../../components/shared/chat/chat-widget";
 import { ErrorCatcher } from "../../components/shared/utilities/misc";
 import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
@@ -38,12 +36,12 @@ export function HomeLayout({ ...props }: LayoutProps) {
             {/* {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />} */}
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
-            {customer && (
+            {/* {customer && (
               <ChatProvider senderRole="CUSTOMER">
                 <ChatWidget senderRole="CUSTOMER" senderId={customer?._id} />
               </ChatProvider>
-            )}
-            <div className={`flex flex-col flex-1 grow `}>
+            )} */}
+            <div className={`flex flex-col flex-1 grow`}>
               <ErrorCatcher>
                 <HomeLayoutContent {...props} />
               </ErrorCatcher>
