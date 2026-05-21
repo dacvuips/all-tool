@@ -96,7 +96,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
         timestamp: "00:00",
         scene_type: "CHARACTER" as const,
         visual_prompt: result?.visualPrompt || data.description || "(AI generated)",
-        motion_description: result?.motionPrompt || data.description || "(AI generated)",
+        motion_description: "",
         original_content: result?.dialogue || data.voiceover || "",
         audio_description: result?.audio || data.audio || "",
       };

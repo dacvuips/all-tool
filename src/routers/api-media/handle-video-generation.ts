@@ -132,13 +132,17 @@ function buildVideoModelKey(params: CallAisandboxParams): string {
   const base = `veo_3_1_t2v_lite_low_priority`;
   return base;
 }
+function buildVideoModelKeyWithReferenceImages(params: CallAisandboxParams): string {
+  const base = `veo_3_1_r2v_lite_low_priority`;
+  return base;
+}
 
 function buildClientContext(params: CallAisandboxParams) {
   return {
     projectId: params.projectId,
     tool: "PINHOLE",
     userPaygateTier: "PAYGATE_TIER_TWO",
-    sessionId: params.sessionId,
+    sessionId: `;${params.sessionId}`,
     recaptchaContext: {
       token: params.recaptchaToken,
       applicationType: "RECAPTCHA_APPLICATION_TYPE_WEB",
@@ -349,7 +353,7 @@ export async function callReferenceImagesAPI(
             parts: [{ text: params.prompt }],
           },
         },
-        videoModelKey: buildVideoModelKey(params),
+        videoModelKey: buildVideoModelKeyWithReferenceImages(params),
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,
           imageUsageType: "IMAGE_USAGE_TYPE_ASSET",

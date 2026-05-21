@@ -77,7 +77,6 @@ export default [
           batchId: crypto.randomUUID(),
           headers: Headers,
         };
-
         const { mediaName } =
           uploadedImageNames.length > 0
             ? await callReferenceImagesAPI(params)
@@ -99,7 +98,10 @@ export default [
         if (res.headersSent) {
           if (!res.writableEnded) {
             res.write(
-              `data: ${JSON.stringify({ type: "error", message: err?.message || "Lỗi server" })}\n\n`
+              `data: ${JSON.stringify({
+                type: "error",
+                message: err?.message || "Lỗi server",
+              })}\n\n`
             );
             res.end();
           }
