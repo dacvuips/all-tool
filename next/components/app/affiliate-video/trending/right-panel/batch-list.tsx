@@ -24,8 +24,14 @@ interface BatchListPanelProps {
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
-  const { trendingScriptData, setTrendingScriptData, selectedHistoryId } =
-    useAffiliateVideoContext();
+  const {
+    trendingScriptData,
+    setTrendingScriptData,
+    selectedHistoryId,
+    sceneHistory,
+    selectHistoryItem,
+    clearSceneHistory,
+  } = useAffiliateVideoContext();
   const db = useIndexedDB<TrendingScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
 
@@ -120,6 +126,16 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       scenes={scenes}
       characters={characters}
       selectedHistoryId={selectedHistoryId}
+      history={
+        sceneHistory?.length
+          ? {
+              items: sceneHistory,
+              selectedId: selectedHistoryId ?? null,
+              onSelect: (id) => selectHistoryItem?.(id),
+              onClear: () => clearSceneHistory?.(),
+            }
+          : undefined
+      }
       onPersistScenes={handlePersistScenes}
       onSyncScenes={handleSyncScenes}
       onBuildInsertedScene={handleBuildInsertedScene}

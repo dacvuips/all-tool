@@ -414,13 +414,13 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
       const {
         sceneId,
         prompt,
-        aspectRatio = "9:16",
+        aspectRatio,
         referenceImage,
         additionalImages,
         productImages,
         productImagePrompt,
         onProgress,
-        noText = false,
+        noText,
       } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
@@ -527,15 +527,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const {
-        sceneId,
-        prompt,
-        images,
-        aspectRatio = "9:16",
-        generateAudio = true,
-        onProgress,
-        onStatusMessage,
-      } = params;
+      const { sceneId, prompt, images, aspectRatio, generateAudio, onProgress, onStatusMessage } =
+        params;
 
       try {
         onProgress?.(5);

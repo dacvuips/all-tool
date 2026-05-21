@@ -3,13 +3,7 @@
  * Thin wrapper around SharedBatchListPanel for the "copy-video" module.
  * Handles context-specific persistence (IndexedDB) and API calls.
  */
-import {
-  CACHE_KEY,
-  CharacterItem,
-  CopyVideoScene,
-  DB_NAME,
-  STORE_NAME,
-} from "../../constants";
+import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../shared/batch-list";
 import { useCopyVideoApi } from "../hook/useCopyVideoApi";
@@ -23,7 +17,14 @@ interface BatchListPanelProps {
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
-  const { scriptData, updateScriptData, selectedHistoryId } = useCopyVideoContext();
+  const {
+    scriptData,
+    updateScriptData,
+    selectedHistoryId,
+    sceneHistory,
+    selectHistoryItem,
+    clearSceneHistory,
+  } = useCopyVideoContext();
   const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
   const { insertScene } = useCopyVideoApi();
 
@@ -67,7 +68,13 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
 
   /** Call AI API to build a new scene, fallback on error */
   const handleBuildInsertedScene = async (
-    data: { description: string; voiceover: string; cameraAngle: string; selectedCharacters: string[]; audio: string },
+    data: {
+      description: string;
+      voiceover: string;
+      cameraAngle: string;
+      selectedCharacters: string[];
+      audio: string;
+    },
     sceneNumber: number,
     prevScene?: any,
     nextScene?: any
@@ -120,6 +127,18 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       scenes={scenes}
       characters={characters}
       selectedHistoryId={selectedHistoryId}
+      history={
+        sceneHistory?.length
+          ? {
+              items: sceneHistory,
+              selectedId: selectedHistoryId ?? null,
+              onSelect: (id) => selectHistoryItem?.(id),
+              onClear: () => clearSceneHistory?.(),
+              formatOptionLabel: (item) =>
+                `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
+            }
+          : undefined
+      }
       onPersistScenes={handlePersistScenes}
       onSyncScenes={handleSyncScenes}
       onBuildInsertedScene={handleBuildInsertedScene}

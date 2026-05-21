@@ -14,6 +14,16 @@ import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
 import { CharacterItem } from "../constants";
 import { SceneTabKey } from "./scene-card-tabs";
+import { BaseHistoryItem, SceneHistoryDropdown } from "./scene-history-dropdown";
+
+/** Cấu hình dropdown lịch sử – data từ provider (IndexedDB) */
+export interface BatchListHistoryConfig<TData = unknown> {
+  items: BaseHistoryItem<TData>[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  onClear: () => void | Promise<void>;
+  formatOptionLabel?: (item: BaseHistoryItem<TData>) => string;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -26,6 +36,9 @@ export interface SharedBatchListPanelProps {
   hideImageColumn?: boolean;
   /** Unique key for selected history (used as React key prefix) */
   selectedHistoryId?: string | null;
+
+  /** Dropdown lịch sử từ IndexedDB (truyền từ wrapper / provider) */
+  history?: BatchListHistoryConfig;
 
   // ── Persistence callbacks ──
 
@@ -71,6 +84,7 @@ export function SharedBatchListPanel({
   characters,
   hideImageColumn = false,
   selectedHistoryId,
+  history,
   onPersistScenes,
   onSyncScenes,
   onBuildInsertedScene,
@@ -210,9 +224,7 @@ export function SharedBatchListPanel({
     imageUrls: string[]
   ) => {
     const updated = sceneList.map((s) =>
-      s.id === sceneId
-        ? { ...s, elementImageSlots: slots, selectedProductImages: imageUrls }
-        : s
+      s.id === sceneId ? { ...s, elementImageSlots: slots, selectedProductImages: imageUrls } : s
     );
     setSceneList(updated);
     try {
@@ -246,6 +258,18 @@ export function SharedBatchListPanel({
   // ── Render ──
   return (
     <div className="flex overflow-hidden flex-col h-full">
+      {history && (
+        <div className="px-3 pt-3 bg-white shrink-0">
+          <SceneHistoryDropdown
+            items={history.items}
+            selectedId={history.selectedId}
+            onSelect={history.onSelect}
+            onClear={history.onClear}
+            formatOptionLabel={history.formatOptionLabel}
+          />
+        </div>
+      )}
+
       {/* Action buttons bar */}
       <ActionBarComponent scenes={sceneList} />
 

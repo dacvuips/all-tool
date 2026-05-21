@@ -26,7 +26,14 @@ interface BatchListPanelProps {
 }
 
 export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
-  const { scriptData, setScriptData, selectedHistoryId } = useAffiliateVideoContext();
+  const {
+    scriptData,
+    setScriptData,
+    selectedHistoryId,
+    sceneHistory,
+    selectHistoryItem,
+    clearSceneHistory,
+  } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
 
@@ -116,6 +123,16 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
       characters={characters}
       hideImageColumn={storyModeType === StoryModeTypeEnum.prompt_to_video}
       selectedHistoryId={selectedHistoryId}
+      history={
+        sceneHistory?.length
+          ? {
+              items: sceneHistory,
+              selectedId: selectedHistoryId ?? null,
+              onSelect: (id) => selectHistoryItem?.(id),
+              onClear: () => clearSceneHistory?.(),
+            }
+          : undefined
+      }
       onPersistScenes={handlePersistScenes}
       onSyncScenes={handleSyncScenes}
       onBuildInsertedScene={handleBuildInsertedScene}

@@ -94,11 +94,15 @@ export default [
       } catch (err: any) {
         logger.error(`[generation-video] Lỗi: ${err?.message}`);
         // If SSE headers already sent, send error event
+        // Check res.writableEnded to avoid ERR_STREAM_WRITE_AFTER_END
+        // (pollAndExtractVideo có thể đã gọi res.end() trước khi throw)
         if (res.headersSent) {
-          res.write(
-            `data: ${JSON.stringify({ type: "error", message: err?.message || "Lỗi server" })}\n\n`
-          );
-          res.end();
+          if (!res.writableEnded) {
+            res.write(
+              `data: ${JSON.stringify({ type: "error", message: err?.message || "Lỗi server" })}\n\n`
+            );
+            res.end();
+          }
         } else {
           const status = err?.statusCode || 500;
           res.status(status).json({ message: err?.message || "Lỗi server" });

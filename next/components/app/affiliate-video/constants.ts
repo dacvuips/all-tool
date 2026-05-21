@@ -201,6 +201,7 @@ export const DB_NAME = {
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
+  generateTrending: "generate-trending",
   copyVideo: "copy-video",
   generateElement: "generate-element",
 };

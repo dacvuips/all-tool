@@ -36,15 +36,15 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
         <input
           type="range"
           min={1}
-          max={30}
+          max={50}
           step={1}
           value={localValue}
           onChange={handleInputChange}
           className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-purple-200 accent-purple-600 focus:outline-none"
           style={{
             background: `linear-gradient(to right, #9333ea 0%, #9333ea ${
-              ((localValue - 1) / 29) * 100
-            }%, #e9d5ff ${((localValue - 1) / 29) * 100}%, #e9d5ff 100%)`,
+              ((localValue - 1) / 49) * 100
+            }%, #e9d5ff ${((localValue - 1) / 49) * 100}%, #e9d5ff 100%)`,
           }}
         />
         {/* Custom thumb styles using tailwind arbitrary variants since standard classes might not fully style the thumb in all browsers */}
@@ -81,6 +81,8 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
         <span>10</span>
         <span>20</span>
         <span>30</span>
+        <span>40</span>
+        <span>50</span>
       </div>
 
       <p className="text-purple-600 text-xs italic mt-3 leading-relaxed">

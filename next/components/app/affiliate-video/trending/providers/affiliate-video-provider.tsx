@@ -3,17 +3,16 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../../lib/providers/global-provider";
 import {
-    AffiliateVideoFormConfig,
-    CACHE_KEY,
-    DB_NAME,
-    SceneHistoryItem,
-    ScriptData,
-    STORE_NAME,
-    StoryModeTypeEnum,
-    TrendingHistoryItem,
-    TrendingModeTypeEnum,
-    TrendingScriptData,
-    TrendingVideoFormConfig,
+  AffiliateVideoFormConfig,
+  CACHE_KEY,
+  DB_NAME,
+  ScriptData,
+  STORE_NAME,
+  StoryModeTypeEnum,
+  TrendingHistoryItem,
+  TrendingModeTypeEnum,
+  TrendingScriptData,
+  TrendingVideoFormConfig,
 } from "../../constants";
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
@@ -97,7 +96,7 @@ export const AffiliateVideoContext = createContext<
 
     // ── Scene history ──
     /** Full history list (newest first) */
-    sceneHistory: SceneHistoryItem[];
+    sceneHistory: TrendingHistoryItem[];
     /** Currently selected history item ID (null = latest / no history) */
     selectedHistoryId: string | null;
     /** Select a history item by ID and apply its data */
@@ -310,7 +309,8 @@ export function AffiliateVideoProvider(props: {
 
   const restoreConfigFromDB = async () => {
     try {
-      const cachedConfig = await scriptDB.get(CACHE_KEY.generateInput);
+      const cachedConfig = await scriptDB.get(CACHE_KEY.trendingInput);
+      console.log(cachedConfig);
       if (cachedConfig) {
         setAffiliateVideoFormConfig(cachedConfig);
       }
@@ -346,7 +346,7 @@ export function AffiliateVideoProvider(props: {
   /** Persist config to IndexedDB */
   const persistConfig = (config: TrendingVideoFormConfig) => {
     scriptDB
-      .set(CACHE_KEY.generateInput, config)
+      .set(CACHE_KEY.trendingInput, config)
       .catch((err) => console.warn("[affiliate-video] Failed to persist config", err));
   };
 
@@ -402,7 +402,11 @@ export function AffiliateVideoProvider(props: {
         affiliateVideoFormConfig,
         setAffiliateVideoFormConfig: updateAffiliateVideoFormConfig,
 
-        // scene history
+        sceneHistory: trendingHistory,
+        selectedHistoryId: selectedTrendingHistoryId,
+        selectHistoryItem: selectTrendingHistoryItem,
+        clearSceneHistory: clearTrendingHistoryFn,
+        refreshSceneHistory: refreshTrendingHistory,
 
         // story mode
         storyModeType,

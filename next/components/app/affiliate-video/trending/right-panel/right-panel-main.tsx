@@ -5,9 +5,7 @@
  * - Responsive: grid stack trên mobile
  * Light theme – className only, Tailwind CSS
  */
-import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiDeleteBinLine } from "react-icons/ri";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
@@ -26,52 +24,14 @@ export const AffiliateVideoRightPanel = () => {
     scriptTab,
     setScriptTab,
     batchRunning,
-    sceneHistory,
-    clearSceneHistory,
   } = useAffiliateVideoContext();
 
-  const [confirmClear, setConfirmClear] = useState(false);
   const tabIndex =
     TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
 
   // Label tab Batch List kèm số lượng scene
   const sceneCount = trendingScriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
-
-  const renderHistoryActions = () => (
-    <>
-      <span className="text-[10px] text-gray-400 whitespace-nowrap mr-1">
-        {sceneHistory.length} {t("bản")}
-      </span>
-      {!confirmClear ? (
-        <button
-          onClick={() => setConfirmClear(true)}
-          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
-          title={t("Xóa lịch sử")}
-        >
-          <RiDeleteBinLine className="text-sm" />
-        </button>
-      ) : (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={async () => {
-              if (clearSceneHistory) await clearSceneHistory();
-              setConfirmClear(false);
-            }}
-            className="text-[10px] font-semibold text-white bg-red-500 hover:bg-red-600 px-2 py-1 rounded-md cursor-pointer border-0 transition-colors"
-          >
-            {t("Xóa hết")}
-          </button>
-          <button
-            onClick={() => setConfirmClear(false)}
-            className="text-[10px] font-semibold text-gray-500 hover:text-gray-700 px-2 py-1 rounded-md cursor-pointer border-0 bg-transparent transition-colors"
-          >
-            {t("Hủy")}
-          </button>
-        </div>
-      )}
-    </>
-  );
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

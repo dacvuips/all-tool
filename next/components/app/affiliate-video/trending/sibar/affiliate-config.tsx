@@ -153,7 +153,7 @@ export const AffiliateConfig = () => {
                   <Button
                     key={ar.value}
                     id={`aspect-ratio-${ar.value.replace(":", "-")}`}
-                    onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
+                    onClick={() => { if (patchConfig) patchConfig({ aspectRatio: ar.value }); if (formContext) formContext.setValue("aspectRatio", ar.value); }}
                     className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isActive
                         ? "border-blue-400 bg-blue-50 text-blue-600"

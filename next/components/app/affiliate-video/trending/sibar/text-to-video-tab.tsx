@@ -81,6 +81,10 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
     // Merge objectToPersonifyCode from provider state – react-hook-form doesn't track this field
     const mergedData = {
       ...data,
+      aspectRatio: videoConfig?.aspectRatio ?? data.aspectRatio,
+      artStyle: videoConfig?.artStyle ?? data.artStyle,
+      language: videoConfig?.language ?? data.language,
+      tipContent: videoConfig?.tipContent ?? data.tipContent,
       batchSize: videoConfig?.batchSize ?? 8,
       trendingModeType,
       productImages: videoConfig?.productImages,

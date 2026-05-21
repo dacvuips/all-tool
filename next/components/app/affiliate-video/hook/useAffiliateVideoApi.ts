@@ -866,6 +866,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       if (!result) return undefined;
       const scriptResult: TrendingScriptData = {
         ...result.data,
+        trendingModeType: data.trendingModeType,
+        aspectRatio: data.aspectRatio,
         productImages: data.productImages,
       };
 
@@ -877,13 +879,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }));
       }
 
-      // Persist script result (include storyModeType)
+      // Persist script result (include trendingModeType + aspectRatio from form)
       scriptDB
-        .set(CACHE_KEY.lastTrendingScript, {
-          ...scriptResult,
-          trendingModeType: data.trendingModeType,
-          productImages: data.productImages,
-        })
+        .set(CACHE_KEY.lastTrendingScript, scriptResult)
         .catch((e) => console.warn("[trending -api] IndexedDB write error", e));
 
       // Push to history (await so provider can read it immediately)
@@ -900,7 +898,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       const {
         sceneId,
         prompt,
-        aspectRatio = "9:16",
+        aspectRatio,
         referenceImage,
         additionalImages,
         productImages,
@@ -1012,15 +1010,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const {
-        sceneId,
-        prompt,
-        images,
-        aspectRatio = "9:16",
-        generateAudio = true,
-        onProgress,
-        onStatusMessage,
-      } = params;
+      const { sceneId, prompt, images, aspectRatio, generateAudio, onProgress, onStatusMessage } =
+        params;
 
       try {
         onProgress?.(5);

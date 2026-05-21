@@ -373,8 +373,9 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
             images: images.length > 0 ? images : undefined,
             productImages: productImages?.length ? productImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
-            config: { numberOfImages: 1, aspectRatio },
+            config: { numberOfImages: 1 },
             noText: noText,
+            aspectRatio,
           }),
         });
 
@@ -439,15 +440,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const {
-        sceneId,
-        prompt,
-        images,
-        aspectRatio = "9:16",
-        generateAudio = true,
-        onProgress,
-        onStatusMessage,
-      } = params;
+      const { sceneId, prompt, images, aspectRatio, generateAudio, onProgress, onStatusMessage } =
+        params;
 
       try {
         onProgress?.(5);

@@ -63,15 +63,15 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
         <input
           type="range"
           min={1}
-          max={30}
+          max={50}
           step={1}
           value={localValue}
           onChange={handleInputChange}
           className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-purple-200 accent-purple-600 focus:outline-none"
           style={{
             background: `linear-gradient(to right, #9333ea 0%, #9333ea ${
-              ((localValue - 1) / 29) * 100
-            }%, #e9d5ff ${((localValue - 1) / 29) * 100}%, #e9d5ff 100%)`,
+              ((localValue - 1) / 49) * 100
+            }%, #e9d5ff ${((localValue - 1) / 49) * 100}%, #e9d5ff 100%)`,
           }}
         />
         {/* Custom thumb styles – đảm bảo hiển thị đúng trên mọi trình duyệt */}
@@ -109,6 +109,8 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
         <span>10</span>
         <span>20</span>
         <span>30</span>
+        <span>40</span>
+        <span>50</span>
       </div>
 
       {/* Mô tả phụ */}

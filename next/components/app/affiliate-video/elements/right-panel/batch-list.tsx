@@ -17,7 +17,14 @@ interface BatchListPanelProps {
 }
 
 export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
-  const { scriptData, updateScriptData, selectedHistoryId } = useElementContext();
+  const {
+    scriptData,
+    updateScriptData,
+    selectedHistoryId,
+    sceneHistory,
+    selectHistoryItem,
+    clearSceneHistory,
+  } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
 
@@ -112,6 +119,18 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
       scenes={scenes}
       characters={characters}
       selectedHistoryId={selectedHistoryId}
+      history={
+        sceneHistory?.length
+          ? {
+              items: sceneHistory,
+              selectedId: selectedHistoryId ?? null,
+              onSelect: (id) => selectHistoryItem?.(id),
+              onClear: () => clearSceneHistory?.(),
+              formatOptionLabel: (item) =>
+                `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
+            }
+          : undefined
+      }
       onPersistScenes={handlePersistScenes}
       onSyncScenes={handleSyncScenes}
       onBuildInsertedScene={handleBuildInsertedScene}
