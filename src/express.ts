@@ -96,7 +96,7 @@ function useHelmet(app: express.Application) {
           directives: {
             defaultSrc: ["'self'"],
             mediaSrc: ["'self'", "blob:", "data:", "https://flow-content.google"],
-            imgSrc: ["'self'", "https:", "data:", "i.imgur.com", "http"],
+            imgSrc: ["'self'", "https:", "data:", "blob:", "i.imgur.com", "http"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
