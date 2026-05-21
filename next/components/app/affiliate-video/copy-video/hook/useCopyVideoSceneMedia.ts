@@ -9,7 +9,6 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene } from "../../constants";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
@@ -40,6 +39,7 @@ export interface UseSceneMediaReturn {
   generatingImage: boolean;
   /** Tiến trình tạo ảnh 0-100 */
   imageProgress: number;
+  imageError: string | null;
 
   // ── Video đơn state ──
   /** Video đã tạo (hoặc load từ cache) */
@@ -50,6 +50,7 @@ export interface UseSceneMediaReturn {
   videoProgress: number;
   /** Thông báo trạng thái video (SSE message) */
   videoStatusMessage: string;
+  videoError: string | null;
 
   // ── Video nối (extend) state ──
   /** Video nối đã tạo */
@@ -58,6 +59,7 @@ export interface UseSceneMediaReturn {
   generatingExtendVideo: boolean;
   /** Tiến trình tạo video nối 0-100 */
   extendVideoProgress: number;
+  extendVideoError: string | null;
 
   /** Ảnh của scene kế tiếp (dùng cho video nối) */
   nextGeneratedImage: GeneratedImageData | null;
@@ -75,6 +77,7 @@ export interface UseSceneMediaReturn {
   handleDownloadVideo: () => Promise<void>;
   /** Download video nối đã tạo về máy (trigger browser download) */
   handleDownloadExtendVideo: () => Promise<void>;
+  reportVideoError: (message: string) => void;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -87,7 +90,6 @@ export function useCopyVideoSceneMedia({
   noText,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
-  const toast = useToast();
 
   // ── Lấy concurrency limits từ plan của user ───
   const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
@@ -95,18 +97,23 @@ export function useCopyVideoSceneMedia({
   // ── State ──
   const [generatingImage, setGeneratingImage] = useState(false);
   const [imageProgress, setImageProgress] = useState(0);
+  const [imageError, setImageError] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<GeneratedImageData | null>(null);
   const [nextGeneratedImage, setNextGeneratedImage] = useState<GeneratedImageData | null>(null);
 
   const [generatingVideo, setGeneratingVideo] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoStatusMessage, setVideoStatusMessage] = useState("");
+  const [videoError, setVideoError] = useState<string | null>(null);
   const [generatedVideo, setGeneratedVideo] = useState<GeneratedVideoData | null>(null);
 
   // ── Extend video (video nối) state ──
   const [generatingExtendVideo, setGeneratingExtendVideo] = useState(false);
   const [extendVideoProgress, setExtendVideoProgress] = useState(0);
+  const [extendVideoError, setExtendVideoError] = useState<string | null>(null);
   const [generatedExtendVideo, setGeneratedExtendVideo] = useState<GeneratedVideoData | null>(null);
+
+  const reportVideoError = useCallback((message: string) => setVideoError(message), []);
 
   // ── Refs cho simulated progress timers ──
   const imageProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -324,7 +331,7 @@ export function useCopyVideoSceneMedia({
     // ── Check concurrency limit ──
     const currentImageGenerating = batchGeneratingSceneIdsRef?.current?.size ?? 0;
     if (currentImageGenerating >= IMAGE_CONCURRENCY) {
-      toast.warn(
+      setImageError(
         t("Đang tạo ảnh tối đa {{max}} ảnh cùng lúc. Vui lòng chờ hoàn thành.", {
           max: IMAGE_CONCURRENCY,
         })
@@ -332,6 +339,7 @@ export function useCopyVideoSceneMedia({
       return;
     }
 
+    setImageError(null);
     setGeneratingImage(true);
     setImageProgress(0);
     addBatchGeneratingSceneId(scene.id);
@@ -391,10 +399,12 @@ export function useCopyVideoSceneMedia({
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
         },
+        onError: setImageError,
       });
 
       if (result) {
         setGeneratedImage(result);
+        setImageError(null);
       } else {
         console.warn("[handleGenerateImage] No result returned");
       }
@@ -437,20 +447,22 @@ export function useCopyVideoSceneMedia({
     // ── Check concurrency limit ──
     const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
     if (currentVideoGenerating >= VIDEO_CONCURRENCY) {
-      toast.warn(
-        t("Đang tạo video tối đa {{max}} video cùng lúc. Vui lòng chờ hoàn thành.", {
-          max: VIDEO_CONCURRENCY,
-        })
-      );
+      const message = t("Đang tạo video tối đa {{max}} video cùng lúc. Vui lòng chờ hoàn thành.", {
+        max: VIDEO_CONCURRENCY,
+      });
+      if (isStitch) setExtendVideoError(message);
+      else setVideoError(message);
       return;
     }
 
     if (isStitch) {
+      setExtendVideoError(null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
       startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
+      setVideoError(null);
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
@@ -463,9 +475,10 @@ export function useCopyVideoSceneMedia({
 
       if (isStitch) {
         if (!generatedImage || !nextGeneratedImage) {
-          toast.error(
-            t("Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo")
+          const message = t(
+            "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
           );
+          setExtendVideoError(message);
           throw new Error("Missing start or end image");
         }
         imagesArray = [
@@ -497,16 +510,19 @@ export function useCopyVideoSceneMedia({
         onStatusMessage: (msg) => {
           if (!isStitch) setVideoStatusMessage(msg);
         },
+        onError: isStitch ? setExtendVideoError : setVideoError,
       });
       if (result) {
         if (isStitch) {
           setGeneratedExtendVideo(result);
+          setExtendVideoError(null);
         } else {
           setGeneratedVideo(result);
+          setVideoError(null);
         }
       }
     } catch {
-      // error already toasted inside generateVideo
+      // Lỗi đã được set qua onError hoặc validation phía trên
     } finally {
       if (isStitch) {
         stopSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef);
@@ -637,15 +653,18 @@ export function useCopyVideoSceneMedia({
     nextGeneratedImage,
     generatingImage: isGeneratingImage,
     imageProgress,
+    imageError,
     // Video đơn
     generatedVideo,
     generatingVideo: isGeneratingVideo,
     videoProgress,
     videoStatusMessage,
+    videoError,
     // Video nối (extend)
     generatedExtendVideo,
     generatingExtendVideo: isGeneratingExtendVideo,
     extendVideoProgress,
+    extendVideoError,
     // Actions
     handleCopyVideoGenerateImage,
     handleSetImage,
@@ -653,5 +672,6 @@ export function useCopyVideoSceneMedia({
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
+    reportVideoError,
   };
 }

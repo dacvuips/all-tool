@@ -16,6 +16,7 @@ import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
+import { SceneMediaError } from "./scene-media-error";
 
 // ── Types cho video data ─────────────────────────────────────────────────────
 export interface GeneratedVideoData {
@@ -42,6 +43,8 @@ export interface SceneCardVideoTabProps {
   aspectRatio?: string;
   /** Thông báo lỗi khi chưa có ảnh */
   onImageRequired?: () => void;
+  /** Lỗi tạo video (hiển thị inline) */
+  errorMessage?: string | null;
 
   // ── Callbacks ──
   /** Generate/tạo lại video */
@@ -61,6 +64,7 @@ export function SceneCardVideoTab({
   isPromptToVideo = false,
   aspectRatio,
   onImageRequired,
+  errorMessage,
   onGenerateVideo,
   onDownloadVideo,
 }: SceneCardVideoTabProps) {
@@ -214,6 +218,8 @@ export function SceneCardVideoTab({
           </button>
         )}
       </div>
+
+      <SceneMediaError message={errorMessage} />
     </div>
   );
 }

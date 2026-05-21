@@ -156,12 +156,16 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
+    imageError,
+    videoError,
+    extendVideoError,
     handleGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
+    reportVideoError,
   } = useSceneMedia({ scene, nextSceneId, selectedProductImages, noText: scene.noText });
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
@@ -474,6 +478,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onDownloadImage={handleDownloadImage}
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
+            errorMessage={imageError}
           />
         )}
         renderVideoTab={() => (
@@ -485,7 +490,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             hasImage={!!generatedImage}
             isPromptToVideo={isPromptToVideo}
             aspectRatio={scriptData?.aspectRatio}
-            onImageRequired={() => toast.error(t("Cần tạo ảnh trước khi tạo video"))}
+            errorMessage={videoError}
+            onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
             onGenerateVideo={() => handleGenerateVideo()}
             onDownloadVideo={handleDownloadVideo}
           />
@@ -498,6 +504,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             isDisabled={isDisabled}
             nextSceneId={nextSceneId}
             aspectRatio={scriptData?.aspectRatio}
+            errorMessage={extendVideoError}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
             onDownloadExtendVideo={handleDownloadExtendVideo}
           />

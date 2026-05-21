@@ -103,6 +103,8 @@ export interface GenerateImageParams {
   noText?: boolean;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
+  /** Báo lỗi inline thay vì toast (scene batch row) */
+  onError?: (message: string) => void;
 }
 
 export interface GenerateVideoParams {
@@ -123,6 +125,8 @@ export interface GenerateVideoParams {
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
   onStatusMessage?: (msg: string) => void;
+  /** Báo lỗi inline thay vì toast (scene batch row) */
+  onError?: (message: string) => void;
 }
 
 export interface ExtendVideoParams {
@@ -905,6 +909,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         productImagePrompt,
         noText,
         onProgress,
+        onError,
       } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
@@ -953,7 +958,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           clearInterval(progressTimer);
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -968,7 +974,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
         if (resultImages.length === 0) {
           clearInterval(progressTimer);
-          toast.error("Không nhận được ảnh từ API");
+          const message = "Không nhận được ảnh từ API";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -985,7 +993,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       } catch (err: any) {
         clearInterval(progressTimer);
         onProgress?.(0);
+        const message = err?.message || "Lỗi tạo ảnh";
+        if (onError) onError(message);
+        else toast.error(message);
         console.error("[generateImage] Error:", err);
+        return undefined;
       }
     },
     [toast, imageDB]
@@ -1010,8 +1022,16 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const { sceneId, prompt, images, aspectRatio, generateAudio, onProgress, onStatusMessage } =
-        params;
+      const {
+        sceneId,
+        prompt,
+        images,
+        aspectRatio,
+        generateAudio,
+        onProgress,
+        onStatusMessage,
+        onError,
+      } = params;
 
       try {
         onProgress?.(5);
@@ -1030,7 +1050,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -1039,7 +1060,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const decoder = new TextDecoder();
 
         if (!reader) {
-          toast.error("Không thể đọc response stream");
+          const message = "Không thể đọc response stream";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -1069,8 +1092,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
                 onStatusMessage?.("Hoàn thành!");
                 videoData = event.data;
               } else if (event.type === "error") {
-                toast.error(event.message || "Lỗi tạo video");
-                throw new Error(event.message);
+                const message = event.message || "Lỗi tạo video";
+                if (onError) onError(message);
+                else toast.error(message);
+                return undefined;
               }
             } catch (parseErr) {
               // Ignore malformed SSE lines
@@ -1079,7 +1104,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         if (!videoData) {
-          toast.error("Không nhận được video từ API");
+          const message = "Không nhận được video từ API";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -1091,7 +1118,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return videoData;
       } catch (err: any) {
         onProgress?.(0);
+        const message = err?.message || "Lỗi tạo video";
+        if (onError) onError(message);
+        else toast.error(message);
         console.error("[generateVideo] Error:", err);
+        return undefined;
       }
     },
     [toast, videoDB]

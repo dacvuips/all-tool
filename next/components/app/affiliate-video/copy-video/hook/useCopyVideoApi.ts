@@ -55,6 +55,8 @@ export interface GenerateImageParams {
   productImagePrompt?: string;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
+  /** Báo lỗi inline thay vì toast (scene batch row) */
+  onError?: (message: string) => void;
   noText?: boolean;
 }
 
@@ -76,6 +78,8 @@ export interface GenerateVideoParams {
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
   onStatusMessage?: (msg: string) => void;
+  /** Báo lỗi inline thay vì toast (scene batch row) */
+  onError?: (message: string) => void;
 }
 
 export interface ExtendVideoParams {
@@ -420,6 +424,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         productImages,
         productImagePrompt,
         onProgress,
+        onError,
         noText,
       } = params;
 
@@ -470,7 +475,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           clearInterval(progressTimer);
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -485,7 +491,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
 
         if (resultImages.length === 0) {
           clearInterval(progressTimer);
-          toast.error("Không nhận được ảnh từ API");
+          const message = "Không nhận được ảnh từ API";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -502,7 +510,11 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
       } catch (err: any) {
         clearInterval(progressTimer);
         onProgress?.(0);
+        const message = err?.message || "Lỗi tạo ảnh";
+        if (onError) onError(message);
+        else toast.error(message);
         console.error("[generateImage] Error:", err);
+        return undefined;
       }
     },
     [toast, imageDB]
@@ -527,8 +539,16 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
-      const { sceneId, prompt, images, aspectRatio, generateAudio, onProgress, onStatusMessage } =
-        params;
+      const {
+        sceneId,
+        prompt,
+        images,
+        aspectRatio,
+        generateAudio,
+        onProgress,
+        onStatusMessage,
+        onError,
+      } = params;
 
       try {
         onProgress?.(5);
@@ -547,7 +567,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -556,7 +577,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         const decoder = new TextDecoder();
 
         if (!reader) {
-          toast.error("Không thể đọc response stream");
+          const message = "Không thể đọc response stream";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -586,8 +609,10 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
                 onStatusMessage?.("Hoàn thành!");
                 videoData = event.data;
               } else if (event.type === "error") {
-                toast.error(event.message || "Lỗi tạo video");
-                throw new Error(event.message);
+                const message = event.message || "Lỗi tạo video";
+                if (onError) onError(message);
+                else toast.error(message);
+                return undefined;
               }
             } catch (parseErr) {
               // Ignore malformed SSE lines
@@ -596,7 +621,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         if (!videoData) {
-          toast.error("Không nhận được video từ API");
+          const message = "Không nhận được video từ API";
+          if (onError) onError(message);
+          else toast.error(message);
           return undefined;
         }
 
@@ -608,7 +635,11 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         return videoData;
       } catch (err: any) {
         onProgress?.(0);
+        const message = err?.message || "Lỗi tạo video";
+        if (onError) onError(message);
+        else toast.error(message);
         console.error("[generateVideo] Error:", err);
+        return undefined;
       }
     },
     [toast, videoDB]

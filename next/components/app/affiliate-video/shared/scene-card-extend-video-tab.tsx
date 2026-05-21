@@ -16,6 +16,7 @@ import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
+import { SceneMediaError } from "./scene-media-error";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export interface GeneratedExtendVideoData {
@@ -38,6 +39,8 @@ export interface SceneCardExtendVideoTabProps {
   nextSceneId?: string;
   /** Aspect ratio cho video dialog */
   aspectRatio?: string;
+  /** Lỗi tạo video nối (hiển thị inline) */
+  errorMessage?: string | null;
 
   // ── Callbacks ──
   /** Generate/tạo lại extend video. Truyền true để phân biệt với video đơn */
@@ -55,6 +58,7 @@ export function SceneCardExtendVideoTab({
   isDisabled = false,
   nextSceneId,
   aspectRatio,
+  errorMessage,
   onGenerateExtendVideo,
   onDownloadExtendVideo,
 }: SceneCardExtendVideoTabProps) {
@@ -220,6 +224,8 @@ export function SceneCardExtendVideoTab({
           </button>
         )}
       </div>
+
+      <SceneMediaError message={errorMessage} />
     </div>
   );
 }

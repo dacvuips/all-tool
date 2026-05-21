@@ -161,18 +161,22 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedImage,
     generatingImage,
     imageProgress,
+    imageError,
     generatedVideo,
     generatingVideo,
     videoProgress,
+    videoError,
     handleCopyVideoGenerateImage,
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
+    extendVideoError,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
+    reportVideoError,
   } = useElementSceneMedia({
     scene,
     nextSceneId,
@@ -441,6 +445,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             originThumbnailUrl={thumbnailOriginImage}
             originThumbnailLoading={thumbnailLoading}
             sceneTimestamp={scene.timestamp}
+            errorMessage={imageError}
           />
         )}
         renderVideoTab={() => (
@@ -452,6 +457,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             hasImage={!!generatedImage}
             isPromptToVideo
             aspectRatio={scriptData?.aspectRatio}
+            errorMessage={videoError}
+            onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
             onGenerateVideo={() => handleGenerateVideo()}
             onDownloadVideo={handleDownloadVideo}
           />
@@ -464,6 +471,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             isDisabled={isDisabled}
             nextSceneId={nextSceneId}
             aspectRatio={scriptData?.aspectRatio}
+            errorMessage={extendVideoError}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
             onDownloadExtendVideo={handleDownloadExtendVideo}
           />

@@ -13,6 +13,7 @@ import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
+import { SceneMediaError } from "./scene-media-error";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -44,6 +45,8 @@ export interface SceneCardImageTabProps {
   originThumbnailLoading?: boolean;
   /** Timestamp của scene (hiển thị dưới origin thumbnail) */
   sceneTimestamp?: string;
+  /** Lỗi tạo/upload ảnh (hiển thị inline) */
+  errorMessage?: string | null;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -61,6 +64,7 @@ export function SceneCardImageTab({
   originThumbnailUrl,
   originThumbnailLoading,
   sceneTimestamp,
+  errorMessage,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -206,6 +210,8 @@ export function SceneCardImageTab({
         className="hidden"
         onChange={handleFileUpload}
       />
+
+      <SceneMediaError message={errorMessage} />
     </div>
   );
 }
