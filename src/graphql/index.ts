@@ -120,7 +120,17 @@ export default async (app: Express, httpServer: Server) => {
     ],
   });
 
-  // const defaultFragmentFields = Object.keys(defaultFragment);
+  const isGraphqlWebSocketUpgrade = (req: Request) =>
+    (req.headers.upgrade || "").toLowerCase() === "websocket";
+
+  // WebSocket handshake is handled by httpServer.on("upgrade") — do not pass to Apollo (avoids HTTP 400 spam).
+  app.use("/graphql", (req, res, next) => {
+    if (isGraphqlWebSocketUpgrade(req)) {
+      return;
+    }
+    next();
+  });
+
   morgan.token("gql-query", (req: Request) => _.get(req, "gql", ""));
   app.use(
     "/graphql",
@@ -135,9 +145,10 @@ export default async (app: Express, httpServer: Server) => {
     },
     morgan(
       ":trueIp GRAPHQL :gql-query - :status - :response-time ms",
-      // ":remote-addr :remote-user :method :url :gql-query HTTP/:http-version :status :res[content-length] - :response-time ms",
       {
-        skip: (req: Request) => (_.get(req, "body.query") || "").includes("IntrospectionQuery"),
+        skip: (req: Request) =>
+          isGraphqlWebSocketUpgrade(req) ||
+          (_.get(req, "body.query") || "").includes("IntrospectionQuery"),
         stream: { write: (msg: string) => logger.info(msg.trim()) },
       }
     )
@@ -161,11 +172,13 @@ export default async (app: Express, httpServer: Server) => {
   });
 
   httpServer.on("upgrade", (req, socket, head) => {
-    const { pathname } = new URL(req.url, `http://${req.headers.host}`);
+    const { pathname } = new URL(req.url || "/", `http://${req.headers.host}`);
     if (pathname === "/graphql") {
       wsServer.handleUpgrade(req, socket as Socket, head, (ws) => {
         wsServer.emit("connection", ws, req);
       });
+    } else {
+      socket.destroy();
     }
   });
   // Hand in the schema we just created and have the
