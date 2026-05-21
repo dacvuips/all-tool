@@ -9,7 +9,6 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 import {
   ArtStyleCategoryPublicItem,
   ArtStyleCategoryService,
-  ArtStylePublicItem,
   ArtStylesByCategoryResult,
   CustomerArtStyleInput,
 } from "../../../../lib/repo/list/artStyleCategory.repo";

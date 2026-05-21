@@ -160,10 +160,12 @@ export class ThrottleGate {
   }
 }
 
-// ── Pre-built gates cho image & video ───────────────────────────────────────
+// ── Pre-built gates cho image, video & captcha ──────────────────────────────
 
 export const imageThrottleGate = new ThrottleGate("aisandbox:throttle_gate:image");
 export const videoThrottleGate = new ThrottleGate("aisandbox:throttle_gate:video");
+/** Gate cho captcha API — back off khi captcha server báo hàng đợi đầy. */
+export const captchaThrottleGate = new ThrottleGate("aisandbox:throttle_gate:captcha");
 
 // ── Main retry helper ───────────────────────────────────────────────────────
 
