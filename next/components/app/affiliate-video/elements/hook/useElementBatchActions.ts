@@ -871,7 +871,10 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const motion_description = scene.motion_description || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
-            prompt: `[MOTION]${motion_description}`,
+            prompt: scene.voiceDisable
+              ? `[MOTION]${scene.motion_description}`
+              : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.original_content}`,
+
             images: [
               { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },

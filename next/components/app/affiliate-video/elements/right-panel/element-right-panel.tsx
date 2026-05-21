@@ -60,6 +60,34 @@ export const ElementRightPanel = () => {
           )}
         </TabGroup.Tab>
       </TabGroup>
+      <TabGroup
+        index={tabIndex}
+        onChange={(i) => setScriptTab?.(indexToScriptTab(i))}
+        name="element-video-right"
+        flex={false}
+        tabClassName="px-4 py-3"
+        titleClassName="text-sm font-semibold whitespace-nowrap"
+        bodyClassName="flex-1 overflow-y-auto v-scrollbar"
+        className="bg-white"
+      >
+        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
+        <TabGroup.Tab label={batchTabLabel}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <BatchListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                ...s,
+                id: s.id || `scene-${i}`,
+                sceneNumber: i + 1,
+                disabled: s.disabled ?? false,
+                voiceDisable: s.voiceDisable ?? false,
+              }))}
+              characters={[]}
+            />
+          )}
+        </TabGroup.Tab>
+      </TabGroup>
     </div>
   );
 };

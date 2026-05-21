@@ -12,9 +12,9 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useConcurrencyLimits } from "./useConcurrencyLimits";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript, StoryModeTypeEnum } from "../constants";
+import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
@@ -823,7 +823,9 @@ export function useBatchActions(scenes: SceneScript[]) {
           const motionPrompt = scene.motionPrompt || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
-            prompt: `[MOTION]${motionPrompt}`,
+            prompt: scene.voiceDisable
+              ? `[MOTION]${scene.motionPrompt}`
+              : `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
             images: [
               { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },

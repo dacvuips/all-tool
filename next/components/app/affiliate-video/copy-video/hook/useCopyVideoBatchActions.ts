@@ -12,8 +12,8 @@
 import { saveAs } from "file-saver";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useToast } from "../../../../../lib/providers/toast-provider";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene, DB_NAME } from "../../constants";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
@@ -46,10 +46,8 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
   // ─── Lấy concurrency limits từ plan của user ───
   const { customer } = useAuth();
-  const IMAGE_CONCURRENCY =
-    customer?.googlePackage?.imageStreamCount || DEFAULT_IMAGE_CONCURRENCY;
-  const VIDEO_CONCURRENCY =
-    customer?.googlePackage?.videoStreamCount || DEFAULT_VIDEO_CONCURRENCY;
+  const IMAGE_CONCURRENCY = customer?.googlePackage?.imageStreamCount || DEFAULT_IMAGE_CONCURRENCY;
+  const VIDEO_CONCURRENCY = customer?.googlePackage?.videoStreamCount || DEFAULT_VIDEO_CONCURRENCY;
 
   // ── IndexedDB for selected product images per scene ──
   const selectedProductImagesDB = useIndexedDB<string[]>(
@@ -866,7 +864,11 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const motion_description = scene.motion_description || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
-            prompt: `[MOTION]${motion_description}`,
+            prompt: scene.voiceDisable
+              ? `[MOTION]${scene.motion_description}`
+              : `[MOTION]${scene.motion_description}, [AUDIO]${
+                  scene.audio_description
+                }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
             images: [
               { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
