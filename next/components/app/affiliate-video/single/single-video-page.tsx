@@ -20,11 +20,11 @@ export const AffiliateSingleVideoPage = ({ type }: AffiliateSingleVideoPageProps
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   return (
-    <div className="flex flex-1 overflow-hidden relative">
+    <div className="flex overflow-hidden relative flex-1">
       {/* ══ NÚT MỞ SIDEBAR (chỉ hiện trên mobile) ══ */}
       <button
         onClick={() => setIsSidebarOpen(true)}
-        className={`md:hidden fixed top-1/2 -translate-y-1/2 left-0 z-100 w-7 h-14 rounded-r-lg bg-white shadow-lg flex items-center justify-center cursor-pointer   hover:bg-gray-200 transition-colors border ${
+        className={`md:hidden fixed top-1/2 -translate-y-1/2 -left-0.5 z-100 w-7 h-14 text-white rounded-r-lg bg-primary shadow-lg flex items-center justify-center cursor-pointer   hover:bg-gray-200 hover:text-gray-800 transition-colors border ${
           isSidebarOpen ? "hidden" : ""
         }`}
         title={t("Mở cấu hình")}
@@ -35,7 +35,7 @@ export const AffiliateSingleVideoPage = ({ type }: AffiliateSingleVideoPageProps
       {/* ══ OVERLAY (mobile) ══ */}
       {isSidebarOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          className="fixed inset-0 z-40 md:hidden bg-black/40"
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
