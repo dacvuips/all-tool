@@ -8,22 +8,21 @@
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
+import { ElementScriptTabEnum } from "../../constants";
 import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";
 
-type ElementScriptTab = "images-to-video" | "video-to-video" | "batch";
-
 /** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
-const scriptTabToIndex = (tab: ElementScriptTab | undefined): number => {
-  if (tab === "images-to-video") return 1;
-  if (tab === "video-to-video") return 2;
+const scriptTabToIndex = (tab: ElementScriptTabEnum | undefined): number => {
+  if (tab === ElementScriptTabEnum.imagesToVideo) return 1;
+  if (tab === ElementScriptTabEnum.videoToVideo) return 2;
   return 0;
 };
-const indexToScriptTab = (index: number): ElementScriptTab => {
-  if (index === 1) return "images-to-video";
-  if (index === 2) return "video-to-video";
-  return "batch";
+const indexToScriptTab = (index: number): ElementScriptTabEnum => {
+  if (index === 1) return ElementScriptTabEnum.imagesToVideo;
+  if (index === 2) return ElementScriptTabEnum.videoToVideo;
+  return ElementScriptTabEnum.batch;
 };
 
 // ── Main Right Panel ─────────────────────────────────────────────────────

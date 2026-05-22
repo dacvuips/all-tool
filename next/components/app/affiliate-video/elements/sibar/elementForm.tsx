@@ -10,6 +10,7 @@ import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
+import { ElementScriptTabEnum } from "../../constants";
 import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
 import { AffiliateConfig } from "./affiliate-config";
@@ -46,7 +47,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         }
 
         setScriptData?.(result);
-        setScriptTab?.("batch");
+        setScriptTab?.(ElementScriptTabEnum.batch);
         toast.success(t("Đã tạo {{count}} cảnh từ prompt", { count: result.scenes.length }));
       } catch (err: any) {
         console.error("[ElementForm] parse prompt error:", err);

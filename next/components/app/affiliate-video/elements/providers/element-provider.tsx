@@ -8,6 +8,7 @@ import {
   ElementFormConfig,
   ElementFormImage,
   ElementHistoryItem,
+  ElementScriptTabEnum,
   STORE_NAME,
 } from "../../constants";
 import { useTranslation } from "react-i18next";
@@ -27,12 +28,12 @@ function normalizeElementFormConfig(config: ElementFormConfig): ElementFormConfi
   return config;
 }
 
-function readStoredScriptTab(): "images-to-video" | "video-to-video" | "batch" {
-  if (typeof window === "undefined") return "batch";
+function readStoredScriptTab(): ElementScriptTabEnum {
+  if (typeof window === "undefined") return ElementScriptTabEnum.batch;
   const saved = sessionStorage.getItem(ELEMENT_SCRIPT_TAB_KEY);
-  return saved === "images-to-video" || saved === "video-to-video" || saved === "batch"
-    ? saved
-    : "batch";
+  return Object.values(ElementScriptTabEnum).includes(saved as ElementScriptTabEnum)
+    ? (saved as ElementScriptTabEnum)
+    : ElementScriptTabEnum.batch;
 }
 
 interface ElementContextType {
@@ -49,8 +50,8 @@ interface ElementContextType {
   setScriptData: (data: ElementAnalysisData | null) => void;
   /** Update scriptData + persist to IndexedDB WITHOUT adding to history (for scene edits) */
   updateScriptData: (data: ElementAnalysisData | null) => void;
-  scriptTab: "images-to-video" | "video-to-video" | "batch";
-  setScriptTab: (tab: "images-to-video" | "video-to-video" | "batch") => void;
+  scriptTab: ElementScriptTabEnum;
+  setScriptTab: (tab: ElementScriptTabEnum) => void;
 
   // ── Scene history ──
   sceneHistory: ElementHistoryItem[];
@@ -100,11 +101,9 @@ export function ElementProvider(props) {
 
   // ── Script / analysis data ──
   const [scriptData, setScriptDataRaw] = useState<ElementAnalysisData | null>(null);
-  const [scriptTab, setScriptTabState] = useState<"images-to-video" | "video-to-video" | "batch">(
-    readStoredScriptTab
-  );
+  const [scriptTab, setScriptTabState] = useState<ElementScriptTabEnum>(readStoredScriptTab);
 
-  const setScriptTab = useCallback((tab: "images-to-video" | "video-to-video" | "batch") => {
+  const setScriptTab = useCallback((tab: ElementScriptTabEnum) => {
     setScriptTabState(tab);
     if (typeof window !== "undefined") {
       sessionStorage.setItem(ELEMENT_SCRIPT_TAB_KEY, tab);

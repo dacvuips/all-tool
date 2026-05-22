@@ -265,6 +265,13 @@ export interface CopyVideoAnalysisData {
   productImages?: string[];
 }
 
+/** Right panel tabs for element video workflow */
+export enum ElementScriptTabEnum {
+  batch = "batch",
+  imagesToVideo = "images-to-video",
+  videoToVideo = "video-to-video",
+}
+
 export interface ElementAnalysisData {
   scenes: ElementScene[];
   aspectRatio?: string;
