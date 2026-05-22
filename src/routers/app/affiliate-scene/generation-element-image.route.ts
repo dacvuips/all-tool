@@ -83,6 +83,7 @@ export default [
           accessToken,
           headers: Headers,
         };
+
         await callImageToImageAPI(params);
 
         // Tạo ảnh thành công → tăng imageCount

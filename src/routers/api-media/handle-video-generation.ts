@@ -244,7 +244,7 @@ export async function callTextOnlyAPI(
 /**
  * 1 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartImage (startImage)
  */
-async function callStartImageAPI(
+export async function callStartImageAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
@@ -286,7 +286,7 @@ async function callStartImageAPI(
  * 2 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartAndEndImage
  * (startImage = ảnh đầu, endImage = ảnh thứ 2)
  */
-async function callStartAndEndImageAPI(
+export async function callStartAndEndImageAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);

@@ -178,3 +178,9 @@ export const ArtStyleMap: Array<{
     des: "Vibrant children's crayon drawing style, characterized by thick bold strokes, rich waxy textures, and playful uneven shading. The entire scene should look hand-drawn with crayon on white paper, featuring bright saturated colors, visible crayon marks, and a childlike perspective. Colors should have a slightly textured, opaque quality typical of wax crayons, with some areas showing the paper grain beneath. The overall aesthetic is energetic, colorful, and charmingly imperfect, capturing the look of a classic art project created by a child. 8k resolution, natural crayon texture, vibrant saturated colors, visible crayon strokes, hand-drawn quality, paper texture visible, playful energetic feel, bright lighting, no digital effects, no 3D render, no plastic texture, no smooth gradients, no airbrushed look, no glossy finish, no watercolor, no marker, no pastel, no oil paint, no chalk, no pencil, no ink.",
   },
 ];
+export enum ServiceImageEnum {
+  imageOnly = "image_only",
+  startEnd = "start_end",
+  startAddEnd = "start_add_end",
+  video = "video",
+}

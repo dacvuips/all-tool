@@ -28,6 +28,7 @@ export const ParamName = {
   openRegisterShopMallPost: "open-register-shop-mall-post",
   productId: "productId",
   creditAmount: "creditAmount", // số tiền credit để thanh toán
+  elementScriptTab: "elementScriptTab", // tab của element script
 };
 
 export const QUICK_AMOUNTS = [10, 100, 1000, 10000];

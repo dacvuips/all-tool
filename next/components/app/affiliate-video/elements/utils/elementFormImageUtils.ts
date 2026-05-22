@@ -1,4 +1,5 @@
 import { ElementFormConfig, ElementFormImage } from "../../constants";
+import { ServiceImageEnum } from "../constants";
 
 /** Chuẩn hóa artStyleImg (hỗ trợ dữ liệu cũ lưu 1 ảnh đơn). */
 export function getArtStyleImages(
@@ -19,6 +20,11 @@ export function getImageDisplayName(img: ElementFormImage): string {
 /** Tên dùng để match trong prompt (bỏ phần mở rộng file). */
 export function getImageMatchToken(img: ElementFormImage): string {
   return getImageDisplayName(img).toLowerCase();
+}
+
+/** Số ô ảnh trên mỗi scene theo chế độ nạp ảnh (Images to Video). */
+export function getSceneImageSlotCount(serviceImageType?: string): number {
+  return serviceImageType === ServiceImageEnum.imageOnly ? 1 : 2;
 }
 
 /** Danh sách ảnh tham chiếu theo thứ tự upload (artStyle → object → item). */

@@ -72,7 +72,7 @@ export interface UseSceneMediaReturn {
 
   // ── Actions ──
   /** Gọi API tạo ảnh mới từ scene.imageGenPrompt */
-  handleCopyVideoGenerateImage: () => Promise<void>;
+  handleGenerateImage: () => Promise<void>;
   /** Set ảnh thủ công (upload từ máy hoặc chọn từ gallery) */
   handleSetImage: (imageData: GeneratedImageData) => Promise<void>;
   /** Gọi API tạo video từ scene.motionPrompt + audio + dialogue */
@@ -332,7 +332,7 @@ export function useElementSceneMedia({
   // Giả lập progress chạy trong ~2 phút (120s), từ random 1-10% → 99%.
   // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
-  const handleCopyVideoGenerateImage = async () => {
+  const handleGenerateImage = async () => {
     if (generatingImage || !scene.visual_prompt) return;
 
     // ── Check concurrency limit ──
@@ -381,6 +381,7 @@ export function useElementSceneMedia({
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         productImages: selectedProductImages?.length ? selectedProductImages : undefined,
         productImagePrompt: scene.product_image_prompt || undefined,
+        serviceImageType: scriptData.serviceImageType,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -423,8 +424,6 @@ export function useElementSceneMedia({
   // Giả lập progress chạy trong ~5 phút (300s), từ random 1-10% → 99%.
   // Khi API trả kết quả (hoặc SSE progress thật), dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
-  const getVideoMotionPrompt = () =>
-    (scene.motion_description || "").trim() || (scene.visual_prompt || "").trim();
 
   const handleGenerateVideo = async (isStitch?: boolean) => {
     // Chỉ chặn loại video tương ứng, không chặn chéo
@@ -432,14 +431,8 @@ export function useElementSceneMedia({
     if (isStitch && generatingExtendVideo) return;
     if (!isStitch && generatingVideo) return;
 
-    const motionPrompt = getVideoMotionPrompt();
-    if (!motionPrompt) {
-      if (isStitch)
-        setExtendVideoError(t("Cần nhập prompt hoặc mô tả chuyển động trước khi tạo video"));
-      else setVideoError(t("Cần nhập prompt hoặc mô tả chuyển động trước khi tạo video"));
-      return;
-    }
-
+    const motionPrompt = (scene.motion_description || "").trim();
+    const visualPrompt = scene.visual_prompt?.trim();
     // ── Check concurrency limit ──
     const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
     if (currentVideoGenerating >= VIDEO_CONCURRENCY) {
@@ -500,16 +493,16 @@ export function useElementSceneMedia({
           );
         }
       }
-
       const result = await generateVideo({
         sceneId: isStitch ? scene.id + "::stitch" : scene.id,
         prompt: scene.voiceDisable
-          ? `[MOTION]${motionPrompt}`
-          : `[MOTION]${motionPrompt}, [AUDIO]${scene.audio_description}, [DIALOGUE]${
-              scene.translated_content || scene.original_content
-            }`,
+          ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
+          : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
+              scene.audio_description
+            }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
         images: imagesArray,
         aspectRatio: scriptData?.aspectRatio,
+        serviceImageType: scriptData.serviceImageType,
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));
@@ -678,7 +671,7 @@ export function useElementSceneMedia({
     extendVideoProgress,
     extendVideoError,
     // Actions
-    handleCopyVideoGenerateImage,
+    handleGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,

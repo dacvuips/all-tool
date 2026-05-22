@@ -4,11 +4,14 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
   callReferenceImagesAPI,
+  callStartAndEndImageAPI,
+  callStartImageAPI,
   callTextOnlyAPI,
   pollAndExtractVideo,
 } from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
+import { ServiceImageEnum } from "../constanst";
 import { ActionEnum, checkVideoLimit, incrementVideoCount, resolveArtStylePrompt } from "./_shared";
 
 export default [
@@ -32,6 +35,8 @@ export default [
             generateAudio?: boolean;
             artStyleId?: string;
             artStyle?: string;
+            /** Gửi từ client (useElementApi) */
+            serviceImageType?: ServiceImageEnum;
           };
         };
 
@@ -88,10 +93,30 @@ export default [
           headers: Headers,
         };
 
-        const { mediaName } =
-          uploadedImageNames.length > 0
-            ? await callReferenceImagesAPI(params)
-            : await callTextOnlyAPI(params);
+        const serviceType = body.config?.serviceImageType;
+        let videoResult: { mediaName: string };
+
+        switch (serviceType) {
+          case ServiceImageEnum.imageOnly:
+            videoResult = await callStartImageAPI(params);
+            break;
+          case ServiceImageEnum.startEnd:
+            videoResult = await callStartAndEndImageAPI(params);
+            break;
+          case ServiceImageEnum.startAddEnd:
+            videoResult = await callReferenceImagesAPI(params);
+            break;
+          case ServiceImageEnum.video:
+          default:
+            if (uploadedImageNames.length > 0) {
+              videoResult = await callReferenceImagesAPI(params);
+            } else {
+              videoResult = await callTextOnlyAPI(params);
+            }
+            break;
+        }
+
+        const { mediaName } = videoResult;
 
         await pollAndExtractVideo({
           mediaName,

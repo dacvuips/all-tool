@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElementFormConfig, ElementFormImage } from "../../../constants";
 import { matchElementImagesInPrompt } from "../../utils/matchElementImagesInPrompt";
-import { SceneElementImageSlot } from "./scene-element-image-slot";
+import { SceneElementImageSlot } from "../scene-element-image-slot";
 
 const SLOT_COUNT = 3;
 

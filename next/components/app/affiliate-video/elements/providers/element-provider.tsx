@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import {
   CACHE_KEY,
@@ -11,8 +11,8 @@ import {
   ElementScriptTabEnum,
   STORE_NAME,
 } from "../../constants";
-import { useTranslation } from "react-i18next";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { ServiceImageEnum } from "../constants";
 
 /** Key used to persist the last generated script in IndexedDB */
 const ELEMENT_STORE_NAME = STORE_NAME.generateElement;
@@ -83,13 +83,13 @@ export const ElementContext = createContext<Partial<ElementContextType>>({
 export function ElementProvider(props) {
   const { customer } = useAuth();
   const { t } = useTranslation();
-  const { LANGUAGE_OPTIONS, ART_STYLE_TRANSLATED_OPTIONS, MOOD_OPTIONS } = useOptionsTranslation();
 
   const DEFAULT_ELEMENT_CONFIG: ElementFormConfig = {
     prompt: "",
     aspectRatio: "16:9",
     artStyle: "",
     artStyleId: "",
+    serviceImageType: ServiceImageEnum.imageOnly,
   };
 
   // ── IndexedDB – shared cache for AI results ──

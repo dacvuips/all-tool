@@ -7,10 +7,12 @@
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
+import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Field, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS } from "../../constants";
+import { Button, Field, Radio, Textarea } from "../../../../shared/utilities/form";
+import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { ElementImagesUpload } from "./element-images-upload";
 
@@ -20,9 +22,12 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, elementFormConfig } = useElementContext();
+  const [queryParams, setQueryParams] = useQueryParams({
+    [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
+  });
+  const elementParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
 
-  // Local state for instant UI feedback; synced from URL param on mount/navigation
-
+  const isImagesToVideo = elementParam === ElementScriptTabEnum.imagesToVideo;
   return (
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
@@ -74,6 +79,23 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />
         </Field>
+        {/* Option cho Images to Video*/}
+        {isImagesToVideo && (
+          <Field label={t("Chế độ nạp ảnh")}>
+            <Radio
+              defaultValue={ServiceImageEnum.imageOnly}
+              selectFirst
+              cols={12}
+              value={elementFormConfig.serviceImageType}
+              onChange={(val) => patchConfig && patchConfig({ serviceImageType: val })}
+              options={[
+                { label: t("Chỉ có ảnh bắt đầu -> Video"), value: ServiceImageEnum.imageOnly },
+                { label: t("Ảnh bắt đầu và kết thúc -> Video"), value: ServiceImageEnum.startEnd },
+                { label: t("2 ảnh kết hợp -> Video"), value: ServiceImageEnum.startAddEnd },
+              ]}
+            />
+          </Field>
+        )}
         {/* Ảnh sản phẩm */}
         <ElementImagesUpload
           artStyleImg={elementFormConfig?.artStyleImg}

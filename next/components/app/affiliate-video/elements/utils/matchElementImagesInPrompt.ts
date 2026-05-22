@@ -1,8 +1,12 @@
 import { ElementFormConfig, ElementFormImage } from "../../constants";
+import { ServiceImageEnum } from "../constants";
 import {
   elementFormImageToDataUrl,
+  getArtStyleImages,
+  getImageDisplayName,
   getImageMatchToken,
   getOrderedElementImages,
+  getSceneImageSlotCount,
 } from "./elementFormImageUtils";
 
 /** 3 vị trí ảnh tham chiếu trên scene row */
@@ -11,16 +15,63 @@ export type ElementImageSlotKey = (typeof ELEMENT_IMAGE_SLOT_KEYS)[number];
 
 const SCENE_SLOT_COUNT = 3;
 
-export function isImageNameInPrompt(prompt: string, img: ElementFormImage): boolean {
-  const token = getImageMatchToken(img);
-  if (!token || token.length < 2) return false;
-  return prompt.toLowerCase().includes(token);
+/** Vị trí đầu tiên của tên ảnh trong prompt (từ trên xuống), -1 nếu không có. */
+export function getTokenFirstIndexInPrompt(prompt: string, token: string): number {
+  if (!token) return -1;
+  const lower = prompt.toLowerCase();
+  const t = token.toLowerCase();
+  if (/^\d+$/.test(t)) {
+    const re = new RegExp(`(^|[^\\d])${t}([^\\d]|$)`);
+    const m = lower.match(re);
+    if (!m || m.index === undefined) return -1;
+    return m.index + (m[1]?.length ?? 0);
+  }
+  if (t.length < 2) return -1;
+  return lower.indexOf(t);
 }
 
-/** Vị trí đầu tiên của token trong prompt (từ trên xuống), -1 nếu không có. */
-function getTokenFirstIndex(prompt: string, token: string): number {
-  if (!token || token.length < 2) return -1;
-  return prompt.toLowerCase().indexOf(token);
+export function isImageNameInPrompt(prompt: string, img: ElementFormImage): boolean {
+  return getTokenFirstIndexInPrompt(prompt, getImageMatchToken(img)) >= 0;
+}
+
+function findArtStyleImageByDisplayName(
+  images: ElementFormImage[],
+  name: string
+): ElementFormImage | undefined {
+  const target = name.toLowerCase();
+  return images.find((img) => {
+    const token = getImageMatchToken(img);
+    return token === target || getImageDisplayName(img).toLowerCase() === target;
+  });
+}
+
+/**
+ * Images to Video: gán artStyleImg theo tên file (số), không dùng prompt cảnh.
+ * - imageOnly: cảnh N → ảnh tên N
+ * - startEnd / startAddEnd: cảnh N → slot 1 = ảnh (2N-1), slot 2 = ảnh (2N)
+ *   (cảnh 1: 1–2, cảnh 2: 3–4, cảnh 3: 5–6, …)
+ */
+export function matchArtStyleImagesForScene(
+  sceneNumber: number,
+  serviceImageType: string | undefined,
+  config?: Pick<ElementFormConfig, "artStyleImg">
+): (ElementFormImage | undefined)[] {
+  const slotCount = getSceneImageSlotCount(serviceImageType);
+  const images = getArtStyleImages(config).filter((img) => img.imageBytes || img.fifeUrl);
+  if (!images.length) {
+    return Array.from({ length: slotCount }, () => undefined);
+  }
+
+  if (serviceImageType === ServiceImageEnum.imageOnly) {
+    return [findArtStyleImageByDisplayName(images, String(sceneNumber))].slice(0, slotCount);
+  }
+
+  const n1 = String((sceneNumber - 1) * 2 + 1);
+  const n2 = String((sceneNumber - 1) * 2 + 2);
+  return [
+    findArtStyleImageByDisplayName(images, n1),
+    findArtStyleImageByDisplayName(images, n2),
+  ].slice(0, slotCount);
 }
 
 /**
@@ -43,7 +94,7 @@ export function matchElementImagesInPrompt(
   const matches = getOrderedElementImages(config)
     .map((img) => ({
       img,
-      pos: getTokenFirstIndex(trimmed, getImageMatchToken(img)),
+      pos: getTokenFirstIndexInPrompt(trimmed, getImageMatchToken(img)),
     }))
     .filter((m) => m.pos >= 0)
     .sort((a, b) => a.pos - b.pos);

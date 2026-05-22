@@ -16,6 +16,7 @@ import {
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { ServiceImageEnum } from "../constants";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -59,6 +60,7 @@ export interface GenerateImageParams {
   noText?: boolean;
   artStyleId?: string;
   artStyle?: string;
+  serviceImageType?: ServiceImageEnum;
 }
 
 export interface GenerateVideoParams {
@@ -83,6 +85,7 @@ export interface GenerateVideoParams {
   onError?: (message: string) => void;
   artStyleId?: string;
   artStyle?: string;
+  serviceImageType?: ServiceImageEnum;
 }
 
 export interface ExtendVideoParams {
@@ -473,6 +476,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onError,
         artStyleId,
         artStyle,
+        serviceImageType,
       } = params;
 
       try {
@@ -485,7 +489,13 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           body: JSON.stringify({
             prompt,
             images,
-            config: { aspectRatio, generateAudio, artStyleId, artStyle },
+            config: {
+              aspectRatio,
+              generateAudio,
+              artStyleId,
+              artStyle,
+              serviceImageType,
+            },
           }),
         });
 

@@ -6,12 +6,14 @@
  * Light theme – className only, Tailwind CSS
  */
 import { useTranslation } from "react-i18next";
+import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
-import { ElementScriptTabEnum } from "../../constants";
+import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./element/batch-list";
+import { ImagesToVideoListPanel } from "./images-to-video/images-to-video-list";
 
 /** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
 const scriptTabToIndex = (tab: ElementScriptTabEnum | undefined): number => {
@@ -25,12 +27,24 @@ const indexToScriptTab = (index: number): ElementScriptTabEnum => {
   return ElementScriptTabEnum.batch;
 };
 
+const parseScriptTabParam = (value: string | undefined): ElementScriptTabEnum | undefined => {
+  if (value && Object.values(ElementScriptTabEnum).includes(value as ElementScriptTabEnum)) {
+    return value as ElementScriptTabEnum;
+  }
+  return undefined;
+};
+
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const ElementRightPanel = () => {
   const { t } = useTranslation();
-  const { scriptData, scriptTab, setScriptTab, batchRunning } = useElementContext();
+  const { scriptData, setScriptTab, batchRunning } = useElementContext();
   const { customer } = useAuth();
-  const tabIndex = scriptTabToIndex(scriptTab);
+  const [queryParams, setQueryParams] = useQueryParams({
+    [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
+  });
+  const tabIndex = scriptTabToIndex(
+    parseScriptTabParam(queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined)
+  );
 
   // Label tab Batch List kèm số lượng scene
   const sceneCount = scriptData?.scenes?.length ?? 0;
@@ -39,7 +53,11 @@ export const ElementRightPanel = () => {
     <div className="flex overflow-hidden flex-col flex-1">
       <TabGroup
         index={tabIndex}
-        onChange={(i) => setScriptTab?.(indexToScriptTab(i))}
+        onChange={(i) => {
+          const tab = indexToScriptTab(i);
+          setQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: tab });
+          setScriptTab?.(tab);
+        }}
         name="element-video-right"
         flex={false}
         tabClassName="px-4 py-3"
@@ -68,7 +86,16 @@ export const ElementRightPanel = () => {
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
-            <>{"Đang phát triển , các sếp bình tỉnh nhé"}</>
+            <ImagesToVideoListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                ...s,
+                id: s.id || `scene-${i}`,
+                sceneNumber: i + 1,
+                disabled: s.disabled ?? false,
+                voiceDisable: s.voiceDisable ?? false,
+              }))}
+              characters={[]}
+            />
           )}
         </TabGroup.Tab>
         <TabGroup.Tab label={t("Video To Video")}>

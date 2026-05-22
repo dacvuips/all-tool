@@ -3,6 +3,8 @@
  * Shared design tokens, types, and constants for the AI Video Generator (Veo 3).
  */
 
+import { ServiceImageEnum } from "./elements/constants";
+
 // ── CSS Design Tokens ──────────────────────────────────────────────────────
 export const CSS = {
   bg: "#080815",
@@ -92,6 +94,7 @@ export interface ElementFormConfig {
   aspectRatio: AspectRatio;
   artStyle: string;
   artStyleId?: string;
+  serviceImageType?: string;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
@@ -272,11 +275,15 @@ export enum ElementScriptTabEnum {
   videoToVideo = "video-to-video",
 }
 
+/** Query param key for element right-panel active tab (value = ElementScriptTabEnum) */
+export const ELEMENT_SCRIPT_TAB_QUERY_KEY = "elementScriptTab";
+
 export interface ElementAnalysisData {
   scenes: ElementScene[];
   aspectRatio?: string;
   artStyleId?: string;
   artStyle?: string;
+  serviceImageType?: ServiceImageEnum;
 }
 
 export interface ElementHistoryItem {

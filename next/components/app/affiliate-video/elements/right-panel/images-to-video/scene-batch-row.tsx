@@ -102,8 +102,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [expandedField, setExpandedField] = useState<EditField | null>(null);
   const [hoveredField, setHoveredField] = useState<EditField | null>(null);
   const [copiedField, setCopiedField] = useState<EditField | null>(null);
-  const [showVideoModal, setShowVideoModal] = useState(false);
-  const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
+
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // ── Thumbnail from IndexedDB (saved during video analysis) ──
@@ -410,8 +409,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <SceneElementImagesRow
           sceneId={scene.id}
+          sceneNumber={scene.sceneNumber}
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
+          slotSource="artStyleImg"
           savedSlots={scene.elementImageSlots}
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
