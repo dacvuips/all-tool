@@ -94,8 +94,8 @@ export function SceneCardImageTab({
       {(originThumbnailUrl || originThumbnailLoading) && (
         <div className="flex flex-col">
           {originThumbnailLoading ? (
-            <div className="w-20 h-12 rounded-lg border border-dashed border-amber-300 bg-amber-50 flex items-center justify-center">
-              <RiLoader4Line className="text-amber-500 text-sm animate-spin" />
+            <div className="flex justify-center items-center w-20 h-12 bg-amber-50 rounded-lg border border-amber-300 border-dashed">
+              <RiLoader4Line className="text-sm text-amber-500 animate-spin" />
             </div>
           ) : originThumbnailUrl ? (
             <div className="relative w-full max-w-xs group">
@@ -104,14 +104,14 @@ export function SceneCardImageTab({
                 lazyload={false}
                 src={originThumbnailUrl}
                 alt={`Origin frame - Scene ${sceneNumber}`}
-                className="rounded-lg object-cover border border-amber-200 shadow-sm"
+                className="object-cover rounded-lg border border-amber-200 shadow-sm"
                 ratio169
               />
-              <span className="absolute top-1 left-0 px-1 py-0 rounded-r-full text-9 font-bold text-white border-white border bg-success-dark bg-opacity-70 shadow-sm z-10">
+              <span className="absolute left-0 top-1 z-10 px-1 py-0 font-bold text-white bg-opacity-70 rounded-r-full border border-white shadow-sm text-9 bg-success-dark">
                 {t("Ảnh gốc")}
               </span>
               {sceneTimestamp && (
-                <span className="block text-center text-9 text-amber-600 font-medium -mt-2 bg-gray-100 pt-2 rounded-b-md">
+                <span className="block pt-2 -mt-2 font-medium text-center text-amber-600 bg-gray-100 rounded-b-md text-9">
                   {sceneTimestamp}
                 </span>
               )}
@@ -121,7 +121,7 @@ export function SceneCardImageTab({
       )}
 
       {/* ── Generated Image section ── */}
-      <div className="flex items-center justify-center gap-2 group">
+      <div className="flex gap-2 justify-center items-center group">
         {generatedImage ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
             {/* Ảnh đã generate */}
@@ -131,7 +131,7 @@ export function SceneCardImageTab({
                 lazyload={false}
                 src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
                 alt={`Scene ${sceneNumber}`}
-                className="rounded-md object-cover border border-dashed border-green-300 shadow-sm"
+                className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
                 ratio916
               />
             </div>
@@ -140,7 +140,7 @@ export function SceneCardImageTab({
               {/* Tải ảnh */}
               <Button
                 onClick={onDownloadImage}
-                className="w-8 rounded-lg h-8 bg-success-light text-success"
+                className="w-8 h-8 rounded-lg bg-success-light text-success"
                 iconClassName="text-xl font-bold"
                 tooltip={t("Tải")}
                 icon={<HiOutlineArrowDownTray />}
@@ -148,8 +148,8 @@ export function SceneCardImageTab({
               />
               {/* Tạo lại / progress */}
               {generatingImage ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-pink-50 border border-pink-200">
-                  <RiLoader4Line className="text-pink-500 text-sm animate-spin" />
+                <div className="flex gap-1 items-center px-2 py-1 bg-pink-50 rounded-lg border border-pink-200">
+                  <RiLoader4Line className="text-sm text-pink-500 animate-spin" />
                   <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
                 </div>
               ) : (
@@ -157,7 +157,7 @@ export function SceneCardImageTab({
                   onClick={onGenerateImage}
                   icon={<GenerateAiIcon />}
                   placement="bottom"
-                  className="w-8 rounded-lg h-8 bg-orange-light text-orange"
+                  className="w-8 h-8 rounded-lg bg-orange-light text-orange"
                   iconClassName="text-xl font-bold"
                   tooltip={t("Tạo lại")}
                 />
@@ -167,7 +167,7 @@ export function SceneCardImageTab({
                 onClick={() => fileInputRef.current?.click()}
                 icon={<RiUploadCloud2Line />}
                 placement="bottom"
-                className="w-8 rounded-lg h-8 bg-blue-50 text-blue-500"
+                className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
                 iconClassName="text-xl font-bold"
                 tooltip={t("Upload ảnh")}
               />
@@ -176,7 +176,7 @@ export function SceneCardImageTab({
                 onClick={onOpenGallery}
                 icon={<RiGalleryLine />}
                 placement="bottom"
-                className="w-8 rounded-lg h-8 bg-purple-50 text-purple-500"
+                className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
                 iconClassName="text-xl font-bold"
                 tooltip={t("Chọn từ Gallery")}
               />
@@ -184,18 +184,18 @@ export function SceneCardImageTab({
           </div>
         ) : generatingImage ? (
           /* ── Spinner + progress khi chưa có ảnh ── */
-          <div className="w-16 h-16 rounded-xl border-2 border-pink-300 bg-pink-50 flex flex-col items-center justify-center">
-            <RiLoader4Line className="text-pink-500 text-xl animate-spin" />
+          <div className="flex flex-col justify-center items-center w-16 h-16 bg-pink-50 rounded-xl border-2 border-pink-300">
+            <RiLoader4Line className="text-xl text-pink-500 animate-spin" />
             <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
           </div>
         ) : (
           /* ── Default: nút tạo ảnh ── */
           <button
             onClick={onGenerateImage}
-            className="w-full max-w-xs h-20 rounded-xl border-2 border-dashed border-gray-200 hover:border-pink-300 bg-gray-50 hover:bg-pink-50 flex flex-col items-center justify-center cursor-pointer transition-all group"
+            className="flex flex-col justify-center items-center w-full max-w-xs h-20 bg-gray-50 rounded-xl border-2 border-gray-200 border-dashed transition-all cursor-pointer hover:border-pink-300 hover:bg-pink-50 group"
           >
             <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-xl mb-0.5" />
-            <span className="text-gray-400 group-hover:text-pink-500 text-xs font-medium">
+            <span className="text-xs font-medium text-gray-400 group-hover:text-pink-500">
               {t("Tạo ảnh")}
             </span>
           </button>

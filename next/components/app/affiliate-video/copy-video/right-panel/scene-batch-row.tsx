@@ -99,10 +99,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // ── Thumbnail from IndexedDB (saved during video analysis) ──
+  const { sceneThumbnailVersion, scriptData } = useCopyVideoContext();
   const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
-    scene.id
+    scene.id,
+    sceneThumbnailVersion
   );
-  const { scriptData } = useCopyVideoContext();
 
   // ── Product image selection (per-scene, persisted in IndexedDB) ──
   const productImages = scriptData?.productImages || [];

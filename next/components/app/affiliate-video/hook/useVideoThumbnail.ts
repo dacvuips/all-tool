@@ -260,7 +260,11 @@ export async function extractAndSaveThumbnails(
 // Returns { thumbnailUrl, loading }.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function useSceneThumbnail(sceneId: string | undefined): {
+export function useSceneThumbnail(
+  sceneId: string | undefined,
+  /** Bump after thumbnails are persisted so hooks re-read IndexedDB */
+  refreshKey = 0
+): {
   thumbnailUrl: string | null;
   loading: boolean;
 } {
@@ -294,7 +298,7 @@ export function useSceneThumbnail(sceneId: string | undefined): {
     return () => {
       cancelled = true;
     };
-  }, [sceneId]);
+  }, [sceneId, refreshKey]);
 
   return { thumbnailUrl, loading };
 }

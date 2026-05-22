@@ -54,6 +54,10 @@ interface CopyVideoContextType {
       generatingExtendVideo: boolean
     ) => void
   ) => () => void;
+
+  /** Increments when scene origin thumbnails finish saving to IndexedDB */
+  sceneThumbnailVersion: number;
+  notifySceneThumbnailsSaved: () => void;
 }
 
 export const CopyVideoContext = createContext<Partial<CopyVideoContextType>>({
@@ -77,6 +81,10 @@ export function CopyVideoProvider(props) {
   const scriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
 
   const [batchRunning, setBatchRunning] = useState(false);
+  const [sceneThumbnailVersion, setSceneThumbnailVersion] = useState(0);
+  const notifySceneThumbnailsSaved = useCallback(() => {
+    setSceneThumbnailVersion((v) => v + 1);
+  }, []);
   const [copyVideoFormConfig, setCopyVideoFormConfig] =
     useState<CopyVideoFormConfig>(DEFAULT_VIDEO_CONFIG);
 
@@ -310,6 +318,9 @@ export function CopyVideoProvider(props) {
         addBatchGeneratingVideoSceneId,
         removeBatchGeneratingVideoSceneId,
         subscribeBatchState,
+
+        sceneThumbnailVersion,
+        notifySceneThumbnailsSaved,
       }}
     >
       {props.children}

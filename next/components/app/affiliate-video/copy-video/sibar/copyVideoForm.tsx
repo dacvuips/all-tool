@@ -29,6 +29,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
     setScriptData,
     setScriptTab,
     persistCopyVideoInput,
+    notifySceneThumbnailsSaved,
   } = useCopyVideoContext();
   const { analyzeVideoForCopy } = useCopyVideoApi();
   const thumbnailDB = useThumbnailDB();
@@ -55,14 +56,16 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
             })
           );
 
-          // Extract & save thumbnails to IndexedDB (fire-and-forget)
+          // Extract & save thumbnails to IndexedDB, then refresh scene cards
           if (copyVideoFormConfig?.sourceVideo?.base64 && result.scenes?.length) {
             extractAndSaveThumbnails(
               copyVideoFormConfig.sourceVideo.base64,
               copyVideoFormConfig.sourceVideo.mimeType,
               result.scenes,
               thumbnailDB
-            ).catch((err) => console.warn("[CopyVideoForm] Failed to extract thumbnails:", err));
+            )
+              .then(() => notifySceneThumbnailsSaved?.())
+              .catch((err) => console.warn("[CopyVideoForm] Failed to extract thumbnails:", err));
           }
         }
       } catch (err: any) {
@@ -82,6 +85,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       t,
       thumbnailDB,
       persistCopyVideoInput,
+      notifySceneThumbnailsSaved,
     ]
   );
 
