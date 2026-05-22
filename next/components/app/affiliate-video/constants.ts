@@ -268,6 +268,8 @@ export interface CopyVideoAnalysisData {
 export interface ElementAnalysisData {
   scenes: ElementScene[];
   aspectRatio?: string;
+  artStyleId?: string;
+  artStyle?: string;
 }
 
 export interface ElementHistoryItem {

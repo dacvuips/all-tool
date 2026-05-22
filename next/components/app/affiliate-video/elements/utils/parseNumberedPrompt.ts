@@ -1,4 +1,4 @@
-import { CopyVideoAnalysisData, ElementScene, uid } from "../../constants";
+import { ElementAnalysisData, ElementScene, uid } from "../../constants";
 
 /** Một dòng prompt đã tách theo số thứ tự (1., 2., …) */
 export interface NumberedPromptItem {
@@ -37,8 +37,10 @@ export function parseNumberedPrompt(prompt: string): NumberedPromptItem[] {
 /** Chuyển danh sách prompt đánh số thành dữ liệu phân tích copy-video (scenes). */
 export function buildAnalysisDataFromNumberedPrompt(
   prompt: string,
-  aspectRatio?: string
-): CopyVideoAnalysisData | null {
+  aspectRatio?: string,
+  artStyleId?: string,
+  artStyle?: string
+): ElementAnalysisData | null {
   const items = parseNumberedPrompt(prompt);
   if (items.length === 0) return null;
 
@@ -55,9 +57,9 @@ export function buildAnalysisDataFromNumberedPrompt(
   }));
 
   return {
-    characters: [],
-    props: [],
     scenes,
     aspectRatio,
+    artStyleId,
+    artStyle,
   };
 }

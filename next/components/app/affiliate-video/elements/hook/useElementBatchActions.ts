@@ -70,8 +70,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   /** Ảnh tham chiếu 3 ô – cùng nguồn tab Ảnh (URL IndexedDB + slot trên scene). */
   const getSceneReferenceImages = useCallback(
     async (scene: CopyVideoScene) => {
-      const urls =
-        (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages;
+      const urls = (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages;
       return resolveElementReferenceImagesForApi({
         urls,
         slots: scene.elementImageSlots,

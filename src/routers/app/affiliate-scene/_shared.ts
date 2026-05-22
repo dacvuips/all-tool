@@ -610,7 +610,7 @@ export async function resolveObjectToPersonifyPrompt(opts: {
 export async function resolveArtStylePrompt(opts: {
   artStyleId?: string;
   artStyle?: string;
-}): Promise<{ prompt?: string }> {
+}): Promise<{ prompt?: string; name?: string }> {
   if (!opts.artStyleId) {
     return { prompt: opts.artStyle };
   }
@@ -622,7 +622,7 @@ export async function resolveArtStylePrompt(opts: {
     }
 
     // Nếu có prompt trong DB → dùng prompt đó, ngược lại giữ artStyle name
-    return { prompt: artStyleDoc.prompt || opts.artStyle };
+    return { prompt: artStyleDoc.prompt || opts.artStyle, name: artStyleDoc.name };
   } catch {
     return { prompt: opts.artStyle };
   }

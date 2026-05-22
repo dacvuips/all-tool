@@ -375,6 +375,8 @@ export function useElementSceneMedia({
         prompt: `${scene.visual_prompt}`,
         noText: noText,
         aspectRatio: scriptData?.aspectRatio,
+        artStyle: scriptData?.artStyle,
+        artStyleId: scriptData?.artStyleId,
         referenceImage,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         productImages: selectedProductImages?.length ? selectedProductImages : undefined,
@@ -432,7 +434,8 @@ export function useElementSceneMedia({
 
     const motionPrompt = getVideoMotionPrompt();
     if (!motionPrompt) {
-      if (isStitch) setExtendVideoError(t("Cần nhập prompt hoặc mô tả chuyển động trước khi tạo video"));
+      if (isStitch)
+        setExtendVideoError(t("Cần nhập prompt hoặc mô tả chuyển động trước khi tạo video"));
       else setVideoError(t("Cần nhập prompt hoặc mô tả chuyển động trước khi tạo video"));
       return;
     }
@@ -482,8 +485,7 @@ export function useElementSceneMedia({
         const countFilledSlots = (arr?: (ElementFormImage | undefined)[]) =>
           arr?.filter((s) => s && (s.imageBytes || s.fifeUrl)).length ?? 0;
         const slotsForVideo =
-          countFilledSlots(selectedElementImageSlots) >=
-          countFilledSlots(scene.elementImageSlots)
+          countFilledSlots(selectedElementImageSlots) >= countFilledSlots(scene.elementImageSlots)
             ? selectedElementImageSlots
             : scene.elementImageSlots ?? selectedElementImageSlots;
 
@@ -519,6 +521,8 @@ export function useElementSceneMedia({
           if (!isStitch) setVideoStatusMessage(msg);
         },
         onError: isStitch ? setExtendVideoError : setVideoError,
+        artStyleId: scriptData?.artStyleId,
+        artStyle: scriptData?.artStyle,
       });
       if (result) {
         if (isStitch) {

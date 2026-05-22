@@ -9,7 +9,7 @@ import {
 } from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
-import { ActionEnum, checkVideoLimit, incrementVideoCount } from "./_shared";
+import { ActionEnum, checkVideoLimit, incrementVideoCount, resolveArtStylePrompt } from "./_shared";
 
 export default [
   {
@@ -30,17 +30,27 @@ export default [
           config?: {
             aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
+            artStyleId?: string;
+            artStyle?: string;
           };
         };
 
         if (!body?.prompt) {
           return res.status(400).json({ message: "Thiếu prompt" });
         }
-        console.log(body);
+
         // Kiểm tra giới hạn video trước khi tạo
         await checkVideoLimit(context.id);
         // Lấy captcha + credentials + projectId + accessToken
 
+        const { prompt: resolvedArtStylePrompt, name: resolvedArtStyleName } =
+          await resolveArtStylePrompt({
+            artStyleId: body.config?.artStyleId,
+            artStyle: body.config?.artStyle,
+          });
+        if (resolvedArtStylePrompt && resolvedArtStyleName === body.config?.artStyle) {
+          body.config.artStyle = resolvedArtStylePrompt;
+        }
         const {
           captcha: recaptchaToken,
           sessionId,
@@ -66,7 +76,7 @@ export default [
 
         const params = {
           res: res,
-          prompt: body.prompt,
+          prompt: `${body.config?.artStyle} ${body.prompt}`,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames,
           recaptchaToken,

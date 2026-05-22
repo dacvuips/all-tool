@@ -5,7 +5,7 @@ import { Context } from "../../../libs/graphql";
 import { callImageToImageAPI } from "../../api-media/handle-image-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
-import { ActionEnum, checkImageLimit, incrementImageCount } from "./_shared";
+import { ActionEnum, checkImageLimit, incrementImageCount, resolveArtStylePrompt } from "./_shared";
 
 export default [
   {
@@ -25,6 +25,8 @@ export default [
           >;
           aspectRatio?: "16:9" | "9:16";
           noText?: boolean;
+          artStyleId?: string;
+          artStyle?: string;
         };
 
         if (!body?.prompt) {
@@ -58,12 +60,21 @@ export default [
         }
         // Tạo payload theo cấu trúc Google Labs API
 
+        const { prompt: resolvedArtStylePrompt, name: resolvedArtStyleName } =
+          await resolveArtStylePrompt({
+            artStyleId: body.artStyleId,
+            artStyle: body.artStyle,
+          });
+        if (resolvedArtStylePrompt && resolvedArtStyleName === body.artStyle) {
+          body.artStyle = resolvedArtStylePrompt;
+        }
+
         const noTextStr = !body?.noText
           ? `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`
           : "";
         const params = {
           res,
-          prompt: `${body.prompt} ${noTextStr}`,
+          prompt: `${body.artStyle} ${body.prompt} ${noTextStr}`,
           aspectRatio: body.aspectRatio,
           uploadedImageNames: uploadedImageNames,
           recaptchaToken,

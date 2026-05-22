@@ -57,6 +57,8 @@ export interface GenerateImageParams {
   /** Báo lỗi inline thay vì toast (scene batch row) */
   onError?: (message: string) => void;
   noText?: boolean;
+  artStyleId?: string;
+  artStyle?: string;
 }
 
 export interface GenerateVideoParams {
@@ -79,6 +81,8 @@ export interface GenerateVideoParams {
   onStatusMessage?: (msg: string) => void;
   /** Báo lỗi inline thay vì toast (scene batch row) */
   onError?: (message: string) => void;
+  artStyleId?: string;
+  artStyle?: string;
 }
 
 export interface ExtendVideoParams {
@@ -210,6 +214,8 @@ export interface GeneratedVideoData {
   mimeType: string;
   /** Aspect ratio used when this video was generated (e.g. "9:16", "16:9") */
   aspectRatio?: string;
+  artStyleId?: string;
+  artStyle?: string;
 }
 
 export interface UseAffiliateVideoApiReturn {
@@ -338,6 +344,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onError,
         noText = false,
+        artStyleId,
+        artStyle,
       } = params;
 
       // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
@@ -381,6 +389,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
             config: { numberOfImages: 1 },
             noText: noText,
             aspectRatio,
+            artStyleId,
+            artStyle,
           }),
         });
 
@@ -461,6 +471,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onStatusMessage,
         onError,
+        artStyleId,
+        artStyle,
       } = params;
 
       try {
@@ -473,7 +485,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           body: JSON.stringify({
             prompt,
             images,
-            config: { aspectRatio, generateAudio },
+            config: { aspectRatio, generateAudio, artStyleId, artStyle },
           }),
         });
 

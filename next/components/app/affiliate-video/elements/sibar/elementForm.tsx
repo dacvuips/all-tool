@@ -36,7 +36,9 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
 
         const result = buildAnalysisDataFromNumberedPrompt(
           promptText,
-          elementFormConfig?.aspectRatio
+          elementFormConfig?.aspectRatio,
+          elementFormConfig?.artStyleId,
+          elementFormConfig?.artStyle
         );
         if (!result?.scenes?.length) {
           toast.error(t("Không tách được cảnh nào từ prompt. Dùng định dạng: 1. mô tả cảnh"));
@@ -53,15 +55,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [
-      elementFormConfig,
-      persistElementInput,
-      setBatchRunning,
-      setScriptData,
-      setScriptTab,
-      t,
-      toast,
-    ]
+    [elementFormConfig, persistElementInput, setBatchRunning, setScriptData, setScriptTab, t, toast]
   );
 
   return (
