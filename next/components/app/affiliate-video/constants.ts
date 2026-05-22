@@ -85,10 +85,13 @@ export interface ElementFormImage {
 
 export interface ElementFormConfig {
   prompt: string;
-  artStyleImg?: ElementFormImage;
+  /** Ảnh tham chiếu – có thể upload nhiều ảnh */
+  artStyleImg?: ElementFormImage[];
   objectImg?: ElementFormImage;
   itemImg?: ElementFormImage;
   aspectRatio: AspectRatio;
+  artStyle: string;
+  artStyleId?: string;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";

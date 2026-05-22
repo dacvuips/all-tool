@@ -13,7 +13,10 @@ import { CopyVideoScene, ElementFormImage } from "../../constants";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
 import { useElementContext } from "../providers/element-provider";
-import { elementImageSlotsToApiImages } from "../utils/elementFormImageUtils";
+import {
+  productImageUrlsToApiImages,
+  resolveElementReferenceImagesForApi,
+} from "../utils/elementFormImageUtils";
 import { GeneratedImageData, GeneratedVideoData, useElementApi } from "./useElementApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
@@ -361,30 +364,7 @@ export function useElementSceneMedia({
         }
       }
 
-      // Convert selected product images to base64 for API
-      const additionalImages: { imageBytes: string; mimeType: string }[] = [];
-      if (selectedProductImages?.length) {
-        for (const imgUrl of selectedProductImages) {
-          try {
-            const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (dataMatch) {
-              additionalImages.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
-            } else {
-              const resp = await fetch(imgUrl);
-              const blob = await resp.blob();
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve((reader.result as string).split(",")[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-              additionalImages.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
-            }
-          } catch (err) {
-            console.warn("[handleGenerateImage] Failed to convert product image:", imgUrl, err);
-          }
-        }
-      }
+      const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
 
       const noTextStr = noText
         ? `\nIMPORTANT: Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`
@@ -499,7 +479,24 @@ export function useElementSceneMedia({
           { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
         ];
       } else {
-        imagesArray = await elementImageSlotsToApiImages(selectedElementImageSlots);
+        const countFilledSlots = (arr?: (ElementFormImage | undefined)[]) =>
+          arr?.filter((s) => s && (s.imageBytes || s.fifeUrl)).length ?? 0;
+        const slotsForVideo =
+          countFilledSlots(selectedElementImageSlots) >=
+          countFilledSlots(scene.elementImageSlots)
+            ? selectedElementImageSlots
+            : scene.elementImageSlots ?? selectedElementImageSlots;
+
+        imagesArray = await resolveElementReferenceImagesForApi({
+          urls: selectedProductImages,
+          slots: slotsForVideo,
+        });
+        const filledSlotCount = countFilledSlots(slotsForVideo);
+        if (filledSlotCount > 0 && imagesArray.length < filledSlotCount) {
+          console.warn(
+            `[handleGenerateVideo] Scene ${scene.id}: ${filledSlotCount} ô ảnh đã gắn nhưng chỉ convert được ${imagesArray.length} ảnh gửi API`
+          );
+        }
       }
 
       const result = await generateVideo({

@@ -1,11 +1,42 @@
-import { ElementFormImage } from "../../constants";
+import { ElementFormConfig, ElementFormImage } from "../../constants";
+
+/** Chuẩn hóa artStyleImg (hỗ trợ dữ liệu cũ lưu 1 ảnh đơn). */
+export function getArtStyleImages(
+  config?: Pick<ElementFormConfig, "artStyleImg"> | { artStyleImg?: ElementFormImage | ElementFormImage[] }
+): ElementFormImage[] {
+  const raw = config?.artStyleImg;
+  if (!raw) return [];
+  return Array.isArray(raw) ? raw : [raw];
+}
+
+/** Tên hiển thị (bỏ phần mở rộng file, giữ nguyên hoa thường). */
+export function getImageDisplayName(img: ElementFormImage): string {
+  const raw = (img.name || "").trim();
+  if (!raw) return "";
+  return raw.replace(/\.[^./\\]+$/, "").trim();
+}
 
 /** Tên dùng để match trong prompt (bỏ phần mở rộng file). */
 export function getImageMatchToken(img: ElementFormImage): string {
-  const raw = (img.name || "").trim();
-  if (!raw) return "";
-  const withoutExt = raw.replace(/\.[^./\\]+$/, "").trim();
-  return withoutExt.toLowerCase();
+  return getImageDisplayName(img).toLowerCase();
+}
+
+/** Danh sách ảnh tham chiếu theo thứ tự upload (artStyle → object → item). */
+export function getOrderedElementImages(
+  config?: Pick<ElementFormConfig, "artStyleImg" | "objectImg" | "itemImg">
+): ElementFormImage[] {
+  if (!config) return [];
+  const images: ElementFormImage[] = [];
+  for (const img of getArtStyleImages(config)) {
+    if (img.imageBytes || img.fifeUrl) images.push(img);
+  }
+  if (config.objectImg?.imageBytes || config.objectImg?.fifeUrl) {
+    images.push(config.objectImg);
+  }
+  if (config.itemImg?.imageBytes || config.itemImg?.fifeUrl) {
+    images.push(config.itemImg);
+  }
+  return images;
 }
 
 export function elementFormImageToDataUrl(img: ElementFormImage): string {
@@ -30,32 +61,20 @@ export function getElementFormImagePreviewSrc(img: ElementFormImage): string | n
   return base64ToBlobUrl(img.imageBytes, img.mimeType || "image/png");
 }
 
-/**
- * Chuyển 3 ô ảnh tham chiếu (theo thứ tự) thành payload cho API generation-video.
- * Ưu tiên imageBytes trong slot; nếu chỉ có URL thì fetch/chuẩn hóa data URL.
- */
-export async function elementImageSlotsToApiImages(
-  slots: (ElementFormImage | undefined)[] | undefined
+/** Chuyển URL/data URL ảnh tham chiếu (cùng nguồn tab Ảnh) thành payload API. */
+export async function productImageUrlsToApiImages(
+  urls: string[] | undefined
 ): Promise<{ imageBytes: string; mimeType: string }[]> {
-  if (!slots?.length) return [];
+  if (!urls?.length) return [];
   const out: { imageBytes: string; mimeType: string }[] = [];
-  for (const img of slots) {
-    if (!img || (!img.imageBytes && !img.fifeUrl)) continue;
+  for (const imgUrl of urls) {
     try {
-      if (img.imageBytes) {
-        out.push({
-          imageBytes: img.imageBytes,
-          mimeType: img.mimeType || "image/png",
-        });
-        continue;
-      }
-      const url = img.fifeUrl;
-      const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+      const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
       if (dataMatch) {
         out.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
         continue;
       }
-      const resp = await fetch(url);
+      const resp = await fetch(imgUrl);
       const blob = await resp.blob();
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
@@ -63,10 +82,77 @@ export async function elementImageSlotsToApiImages(
         reader.onerror = reject;
         reader.readAsDataURL(blob);
       });
-      out.push({ mimeType: blob.type || img.mimeType || "image/png", imageBytes: base64 });
+      out.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
     } catch (err) {
-      console.warn("[elementImageSlotsToApiImages] Failed to convert slot image:", err);
+      console.warn("[productImageUrlsToApiImages] Failed to convert image:", imgUrl, err);
     }
+  }
+  return out;
+}
+
+/** Số ô ảnh tham chiếu trên mỗi scene row */
+export const ELEMENT_SCENE_IMAGE_SLOT_COUNT = 3;
+
+/**
+ * Ảnh tham chiếu cho API video.
+ * Luôn đọc từ 3 ô slot trước (đúng thứ tự UI); chỉ fallback URL khi slot trống.
+ */
+export async function resolveElementReferenceImagesForApi(options: {
+  urls?: string[];
+  slots?: (ElementFormImage | undefined)[];
+}): Promise<{ imageBytes: string; mimeType: string }[]> {
+  const fromSlots = await elementImageSlotsToApiImages(options.slots);
+  if (fromSlots.length > 0) return fromSlots;
+  return productImageUrlsToApiImages(options.urls);
+}
+
+/** Convert một ElementFormImage → payload API (hoặc undefined nếu thiếu dữ liệu). */
+async function elementFormImageToApiPayload(
+  img: ElementFormImage
+): Promise<{ imageBytes: string; mimeType: string } | undefined> {
+  if (!img.imageBytes && !img.fifeUrl) return undefined;
+  try {
+    if (img.imageBytes) {
+      return {
+        imageBytes: img.imageBytes,
+        mimeType: img.mimeType || "image/png",
+      };
+    }
+    const url = img.fifeUrl;
+    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataMatch) {
+      return { mimeType: dataMatch[1], imageBytes: dataMatch[2] };
+    }
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return { mimeType: blob.type || img.mimeType || "image/png", imageBytes: base64 };
+  } catch (err) {
+    console.warn("[elementFormImageToApiPayload] Failed to convert image:", img.name, err);
+    return undefined;
+  }
+}
+
+/**
+ * Chuyển 3 ô ảnh tham chiếu (theo thứ tự slot 1→3) thành payload cho API generation-video.
+ * Duyệt đủ 3 index — không bỏ slot giữa khi compact mảng URL.
+ */
+export async function elementImageSlotsToApiImages(
+  slots: (ElementFormImage | undefined)[] | undefined,
+  slotCount = ELEMENT_SCENE_IMAGE_SLOT_COUNT
+): Promise<{ imageBytes: string; mimeType: string }[]> {
+  if (!slots?.length) return [];
+  const out: { imageBytes: string; mimeType: string }[] = [];
+  for (let i = 0; i < slotCount; i++) {
+    const img = slots[i];
+    if (!img || (!img.imageBytes && !img.fifeUrl)) continue;
+    const payload = await elementFormImageToApiPayload(img);
+    if (payload) out.push(payload);
   }
   return out;
 }

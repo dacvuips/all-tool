@@ -10,6 +10,7 @@ import { BsFile } from "react-icons/bs";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { useElementContext } from "../providers/element-provider";
 import { ElementImagesUpload } from "./element-images-upload";
 
@@ -52,17 +53,14 @@ export const AffiliateConfig = () => {
             })}
           </div>
         </Field>
-
-        {/* Ảnh sản phẩm */}
-        <ElementImagesUpload
-          artStyleImg={elementFormConfig?.artStyleImg}
-          objectImg={elementFormConfig?.objectImg}
-          itemImg={elementFormConfig?.itemImg}
-          readOnly={!customer}
-          onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
-          onObjectImgChange={(v) => patchConfig && patchConfig({ objectImg: v })}
-          onItemImgChange={(v) => patchConfig && patchConfig({ itemImg: v })}
-        />
+        <div>
+          <ArtStylePickerDialog
+            name="artStyle"
+            value={elementFormConfig?.artStyle}
+            onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+            onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
+          />
+        </div>
 
         <Field noError label={t("Prompt phân cảnh")}>
           <Textarea
@@ -76,6 +74,12 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />
         </Field>
+        {/* Ảnh sản phẩm */}
+        <ElementImagesUpload
+          artStyleImg={elementFormConfig?.artStyleImg}
+          readOnly={!customer}
+          onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
+        />
       </div>
     </div>
   );

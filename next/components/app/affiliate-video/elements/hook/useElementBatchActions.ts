@@ -18,7 +18,10 @@ import { CopyVideoScene, DB_NAME } from "../../constants";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useElementContext } from "../providers/element-provider";
-import { elementImageSlotsToApiImages } from "../utils/elementFormImageUtils";
+import {
+  productImageUrlsToApiImages,
+  resolveElementReferenceImagesForApi,
+} from "../utils/elementFormImageUtils";
 import { useElementApi } from "./useElementApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -60,37 +63,28 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
   // ── IndexedDB for selected product images per scene ──
   const selectedProductImagesDB = useIndexedDB<string[]>(
-    "selected-product-images",
-    DB_NAME.copyVideo
+    "selected-images",
+    DB_NAME.generateElement
+  );
+
+  /** Ảnh tham chiếu 3 ô – cùng nguồn tab Ảnh (URL IndexedDB + slot trên scene). */
+  const getSceneReferenceImages = useCallback(
+    async (scene: CopyVideoScene) => {
+      const urls =
+        (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages;
+      return resolveElementReferenceImagesForApi({
+        urls,
+        slots: scene.elementImageSlots,
+      });
+    },
+    [selectedProductImagesDB]
   );
 
   /** Helper: convert product image URLs to base64 objects for API */
   const convertProductImages = useCallback(
     async (sceneId: string): Promise<{ imageBytes: string; mimeType: string }[]> => {
       const selected = await selectedProductImagesDB.get(sceneId);
-      if (!selected?.length) return [];
-      const result: { imageBytes: string; mimeType: string }[] = [];
-      for (const imgUrl of selected) {
-        try {
-          const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-          if (dataMatch) {
-            result.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
-          } else {
-            const resp = await fetch(imgUrl);
-            const blob = await resp.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve((reader.result as string).split(",")[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-            result.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
-          }
-        } catch (err) {
-          console.warn("[BatchActions] Failed to convert product image:", imgUrl, err);
-        }
-      }
-      return result;
+      return productImageUrlsToApiImages(selected ?? undefined);
     },
     [selectedProductImagesDB]
   );
@@ -663,6 +657,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             addBatchGeneratingVideoSceneId(scene.id);
             const motionPrompt = getSceneMotionPrompt(scene);
             const audioDesc = scene.audio_description || "";
+            const refImages = await getSceneReferenceImages(scene);
             await generateVideo({
               sceneId: scene.id,
               prompt: scene.voiceDisable
@@ -670,6 +665,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
                 : `[MOTION]${motionPrompt}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${
                     scene.original_content
                   }`,
+              images: refImages.length > 0 ? refImages : undefined,
               aspectRatio: elementFormConfig?.aspectRatio,
             });
             completed++;
@@ -738,7 +734,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           addBatchGeneratingVideoSceneId(scene.id);
           const motionPrompt = getSceneMotionPrompt(scene);
           const audioDesc = scene.audio_description || "";
-          const slotImages = await elementImageSlotsToApiImages(scene.elementImageSlots);
+          const refImages = await getSceneReferenceImages(scene);
           await generateVideo({
             sceneId: scene.id,
             prompt: scene.voiceDisable
@@ -746,7 +742,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               : `[MOTION]${motionPrompt}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${
                   scene.original_content
                 }`,
-            images: slotImages,
+            images: refImages.length > 0 ? refImages : undefined,
             aspectRatio: elementFormConfig?.aspectRatio,
           });
           completed++;

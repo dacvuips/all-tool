@@ -12,12 +12,19 @@ import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";
 
-/** Tab JSX order: 0 = Danh sách hàng loạt, 1 = Kịch Bản (must match onChange mapping below) */
-const scriptTabToIndex = (tab: "script" | "batch" | undefined): number => {
-  if (tab === "script") return 1;
-  return 0; // "batch" or unknown → batch list tab
+type ElementScriptTab = "images-to-video" | "video-to-video" | "batch";
+
+/** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
+const scriptTabToIndex = (tab: ElementScriptTab | undefined): number => {
+  if (tab === "images-to-video") return 1;
+  if (tab === "video-to-video") return 2;
+  return 0;
 };
-const indexToScriptTab = (index: number): "script" | "batch" => (index === 1 ? "script" : "batch");
+const indexToScriptTab = (index: number): ElementScriptTab => {
+  if (index === 1) return "images-to-video";
+  if (index === 2) return "video-to-video";
+  return "batch";
+};
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const ElementRightPanel = () => {
@@ -28,7 +35,6 @@ export const ElementRightPanel = () => {
 
   // Label tab Batch List kèm số lượng scene
   const sceneCount = scriptData?.scenes?.length ?? 0;
-  const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
 
   return (
     <div className="flex overflow-hidden flex-col flex-1">
@@ -43,7 +49,7 @@ export const ElementRightPanel = () => {
         className="bg-white"
       >
         {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={batchTabLabel}>
+        <TabGroup.Tab label={`${t("Thành Phần")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
@@ -59,32 +65,18 @@ export const ElementRightPanel = () => {
             />
           )}
         </TabGroup.Tab>
-      </TabGroup>
-      <TabGroup
-        index={tabIndex}
-        onChange={(i) => setScriptTab?.(indexToScriptTab(i))}
-        name="element-video-right"
-        flex={false}
-        tabClassName="px-4 py-3"
-        titleClassName="text-sm font-semibold whitespace-nowrap"
-        bodyClassName="flex-1 overflow-y-auto v-scrollbar"
-        className="bg-white"
-      >
-        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={batchTabLabel}>
+        <TabGroup.Tab label={t("Images To Video")}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
-            <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
-              characters={[]}
-            />
+            <>{"Đang phát triển , các sếp bình tỉnh nhé"}</>
+          )}
+        </TabGroup.Tab>
+        <TabGroup.Tab label={t("Video To Video")}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <>{"Đang phát triển , các sếp bình tỉnh nhé"} </>
           )}
         </TabGroup.Tab>
       </TabGroup>

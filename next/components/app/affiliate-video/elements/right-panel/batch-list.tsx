@@ -93,23 +93,23 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
 
       return {
         id: crypto.randomUUID(),
-        timestamp: "00:00",
-        scene_type: "CHARACTER" as const,
+        timestamp: "",
+        scene_type: "",
         visual_prompt: result?.visualPrompt || data.description || "(AI generated)",
         motion_description: "",
-        original_content: result?.dialogue || data.voiceover || "",
-        audio_description: result?.audio || data.audio || "",
+        original_content: "",
+        audio_description: "",
       };
     } catch (err) {
       console.error("[elements/handleInsert] API error:", err);
       return {
         id: crypto.randomUUID(),
-        timestamp: "00:00",
-        scene_type: "CHARACTER" as const,
+        timestamp: "",
+        scene_type: "",
         visual_prompt: data.description || "(AI generated)",
-        motion_description: data.description || "(AI generated)",
-        original_content: data.voiceover || "",
-        audio_description: data.audio || "",
+        motion_description: "",
+        original_content: "",
+        audio_description: "",
       };
     }
   };

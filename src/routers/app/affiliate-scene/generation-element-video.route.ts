@@ -36,7 +36,7 @@ export default [
         if (!body?.prompt) {
           return res.status(400).json({ message: "Thiếu prompt" });
         }
-
+        console.log(body);
         // Kiểm tra giới hạn video trước khi tạo
         await checkVideoLimit(context.id);
         // Lấy captcha + credentials + projectId + accessToken
@@ -77,6 +77,7 @@ export default [
           batchId: crypto.randomUUID(),
           headers: Headers,
         };
+
         const { mediaName } =
           uploadedImageNames.length > 0
             ? await callReferenceImagesAPI(params)

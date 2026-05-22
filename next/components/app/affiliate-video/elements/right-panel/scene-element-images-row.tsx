@@ -1,5 +1,5 @@
 /**
- * Hàng 3 ô ảnh tham chiếu theo scene – auto-match tên ảnh trong prompt.
+ * Hàng 3 ô ảnh tham chiếu theo scene – auto-match tên ảnh trong prompt (tối đa 3, theo thứ tự xuất hiện).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -31,15 +31,6 @@ export function SceneElementImagesRow({
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
 
-  const hasConfigImages = !!(
-    elementFormConfig?.artStyleImg?.imageBytes ||
-    elementFormConfig?.objectImg?.imageBytes ||
-    elementFormConfig?.itemImg?.imageBytes ||
-    elementFormConfig?.artStyleImg?.fifeUrl ||
-    elementFormConfig?.objectImg?.fifeUrl ||
-    elementFormConfig?.itemImg?.fifeUrl
-  );
-
   const autoMatched = useMemo(
     () => matchElementImagesInPrompt(prompt, elementFormConfig),
     [prompt, elementFormConfig]
@@ -66,7 +57,15 @@ export function SceneElementImagesRow({
 
   const notifyParent = useCallback(
     (next: (ElementFormImage | undefined)[]) => {
-      const key = elementImageSlotsToUrls(next).join("|");
+      // Key theo từng slot (không chỉ URL) — tránh bỏ qua sync khi đổi ảnh cùng URL / thứ tự slot
+      const key = next
+        .map((s, i) => {
+          if (!s) return `${i}:`;
+          const bytesLen = s.imageBytes?.length ?? 0;
+          const url = s.fifeUrl || "";
+          return `${i}:${s.name ?? ""}:${bytesLen}:${url.slice(0, 32)}`;
+        })
+        .join("|");
       if (key === lastNotifiedRef.current) return;
       lastNotifiedRef.current = key;
       onSlotsChange(next);

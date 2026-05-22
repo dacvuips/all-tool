@@ -6,10 +6,10 @@ import {
   DB_NAME,
   ElementAnalysisData,
   ElementFormConfig,
+  ElementFormImage,
   ElementHistoryItem,
   STORE_NAME,
 } from "../../constants";
-
 import { useTranslation } from "react-i18next";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 
@@ -18,10 +18,21 @@ const ELEMENT_STORE_NAME = STORE_NAME.generateElement;
 
 const ELEMENT_SCRIPT_TAB_KEY = "element-script-tab";
 
-function readStoredScriptTab(): "script" | "batch" {
+/** Migrate legacy single artStyleImg to array. */
+function normalizeElementFormConfig(config: ElementFormConfig): ElementFormConfig {
+  const raw = config.artStyleImg as ElementFormImage | ElementFormImage[] | undefined;
+  if (raw != null && !Array.isArray(raw)) {
+    return { ...config, artStyleImg: [raw] };
+  }
+  return config;
+}
+
+function readStoredScriptTab(): "images-to-video" | "video-to-video" | "batch" {
   if (typeof window === "undefined") return "batch";
   const saved = sessionStorage.getItem(ELEMENT_SCRIPT_TAB_KEY);
-  return saved === "script" || saved === "batch" ? saved : "batch";
+  return saved === "images-to-video" || saved === "video-to-video" || saved === "batch"
+    ? saved
+    : "batch";
 }
 
 interface ElementContextType {
@@ -38,8 +49,8 @@ interface ElementContextType {
   setScriptData: (data: ElementAnalysisData | null) => void;
   /** Update scriptData + persist to IndexedDB WITHOUT adding to history (for scene edits) */
   updateScriptData: (data: ElementAnalysisData | null) => void;
-  scriptTab: "script" | "batch";
-  setScriptTab: (tab: "script" | "batch") => void;
+  scriptTab: "images-to-video" | "video-to-video" | "batch";
+  setScriptTab: (tab: "images-to-video" | "video-to-video" | "batch") => void;
 
   // ── Scene history ──
   sceneHistory: ElementHistoryItem[];
@@ -76,6 +87,8 @@ export function ElementProvider(props) {
   const DEFAULT_ELEMENT_CONFIG: ElementFormConfig = {
     prompt: "",
     aspectRatio: "16:9",
+    artStyle: "",
+    artStyleId: "",
   };
 
   // ── IndexedDB – shared cache for AI results ──
@@ -87,9 +100,11 @@ export function ElementProvider(props) {
 
   // ── Script / analysis data ──
   const [scriptData, setScriptDataRaw] = useState<ElementAnalysisData | null>(null);
-  const [scriptTab, setScriptTabState] = useState<"script" | "batch">(readStoredScriptTab);
+  const [scriptTab, setScriptTabState] = useState<"images-to-video" | "video-to-video" | "batch">(
+    readStoredScriptTab
+  );
 
-  const setScriptTab = useCallback((tab: "script" | "batch") => {
+  const setScriptTab = useCallback((tab: "images-to-video" | "video-to-video" | "batch") => {
     setScriptTabState(tab);
     if (typeof window !== "undefined") {
       sessionStorage.setItem(ELEMENT_SCRIPT_TAB_KEY, tab);
@@ -238,7 +253,7 @@ export function ElementProvider(props) {
         scriptDB.get(CACHE_KEY.elementInput),
       ]);
       if (cachedScript) setScriptDataRaw(cachedScript);
-      if (cachedConfig) setElementFormConfig(cachedConfig);
+      if (cachedConfig) setElementFormConfig(normalizeElementFormConfig(cachedConfig));
     } catch (err) {
       console.warn("[element] Failed to restore from IndexedDB", err);
     }

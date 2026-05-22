@@ -7,9 +7,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiLoader4Line, RiUploadCloud2Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { Button, Field } from "../../../../shared/utilities/form";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
+import { Button, Field } from "../../../../shared/utilities/form";
 import { ElementFormImage } from "../../constants";
+import { getElementFormImagePreviewSrc, getImageDisplayName } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
@@ -249,24 +250,271 @@ function ImageUploadSlot({
   );
 }
 
+interface MultiImageUploadSlotProps {
+  label: string;
+  value?: ElementFormImage[];
+  onChange: (value: ElementFormImage[] | undefined) => void;
+  maxSizeMB?: number;
+  readOnly?: boolean;
+}
+
+function MultiImageListItem({
+  img,
+  index,
+  readOnly,
+  onRemove,
+}: {
+  img: ElementFormImage;
+  index: number;
+  readOnly: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const [zoomImage, setZoomImage] = useState("");
+  const previewSrc = useMemo(() => getElementFormImagePreviewSrc(img), [img]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc?.startsWith("blob:")) {
+        URL.revokeObjectURL(previewSrc);
+      }
+    };
+  }, [previewSrc]);
+
+  if (!previewSrc) return null;
+
+  const displayName = getImageDisplayName(img) || `image-${index + 1}`;
+
+  return (
+    <li className="flex flex-col min-w-0">
+      <div
+        role="button"
+        tabIndex={0}
+        className="overflow-hidden relative w-full bg-gray-100 rounded-lg cursor-pointer group aspect-square"
+        onClick={() => setZoomImage(previewSrc)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setZoomImage(previewSrc);
+          }
+        }}
+      >
+        <img src={previewSrc} alt={displayName} className="object-cover w-full h-full" />
+        {!readOnly && (
+          <Button
+            onClick={(e) => {
+              e?.stopPropagation?.();
+              onRemove(index);
+            }}
+            icon={<RiCloseLine />}
+            className="absolute -top-1 -right-1 z-10 px-0 w-6 h-6 bg-white rounded-full opacity-0 transition-opacity text-danger group-hover:opacity-100 hover:bg-black/70"
+            iconClassName="text-sm"
+            tooltip={t("Xóa")}
+          />
+        )}
+      </div>
+      <ImageDialog
+        isOpen={!!zoomImage}
+        image={zoomImage}
+        onClose={() => setZoomImage("")}
+        imageDialogClassName="object-contain max-w-full max-h-[80vh]"
+      />
+      <span className="mt-1 w-full text-xs text-center text-gray-600 truncate" title={displayName}>
+        {displayName}
+      </span>
+    </li>
+  );
+}
+
+function MultiImageUploadSlot({
+  label,
+  value = [],
+  onChange,
+  maxSizeMB = 10,
+  readOnly = false,
+}: MultiImageUploadSlotProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const processFile = useCallback(
+    async (file: File): Promise<ElementFormImage | null> => {
+      if (readOnly) return null;
+
+      const isImage =
+        ACCEPTED_IMAGE_TYPES.includes(file.type) || /\.(jpe?g|png|webp|gif)$/i.test(file.name);
+      if (!isImage) {
+        toast.error(t("Chỉ hỗ trợ file ảnh (JPG, PNG, WebP, GIF)"));
+        return null;
+      }
+
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > maxSizeMB) {
+        toast.error(
+          `${t("File quá lớn")}. ${t("Tối đa")}: ${maxSizeMB}MB, ${t("file")}: ${sizeMB.toFixed(
+            1
+          )}MB`
+        );
+        return null;
+      }
+
+      try {
+        const imageBytes = await fileToBase64(file);
+        const mimeType = file.type || "image/png";
+        return {
+          fifeUrl: "",
+          imageBytes,
+          mimeType,
+          name: file.name,
+        };
+      } catch (err) {
+        console.error("[MultiImageUploadSlot] Error processing file:", err);
+        toast.error(t("Lỗi khi xử lý ảnh. Vui lòng thử lại."));
+        return null;
+      }
+    },
+    [maxSizeMB, readOnly, t, toast]
+  );
+
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      if (readOnly || uploading) return;
+      const fileArr = Array.from(files);
+      if (!fileArr.length) return;
+
+      setUploading(true);
+      const added: ElementFormImage[] = [];
+      for (const file of fileArr) {
+        const img = await processFile(file);
+        if (img) added.push(img);
+      }
+      setUploading(false);
+
+      if (added.length) {
+        onChange([...value, ...added]);
+        toast.success(
+          added.length === 1
+            ? t("Đã upload ảnh thành công")
+            : `${t("Đã upload")} ${added.length} ${t("ảnh")}`
+        );
+      }
+    },
+    [onChange, processFile, readOnly, t, toast, uploading, value]
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files?.length) addFiles(files);
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!readOnly) setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files?.length) addFiles(files);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = value.filter((_, i) => i !== index);
+    onChange(next.length ? next : undefined);
+  };
+
+  const openFilePicker = () => {
+    if (!readOnly && !uploading) fileInputRef.current?.click();
+  };
+
+  return (
+    <Field noError label={label}>
+      <div className="space-y-2">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={openFilePicker}
+          className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 transition-all ${
+            readOnly ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+          } ${
+            dragOver
+              ? "bg-indigo-50 border-indigo-400"
+              : "border-gray-300 hover:border-indigo-300 hover:bg-indigo-50/30"
+          }`}
+        >
+          {uploading ? (
+            <div className="flex flex-col gap-2 items-center">
+              <RiLoader4Line className="text-3xl text-indigo-500 animate-spin" />
+              <span className="text-sm font-medium text-indigo-600">{t("Đang xử lý")}...</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-center items-center mb-2 w-10 h-10 bg-indigo-50 rounded-full">
+                <RiUploadCloud2Line className="text-xl text-indigo-500" />
+              </div>
+              <span className="text-sm font-semibold text-center text-gray-700">
+                {value.length > 0
+                  ? t("Kéo thả hoặc bấm để thêm ảnh")
+                  : t("Kéo thả hoặc bấm để chọn ảnh")}
+              </span>
+              <span className="mt-1 text-xs text-center text-gray-400">
+                JPG, PNG, WebP, GIF • {t("Tối đa")} {maxSizeMB}MB • {t("Có thể chọn nhiều ảnh")}
+              </span>
+            </>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_EXTENSIONS}
+          multiple
+          className="sr-only"
+          disabled={readOnly}
+          onChange={handleFileChange}
+        />
+
+        {value.length > 0 && (
+          <ul className="grid grid-cols-5 gap-2 max-h-[400px] overflow-y-auto pr-1">
+            {value.map((img, index) => (
+              <MultiImageListItem
+                key={`${img.name}-${index}`}
+                img={img}
+                index={index}
+                readOnly={readOnly}
+                onRemove={handleRemove}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Field>
+  );
+}
+
 export interface ElementImagesUploadProps {
-  artStyleImg?: ElementFormImage;
-  objectImg?: ElementFormImage;
-  itemImg?: ElementFormImage;
-  onArtStyleImgChange: (value: ElementFormImage | undefined) => void;
-  onObjectImgChange: (value: ElementFormImage | undefined) => void;
-  onItemImgChange: (value: ElementFormImage | undefined) => void;
+  artStyleImg?: ElementFormImage[];
+  onArtStyleImgChange: (value: ElementFormImage[] | undefined) => void;
   readOnly?: boolean;
   maxSizeMB?: number;
 }
 
 export function ElementImagesUpload({
   artStyleImg,
-  objectImg,
-  itemImg,
   onArtStyleImgChange,
-  onObjectImgChange,
-  onItemImgChange,
   readOnly = false,
   maxSizeMB = 10,
 }: ElementImagesUploadProps) {
@@ -274,24 +522,10 @@ export function ElementImagesUpload({
 
   return (
     <div className="space-y-3">
-      <ImageUploadSlot
-        label={t("Ảnh phong cách")}
+      <MultiImageUploadSlot
+        label={t("Ảnh Tham chiêu (Tùy chọn)")}
         value={artStyleImg}
         onChange={onArtStyleImgChange}
-        readOnly={readOnly}
-        maxSizeMB={maxSizeMB}
-      />
-      <ImageUploadSlot
-        label={t("Ảnh đối tượng")}
-        value={objectImg}
-        onChange={onObjectImgChange}
-        readOnly={readOnly}
-        maxSizeMB={maxSizeMB}
-      />
-      <ImageUploadSlot
-        label={t("Ảnh sản phẩm")}
-        value={itemImg}
-        onChange={onItemImgChange}
         readOnly={readOnly}
         maxSizeMB={maxSizeMB}
       />

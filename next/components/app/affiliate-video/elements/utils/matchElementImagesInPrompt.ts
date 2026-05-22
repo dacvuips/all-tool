@@ -1,9 +1,15 @@
 import { ElementFormConfig, ElementFormImage } from "../../constants";
-import { elementFormImageToDataUrl, getImageMatchToken } from "./elementFormImageUtils";
+import {
+  elementFormImageToDataUrl,
+  getImageMatchToken,
+  getOrderedElementImages,
+} from "./elementFormImageUtils";
 
-/** 3 vị trí ảnh tham chiếu: phong cách → đối tượng → sản phẩm */
+/** 3 vị trí ảnh tham chiếu trên scene row */
 export const ELEMENT_IMAGE_SLOT_KEYS = ["artStyleImg", "objectImg", "itemImg"] as const;
 export type ElementImageSlotKey = (typeof ELEMENT_IMAGE_SLOT_KEYS)[number];
+
+const SCENE_SLOT_COUNT = 3;
 
 export function isImageNameInPrompt(prompt: string, img: ElementFormImage): boolean {
   const token = getImageMatchToken(img);
@@ -11,22 +17,42 @@ export function isImageNameInPrompt(prompt: string, img: ElementFormImage): bool
   return prompt.toLowerCase().includes(token);
 }
 
+/** Vị trí đầu tiên của token trong prompt (từ trên xuống), -1 nếu không có. */
+function getTokenFirstIndex(prompt: string, token: string): number {
+  if (!token || token.length < 2) return -1;
+  return prompt.toLowerCase().indexOf(token);
+}
+
 /**
  * Trả về mảng 3 phần tử (slot 1–3).
- * Mỗi slot chỉ gán ảnh từ config khi tên ảnh xuất hiện trong prompt.
+ * Quét prompt từ trên xuống; ảnh khớp sớm nhất lần lượt gán slot 1→3.
+ * Ảnh khớp từ thứ 4 trở đi (theo thứ tự xuất hiện trong prompt) không gán vào slot.
  */
 export function matchElementImagesInPrompt(
   prompt: string,
   config?: Pick<ElementFormConfig, ElementImageSlotKey>
 ): (ElementFormImage | undefined)[] {
+  const empty: (ElementFormImage | undefined)[] = [
+    undefined,
+    undefined,
+    undefined,
+  ];
   const trimmed = prompt.trim();
-  if (!trimmed || !config) return [undefined, undefined, undefined];
+  if (!trimmed || !config) return empty;
 
-  return ELEMENT_IMAGE_SLOT_KEYS.map((key) => {
-    const img = config[key];
-    if (!img?.imageBytes && !img?.fifeUrl) return undefined;
-    return isImageNameInPrompt(trimmed, img) ? img : undefined;
-  });
+  const matches = getOrderedElementImages(config)
+    .map((img) => ({
+      img,
+      pos: getTokenFirstIndex(trimmed, getImageMatchToken(img)),
+    }))
+    .filter((m) => m.pos >= 0)
+    .sort((a, b) => a.pos - b.pos);
+
+  const slots = [...empty];
+  for (let i = 0; i < Math.min(SCENE_SLOT_COUNT, matches.length); i++) {
+    slots[i] = matches[i].img;
+  }
+  return slots;
 }
 
 /** Gộp ảnh đã lưu theo scene với kết quả auto-match (ưu tiên override thủ công). */
