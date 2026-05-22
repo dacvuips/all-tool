@@ -3,12 +3,12 @@
  * Thin wrapper around SharedBatchListPanel for the "elements" module.
  * Handles context-specific persistence (IndexedDB) and API calls.
  */
-import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
-import { useIndexedDB } from "../../hook/useIndexedDB";
-import { SharedBatchListPanel } from "../../shared/batch-list";
-import { useElementApi } from "../hook/useElementApi";
-import { useElementContext } from "../providers/element-provider";
-import { BatchActionBar } from "./batch-action-bar";
+import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../../constants";
+import { useIndexedDB } from "../../../hook/useIndexedDB";
+import { SharedBatchListPanel } from "../../../shared/batch-list";
+import { useElementApi } from "../../hook/useElementApi";
+import { useElementContext } from "../../providers/element-provider";
+import { BatchActionBar } from "../batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
 
 interface BatchListPanelProps {

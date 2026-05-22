@@ -11,7 +11,7 @@ import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ElementScriptTabEnum } from "../../constants";
 import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
-import { BatchListPanel } from "./batch-list";
+import { BatchListPanel } from "./element/batch-list";
 
 /** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
 const scriptTabToIndex = (tab: ElementScriptTabEnum | undefined): number => {

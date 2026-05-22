@@ -20,24 +20,24 @@ import {
   RiSearchLine,
   RiText,
 } from "react-icons/ri";
-import { useToast } from "../../../../../lib/providers/toast-provider";
-import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
-import { Dialog } from "../../../../shared/utilities/dialog/dialog";
-import { Button, Input } from "../../../../shared/utilities/form";
-import { Img } from "../../../../shared/utilities/misc";
-import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage } from "../../constants";
-import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
-import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
-import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
-import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
-import { GeneratedImageData } from "../hook/useElementApi";
+import { useToast } from "../../../../../../lib/providers/toast-provider";
+import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
+import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
+import { Button, Input } from "../../../../../shared/utilities/form";
+import { Img } from "../../../../../shared/utilities/misc";
+import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage } from "../../../constants";
+import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
+import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
+import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
+import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
+import { GeneratedImageData } from "../../hook/useElementApi";
 
-import { useIndexedDB } from "../../hook/useIndexedDB";
-import { useSceneThumbnail } from "../../hook/useVideoThumbnail";
-import { useElementSceneMedia } from "../hook/useElementSceneMedia";
-import { useElementContext } from "../providers/element-provider";
-import { elementImageSlotsToUrls } from "../utils/matchElementImagesInPrompt";
-import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
+import { useIndexedDB } from "../../../hook/useIndexedDB";
+import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
+import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
+import { useElementContext } from "../../providers/element-provider";
+import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
+import { AddSceneButton, InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 
 // ── Types ──────────────────────────────────────────────────────────────────

@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
-import { useToast } from "../../../../../lib/providers/toast-provider";
-import { ElementFormImage } from "../../constants";
-import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
+import { useToast } from "../../../../../../lib/providers/toast-provider";
+import { ElementFormImage } from "../../../constants";
+import { getElementFormImagePreviewSrc } from "../../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
