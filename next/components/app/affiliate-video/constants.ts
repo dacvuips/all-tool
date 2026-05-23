@@ -85,12 +85,21 @@ export interface ElementFormImage {
   name: string;
 }
 
+export interface ElementFormVideo {
+  fifeUrl: string;
+  videoBytes: string;
+  mimeType: string;
+  name: string;
+}
+
 export interface ElementFormConfig {
   prompt: string;
   /** Ảnh tham chiếu – có thể upload nhiều ảnh */
   artStyleImg?: ElementFormImage[];
   objectImg?: ElementFormImage;
   itemImg?: ElementFormImage;
+  /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
+  videoRef?: ElementFormVideo[];
   aspectRatio: AspectRatio;
   artStyle: string;
   artStyleId?: string;
@@ -256,6 +265,8 @@ export interface CopyVideoScene {
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
+  /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
+  elementVideoSlots?: (ElementFormVideo | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
 }
@@ -314,6 +325,8 @@ export interface ElementScene {
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
+  /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
+  elementVideoSlots?: (ElementFormVideo | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
 }

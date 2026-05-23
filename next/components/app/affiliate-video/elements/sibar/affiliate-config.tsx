@@ -15,6 +15,7 @@ import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { ElementImagesUpload } from "./element-images-upload";
+import { ElementVideoUpload } from "./element-images-upload";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ export const AffiliateConfig = () => {
   const elementParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
 
   const isImagesToVideo = elementParam === ElementScriptTabEnum.imagesToVideo;
+  const isVideoToVideo = elementParam === ElementScriptTabEnum.videoToVideo;
   return (
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
@@ -95,6 +97,13 @@ export const AffiliateConfig = () => {
               ]}
             />
           </Field>
+        )}
+        {isVideoToVideo && (
+          <ElementVideoUpload
+            videoRef={elementFormConfig?.videoRef}
+            readOnly={!customer}
+            onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
+          />
         )}
         {/* Ảnh sản phẩm */}
         <ElementImagesUpload

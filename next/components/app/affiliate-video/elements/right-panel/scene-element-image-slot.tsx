@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { ElementFormImage } from "../../constants";
 import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
 
@@ -31,6 +32,7 @@ export interface SceneElementImageSlotProps {
   readOnly?: boolean;
   onChange: (value: ElementFormImage | undefined) => void;
   maxSizeMB?: number;
+  imageClass?: string;
 }
 
 export function SceneElementImageSlot({
@@ -39,12 +41,14 @@ export function SceneElementImageSlot({
   readOnly = false,
   onChange,
   maxSizeMB = 10,
+  imageClass = "w-14 h-14",
 }: SceneElementImageSlotProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [zoomImage, setZoomImage] = useState("");
 
   const previewSrc = useMemo(() => {
     if (!value) return null;
@@ -137,16 +141,18 @@ export function SceneElementImageSlot({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={!hasImage ? openFilePicker : undefined}
-        className={`relative w-14 h-14  overflow-hidden transition-all ${
-          readOnly ? "opacity-60 cursor-not-allowed" : hasImage ? "" : "cursor-pointer"
-        } ${
+        onClick={hasImage ? () => setZoomImage(previewSrc || "") : openFilePicker}
+        className={`${imageClass} relative   overflow-hidden transition-all ${
+          readOnly && !hasImage
+            ? "opacity-60 cursor-not-allowed"
+            : "cursor-pointer"
+        } ${readOnly && hasImage ? "opacity-60" : ""} ${
           dragOver
             ? "bg-blue-50 ring-2 ring-blue-400"
             : hasImage
             ? "bg-gray-100"
             : "bg-gray-100/80 hover:bg-gray-100"
-        }`}
+        } `}
       >
         <span className="absolute top-0 left-0 z-10 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-gray-600 rounded-br-md">
           {slotIndex}
@@ -191,6 +197,12 @@ export function SceneElementImageSlot({
         className="sr-only"
         disabled={readOnly}
         onChange={handleFileChange}
+      />
+      <ImageDialog
+        isOpen={!!zoomImage}
+        image={zoomImage}
+        onClose={() => setZoomImage("")}
+        imageDialogClassName="object-contain max-w-full max-h-[80vh]"
       />
     </div>
   );

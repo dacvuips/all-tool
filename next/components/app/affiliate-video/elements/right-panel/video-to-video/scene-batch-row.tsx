@@ -25,7 +25,7 @@ import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../../shared/utilities/form";
 import { Img } from "../../../../../shared/utilities/misc";
-import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage } from "../../../constants";
+import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage, ElementFormVideo } from "../../../constants";
 import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
@@ -34,12 +34,12 @@ import { GeneratedImageData } from "../../hook/useElementApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
-import { ServiceImageEnum } from "../../constants";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
 import { AddSceneButton, InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
+import { SceneElementVideosRow } from "./scene-element-videos-row";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type EditField =
@@ -71,6 +71,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleNoText,
   onUpdateSelectedProductImages,
   onUpdateElementImageSlots,
+  onUpdateElementVideoSlots,
 }: {
   scene: CopyVideoScene;
   index: number;
@@ -92,6 +93,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     slots: (ElementFormImage | undefined)[],
     imageUrls: string[]
   ) => void;
+  onUpdateElementVideoSlots?: (
+    sceneId: string,
+    slots: (ElementFormVideo | undefined)[]
+  ) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -103,7 +108,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [expandedField, setExpandedField] = useState<EditField | null>(null);
   const [hoveredField, setHoveredField] = useState<EditField | null>(null);
   const [copiedField, setCopiedField] = useState<EditField | null>(null);
-
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // ── Thumbnail from IndexedDB (saved during video analysis) ──
@@ -151,6 +157,23 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages, onUpdateElementImageSlots]
   );
 
+  // ── Video tham chiếu 1 ô (per-scene) ──
+  const [selectedElementVideoSlots, setSelectedElementVideoSlots] = useState<
+    (ElementFormVideo | undefined)[]
+  >(scene.elementVideoSlots || []);
+
+  useEffect(() => {
+    setSelectedElementVideoSlots(scene.elementVideoSlots || []);
+  }, [scene.id, scene.elementVideoSlots]);
+
+  const handleElementVideoSlotsChange = useCallback(
+    (slots: (ElementFormVideo | undefined)[]) => {
+      setSelectedElementVideoSlots(slots);
+      onUpdateElementVideoSlots?.(scene.id, slots);
+    },
+    [scene.id, onUpdateElementVideoSlots]
+  );
+
   // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
   const [localProductPrompt, setLocalProductPrompt] = useState(scene.product_image_prompt ?? "");
   useEffect(() => {
@@ -186,6 +209,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     noText: scene.noText,
   });
 
+  const videoPaddingTop = "56.25%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openEdit = (field: EditField) => {
@@ -225,9 +249,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
   }, [editValue]);
-
-  const isImageOnly = elementFormConfig.serviceImageType === ServiceImageEnum.imageOnly;
-  console.log(isImageOnly);
 
   /** Renders editable prompt cell content */
   const renderEditablePrompt = (
@@ -408,14 +429,25 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           />
         </div>
       </div>
+
+      {/* ── Video tham chiếu (1 ô, match tên video trong prompt) ── */}
+      <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+        <SceneElementVideosRow
+          sceneId={scene.id}
+          prompt={scene.visual_prompt || ""}
+          elementFormConfig={elementFormConfig}
+          savedSlots={scene.elementVideoSlots}
+          readOnly={isDisabled}
+          onSlotsChange={handleElementVideoSlotsChange}
+        />
+      </div>
+
       {/* ── Ảnh tham chiếu (3 ô, match tên trong prompt) ── */}
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <SceneElementImagesRow
           sceneId={scene.id}
-          sceneNumber={scene.sceneNumber}
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
-          slotSource="artStyleImg"
           savedSlots={scene.elementImageSlots}
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
@@ -423,7 +455,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       </div>
       {/* ── Media tabs ── */}
       <SceneCardTabs
-        hideImageTab={!!hideImageColumn || isImageOnly}
+        hideImageTab={true}
         hideExtendTab={true}
         forcedTab={forcedTab}
         tabStatus={{
@@ -594,6 +626,10 @@ interface SceneRowGroupProps {
     slots: (ElementFormImage | undefined)[],
     imageUrls: string[]
   ) => void;
+  onUpdateElementVideoSlots?: (
+    sceneId: string,
+    slots: (ElementFormVideo | undefined)[]
+  ) => void;
 }
 
 export function SceneRowGroup({
@@ -610,6 +646,7 @@ export function SceneRowGroup({
   onToggleNoText,
   onUpdateSelectedProductImages,
   onUpdateElementImageSlots,
+  onUpdateElementVideoSlots,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -650,6 +687,7 @@ export function SceneRowGroup({
           onToggleNoText={onToggleNoText}
           onUpdateSelectedProductImages={onUpdateSelectedProductImages}
           onUpdateElementImageSlots={onUpdateElementImageSlots}
+          onUpdateElementVideoSlots={onUpdateElementVideoSlots}
         />
       </div>
 

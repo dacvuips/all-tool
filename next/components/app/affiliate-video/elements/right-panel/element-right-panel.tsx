@@ -14,6 +14,7 @@ import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./element/batch-list";
 import { ImagesToVideoListPanel } from "./images-to-video/images-to-video-list";
+import { VideoToVideoListPanel } from "./video-to-video/video-to-video-list";
 
 /** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
 const scriptTabToIndex = (tab: ElementScriptTabEnum | undefined): number => {
@@ -102,7 +103,16 @@ export const ElementRightPanel = () => {
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
-            <>{"Đang phát triển , các sếp bình tỉnh nhé"} </>
+            <VideoToVideoListPanel
+              scenes={(scriptData?.scenes || []).map((s, i) => ({
+                ...s,
+                id: s.id || `scene-${i}`,
+                sceneNumber: i + 1,
+                disabled: s.disabled ?? false,
+                voiceDisable: s.voiceDisable ?? false,
+              }))}
+              characters={[]}
+            />
           )}
         </TabGroup.Tab>
       </TabGroup>

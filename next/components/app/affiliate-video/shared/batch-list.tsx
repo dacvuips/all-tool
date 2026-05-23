@@ -234,6 +234,22 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Update element video slots (1 ô video tham chiếu) */
+  const handleUpdateElementVideoSlots = async (
+    sceneId: string,
+    slots: any[]
+  ) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, elementVideoSlots: slots } : s
+    );
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleUpdateElementVideoSlots] Failed to persist:", err);
+    }
+  };
+
   if (!customer) {
     return (
       <div className="flex flex-col justify-center items-center py-16">
@@ -364,6 +380,7 @@ export function SharedBatchListPanel({
               onToggleNoText={handleToggleNoText}
               onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
               onUpdateElementImageSlots={handleUpdateElementImageSlots}
+              onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
               forcedTab={globalTab}
               {...sceneRowExtraProps}
             />

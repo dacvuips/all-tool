@@ -5,7 +5,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCloseLine, RiLoader4Line, RiUploadCloud2Line } from "react-icons/ri";
+import { RiCloseLine, RiDeleteBinLine, RiLoader4Line, RiUploadCloud2Line, RiVideoLine } from "react-icons/ri";
+import { ElementFormVideo } from "../../constants";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { Button, Field } from "../../../../shared/utilities/form";
@@ -488,17 +489,32 @@ function MultiImageUploadSlot({
         />
 
         {value.length > 0 && (
-          <ul className="grid grid-cols-5 gap-2 max-h-[400px] overflow-y-auto pr-1">
-            {value.map((img, index) => (
-              <MultiImageListItem
-                key={`${img.name}-${index}`}
-                img={img}
-                index={index}
-                readOnly={readOnly}
-                onRemove={handleRemove}
-              />
-            ))}
-          </ul>
+          <div className="space-y-2">
+            {!readOnly && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => onChange(undefined)}
+                  icon={<RiDeleteBinLine />}
+                  className="h-7 px-2 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100 gap-1"
+                  iconClassName="text-sm"
+                  tooltip={t("Xóa tất cả ảnh")}
+                >
+                  {t("Xóa tất cả")}
+                </Button>
+              </div>
+            )}
+            <ul className="grid grid-cols-5 gap-2 max-h-[400px] overflow-y-auto pr-1">
+              {value.map((img, index) => (
+                <MultiImageListItem
+                  key={`${img.name}-${index}`}
+                  img={img}
+                  index={index}
+                  readOnly={readOnly}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     </Field>
@@ -511,6 +527,318 @@ export interface ElementImagesUploadProps {
   readOnly?: boolean;
   maxSizeMB?: number;
 }
+
+// ── Video upload constants ────────────────────────────────────────────────
+const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"];
+const ACCEPTED_VIDEO_EXTENSIONS = ".mp4,.webm,.mov,.avi";
+
+function fileToBase64Video(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+      if (base64) resolve(base64);
+      else reject(new Error("Failed to read video as base64"));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function base64VideoToBlobUrl(base64: string, mimeType: string): string {
+  const byteChars = atob(base64);
+  const byteNumbers = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([byteNumbers], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
+interface VideoUploadSlotProps {
+  label: string;
+  value?: ElementFormVideo[];
+  onChange: (value: ElementFormVideo[] | undefined) => void;
+  maxSizeMB?: number;
+  readOnly?: boolean;
+}
+
+function MultiVideoListItem({
+  video,
+  index,
+  readOnly,
+  onRemove,
+}: {
+  video: ElementFormVideo;
+  index: number;
+  readOnly: boolean;
+  onRemove: (index: number) => void;
+}) {
+  const { t } = useTranslation();
+  const previewSrc = useMemo(() => {
+    if (!video.videoBytes && !video.fifeUrl) return null;
+    if (video.fifeUrl) return video.fifeUrl;
+    return base64VideoToBlobUrl(video.videoBytes, video.mimeType || "video/mp4");
+  }, [video.videoBytes, video.fifeUrl, video.mimeType]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc?.startsWith("blob:")) URL.revokeObjectURL(previewSrc);
+    };
+  }, [previewSrc]);
+
+  if (!previewSrc) return null;
+
+  const displayName = (video.name || `video-${index + 1}`).replace(/\.[^./\\]+$/, "").trim() || `video-${index + 1}`;
+
+  return (
+    <li className="flex flex-col min-w-0">
+      <div className="overflow-hidden relative w-full bg-black rounded-lg group aspect-video">
+        <video
+          src={previewSrc}
+          className="object-cover w-full h-full"
+          muted
+          preload="metadata"
+        />
+        {!readOnly && (
+          <Button
+            onClick={(e) => {
+              e?.stopPropagation?.();
+              onRemove(index);
+            }}
+            icon={<RiCloseLine />}
+            className="absolute -top-1 -right-1 z-10 px-0 w-6 h-6 bg-white rounded-full opacity-0 transition-opacity text-danger group-hover:opacity-100 hover:bg-black/70"
+            iconClassName="text-sm"
+            tooltip={t("Xóa")}
+          />
+        )}
+      </div>
+      <span
+        className="mt-1 w-full text-xs text-center text-gray-600 truncate"
+        title={displayName}
+      >
+        {displayName}
+      </span>
+    </li>
+  );
+}
+
+function MultiVideoUploadSlot({
+  label,
+  value = [],
+  onChange,
+  maxSizeMB = 100,
+  readOnly = false,
+}: VideoUploadSlotProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  const processFile = useCallback(
+    async (file: File): Promise<ElementFormVideo | null> => {
+      if (readOnly) return null;
+
+      const isVideo =
+        ACCEPTED_VIDEO_TYPES.includes(file.type) || /\.(mp4|webm|mov|avi)$/i.test(file.name);
+      if (!isVideo) {
+        toast.error(t("Chỉ hỗ trợ file video (MP4, WebM, MOV, AVI)"));
+        return null;
+      }
+
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > maxSizeMB) {
+        toast.error(
+          `${t("File quá lớn")}. ${t("Tối đa")}: ${maxSizeMB}MB, ${t("file")}: ${sizeMB.toFixed(1)}MB`
+        );
+        return null;
+      }
+
+      try {
+        const videoBytes = await fileToBase64Video(file);
+        const mimeType = file.type || "video/mp4";
+        return { fifeUrl: "", videoBytes, mimeType, name: file.name };
+      } catch (err) {
+        console.error("[MultiVideoUploadSlot] Error processing file:", err);
+        toast.error(t("Lỗi khi xử lý video. Vui lòng thử lại."));
+        return null;
+      }
+    },
+    [maxSizeMB, readOnly, t, toast]
+  );
+
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      if (readOnly || uploading) return;
+      const fileArr = Array.from(files);
+      if (!fileArr.length) return;
+
+      setUploading(true);
+      const added: ElementFormVideo[] = [];
+      for (const file of fileArr) {
+        const vid = await processFile(file);
+        if (vid) added.push(vid);
+      }
+      setUploading(false);
+
+      if (added.length) {
+        onChange([...value, ...added]);
+        toast.success(
+          added.length === 1
+            ? t("Đã upload video thành công")
+            : `${t("Đã upload")} ${added.length} ${t("video")}`
+        );
+      }
+    },
+    [onChange, processFile, readOnly, t, toast, uploading, value]
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files?.length) addFiles(files);
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!readOnly) setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files?.length) addFiles(files);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = value.filter((_, i) => i !== index);
+    onChange(next.length ? next : undefined);
+  };
+
+  const openFilePicker = () => {
+    if (!readOnly && !uploading) fileInputRef.current?.click();
+  };
+
+  return (
+    <Field noError label={label}>
+      <div className="space-y-2">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={openFilePicker}
+          className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 transition-all ${
+            readOnly ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+          } ${
+            dragOver
+              ? "bg-violet-50 border-violet-400"
+              : "border-gray-300 hover:border-violet-300 hover:bg-violet-50/30"
+          }`}
+        >
+          {uploading ? (
+            <div className="flex flex-col gap-2 items-center">
+              <RiLoader4Line className="text-3xl text-violet-500 animate-spin" />
+              <span className="text-sm font-medium text-violet-600">{t("Đang xử lý")}...</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-center items-center mb-2 w-10 h-10 bg-violet-50 rounded-full">
+                <RiVideoLine className="text-xl text-violet-500" />
+              </div>
+              <span className="text-sm font-semibold text-center text-gray-700">
+                {value.length > 0
+                  ? t("Kéo thả hoặc bấm để thêm video")
+                  : t("Kéo thả hoặc bấm để chọn video")}
+              </span>
+              <span className="mt-1 text-xs text-center text-gray-400">
+                MP4, WebM, MOV, AVI • {t("Tối đa")} {maxSizeMB}MB • {t("Có thể chọn nhiều video")}
+              </span>
+            </>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={ACCEPTED_VIDEO_EXTENSIONS}
+          multiple
+          className="sr-only"
+          disabled={readOnly}
+          onChange={handleFileChange}
+        />
+
+        {value.length > 0 && (
+          <div className="space-y-2">
+            {!readOnly && (
+              <div className="flex justify-end">
+                <Button
+                  onClick={() => onChange(undefined)}
+                  icon={<RiDeleteBinLine />}
+                  className="h-7 px-2 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100 gap-1"
+                  iconClassName="text-sm"
+                  tooltip={t("Xóa tất cả video")}
+                >
+                  {t("Xóa tất cả")}
+                </Button>
+              </div>
+            )}
+            <ul className="grid grid-cols-3 gap-2 max-h-[400px] overflow-y-auto pr-1">
+              {value.map((vid, index) => (
+                <MultiVideoListItem
+                  key={`${vid.name}-${index}`}
+                  video={vid}
+                  index={index}
+                  readOnly={readOnly}
+                  onRemove={handleRemove}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+export interface ElementVideoUploadProps {
+  videoRef?: ElementFormVideo[];
+  onVideoRefChange: (value: ElementFormVideo[] | undefined) => void;
+  readOnly?: boolean;
+  maxSizeMB?: number;
+}
+
+export function ElementVideoUpload({
+  videoRef,
+  onVideoRefChange,
+  readOnly = false,
+  maxSizeMB = 100,
+}: ElementVideoUploadProps) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="space-y-3">
+      <MultiVideoUploadSlot
+        label={t("Video tham chiếu (Tùy chọn)")}
+        value={videoRef}
+        onChange={onVideoRefChange}
+        readOnly={readOnly}
+        maxSizeMB={maxSizeMB}
+      />
+    </div>
+  );
+}
+
 
 export function ElementImagesUpload({
   artStyleImg,
