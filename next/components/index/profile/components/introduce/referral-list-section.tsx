@@ -67,7 +67,7 @@ export function ReferralListSection({
             <NotifyText
               color="blue"
               text={t(
-                "Mỗi lần người được bạn giới thiệu nạp gói thành công bạn sẽ nhận được 5% - 10% trên mỗi đơn nạp gói của người đó"
+                "Mỗi lần người được bạn giới thiệu nạp gói thành công bạn sẽ nhận được 10% - 30% trên mỗi đơn nạp gói của người đó"
               )}
               className="mb-2"
             />

@@ -1,16 +1,26 @@
 import { gql } from "apollo-server-express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { t } from "../../../helpers/functions/string";
+import logger from "../../../helpers/logger";
+import { MainConnection } from "../../../helpers/mongo";
 import { Scope } from "../../../libs/dal/authority";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../libs/dal/customer";
-import { NotificationModel, NotificationTarget } from "../../../libs/dal/notification";
+import { IntroduceModel } from "../../../libs/dal/introduce";
+import {
+  InsertNotification,
+  NotificationModel,
+  NotificationTarget,
+} from "../../../libs/dal/notification";
 import {
   PackageTransactionSnapshot,
   PackageTransactionTypeEnum,
 } from "../../../libs/dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../libs/dal/packageTransaction/package-transaction.model";
 import { SettingModel } from "../../../libs/dal/setting/setting.model";
+import { walletService } from "../../../libs/dal/wallet";
 import { Context } from "../../../libs/graphql";
+import { GetWalletInfo } from "../../../libs/usecases/wallet";
+import { WalletTransactionBuilder } from "../../../libs/usecases/wallet/wallet-transaction.builder";
 import { NotificationBuilder } from "../notification/notificationBuilder";
 
 /** Map SubscriptionPlanEnum → setting key prefix */
@@ -30,6 +40,7 @@ const FREE_PACKAGE_DEFAULTS = {
   requestLimit: 5,
   imageStreamCount: 1,
   videoStreamCount: 1,
+  price: 0,
 };
 
 export default {
@@ -78,6 +89,7 @@ export default {
           requestLimit: number;
           imageStreamCount: number;
           videoStreamCount: number;
+          price: number;
         };
 
         if (subscription === SubscriptionPlanEnum.FREE) {
@@ -99,6 +111,7 @@ export default {
             requestLimit: getValue("request-limit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
+            price: getValue("price"),
           };
         }
 
@@ -165,6 +178,85 @@ export default {
             afterSnapshot.subscription || "N/A"
           }`,
         });
+
+        // === Hoa hồng giới thiệu: cộng 10% giá đơn cho người giới thiệu ===
+        if (!!customerId && packageConfig.price > 0) {
+          try {
+            // Tìm bản ghi giới thiệu: người nạp đơn là refereeId
+            const introduce = await IntroduceModel.findOne({
+              refereeId: customerId,
+              blocked: false,
+            });
+
+            if (introduce) {
+              const referrerId = introduce.referrerId.toString();
+
+              // Count số lượng người được referrerId giới thiệu
+              const refereeCount = await IntroduceModel.countDocuments({
+                referrerId: introduce.referrerId,
+                blocked: false,
+              });
+              // Tính tỉ lệ hoa hồng theo tier số lượng người giới thiệu
+              // 1–4 người: 10%, 5–9 người: 12%, 10+ người: 15%
+              const bonusRate = refereeCount >= 10 ? 0.15 : refereeCount >= 5 ? 0.12 : 0.1;
+              const bonusPercent = refereeCount >= 10 ? 15 : refereeCount >= 5 ? 12 : 10;
+              const referralBonus = Math.round(packageConfig.price * bonusRate);
+
+              // Cộng wallet cho người giới thiệu
+              const referrerWallet = await GetWalletInfo.usecase.execute({
+                ownerId: referrerId,
+              });
+              const referralSession = await MainConnection.startSession();
+              try {
+                await referralSession.withTransaction(async () => {
+                  await walletService.createTransaction({
+                    transaction: new WalletTransactionBuilder(referrerWallet)
+                      .introduceReward({
+                        amount: referralBonus,
+                        description: `Hoa hồng giới thiệu ${referralBonus} (10% đơn hàng)`,
+                        orderId: "",
+                        orderCode: "",
+                      })
+                      .build(),
+                    session: referralSession,
+                  });
+                });
+              } finally {
+                await referralSession.endSession();
+              }
+
+              // Thông báo cho người giới thiệu
+              const referrerNotify = new NotificationBuilder(
+                "Hoa hồng giới thiệu",
+                `Bạn nhận được ${referralBonus} credit hoa hồng từ đơn hàng của người bạn giới thiệu`
+              )
+                .sendTo(NotificationTarget.CUSTOMER, referrerId)
+                .build();
+              InsertNotification([referrerNotify]);
+
+              // Ghi thông tin đơn vào Introduce
+              await IntroduceModel.findByIdAndUpdate(introduce._id, {
+                $push: {
+                  orders: {
+                    discountPrice: referralBonus,
+                  },
+                },
+              });
+
+              logger.info(`Đã cộng hoa hồng giới thiệu`, {
+                referrerId,
+                refereeId: customerId.toString(),
+
+                referralBonus,
+              });
+            }
+          } catch (err) {
+            // Không để lỗi hoa hồng ảnh hưởng tới luồng thanh toán chính
+            logger.error(`Lỗi khi xử lý hoa hồng giới thiệu`, {
+              err,
+            });
+          }
+        }
 
         // Tạo thông báo tới customer
         const notifyTitle = `Gói dịch vụ đã được cập nhật`;
