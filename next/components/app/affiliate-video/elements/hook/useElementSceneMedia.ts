@@ -84,6 +84,7 @@ export interface UseSceneMediaReturn {
   /** Download video nối đã tạo về máy (trigger browser download) */
   handleDownloadExtendVideo: () => Promise<void>;
   reportVideoError: (message: string) => void;
+  handleGenerateVideoToVideo: () => Promise<void>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -133,6 +134,7 @@ export function useElementSceneMedia({
     saveGeneratedImage,
     generateVideo,
     getGeneratedVideo,
+    generateVideoToVideo,
   } = useElementApi();
   const {
     batchGeneratingSceneIdsRef,
@@ -538,6 +540,75 @@ export function useElementSceneMedia({
     }
   };
 
+  const handleGenerateVideoToVideo = async () => {
+    const motionPrompt = (scene.motion_description || "").trim();
+    const visualPrompt = scene.visual_prompt?.trim();
+    // ── Check concurrency limit ──
+    const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
+    if (currentVideoGenerating >= VIDEO_CONCURRENCY) {
+      const message = t("Đang tạo video tối đa {{max}} video cùng lúc. Vui lòng chờ hoàn thành.", {
+        max: VIDEO_CONCURRENCY,
+      });
+      setVideoError(message);
+      return;
+    }
+
+    setVideoError(null);
+    setGeneratingVideo(true);
+    setVideoProgress(0);
+    setVideoStatusMessage("");
+    startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+    addBatchGeneratingVideoSceneId(scene.id);
+    try {
+      let imagesArray: any[] | undefined = undefined;
+
+      const countFilledSlots = (arr?: (ElementFormImage | undefined)[]) =>
+        arr?.filter((s) => s && (s.imageBytes || s.fifeUrl)).length ?? 0;
+      const slotsForVideo =
+        countFilledSlots(selectedElementImageSlots) >= countFilledSlots(scene.elementImageSlots)
+          ? selectedElementImageSlots
+          : scene.elementImageSlots ?? selectedElementImageSlots;
+
+      imagesArray = await resolveElementReferenceImagesForApi({
+        urls: selectedProductImages,
+        slots: slotsForVideo,
+      });
+      const filledSlotCount = countFilledSlots(slotsForVideo);
+      if (filledSlotCount > 0 && imagesArray.length < filledSlotCount) {
+      }
+      const result = await generateVideoToVideo({
+        sceneId: scene.id,
+        prompt: scene.voiceDisable
+          ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
+          : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
+              scene.audio_description
+            }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
+        images: imagesArray,
+        aspectRatio: scriptData?.aspectRatio,
+        serviceImageType: scriptData.serviceImageType,
+        onProgress: (pct) => {
+          setVideoProgress((prev) => Math.max(prev, pct));
+        },
+        onStatusMessage: (msg) => {
+          setVideoStatusMessage(msg);
+        },
+        onError: setVideoError,
+        artStyleId: scriptData?.artStyleId,
+        artStyle: scriptData?.artStyle,
+      });
+      if (result) {
+        setGeneratedVideo(result);
+        setVideoError(null);
+      }
+    } catch {
+      // Lỗi đã được set qua onError hoặc validation phía trên
+    } finally {
+      stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
+      setGeneratingVideo(false);
+      removeBatchGeneratingVideoSceneId(scene.id);
+    }
+  };
+
   // ─────────────────────────────────────────────────────────────────────────
   // handleDownloadImage
   // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
@@ -675,5 +746,6 @@ export function useElementSceneMedia({
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
+    handleGenerateVideoToVideo,
   };
 }

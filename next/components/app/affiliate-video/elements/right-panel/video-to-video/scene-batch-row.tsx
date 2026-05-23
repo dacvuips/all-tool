@@ -25,7 +25,13 @@ import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../../shared/utilities/form";
 import { Img } from "../../../../../shared/utilities/misc";
-import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage, ElementFormVideo } from "../../../constants";
+import {
+  CharacterItem,
+  CopyVideoScene,
+  DB_NAME,
+  ElementFormImage,
+  ElementFormVideo,
+} from "../../../constants";
 import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
@@ -93,10 +99,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     slots: (ElementFormImage | undefined)[],
     imageUrls: string[]
   ) => void;
-  onUpdateElementVideoSlots?: (
-    sceneId: string,
-    slots: (ElementFormVideo | undefined)[]
-  ) => void;
+  onUpdateElementVideoSlots?: (sceneId: string, slots: (ElementFormVideo | undefined)[]) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -200,6 +203,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
+    handleGenerateVideoToVideo,
   } = useElementSceneMedia({
     scene,
     nextSceneId,
@@ -489,13 +493,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             generatedVideo={generatedVideo}
             generatingVideo={generatingVideo}
             videoProgress={videoProgress}
-            isDisabled={isDisabled}
+            isDisabled={isDisabled || true}
             hasImage={!!generatedImage}
             isPromptToVideo
             aspectRatio={scriptData?.aspectRatio}
             errorMessage={videoError}
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
-            onGenerateVideo={() => handleGenerateVideo()}
+            onGenerateVideo={() => handleGenerateVideoToVideo()}
             onDownloadVideo={handleDownloadVideo}
           />
         )}
@@ -626,10 +630,7 @@ interface SceneRowGroupProps {
     slots: (ElementFormImage | undefined)[],
     imageUrls: string[]
   ) => void;
-  onUpdateElementVideoSlots?: (
-    sceneId: string,
-    slots: (ElementFormVideo | undefined)[]
-  ) => void;
+  onUpdateElementVideoSlots?: (sceneId: string, slots: (ElementFormVideo | undefined)[]) => void;
 }
 
 export function SceneRowGroup({

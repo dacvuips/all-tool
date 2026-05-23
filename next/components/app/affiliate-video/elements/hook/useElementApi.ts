@@ -87,6 +87,10 @@ export interface GenerateVideoParams {
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
 }
+export interface GenerateVideoToVideoParams extends GenerateVideoParams {
+  /** Video gốc cần nối (base64) */
+  video?: { uri?: string | null; videoBytes?: string | null; mimeType: string };
+}
 
 export interface ExtendVideoParams {
   /** Scene ID – dùng làm key lưu vào IndexedDB */
@@ -287,6 +291,8 @@ export interface UseAffiliateVideoApiReturn {
    * Gửi video base64 lên server → Gemini phân tích → trả về characters, props, scenes.
    * Tự động lưu kết quả vào IndexedDB.
    */
+
+  generateVideoToVideo: (params: GenerateVideoParams) => Promise<GeneratedVideoData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -588,6 +594,126 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
     [videoDB]
   );
 
+  // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
+  const generateVideoToVideo = useCallback(
+    async (params: GenerateVideoToVideoParams): Promise<GeneratedVideoData | undefined> => {
+      const {
+        sceneId,
+        prompt,
+        images,
+        aspectRatio,
+        generateAudio,
+        onProgress,
+        onStatusMessage,
+        onError,
+        artStyleId,
+        artStyle,
+        serviceImageType,
+        video,
+      } = params;
+
+      try {
+        onProgress?.(5);
+        onStatusMessage?.("Đang gửi yêu cầu tạo video...");
+
+        const res = await fetch("/api/app/generation-element-video-to-video/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            images,
+            video,
+            config: {
+              aspectRatio,
+              generateAudio,
+              artStyleId,
+              artStyle,
+              serviceImageType,
+            },
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          const message = err?.message || `Lỗi ${res.status}`;
+          if (onError) onError(message);
+          else toast.error(message);
+          return undefined;
+        }
+
+        // Read SSE stream
+        const reader = res.body?.getReader();
+        const decoder = new TextDecoder();
+
+        if (!reader) {
+          const message = "Không thể đọc response stream";
+          if (onError) onError(message);
+          else toast.error(message);
+          return undefined;
+        }
+
+        let videoData: GeneratedVideoData | undefined;
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from buffer
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // keep incomplete line
+
+          for (const line of lines) {
+            if (!line.startsWith("data: ")) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === "progress") {
+                onProgress?.(event.progress);
+                if (event.message) onStatusMessage?.(event.message);
+              } else if (event.type === "done") {
+                onProgress?.(100);
+                onStatusMessage?.("Hoàn thành!");
+                videoData = event.data;
+              } else if (event.type === "error") {
+                const message = event.message || "Lỗi tạo video";
+                if (onError) onError(message);
+                else toast.error(message);
+                return undefined;
+              }
+            } catch (parseErr) {
+              // Ignore malformed SSE lines
+            }
+          }
+        }
+
+        if (!videoData) {
+          const message = "Không nhận được video từ API";
+          if (onError) onError(message);
+          else toast.error(message);
+          return undefined;
+        }
+
+        // Attach the aspect ratio used at generation time
+        videoData.aspectRatio = aspectRatio;
+        // Persist to IndexedDB
+        await videoDB.set(sceneId, videoData);
+
+        return videoData;
+      } catch (err: any) {
+        onProgress?.(0);
+        const message = err?.message || "Lỗi tạo video";
+        if (onError) onError(message);
+        else toast.error(message);
+        console.error("[generateVideo] Error:", err);
+        return undefined;
+      }
+    },
+    [toast, videoDB]
+  );
+
   // ── insertScene – gọi API chèn scene mới ──
   const insertScene = useCallback(
     async (params: InsertSceneParams): Promise<InsertSceneResult | undefined> => {
@@ -736,5 +862,6 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
     getGeneratedAudio,
     getSceneHistory,
     clearSceneHistory,
+    generateVideoToVideo,
   };
 }

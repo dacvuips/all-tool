@@ -20,7 +20,7 @@ import { CaptchaResponseData } from "../helpers/validateApiKey";
  * - Poll kết quả và stream về client
  * - Tăng usedQuantity sau khi thành công
  */
-export async function handleVideoGeneration(
+export async function handleVideoToVideoGeneration(
   req: Request,
   res: Response,
   captchaData: CaptchaResponseData,
@@ -90,6 +90,7 @@ interface CallAisandboxParams {
   batchId?: string;
   Seed?: string;
   headers?: Record<string, string>;
+  uploadedVideoNames?: string[]; // Thêm param mới cho video input (dùng cho video-to-video)
 }
 
 /**
@@ -101,22 +102,11 @@ interface CallAisandboxParams {
 export async function callAisandboxVideoAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
-  const { uploadedImageNames } = params;
-  const imageCount = uploadedImageNames?.length || 0;
-
   return retryWithThrottleGate(
     () => {
-      if (imageCount === 0) {
-        return callTextOnlyAPI(params);
-      } else if (imageCount === 1) {
-        return callStartImageAPI(params);
-      } else if (imageCount === 2) {
-        return callStartAndEndImageAPI(params);
-      } else {
-        return callReferenceImagesAPI(params);
-      }
+      return callVideoToVideoAPI(params);
     },
-    { label: "generation-video", gate: videoThrottleGate }
+    { label: "generation-video-to-video", gate: videoThrottleGate }
   );
 }
 
@@ -129,11 +119,7 @@ function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
 }
 
 function buildVideoModelKey(params: CallAisandboxParams): string {
-  const base = `veo_3_1_t2v_lite_low_priority`;
-  return base;
-}
-function buildVideoModelKeyWithReferenceImages(params: CallAisandboxParams): string {
-  const base = `veo_3_1_r2v_lite_low_priority`;
+  const base = `abra_edit`;
   return base;
 }
 
@@ -200,12 +186,13 @@ async function sendAndParseResponse(
   return { response, mediaName };
 }
 
-// ── Case 1: Không có ảnh → Text-to-Video ────────────────────────────────────
+// ── Case 1: Không có ảnh → video-to-Video ────────────────────────────────────
 
 /**
- * Chỉ có prompt, không có ảnh → gọi endpoint batchAsyncGenerateVideoText
+ * Chỉ có prompt, video, nhiều ảnh → gọi endpoint batchAsyncGenerateVideoEditVideo
+
  */
-export async function callTextOnlyAPI(
+export async function callVideoToVideoAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const videoAspectRatio = mapAspectRatio(params.aspectRatio);
@@ -229,131 +216,11 @@ export async function callTextOnlyAPI(
           },
         },
         videoModelKey: buildVideoModelKey(params),
-        metadata: {},
-      },
-    ],
-    useV2ModelConfig: true,
-  };
-
-  const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoText";
-  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
-}
-
-// ── Case 2: 1 ảnh → Start Image ─────────────────────────────────────────────
-
-/**
- * 1 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartImage (startImage)
- */
-export async function callStartImageAPI(
-  params: CallAisandboxParams
-): Promise<{ response: any; mediaName: string }> {
-  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = params.batchId;
-  const seed = params.Seed;
-
-  const payload = {
-    mediaGenerationContext: {
-      batchId,
-      // audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
-    },
-    clientContext: buildClientContext(params),
-    requests: [
-      {
-        aspectRatio: videoAspectRatio,
-        seed,
-        textInput: {
-          structuredPrompt: {
-            parts: [{ text: params.prompt }],
-          },
+        videoInput: {
+          mediaId: params.uploadedVideoNames,
+          startFrameIndex: 0,
+          endFrameIndex: 240,
         },
-        videoModelKey: buildVideoModelKey(params),
-        metadata: {},
-        startImage: {
-          mediaId: params.uploadedImageNames![0],
-        },
-      },
-    ],
-    useV2ModelConfig: true,
-  };
-
-  const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartImage";
-  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
-}
-
-// ── Case 3: 2 ảnh → Start + End Image ───────────────────────────────────────
-
-/**
- * 2 ảnh upload → gọi endpoint batchAsyncGenerateVideoStartAndEndImage
- * (startImage = ảnh đầu, endImage = ảnh thứ 2)
- */
-export async function callStartAndEndImageAPI(
-  params: CallAisandboxParams
-): Promise<{ response: any; mediaName: string }> {
-  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = params.batchId;
-  const seed = params.Seed;
-
-  const payload = {
-    mediaGenerationContext: {
-      batchId,
-      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
-    },
-    clientContext: buildClientContext(params),
-    requests: [
-      {
-        aspectRatio: videoAspectRatio,
-        seed,
-        textInput: {
-          structuredPrompt: {
-            parts: [{ text: params.prompt }],
-          },
-        },
-        videoModelKey: buildVideoModelKey(params),
-        metadata: {},
-        startImage: {
-          mediaId: params.uploadedImageNames![0],
-        },
-        endImage: {
-          mediaId: params.uploadedImageNames![1],
-        },
-      },
-    ],
-    useV2ModelConfig: true,
-  };
-
-  const endpoint =
-    "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoStartAndEndImage";
-  return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
-}
-
-// ── Case 4: 3+ ảnh → Reference Images (logic hiện tại) ─────────────────────
-
-/**
- * 3+ ảnh upload → gọi endpoint batchAsyncGenerateVideoReferenceImages (referenceImages)
- */
-export async function callReferenceImagesAPI(
-  params: CallAisandboxParams
-): Promise<{ response: any; mediaName: string }> {
-  const videoAspectRatio = mapAspectRatio(params.aspectRatio);
-  const batchId = params.batchId;
-  const seed = params.Seed;
-
-  const payload = {
-    mediaGenerationContext: {
-      batchId,
-      audioFailurePreference: "BLOCK_SILENCED_VIDEOS",
-    },
-    clientContext: buildClientContext(params),
-    requests: [
-      {
-        aspectRatio: videoAspectRatio,
-        seed,
-        textInput: {
-          structuredPrompt: {
-            parts: [{ text: params.prompt }],
-          },
-        },
-        videoModelKey: buildVideoModelKeyWithReferenceImages(params),
         referenceImages: params.uploadedImageNames!.map((mediaId) => ({
           mediaId,
           imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
@@ -363,8 +230,7 @@ export async function callReferenceImagesAPI(
     useV2ModelConfig: true,
   };
 
-  const endpoint =
-    "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoReferenceImages";
+  const endpoint = "https://aisandbox-pa.googleapis.com/v1/video:batchAsyncGenerateVideoEditVideo";
   return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
