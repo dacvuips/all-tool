@@ -1,4 +1,5 @@
 import copy from "copy-to-clipboard";
+import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -184,7 +185,7 @@ export function ProfileIntroduce() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const limit = 12;
-
+  const router = useRouter();
   const fetchIntroduces = async (p: number) => {
     try {
       setLoading(true);
@@ -216,6 +217,13 @@ export function ProfileIntroduce() {
     if (customer?.code) {
       copy(customer.code);
       toast.success(t("Đã sao chép mã giới thiệu"));
+    }
+  };
+  const handleCopyLink = () => {
+    if (customer?.code) {
+      copy(`${typeof window !== "undefined" ? window.location.origin : ""}?ref=${customer.code}`);
+
+      toast.success(t("Đã sao chép link giới thiệu"));
     }
   };
 
@@ -250,7 +258,7 @@ export function ProfileIntroduce() {
 
           {/* Referral code box */}
           <div className="rounded-xl border-2 border-dashed border-primary/25 bg-primary/3 p-4 md:p-5">
-            <div className="uppercase text-gray-400 font-semibold mb-2">
+            <div className="uppercase text-primary font-semibold mb-2 mt-1">
               {t("Mã giới thiệu của bạn")}
             </div>
             <div className="flex items-center gap-3">
@@ -265,14 +273,84 @@ export function ProfileIntroduce() {
                 {t("Sao chép")}
               </button>
             </div>
+
+            <div className="uppercase text-primary font-semibold mb-2 mt-1">
+              {t("Link giới thiệu của bạn")}
+            </div>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 text-md font-black tracking-widest text-gray-800 font-mono">
+                {customer?.code
+                  ? `${typeof window !== "undefined" ? window.location.origin : ""}?ref=${
+                      customer.code
+                    }`
+                  : "—"}
+              </code>
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-primary text-white font-semibold text-sm rounded-xl hover:bg-primary-dark transition-all duration-200 active:scale-95 border-none cursor-pointer shadow-md shadow-primary/20 flex-shrink-0"
+              >
+                <RiFileCopyLine />
+                {t("Sao chép")}
+              </button>
+            </div>
             <NotifyText
               color="blue"
               text={t(
-                "Chia sẻ mã giới thiệu của bạn với bạn bè để nhận thưởng, bạn sẽ nhận được 5% - 10% trên mỗi đơn nạp gói của người được bạn giới thiệu"
+                "Chia sẻ mã giới thiệu của bạn với bạn bè để nhận thưởng, bạn sẽ nhận được 10% - 30% trên mỗi đơn nạp gói của người được bạn giới thiệu"
               )}
               className="mt-2"
             />
             <NotifyText color="green" text={t("Đồng hành cùng phát triển")} className="mt-2" />
+
+            {/* Commission tier cards */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)",
+                gap: "10px",
+                marginTop: "14px",
+              }}
+            >
+              {[
+                { percent: "10%", label: t("Giới thiệu < 10 người") },
+                { percent: "20%", label: t("Giới thiệu 20 - 50 người") },
+                { percent: "30%", label: t("Giới thiệu > 50 người") },
+              ].map((tier, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #db2777 100%)",
+                    borderRadius: "12px",
+                    padding: "14px 10px",
+                    textAlign: "center",
+                    color: "#fff",
+                    boxShadow: "0 4px 18px rgba(124,58,237,0.35)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "clamp(20px, 3vw, 28px)",
+                      fontWeight: 800,
+                      lineHeight: 1.1,
+                      letterSpacing: "-0.5px",
+                    }}
+                  >
+                    {tier.percent}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      marginTop: "6px",
+                      opacity: 0.9,
+                      fontWeight: 500,
+                    }}
+                  >
+                    {tier.label}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 

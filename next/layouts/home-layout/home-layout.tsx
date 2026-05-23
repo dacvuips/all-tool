@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CheckoutProvider } from "../../components/index/checkout/provider/checkout-provider";
 import { HomeProvider } from "../../components/index/home/provider/home-provider";
 import { ErrorCatcher } from "../../components/shared/utilities/misc";
@@ -26,6 +26,16 @@ export function HomeLayout({ ...props }: LayoutProps) {
   const isHomePage = !["/profile", "/checkout", "/post"].some((path) =>
     router.pathname.startsWith(path)
   );
+
+  // Lưu referral code từ query param ?ref=... vào localStorage
+  useEffect(() => {
+    if (router.isReady) {
+      const ref = router.query.ref as string;
+      if (ref) {
+        localStorage.setItem("ref", ref);
+      }
+    }
+  }, [router.isReady, router.query.ref]);
 
   return (
     <>

@@ -1,6 +1,6 @@
 import { Player } from "@lottiefiles/react-lottie-player";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Field, Form, Input } from "../../../components/shared/utilities/form";
 import { useOptionsTranslation } from "../../../lib/hooks/useOptionsTranslate";
@@ -18,6 +18,7 @@ const UpdatePhoneNumberForm = () => {
   const { customer, setCustomer } = useAuth();
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [defaultValues, setDefaultValues] = useState<any>({});
   const toast = useToast();
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -30,6 +31,16 @@ const UpdatePhoneNumberForm = () => {
   //     setIsOpen(!!customer?.phoneNumber ? false : true);
   //   }
   // }, [customer]);
+
+  // Tự động điền referral code từ localStorage vào field introduceCode
+  useEffect(() => {
+    if (isOpen) {
+      const savedRef = typeof window !== "undefined" ? localStorage.getItem("ref") : "";
+      if (savedRef) {
+        setDefaultValues({ introduceCode: savedRef });
+      }
+    }
+  }, [isOpen]);
 
   const handleSubmit = async (data) => {
     setLoading(true);
@@ -56,6 +67,8 @@ const UpdatePhoneNumberForm = () => {
         width={400}
         onSubmit={handleSubmit}
         isOpen={isOpen}
+        defaultValues={defaultValues}
+        allowResetDefaultValues
         slideFromBottom={"none"}
         hasCloseIcon={false}
         onOverlayClick={() => {}}

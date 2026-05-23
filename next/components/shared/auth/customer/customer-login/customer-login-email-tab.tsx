@@ -98,6 +98,11 @@ export const CustomerLoginEmailTab = ({ ...props }: Props) => {
   useEffect(() => {
     if (!props.isOpen) {
       setDefaultValues({});
+    } else {
+      const savedRef = typeof window !== "undefined" ? localStorage.getItem("ref") : "";
+      if (savedRef) {
+        setDefaultValues({ introduceCode: savedRef });
+      }
     }
   }, [props.isOpen]);
 

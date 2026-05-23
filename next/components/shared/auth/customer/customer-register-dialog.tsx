@@ -32,7 +32,8 @@ export function CustomerRegisterDialog({ idToken, ...props }: Props) {
 
   useEffect(() => {
     if (props.isOpen) {
-      setDefaultValues({});
+      const savedRef = typeof window !== "undefined" ? localStorage.getItem("ref") : "";
+      setDefaultValues({ introduceCode: savedRef || "" });
     }
   }, [props.isOpen, idToken]);
 
