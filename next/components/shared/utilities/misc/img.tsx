@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import LazyLoad, { forceCheck } from "react-lazyload";
+import LazyLoad from "react-lazyload";
 import { compressImage } from "../../../../lib/helpers/image";
 import { ImageDialog } from "../dialog/image-dialog";
 
@@ -95,7 +95,13 @@ export function Img({
         }`}
         style={{
           ...(props.percent || props.ratio169 || props.ratio916
-            ? { paddingTop: props.ratio916 ? "177.78%" : props.ratio169 ? "56.25%" : props.percent + "%" }
+            ? {
+                paddingTop: props.ratio916
+                  ? "90%"
+                  : props.ratio169
+                  ? "56.25%"
+                  : props.percent + "%",
+              }
             : {}),
         }}
       >

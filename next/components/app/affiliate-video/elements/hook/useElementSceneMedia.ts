@@ -488,9 +488,6 @@ export function useElementSceneMedia({
         });
         const filledSlotCount = countFilledSlots(slotsForVideo);
         if (filledSlotCount > 0 && imagesArray.length < filledSlotCount) {
-          console.warn(
-            `[handleGenerateVideo] Scene ${scene.id}: ${filledSlotCount} ô ảnh đã gắn nhưng chỉ convert được ${imagesArray.length} ảnh gửi API`
-          );
         }
       }
       const result = await generateVideo({

@@ -442,7 +442,7 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   };
 
   if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
-    const errorMsg = "Tạo video thất bại vui lòng tạo lại";
+    const errorMsg = "Video creation failed due to a policy violation. Please try again.";
 
     // Log error message
     logger.error(
