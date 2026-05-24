@@ -64,7 +64,9 @@ export function OrderPaymentChangedDialog({
         return {
           icon: "error" as const,
           title: t("Thanh toán hết hạn"),
-          message: t("Thời gian thanh toán đã hết. Vui lòng tạo đơn hàng mới hoặc liên hệ hỗ trợ."),
+          message: `${t("Thời gian thanh toán đã hết")}. ${t(
+            "Vui lòng tạo đơn hàng mới hoặc liên hệ hỗ trợ"
+          )}.`,
           redirectPath: "/",
           confirmText: t("Về trang chủ"),
         };

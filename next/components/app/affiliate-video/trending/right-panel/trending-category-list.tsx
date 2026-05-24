@@ -633,9 +633,9 @@ const CreateEditTrendingDialog = ({
           </div>
           <NotifyText
             color="pink"
-            text={t(
-              "Lưu ý: Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
-            )}
+            text={`${t("Lưu ý")}: ${t(
+              "Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
+            )}`}
           />
         </div>
         <div className="flex items-center justify-end gap-2 w-full">

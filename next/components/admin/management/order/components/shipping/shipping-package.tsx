@@ -157,7 +157,7 @@ export const ShippingPackage = ({ order, onWeightChange }: ShippingPackageProps)
 
         {(length * width * height) / 5 > totalWeight && (
           <div className="p-3 text-sm text-red-600">
-            {t("Cảnh báo: Trọng lượng quy đổi")} ({(length * width * height) / 5}g){" "}
+            {t("Cảnh báo")}: {t("Trọng lượng quy đổi")} ({(length * width * height) / 5}g){" "}
             {t("lớn hơn trọng lượng thực tế")} ({totalWeight}g).
           </div>
         )}

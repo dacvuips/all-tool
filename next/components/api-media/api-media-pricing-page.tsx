@@ -333,9 +333,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
 
       {/* Contact Footer */}
       <div className="text-center py-8 px-4">
-        <p className="text-sm text-gray-600">
-          {t("Liên hệ hỗ trợ:")} <strong>Zalo: 037.7733.100</strong>
-        </p>
+        <p className="text-sm text-gray-600">{`${t("Liên hệ hỗ trợ")}: ${"Zalo: 037.7733.100"}`}</p>
         <p className="text-xs text-gray-400 mt-1">
           {t("Thanh toán qua chuyển khoản ngân hàng hoặc ví điện tử.")}
         </p>

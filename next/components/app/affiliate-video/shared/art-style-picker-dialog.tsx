@@ -399,9 +399,9 @@ const CreateEditArtStyleDialog = ({
           </div>
           <NotifyText
             color="pink"
-            text={t(
-              "Lưu ý: Phong cách sẽ được công khai cho tất cả người dùng sử dụng sau khi admin duyệt"
-            )}
+            text={`${t("Lưu ý")}: ${t(
+              "Phong cách sẽ được công khai cho tất cả người dùng sử dụng sau khi admin duyệt"
+            )}`}
           />
         </div>
         <div className="flex items-center justify-end gap-2 w-full">
@@ -781,7 +781,7 @@ export function ArtStylePickerDialog({
           maxRows={3}
           id="art-style-input"
           className="border-gray-200"
-          placeholder={t("VD: Anime, Realistic...")}
+          placeholder={`${t("VD")}: ${t("Anime, Realistic...")}`}
           value={selectedName || value || ""}
           onChange={(v: string) => {
             if (onChange) onChange(v);

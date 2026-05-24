@@ -76,13 +76,9 @@ export function ProductField() {
         tooltip={t("Chọn page tương ứng trong thư mục pages/app/")}
       >
         {slugOptions.length > 0 ? (
-          <Select
-            options={slugOptions}
-            placeholder={t("Chọn slug từ pages/app/")}
-            clearable
-          />
+          <Select options={slugOptions} placeholder={t("Chọn slug từ pages/app/")} clearable />
         ) : (
-          <Input placeholder={t("VD: page-1")} />
+          <Input placeholder={`${t("VD")}: ${t("page-1")}`} />
         )}
       </Field>
 

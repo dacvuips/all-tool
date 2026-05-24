@@ -13,8 +13,8 @@ import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
-import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -218,7 +218,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
             <Textarea
               id="tip-content-input"
               className="border-gray-200"
-              placeholder={t("VD: Cách ăn chuối tốt nhất")}
+              placeholder={`${t("VD")}: ${t("Cách ăn chuối tốt nhất")}`}
               onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
               maxRows={4}
             />

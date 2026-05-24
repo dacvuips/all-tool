@@ -12,9 +12,9 @@ export const Tip = () => {
       <ul className="space-y-1">
         <li className="text-xs text-warning-dark leading-relaxed">
           •{" "}
-          {t(
-            "Chủ đề Cốt Truyện: Hãy nhập chi tiết bối cảnh để AI tạo drama hay hơn (VD: Mẹ chồng khó tính, Sắp hết ăm...)"
-          )}
+          {`${t("Chủ đề Cốt Truyện")}: ${t(
+            "Hãy nhập chi tiết bối cảnh để AI tạo drama hay hơn"
+          )} ${t("VD")}: ${t("Mẹ chồng khó tính, Sắp hết ăm...")}`}
           .
         </li>
         <li className="text-xs text-warning-dark leading-relaxed">

@@ -42,7 +42,11 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           elementFormConfig?.artStyle
         );
         if (!result?.scenes?.length) {
-          toast.error(t("Không tách được cảnh nào từ prompt. Dùng định dạng: 1. mô tả cảnh"));
+          toast.error(
+            `${t("Không tách được cảnh nào từ prompt")}. ${t("Dùng định dạng")}: ${t(
+              "1" + "." + " " + t("mô tả cảnh")
+            )}`
+          );
           return;
         }
 

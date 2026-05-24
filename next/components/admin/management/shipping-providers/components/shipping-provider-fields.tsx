@@ -105,8 +105,12 @@ export function ShippingProviderFields() {
       {/* Phần cấu hình API */}
       <Form.Title title={t("Cấu hình API")} />
       {/* Base URL */}
-      <Field  name="apiConfig.baseUrl" label={t("Base URL")} cols={sm ? 8 : 12} required >
-        <Input type="url" placeholder={t("VD: https://online-gateway.ghn.vn")} />
+      <Field name="apiConfig.baseUrl" label={t("Base URL")} cols={sm ? 8 : 12} required>
+        <Input
+          type="url"
+          placeholder={`${t("VD")}: https://online-gateway.ghn.vn
+        }`}
+        />
       </Field>{" "}
       {/* Shop ID */}
       <Field name="apiConfig.shopId" label={t("Shop ID")} cols={sm ? 4 : 12}>
@@ -180,7 +184,7 @@ function ServiceItem({ index, onRemove, canRemove }: ServiceItemProps) {
           cols={sm ? 3 : 12}
           required
         >
-          <Input placeholder={t("VD: EXPRESS")} className="uppercase" />
+          <Input placeholder={`${t("VD")}: ${t("EXPRESS")}`} className="uppercase" />
         </Field>
 
         {/* Tên dịch vụ */}
@@ -190,7 +194,7 @@ function ServiceItem({ index, onRemove, canRemove }: ServiceItemProps) {
           cols={sm ? 3 : 12}
           required
         >
-          <Input placeholder={t("VD: Giao hàng nhanh")} />
+          <Input placeholder={`${t("VD")}: ${t("Giao hàng nhanh")}`} />
         </Field>
 
         {/* Thời gian ước tính */}
@@ -199,7 +203,7 @@ function ServiceItem({ index, onRemove, canRemove }: ServiceItemProps) {
           label={t("Thời gian ước tính")}
           cols={sm ? 3 : 12}
         >
-          <Input placeholder={t("VD: 2-3 ngày")} />
+          <Input placeholder={`${t("VD")}: ${t("2-3 ngày")}`} />
         </Field>
 
         {/* Trạng thái */}

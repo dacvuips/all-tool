@@ -415,7 +415,7 @@ export function ObjectPersonifyPickerDialog({
           <Input
             id="object-to-personify-input"
             className="border-gray-200"
-            placeholder={t("VD: Một quả chuối tươi")}
+            placeholder={`${t("VD")}: ${t("Một quả chuối tươi")}`}
             value={selectedDisplayName || value || ""}
             onChange={(v) => {
               if (onChange) onChange(v);
@@ -547,7 +547,7 @@ export function ObjectPersonifyPickerDialog({
                           <Input
                             id="custom-object-name"
                             className="border-gray-200"
-                            placeholder={t("VD: Quả chuối tươi")}
+                            placeholder={`${t("VD")}: ${t("Quả chuối tươi")}`}
                             value={objectName}
                             onChange={(v) => setObjectName(v)}
                           />

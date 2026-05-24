@@ -12,13 +12,13 @@ import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
-import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import {
   ASPECT_RATIOS,
   BATCH_SIZE_DESCRIPTIONS,
   BATCH_SIZE_LABELS,
   TrendingModeTypeEnum,
 } from "../../constants";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -153,7 +153,10 @@ export const AffiliateConfig = () => {
                   <Button
                     key={ar.value}
                     id={`aspect-ratio-${ar.value.replace(":", "-")}`}
-                    onClick={() => { if (patchConfig) patchConfig({ aspectRatio: ar.value }); if (formContext) formContext.setValue("aspectRatio", ar.value); }}
+                    onClick={() => {
+                      if (patchConfig) patchConfig({ aspectRatio: ar.value });
+                      if (formContext) formContext.setValue("aspectRatio", ar.value);
+                    }}
                     className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                       isActive
                         ? "border-blue-400 bg-blue-50 text-blue-600"
@@ -201,7 +204,7 @@ export const AffiliateConfig = () => {
               id="tip-content-input"
               className="border-gray-200"
               value={videoConfig?.tipContent || ""}
-              placeholder={t("VD: Cách ăn chuối tốt nhất")}
+              placeholder={`${t("VD")}: ${t("Cách ăn chuối tốt nhất")}`}
               onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
             />
           </Field>

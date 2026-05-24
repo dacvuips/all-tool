@@ -14,8 +14,7 @@ import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } fro
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
-import { ElementImagesUpload } from "./element-images-upload";
-import { ElementVideoUpload } from "./element-images-upload";
+import { ElementImagesUpload, ElementVideoUpload } from "./element-images-upload";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
@@ -74,9 +73,9 @@ export const AffiliateConfig = () => {
             id="scene-prompt-list"
             className="border-gray-200 min-h-[200px]"
             maxRows={10}
-            placeholder={t(
-              "Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ:\n1. Mô tả cảnh đầu...\n2. Mô tả cảnh hai...\n3. Mô tả cảnh ba..."
-            )}
+            placeholder={`${t("Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ")}:\n${t("1")}. ${t(
+              "Mô tả cảnh đầu"
+            )}...\n${t("2")}. ${t("Mô tả cảnh hai")}...\n${t("3")}. ${t("Mô tả cảnh ba")}...`}
             value={elementFormConfig?.prompt}
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />

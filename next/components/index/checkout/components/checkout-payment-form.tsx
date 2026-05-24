@@ -219,7 +219,7 @@ export function CheckoutPaymentForm() {
       document.body.appendChild(form);
       form.submit();
     } catch (err) {
-      console.error(t("Lỗi tạo checkout:"), err);
+      console.error(`${t("Lỗi tạo checkout")}:`, err);
       toast.error(t("Không thể kết nối cổng thanh toán. Vui lòng thử lại."));
       setSePayLoading(false);
     }
