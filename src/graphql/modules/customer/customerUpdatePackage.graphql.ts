@@ -189,8 +189,6 @@ export default {
             });
 
             if (introduce) {
-              const referrerId = introduce.referrerId.toString();
-
               // Count số lượng người được referrerId giới thiệu
               const refereeCount = await IntroduceModel.countDocuments({
                 referrerId: introduce.referrerId,
@@ -202,6 +200,7 @@ export default {
               const bonusPercent = refereeCount >= 10 ? 15 : refereeCount >= 5 ? 12 : 10;
               const referralBonus = Math.round(packageConfig.price * bonusRate);
 
+              const referrerId = introduce.referrerId.toString();
               // Cộng wallet cho người giới thiệu
               const referrerWallet = await GetWalletInfo.usecase.execute({
                 ownerId: referrerId,

@@ -14,6 +14,7 @@ import {
 } from "../../../../services/sepayPG/sepayPG.service";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
+import { ApiMediaSubscriptionPlanEnum, apiMediaTokenService } from "../../../dal/apiMediaToken";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
 import { IntroduceModel } from "../../../dal/introduce";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
@@ -25,10 +26,6 @@ import {
 } from "../../../dal/packageTransaction/package-transaction.interface";
 import { PackageTransactionModel } from "../../../dal/packageTransaction/package-transaction.model";
 import { RecaptchaSubscriptionPlanEnum, recaptchaTokenService } from "../../../dal/recaptchaToken";
-import {
-  ApiMediaSubscriptionPlanEnum,
-  apiMediaTokenService,
-} from "../../../dal/apiMediaToken";
 import { SettingModel } from "../../../dal/setting/setting.model";
 import { walletService } from "../../../dal/wallet";
 import { pubsub } from "../../../graphql/pub-sub";
@@ -223,7 +220,18 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
         });
 
         if (introduce) {
-          const referralBonus = Math.round(order.totalAmount * 0.1); // 10%
+          // Count số lượng người được referrerId giới thiệu
+          const refereeCount = await IntroduceModel.countDocuments({
+            referrerId: introduce.referrerId,
+            blocked: false,
+          });
+          // Tính tỉ lệ hoa hồng theo tier số lượng người giới thiệu
+          // 1–4 người: 10%, 5–9 người: 12%, 10+ người: 15%
+
+          const bonusRate = refereeCount >= 10 ? 0.15 : refereeCount >= 5 ? 0.12 : 0.1;
+          const bonusPercent = refereeCount >= 10 ? 15 : refereeCount >= 5 ? 12 : 10;
+          const referralBonus = Math.round(order.totalAmount * bonusRate);
+
           const referrerId = introduce.referrerId.toString();
 
           // Cộng wallet cho người giới thiệu
