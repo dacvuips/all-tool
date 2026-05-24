@@ -6,7 +6,13 @@
  */
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
-import { RiBookOpenLine, RiFileCopy2Line, RiFileTextLine, RiGridLine } from "react-icons/ri";
+import {
+  RiBookOpenLine,
+  RiFileCopy2Line,
+  RiFileTextLine,
+  RiGridLine,
+  RiListOrdered,
+} from "react-icons/ri";
 
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
@@ -40,7 +46,7 @@ export default function AffiliateMainPage() {
     },
     {
       icon: <RiGridLine />,
-      label: t("Hàng Loạt"),
+      label: t("Kịch Bản"),
       value: "batch",
       component: <AffiliateSingleVideoPage type={TAB_TYPE.batch} />,
     },
@@ -52,8 +58,8 @@ export default function AffiliateMainPage() {
       component: <AffiliateCopyVideoPage />,
     },
     {
-      icon: <RiFileCopy2Line />,
-      label: t("Thành phần"),
+      icon: <RiListOrdered />,
+      label: t("Hàng Loạt"),
       value: "elements",
       component: <ElementPage />,
     },
