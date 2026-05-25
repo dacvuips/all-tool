@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import logger from "../../helpers/logger";
+import { ForbiddenError } from "../../libs/core";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
@@ -9,7 +10,7 @@ import {
   retryWithThrottleGate,
   videoThrottleGate,
 } from "../helpers/retry-throttle";
-import { CaptchaResponseData } from "../helpers/validateApiKey";
+import { CaptchaResponseData, getApiSetting } from "../helpers/validateApiKey";
 
 /**
  * Xử lý logic generate video:
@@ -23,7 +24,7 @@ import { CaptchaResponseData } from "../helpers/validateApiKey";
 export async function handleVideoGeneration(
   req: Request,
   res: Response,
-  captchaData: CaptchaResponseData,
+  _captchaData: CaptchaResponseData,
   tokenKey: string
 ): Promise<void> {
   const body = req.body as {
@@ -41,40 +42,75 @@ export async function handleVideoGeneration(
     res.status(400).json({ message: "Thiếu prompt" });
     return;
   }
-  // Upload ảnh lên Google Labs trước nếu có
+
   const context = new Context({ req });
-  const uploadedImageNames = await processAndUploadImages(
-    body.images || [],
-    captchaData.accessToken,
-    captchaData.ProjectID,
-    context.id
-  );
+  const links = await getApiSetting("recaptcha-api-secret-key");
+  let lastCaptchaError = false;
 
-  // Tao video
-  const { mediaName } = await callAisandboxVideoAPI({
-    res: res,
-    prompt: body.prompt,
-    aspectRatio: body.config?.aspectRatio,
-    uploadedImageNames,
-    recaptchaToken: captchaData.captcha,
-    sessionId: captchaData.sessionId,
-    projectId: captchaData.ProjectID,
-    accessToken: captchaData.accessToken,
-    batchId: crypto.randomUUID(),
-    Seed: captchaData.Seed,
-    headers: captchaData.Headers,
-  });
+  for (const selectedLink of links) {
+    if (!selectedLink || !selectedLink.url) continue;
 
-  await pollAndExtractVideo({
-    mediaName,
-    accessToken: captchaData.accessToken,
-    customerId: context.id,
-    res,
-    headers: captchaData.Headers,
-  });
+    try {
+      const type = (req.query.type as string) || "VIDEO_GENERATION";
+      const captchaUrl = `${selectedLink.url}?action=${type}`;
+      const headers: Record<string, string> = {};
+      if (selectedLink.apiKey) {
+        headers["X-API-Key"] = selectedLink.apiKey;
+      }
 
-  // Tăng usedQuantity sau khi generate video thành công (atomic $inc, tìm theo API key)
-  await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
+      const captchaResp = await fetch(captchaUrl, { headers });
+      if (!captchaResp.ok) continue;
+      const currentCaptchaData: CaptchaResponseData = await captchaResp.json();
+      if (!currentCaptchaData) continue;
+
+      const uploadedImageNames = await processAndUploadImages(
+        body.images || [],
+        currentCaptchaData.accessToken,
+        currentCaptchaData.ProjectID,
+        context.id
+      );
+
+      const { mediaName } = await callAisandboxVideoAPI({
+        res: res,
+        prompt: body.prompt,
+        aspectRatio: body.config?.aspectRatio,
+        uploadedImageNames,
+        recaptchaToken: currentCaptchaData.captcha,
+        sessionId: currentCaptchaData.sessionId,
+        projectId: currentCaptchaData.ProjectID,
+        accessToken: currentCaptchaData.accessToken,
+        batchId: crypto.randomUUID(),
+        Seed: currentCaptchaData.Seed,
+        headers: currentCaptchaData.Headers,
+      });
+
+      await pollAndExtractVideo({
+        mediaName,
+        accessToken: currentCaptchaData.accessToken,
+        customerId: context.id,
+        res,
+        headers: currentCaptchaData.Headers,
+      });
+
+      await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
+      return;
+    } catch (err: any) {
+      if (err.isCaptchaError || err.statusCode === 403) {
+        lastCaptchaError = true;
+        logger.warn(
+          `[generation-video] Link ${selectedLink.url} bị lỗi Captcha/403. Thử link tiếp theo...`
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  if (lastCaptchaError) {
+    throw new ForbiddenError(`Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`);
+  } else {
+    throw new Error(`Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.`);
+  }
 }
 
 interface CallAisandboxParams {
@@ -180,6 +216,32 @@ async function sendAndParseResponse(
     }
 
     const errText = await resp.text();
+    let isCaptchaError = false;
+    if (resp.status === 403) {
+      try {
+        const errJson = JSON.parse(errText);
+        if (
+          errJson?.error?.message?.includes("reCAPTCHA") ||
+          errJson?.error?.details?.some((d: any) => d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
+        ) {
+          isCaptchaError = true;
+        }
+      } catch (e) {
+        if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
+          isCaptchaError = true;
+        }
+      }
+    }
+
+    if (isCaptchaError) {
+      const err: any = new Error(
+        `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
+      );
+      err.isCaptchaError = true;
+      err.statusCode = 403;
+      throw err;
+    }
+
     const err: any = new Error(`Aisandbox API error ${resp.status}: ${errText}`);
     err.statusCode = resp.status;
     throw err;

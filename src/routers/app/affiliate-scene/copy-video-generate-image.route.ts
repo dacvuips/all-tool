@@ -61,6 +61,7 @@ export default [
           sessionId,
           ProjectID: projectId,
           accessToken,
+          Headers,
         } = await fetchCaptchaData({
           type: ActionEnum.IMAGE_GENERATION,
           logPrefix: "generation-image",
@@ -98,6 +99,7 @@ export default [
           sessionId,
           projectId,
           accessToken,
+          headers: Headers,
         });
 
         // Tạo ảnh thành công → tăng imageCount
