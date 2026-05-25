@@ -656,27 +656,27 @@ export interface TrendingVideoFormConfig {
 }
 /** Quy tắc thứ tự ảnh tham chiếu — chỉ ghi một lần khi có cả nhân hoá và sản phẩm. */
 const IMAGE_REFERENCE_ORDER_RULE =
-  "QUAN TRỌNG: Ảnh tham chiếu đầu tiên luôn là nhân vật, từ ảnh tham chiếu thứ hai trở đi là ảnh sản phẩm.";
+  "IMPORTANT: The first reference image is always the character; from the second reference image onward, the images are product images.";
 
 const PRODUCT_IMAGE_REFERENCE_RULES =
-  "đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay";
+  "place ALL products into ONE single unified image. Each product must preserve its exact appearance, shape, color, brand, and packaging as shown in the reference image. Arrange all products naturally within a single, cohesive composition. Every product must be clearly visible and easily recognizable in the final image. Some random product items must be shown being held in the character's hand";
 
 const OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES =
-  "giữ nguyên chính xác diện mạo, hình dáng, màu sắc, chất liệu và đặc điểm nhận dạng, gương mặt tỉ lệ mắt mũi miệng, kích thước của nhân vật như trong ảnh đầu tiên tham chiếu khi tạo hình ảnh không được biến đổi thành nhân vật nhân hoá, không được tự ý vẽ thêm hoặc bớt gì. Ví dụ: nếu ảnh đầu tiên là một người đàn ông trẻ, thì ảnh thứ hai phải là một người đàn ông trẻ khác, không phải là một người nữ. không được thây đổi phụ kiện những thứ mà người đàn ông đang mặc trên người mình";
+  "preserve the character's exact appearance, shape, color, material, and identifying features—including the face with the correct proportions of eyes, nose, and mouth—as well as the character's size, 100% identical to the first reference image when generating images. Do NOT transform the character into a personified/anthropomorphized version, and do not arbitrarily add or remove anything. For example, if the first image shows a young man, the second image must also be a young man (a different one is not allowed; it must not be a woman). Do not change the accessories or clothing the man is wearing, and do not change his hairstyle. For example, if the accessory in the first scene is a hat, the second image must also feature a hat, not a shirt";
 
-export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nQUAN TRỌNG: Prompt này dành cho ảnh thứ 2 trở đi. Bạn PHẢI ${PRODUCT_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
+export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nIMPORTANT: This prompt applies to the 2nd image onward. You MUST ${PRODUCT_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
 
-export const DEFAULT_OBJECT_PERSONIFY_IMAGE_REFERENCE_NOTE = `\nQUAN TRỌNG: Prompt này dành cho ảnh đầu tiên. Bạn PHẢI ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
+export const DEFAULT_OBJECT_PERSONIFY_IMAGE_REFERENCE_NOTE = `\nIMPORTANT: This prompt applies to the first image. You MUST ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
 
 function buildCombinedImageReferenceNote(productCustomPrompt?: string): string {
   const productSection = productCustomPrompt
     ? productCustomPrompt
-    : `Bạn PHẢI ${PRODUCT_IMAGE_REFERENCE_RULES}.`;
+    : `You MUST ${PRODUCT_IMAGE_REFERENCE_RULES}.`;
   return (
-    `\nQUAN TRỌNG — ẢNH THAM CHIẾU:\n` +
+    `\nIMPORTANT — REFERENCE IMAGES:\n` +
     `${IMAGE_REFERENCE_ORDER_RULE}\n\n` +
-    `• Ảnh 1 (nhân vật/nhân hoá): Bạn PHẢI ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}.\n\n` +
-    `• Ảnh 2 trở đi (sản phẩm): ${productSection}`
+    `• Image 1 (character/personification): You MUST ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}.\n\n` +
+    `• Image 2 onward (products): ${productSection}`
   );
 }
 
