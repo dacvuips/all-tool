@@ -210,6 +210,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     thumbnailOriginImage,
     selectedProductImages,
     selectedElementImageSlots,
+    selectedElementVideoSlots,
     noText: scene.noText,
   });
 

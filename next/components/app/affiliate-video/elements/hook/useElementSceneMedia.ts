@@ -9,13 +9,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CopyVideoScene, ElementFormImage } from "../../constants";
+import { CopyVideoScene, ElementFormImage, ElementFormVideo } from "../../constants";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
 import { useElementContext } from "../providers/element-provider";
 import {
   productImageUrlsToApiImages,
   resolveElementReferenceImagesForApi,
+  resolveElementReferenceVideoForApi,
 } from "../utils/elementFormImageUtils";
 import { GeneratedImageData, GeneratedVideoData, useElementApi } from "./useElementApi";
 
@@ -31,6 +32,8 @@ interface UseSceneMediaParams {
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu đã chọn cho scene này */
   selectedElementImageSlots?: (ElementFormImage | undefined)[];
+  /** Ô video tham chiếu (video-to-video) */
+  selectedElementVideoSlots?: (ElementFormVideo | undefined)[];
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
   noText?: boolean;
 }
@@ -95,6 +98,7 @@ export function useElementSceneMedia({
   thumbnailOriginImage,
   selectedProductImages,
   selectedElementImageSlots,
+  selectedElementVideoSlots,
   noText,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
@@ -543,6 +547,23 @@ export function useElementSceneMedia({
   const handleGenerateVideoToVideo = async () => {
     const motionPrompt = (scene.motion_description || "").trim();
     const visualPrompt = scene.visual_prompt?.trim();
+
+    const countFilledVideoSlots = (arr?: (ElementFormVideo | undefined)[]) =>
+      arr?.filter((s) => s && (s.videoBytes || s.fifeUrl)).length ?? 0;
+    const videoSlotsForApi =
+      countFilledVideoSlots(selectedElementVideoSlots) >=
+      countFilledVideoSlots(scene.elementVideoSlots)
+        ? selectedElementVideoSlots
+        : scene.elementVideoSlots ?? selectedElementVideoSlots;
+
+    const videoPayload = await resolveElementReferenceVideoForApi({
+      slots: videoSlotsForApi,
+    });
+    if (!videoPayload?.videoBytes) {
+      setVideoError(t("Cần chọn video tham chiếu trước khi tạo video"));
+      return;
+    }
+
     // ── Check concurrency limit ──
     const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
     if (currentVideoGenerating >= VIDEO_CONCURRENCY) {
@@ -584,6 +605,10 @@ export function useElementSceneMedia({
               scene.audio_description
             }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
         images: imagesArray,
+        video: {
+          videoBytes: videoPayload.videoBytes,
+          mimeType: videoPayload.mimeType,
+        },
         aspectRatio: scriptData?.aspectRatio,
         serviceImageType: scriptData.serviceImageType,
         onProgress: (pct) => {

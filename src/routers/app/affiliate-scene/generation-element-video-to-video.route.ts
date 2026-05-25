@@ -4,7 +4,10 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { pollAndExtractVideo } from "../../api-media/handle-video-generation";
 import { callVideoToVideoAPI } from "../../api-media/handle-video-to-video-generation";
-import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
+import {
+  processAndUploadImages,
+  processAndUploadVideo,
+} from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
 import { ServiceImageEnum } from "../constanst";
 import { ActionEnum, checkVideoLimit, incrementVideoCount, resolveArtStylePrompt } from "./_shared";
@@ -43,6 +46,10 @@ export default [
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
+        if (!body?.video?.videoBytes) {
+          return res.status(400).json({ message: "Thiếu video tham chiếu" });
+        }
+
         // Kiểm tra giới hạn video trước khi tạo
         await checkVideoLimit(context.id);
         // Lấy captcha + credentials + projectId + accessToken
@@ -74,6 +81,17 @@ export default [
           context.id
         );
 
+        const uploadedVideoMediaId = await processAndUploadVideo(
+          body.video,
+          accessToken,
+          projectId,
+          context.id
+        );
+
+        if (!uploadedVideoMediaId) {
+          return res.status(400).json({ message: "Không thể upload video tham chiếu" });
+        }
+
         const sendSSE = (data: any) => {
           res.write(`data: ${JSON.stringify(data)}\n\n`);
         };
@@ -83,6 +101,7 @@ export default [
           prompt: `${body.config?.artStyle} ${body.prompt}`,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames,
+          uploadedVideoNames: [uploadedVideoMediaId],
           recaptchaToken,
           sessionId,
           projectId,

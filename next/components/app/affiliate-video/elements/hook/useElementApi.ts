@@ -292,7 +292,7 @@ export interface UseAffiliateVideoApiReturn {
    * Tự động lưu kết quả vào IndexedDB.
    */
 
-  generateVideoToVideo: (params: GenerateVideoParams) => Promise<GeneratedVideoData | undefined>;
+  generateVideoToVideo: (params: GenerateVideoToVideoParams) => Promise<GeneratedVideoData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────

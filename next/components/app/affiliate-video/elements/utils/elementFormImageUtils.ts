@@ -1,4 +1,4 @@
-import { ElementFormConfig, ElementFormImage } from "../../constants";
+import { ElementFormConfig, ElementFormImage, ElementFormVideo } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 
 /** Chuẩn hóa artStyleImg (hỗ trợ dữ liệu cũ lưu 1 ảnh đơn). */
@@ -161,4 +161,47 @@ export async function elementImageSlotsToApiImages(
     if (payload) out.push(payload);
   }
   return out;
+}
+
+/** Convert một ElementFormVideo → payload API (hoặc undefined nếu thiếu dữ liệu). */
+async function elementFormVideoToApiPayload(
+  vid: ElementFormVideo
+): Promise<{ videoBytes: string; mimeType: string } | undefined> {
+  if (!vid.videoBytes && !vid.fifeUrl) return undefined;
+  try {
+    if (vid.videoBytes) {
+      return {
+        videoBytes: vid.videoBytes,
+        mimeType: vid.mimeType || "video/mp4",
+      };
+    }
+    const url = vid.fifeUrl;
+    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataMatch) {
+      return { mimeType: dataMatch[1], videoBytes: dataMatch[2] };
+    }
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve((reader.result as string).split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    return { mimeType: blob.type || vid.mimeType || "video/mp4", videoBytes: base64 };
+  } catch (err) {
+    console.warn("[elementFormVideoToApiPayload] Failed to convert video:", vid.name, err);
+    return undefined;
+  }
+}
+
+/**
+ * Video tham chiếu (ô slot 0) cho API generation-element-video-to-video.
+ */
+export async function resolveElementReferenceVideoForApi(options: {
+  slots?: (ElementFormVideo | undefined)[];
+}): Promise<{ videoBytes: string; mimeType: string } | undefined> {
+  const slot = options.slots?.[0];
+  if (!slot) return undefined;
+  return elementFormVideoToApiPayload(slot);
 }

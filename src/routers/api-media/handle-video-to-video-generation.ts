@@ -217,14 +217,18 @@ export async function callVideoToVideoAPI(
         },
         videoModelKey: buildVideoModelKey(params),
         videoInput: {
-          mediaId: params.uploadedVideoNames,
+          mediaId: params.uploadedVideoNames?.[0],
           startFrameIndex: 0,
           endFrameIndex: 240,
         },
-        referenceImages: params.uploadedImageNames!.map((mediaId) => ({
-          mediaId,
-          imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
-        })),
+        ...(params.uploadedImageNames?.length
+          ? {
+              referenceImages: params.uploadedImageNames.map((mediaId) => ({
+                mediaId,
+                imageUsageType: "IMAGE_USAGE_TYPE_ASSET",
+              })),
+            }
+          : {}),
       },
     ],
     useV2ModelConfig: true,

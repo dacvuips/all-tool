@@ -163,3 +163,100 @@ export async function uploadImageToGoogleLabs(
   logger.info(`[uploadImage] Upload thành công, media name: ${mediaName}`);
   return mediaName;
 }
+
+function extractMediaNameFromUploadResponse(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const r = result as Record<string, unknown>;
+  if (Array.isArray(result)) {
+    const first = result[0] as Record<string, unknown> | undefined;
+    if (!first) return null;
+    const media = first.media as { name?: string } | undefined;
+    const mediaId = first.mediaId as { mediaId?: string } | string | undefined;
+    if (media?.name) return media.name;
+    if (typeof mediaId === "string") return mediaId;
+    if (mediaId && typeof mediaId === "object" && mediaId.mediaId) return mediaId.mediaId;
+    return null;
+  }
+  const media = r.media as { name?: string } | undefined;
+  const mediaId = r.mediaId as { mediaId?: string } | string | undefined;
+  if (media?.name) return media.name;
+  if (typeof mediaId === "string") return mediaId;
+  if (mediaId && typeof mediaId === "object" && mediaId.mediaId) return mediaId.mediaId;
+  return null;
+}
+
+/**
+ * Upload video lên Google Labs (aisandbox) và trả về media name.
+ * Endpoint: POST https://aisandbox-pa.googleapis.com/v1/flow/uploadVideo
+ */
+export async function uploadVideoToGoogleLabs(
+  videoBytes: string,
+  mimeType: string,
+  accessToken: string,
+  projectId: string
+): Promise<string> {
+  const endpoint = "https://aisandbox-pa.googleapis.com/v1/flow/uploadVideo";
+  const fileName = `video_${Date.now()}.mp4`;
+
+  const payload = {
+    clientContext: {
+      projectId,
+      tool: "PINHOLE",
+    },
+    videoBytes,
+    isUserUploaded: true,
+    isHidden: false,
+    mimeType: mimeType || "video/mp4",
+    fileName,
+  };
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    const err: any = new Error(`Upload video API error ${resp.status}: ${errText}`);
+    err.statusCode = resp.status;
+    throw err;
+  }
+
+  const result = await resp.json();
+  const mediaName = extractMediaNameFromUploadResponse(result);
+
+  if (!mediaName) {
+    const err: any = new Error("Không lấy được media name từ uploadVideo response");
+    err.statusCode = 500;
+    throw err;
+  }
+
+  logger.info(`[uploadVideo] Upload thành công, media name: ${mediaName}`);
+  return mediaName;
+}
+
+/**
+ * Upload video tham chiếu (base64) lên Google Labs.
+ */
+export async function processAndUploadVideo(
+  video: { videoBytes: string; mimeType?: string } | null | undefined,
+  accessToken: string,
+  projectId: string,
+  userId: string
+): Promise<string | null> {
+  if (!video?.videoBytes) return null;
+
+  logger.info(`[processVideo] Bắt đầu upload video cho user ${userId}`);
+  const mediaName = await uploadVideoToGoogleLabs(
+    video.videoBytes,
+    video.mimeType || "video/mp4",
+    accessToken,
+    projectId
+  );
+  logger.info(`[processVideo] Hoàn thành upload video cho user ${userId}, name: ${mediaName}`);
+  return mediaName;
+}
