@@ -1,15 +1,46 @@
+import copy from "copy-to-clipboard";
 import Link from "next/link";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineFacebook } from "react-icons/ai";
-import { RiMailLine } from "react-icons/ri";
+import { RiFileCopyLine, RiMailLine } from "react-icons/ri";
+import { Button } from "../../../components/shared/utilities/form";
 import { Accordion } from "../../../components/shared/utilities/misc";
 import { useScreen } from "../../../lib/hooks/useScreen";
+import { useAuth } from "../../../lib/providers/auth-provider";
+import { useToast } from "../../../lib/providers/toast-provider";
 
 export function Footer({ className, ...props }: ReactProps) {
   const { t } = useTranslation();
+  const toast = useToast();
+  const { customer } = useAuth();
   const screenLg = useScreen("lg");
   const [openEmail, setOpenEmail] = useState<boolean>(false);
+
+  const handleCopyLink = () => {
+    if (customer?.code) {
+      copy(`${typeof window !== "undefined" ? window.location.origin : ""}?ref=${customer.code}`);
+
+      toast.success(t("Đã sao chép link giới thiệu"));
+    }
+  };
+  const ReferralLink = () => {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="flex-1 text-12 text-primary  font-semibold">
+          {customer?.code
+            ? `${typeof window !== "undefined" ? window.location.origin : ""}?ref=${customer.code}`
+            : "—"}
+        </div>
+        <Button
+          onClick={handleCopyLink}
+          icon={<RiFileCopyLine />}
+          text={t("Sao chép")}
+          className="px-0 h-7"
+        />
+      </div>
+    );
+  };
   if (!screenLg)
     return (
       <footer className={`w-full text-accent mt-5 ${className}`}>
@@ -28,6 +59,7 @@ export function Footer({ className, ...props }: ReactProps) {
                 <div className="max-w-3xl text-center text-12 text-accent">
                   {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
                 </div>
+                <ReferralLink />
                 <div className="text-center text-12 text-accent">
                   {`Zalo: 097.352.2962 - 037.7733.100`}
                 </div>
@@ -79,8 +111,9 @@ export function Footer({ className, ...props }: ReactProps) {
                 </div>
                 <div className="flex flex-col   justify-center ">
                   <span className=" text-12 text-accent">
-                    {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
+                    {t("Lấy link tiếp thị liên kết để nhận 20% - 30 % hoa hồng.")}
                   </span>
+                  <ReferralLink />
                   <p className="text-12   text-accent">{`Zalo: 097.352.2962 - 037.7733.100`}</p>
                 </div>
               </div>

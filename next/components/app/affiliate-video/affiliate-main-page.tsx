@@ -70,6 +70,22 @@ export default function AffiliateMainPage() {
       value: "product-review",
       component: <>{"Đang phát triển"}</>,
     },
+    {
+      icon: <RiBookOpenLine />,
+      label: t("Chuyên thời trang"),
+      value: "fashion-review",
+      component: <>{"Sắp xong rồi"}</>,
+    },
+    {
+      icon: (
+        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+          {"Hot 🔥"}
+        </div>
+      ),
+      label: t("ChatBot AI"),
+      value: "chatbot-ai",
+      component: <>{"Sắp xong rồi"}</>,
+    },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
     // { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },
