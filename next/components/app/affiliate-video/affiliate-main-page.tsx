@@ -14,6 +14,7 @@ import {
   RiListOrdered,
 } from "react-icons/ri";
 
+import { useScreen } from "../../../lib/hooks/useScreen";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
@@ -24,7 +25,7 @@ import { TrendingPage } from "./trending/trending-page";
 export default function AffiliateMainPage() {
   const { t } = useTranslation();
   const router = useRouter();
-
+  const xl = useScreen("xl");
   /** Các tab chế độ tạo video */
   const navigationTabs = [
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
@@ -94,7 +95,7 @@ export default function AffiliateMainPage() {
   return (
     <div
       className="flex flex-col h-screen overflow-hidden bg-amber-50"
-      style={{ height: "calc(100vh - 175px)" }}
+      style={{ height: `calc(100vh - ${xl ? 150 : 60}px)` }}
     >
       {/* ══ TOP NAV – thanh điều hướng chính ══ */}
       <TabGroup
