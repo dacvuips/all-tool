@@ -654,6 +654,125 @@ export interface TrendingVideoFormConfig {
   promptId: string;
   artStyleId?: string;
 }
+/** Quy tắc thứ tự ảnh tham chiếu — chỉ ghi một lần khi có cả nhân hoá và sản phẩm. */
+const IMAGE_REFERENCE_ORDER_RULE =
+  "Ảnh tham chiếu đầu tiên luôn là nhân vật/nhân hoá; từ ảnh tham chiếu thứ hai trở đi là ảnh sản phẩm.";
+
+const PRODUCT_IMAGE_REFERENCE_RULES =
+  "đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay";
+
+const OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES =
+  "giữ nguyên chính xác diện mạo, hình dáng, màu sắc, chất liệu và đặc điểm nhận dạng, gương mặt tỉ lệ mắt mũi miệng, kích thước của nhân vật như trong ảnh đầu tiên tham chiếu khi tạo hình ảnh không biến đổi thành nhân vật nhân hoá, không được tự ý vẽ thêm hoặc bớt gì";
+
+export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nQUAN TRỌNG: Prompt này dành cho ảnh thứ 2 trở đi. Bạn PHẢI ${PRODUCT_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
+
+export const DEFAULT_OBJECT_PERSONIFY_IMAGE_REFERENCE_NOTE = `\nQUAN TRỌNG: Prompt này dành cho ảnh đầu tiên. Bạn PHẢI ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
+
+function buildCombinedImageReferenceNote(productCustomPrompt?: string): string {
+  const productSection = productCustomPrompt
+    ? productCustomPrompt
+    : `Bạn PHẢI ${PRODUCT_IMAGE_REFERENCE_RULES}.`;
+  return (
+    `\nQUAN TRỌNG — ẢNH THAM CHIẾU:\n` +
+    `${IMAGE_REFERENCE_ORDER_RULE}\n\n` +
+    `• Ảnh 1 (nhân vật/nhân hoá): Bạn PHẢI ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}.\n\n` +
+    `• Ảnh 2 trở đi (sản phẩm): ${productSection}`
+  );
+}
+
+/** Gộp note nhân hoá + sản phẩm; tránh lặp quy tắc thứ tự ảnh khi cả hai đều có. */
+export function buildImageReferenceNotes(opts: {
+  productUrls?: string[];
+  productCustomPrompt?: string;
+  personifyImages?: ReferenceImageInput[];
+}): string {
+  const productUrls = opts.productUrls?.filter(Boolean) || [];
+  const hasProduct = productUrls.length > 0;
+  const hasPersonify = filterReferenceImages(opts.personifyImages).length > 0;
+
+  if (!hasProduct && !hasPersonify) return "";
+  if (hasProduct && hasPersonify) {
+    return buildCombinedImageReferenceNote(opts.productCustomPrompt);
+  }
+  if (hasPersonify) return buildObjectPersonifyImageReferenceNote(opts.personifyImages);
+  return buildProductImageReferenceNote(productUrls, opts.productCustomPrompt);
+}
+
+export function buildProductImageReferenceNote(urls: string[], customPrompt?: string): string {
+  const filtered = urls?.filter(Boolean) || [];
+  if (filtered.length === 0) return "";
+  if (customPrompt) return `\n${customPrompt}`;
+  return DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE;
+}
+
+export type ReferenceImageInput =
+  | string
+  | {
+      imageBytes?: string;
+      mimeType?: string;
+      fifeUrl?: string;
+      name?: string;
+    };
+
+export type UploadableReferenceImage = string | { imageBytes: string; mimeType?: string };
+
+function normalizeReferenceImageItem(item: ReferenceImageInput): UploadableReferenceImage | null {
+  if (!item) return null;
+
+  if (typeof item === "string") {
+    const s = item.trim();
+    if (!s) return null;
+    const dataMatch = s.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataMatch) return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+    return s;
+  }
+
+  let bytes = item.imageBytes?.trim();
+  if (!bytes && item.fifeUrl?.trim()) {
+    const url = item.fifeUrl.trim();
+    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataMatch) return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+    return url;
+  }
+  if (!bytes) return null;
+
+  const dataMatch = bytes.match(/^data:([^;]+);base64,(.+)$/);
+  if (dataMatch) {
+    return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+  }
+  return { imageBytes: bytes, mimeType: item.mimeType || "image/png" };
+}
+
+export function filterReferenceImages(images?: ReferenceImageInput[]): UploadableReferenceImage[] {
+  const out: UploadableReferenceImage[] = [];
+  for (const item of images || []) {
+    const normalized = normalizeReferenceImageItem(item);
+    if (normalized) out.push(normalized);
+  }
+  return out;
+}
+
+export function buildObjectPersonifyImageReferenceNote(images?: ReferenceImageInput[]): string {
+  if (filterReferenceImages(images).length === 0) return "";
+  return DEFAULT_OBJECT_PERSONIFY_IMAGE_REFERENCE_NOTE;
+}
+
+export function buildProductImageScriptNote(urls: string[]): string {
+  const filtered = urls?.filter(Boolean) || [];
+  if (filtered.length === 0) return "";
+  return `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${filtered.join(
+    ", "
+  )}`;
+}
+
+export function buildObjectPersonifyImageScriptNote(images?: ReferenceImageInput[]): string {
+  const filtered = filterReferenceImages(images);
+  if (filtered.length === 0) return "";
+  const urls = filtered.filter((i): i is string => typeof i === "string");
+  const urlPart = urls.length ? `\nURLs: ${urls.join(", ")}` : "";
+  return `\n\n*** ẢNH THAM CHIẾU NHÂN HOÁ ĐỒ VẬT ***\nCó ảnh tham chiếu nhân hoá đồ vật (base64 hoặc URL). Hãy dùng để mô tả chính xác hơn nhân vật nhân hoá trong visual_prompt.${urlPart}`;
+}
+
 /**
  * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config
  */

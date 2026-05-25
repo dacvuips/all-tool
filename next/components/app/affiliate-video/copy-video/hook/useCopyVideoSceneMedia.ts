@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CopyVideoScene } from "../../constants";
+import { resolveObjectToPersonifyImageForApi } from "../../elements/utils/elementFormImageUtils";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -136,7 +137,14 @@ export function useCopyVideoSceneMedia({
     removeBatchGeneratingVideoSceneId,
     subscribeBatchState,
     scriptData,
+    copyVideoFormConfig,
   } = useCopyVideoContext();
+
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: copyVideoFormConfig?.objectToPersonify,
+    objectToPersonifyCode: copyVideoFormConfig?.objectToPersonifyCode,
+    fallbackImage: scriptData?.objectToPersonifyImage ?? copyVideoFormConfig?.objectToPersonifyImage,
+  });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -394,6 +402,7 @@ export function useCopyVideoSceneMedia({
         referenceImage,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         productImages: selectedProductImages?.length ? selectedProductImages : undefined,
+        objectToPersonifyImage,
         productImagePrompt: scene.product_image_prompt || undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật

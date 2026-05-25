@@ -9,6 +9,9 @@ import {
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
+  buildObjectPersonifyImageScriptNote,
+  buildProductImageScriptNote,
+  filterReferenceImages,
   interpolateTemplate,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
@@ -29,6 +32,7 @@ export default [
           text: string;
           objectToPersonifyCode?: string;
           productImages?: string[];
+          objectToPersonifyImages?: import("./_shared").ReferenceImageInput[];
         };
 
         if (!body?.config) {
@@ -38,18 +42,25 @@ export default [
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
 
-        // ── Resolve objectToPersonify prompt from DB ──
-        const { prompt: resolvedPersonifyPrompt, error: objectError } =
-          await resolveObjectToPersonifyPrompt({
-            objectToPersonifyCode: body.objectToPersonifyCode,
-            objectToPersonify: body.config.objectToPersonify,
-          });
+        const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages || []);
+        const usePersonifyImage = personifyImageRefs.length > 0;
 
-        if (objectError) {
-          return res.status(objectError.status).json({ message: objectError.message });
-        }
-        if (resolvedPersonifyPrompt) {
-          body.config.objectToPersonify = resolvedPersonifyPrompt;
+        // ── Resolve objectToPersonify prompt from DB (chỉ khi không dùng ảnh tham chiếu) ──
+        if (!usePersonifyImage) {
+          const { prompt: resolvedPersonifyPrompt, error: objectError } =
+            await resolveObjectToPersonifyPrompt({
+              objectToPersonifyCode: body.objectToPersonifyCode,
+              objectToPersonify: body.config.objectToPersonify,
+            });
+
+          if (objectError) {
+            return res.status(objectError.status).json({ message: objectError.message });
+          }
+          if (resolvedPersonifyPrompt) {
+            body.config.objectToPersonify = resolvedPersonifyPrompt;
+          }
+        } else {
+          body.config.objectToPersonify = "";
         }
 
         // ── Resolve artStyle prompt from DB ──
@@ -63,13 +74,10 @@ export default [
         }
 
         // Build product image reference text
-        const productImageUrls = body.productImages?.filter(Boolean) || [];
-        const productImageNote =
-          productImageUrls.length > 0
-            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(
-                ", "
-              )}`
-            : "";
+        const productImageNote = buildProductImageScriptNote(body.productImages || []);
+        const personifyImageNote = usePersonifyImage
+          ? buildObjectPersonifyImageScriptNote(body.objectToPersonifyImages || [])
+          : "";
 
         const clients = await getAvailableGeminiClients();
         const storyModeTypes = req?.body?.config?.storyModeType;
@@ -113,7 +121,9 @@ CRITICAL RULE: Always keep character and environment identical.
 
         // Thay thế placeholder trong text
         const interpolatedText =
-          interpolateTemplate(body.text || prompt, body.config) + productImageNote;
+          interpolateTemplate(body.text || prompt, body.config) +
+          personifyImageNote +
+          productImageNote;
 
         const response = await callWithKeyRotation(
           clients,

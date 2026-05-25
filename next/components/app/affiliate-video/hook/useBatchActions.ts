@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript, StoryModeTypeEnum } from "../constants";
+import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -34,6 +35,12 @@ export function useBatchActions(scenes: SceneScript[]) {
     removeBatchGeneratingVideoSceneId,
     affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
+    objectToPersonifyCode: affiliateVideoFormConfig?.objectToPersonifyCode,
+    fallbackImage:
+      scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
+  });
   const isPromptToVideo = scriptData?.storyModeType === StoryModeTypeEnum.prompt_to_video;
   const toast = useToast();
 
@@ -510,6 +517,7 @@ export function useBatchActions(scenes: SceneScript[]) {
             productImages: scene.selectedProductImages?.length
               ? scene.selectedProductImages
               : undefined,
+            objectToPersonifyImage,
             productImagePrompt: scene.product_image_prompt || undefined,
           });
           completed++;
@@ -658,6 +666,7 @@ export function useBatchActions(scenes: SceneScript[]) {
               productImages: scene.selectedProductImages?.length
                 ? scene.selectedProductImages
                 : undefined,
+              objectToPersonifyImage,
               productImagePrompt: scene.product_image_prompt || undefined,
             });
           } catch (imgErr) {

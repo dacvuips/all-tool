@@ -130,6 +130,7 @@ interface CallAisandboxParams {
 export async function callAisandboxImageAPI(params: CallAisandboxParams): Promise<void> {
   const { uploadedImageNames } = params;
   const imageCount = uploadedImageNames?.length || 0;
+
   await retryWithThrottleGate(
     async () => {
       if (imageCount === 0) {

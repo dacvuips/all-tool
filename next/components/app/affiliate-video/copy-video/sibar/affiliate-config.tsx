@@ -110,8 +110,25 @@ export const AffiliateConfig = () => {
           <ObjectPersonifyPickerDialog
             name="objectToPersonify"
             value={copyVideoFormConfig?.objectToPersonify}
-            onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
+            onChange={(v) =>
+              patchConfig &&
+              patchConfig({
+                objectToPersonify: v,
+                ...(v?.trim() ? { objectToPersonifyImage: undefined } : {}),
+              })
+            }
             onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
+            imageValue={copyVideoFormConfig?.objectToPersonifyImage}
+            onImageChange={(v) =>
+              patchConfig &&
+              patchConfig({
+                objectToPersonifyImage: v,
+                ...(v?.imageBytes
+                  ? { objectToPersonify: "", objectToPersonifyCode: undefined }
+                  : {}),
+              })
+            }
+            readOnly={!customer}
           />
         </div>
         {/* Ảnh sản phẩm */}

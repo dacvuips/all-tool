@@ -56,6 +56,7 @@ export interface VideoFormBase {
 export interface AffiliateVideoFormConfig extends VideoFormBase {
   objectToPersonify: string;
   objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ElementFormImage;
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
@@ -76,6 +77,7 @@ export interface CopyVideoFormConfig extends VideoFormBase {
   productImages?: string[];
   objectToPersonify: string;
   objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ElementFormImage;
 }
 
 export interface ElementFormImage {
@@ -188,6 +190,7 @@ export interface ScriptData {
   aspectRatio: "16:9" | "9:16";
   scenes: SceneScript[];
   productImages?: string[];
+  objectToPersonifyImage?: ElementFormImage;
 }
 
 export interface TrendingScriptData {
@@ -277,6 +280,7 @@ export interface CopyVideoAnalysisData {
   scenes: CopyVideoScene[];
   aspectRatio?: string;
   productImages?: string[];
+  objectToPersonifyImage?: ElementFormImage;
 }
 
 /** Right panel tabs for element video workflow */

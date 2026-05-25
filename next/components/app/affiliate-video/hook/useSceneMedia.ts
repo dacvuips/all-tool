@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SceneScript } from "../constants";
+import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -127,7 +128,14 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
     removeBatchGeneratingVideoSceneId,
     subscribeBatchState,
     scriptData,
+    affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
+
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
+    objectToPersonifyCode: affiliateVideoFormConfig?.objectToPersonifyCode,
+    fallbackImage: scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
+  });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -371,6 +379,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
         noText,
         additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
         productImages: selectedProductImages?.length ? selectedProductImages : undefined,
+        objectToPersonifyImage,
         productImagePrompt: scene.product_image_prompt || undefined,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật

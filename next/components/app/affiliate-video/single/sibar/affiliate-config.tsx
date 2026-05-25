@@ -207,8 +207,25 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
           <ObjectPersonifyPickerDialog
             name="objectToPersonify"
             value={videoConfig?.objectToPersonify}
-            onChange={(v) => patchConfig && patchConfig({ objectToPersonify: v })}
+            onChange={(v) =>
+              patchConfig &&
+              patchConfig({
+                objectToPersonify: v,
+                ...(v?.trim() ? { objectToPersonifyImage: undefined } : {}),
+              })
+            }
             onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
+            imageValue={videoConfig?.objectToPersonifyImage}
+            onImageChange={(v) =>
+              patchConfig &&
+              patchConfig({
+                objectToPersonifyImage: v,
+                ...(v?.imageBytes
+                  ? { objectToPersonify: "", objectToPersonifyCode: undefined }
+                  : {}),
+              })
+            }
+            readOnly={!customer}
           />
         </div>
 

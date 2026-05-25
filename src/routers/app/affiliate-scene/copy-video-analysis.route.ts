@@ -10,6 +10,9 @@ import {
   getAvailableGeminiClients,
   incrementRequestCount,
   resolveArtStylePrompt,
+  buildObjectPersonifyImageScriptNote,
+  buildProductImageScriptNote,
+  filterReferenceImages,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
 
@@ -237,6 +240,7 @@ export default [
           mood?: string;
           aspectRatio?: string;
           productImages?: string[];
+          objectToPersonifyImages?: import("./_shared").ReferenceImageInput[];
           objectToPersonifyCode?: string;
           objectToPersonify?: string;
           artStyleId?: string;
@@ -252,17 +256,23 @@ export default [
         await checkRequestLimit(context.id);
         const clients = await getAvailableGeminiClients();
 
-        // ── Resolve objectToPersonify prompt from DB ──
-        const { prompt: objectToPersonifyPrompt, error: objectError } =
-          await resolveObjectToPersonifyPrompt({
+        const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages || []);
+        const usePersonifyImage = personifyImageRefs.length > 0;
+        let objectToPersonifyPrompt: string | undefined;
+
+        // ── Resolve objectToPersonify prompt (chỉ khi không dùng ảnh tham chiếu) ──
+        if (!usePersonifyImage) {
+          const resolved = await resolveObjectToPersonifyPrompt({
             objectToPersonifyCode: body.objectToPersonifyCode,
             objectToPersonify: body.objectToPersonify,
           });
-        if (objectError) {
-          return res.status(objectError.status).json({ message: objectError.message });
-        }
-        if (objectToPersonifyPrompt) {
-          body.objectToPersonify = objectToPersonifyPrompt;
+          if (resolved.error) {
+            return res.status(resolved.error.status).json({ message: resolved.error.message });
+          }
+          objectToPersonifyPrompt = resolved.prompt;
+          if (objectToPersonifyPrompt) {
+            body.objectToPersonify = objectToPersonifyPrompt;
+          }
         }
 
         // ── Resolve artStyle prompt from DB ──
@@ -275,21 +285,20 @@ export default [
         }
 
         // Build product image reference text
-        const productImageUrls = body.productImages?.filter(Boolean) || [];
-        const productImageNote =
-          productImageUrls.length > 0
-            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(
-                ", "
-              )}`
-            : "";
+        const productImageNote = buildProductImageScriptNote(body.productImages || []);
+        const personifyImageNote = usePersonifyImage
+          ? buildObjectPersonifyImageScriptNote(body.objectToPersonifyImages || [])
+          : "";
         const text =
           buildVideoAnalysisPrompt({
             artStyle: body.artStyle,
             language: body.language,
             mood: body.mood,
             aspectRatio: body.aspectRatio,
-            objectToPersonifyPrompt,
-          }) + productImageNote;
+            objectToPersonifyPrompt: usePersonifyImage ? undefined : objectToPersonifyPrompt,
+          }) +
+          personifyImageNote +
+          productImageNote;
 
         const response = await callWithKeyRotation(
           clients,

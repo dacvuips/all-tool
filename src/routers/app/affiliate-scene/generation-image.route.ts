@@ -5,7 +5,14 @@ import { Context } from "../../../libs/graphql";
 import { callAisandboxImageAPI } from "../../api-media/handle-image-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { fetchCaptchaData } from "../../helpers/validateApiKey";
-import { ActionEnum, checkImageLimit, incrementImageCount } from "./_shared";
+import {
+  ActionEnum,
+  buildImageReferenceNotes,
+  checkImageLimit,
+  filterReferenceImages,
+  incrementImageCount,
+  ReferenceImageInput,
+} from "./_shared";
 
 export default [
   {
@@ -24,6 +31,7 @@ export default [
             | { imageBytes: string; mimeType?: string } // base64
           >;
           productImages?: string[];
+          objectToPersonifyImages?: ReferenceImageInput[];
           productImagePrompt?: string;
           config?: {
             numberOfImages?: number;
@@ -40,13 +48,12 @@ export default [
         await checkImageLimit(context.id);
         // Build product image reference note to append to prompt
         const productImageUrls = body.productImages?.filter(Boolean) || [];
-        const defaultProductImageNote = `\nQUAN TRỌNG: Có hình ảnh tham chiếu sản phẩm được đính kèm. Bạn PHẢI đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay`;
-        const productImageNote =
-          productImageUrls.length > 0
-            ? body.productImagePrompt
-              ? `\n${body.productImagePrompt}`
-              : defaultProductImageNote
-            : "";
+        const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages);
+        const imageReferenceNote = buildImageReferenceNotes({
+          productUrls: productImageUrls,
+          productCustomPrompt: body.productImagePrompt,
+          personifyImages: personifyImageRefs,
+        });
 
         // Lấy captcha + credentials từ Cliproxy API
         const {
@@ -59,6 +66,25 @@ export default [
           type: ActionEnum.IMAGE_GENERATION,
           logPrefix: "generation-image",
         });
+        {
+          /* Upload ảnh nhân hoá đồ vật lên Google Labs trước nếu có */
+        }
+        let personifyImageNames: string[] = [];
+        if (personifyImageRefs.length > 0) {
+          logger.info(
+            `[generation-image] Upload ${personifyImageRefs.length} ảnh nhân hoá đồ vật (user ${context.id})`
+          );
+          personifyImageNames = await processAndUploadImages(
+            personifyImageRefs,
+            accessToken,
+            projectId,
+            context.id
+          );
+        } else if (body.objectToPersonifyImages?.length) {
+          logger.warn(
+            `[generation-image] objectToPersonifyImages có ${body.objectToPersonifyImages.length} phần tử nhưng không có imageBytes hợp lệ`
+          );
+        }
 
         // Upload ảnh lên Google Labs trước nếu có
         let uploadedImageNames: string[] = [];
@@ -88,9 +114,9 @@ export default [
 
         await callAisandboxImageAPI({
           res,
-          prompt: `${body.prompt} ${productImageNote} ${noTextStr}`,
+          prompt: `${body.prompt} ${imageReferenceNote} ${noTextStr}`,
           aspectRatio: body.config?.aspectRatio,
-          uploadedImageNames: [...uploadedImageNames, ...productImageNames],
+          uploadedImageNames: [...personifyImageNames, ...uploadedImageNames, ...productImageNames],
           recaptchaToken,
           sessionId,
           projectId,

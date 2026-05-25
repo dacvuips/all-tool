@@ -36,8 +36,8 @@ const nextConfig = {
     version: process.env.npm_package_version,
     firebaseView: config.get("firebase.webConfig"),
     seo: {
-      title: "Viet Theo Veo 3 - Leading MMO Trading Solution",
-      siteName: "Viet Theo Veo 3 - Leading MMO Trading Solution",
+      title: "Viet Theo Veo 3 - Free Tool Generate Video AI - Image AI ",
+      siteName: "Viet Theo Veo 3 - Free Tool Generate Video AI - Image AI ",
     },
     upload: {
       uploadImageApiLink: config.get("upload.uploadImageApiLink"),

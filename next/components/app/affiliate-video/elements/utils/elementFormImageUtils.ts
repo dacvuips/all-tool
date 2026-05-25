@@ -112,6 +112,83 @@ export async function resolveElementReferenceImagesForApi(options: {
   return productImageUrlsToApiImages(options.urls);
 }
 
+/** Ảnh nhân hoá đồ vật (tab Ảnh) → payload cho generation-image / copy-video-generate-image. */
+export async function objectToPersonifyImageToApiImages(
+  image?: ElementFormImage
+): Promise<{ imageBytes: string; mimeType: string }[]> {
+  if (!image) return [];
+  const payload = await elementFormImageToApiPayload(image);
+  return payload ? [payload] : [];
+}
+
+export function hasObjectToPersonifyImage(image?: ElementFormImage): boolean {
+  return !!(image?.imageBytes || image?.fifeUrl);
+}
+
+export type ObjectToPersonifyMode = "image" | "prompt" | "none";
+
+/** Có ảnh → mode ảnh (ưu tiên); không ảnh nhưng có prompt/code → mode prompt. */
+export function getObjectToPersonifyMode(opts: {
+  objectToPersonify?: string;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ElementFormImage;
+}): ObjectToPersonifyMode {
+  if (hasObjectToPersonifyImage(opts.objectToPersonifyImage)) return "image";
+  if (opts.objectToPersonify?.trim() || opts.objectToPersonifyCode?.trim()) return "prompt";
+  return "none";
+}
+
+export type ObjectToPersonifyApiFields = {
+  objectToPersonify?: string;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImages?: ElementFormImage[];
+};
+
+/** Payload API: chỉ ảnh HOẶC chỉ prompt, không gửi cả hai. */
+export function buildObjectToPersonifyApiFields(opts: {
+  objectToPersonify?: string;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ElementFormImage;
+}): ObjectToPersonifyApiFields {
+  const mode = getObjectToPersonifyMode(opts);
+  if (mode === "image") {
+    return { objectToPersonifyImages: [opts.objectToPersonifyImage!] };
+  }
+  if (mode === "prompt") {
+    return {
+      objectToPersonify: opts.objectToPersonify?.trim() || undefined,
+      objectToPersonifyCode: opts.objectToPersonify?.trim()
+        ? opts.objectToPersonifyCode
+        : undefined,
+    };
+  }
+  return {};
+}
+
+/** Config cho generation-scene: xoá prompt khi dùng ảnh. */
+export function stripObjectToPersonifyPromptFromConfig<
+  T extends {
+    objectToPersonify?: string;
+    objectToPersonifyCode?: string;
+  },
+>(data: T): T {
+  return { ...data, objectToPersonify: "", objectToPersonifyCode: undefined };
+}
+
+/** Ảnh tham chiếu khi generate scene image – chỉ khi mode = image. */
+export function resolveObjectToPersonifyImageForApi(opts: {
+  objectToPersonify?: string;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ElementFormImage;
+  fallbackImage?: ElementFormImage;
+}): ElementFormImage | undefined {
+  const image = opts.objectToPersonifyImage ?? opts.fallbackImage;
+  if (getObjectToPersonifyMode({ ...opts, objectToPersonifyImage: image }) !== "image") {
+    return undefined;
+  }
+  return image;
+}
+
 /** Convert một ElementFormImage → payload API (hoặc undefined nếu thiếu dữ liệu). */
 async function elementFormImageToApiPayload(
   img: ElementFormImage
@@ -119,9 +196,11 @@ async function elementFormImageToApiPayload(
   if (!img.imageBytes && !img.fifeUrl) return undefined;
   try {
     if (img.imageBytes) {
+      const raw = img.imageBytes.trim();
+      const dataMatch = raw.match(/^data:([^;]+);base64,(.+)$/);
       return {
-        imageBytes: img.imageBytes,
-        mimeType: img.mimeType || "image/png",
+        imageBytes: dataMatch ? dataMatch[2] : raw,
+        mimeType: dataMatch ? dataMatch[1] : img.mimeType || "image/png",
       };
     }
     const url = img.fifeUrl;

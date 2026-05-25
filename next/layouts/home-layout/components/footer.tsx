@@ -1,11 +1,8 @@
 import copy from "copy-to-clipboard";
-import Link from "next/link";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiOutlineFacebook } from "react-icons/ai";
-import { RiFileCopyLine, RiMailLine } from "react-icons/ri";
+import { RiFileCopyLine } from "react-icons/ri";
 import { Button } from "../../../components/shared/utilities/form";
-import { Accordion } from "../../../components/shared/utilities/misc";
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
@@ -25,6 +22,7 @@ export function Footer({ className, ...props }: ReactProps) {
     }
   };
   const ReferralLink = () => {
+    if (!customer) return null;
     return (
       <div className="flex items-center gap-3">
         <div className="flex-1 text-12 text-primary  font-semibold">
@@ -43,56 +41,57 @@ export function Footer({ className, ...props }: ReactProps) {
   };
   if (!screenLg)
     return (
-      <footer className={`w-full text-accent mt-5 ${className}`}>
-        <div className="border-t-4 border-primary"></div>
-        <div className="pt-2 pb-4 bg-white">
-          <div className="mx-4 ">
-            <div className="flex flex-col items-center ">
-              <img src="/assets/img/logo-full-1.png" className="object-cover py-1 w-44" alt="" />
+      // <footer className={`w-full text-accent mt-5 ${className}`}>
+      //   <div className="border-t-4 border-primary"></div>
+      //   <div className="pt-2 pb-4 bg-white">
+      //     <div className="mx-4 ">
+      //       <div className="flex flex-col items-center ">
+      //         <img src="/assets/img/logo-full-1.png" className="object-cover py-1 w-44" alt="" />
 
-              <div className="flex flex-row ">
-                <span className="text-sm font-bold text-accent">
-                  {t("Free Generate Image - Video - AI")}
-                </span>
-              </div>
-              <div className="flex flex-col  items-center justify-center ">
-                <div className="max-w-3xl text-center text-12 text-accent">
-                  {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
-                </div>
-                <ReferralLink />
-                <div className="text-center text-12 text-accent">
-                  {`Zalo: 097.352.2962 - 037.7733.100`}
-                </div>
-              </div>
-              <div className="flex flex-col items-center">
-                <div className="flex flex-col items-center justify-center ">
-                  <div className="flex gap-2 item-center">
-                    <Link href={"https://www.facebook.com/midman.vn"} target="_blank">
-                      <i className="cursor-pointer text-32 hover:text-primary">
-                        <AiOutlineFacebook />
-                      </i>
-                    </Link>
-                    <Link href="mailto:midmanvn@gmail.com">
-                      <i
-                        onClick={() => setOpenEmail(!openEmail)}
-                        className="cursor-pointer text-32 hover:text-primary"
-                      >
-                        <RiMailLine />
-                      </i>
-                    </Link>
-                  </div>
-                  <Accordion isOpen={openEmail}>
-                    <div className="px-2 border rounded-full">{"midmanvn@gmail.com"}</div>
-                  </Accordion>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        {/* <div className="py-2 text-sm text-center">{`MidMan © ${new Date().getFullYear()}${
-          publicRuntimeConfig?.version ? " v" + publicRuntimeConfig?.version : ""
-        }`}</div> */}
-      </footer>
+      <></>
+      //         <div className="flex flex-row ">
+      //           <span className="text-sm font-bold text-accent">
+      //             {t("Free Generate Image - Video - AI")}
+      //           </span>
+      //         </div>
+      //         <div className="flex flex-col  items-center justify-center ">
+      //           <div className="max-w-3xl text-center text-12 text-accent">
+      //             {t("Lấy link tiếp thị liên kết để nhận 20% hoa hồng.")}
+      //           </div>
+      //           <ReferralLink />
+      //           <div className="text-center text-12 text-accent">
+      //             {`Zalo: 097.352.2962 - 037.7733.100`}
+      //           </div>
+      //         </div>
+      //         <div className="flex flex-col items-center">
+      //           <div className="flex flex-col items-center justify-center ">
+      //             <div className="flex gap-2 item-center">
+      //               <Link href={"https://www.facebook.com/midman.vn"} target="_blank">
+      //                 <i className="cursor-pointer text-32 hover:text-primary">
+      //                   <AiOutlineFacebook />
+      //                 </i>
+      //               </Link>
+      //               <Link href="mailto:midmanvn@gmail.com">
+      //                 <i
+      //                   onClick={() => setOpenEmail(!openEmail)}
+      //                   className="cursor-pointer text-32 hover:text-primary"
+      //                 >
+      //                   <RiMailLine />
+      //                 </i>
+      //               </Link>
+      //             </div>
+      //             <Accordion isOpen={openEmail}>
+      //               <div className="px-2 border rounded-full">{"midmanvn@gmail.com"}</div>
+      //             </Accordion>
+      //           </div>
+      //         </div>
+      //       </div>
+      //     </div>
+      //   </div>
+      //   {/* <div className="py-2 text-sm text-center">{`MidMan © ${new Date().getFullYear()}${
+      //     publicRuntimeConfig?.version ? " v" + publicRuntimeConfig?.version : ""
+      //   }`}</div> */}
+      // </footer>
     );
 
   return (

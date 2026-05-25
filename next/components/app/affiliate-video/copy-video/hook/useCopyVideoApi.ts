@@ -13,9 +13,16 @@ import {
   CopyVideoFormConfig,
   CopyVideoHistoryItem,
   DB_NAME,
+  ElementFormImage,
   SceneHistoryItem,
   STORE_NAME,
 } from "../../constants";
+import {
+  buildObjectToPersonifyApiFields,
+  getObjectToPersonifyMode,
+  hasObjectToPersonifyImage,
+  objectToPersonifyImageToApiImages,
+} from "../../elements/utils/elementFormImageUtils";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -51,6 +58,8 @@ export interface GenerateImageParams {
   additionalImages?: { imageBytes: string; mimeType: string }[];
   /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
   productImages?: string[];
+  /** URL ảnh tham chiếu nhân hoá đồ vật */
+  objectToPersonifyImage?: ElementFormImage;
   /** Custom prompt cho product images – nếu có sẽ dùng thay prompt mặc định */
   productImagePrompt?: string;
   /** Callback nhận progress 0-100 */
@@ -304,6 +313,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
       mood?: string;
       aspectRatio?: string;
       productImages?: string[];
+      /** Payload API – mảng ảnh tham chiếu nhân hoá (0–1 phần tử) */
+      objectToPersonifyImages?: ElementFormImage[];
       objectToPersonify?: string;
       objectToPersonifyCode?: string;
       artStyleId?: string;
@@ -366,6 +377,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         return undefined;
       }
 
+      const personifyApi = buildObjectToPersonifyApiFields(data);
+
       const result = await callCopyVideoAnalysisApi({
         videoBase64: data.sourceVideo.base64,
         mimeType: data.sourceVideo.mimeType,
@@ -374,9 +387,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
-        objectToPersonify: data.objectToPersonify,
-        objectToPersonifyCode: data.objectToPersonifyCode,
         artStyleId: data.artStyleId || undefined,
+        ...personifyApi,
       });
       if (!result) return undefined;
 
@@ -384,6 +396,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         ...result.data,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
+        objectToPersonifyImage:
+          getObjectToPersonifyMode(data) === "image" ? data.objectToPersonifyImage : undefined,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới
@@ -422,6 +436,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         referenceImage,
         additionalImages,
         productImages,
+        objectToPersonifyImage,
         productImagePrompt,
         onProgress,
         onError,
@@ -458,6 +473,10 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           images.push(...additionalImages);
         }
 
+        const personifyApiImages = hasObjectToPersonifyImage(objectToPersonifyImage)
+          ? await objectToPersonifyImageToApiImages(objectToPersonifyImage)
+          : [];
+
         const res = await fetch("/api/app/copy-video-generate-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -465,6 +484,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             prompt,
             images: images.length > 0 ? images : undefined,
             productImages: productImages?.length ? productImages : undefined,
+            objectToPersonifyImages: personifyApiImages.length
+              ? personifyApiImages
+              : undefined,
             productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio },
             noText: noText,

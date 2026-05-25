@@ -88,6 +88,7 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
       objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
       artStyleId: videoConfig?.artStyleId,
       productImages: videoConfig?.productImages,
+      objectToPersonifyImage: videoConfig?.objectToPersonifyImage,
     };
     if (type === TAB_TYPE.single) {
       const { batchSize, ...rest } = mergedData;

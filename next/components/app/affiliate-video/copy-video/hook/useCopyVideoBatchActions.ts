@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene, DB_NAME } from "../../constants";
+import { resolveObjectToPersonifyImageForApi } from "../../elements/utils/elementFormImageUtils";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -39,7 +40,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
+    scriptData,
   } = useCopyVideoContext();
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: copyVideoFormConfig?.objectToPersonify,
+    objectToPersonifyCode: copyVideoFormConfig?.objectToPersonifyCode,
+    fallbackImage:
+      scriptData?.objectToPersonifyImage ?? copyVideoFormConfig?.objectToPersonifyImage,
+  });
   // Copy-video mode is always image_to_video (no prompt_to_video)
   const isPromptToVideo = false;
   const toast = useToast();
@@ -554,6 +562,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             aspectRatio: copyVideoFormConfig?.aspectRatio,
             additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
             productImages: selectedUrls?.length ? selectedUrls : undefined,
+            objectToPersonifyImage,
             noText: scene.noText,
           });
           completed++;
@@ -699,6 +708,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               aspectRatio: copyVideoFormConfig?.aspectRatio,
               additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
               productImages: selectedUrls?.length ? selectedUrls : undefined,
+              objectToPersonifyImage,
               noText: scene.noText,
             });
           } catch (imgErr) {

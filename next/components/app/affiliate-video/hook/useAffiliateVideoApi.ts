@@ -25,6 +25,7 @@ import {
   CopyVideoFormConfig,
   CopyVideoHistoryItem,
   DB_NAME,
+  ElementFormImage,
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
@@ -32,6 +33,13 @@ import {
   TrendingScriptData,
   TrendingVideoFormConfig,
 } from "../constants";
+import {
+  buildObjectToPersonifyApiFields,
+  getObjectToPersonifyMode,
+  hasObjectToPersonifyImage,
+  objectToPersonifyImageToApiImages,
+  stripObjectToPersonifyPromptFromConfig,
+} from "../elements/utils/elementFormImageUtils";
 import { useIndexedDB } from "./useIndexedDB";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -97,6 +105,8 @@ export interface GenerateImageParams {
   additionalImages?: { imageBytes: string; mimeType: string }[];
   /** URL ảnh sản phẩm gốc – truyền lên server để inject vào prompt */
   productImages?: string[];
+  /** URL ảnh tham chiếu nhân hoá đồ vật */
+  objectToPersonifyImage?: ElementFormImage;
   /** Custom prompt cho product images – nếu có sẽ dùng thay prompt mặc định */
   productImagePrompt?: string;
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
@@ -503,6 +513,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       objectToPersonifyCode?: string;
       artStyleId?: string;
       productImages?: string[];
+      /** Payload API – mảng ảnh tham chiếu nhân hoá (0–1 phần tử) */
+      objectToPersonifyImages?: ElementFormImage[];
     }) => {
       const res = await fetch("/api/app/generation-scene/", {
         method: "POST",
@@ -617,13 +629,17 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // ── generateScene (flow cũ – từ config form) ──
   const generateScene = useCallback(
     async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
+      const personifyApi = buildObjectToPersonifyApiFields(data);
+      const configForApi =
+        getObjectToPersonifyMode(data) === "image"
+          ? stripObjectToPersonifyPromptFromConfig(data)
+          : data;
+
       const result = await callGenerationSceneApi({
-        config: data,
-        objectToPersonifyCode: data.objectToPersonify?.trim()
-          ? data.objectToPersonifyCode
-          : undefined,
+        config: configForApi,
         artStyleId: data.artStyleId || undefined,
         productImages: data.productImages,
+        ...personifyApi,
       });
       if (!result) return undefined;
       const scriptResult: ScriptData = {
@@ -631,6 +647,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         storyModeType: data.storyModeType,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
+        objectToPersonifyImage:
+          getObjectToPersonifyMode(data) === "image" ? data.objectToPersonifyImage : undefined,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới
@@ -709,6 +727,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       mood?: string;
       aspectRatio?: string;
       productImages?: string[];
+      objectToPersonifyImages?: ElementFormImage[];
+      objectToPersonify?: string;
       objectToPersonifyCode?: string;
       artStyleId?: string;
     }) => {
@@ -770,6 +790,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return undefined;
       }
 
+      const personifyApi = buildObjectToPersonifyApiFields(data);
+
       const result = await callCopyVideoAnalysisApi({
         videoBase64: data.sourceVideo.base64,
         mimeType: data.sourceVideo.mimeType,
@@ -778,16 +800,17 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         mood: data.mood,
         aspectRatio: data.aspectRatio,
         productImages: data.productImages,
-        objectToPersonifyCode: data.objectToPersonify?.trim()
-          ? data.objectToPersonifyCode
-          : undefined,
         artStyleId: data.artStyleId || undefined,
+        ...personifyApi,
       });
       if (!result) return undefined;
 
       const analysisResult: CopyVideoAnalysisData = {
         ...result.data,
         aspectRatio: data.aspectRatio,
+        productImages: data.productImages,
+        objectToPersonifyImage:
+          getObjectToPersonifyMode(data) === "image" ? data.objectToPersonifyImage : undefined,
       };
 
       // Gán id ngẫu nhiên cho từng scene mới
@@ -906,6 +929,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         referenceImage,
         additionalImages,
         productImages,
+        objectToPersonifyImage,
         productImagePrompt,
         noText,
         onProgress,
@@ -942,6 +966,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           images.push(...additionalImages);
         }
 
+        const personifyApiImages = hasObjectToPersonifyImage(objectToPersonifyImage)
+          ? await objectToPersonifyImageToApiImages(objectToPersonifyImage)
+          : [];
+
         const res = await fetch("/api/app/generation-image/", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -949,6 +977,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             prompt,
             images: images.length > 0 ? images : undefined,
             productImages: productImages?.length ? productImages : undefined,
+            objectToPersonifyImages: personifyApiImages.length ? personifyApiImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio, noText },
           }),
