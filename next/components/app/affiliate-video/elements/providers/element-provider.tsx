@@ -12,6 +12,11 @@ import {
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  SceneErrorKind,
+  SceneErrors,
+  useSceneErrorBroadcast,
+} from "../../hook/useSceneErrorBroadcast";
 import { ServiceImageEnum } from "../constants";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -74,6 +79,10 @@ interface ElementContextType {
       generatingExtendVideo: boolean
     ) => void
   ) => () => void;
+  /** Báo lỗi inline cho 1 scene (dùng cho batch/single generation) */
+  reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
+  /** Subscribe state lỗi inline cho 1 scene */
+  subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
 }
 
 export const ElementContext = createContext<Partial<ElementContextType>>({
@@ -169,6 +178,9 @@ export function ElementProvider(props) {
       (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
     >
   >(new Map());
+
+  // ── Per-scene inline error broadcast (batch generation failures) ──
+  const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -335,6 +347,8 @@ export function ElementProvider(props) {
         addBatchGeneratingVideoSceneId,
         removeBatchGeneratingVideoSceneId,
         subscribeBatchState,
+        reportSceneError,
+        subscribeSceneError,
       }}
     >
       {props.children}

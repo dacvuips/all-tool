@@ -12,6 +12,11 @@ import {
 
 import { useTranslation } from "react-i18next";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  SceneErrorKind,
+  SceneErrors,
+  useSceneErrorBroadcast,
+} from "../../hook/useSceneErrorBroadcast";
 
 /** Key used to persist the last generated script in IndexedDB */
 const COPY_VIDEO_STORE_NAME = STORE_NAME.copyVideo;
@@ -54,6 +59,10 @@ interface CopyVideoContextType {
       generatingExtendVideo: boolean
     ) => void
   ) => () => void;
+  /** Báo lỗi inline cho 1 scene (dùng cho batch/single generation) */
+  reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
+  /** Subscribe state lỗi inline cho 1 scene */
+  subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
 
   /** Increments when scene origin thumbnails finish saving to IndexedDB */
   sceneThumbnailVersion: number;
@@ -151,6 +160,9 @@ export function CopyVideoProvider(props) {
       (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
     >
   >(new Map());
+
+  // ── Per-scene inline error broadcast (batch generation failures) ──
+  const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -318,6 +330,8 @@ export function CopyVideoProvider(props) {
         addBatchGeneratingVideoSceneId,
         removeBatchGeneratingVideoSceneId,
         subscribeBatchState,
+        reportSceneError,
+        subscribeSceneError,
 
         sceneThumbnailVersion,
         notifySceneThumbnailsSaved,

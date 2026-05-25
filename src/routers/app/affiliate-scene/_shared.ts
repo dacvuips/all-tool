@@ -656,13 +656,13 @@ export interface TrendingVideoFormConfig {
 }
 /** Quy tắc thứ tự ảnh tham chiếu — chỉ ghi một lần khi có cả nhân hoá và sản phẩm. */
 const IMAGE_REFERENCE_ORDER_RULE =
-  "Ảnh tham chiếu đầu tiên luôn là nhân vật/nhân hoá; từ ảnh tham chiếu thứ hai trở đi là ảnh sản phẩm.";
+  "QUAN TRỌNG: Ảnh tham chiếu đầu tiên luôn là nhân vật, từ ảnh tham chiếu thứ hai trở đi là ảnh sản phẩm.";
 
 const PRODUCT_IMAGE_REFERENCE_RULES =
   "đưa TẤT CẢ sản phẩm vào CÙNG MỘT hình ảnh duy nhất. Mỗi sản phẩm phải giữ nguyên chính xác diện mạo, hình dáng, màu sắc, thương hiệu và bao bì như trong hình ảnh tham chiếu. Hãy sắp xếp tất cả sản phẩm một cách tự nhiên trong một bố cục thống nhất. Mỗi sản phẩm phải hiển thị rõ ràng và dễ nhận biết trong hình ảnh cuối cùng. Một số hình ảnh sản phẩm ngẫu nhiên phải được nhân vật cầm trên tay";
 
 const OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES =
-  "giữ nguyên chính xác diện mạo, hình dáng, màu sắc, chất liệu và đặc điểm nhận dạng, gương mặt tỉ lệ mắt mũi miệng, kích thước của nhân vật như trong ảnh đầu tiên tham chiếu khi tạo hình ảnh không biến đổi thành nhân vật nhân hoá, không được tự ý vẽ thêm hoặc bớt gì";
+  "giữ nguyên chính xác diện mạo, hình dáng, màu sắc, chất liệu và đặc điểm nhận dạng, gương mặt tỉ lệ mắt mũi miệng, kích thước của nhân vật như trong ảnh đầu tiên tham chiếu khi tạo hình ảnh không được biến đổi thành nhân vật nhân hoá, không được tự ý vẽ thêm hoặc bớt gì. Ví dụ: nếu ảnh đầu tiên là một người đàn ông trẻ, thì ảnh thứ hai phải là một người đàn ông trẻ khác, không phải là một người nữ. không được thây đổi phụ kiện những thứ mà người đàn ông đang mặc trên người mình";
 
 export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nQUAN TRỌNG: Prompt này dành cho ảnh thứ 2 trở đi. Bạn PHẢI ${PRODUCT_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
 

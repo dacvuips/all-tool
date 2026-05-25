@@ -292,7 +292,9 @@ export interface UseAffiliateVideoApiReturn {
    * Tự động lưu kết quả vào IndexedDB.
    */
 
-  generateVideoToVideo: (params: GenerateVideoToVideoParams) => Promise<GeneratedVideoData | undefined>;
+  generateVideoToVideo: (
+    params: GenerateVideoToVideoParams
+  ) => Promise<GeneratedVideoData | undefined>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -408,7 +410,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -425,7 +427,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           clearInterval(progressTimer);
           const message = "Không nhận được ảnh từ API";
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -444,7 +446,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onProgress?.(0);
         const message = err?.message || "Lỗi tạo ảnh";
         if (onError) onError(message);
-        else toast.error(message);
+        else console.error(message);
         console.error("[generateImage] Error:", err);
         return undefined;
       }
@@ -509,7 +511,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -520,7 +522,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         if (!reader) {
           const message = "Không thể đọc response stream";
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -552,7 +554,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
               } else if (event.type === "error") {
                 const message = event.message || "Lỗi tạo video";
                 if (onError) onError(message);
-                else toast.error(message);
+                else console.error(message);
                 return undefined;
               }
             } catch (parseErr) {
@@ -564,7 +566,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         if (!videoData) {
           const message = "Không nhận được video từ API";
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -578,7 +580,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onProgress?.(0);
         const message = err?.message || "Lỗi tạo video";
         if (onError) onError(message);
-        else toast.error(message);
+        else console.error(message);
         console.error("[generateVideo] Error:", err);
         return undefined;
       }
@@ -637,7 +639,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           const err = await res.json().catch(() => ({}));
           const message = err?.message || `Lỗi ${res.status}`;
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -648,7 +650,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         if (!reader) {
           const message = "Không thể đọc response stream";
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -680,7 +682,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
               } else if (event.type === "error") {
                 const message = event.message || "Lỗi tạo video";
                 if (onError) onError(message);
-                else toast.error(message);
+                else console.error(message);
                 return undefined;
               }
             } catch (parseErr) {
@@ -692,7 +694,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         if (!videoData) {
           const message = "Không nhận được video từ API";
           if (onError) onError(message);
-          else toast.error(message);
+          else console.error(message);
           return undefined;
         }
 
@@ -706,7 +708,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onProgress?.(0);
         const message = err?.message || "Lỗi tạo video";
         if (onError) onError(message);
-        else toast.error(message);
+        else console.error(message);
         console.error("[generateVideo] Error:", err);
         return undefined;
       }

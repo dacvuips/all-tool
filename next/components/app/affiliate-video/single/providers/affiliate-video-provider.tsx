@@ -14,6 +14,11 @@ import {
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  SceneErrorKind,
+  SceneErrors,
+  useSceneErrorBroadcast,
+} from "../../hook/useSceneErrorBroadcast";
 
 /** Key used to persist the last generated script in IndexedDB */
 
@@ -90,6 +95,10 @@ export const AffiliateVideoContext = createContext<
         generatingExtendVideo: boolean
       ) => void
     ) => () => void;
+    /** Báo lỗi inline cho 1 scene (dùng cho batch/single generation) */
+    reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
+    /** Subscribe state lỗi inline cho 1 scene */
+    subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
 
     // ── Scene history ──
     /** Full history list (newest first) */
@@ -139,6 +148,9 @@ export function AffiliateVideoProvider(props) {
       (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
     >
   >(new Map());
+
+  // ── Per-scene inline error broadcast (batch generation failures) ──
+  const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
 
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
     StoryModeTypeEnum.image_to_video
@@ -376,6 +388,8 @@ export function AffiliateVideoProvider(props) {
         addBatchGeneratingVideoSceneId,
         removeBatchGeneratingVideoSceneId,
         subscribeBatchState,
+        reportSceneError,
+        subscribeSceneError,
 
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,

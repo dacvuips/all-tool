@@ -114,8 +114,6 @@ export function useCopyVideoSceneMedia({
   const [extendVideoError, setExtendVideoError] = useState<string | null>(null);
   const [generatedExtendVideo, setGeneratedExtendVideo] = useState<GeneratedVideoData | null>(null);
 
-  const reportVideoError = useCallback((message: string) => setVideoError(message), []);
-
   // ── Refs cho simulated progress timers ──
   const imageProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -136,9 +134,19 @@ export function useCopyVideoSceneMedia({
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
     subscribeBatchState,
+    subscribeSceneError,
+    reportSceneError,
     scriptData,
     copyVideoFormConfig,
   } = useCopyVideoContext();
+
+  const reportVideoError = useCallback(
+    (message: string) => {
+      setVideoError(message);
+      reportSceneError?.(scene.id, "video", message);
+    },
+    [scene.id, reportSceneError]
+  );
 
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: copyVideoFormConfig?.objectToPersonify,
@@ -160,6 +168,17 @@ export function useCopyVideoSceneMedia({
     });
     return unsub;
   }, [scene.id, subscribeBatchState]);
+
+  // ── Subscribe inline errors broadcast (batch generation failures) ──
+  useEffect(() => {
+    if (!subscribeSceneError) return;
+    const unsub = subscribeSceneError(scene.id, (errors) => {
+      if (errors.image !== undefined) setImageError(errors.image ?? null);
+      if (errors.video !== undefined) setVideoError(errors.video ?? null);
+      if (errors.extend !== undefined) setExtendVideoError(errors.extend ?? null);
+    });
+    return unsub;
+  }, [scene.id, subscribeSceneError]);
 
   // // Combined flag: either local generation or batch generation
   const isGeneratingImage = generatingImage || isBatchGenerating;
@@ -339,15 +358,16 @@ export function useCopyVideoSceneMedia({
     // ── Check concurrency limit ──
     const currentImageGenerating = batchGeneratingSceneIdsRef?.current?.size ?? 0;
     if (currentImageGenerating >= IMAGE_CONCURRENCY) {
-      setImageError(
-        t("Đang tạo ảnh tối đa {{max}} ảnh cùng lúc. Vui lòng chờ hoàn thành.", {
-          max: IMAGE_CONCURRENCY,
-        })
-      );
+      const message = t("Đang tạo ảnh tối đa {{max}} ảnh cùng lúc. Vui lòng chờ hoàn thành.", {
+        max: IMAGE_CONCURRENCY,
+      });
+      setImageError(message);
+      reportSceneError?.(scene.id, "image", message);
       return;
     }
 
     setImageError(null);
+    reportSceneError?.(scene.id, "image", null);
     setGeneratingImage(true);
     setImageProgress(0);
     addBatchGeneratingSceneId(scene.id);
@@ -408,12 +428,16 @@ export function useCopyVideoSceneMedia({
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
         },
-        onError: setImageError,
+        onError: (msg) => {
+          setImageError(msg);
+          reportSceneError?.(scene.id, "image", msg);
+        },
       });
 
       if (result) {
         setGeneratedImage(result);
         setImageError(null);
+        reportSceneError?.(scene.id, "image", null);
       } else {
         console.warn("[handleGenerateImage] No result returned");
       }
@@ -435,8 +459,13 @@ export function useCopyVideoSceneMedia({
     try {
       await saveGeneratedImage(scene.id, imageData);
       setGeneratedImage(imageData);
-    } catch (err) {
+      setImageError(null);
+      reportSceneError?.(scene.id, "image", null);
+    } catch (err: any) {
       console.error("[handleSetImage] Error:", err);
+      const message = err?.message || t("Không thể lưu ảnh. Vui lòng thử lại.");
+      setImageError(message);
+      reportSceneError?.(scene.id, "image", message);
     }
   };
 
@@ -459,19 +488,26 @@ export function useCopyVideoSceneMedia({
       const message = t("Đang tạo video tối đa {{max}} video cùng lúc. Vui lòng chờ hoàn thành.", {
         max: VIDEO_CONCURRENCY,
       });
-      if (isStitch) setExtendVideoError(message);
-      else setVideoError(message);
+      if (isStitch) {
+        setExtendVideoError(message);
+        reportSceneError?.(scene.id + "::stitch", "extend", message);
+      } else {
+        setVideoError(message);
+        reportSceneError?.(scene.id, "video", message);
+      }
       return;
     }
 
     if (isStitch) {
       setExtendVideoError(null);
+      reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
       startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
+      reportSceneError?.(scene.id, "video", null);
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
@@ -488,6 +524,7 @@ export function useCopyVideoSceneMedia({
             "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
           );
           setExtendVideoError(message);
+          reportSceneError?.(scene.id + "::stitch", "extend", message);
           throw new Error("Missing start or end image");
         }
         imagesArray = [
@@ -519,15 +556,25 @@ export function useCopyVideoSceneMedia({
         onStatusMessage: (msg) => {
           if (!isStitch) setVideoStatusMessage(msg);
         },
-        onError: isStitch ? setExtendVideoError : setVideoError,
+        onError: (msg) => {
+          if (isStitch) {
+            setExtendVideoError(msg);
+            reportSceneError?.(scene.id + "::stitch", "extend", msg);
+          } else {
+            setVideoError(msg);
+            reportSceneError?.(scene.id, "video", msg);
+          }
+        },
       });
       if (result) {
         if (isStitch) {
           setGeneratedExtendVideo(result);
           setExtendVideoError(null);
+          reportSceneError?.(scene.id + "::stitch", "extend", null);
         } else {
           setGeneratedVideo(result);
           setVideoError(null);
+          reportSceneError?.(scene.id, "video", null);
         }
       }
     } catch {

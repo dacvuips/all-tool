@@ -1,10 +1,7 @@
 import { Request } from "express";
 import { settingService } from "../../libs/dal/setting";
-import {
-  buildThrottleError,
-  captchaThrottleGate,
-  retryWithThrottleGate,
-} from "./retry-throttle";
+import { captchaSerialQueue } from "./captcha-serial-queue";
+import { buildThrottleError, captchaThrottleGate, retryWithThrottleGate } from "./retry-throttle";
 
 /** Cấu hình link API */
 export interface ApiLinkData {
@@ -140,7 +137,11 @@ export interface CaptchaResponseData {
 function detectCaptchaQueueFull(status: number, errText: string): boolean {
   if (status !== 500 && status !== 503 && status !== 429) return false;
   // Captcha server trả body dạng: {"statusCode":500,"message":"Hàng đợi cho [...] đã đầy (N). Thử lại sau."}
-  if (errText.includes("đã đầy") || errText.includes("queue is full") || errText.includes("too many")) {
+  if (
+    errText.includes("đã đầy") ||
+    errText.includes("queue is full") ||
+    errText.includes("too many")
+  ) {
     return true;
   }
   return false;
@@ -155,77 +156,84 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
   const links = await getApiSetting("recaptcha-api-secret-key");
 
   /**
+   * Mọi request captcha xếp hàng FIFO, tối thiểu 5s giữa hai lần gọi API (Redis + local chain).
    * Vòng lặp thử từng link được wrap trong retryWithThrottleGate.
    * Khi captcha server báo "hàng đợi đầy" (500/503 + từ khoá đặc trưng):
    *   → throw ThrottleError → gate set trên Redis → tất cả instance back off
    *     → sau backoff: retryWithThrottleGate gọi lại fn() → thử lại từ đầu.
    */
-  return retryWithThrottleGate(
-    async () => {
-      let captchaData: CaptchaResponseData = null;
-      let lastError: any = null;
+  return captchaSerialQueue.run(
+    () =>
+      retryWithThrottleGate(
+        async () => {
+          let captchaData: CaptchaResponseData = null;
+          let lastError: any = null;
 
-      for (const selectedLink of links) {
-        if (!selectedLink || !selectedLink.url) {
-          continue;
-        }
-
-        try {
-          const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
-          const headers: Record<string, string> = {};
-          if (selectedLink.apiKey) {
-            headers["X-API-Key"] = selectedLink.apiKey;
-          }
-
-          const captchaResp = await fetch(captchaUrl, { headers });
-
-          if (!captchaResp.ok) {
-            const errText = await captchaResp.text();
-
-            // Hàng đợi đầy → throw ThrottleError để retryWithThrottleGate xử lý
-            if (detectCaptchaQueueFull(captchaResp.status, errText)) {
-              console.warn(
-                `[${logPrefix}] Link ${selectedLink?.url} bị throttle (hàng đợi đầy ${captchaResp.status}). Set gate, chờ retry...`
-              );
-              throw buildThrottleError(`Captcha API error ${captchaResp.status}: ${errText.slice(0, 200)}`);
-            }
-
-            // On 403, skip to next API key
-            if (captchaResp.status === 403) {
-              lastError = new Error(`Captcha API error 403: ${errText}`);
-              console.warn(
-                `[${logPrefix}] Link ${selectedLink?.url} bị 403. Chuyển sang key tiếp theo...`
-              );
+          for (const selectedLink of links) {
+            if (!selectedLink || !selectedLink.url) {
               continue;
             }
 
-            throw new Error(`Captcha API error ${captchaResp.status}: ${errText}`);
+            try {
+              const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
+              const headers: Record<string, string> = {};
+              if (selectedLink.apiKey) {
+                headers["X-API-Key"] = selectedLink.apiKey;
+              }
+
+              const captchaResp = await fetch(captchaUrl, { headers });
+
+              if (!captchaResp.ok) {
+                const errText = await captchaResp.text();
+
+                // Hàng đợi đầy → throw ThrottleError để retryWithThrottleGate xử lý
+                if (detectCaptchaQueueFull(captchaResp.status, errText)) {
+                  console.warn(
+                    `[${logPrefix}] Link ${selectedLink?.url} bị throttle (hàng đợi đầy ${captchaResp.status}). Set gate, chờ retry...`
+                  );
+                  throw buildThrottleError(
+                    `Captcha API error ${captchaResp.status}: ${errText.slice(0, 200)}`
+                  );
+                }
+
+                // On 403, skip to next API key
+                if (captchaResp.status === 403) {
+                  lastError = new Error(`Captcha API error 403: ${errText}`);
+                  console.warn(
+                    `[${logPrefix}] Link ${selectedLink?.url} bị 403. Chuyển sang key tiếp theo...`
+                  );
+                  continue;
+                }
+
+                throw new Error(`Captcha API error ${captchaResp.status}: ${errText}`);
+              }
+
+              captchaData = await captchaResp.json();
+              break;
+            } catch (err: any) {
+              // ThrottleError: ném lại để retryWithThrottleGate xử lý (không tiếp tục link tiếp theo)
+              if (err.isThrottleError) throw err;
+
+              lastError = err;
+              console.warn(
+                `[${logPrefix}] Link ${selectedLink?.url} thất bại: ${err.message}. Thử link tiếp theo...`
+              );
+              continue;
+            }
           }
 
-          captchaData = await captchaResp.json();
-          break;
-        } catch (err: any) {
-          // ThrottleError: ném lại để retryWithThrottleGate xử lý (không tiếp tục link tiếp theo)
-          if (err.isThrottleError) throw err;
+          if (!captchaData) {
+            const err: any = new Error(
+              lastError?.message || `Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.`
+            );
+            err.statusCode = 502;
+            throw err;
+          }
 
-          lastError = err;
-          console.warn(
-            `[${logPrefix}] Link ${selectedLink?.url} thất bại: ${err.message}. Thử link tiếp theo...`
-          );
-          continue;
-        }
-      }
-
-      if (!captchaData) {
-        const err: any = new Error(
-          lastError?.message || `Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.`
-        );
-        err.statusCode = 502;
-        throw err;
-      }
-
-      return captchaData;
-    },
-    { label: "captcha-fetch", gate: captchaThrottleGate }
+          return captchaData;
+        },
+        { label: "captcha-fetch", gate: captchaThrottleGate }
+      ),
+    logPrefix
   );
 }

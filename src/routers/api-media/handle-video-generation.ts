@@ -196,7 +196,6 @@ async function sendAndParseResponse(
   const resp = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${accessToken}`,
       ...(headers || {}),
     },
@@ -291,7 +290,6 @@ export async function callTextOnlyAPI(
           },
         },
         videoModelKey: buildVideoModelKey(params),
-        metadata: {},
       },
     ],
     useV2ModelConfig: true,
@@ -329,7 +327,6 @@ export async function callStartImageAPI(
           },
         },
         videoModelKey: buildVideoModelKey(params),
-        metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
         },
@@ -371,7 +368,6 @@ export async function callStartAndEndImageAPI(
           },
         },
         videoModelKey: buildVideoModelKey(params),
-        metadata: {},
         startImage: {
           mediaId: params.uploadedImageNames![0],
         },

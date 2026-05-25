@@ -51,6 +51,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
+    reportSceneError,
   } = useElementContext();
   // Elements: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
@@ -548,6 +549,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingSceneId(scene.id);
+          reportSceneError?.(scene.id, "image", null);
           const selectedUrls = await selectedProductImagesDB.get(scene.id);
           const additionalImages = await convertProductImages(scene.id);
           await elementGenerateImage({
@@ -557,11 +559,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
             productImages: selectedUrls?.length ? selectedUrls : undefined,
             noText: scene.noText,
+            onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
           setBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[BatchCreateAllImage] Scene #${scene.sceneNumber} error:`, err);
+          reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
           errors++;
           setBatchErrors(errors);
           completed++;
@@ -654,6 +658,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         if (isPromptToVideo) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
+            reportSceneError?.(scene.id, "video", null);
             const motionPrompt = getSceneMotionPrompt(scene);
             const audioDesc = scene.audio_description || "";
             const refImages = await getSceneReferenceImages(scene);
@@ -666,11 +671,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
                   }`,
               images: refImages.length > 0 ? refImages : undefined,
               aspectRatio: elementFormConfig?.aspectRatio,
+              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
             });
             completed++;
             setVideoBatchCompleted(completed);
-          } catch (err) {
+          } catch (err: any) {
             console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -696,6 +703,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
+            reportSceneError?.(scene.id, "image", null);
             const selectedUrls = await selectedProductImagesDB.get(scene.id);
             const additionalImages = await convertProductImages(scene.id);
             existingImage = await elementGenerateImage({
@@ -705,12 +713,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
               productImages: selectedUrls?.length ? selectedUrls : undefined,
               noText: scene.noText,
+              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
-          } catch (imgErr) {
+          } catch (imgErr: any) {
             console.error(
               `[BatchCreateAllVideo] Scene #${scene.sceneNumber} image generation error:`,
               imgErr
             );
+            reportSceneError?.(scene.id, "image", imgErr?.message || t("Lỗi tạo ảnh"));
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -731,6 +741,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id);
+          reportSceneError?.(scene.id, "video", null);
           const motionPrompt = getSceneMotionPrompt(scene);
           const audioDesc = scene.audio_description || "";
           const refImages = await getSceneReferenceImages(scene);
@@ -743,11 +754,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
                 }`,
             images: refImages.length > 0 ? refImages : undefined,
             aspectRatio: elementFormConfig?.aspectRatio,
+            onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
           setVideoBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+          reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
           errors++;
           setVideoBatchErrors(errors);
           completed++;
@@ -863,6 +876,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
+          reportSceneError?.(scene.id + "::stitch", "extend", null);
           const motion_description = scene.motion_description || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
@@ -875,13 +889,19 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
             ],
             aspectRatio: elementFormConfig?.aspectRatio,
+            onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
           setExtendBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(
             `[BatchCreateAllExtendVideo] Scene #${scene.sceneNumber} → #${nextScene.sceneNumber} error:`,
             err
+          );
+          reportSceneError?.(
+            scene.id + "::stitch",
+            "extend",
+            err?.message || t("Lỗi tạo video nối")
           );
           errors++;
           setExtendBatchErrors(errors);

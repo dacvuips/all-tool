@@ -41,6 +41,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
     scriptData,
+    reportSceneError,
   } = useCopyVideoContext();
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: copyVideoFormConfig?.objectToPersonify,
@@ -554,6 +555,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingSceneId(scene.id);
+          reportSceneError?.(scene.id, "image", null);
           const selectedUrls = await selectedProductImagesDB.get(scene.id);
           const additionalImages = await convertProductImages(scene.id);
           await copyVideoGenerateImage({
@@ -564,11 +566,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             productImages: selectedUrls?.length ? selectedUrls : undefined,
             objectToPersonifyImage,
             noText: scene.noText,
+            onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
           setBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[BatchCreateAllImage] Scene #${scene.sceneNumber} error:`, err);
+          reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
           errors++;
           setBatchErrors(errors);
           completed++;
@@ -661,6 +665,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         if (isPromptToVideo) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
+            reportSceneError?.(scene.id, "video", null);
             const audioDesc = scene.audio_description || "";
             await generateVideo({
               sceneId: scene.id,
@@ -670,11 +675,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
                     audioDesc ? `, [AUDIO]${audioDesc}` : ""
                   }, [DIALOGUE]${scene.original_content}`,
               aspectRatio: copyVideoFormConfig?.aspectRatio,
+              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
             });
             completed++;
             setVideoBatchCompleted(completed);
-          } catch (err) {
+          } catch (err: any) {
             console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -700,6 +707,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
+            reportSceneError?.(scene.id, "image", null);
             const selectedUrls = await selectedProductImagesDB.get(scene.id);
             const additionalImages = await convertProductImages(scene.id);
             existingImage = await copyVideoGenerateImage({
@@ -710,12 +718,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               productImages: selectedUrls?.length ? selectedUrls : undefined,
               objectToPersonifyImage,
               noText: scene.noText,
+              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
-          } catch (imgErr) {
+          } catch (imgErr: any) {
             console.error(
               `[BatchCreateAllVideo] Scene #${scene.sceneNumber} image generation error:`,
               imgErr
             );
+            reportSceneError?.(scene.id, "image", imgErr?.message || t("Lỗi tạo ảnh"));
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -736,6 +746,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id);
+          reportSceneError?.(scene.id, "video", null);
           const audioDesc = scene.audio_description || "";
           await generateVideo({
             sceneId: scene.id,
@@ -751,11 +762,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               },
             ],
             aspectRatio: copyVideoFormConfig?.aspectRatio,
+            onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
           setVideoBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+          reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
           errors++;
           setVideoBatchErrors(errors);
           completed++;
@@ -871,6 +884,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
 
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
+          reportSceneError?.(scene.id + "::stitch", "extend", null);
           const motion_description = scene.motion_description || "smooth transition between scenes";
           await generateVideo({
             sceneId: scene.id + "::stitch",
@@ -884,13 +898,19 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
             ],
             aspectRatio: copyVideoFormConfig?.aspectRatio,
+            onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
           setExtendBatchCompleted(completed);
-        } catch (err) {
+        } catch (err: any) {
           console.error(
             `[BatchCreateAllExtendVideo] Scene #${scene.sceneNumber} → #${nextScene.sceneNumber} error:`,
             err
+          );
+          reportSceneError?.(
+            scene.id + "::stitch",
+            "extend",
+            err?.message || t("Lỗi tạo video nối")
           );
           errors++;
           setExtendBatchErrors(errors);
