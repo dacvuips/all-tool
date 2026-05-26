@@ -13,6 +13,13 @@ RouterFiles.filter((f) => /(.*).route.js$/.test(f)).map((f) => {
     router[route.method](route.path, route.midd, (req: express.Request, res: express.Response) =>
       route.action(req, res).catch((error: any) => {
         logger.error("API Request Error:::" + error.message, error);
+        // Response may already be sent (e.g. SSE stream ended in pollAndExtractVideo).
+        if (res.headersSent) {
+          if (!res.writableEnded) {
+            res.end();
+          }
+          return;
+        }
         if (!(error instanceof BaseError)) {
           error = new BaseError("unknow_error", error.message, 500, false);
           res.status(500).json(error);

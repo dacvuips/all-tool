@@ -90,13 +90,16 @@ export default [
           captchaRetry,
         });
 
-        await pollAndExtractVideo({
+        const pollSuccess = await pollAndExtractVideo({
           mediaName,
           accessToken,
           customerId: context.id,
           res,
           headers,
         });
+        if (!pollSuccess) {
+          return;
+        }
         await incrementVideoCount(context.id);
       } catch (err: any) {
         logger.error(`[generation-video] Lỗi: ${err?.message}`);

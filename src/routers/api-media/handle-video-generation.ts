@@ -90,13 +90,16 @@ export async function handleVideoGeneration(
         headers: currentCaptchaData.Headers,
       });
 
-      await pollAndExtractVideo({
+      const pollSuccess = await pollAndExtractVideo({
         mediaName,
         accessToken: currentCaptchaData.accessToken,
         customerId: context.id,
         res,
         headers: currentCaptchaData.Headers,
       });
+      if (!pollSuccess) {
+        return;
+      }
 
       await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
       return;
@@ -524,11 +527,34 @@ interface PollAndExtractVideoParams {
   headers?: Record<string, string>;
 }
 
+function resolveVideoGenerationErrorMessage(
+  generationStatus: string,
+  mediaResult: any,
+  pollCount: number,
+  maxPolls: number
+): string {
+  const apiMessage =
+    mediaResult?.operation?.error?.message ||
+    mediaResult?.error?.message ||
+    mediaResult?.operation?.metadata?.errorMessage;
+  if (apiMessage) {
+    return apiMessage;
+  }
+  if (generationStatus === "MEDIA_GENERATION_STATUS_FAILED") {
+    return "Video creation failed due to a policy violation. Please try again.";
+  }
+  if (pollCount >= maxPolls) {
+    return "Hết thời gian chờ tạo video. Vui lòng thử lại.";
+  }
+  return "Tạo video thất bại. Vui lòng thử lại.";
+}
+
 /**
  * Poll media endpoint cho đến khi video generation hoàn tất,
  * extract video data và gửi kết quả qua SSE.
+ * @returns true nếu thành công, false nếu đã gửi lỗi qua SSE (không throw để tránh double-response).
  */
-export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<void> {
+export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<boolean> {
   const { mediaName, accessToken, customerId, res, headers } = params;
 
   // Poll media endpoint until video generation completes
@@ -590,16 +616,20 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   };
 
   if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
-    const errorMsg = "Video creation failed due to a policy violation. Please try again.";
+    const errorMsg = resolveVideoGenerationErrorMessage(
+      generationStatus,
+      mediaResult,
+      pollCount,
+      MAX_POLLS
+    );
 
-    // Log error message
     logger.error(
       `[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`
     );
 
     sendSSE({ type: "error", message: errorMsg });
     res.end();
-    throw new Error(errorMsg);
+    return false;
   }
 
   // Extract fifeUrl from operation metadata – try multiple known paths
@@ -622,7 +652,7 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
 
     sendSSE({ type: "error", message: errorMsg });
     res.end();
-    return;
+    return false;
   }
 
   sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
@@ -636,4 +666,5 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   });
 
   res.end();
+  return true;
 }

@@ -10,6 +10,7 @@ import {
   videoThrottleGate,
 } from "../helpers/retry-throttle";
 import { CaptchaResponseData } from "../helpers/validateApiKey";
+import { pollAndExtractVideo } from "./handle-video-generation";
 
 /**
  * Xử lý logic generate video:
@@ -65,13 +66,16 @@ export async function handleVideoToVideoGeneration(
     headers: captchaData.Headers,
   });
 
-  await pollAndExtractVideo({
+  const pollSuccess = await pollAndExtractVideo({
     mediaName,
     accessToken: captchaData.accessToken,
     customerId: context.id,
     res,
     headers: captchaData.Headers,
   });
+  if (!pollSuccess) {
+    return;
+  }
 
   // Tăng usedQuantity sau khi generate video thành công (atomic $inc, tìm theo API key)
   await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
@@ -264,124 +268,3 @@ export async function callVideoToVideoAPI(
   return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
-interface PollAndExtractVideoParams {
-  mediaName: string;
-  accessToken: string;
-  customerId: string;
-  res: Response;
-  headers?: Record<string, string>;
-}
-
-/**
- * Poll media endpoint cho đến khi video generation hoàn tất,
- * extract video data và gửi kết quả qua SSE.
- */
-export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<void> {
-  const { mediaName, accessToken, customerId, res, headers } = params;
-
-  // Poll media endpoint until video generation completes
-  const MAX_POLLS = 360; // max ~30 minutes (5s * 360)
-  let pollCount = 0;
-  let mediaResult: any = null;
-  let generationStatus = "MEDIA_GENERATION_STATUS_PENDING";
-
-  while (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL" && pollCount < MAX_POLLS) {
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s interval
-    pollCount++;
-
-    try {
-      const pollResp = await fetch(
-        "https://aisandbox-pa.googleapis.com/v1/video:batchCheckAsyncVideoGenerationStatus",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${accessToken}`,
-            ...(headers || {}),
-          },
-          body: JSON.stringify({
-            operations: [
-              {
-                operation: {
-                  name: mediaName,
-                },
-              },
-            ],
-          }),
-        }
-      );
-      if (pollResp.ok) {
-        const pollData = await pollResp.json();
-        // Response is an array: [{ operations: [{ operation: {...}, status: "..." }], remainingCredits: ... }]
-        const result = Array.isArray(pollData) ? pollData[0] : pollData;
-        const operationResult = result?.operations?.[0];
-        generationStatus = operationResult?.status || "MEDIA_GENERATION_STATUS_PENDING";
-        mediaResult = operationResult;
-
-        // Nếu status FAILED → dừng polling ngay
-        if (generationStatus === "MEDIA_GENERATION_STATUS_FAILED") {
-          logger.warn(`[generation-video] Video generation failed at poll #${pollCount}`);
-          break;
-        }
-      } else {
-        const errText = await pollResp.text();
-        logger.warn(`[generation-video] Poll error ${pollResp.status}: ${errText}`);
-      }
-    } catch (pollErr: any) {
-      logger.warn(`[generation-video] Poll error: ${pollErr?.message}`);
-    }
-  }
-
-  // Gửi kết quả video về client qua SSE
-  const sendSSE = (data: any) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
-
-  if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
-    const errorMsg = "Video creation failed due to a policy violation. Please try again.";
-
-    // Log error message
-    logger.error(
-      `[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`
-    );
-
-    sendSSE({ type: "error", message: errorMsg });
-    res.end();
-    throw new Error(errorMsg);
-  }
-
-  // Extract fifeUrl from operation metadata – try multiple known paths
-  // because text-to-video and image-to-video APIs may return different structures
-  const metadata = mediaResult?.operation?.metadata;
-  const fifeUrl: string | null =
-    metadata?.video?.fifeUrl ||
-    metadata?.video?.uri ||
-    metadata?.video?.downloadUri ||
-    metadata?.fifeUrl ||
-    metadata?.mediaContent?.uri ||
-    metadata?.mediaContent?.fifeUrl ||
-    mediaResult?.operation?.result?.video?.fifeUrl ||
-    mediaResult?.operation?.result?.fifeUrl ||
-    null;
-
-  if (!fifeUrl) {
-    const errorMsg = "Không tìm thấy URL video trong kết quả API";
-    logger.error(`[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`);
-
-    sendSSE({ type: "error", message: errorMsg });
-    res.end();
-    return;
-  }
-
-  sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
-  sendSSE({
-    type: "done",
-    data: {
-      videoUri: fifeUrl,
-      videoBytes: null,
-      mimeType: "video/mp4",
-    },
-  });
-
-  res.end();
-}
