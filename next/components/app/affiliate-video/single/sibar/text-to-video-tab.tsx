@@ -4,73 +4,14 @@
  * - i18n: tất cả text bọc trong t()
  * Light theme – className only, Tailwind CSS
  */
-import { useState } from "react";
-import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { RiCameraLensFill, RiCloseLine, RiLoader4Fill, RiMagicFill } from "react-icons/ri";
-import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Form } from "../../../../shared/utilities/form";
+import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
+import { Form } from "../../../../shared/utilities/form";
 import { TAB_TYPE } from "../../constants";
 
-import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
-
-// ── SuggestButton – nút gợi ý AI (nằm trong <Form>) ──────────────────────
-const SuggestButton = () => {
-  const { t } = useTranslation();
-  const { suggestConfig } = useAffiliateVideoApi();
-  const { videoConfig, patchConfig } = useAffiliateVideoContext();
-  const formContext = useFormContext();
-  const [isLoading, setIsLoading] = useState(false);
-  const { customer } = useAuth();
-  /** Gọi AI gợi ý cấu hình nhân vật & nội dung mẹo */
-
-  const handleSuggestConfig = async () => {
-    if (isLoading) return;
-    setIsLoading(true);
-    try {
-      const result = await suggestConfig({
-        category: videoConfig?.category,
-        mood: videoConfig?.mood,
-        language: videoConfig?.language,
-      });
-      if (result) {
-        // Cập nhật react-hook-form fields
-        formContext?.setValue("objectToPersonify", result.objectToPersonify);
-        formContext?.setValue("tipContent", result.tipContent);
-        // Lưu vào provider state + IndexedDB
-        patchConfig?.({
-          objectToPersonify: result.objectToPersonify,
-          tipContent: result.tipContent,
-        });
-      }
-    } catch {
-      // Lỗi đã được xử lý bằng toast trong suggestConfig
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <Button
-      outline
-      info
-      onClick={handleSuggestConfig}
-      disabled={isLoading || !customer}
-      className="h-7 px-2"
-      icon={
-        isLoading ? (
-          <RiLoader4Fill className="text-xs animate-spin" />
-        ) : (
-          <RiMagicFill className="text-xs" />
-        )
-      }
-      text={isLoading ? t("Đang gợi ý...") : t("Gợi ý")}
-    />
-  );
-};
 
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: TAB_TYPE }) => {
@@ -112,7 +53,6 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
           <span className="text-base font-bold text-gray-800">{t("Tạo Nhân Vật")}</span>
         </div>
         <div className="flex items-center gap-1">
-          <SuggestButton />
           {onClose && (
             <button
               type="button"

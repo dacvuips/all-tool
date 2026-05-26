@@ -8,12 +8,11 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiOutlineVideoCamera } from "react-icons/ai";
+import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
 import { BsMagic } from "react-icons/bs";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { SceneMediaError } from "./scene-media-error";
@@ -170,7 +169,7 @@ export function SceneCardVideoTab({
               ) : (
                 <Button
                   onClick={handleClickGenerate}
-                  icon={<GenerateAiIcon />}
+                  icon={<AiOutlineReload />}
                   placement="bottom"
                   className="w-8 rounded-lg h-8 bg-orange-light text-orange"
                   iconClassName="text-xl font-bold"

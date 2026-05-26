@@ -24,8 +24,8 @@ export function Footer({ className, ...props }: ReactProps) {
   const ReferralLink = () => {
     if (!customer) return null;
     return (
-      <div className="flex items-center gap-3">
-        <div className="flex-1 text-12 text-primary  font-semibold">
+      <div className=" border border-gray-200 rounded-full flex items-center gap-3 px-2 divide-x-0.5">
+        <div className="flex-1 text-12 text-primary  font-italic">
           {customer?.code
             ? `${typeof window !== "undefined" ? window.location.origin : ""}?ref=${customer.code}`
             : "—"}
@@ -34,7 +34,7 @@ export function Footer({ className, ...props }: ReactProps) {
           onClick={handleCopyLink}
           icon={<RiFileCopyLine />}
           text={t("Sao chép")}
-          className="px-0 h-7"
+          className="px-0 h-7 rounded-none"
         />
       </div>
     );
@@ -96,22 +96,19 @@ export function Footer({ className, ...props }: ReactProps) {
 
   return (
     <>
-      <footer className={`w-full text-accent mt-5 ${className}`}>
+      <footer className={`w-full text-accent ${className}`}>
         <div className="border-t-4 border-primary "></div>
-        <div className="pt-2 pb-4 bg-white ">
+        <div className="py-2 bg-white ">
           <div className="main-container ">
             <div className="flex items-center gap-5">
               <img src="/assets/img/logo-full-1.png" className="object-cover py-1 w-44" alt="" />
               <div className="flex flex-row gap-2">
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col justify-center ">
                   <span className="text-sm font-bold text-accent">
                     {t("Free Generate Image - Video - AI")}
                   </span>
-                  <p className="text-12   text-accent">{`Zalo: 097.352.2962 - 037.7733.100`}</p>
-                </div>
-                <div className="flex flex-col   justify-center ">
                   <span className=" text-12 text-accent">
-                    {t("Lấy link tiếp thị liên kết để nhận 20% - 30 % hoa hồng.")}
+                    {t("Lấy link tiếp thị liên kết để nhận 20% - 30 % hoa hồng trọn đời.")}
                   </span>
                   <ReferralLink />
                 </div>

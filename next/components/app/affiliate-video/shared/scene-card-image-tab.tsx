@@ -7,9 +7,9 @@
  */
 import React, { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { AiOutlineReload } from "react-icons/ai";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiGalleryLine, RiImageFill, RiLoader4Line, RiUploadCloud2Line } from "react-icons/ri";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
@@ -155,7 +155,7 @@ export function SceneCardImageTab({
               ) : (
                 <Button
                   onClick={onGenerateImage}
-                  icon={<GenerateAiIcon />}
+                  icon={<AiOutlineReload />}
                   placement="bottom"
                   className="w-8 h-8 rounded-lg bg-orange-light text-orange"
                   iconClassName="text-xl font-bold"
