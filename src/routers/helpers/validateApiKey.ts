@@ -1,4 +1,5 @@
 import { Request } from "express";
+import logger from "../../helpers/logger";
 import { settingService } from "../../libs/dal/setting";
 import {
   acquireCaptchaLinkWithSlot,
@@ -6,10 +7,10 @@ import {
   releaseCaptchaLinkSlot,
   TIME,
 } from "./captcha-link-slot";
-
-export { TIME };
 import { captchaSerialQueue } from "./captcha-serial-queue";
 import { buildThrottleError, captchaThrottleGate, retryWithThrottleGate } from "./retry-throttle";
+
+export { TIME };
 
 /** Cấu hình link API */
 export interface ApiLinkData {
@@ -164,6 +165,59 @@ function detectCaptchaNoAccountOnline(status: number, errText: string): boolean 
   );
 }
 
+/** Số lần retry tối đa khi Google trả lỗi reCAPTCHA (mỗi lần lấy captcha mới qua hàng đợi 10s). */
+export const CAPTCHA_GENERATION_MAX_RETRIES = 10;
+
+export function isCaptchaValidationError(err: any): boolean {
+  return err?.isCaptchaError === true;
+}
+
+/** Cập nhật token/captcha mới; giữ nguyên uploadedImageNames / mediaId đã upload. */
+export function applyFreshCaptchaCredentials<T extends Record<string, any>>(
+  params: T,
+  captcha: CaptchaResponseData
+): T {
+  return {
+    ...params,
+    recaptchaToken: captcha.captcha,
+    sessionId: captcha.sessionId,
+    projectId: captcha.ProjectID,
+    accessToken: captcha.accessToken,
+    headers: captcha.Headers,
+    ...(captcha.Seed != null ? { Seed: captcha.Seed } : {}),
+  };
+}
+
+/**
+ * Chạy fn với captcha mới mỗi lần thử; khi Google báo lỗi reCAPTCHA → fetchCaptchaData lại (hàng đợi 10s).
+ */
+export async function runWithCaptchaRetry<T>(opts: {
+  type?: string;
+  logPrefix: string;
+  fn: (captcha: CaptchaResponseData) => Promise<T>;
+}): Promise<T> {
+  const { type, logPrefix, fn } = opts;
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= CAPTCHA_GENERATION_MAX_RETRIES; attempt++) {
+    const captcha = await fetchCaptchaData({ type, logPrefix });
+    try {
+      return await fn(captcha);
+    } catch (err: any) {
+      if (isCaptchaValidationError(err) && attempt < CAPTCHA_GENERATION_MAX_RETRIES) {
+        lastError = err;
+        logger.warn(
+          `[${logPrefix}] Google Captcha thất bại, lấy captcha mới (${attempt}/${CAPTCHA_GENERATION_MAX_RETRIES})...`
+        );
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw lastError;
+}
+
 export async function fetchCaptchaData<T extends IApiToken>(opts: {
   type?: string;
   logPrefix: string;
@@ -191,9 +245,7 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
             const selectedLink = await acquireCaptchaLinkWithSlot(links, logPrefix);
 
             try {
-              const captchaUrl = type
-                ? `${selectedLink.url}?action=${type}`
-                : selectedLink.url;
+              const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;
               const headers: Record<string, string> = {};
               if (selectedLink.apiKey) {
                 headers["X-API-Key"] = selectedLink.apiKey;
@@ -253,8 +305,7 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
           }
 
           const err: any = new Error(
-            lastError?.message ||
-              "Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút."
+            lastError?.message || "Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút."
           );
           err.statusCode = 502;
           throw err;

@@ -10,7 +10,13 @@ import {
   retryWithThrottleGate,
   videoThrottleGate,
 } from "../helpers/retry-throttle";
-import { CaptchaResponseData, getApiSetting } from "../helpers/validateApiKey";
+import {
+  CAPTCHA_GENERATION_MAX_RETRIES,
+  CaptchaResponseData,
+  fetchCaptchaData,
+  getApiSetting,
+  isCaptchaValidationError,
+} from "../helpers/validateApiKey";
 
 /**
  * Xử lý logic generate video:
@@ -118,6 +124,7 @@ interface CallAisandboxParams {
   prompt: string;
   aspectRatio: "16:9" | "9:16";
   uploadedImageNames?: string[];
+  uploadedVideoNames?: string[];
   recaptchaToken: string;
   sessionId: string;
   projectId: string;
@@ -126,15 +133,14 @@ interface CallAisandboxParams {
   batchId?: string;
   Seed?: string;
   headers?: Record<string, string>;
+  captchaRetry?: {
+    actionType?: string;
+    logPrefix: string;
+    onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxParams>;
+  };
 }
 
-/**
- * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
- * Dùng ThrottleGate (Redis-coordinated) để:
- * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
- * - Khi không bị throttle → bay tự do, không giới hạn concurrency.
- */
-export async function callAisandboxVideoAPI(
+async function callAisandboxVideoAPICore(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
   const { uploadedImageNames } = params;
@@ -154,6 +160,90 @@ export async function callAisandboxVideoAPI(
     },
     { label: "generation-video", gate: videoThrottleGate }
   );
+}
+
+/**
+ * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
+ * Dùng ThrottleGate (Redis-coordinated) khi 429 throttle.
+ * Khi lỗi reCAPTCHA + có captchaRetry → lấy captcha mới (hàng đợi 10s), tối đa 10 lần.
+ */
+export async function callAisandboxVideoAPI(
+  params: CallAisandboxParams
+): Promise<{ response: any; mediaName: string; accessToken: string; headers?: Record<string, string> }> {
+  const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
+  let current = params;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await callAisandboxVideoAPICore(current);
+      return {
+        ...result,
+        accessToken: current.accessToken,
+        headers: current.headers,
+      };
+    } catch (err: any) {
+      const retry = current.captchaRetry;
+      if (isCaptchaValidationError(err) && retry && attempt < maxAttempts) {
+        logger.warn(
+          `[${retry.logPrefix}] Google Captcha thất bại, lấy captcha mới (${attempt}/${maxAttempts})...`
+        );
+        const freshCaptcha = await fetchCaptchaData({
+          type: retry.actionType,
+          logPrefix: retry.logPrefix,
+        });
+        current = await retry.onRefresh(freshCaptcha);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const err: any = new Error("Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.");
+  err.isCaptchaError = true;
+  err.statusCode = 403;
+  throw err;
+}
+
+/**
+ * Gọi video API kèm retry captcha (route gọi trực tiếp callStartImageAPI, ...).
+ * Khi retry: fetchCaptchaData + onRefresh (upload lại ảnh/video nếu cần).
+ */
+export async function callVideoAPIWithCaptchaRetry<T extends CallAisandboxParams>(
+  params: T,
+  callFn: (params: T) => Promise<{ mediaName: string }>
+): Promise<{ mediaName: string; accessToken: string; headers?: Record<string, string> }> {
+  const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
+  let current = params;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const result = await callFn(current);
+      return {
+        mediaName: result.mediaName,
+        accessToken: current.accessToken,
+        headers: current.headers,
+      };
+    } catch (err: any) {
+      const retry = current.captchaRetry;
+      if (isCaptchaValidationError(err) && retry && attempt < maxAttempts) {
+        logger.warn(
+          `[${retry.logPrefix}] Google Captcha thất bại, lấy captcha mới (${attempt}/${maxAttempts})...`
+        );
+        const freshCaptcha = await fetchCaptchaData({
+          type: retry.actionType,
+          logPrefix: retry.logPrefix,
+        });
+        current = (await retry.onRefresh(freshCaptcha)) as T;
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const err: any = new Error("Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.");
+  err.isCaptchaError = true;
+  err.statusCode = 403;
+  throw err;
 }
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────

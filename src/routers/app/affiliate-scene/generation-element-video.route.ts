@@ -7,10 +7,11 @@ import {
   callStartAndEndImageAPI,
   callStartImageAPI,
   callTextOnlyAPI,
+  callVideoAPIWithCaptchaRetry,
   pollAndExtractVideo,
 } from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
-import { fetchCaptchaData } from "../../helpers/validateApiKey";
+import { CaptchaResponseData, fetchCaptchaData } from "../../helpers/validateApiKey";
 import { ServiceImageEnum } from "../constanst";
 import { ActionEnum, checkVideoLimit, incrementVideoCount, resolveArtStylePrompt } from "./_shared";
 
@@ -56,74 +57,85 @@ export default [
         if (resolvedArtStylePrompt && resolvedArtStyleName === body.config?.artStyle) {
           body.config.artStyle = resolvedArtStylePrompt;
         }
-        const {
-          captcha: recaptchaToken,
-          sessionId,
-          ProjectID: projectId,
-          accessToken,
-          Seed,
-          Headers,
-        } = await fetchCaptchaData({
+        const videoPrompt = `${body.config?.artStyle} ${body.prompt}`;
+        const serviceType = body.config?.serviceImageType;
+
+        const buildVideoParams = (
+          captcha: CaptchaResponseData,
+          uploadedImageNames: string[]
+        ) => ({
+          res,
+          prompt: videoPrompt,
+          aspectRatio: body.config?.aspectRatio,
+          uploadedImageNames,
+          recaptchaToken: captcha.captcha,
+          sessionId: captcha.sessionId,
+          projectId: captcha.ProjectID,
+          accessToken: captcha.accessToken,
+          Seed: captcha.Seed,
+          batchId: crypto.randomUUID(),
+          headers: captcha.Headers,
+        });
+
+        const captchaRetry = {
+          actionType: ActionEnum.VIDEO_GENERATION,
+          logPrefix: "generation-video",
+          onRefresh: async (freshCaptcha: CaptchaResponseData) => {
+            const uploadedImageNames = await processAndUploadImages(
+              body.images || [],
+              freshCaptcha.accessToken,
+              freshCaptcha.ProjectID,
+              context.id
+            );
+            return {
+              ...buildVideoParams(freshCaptcha, uploadedImageNames),
+              captchaRetry,
+            };
+          },
+        };
+
+        const captcha = await fetchCaptchaData({
           type: ActionEnum.VIDEO_GENERATION,
           logPrefix: "generation-video",
         });
-        // Upload ảnh lên Google Labs trước nếu có
         const uploadedImageNames = await processAndUploadImages(
           body.images || [],
-          accessToken,
-          projectId,
+          captcha.accessToken,
+          captcha.ProjectID,
           context.id
         );
 
-        const sendSSE = (data: any) => {
-          res.write(`data: ${JSON.stringify(data)}\n\n`);
+        const videoParams = {
+          ...buildVideoParams(captcha, uploadedImageNames),
+          captchaRetry,
         };
 
-        const params = {
-          res: res,
-          prompt: `${body.config?.artStyle} ${body.prompt}`,
-          aspectRatio: body.config?.aspectRatio,
-          uploadedImageNames,
-          recaptchaToken,
-          sessionId,
-          projectId,
-          accessToken,
-          Seed,
-          batchId: crypto.randomUUID(),
-          headers: Headers,
-        };
-
-        const serviceType = body.config?.serviceImageType;
-        let videoResult: { mediaName: string };
-
-        switch (serviceType) {
-          case ServiceImageEnum.imageOnly:
-            videoResult = await callStartImageAPI(params);
-            break;
-          case ServiceImageEnum.startEnd:
-            videoResult = await callStartAndEndImageAPI(params);
-            break;
-          case ServiceImageEnum.startAddEnd:
-            videoResult = await callReferenceImagesAPI(params);
-            break;
-          case ServiceImageEnum.video:
-          default:
-            if (uploadedImageNames.length > 0) {
-              videoResult = await callReferenceImagesAPI(params);
-            } else {
-              videoResult = await callTextOnlyAPI(params);
+        const { mediaName, accessToken, headers } = await callVideoAPIWithCaptchaRetry(
+          videoParams,
+          async (params) => {
+            switch (serviceType) {
+              case ServiceImageEnum.imageOnly:
+                return callStartImageAPI(params);
+              case ServiceImageEnum.startEnd:
+                return callStartAndEndImageAPI(params);
+              case ServiceImageEnum.startAddEnd:
+                return callReferenceImagesAPI(params);
+              case ServiceImageEnum.video:
+              default:
+                if (params.uploadedImageNames!.length > 0) {
+                  return callReferenceImagesAPI(params);
+                }
+                return callTextOnlyAPI(params);
             }
-            break;
-        }
-
-        const { mediaName } = videoResult;
+          }
+        );
 
         await pollAndExtractVideo({
           mediaName,
           accessToken,
           customerId: context.id,
           res,
-          headers: Headers,
+          headers,
         });
         await incrementVideoCount(context.id);
       } catch (err: any) {

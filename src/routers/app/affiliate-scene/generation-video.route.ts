@@ -7,7 +7,7 @@ import {
   pollAndExtractVideo,
 } from "../../api-media/handle-video-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
-import { fetchCaptchaData } from "../../helpers/validateApiKey";
+import { CaptchaResponseData, fetchCaptchaData } from "../../helpers/validateApiKey";
 import { ActionEnum, checkVideoLimit, incrementVideoCount } from "./_shared";
 
 export default [
@@ -40,41 +40,54 @@ export default [
         await checkVideoLimit(context.id);
         // Lấy captcha + credentials + projectId + accessToken
 
-        const {
-          captcha: recaptchaToken,
-          sessionId,
-          ProjectID: projectId,
-          accessToken,
-          Seed,
-          Headers,
-        } = await fetchCaptchaData({
-          type: ActionEnum.VIDEO_GENERATION,
-          logPrefix: "generation-video",
-        });
-        // Upload ảnh lên Google Labs trước nếu có
-        const uploadedImageNames = await processAndUploadImages(
-          body.images || [],
-          accessToken,
-          projectId,
-          context.id
-        );
-
-        const sendSSE = (data: any) => {
-          res.write(`data: ${JSON.stringify(data)}\n\n`);
-        };
-
-        const { mediaName } = await callAisandboxVideoAPI({
-          res: res,
+        const buildVideoParams = (
+          captcha: CaptchaResponseData,
+          uploadedImageNames: string[]
+        ) => ({
+          res,
           prompt: body.prompt,
           aspectRatio: body.config?.aspectRatio,
           uploadedImageNames,
-          recaptchaToken,
-          sessionId,
-          projectId,
-          accessToken,
-          Seed,
+          recaptchaToken: captcha.captcha,
+          sessionId: captcha.sessionId,
+          projectId: captcha.ProjectID,
+          accessToken: captcha.accessToken,
+          Seed: captcha.Seed,
           batchId: crypto.randomUUID(),
-          headers: Headers,
+          headers: captcha.Headers,
+        });
+
+        const captchaRetry = {
+          actionType: ActionEnum.VIDEO_GENERATION,
+          logPrefix: "generation-video",
+          onRefresh: async (freshCaptcha: CaptchaResponseData) => {
+            const uploadedImageNames = await processAndUploadImages(
+              body.images || [],
+              freshCaptcha.accessToken,
+              freshCaptcha.ProjectID,
+              context.id
+            );
+            return {
+              ...buildVideoParams(freshCaptcha, uploadedImageNames),
+              captchaRetry,
+            };
+          },
+        };
+
+        const captcha = await fetchCaptchaData({
+          type: ActionEnum.VIDEO_GENERATION,
+          logPrefix: "generation-video",
+        });
+        const uploadedImageNames = await processAndUploadImages(
+          body.images || [],
+          captcha.accessToken,
+          captcha.ProjectID,
+          context.id
+        );
+
+        const { mediaName, accessToken, headers } = await callAisandboxVideoAPI({
+          ...buildVideoParams(captcha, uploadedImageNames),
+          captchaRetry,
         });
 
         await pollAndExtractVideo({
@@ -82,7 +95,7 @@ export default [
           accessToken,
           customerId: context.id,
           res,
-          headers: Headers,
+          headers,
         });
         await incrementVideoCount(context.id);
       } catch (err: any) {

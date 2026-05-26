@@ -10,7 +10,13 @@ import {
   imageThrottleGate,
   retryWithThrottleGate,
 } from "../helpers/retry-throttle";
-import { CaptchaResponseData, getApiSetting } from "../helpers/validateApiKey";
+import {
+  CAPTCHA_GENERATION_MAX_RETRIES,
+  CaptchaResponseData,
+  fetchCaptchaData,
+  getApiSetting,
+  isCaptchaValidationError,
+} from "../helpers/validateApiKey";
 
 /**
  * Xử lý logic generate image:
@@ -119,15 +125,15 @@ interface CallAisandboxParams {
   batchId?: string;
   Seed?: string;
   headers?: Record<string, string>;
+  /** Khi Google trả lỗi reCAPTCHA → lấy captcha mới (hàng đợi 10s), tối đa CAPTCHA_GENERATION_MAX_RETRIES lần. */
+  captchaRetry?: {
+    actionType?: string;
+    logPrefix: string;
+    onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxParams>;
+  };
 }
 
-/**
- * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
- * Dùng ThrottleGate (Redis-coordinated) để:
- * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
- * - Khi không bị throttle → bay tự do, không giới hạn concurrency.
- */
-export async function callAisandboxImageAPI(params: CallAisandboxParams): Promise<void> {
+async function callAisandboxImageAPICore(params: CallAisandboxParams): Promise<void> {
   const { uploadedImageNames } = params;
   const imageCount = uploadedImageNames?.length || 0;
 
@@ -141,6 +147,38 @@ export async function callAisandboxImageAPI(params: CallAisandboxParams): Promis
     },
     { label: "generation-image", gate: imageThrottleGate }
   );
+}
+
+/**
+ * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
+ * Dùng ThrottleGate (Redis-coordinated) để:
+ * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
+ * - Khi lỗi reCAPTCHA (isCaptchaError) + có captchaRetry → lấy captcha mới, tối đa 10 lần.
+ */
+export async function callAisandboxImageAPI(params: CallAisandboxParams): Promise<void> {
+  const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
+  let current = params;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await callAisandboxImageAPICore(current);
+      return;
+    } catch (err: any) {
+      const retry = current.captchaRetry;
+      if (isCaptchaValidationError(err) && retry && attempt < maxAttempts) {
+        logger.warn(
+          `[${retry.logPrefix}] Google Captcha thất bại, lấy captcha mới (${attempt}/${maxAttempts})...`
+        );
+        const freshCaptcha = await fetchCaptchaData({
+          type: retry.actionType,
+          logPrefix: retry.logPrefix,
+        });
+        current = await retry.onRefresh(freshCaptcha);
+        continue;
+      }
+      throw err;
+    }
+  }
 }
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────

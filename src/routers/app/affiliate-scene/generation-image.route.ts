@@ -4,7 +4,7 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { callAisandboxImageAPI } from "../../api-media/handle-image-generation";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
-import { fetchCaptchaData } from "../../helpers/validateApiKey";
+import { CaptchaResponseData, fetchCaptchaData } from "../../helpers/validateApiKey";
 import {
   ActionEnum,
   buildImageReferenceNotes,
@@ -55,73 +55,92 @@ export default [
           personifyImages: personifyImageRefs,
         });
 
-        // Lấy captcha + credentials từ Cliproxy API
-        const {
-          captcha: recaptchaToken,
-          sessionId,
-          ProjectID: projectId,
-          accessToken,
-          Headers,
-        } = await fetchCaptchaData({
-          type: ActionEnum.IMAGE_GENERATION,
-          logPrefix: "generation-image",
-        });
-        {
-          /* Upload ảnh nhân hoá đồ vật lên Google Labs trước nếu có */
-        }
-        let personifyImageNames: string[] = [];
-        if (personifyImageRefs.length > 0) {
-          logger.info(
-            `[generation-image] Upload ${personifyImageRefs.length} ảnh nhân hoá đồ vật (user ${context.id})`
-          );
-          personifyImageNames = await processAndUploadImages(
-            personifyImageRefs,
-            accessToken,
-            projectId,
-            context.id
-          );
-        } else if (body.objectToPersonifyImages?.length) {
-          logger.warn(
-            `[generation-image] objectToPersonifyImages có ${body.objectToPersonifyImages.length} phần tử nhưng không có imageBytes hợp lệ`
-          );
-        }
-
-        // Upload ảnh lên Google Labs trước nếu có
-        let uploadedImageNames: string[] = [];
-        if (body.images?.length > 0) {
-          uploadedImageNames = await processAndUploadImages(
-            body.images || [],
-            accessToken,
-            projectId,
-            context.id
-          );
-        } // Upload product images lên Google Labs nếu có
-        let productImageNames: string[] = [];
-        if (productImageUrls.length > 0) {
-          productImageNames = await processAndUploadImages(
-            productImageUrls,
-            accessToken,
-            projectId,
-            context.id
-          );
-        }
-
-        // Tạo payload theo cấu trúc Google Labs API
-
         const noTextStr = !body.config?.noText
           ? `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`
           : "";
+        const fullPrompt = `${body.prompt} ${imageReferenceNote} ${noTextStr}`;
+
+        const uploadImagesForCaptcha = async (captcha: CaptchaResponseData) => {
+          const accessToken = captcha.accessToken;
+          const projectId = captcha.ProjectID;
+
+          let personifyImageNames: string[] = [];
+          if (personifyImageRefs.length > 0) {
+            logger.info(
+              `[generation-image] Upload ${personifyImageRefs.length} ảnh nhân hoá đồ vật (user ${context.id})`
+            );
+            personifyImageNames = await processAndUploadImages(
+              personifyImageRefs,
+              accessToken,
+              projectId,
+              context.id
+            );
+          } else if (body.objectToPersonifyImages?.length) {
+            logger.warn(
+              `[generation-image] objectToPersonifyImages có ${body.objectToPersonifyImages.length} phần tử nhưng không có imageBytes hợp lệ`
+            );
+          }
+
+          let uploadedImageNames: string[] = [];
+          if (body.images?.length > 0) {
+            uploadedImageNames = await processAndUploadImages(
+              body.images || [],
+              accessToken,
+              projectId,
+              context.id
+            );
+          }
+
+          let productImageNames: string[] = [];
+          if (productImageUrls.length > 0) {
+            productImageNames = await processAndUploadImages(
+              productImageUrls,
+              accessToken,
+              projectId,
+              context.id
+            );
+          }
+
+          return [...personifyImageNames, ...uploadedImageNames, ...productImageNames];
+        };
+
+        const captchaRetry = {
+          actionType: ActionEnum.IMAGE_GENERATION,
+          logPrefix: "generation-image",
+          onRefresh: async (freshCaptcha: CaptchaResponseData) => {
+            const names = await uploadImagesForCaptcha(freshCaptcha);
+            return {
+              res,
+              prompt: fullPrompt,
+              aspectRatio: body.config?.aspectRatio,
+              uploadedImageNames: names,
+              recaptchaToken: freshCaptcha.captcha,
+              sessionId: freshCaptcha.sessionId,
+              projectId: freshCaptcha.ProjectID,
+              accessToken: freshCaptcha.accessToken,
+              headers: freshCaptcha.Headers,
+              captchaRetry,
+            };
+          },
+        };
+
+        const captcha = await fetchCaptchaData({
+          type: ActionEnum.IMAGE_GENERATION,
+          logPrefix: "generation-image",
+        });
+        const uploadedImageNames = await uploadImagesForCaptcha(captcha);
 
         await callAisandboxImageAPI({
           res,
-          prompt: `${body.prompt} ${imageReferenceNote} ${noTextStr}`,
+          prompt: fullPrompt,
           aspectRatio: body.config?.aspectRatio,
-          uploadedImageNames: [...personifyImageNames, ...uploadedImageNames, ...productImageNames],
-          recaptchaToken,
-          sessionId,
-          projectId,
-          accessToken,
-          headers: Headers,
+          uploadedImageNames,
+          recaptchaToken: captcha.captcha,
+          sessionId: captcha.sessionId,
+          projectId: captcha.ProjectID,
+          accessToken: captcha.accessToken,
+          headers: captcha.Headers,
+          captchaRetry,
         });
 
         // Tạo ảnh thành công → tăng imageCount
