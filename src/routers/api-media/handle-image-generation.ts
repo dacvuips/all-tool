@@ -17,6 +17,7 @@ import {
   getApiSetting,
   isCaptchaValidationError,
 } from "../helpers/validateApiKey";
+import { initGenerationSSE, isGenerationSSE } from "./generation-sse";
 
 /**
  * Xử lý logic generate image:
@@ -272,6 +273,11 @@ async function sendAndParseResponse(
     throw err;
   }
 
+  if (isGenerationSSE(res)) {
+    const sendSSE = initGenerationSSE(res);
+    sendSSE({ type: "progress", progress: 70, message: "Đang tải ảnh từ Google..." });
+  }
+
   // Fetch từng ảnh từ fifeUrl và convert sang base64
   const images = await Promise.all(
     mediaItems.map(async (item: any) => {
@@ -297,6 +303,13 @@ async function sendAndParseResponse(
     })
   );
 
+  if (isGenerationSSE(res)) {
+    const sendSSE = initGenerationSSE(res);
+    sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
+    sendSSE({ type: "done", data: images });
+    res.end();
+    return;
+  }
   res.json({ success: true, data: images });
 }
 

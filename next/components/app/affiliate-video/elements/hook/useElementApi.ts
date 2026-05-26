@@ -16,6 +16,10 @@ import {
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  consumeGenerationResponse,
+  extractGeneratedImages,
+} from "../../shared/read-generation-sse";
 import { ServiceImageEnum } from "../constants";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -405,23 +409,15 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           }),
         });
 
-        if (!res.ok) {
-          clearInterval(progressTimer);
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          if (onError) onError(message);
-          else console.error(message);
-          return undefined;
-        }
+        const result = await consumeGenerationResponse(res, {
+          onProgress: (pct) => {
+            clearInterval(progressTimer);
+            onProgress?.(pct);
+          },
+          onError,
+        });
 
-        const result = await res.json();
-
-        // Handle both formats: direct array [...] or wrapped { data: [...] }
-        const resultImages: GeneratedImageData[] = Array.isArray(result)
-          ? result
-          : Array.isArray(result.data)
-          ? result.data
-          : [];
+        const resultImages = extractGeneratedImages(result) as GeneratedImageData[];
 
         if (resultImages.length === 0) {
           clearInterval(progressTimer);
@@ -433,10 +429,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
 
         const imageData = resultImages[0];
 
-        // Persist to IndexedDB
         await imageDB.set(sceneId, imageData);
 
-        // Stop simulated progress and jump to 100%
         clearInterval(progressTimer);
         onProgress?.(100);
 

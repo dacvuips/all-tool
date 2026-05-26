@@ -23,8 +23,19 @@ export default function startExpressApp() {
   // Config CORS
   app.use(cors());
 
-  // Compress Response
-  app.use(compression());
+  // Compress Response (tắt với SSE video generation — compression buffer gây 504)
+  app.use(
+    compression({
+      filter: (req, res) => {
+        if (
+          /generation-(element-)?(video|image)|copy-video-generate-image/.test(req.path)
+        ) {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+    })
+  );
   // Body Parser
   app.use(json({ limit: "50mb" }));
   app.use(urlencoded({ extended: true, limit: "50mb" }));

@@ -3,6 +3,7 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { callAisandboxImageAPI } from "../../api-media/handle-image-generation";
+import { initGenerationSSE, sendGenerationSSEError } from "../../api-media/generation-sse";
 import { processAndUploadImages } from "../../helpers/handleUploadGoogleLabImages";
 import { CaptchaResponseData, fetchCaptchaData } from "../../helpers/validateApiKey";
 import {
@@ -44,8 +45,11 @@ export default [
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
-        // Kiểm tra giới hạn ảnh trước khi tạo
         await checkImageLimit(context.id);
+
+        const sendSSE = initGenerationSSE(res);
+        sendSSE({ type: "progress", progress: 10, message: "Đang chuẩn bị tạo ảnh..." });
+
         // Build product image reference note to append to prompt
         const productImageUrls = body.productImages?.filter(Boolean) || [];
         const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages);
@@ -124,12 +128,15 @@ export default [
           },
         };
 
+        sendSSE({ type: "progress", progress: 15, message: "Đang lấy captcha..." });
         const captcha = await fetchCaptchaData({
           type: ActionEnum.IMAGE_GENERATION,
           logPrefix: "generation-image",
         });
+        sendSSE({ type: "progress", progress: 25, message: "Đang upload ảnh tham chiếu..." });
         const uploadedImageNames = await uploadImagesForCaptcha(captcha);
 
+        sendSSE({ type: "progress", progress: 40, message: "Đang gửi yêu cầu tạo ảnh..." });
         await callAisandboxImageAPI({
           res,
           prompt: fullPrompt,
@@ -147,8 +154,12 @@ export default [
         await incrementImageCount(context.id);
       } catch (err: any) {
         logger.error(`[generation-image] Lỗi: ${err?.message}`);
-        const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
+        if (res.headersSent) {
+          sendGenerationSSEError(res, err?.message || "Lỗi server", err?.statusCode || 500);
+        } else {
+          const status = err?.statusCode || 500;
+          res.status(status).json({ message: err?.message || "Lỗi server" });
+        }
       }
     },
   },

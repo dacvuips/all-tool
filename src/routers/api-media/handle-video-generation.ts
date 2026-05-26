@@ -17,6 +17,13 @@ import {
   getApiSetting,
   isCaptchaValidationError,
 } from "../helpers/validateApiKey";
+export {
+  initGenerationSSE,
+  initVideoGenerationSSE,
+  sendGenerationSSEError,
+  sendVideoGenerationSSEError,
+} from "./generation-sse";
+import { initGenerationSSE } from "./generation-sse";
 
 /**
  * Xử lý logic generate video:
@@ -556,6 +563,7 @@ function resolveVideoGenerationErrorMessage(
  */
 export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<boolean> {
   const { mediaName, accessToken, customerId, res, headers } = params;
+  const sendSSE = initGenerationSSE(res);
 
   // Poll media endpoint until video generation completes
   const MAX_POLLS = 360; // max ~30 minutes (5s * 360)
@@ -563,9 +571,18 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
   let mediaResult: any = null;
   let generationStatus = "MEDIA_GENERATION_STATUS_PENDING";
 
+  sendSSE({ type: "progress", progress: 50, message: "Đang chờ Google tạo video..." });
+
   while (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL" && pollCount < MAX_POLLS) {
     await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s interval
     pollCount++;
+
+    const pollProgress = 50 + Math.min(45, Math.round((pollCount / MAX_POLLS) * 45));
+    sendSSE({
+      type: "progress",
+      progress: pollProgress,
+      message: `Đang xử lý video... (${pollCount}/${MAX_POLLS})`,
+    });
 
     try {
       const pollResp = await fetch(
@@ -609,11 +626,6 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
       logger.warn(`[generation-video] Poll error: ${pollErr?.message}`);
     }
   }
-
-  // Gửi kết quả video về client qua SSE
-  const sendSSE = (data: any) => {
-    res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
 
   if (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL") {
     const errorMsg = resolveVideoGenerationErrorMessage(

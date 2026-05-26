@@ -4,7 +4,9 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
   callVideoAPIWithCaptchaRetry,
+  initVideoGenerationSSE,
   pollAndExtractVideo,
+  sendVideoGenerationSSEError,
 } from "../../api-media/handle-video-generation";
 import { callVideoToVideoAPI } from "../../api-media/handle-video-to-video-generation";
 import {
@@ -53,9 +55,10 @@ export default [
           return res.status(400).json({ message: "Thiếu video tham chiếu" });
         }
 
-        // Kiểm tra giới hạn video trước khi tạo
         await checkVideoLimit(context.id);
-        // Lấy captcha + credentials + projectId + accessToken
+
+        const sendSSE = initVideoGenerationSSE(res);
+        sendSSE({ type: "progress", progress: 10, message: "Đang chuẩn bị tạo video..." });
 
         const { prompt: resolvedArtStylePrompt, name: resolvedArtStyleName } =
           await resolveArtStylePrompt({
@@ -112,10 +115,12 @@ export default [
           },
         };
 
+        sendSSE({ type: "progress", progress: 15, message: "Đang lấy captcha..." });
         const captcha = await fetchCaptchaData({
           type: ActionEnum.VIDEO_GENERATION,
           logPrefix: "generation-video",
         });
+        sendSSE({ type: "progress", progress: 25, message: "Đang upload media..." });
         const { uploadedImageNames, uploadedVideoMediaId } = await uploadMediaForCaptcha(captcha);
 
         const videoParams = {
@@ -134,6 +139,7 @@ export default [
           captchaRetry,
         };
 
+        sendSSE({ type: "progress", progress: 40, message: "Đang gửi yêu cầu tạo video..." });
         const { mediaName, accessToken, headers } = await callVideoAPIWithCaptchaRetry(
           videoParams,
           (params) => callVideoToVideoAPI(params)
@@ -152,19 +158,8 @@ export default [
         await incrementVideoCount(context.id);
       } catch (err: any) {
         logger.error(`[generation-video] Lỗi: ${err?.message}`);
-        // If SSE headers already sent, send error event
-        // Check res.writableEnded to avoid ERR_STREAM_WRITE_AFTER_END
-        // (pollAndExtractVideo có thể đã gọi res.end() trước khi throw)
         if (res.headersSent) {
-          if (!res.writableEnded) {
-            res.write(
-              `data: ${JSON.stringify({
-                type: "error",
-                message: err?.message || "Lỗi server",
-              })}\n\n`
-            );
-            res.end();
-          }
+          sendVideoGenerationSSEError(res, err?.message || "Lỗi server");
         } else {
           const status = err?.statusCode || 500;
           res.status(status).json({ message: err?.message || "Lỗi server" });
