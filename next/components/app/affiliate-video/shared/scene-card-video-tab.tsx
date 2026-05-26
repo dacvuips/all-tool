@@ -10,7 +10,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { BsMagic } from "react-icons/bs";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
@@ -183,16 +182,23 @@ export function SceneCardVideoTab({
                   <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
                 </div>
               ) : (
-                <Button
-                  onClick={handleClickGenerate}
-                  icon={<BsMagic />}
-                  placement="bottom"
-                  className="px-1 rounded-lg h-8 bg-orange-light text-orange text-10"
-                  iconClassName="text-xl font-bold ml-1"
-                  tooltip={t("Tạo Video chất lượng cao")}
-                >
-                  {t("Chất lượng")}
-                </Button>
+                <div className="flex flex-row gap-1 items-center   bg-purple-200 rounded-lg h-8 divide-x-0.5 overflow-hidden  ">
+                  <Button
+                    text={"2k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 2k (1080p)")}
+                  />
+                  <Button
+                    text={"4k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 4k (2160p)")}
+                  />
+                  <Button
+                    text={"8k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 8k (4320p)")}
+                  />
+                </div>
               )}
             </div>
           </div>

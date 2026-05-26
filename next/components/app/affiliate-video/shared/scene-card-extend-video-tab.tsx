@@ -8,12 +8,10 @@
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiOutlineVideoCameraAdd } from "react-icons/ai";
+import { AiOutlineReload, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { BsMagic } from "react-icons/bs";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
-import { GenerateAiIcon } from "../../../../public/assets/svg/generate-ai";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { SceneMediaError } from "./scene-media-error";
@@ -171,7 +169,7 @@ export function SceneCardExtendVideoTab({
               ) : (
                 <Button
                   onClick={onGenerateExtendVideo}
-                  icon={<GenerateAiIcon />}
+                  icon={<AiOutlineReload />}
                   placement="bottom"
                   tooltip={t("Tạo lại video nối")}
                   className="w-8 rounded-lg h-8 bg-orange-light text-orange"
@@ -188,16 +186,23 @@ export function SceneCardExtendVideoTab({
                   </span>
                 </div>
               ) : (
-                <Button
-                  onClick={onGenerateExtendVideo}
-                  icon={<BsMagic />}
-                  placement="bottom"
-                  className="px-1 rounded-lg h-8 bg-orange-light text-orange text-10"
-                  iconClassName="text-xl font-bold ml-1"
-                  tooltip={t("Tạo Video chất lượng cao")}
-                >
-                  {t("Chất lượng")}
-                </Button>
+                <div className="flex flex-row gap-1 items-center   bg-purple-200 rounded-lg h-8 divide-x-0.5 overflow-hidden  ">
+                  <Button
+                    text={"2k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 2k (1080p)")}
+                  />
+                  <Button
+                    text={"4k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 4k (2160p)")}
+                  />
+                  <Button
+                    text={"8k"}
+                    className="px-2 font-medium rounded-none text-purple-500"
+                    tooltip={t("Tạo video 8k (4320p)")}
+                  />
+                </div>
               )}
             </div>
           </div>
