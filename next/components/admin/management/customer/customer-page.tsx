@@ -11,6 +11,7 @@ import { ThreadService } from "../../../../lib/repo/thread/thread.repo";
 import { DatePicker, Field } from "../../../shared/utilities/form";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
+import { CustomerGooglePackageCell } from "./components/customer-google-package-cell";
 import { CustomerSlideout } from "./components/customer-slideout";
 
 export function CustomerPage(props) {
@@ -118,8 +119,10 @@ export function CustomerPage(props) {
             render={(item: Customer) => <DataTable.CellText value={item.email} />}
           />
           <DataTable.Column
-            label={t("Địa chỉ")}
-            render={(item: Customer) => <DataTable.CellText value={item.address} />}
+            label={t("Gói")}
+            render={(item: Customer) => (
+              <CustomerGooglePackageCell googlePackage={item.googlePackage} />
+            )}
           />
 
           <DataTable.Column

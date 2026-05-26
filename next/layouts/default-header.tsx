@@ -45,6 +45,7 @@ import { NotifyDropdown } from "../components/shared/common/notify-dropdown";
 import { formatDate, parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
+import { GooglePackagePopoverContent } from "../components/admin/management/customer/components/customer-google-package-cell";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
 import { useHomeLayoutContext } from "./home-layout/provider/home-layout-provider";
@@ -735,17 +736,11 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
   const { customer } = useAuth();
   const packageRef = useRef();
 
-  const expiryDate = customer?.googlePackage?.expiryPackageDate;
-  const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
-  const expiryText = expiryDate
-    ? `${t("Hết hạn")}: ${formatDate(expiryDate, "datetime")}`
-    : t("Chưa có thời hạn");
-
   return (
     <>
       <div
         ref={packageRef}
-        className="flex items-center h-8 border border-gray-300 rounded-lg gray-50 overflow-hidden text-sm  cursor-default"
+        className="flex items-center h-8 border border-gray-300 rounded-lg gray-50 overflow-hidden text-sm cursor-default"
       >
         <span className="px-2.5 text-gray-700 font-semibold whitespace-nowrap">
           {t("Gói")}:{" "}
@@ -754,37 +749,8 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
           </span>
         </span>
       </div>
-      <Popover reference={packageRef} trigger="hover" placement="bottom" arrow>
-        <div className="p-2 text-sm space-y-1">
-          <div className="text-gray-600 whitespace-nowrap">
-            Video:{" "}
-            <span className="font-semibold text-gray-900">
-              {customer?.googlePackage?.videoCount ?? 0}
-            </span>
-            <span className="text-gray-400"> /{customer?.googlePackage?.videoLimit ?? 0}</span>
-          </div>
-          <div className="text-gray-600 whitespace-nowrap">
-            {t("Ảnh")}:{" "}
-            <span className="font-semibold text-gray-900">
-              {customer?.googlePackage?.imageCount ?? 0}
-            </span>
-            <span className="text-gray-400"> /{customer?.googlePackage?.imageLimit ?? 0}</span>
-          </div>
-          <div className="text-gray-600 whitespace-nowrap">
-            {t("Text")}:{" "}
-            <span className="font-semibold text-gray-900">
-              {customer?.googlePackage?.requestCount ?? 0}
-            </span>
-            <span className="text-gray-400"> /{customer?.googlePackage?.requestLimit ?? 0}</span>
-          </div>
-          <div
-            className={`whitespace-nowrap ${
-              isExpired ? "text-red-600 font-semibold" : "text-gray-700"
-            }`}
-          >
-            {expiryText}
-          </div>
-        </div>
+      <Popover reference={packageRef} trigger="hover" placement="bottom" arrow maxWidth={320}>
+        <GooglePackagePopoverContent googlePackage={customer?.googlePackage} />
       </Popover>
     </>
   );
