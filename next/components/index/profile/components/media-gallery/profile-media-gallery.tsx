@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   RiCloseLine,
@@ -62,6 +62,15 @@ interface LocalMediaItem {
   key: IDBValidKey;
   dataUrl: string;
   mimeType: string;
+}
+
+function buildLocalDataUrl(
+  mimeType: string,
+  base64: string | null | undefined,
+  fallbackUri?: string | null
+): string {
+  if (base64) return `data:${mimeType};base64,${base64}`;
+  return fallbackUri || "";
 }
 
 export function ProfileMediaGallery() {
@@ -323,83 +332,119 @@ function LocalMediaGallery() {
   const imageDB = useIndexedDB<GeneratedImageData>("generated-images", DB_NAME.generateImage);
   const videoDB = useIndexedDB<GeneratedVideoData>("generated-videos", DB_NAME.generateVideo);
   const audioDB = useIndexedDB<GeneratedAudioData>("generated-audio", DB_NAME.generateVoice);
+  const getImageEntries = imageDB.getAllWithKeys;
+  const getVideoEntries = videoDB.getAllWithKeys;
+  const getAudioEntries = audioDB.getAllWithKeys;
+  const removeImageEntry = imageDB.remove;
+  const removeVideoEntry = videoDB.remove;
+  const removeAudioEntry = audioDB.remove;
 
   const [localMedia, setLocalMedia] = useState<LocalMediaItem[]>([]);
-  const [localLoading, setLocalLoading] = useState(false);
+  const [localLoading, setLocalLoading] = useState(true);
+  const fetchInFlightRef = useRef(false);
   const [localTypeFilter, setLocalTypeFilter] = useState<"all" | "image" | "video" | "audio">(
     "all"
   );
   const [localSearch, setLocalSearch] = useState("");
   const [previewLocal, setPreviewLocal] = useState<LocalMediaItem | null>(null);
+  const toastRef = useRef(toast);
+  const tRef = useRef(t);
+  toastRef.current = toast;
+  tRef.current = t;
 
-  const fetchLocalMedia = useCallback(async () => {
-    setLocalLoading(true);
+  const fetchLocalMedia = useCallback(async (options?: { showSpinner?: boolean }) => {
+    if (fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
+
+    const showSpinner = options?.showSpinner ?? false;
+    if (showSpinner) setLocalLoading(true);
+
+    let skippedWhileMapping = 0;
+
     try {
       const [images, videos, audios] = await Promise.all([
-        imageDB.getAllWithKeys(),
-        videoDB.getAllWithKeys(),
-        audioDB.getAllWithKeys(),
+        getImageEntries(),
+        getVideoEntries(),
+        getAudioEntries(),
       ]);
 
       const items: LocalMediaItem[] = [];
 
-      // Process images
-      images.forEach((entry, idx) => {
+      for (const entry of images) {
         const img = entry.value;
-        if (img?.imageBytes) {
+        if (!img?.imageBytes) continue;
+        try {
           items.push({
             id: `local-img-${String(entry.key)}`,
             type: "image",
             key: entry.key,
-            dataUrl: `data:${img.mimeType || "image/png"};base64,${img.imageBytes}`,
+            dataUrl: buildLocalDataUrl(img.mimeType || "image/png", img.imageBytes),
             mimeType: img.mimeType || "image/png",
           });
+        } catch (err) {
+          skippedWhileMapping++;
+          console.warn("[LocalMediaGallery] Skip corrupt image entry", entry.key, err);
         }
-      });
+      }
 
-      // Process videos
-      videos.forEach((entry) => {
+      for (const entry of videos) {
         const vid = entry.value;
-        if (vid?.videoBytes || vid?.videoUri) {
-          const dataUrl = vid.videoBytes
-            ? `data:${vid.mimeType || "video/mp4"};base64,${vid.videoBytes}`
-            : vid.videoUri || "";
+        if (!vid?.videoBytes && !vid?.videoUri) continue;
+        try {
+          const mimeType = vid.mimeType || "video/mp4";
+          const dataUrl = buildLocalDataUrl(mimeType, vid.videoBytes, vid.videoUri);
+          if (!dataUrl) continue;
           items.push({
             id: `local-vid-${String(entry.key)}`,
             type: "video",
             key: entry.key,
             dataUrl,
-            mimeType: vid.mimeType || "video/mp4",
+            mimeType,
           });
+        } catch (err) {
+          skippedWhileMapping++;
+          console.warn("[LocalMediaGallery] Skip corrupt video entry", entry.key, err);
         }
-      });
+      }
 
-      // Process audio
-      audios.forEach((entry) => {
+      for (const entry of audios) {
         const aud = entry.value;
-        if (aud?.audioBytes) {
+        if (!aud?.audioBytes) continue;
+        try {
           items.push({
             id: `local-aud-${String(entry.key)}`,
             type: "audio",
             key: entry.key,
-            dataUrl: `data:${aud.mimeType || "audio/wav"};base64,${aud.audioBytes}`,
+            dataUrl: buildLocalDataUrl(aud.mimeType || "audio/wav", aud.audioBytes),
             mimeType: aud.mimeType || "audio/wav",
           });
+        } catch (err) {
+          skippedWhileMapping++;
+          console.warn("[LocalMediaGallery] Skip corrupt audio entry", entry.key, err);
         }
-      });
+      }
 
       setLocalMedia(items);
+
+      if (skippedWhileMapping > 0) {
+        toastRef.current.info(
+          tRef.current(
+            "Một số media cục bộ bị hỏng đã được bỏ qua. Hãy tạo lại từ công cụ AI nếu cần."
+          )
+        );
+      }
     } catch (err) {
       console.error("[LocalMediaGallery] Error loading IndexedDB media:", err);
-      toast.error(t("Không thể tải media từ bộ nhớ cục bộ"));
+      toastRef.current.error(tRef.current("Không thể tải media từ bộ nhớ cục bộ"));
     } finally {
+      fetchInFlightRef.current = false;
       setLocalLoading(false);
     }
-  }, [imageDB, videoDB, audioDB]);
+  }, [getImageEntries, getVideoEntries, getAudioEntries]);
 
   useEffect(() => {
-    fetchLocalMedia();
-  }, []);
+    fetchLocalMedia({ showSpinner: true });
+  }, [fetchLocalMedia]);
 
   const filteredMedia = useMemo(() => {
     let items = localMedia;
@@ -422,11 +467,11 @@ function LocalMediaGallery() {
 
     try {
       if (item.type === "image") {
-        await imageDB.remove(item.key);
+        await removeImageEntry(item.key);
       } else if (item.type === "video") {
-        await videoDB.remove(item.key);
+        await removeVideoEntry(item.key);
       } else if (item.type === "audio") {
-        await audioDB.remove(item.key);
+        await removeAudioEntry(item.key);
       }
       setLocalMedia((prev) => prev.filter((m) => m.id !== item.id));
       toast.success(t("Đã xóa media cục bộ"));
@@ -451,12 +496,14 @@ function LocalMediaGallery() {
     return counts;
   }, [localMedia]);
 
+  const showInitialSpinner = localLoading && localMedia.length === 0;
+
   return (
     <>
       {/* Refresh button */}
       <div className="flex items-center justify-end mb-4">
         <button
-          onClick={fetchLocalMedia}
+          onClick={() => fetchLocalMedia({ showSpinner: true })}
           disabled={localLoading}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-primary bg-primary/10 rounded-lg hover:bg-primary/20 transition disabled:opacity-50"
         >
@@ -504,15 +551,15 @@ function LocalMediaGallery() {
         </div>
       </div>
 
-      {/* Loading */}
-      {localLoading && (
+      {/* Loading – chỉ full-screen lần đầu; làm mới giữ grid */}
+      {showInitialSpinner && (
         <div className="flex items-center justify-center py-16">
           <RiLoader4Line className="text-3xl animate-spin text-indigo-500" />
         </div>
       )}
 
       {/* Empty */}
-      {!localLoading && filteredMedia.length === 0 && (
+      {!showInitialSpinner && filteredMedia.length === 0 && (
         <div className="flex flex-col items-center justify-center py-16 text-gray-400">
           <RiDatabase2Line className="mb-3 text-5xl" />
           <p className="text-base">{t("Chưa có media cục bộ")}</p>
@@ -521,8 +568,12 @@ function LocalMediaGallery() {
       )}
 
       {/* Grid */}
-      {!localLoading && filteredMedia.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+      {filteredMedia.length > 0 && (
+        <div
+          className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${
+            localLoading ? "opacity-60 pointer-events-none" : ""
+          }`}
+        >
           {filteredMedia.map((item) => (
             <LocalMediaCard
               key={item.id}
@@ -536,7 +587,7 @@ function LocalMediaGallery() {
       )}
 
       {/* Total */}
-      {!localLoading && filteredMedia.length > 0 && (
+      {filteredMedia.length > 0 && (
         <div className="mt-3 text-sm text-center text-gray-400">
           {t("Tổng")}: {filteredMedia.length} {t("media cục bộ")}
         </div>

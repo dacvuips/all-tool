@@ -205,29 +205,44 @@ export function useIndexedDB<T = unknown>(
   }, []);
 
   const getAllWithKeys = useCallback(async (): Promise<{ key: IDBValidKey; value: T }[]> => {
+    const storeName = storeRef.current;
+    const dbName = dbNameRef.current;
+
     try {
-      const db = await ensureStore(storeRef.current, dbNameRef.current);
-      return new Promise((resolve, reject) => {
+      const keys = await withRetry<IDBValidKey[]>(storeName, dbName, "readonly", (s) => s.getAllKeys());
+      const results: { key: IDBValidKey; value: T }[] = [];
+      const unreadableKeys: IDBValidKey[] = [];
+
+      for (const key of keys) {
         try {
-          const tx = db.transaction(storeRef.current, "readonly");
-          const store = tx.objectStore(storeRef.current);
-          const req = store.openCursor();
-          const results: { key: IDBValidKey; value: T }[] = [];
-          req.onsuccess = () => {
-            const cursor = req.result;
-            if (cursor) {
-              results.push({ key: cursor.key, value: cursor.value });
-              cursor.continue();
-            } else {
-              resolve(results);
-            }
-          };
-          req.onerror = () => reject(req.error);
-          tx.onerror = () => reject(tx.error);
-        } catch (err) {
-          reject(err);
+          const value = await withRetry<T | undefined>(storeName, dbName, "readonly", (s) => s.get(key));
+          if (value !== undefined) {
+            results.push({ key, value });
+          }
+        } catch (err: unknown) {
+          unreadableKeys.push(key);
+          const name = err instanceof DOMException ? err.name : (err as Error)?.name;
+          console.warn(
+            `[useIndexedDB] Skipping unreadable record (${name})`,
+            dbName,
+            storeName,
+            key,
+            err
+          );
         }
-      });
+      }
+
+      if (unreadableKeys.length > 0) {
+        void Promise.all(
+          unreadableKeys.map((key) =>
+            withRetry<undefined>(storeName, dbName, "readwrite", (s) => s.delete(key)).catch((delErr) =>
+              console.warn("[useIndexedDB] Failed to remove unreadable record", dbName, storeName, key, delErr)
+            )
+          )
+        );
+      }
+
+      return results;
     } catch {
       return [];
     }
