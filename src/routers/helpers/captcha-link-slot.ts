@@ -18,6 +18,9 @@ const ALL_BUSY_POLL_MS = 500;
 /** Tối đa chờ slot trống trước khi báo quá tải. */
 const MAX_WAIT_FOR_SLOT_MS = 120_000;
 
+/** Số slot mặc định nếu link không khai báo `slotNumber`. */
+const DEFAULT_SLOT_NUMBER = 1;
+
 function linkId(link: ApiLinkData): string {
   return crypto.createHash("sha256").update(`${link.url}|${link.apiKey || ""}`).digest("hex").slice(0, 16);
 }
@@ -39,7 +42,7 @@ export async function isCaptchaLinkBanned(link: ApiLinkData): Promise<boolean> {
   }
 }
 
-/** Block link (không có tài khoản online) và xóa slot đang giữ. */
+/** Block link (không có tài khoản online) và reset counter slot về 0. */
 export async function banCaptchaLink(link: ApiLinkData): Promise<void> {
   try {
     const banKey = captchaLinkBanKey(link);
@@ -51,38 +54,69 @@ export async function banCaptchaLink(link: ApiLinkData): Promise<void> {
   }
 }
 
-/** Giải phóng slot sớm khi gọi API thất bại (không ban). */
+/**
+ * Giải phóng 1 slot (DECR).
+ * Dùng khi gọi API thất bại hoặc hoàn thành sớm hơn TTL.
+ * Không để counter xuống dưới 0.
+ */
 export async function releaseCaptchaLinkSlot(link: ApiLinkData): Promise<void> {
   try {
-    await redis.del(captchaLinkSlotKey(link));
+    const slotKey = captchaLinkSlotKey(link);
+    // Lua: DECR nhưng không để < 0
+    const lua = `
+      local v = redis.call('GET', KEYS[1])
+      if not v then return 0 end
+      local n = tonumber(v)
+      if n and n > 0 then
+        return redis.call('DECR', KEYS[1])
+      end
+      return 0
+    `;
+    await (redis as any).eval(lua, 1, slotKey);
   } catch (err: any) {
     logger.error(`[CaptchaLinkSlot] releaseCaptchaLinkSlot lỗi: ${err?.message}`);
   }
 }
 
 /**
- * Atomically: bỏ qua nếu link bị ban hoặc slot đang bận; nếu trống thì SET NX với TTL = TIME.
+ * Atomically: bỏ qua nếu link bị ban hoặc counter đã đạt slotNumber;
+ * nếu còn slot thì INCR counter + set TTL (gia hạn mỗi lần acquire).
  * Trả true khi chiếm được slot.
+ *
+ * Cơ chế:
+ *   - Counter = số request đang dùng link.
+ *   - TTL = TIME ms, reset mỗi lần có request mới để tự dọn khi process crash.
+ *   - Khi xong, gọi releaseCaptchaLinkSlot() để DECR ngay thay vì chờ TTL.
  */
 export async function tryAcquireCaptchaLinkSlot(link: ApiLinkData): Promise<boolean> {
   try {
+    const maxSlots = link.slotNumber && link.slotNumber > 0 ? link.slotNumber : DEFAULT_SLOT_NUMBER;
+    // Lua script:
+    //   1. Nếu link bị ban → return 0
+    //   2. Lấy counter hiện tại; nếu >= maxSlots → return 0 (hết slot)
+    //   3. INCR counter; set TTL để tự cleanup khi process crash
     const lua = `
-      local banKey = KEYS[1]
+      local banKey  = KEYS[1]
       local slotKey = KEYS[2]
-      local ttl = tonumber(ARGV[1])
+      local maxSlots = tonumber(ARGV[1])
+      local ttl      = tonumber(ARGV[2])
       if redis.call('EXISTS', banKey) == 1 then
         return 0
       end
-      if redis.call('SET', slotKey, '1', 'NX', 'PX', ttl) then
-        return 1
+      local current = tonumber(redis.call('GET', slotKey) or '0')
+      if current >= maxSlots then
+        return 0
       end
-      return 0
+      local newVal = redis.call('INCR', slotKey)
+      redis.call('PEXPIRE', slotKey, ttl)
+      return 1
     `;
     const result = await (redis as any).eval(
       lua,
       2,
       captchaLinkBanKey(link),
       captchaLinkSlotKey(link),
+      String(maxSlots),
       String(TIME)
     );
     return Number(result) === 1;
@@ -94,6 +128,7 @@ export async function tryAcquireCaptchaLinkSlot(link: ApiLinkData): Promise<bool
 
 /**
  * Quay vòng các link cho đến khi chiếm được slot trống (hoặc hết thời gian chờ).
+ * Mỗi link có `slotNumber` slot đồng thời; mặc định là 1 nếu không khai báo.
  * Trả link đã acquire; throw nếu không có link khả dụng.
  */
 export async function acquireCaptchaLinkWithSlot(

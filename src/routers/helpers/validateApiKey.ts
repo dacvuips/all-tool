@@ -16,6 +16,11 @@ export { TIME };
 export interface ApiLinkData {
   url: string;
   apiKey: string;
+  /**
+   * Số request đồng thời tối đa cho link này.
+   * Mặc định 1 nếu không khai báo.
+   */
+  slotNumber?: number;
 }
 
 export interface ApiLinkSetting {
