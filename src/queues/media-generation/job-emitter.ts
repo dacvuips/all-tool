@@ -39,6 +39,8 @@ const WORKER_INSTANCE_ID = `worker-${Date.now()}-${Math.random().toString(36).sl
 const LOCK_TTL_MS = 60 * 1000; // 60 giây
 /** Tần suất heartbeat tự động (gia hạn lock dù handler không gọi progress) */
 const HEARTBEAT_MS = 15 * 1000; // 15 giây
+/** Giữ job SUCCEEDED để poll fallback vẫn lấy được resultData khi WS lỗi */
+const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 10 phút
 
 /** Payload phát qua pubsub — gửi xuống GraphQL Subscription resolver */
 export type MediaGenerationJobPubsubPayload = {
@@ -278,9 +280,8 @@ export class MediaJobEmitter {
   /**
    * Đánh dấu thành công + lưu resultData. Chỉ ghi khi *vẫn* giữ lock.
    *
-   * Sau khi publish pubsub (client nhận SUCCEEDED + resultData), **xóa ngay** document Mongo
-   * để không tích tụ dữ liệu (ảnh/video base64 trong resultData rất nặng).
-   * Client phải lấy kết quả từ subscription; poll/query sau xóa sẽ trả null.
+   * Không xóa ngay document Mongo: cần giữ một khoảng retention để client poll fallback
+   * vẫn đọc được result khi subscription/websocket bị lỗi trên production.
    */
   async succeed(resultData: Record<string, unknown>, finalMessage = "Hoàn tất!"): Promise<void> {
     if (this.terminated) return;
@@ -310,19 +311,30 @@ export class MediaJobEmitter {
     this.stopHeartbeat();
     if (doc) {
       logger.info(`[MediaJobEmitter] SUCCEED jobId=${this.jobId}`);
-      // Bắt buộc publish trước khi xóa — subscription là nguồn kết quả chính cho FE.
+      // Publish trước để client đang subscribe nhận kết quả realtime.
       await publishChange(doc as unknown as IMediaGenerationJob);
       await clearJobWatch(this.jobId);
-      try {
-        const deleted = await model.deleteOne({ _id: this.jobId });
-        if (deleted.deletedCount) {
-          logger.info(`[MediaJobEmitter] DELETED jobId=${this.jobId} sau SUCCEEDED`);
+      const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+      setTimeout(async () => {
+        try {
+          const deleted = await model.deleteOne({
+            _id: this.jobId,
+            status: MediaGenerationJobStatus.SUCCEEDED,
+            completedAt,
+          });
+          if (deleted.deletedCount) {
+            logger.info(
+              `[MediaJobEmitter] DELETED jobId=${this.jobId} sau ${Math.round(
+                SUCCESS_JOB_RETENTION_MS / 1000
+              )}s retention`
+            );
+          }
+        } catch (err: any) {
+          logger.warn(
+            `[MediaJobEmitter] xóa job SUCCEEDED thất bại jobId=${this.jobId}: ${err?.message}`
+          );
         }
-      } catch (err: any) {
-        logger.warn(
-          `[MediaJobEmitter] xóa job SUCCEEDED thất bại jobId=${this.jobId}: ${err?.message}`
-        );
-      }
+      }, SUCCESS_JOB_RETENTION_MS);
     } else {
       logger.warn(`[MediaJobEmitter] succeed jobId=${this.jobId} nhưng không còn giữ lock`);
     }
