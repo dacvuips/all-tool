@@ -17,13 +17,13 @@ import {
   getApiSetting,
   isCaptchaValidationError,
 } from "../helpers/validateApiKey";
+// Re-export các helper SSE legacy (giữ tương thích nếu còn import cũ; logic mới dùng Job pattern).
 export {
   initGenerationSSE,
   initVideoGenerationSSE,
   sendGenerationSSEError,
   sendVideoGenerationSSEError,
 } from "./generation-sse";
-import { initGenerationSSE } from "./generation-sse";
 
 /**
  * Xử lý logic generate video:
@@ -97,18 +97,15 @@ export async function handleVideoGeneration(
         headers: currentCaptchaData.Headers,
       });
 
-      const pollSuccess = await pollAndExtractVideo({
+      const videoResult = await pollAndExtractVideo({
         mediaName,
         accessToken: currentCaptchaData.accessToken,
         customerId: context.id,
-        res,
         headers: currentCaptchaData.Headers,
       });
-      if (!pollSuccess) {
-        return;
-      }
 
       await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
+      res.json({ success: true, data: videoResult });
       return;
     } catch (err: any) {
       if (err.isCaptchaError || err.statusCode === 403) {
@@ -526,12 +523,37 @@ export async function callReferenceImagesAPI(
   return sendAndParseResponse(endpoint, payload, params.accessToken, params.headers);
 }
 
-interface PollAndExtractVideoParams {
+/**
+ * Tham số poll video — *không* phụ thuộc `Response`.
+ *
+ * Caller (route SSE legacy hoặc worker job) tự tiêu thụ tiến độ qua `onProgress`.
+ */
+export interface PollVideoParams {
   mediaName: string;
   accessToken: string;
   customerId: string;
-  res: Response;
   headers?: Record<string, string>;
+  /** Callback bắn tiến độ — caller tự dùng (SSE / Mongo / pubsub) */
+  onProgress?: (progress: number, message?: string) => void | Promise<void>;
+}
+
+/** Kết quả poll video khi thành công */
+export type PollVideoResult = {
+  videoUri: string;
+  videoBytes: string | null;
+  mimeType: string;
+};
+
+/**
+ * Lỗi từ pipeline tạo video — có statusCode để client xử lý hint UI.
+ */
+export class VideoGenerationError extends Error {
+  statusCode: number;
+  constructor(message: string, statusCode = 500) {
+    super(message);
+    this.name = "VideoGenerationError";
+    this.statusCode = statusCode;
+  }
 }
 
 function resolveVideoGenerationErrorMessage(
@@ -557,32 +579,38 @@ function resolveVideoGenerationErrorMessage(
 }
 
 /**
- * Poll media endpoint cho đến khi video generation hoàn tất,
- * extract video data và gửi kết quả qua SSE.
- * @returns true nếu thành công, false nếu đã gửi lỗi qua SSE (không throw để tránh double-response).
+ * Poll media endpoint cho đến khi video generation hoàn tất + extract fifeUrl.
+ *
+ * Hàm `pure`: không phụ thuộc `Response`. Trả về `PollVideoResult` khi thành công,
+ * throw `VideoGenerationError` khi thất bại / timeout.
+ *
+ * `onProgress` (nếu truyền) được gọi sau mỗi vòng poll — không await blocking nếu callback chậm
+ * (sử dụng `Promise.resolve(...).catch(...)` để không kéo dài vòng lặp).
  */
-export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Promise<boolean> {
-  const { mediaName, accessToken, customerId, res, headers } = params;
-  const sendSSE = initGenerationSSE(res);
+export async function pollAndExtractVideo(params: PollVideoParams): Promise<PollVideoResult> {
+  const { mediaName, accessToken, headers, onProgress } = params;
 
-  // Poll media endpoint until video generation completes
-  const MAX_POLLS = 360; // max ~30 minutes (5s * 360)
+  /** Tối đa ~30 phút (5s × 360). Đủ cho mọi video Google trong thực tế. */
+  const MAX_POLLS = 360;
   let pollCount = 0;
   let mediaResult: any = null;
   let generationStatus = "MEDIA_GENERATION_STATUS_PENDING";
 
-  sendSSE({ type: "progress", progress: 50, message: "Đang chờ Google tạo video..." });
+  if (onProgress) {
+    await onProgress(50, "Đang chờ Google tạo video...");
+  }
 
   while (generationStatus !== "MEDIA_GENERATION_STATUS_SUCCESSFUL" && pollCount < MAX_POLLS) {
-    await new Promise((resolve) => setTimeout(resolve, 5000)); // 5s interval
+    await new Promise((resolve) => setTimeout(resolve, 5000));
     pollCount++;
 
     const pollProgress = 50 + Math.min(45, Math.round((pollCount / MAX_POLLS) * 45));
-    sendSSE({
-      type: "progress",
-      progress: pollProgress,
-      message: `Đang xử lý video... (${pollCount}/${MAX_POLLS})`,
-    });
+    if (onProgress) {
+      // Không await để không block vòng poll khi pubsub chậm
+      Promise.resolve(onProgress(pollProgress, `Đang xử lý video... (${pollCount}/${MAX_POLLS})`)).catch(
+        (err) => logger.warn(`[generation-video] onProgress lỗi: ${err?.message}`)
+      );
+    }
 
     try {
       const pollResp = await fetch(
@@ -594,26 +622,16 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
             Authorization: `Bearer ${accessToken}`,
             ...(headers || {}),
           },
-          body: JSON.stringify({
-            operations: [
-              {
-                operation: {
-                  name: mediaName,
-                },
-              },
-            ],
-          }),
+          body: JSON.stringify({ operations: [{ operation: { name: mediaName } }] }),
         }
       );
       if (pollResp.ok) {
         const pollData = await pollResp.json();
-        // Response is an array: [{ operations: [{ operation: {...}, status: "..." }], remainingCredits: ... }]
         const result = Array.isArray(pollData) ? pollData[0] : pollData;
         const operationResult = result?.operations?.[0];
         generationStatus = operationResult?.status || "MEDIA_GENERATION_STATUS_PENDING";
         mediaResult = operationResult;
 
-        // Nếu status FAILED → dừng polling ngay
         if (generationStatus === "MEDIA_GENERATION_STATUS_FAILED") {
           logger.warn(`[generation-video] Video generation failed at poll #${pollCount}`);
           break;
@@ -634,18 +652,13 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
       pollCount,
       MAX_POLLS
     );
-
     logger.error(
       `[generation-video] Error message: ${errorMsg} (status: ${generationStatus}, pollCount: ${pollCount}/${MAX_POLLS})`
     );
-
-    sendSSE({ type: "error", message: errorMsg });
-    res.end();
-    return false;
+    throw new VideoGenerationError(errorMsg, 500);
   }
 
-  // Extract fifeUrl from operation metadata – try multiple known paths
-  // because text-to-video and image-to-video APIs may return different structures
+  // Trích fifeUrl — Google trả về nhiều cấu trúc tuỳ kiểu input
   const metadata = mediaResult?.operation?.metadata;
   const fifeUrl: string | null =
     metadata?.video?.fifeUrl ||
@@ -659,24 +672,13 @@ export async function pollAndExtractVideo(params: PollAndExtractVideoParams): Pr
     null;
 
   if (!fifeUrl) {
-    const errorMsg = "Không tìm thấy URL video trong kết quả API";
     logger.error(`[generation-video] No fifeUrl found in result: ${JSON.stringify(mediaResult)}`);
-
-    sendSSE({ type: "error", message: errorMsg });
-    res.end();
-    return false;
+    throw new VideoGenerationError("Không tìm thấy URL video trong kết quả API", 500);
   }
 
-  sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
-  sendSSE({
-    type: "done",
-    data: {
-      videoUri: fifeUrl,
-      videoBytes: null,
-      mimeType: "video/mp4",
-    },
-  });
-
-  res.end();
-  return true;
+  return {
+    videoUri: fifeUrl,
+    videoBytes: null,
+    mimeType: "video/mp4",
+  };
 }

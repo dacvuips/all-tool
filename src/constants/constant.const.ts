@@ -3,6 +3,8 @@ export const CONSTANTS = {
     THREAD_MESSAGE: "THREAD_MESSAGE",
     ORDER: "ORDER",
     FLOW_NODE_RUN: "FLOW_NODE_RUN",
+    /** Subscribe theo từng job tạo media (ảnh/video) — payload chứa jobId + customerId. */
+    MEDIA_GENERATION_JOB: "MEDIA_GENERATION_JOB",
   },
   CookiesName: {
     cartSessionId: "cartSessionId",

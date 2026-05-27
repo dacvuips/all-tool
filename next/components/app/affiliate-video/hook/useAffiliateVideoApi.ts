@@ -3,6 +3,7 @@
  * Hook chứa tất cả các hàm gọi API cho module affiliate-video.
  */
 import { useCallback } from "react";
+import { useMediaGenerationJob } from "../../../../lib/hooks/useMediaGenerationJob";
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
@@ -18,10 +19,6 @@ import {
   TrendingCategoryService,
   TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
-import {
-  consumeGenerationResponse,
-  extractGeneratedImages,
-} from "../shared/read-generation-sse";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -509,6 +506,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const audioDB = useIndexedDB<GeneratedAudioData>(AUDIO_STORE_NAME, DB_NAME.generateVoice);
   const copyVideoScriptDB = useIndexedDB<any>(COPY_VIDEO_STORE_NAME, DB_NAME.copyVideo);
   const { customer } = useAuth();
+
+  // Hook dùng chung cho mọi tác vụ tạo ảnh/video (job + subscription + poll fallback)
+  const imageJob = useMediaGenerationJob<{ images: GeneratedImageData[] }>();
+  const videoJob = useMediaGenerationJob<GeneratedVideoData>();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
     async (body: {
@@ -923,7 +924,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [callGenerationTrendingApi, scriptDB, pushToTrendingHistory]
   );
 
-  // ── generateImage – gọi API tạo ảnh từ prompt ──
+  // ── generateImage – tạo Job tạo ảnh, theo dõi realtime + poll fallback ──
   const generateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
       const {
@@ -940,65 +941,37 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onError,
       } = params;
 
-      // ── Simulated progress: random start 1-10% → 99% over 2 minutes ──
-      const DURATION_MS = 2 * 60 * 1000; // 2 minutes
-      const INTERVAL_MS = 500; // update every 500ms
-      const startPct = Math.floor(Math.random() * 10) + 1; // 1-10
-      const endPct = 99;
-      const totalSteps = DURATION_MS / INTERVAL_MS;
-      const increment = (endPct - startPct) / totalSteps;
-      let currentPct = startPct;
-
-      onProgress?.(currentPct);
-
-      const progressTimer = setInterval(() => {
-        currentPct += increment;
-        if (currentPct >= endPct) {
-          currentPct = endPct;
-          clearInterval(progressTimer);
-        }
-        onProgress?.(Math.round(currentPct));
-      }, INTERVAL_MS);
+      // Gom ảnh tham chiếu
+      const images: { imageBytes: string; mimeType: string }[] = [];
+      if (referenceImage) {
+        images.push({ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType });
+      }
+      if (additionalImages?.length) {
+        images.push(...additionalImages);
+      }
 
       try {
-        // Build images array from referenceImage + additionalImages
-        const images: { imageBytes: string; mimeType: string }[] = [];
-        if (referenceImage) {
-          images.push({ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType });
-        }
-        if (additionalImages?.length) {
-          images.push(...additionalImages);
-        }
-
         const personifyApiImages = hasObjectToPersonifyImage(objectToPersonifyImage)
           ? await objectToPersonifyImageToApiImages(objectToPersonifyImage)
           : [];
 
-        const res = await fetch("/api/app/generation-image/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        onProgress?.(1);
+        const { data } = await imageJob.run({
+          url: "/api/app/generation-image/",
+          body: {
             prompt,
             images: images.length > 0 ? images : undefined,
             productImages: productImages?.length ? productImages : undefined,
             objectToPersonifyImages: personifyApiImages.length ? personifyApiImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
             config: { numberOfImages: 1, aspectRatio, noText },
-          }),
-        });
-
-        const result = await consumeGenerationResponse(res, {
-          onProgress: (pct) => {
-            clearInterval(progressTimer);
-            onProgress?.(pct);
+            _metadata: { sceneId },
           },
-          onError,
+          onProgress: (pct) => onProgress?.(pct),
         });
 
-        const resultImages = extractGeneratedImages(result) as GeneratedImageData[];
-
+        const resultImages = (data?.images || []) as GeneratedImageData[];
         if (resultImages.length === 0) {
-          clearInterval(progressTimer);
           const message = "Không nhận được ảnh từ API";
           if (onError) onError(message);
           else console.error(message);
@@ -1006,15 +979,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         const imageData = resultImages[0];
-
         await imageDB.set(sceneId, imageData);
-
-        clearInterval(progressTimer);
         onProgress?.(100);
-
         return imageData;
       } catch (err: any) {
-        clearInterval(progressTimer);
         onProgress?.(0);
         const message = err?.message || "Lỗi tạo ảnh";
         if (onError) onError(message);
@@ -1023,7 +991,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return undefined;
       }
     },
-    [toast, imageDB]
+    [imageJob, imageDB]
   );
 
   // ── getGeneratedImage – lấy ảnh đã tạo từ IndexedDB ──
@@ -1042,7 +1010,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [imageDB]
   );
 
-  // ── generateVideo – gọi API tạo video từ prompt (SSE) ──
+  // ── generateVideo – tạo Job tạo video, theo dõi realtime ──
   const generateVideo = useCallback(
     async (params: GenerateVideoParams): Promise<GeneratedVideoData | undefined> => {
       const {
@@ -1057,75 +1025,22 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       } = params;
 
       try {
-        onProgress?.(5);
+        onProgress?.(1);
         onStatusMessage?.("Đang gửi yêu cầu tạo video...");
 
-        const res = await fetch("/api/app/generation-video/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const { data } = await videoJob.run({
+          url: "/api/app/generation-video/",
+          body: {
             prompt,
             images,
             config: { aspectRatio, generateAudio },
-          }),
+            _metadata: { sceneId },
+          },
+          onProgress: (pct) => onProgress?.(pct),
+          onStatusMessage: (msg) => onStatusMessage?.(msg),
         });
 
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          if (onError) onError(message);
-          else console.error(message);
-          return undefined;
-        }
-
-        // Read SSE stream
-        const reader = res.body?.getReader();
-        const decoder = new TextDecoder();
-
-        if (!reader) {
-          const message = "Không thể đọc response stream";
-          if (onError) onError(message);
-          else console.error(message);
-          return undefined;
-        }
-
-        let videoData: GeneratedVideoData | undefined;
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE events from buffer
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || ""; // keep incomplete line
-
-          for (const line of lines) {
-            if (!line.startsWith("data: ")) continue;
-            try {
-              const event = JSON.parse(line.slice(6));
-
-              if (event.type === "progress") {
-                onProgress?.(event.progress);
-                if (event.message) onStatusMessage?.(event.message);
-              } else if (event.type === "done") {
-                onProgress?.(100);
-                onStatusMessage?.("Hoàn thành!");
-                videoData = event.data;
-              } else if (event.type === "error") {
-                const message = event.message || "Lỗi tạo video";
-                if (onError) onError(message);
-                else console.error(message);
-                return undefined;
-              }
-            } catch (parseErr) {
-              // Ignore malformed SSE lines
-            }
-          }
-        }
-
+        const videoData = data as GeneratedVideoData | undefined;
         if (!videoData) {
           const message = "Không nhận được video từ API";
           if (onError) onError(message);
@@ -1133,11 +1048,10 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           return undefined;
         }
 
-        // Attach the aspect ratio used at generation time
         videoData.aspectRatio = aspectRatio;
-        // Persist to IndexedDB
         await videoDB.set(sceneId, videoData);
-
+        onProgress?.(100);
+        onStatusMessage?.("Hoàn thành!");
         return videoData;
       } catch (err: any) {
         onProgress?.(0);
@@ -1148,7 +1062,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return undefined;
       }
     },
-    [toast, videoDB]
+    [videoJob, videoDB]
   );
 
   // ── getGeneratedVideo – lấy video đã tạo từ IndexedDB ──

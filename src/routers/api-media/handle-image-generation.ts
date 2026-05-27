@@ -1,3 +1,14 @@
+/**
+ * Lớp xử lý gọi Google Aisandbox API để tạo ảnh.
+ *
+ * Refactor: hàm public không còn phụ thuộc `express.Response`; trả về kết quả thuần
+ * (`GeneratedImage[]`) để cả route HTTP **và** worker job đều có thể dùng chung.
+ *
+ * Compat: hàm `callAisandboxImageAPI(params)` vẫn được export — chỉ thay đổi giá trị trả về
+ * (từ `void` → `Promise<GeneratedImage[]>`). Tất cả call site nội bộ đã cập nhật.
+ *
+ * Nếu route cũ cần gửi JSON về client, caller tự gọi `res.json({ success: true, data: images })`.
+ */
 import { Request, Response } from "express";
 import logger from "../../helpers/logger";
 import { ForbiddenError } from "../../libs/core";
@@ -17,14 +28,55 @@ import {
   getApiSetting,
   isCaptchaValidationError,
 } from "../helpers/validateApiKey";
-import { initGenerationSSE, isGenerationSSE } from "./generation-sse";
+
+/** Ảnh đã sinh — cấu trúc thống nhất giữa các kiểu input (text-only, image-to-image, ...) */
+export type GeneratedImage = {
+  imageBytes?: string;
+  mimeType?: string;
+  fifeUrl?: string;
+  imageUrl?: string;
+};
+
+/** Tham số chung gọi Google Aisandbox API tạo ảnh — *không* còn `Response`. */
+export interface CallAisandboxImageParams {
+  prompt: string;
+  aspectRatio?: "16:9" | "9:16";
+  uploadedImageNames?: string[];
+  recaptchaToken: string;
+  sessionId: string;
+  projectId: string;
+  accessToken: string;
+  noText?: boolean;
+  batchId?: string;
+  Seed?: string;
+  headers?: Record<string, string>;
+  /** Callback tiến độ — caller (worker/route) tự cập nhật UI. */
+  onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  /** Khi Google trả lỗi reCAPTCHA → lấy captcha mới, tối đa `CAPTCHA_GENERATION_MAX_RETRIES` lần. */
+  captchaRetry?: {
+    actionType?: string;
+    logPrefix: string;
+    onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxImageParams>;
+  };
+}
+
+/** Helper an toàn gọi onProgress (nuốt lỗi) */
+async function safeProgress(
+  fn: CallAisandboxImageParams["onProgress"],
+  progress: number,
+  message?: string
+): Promise<void> {
+  if (!fn) return;
+  try {
+    await fn(progress, message);
+  } catch (err: any) {
+    logger.warn(`[generation-image] onProgress lỗi: ${err?.message}`);
+  }
+}
 
 /**
- * Xử lý logic generate image:
- * - Validate body & prompt
- * - Gọi Google Labs API tạo image (batchGenerateImages)
- * - Extract images từ response (fifeUrl → base64)
- * - Tăng usedQuantity sau khi thành công
+ * Hàm `pure` được route legacy `/api/api-media` dùng — vẫn cần gửi JSON.
+ * Worker pattern (job mode) sẽ dùng `callAisandboxImageAPI` trực tiếp.
  */
 export async function handleImageGeneration(
   req: Request,
@@ -34,13 +86,8 @@ export async function handleImageGeneration(
 ): Promise<void> {
   const body = req.body as {
     prompt: string;
-    images?: Array<
-      | string // URL ảnh
-      | { imageBytes: string; mimeType?: string } // base64
-    >;
-    config?: {
-      aspectRatio?: "16:9" | "9:16";
-    };
+    images?: Array<string | { imageBytes: string; mimeType?: string }>;
+    config?: { aspectRatio?: "16:9" | "9:16" };
   };
   if (!body?.prompt) {
     res.status(400).json({ message: "Thiếu prompt" });
@@ -50,7 +97,6 @@ export async function handleImageGeneration(
   const context = new Context({ req });
   const links = await getApiSetting("recaptcha-api-secret-key");
   let lastCaptchaError = false;
-  let currentCaptchaData: CaptchaResponseData | null = null;
 
   for (const selectedLink of links) {
     if (!selectedLink || !selectedLink.url) continue;
@@ -65,34 +111,31 @@ export async function handleImageGeneration(
 
       const captchaResp = await fetch(captchaUrl, { headers });
       if (!captchaResp.ok) continue;
-      currentCaptchaData = await captchaResp.json();
-
-      if (!currentCaptchaData) continue;
+      const captcha = (await captchaResp.json()) as CaptchaResponseData;
+      if (!captcha) continue;
 
       const uploadedImageNames = await processAndUploadImages(
         body.images || [],
-        currentCaptchaData.accessToken,
-        currentCaptchaData.ProjectID,
+        captcha.accessToken,
+        captcha.ProjectID,
         context.id
       );
 
-      // Tạo ảnh
-      await callAisandboxImageAPI({
-        res,
+      const images = await callAisandboxImageAPI({
         prompt: body.prompt,
         aspectRatio: body.config?.aspectRatio,
         uploadedImageNames,
-        recaptchaToken: currentCaptchaData.captcha,
-        sessionId: currentCaptchaData.sessionId,
-        projectId: currentCaptchaData.ProjectID,
-        accessToken: currentCaptchaData.accessToken,
+        recaptchaToken: captcha.captcha,
+        sessionId: captcha.sessionId,
+        projectId: captcha.ProjectID,
+        accessToken: captcha.accessToken,
         batchId: crypto.randomUUID(),
-        Seed: currentCaptchaData.Seed,
-        headers: currentCaptchaData.Headers,
+        Seed: captcha.Seed,
+        headers: captcha.Headers,
       });
 
-      // Tăng usedQuantity sau khi generate image thành công (atomic $inc, tìm theo API key)
       await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
+      res.json({ success: true, data: images });
       return;
     } catch (err: any) {
       if (err.isCaptchaError || err.statusCode === 403) {
@@ -113,57 +156,25 @@ export async function handleImageGeneration(
   }
 }
 
-interface CallAisandboxParams {
-  res: Response;
-  prompt: string;
-  aspectRatio?: "16:9" | "9:16";
-  uploadedImageNames?: string[];
-  recaptchaToken: string;
-  sessionId: string;
-  projectId: string;
-  accessToken: string;
-  noText?: boolean;
-  batchId?: string;
-  Seed?: string;
-  headers?: Record<string, string>;
-  /** Khi Google trả lỗi reCAPTCHA → lấy captcha mới (hàng đợi 10s), tối đa CAPTCHA_GENERATION_MAX_RETRIES lần. */
-  captchaRetry?: {
-    actionType?: string;
-    logPrefix: string;
-    onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxParams>;
-  };
-}
-
-async function callAisandboxImageAPICore(params: CallAisandboxParams): Promise<void> {
-  const { uploadedImageNames } = params;
-  const imageCount = uploadedImageNames?.length || 0;
-
-  await retryWithThrottleGate(
-    async () => {
-      if (imageCount === 0) {
-        await callTextOnlyAPI(params);
-      } else {
-        await callImageToImageAPI(params);
-      }
-    },
-    { label: "generation-image", gate: imageThrottleGate }
-  );
-}
+// ── Public API: gọi tạo ảnh ────────────────────────────────────────────────────
 
 /**
- * Gọi Aisandbox API: dispatch sang hàm xử lý phù hợp dựa trên số lượng ảnh.
- * Dùng ThrottleGate (Redis-coordinated) để:
- * - Khi bị 429 throttle → back off đồng bộ cross-instance rồi retry.
- * - Khi lỗi reCAPTCHA (isCaptchaError) + có captchaRetry → lấy captcha mới, tối đa 10 lần.
+ * Gọi Aisandbox API tạo ảnh — *đã* xử lý:
+ * - Throttle 429 (Redis-coordinated gate).
+ * - Retry captcha tới `CAPTCHA_GENERATION_MAX_RETRIES` lần nếu Google trả lỗi reCAPTCHA.
+ * - Dispatch text-only vs image-to-image dựa trên `uploadedImageNames`.
+ *
+ * Trả về **mảng ảnh** đã fetch từ `fifeUrl` và convert sang base64.
  */
-export async function callAisandboxImageAPI(params: CallAisandboxParams): Promise<void> {
+export async function callAisandboxImageAPI(
+  params: CallAisandboxImageParams
+): Promise<GeneratedImage[]> {
   const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
   let current = params;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      await callAisandboxImageAPICore(current);
-      return;
+      return await callAisandboxImageAPICore(current);
     } catch (err: any) {
       const retry = current.captchaRetry;
       if (isCaptchaValidationError(err) && retry && attempt < maxAttempts) {
@@ -174,21 +185,40 @@ export async function callAisandboxImageAPI(params: CallAisandboxParams): Promis
           type: retry.actionType,
           logPrefix: retry.logPrefix,
         });
+        // captcha mới — caller cung cấp params mới (có thể đổi headers/accessToken/...)
         current = await retry.onRefresh(freshCaptcha);
         continue;
       }
       throw err;
     }
   }
+  // Không bao giờ đến đây vì throw bên trong loop
+  return [];
 }
 
-// ── Helpers dùng chung ──────────────────────────────────────────────────────
+async function callAisandboxImageAPICore(
+  params: CallAisandboxImageParams
+): Promise<GeneratedImage[]> {
+  const imageCount = params.uploadedImageNames?.length || 0;
+  return retryWithThrottleGate(
+    async () => {
+      if (imageCount === 0) {
+        return callTextOnlyAPI(params);
+      }
+      return callImageToImageAPI(params);
+    },
+    { label: "generation-image", gate: imageThrottleGate }
+  );
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function mapAspectRatio(aspectRatio?: "16:9" | "9:16"): string {
   const input = aspectRatio || "9:16";
   return input === "16:9" ? "IMAGE_ASPECT_RATIO_LANDSCAPE" : "IMAGE_ASPECT_RATIO_PORTRAIT";
 }
-function buildClientContext(params: CallAisandboxParams) {
+
+function buildClientContext(params: CallAisandboxImageParams) {
   return {
     projectId: params.projectId,
     tool: "PINHOLE",
@@ -199,13 +229,18 @@ function buildClientContext(params: CallAisandboxParams) {
     },
   };
 }
+
+/**
+ * Gửi request lên Aisandbox + parse response + tải binary từ `fifeUrl`.
+ * Trả mảng ảnh chuẩn hoá. Throw có thông tin `statusCode` / `isCaptchaError`.
+ */
 async function sendAndParseResponse(
-  res: Response,
   endpoint: string,
   payload: any,
   accessToken: string,
-  headers?: Record<string, string>
-): Promise<void> {
+  headers: Record<string, string> | undefined,
+  onProgress: CallAisandboxImageParams["onProgress"]
+): Promise<GeneratedImage[]> {
   const resp = await fetch(endpoint, {
     method: "POST",
     headers: {
@@ -215,15 +250,14 @@ async function sendAndParseResponse(
     },
     body: JSON.stringify(payload),
   });
+
   if (!resp.ok) {
-    // Phát hiện 429 throttle → throw throttle error để retryOnThrottle bắt và retry.
     if (resp.status === 429) {
       const { isThrottle, errText } = await classify429Error(resp);
       if (isThrottle) {
         logger.warn(`[generation-image] Bị throttle 429 (PUBLIC_ERROR_USER_REQUESTS_THROTTLED).`);
         throw buildThrottleError(`Google Labs API throttle (429): ${errText.slice(0, 200)}`);
       }
-      // 429 khác throttle (ví dụ daily quota khác) → throw thường, không retry.
       const err: any = new Error(`Google Labs API error 429: ${errText}`);
       err.statusCode = 429;
       throw err;
@@ -240,7 +274,7 @@ async function sendAndParseResponse(
         ) {
           isCaptchaError = true;
         }
-      } catch (e) {
+      } catch {
         if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
           isCaptchaError = true;
         }
@@ -260,11 +294,8 @@ async function sendAndParseResponse(
     err.statusCode = resp.status;
     throw err;
   }
+
   const apiRes = await resp.json();
-
-  // Extract images từ response Google Labs
-  // Response trả về { media: [{ image: { generatedImage: { fifeUrl: "..." } } }] }
-
   const mediaItems = (apiRes as any)?.media || [];
 
   if (mediaItems.length === 0) {
@@ -273,21 +304,17 @@ async function sendAndParseResponse(
     throw err;
   }
 
-  if (isGenerationSSE(res)) {
-    const sendSSE = initGenerationSSE(res);
-    sendSSE({ type: "progress", progress: 70, message: "Đang tải ảnh từ Google..." });
-  }
+  await safeProgress(onProgress, 70, "Đang tải ảnh từ Google...");
 
-  // Fetch từng ảnh từ fifeUrl và convert sang base64
-  const images = await Promise.all(
+  // Tải từng ảnh từ fifeUrl → base64 (có thể song song an toàn vì là GET)
+  const images: GeneratedImage[] = await Promise.all(
     mediaItems.map(async (item: any) => {
       const fifeUrl = item?.image?.generatedImage?.fifeUrl;
       if (fifeUrl) {
-        // Fetch image binary từ Google Storage URL
         const imgResp = await fetch(fifeUrl);
         if (!imgResp.ok) {
           logger.warn(`[generation-image] Không thể fetch ảnh từ fifeUrl: ${imgResp.status}`);
-          return { imageUrl: fifeUrl };
+          return { imageUrl: fifeUrl } as GeneratedImage;
         }
         const imgBuffer = await imgResp.arrayBuffer();
         const base64 = Buffer.from(imgBuffer).toString("base64");
@@ -298,22 +325,16 @@ async function sendAndParseResponse(
           fifeUrl,
         };
       }
-      // Fallback: trả về toàn bộ object
-      return item;
+      // Fallback: response không có fifeUrl — trả nguyên item để client tự xử lý
+      return item as GeneratedImage;
     })
   );
 
-  if (isGenerationSSE(res)) {
-    const sendSSE = initGenerationSSE(res);
-    sendSSE({ type: "progress", progress: 100, message: "Hoàn tất!" });
-    sendSSE({ type: "done", data: images });
-    res.end();
-    return;
-  }
-  res.json({ success: true, data: images });
+  await safeProgress(onProgress, 90, "Đang hoàn tất...");
+  return images;
 }
 
-async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
+async function callTextOnlyAPI(params: CallAisandboxImageParams): Promise<GeneratedImage[]> {
   const imageAspectRatio = mapAspectRatio(params.aspectRatio);
   const batchId = params.batchId;
   const seed = params.Seed;
@@ -321,18 +342,14 @@ async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
 
   const payload = {
     clientContext,
-    mediaGenerationContext: {
-      batchId,
-    },
+    mediaGenerationContext: { batchId },
     useNewMedia: true,
     requests: [
       {
         clientContext,
         imageModelName: "NARWHAL",
         imageAspectRatio,
-        structuredPrompt: {
-          parts: [{ text: params.prompt }],
-        },
+        structuredPrompt: { parts: [{ text: params.prompt }] },
         seed,
         imageInputs: [] as any,
       },
@@ -340,10 +357,18 @@ async function callTextOnlyAPI(params: CallAisandboxParams): Promise<void> {
   };
 
   const endpoint = `https://aisandbox-pa.googleapis.com/v1/projects/${params.projectId}/flowMedia:batchGenerateImages`;
-  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken, params.headers);
+  return sendAndParseResponse(
+    endpoint,
+    payload,
+    params.accessToken,
+    params.headers,
+    params.onProgress
+  );
 }
 
-export async function callImageToImageAPI(params: CallAisandboxParams): Promise<void> {
+export async function callImageToImageAPI(
+  params: CallAisandboxImageParams
+): Promise<GeneratedImage[]> {
   const imageAspectRatio = mapAspectRatio(params.aspectRatio);
   const batchId = params.batchId;
   const seed = params.Seed;
@@ -351,18 +376,14 @@ export async function callImageToImageAPI(params: CallAisandboxParams): Promise<
 
   const payload = {
     clientContext,
-    mediaGenerationContext: {
-      batchId,
-    },
+    mediaGenerationContext: { batchId },
     useNewMedia: true,
     requests: [
       {
         clientContext,
         imageModelName: "NARWHAL",
         imageAspectRatio,
-        structuredPrompt: {
-          parts: [{ text: params.prompt }],
-        },
+        structuredPrompt: { parts: [{ text: params.prompt }] },
         seed,
         imageInputs: params.uploadedImageNames!.map((mediaId) => ({
           name: mediaId,
@@ -373,5 +394,11 @@ export async function callImageToImageAPI(params: CallAisandboxParams): Promise<
   };
 
   const endpoint = `https://aisandbox-pa.googleapis.com/v1/projects/${params.projectId}/flowMedia:batchGenerateImages`;
-  await sendAndParseResponse(params.res, endpoint, payload, params.accessToken, params.headers);
+  return sendAndParseResponse(
+    endpoint,
+    payload,
+    params.accessToken,
+    params.headers,
+    params.onProgress
+  );
 }

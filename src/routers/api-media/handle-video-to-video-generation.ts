@@ -66,19 +66,15 @@ export async function handleVideoToVideoGeneration(
     headers: captchaData.Headers,
   });
 
-  const pollSuccess = await pollAndExtractVideo({
+  const videoResult = await pollAndExtractVideo({
     mediaName,
     accessToken: captchaData.accessToken,
     customerId: context.id,
-    res,
     headers: captchaData.Headers,
   });
-  if (!pollSuccess) {
-    return;
-  }
 
-  // Tăng usedQuantity sau khi generate video thành công (atomic $inc, tìm theo API key)
   await ApiMediaTokenModel.findOneAndUpdate({ key: tokenKey }, { $inc: { usedQuantity: 1 } });
+  res.json({ success: true, data: videoResult });
 }
 
 interface CallAisandboxParams {
