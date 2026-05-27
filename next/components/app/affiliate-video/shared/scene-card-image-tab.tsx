@@ -129,7 +129,11 @@ export function SceneCardImageTab({
               <Img
                 showImageOnClick
                 lazyload={false}
-                src={`data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`}
+                src={
+                  generatedImage.imageBytes
+                    ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
+                    : generatedImage.imageUrl || generatedImage.fifeUrl || ""
+                }
                 alt={`Scene ${sceneNumber}`}
                 className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
                 ratio916

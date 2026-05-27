@@ -261,6 +261,8 @@ export interface GeneratedImageData {
   imageBytes: string; // base64
   mimeType: string;
   fifeUrl: string;
+  /** URL trực tiếp — fallback khi server không fetch được binary từ fifeUrl */
+  imageUrl?: string;
 }
 
 export interface GeneratedVideoData {

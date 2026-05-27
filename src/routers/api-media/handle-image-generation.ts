@@ -314,7 +314,7 @@ async function sendAndParseResponse(
         const imgResp = await fetch(fifeUrl);
         if (!imgResp.ok) {
           logger.warn(`[generation-image] Không thể fetch ảnh từ fifeUrl: ${imgResp.status}`);
-          return { imageUrl: fifeUrl } as GeneratedImage;
+          return { imageUrl: fifeUrl, fifeUrl } as GeneratedImage;
         }
         const imgBuffer = await imgResp.arrayBuffer();
         const base64 = Buffer.from(imgBuffer).toString("base64");
