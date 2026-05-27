@@ -14,7 +14,10 @@ import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
 import { useElementContext } from "../providers/element-provider";
 import {
-  productImageUrlsToApiImages,
+  buildElementImageGenerateParams,
+  buildElementVideoGenerateParams,
+} from "../utils/elementSceneGenerationParams";
+import {
   resolveElementReferenceImagesForApi,
   resolveElementReferenceVideoForApi,
 } from "../utils/elementFormImageUtils";
@@ -381,33 +384,16 @@ export function useElementSceneMedia({
     startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
 
     try {
-      // Parse thumbnailOriginImage data URL to extract base64 + mimeType
-      let referenceImage: { imageBytes: string; mimeType: string } | undefined;
-      if (thumbnailOriginImage) {
-        const match = thumbnailOriginImage.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          referenceImage = { mimeType: match[1], imageBytes: match[2] };
-        }
-      }
-
-      const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
-
-      const noTextStr = noText
-        ? `\nIMPORTANT: Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`
-        : "";
+      const imageParams = await buildElementImageGenerateParams({
+        scene,
+        scriptData,
+        thumbnailOriginImage,
+        selectedProductImages,
+        noText,
+      });
 
       const result = await elementGenerateImage({
-        sceneId: scene.id,
-        prompt: `${scene.visual_prompt}`,
-        noText: noText,
-        aspectRatio: scriptData?.aspectRatio,
-        artStyle: scriptData?.artStyle,
-        artStyleId: scriptData?.artStyleId,
-        referenceImage,
-        additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-        productImages: selectedProductImages?.length ? selectedProductImages : undefined,
-        productImagePrompt: scene.product_image_prompt || undefined,
-        serviceImageType: scriptData.serviceImageType,
+        ...imageParams,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -466,8 +452,6 @@ export function useElementSceneMedia({
     if (isStitch && generatingExtendVideo) return;
     if (!isStitch && generatingVideo) return;
 
-    const motionPrompt = (scene.motion_description || "").trim();
-    const visualPrompt = scene.visual_prompt?.trim();
     // ── Check concurrency limit ──
     const currentVideoGenerating = batchGeneratingVideoSceneIdsRef?.current?.size ?? 0;
     if (currentVideoGenerating >= VIDEO_CONCURRENCY) {
@@ -502,47 +486,27 @@ export function useElementSceneMedia({
     }
 
     try {
-      let imagesArray: any[] | undefined = undefined;
-
-      if (isStitch) {
-        if (!generatedImage || !nextGeneratedImage) {
-          const message = t(
-            "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
-          );
-          setExtendVideoError(message);
-          reportSceneError?.(scene.id + "::stitch", "extend", message);
-          throw new Error("Missing start or end image");
-        }
-        imagesArray = [
-          { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType },
-          { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
-        ];
-      } else {
-        const countFilledSlots = (arr?: (ElementFormImage | undefined)[]) =>
-          arr?.filter((s) => s && (s.imageBytes || s.fifeUrl)).length ?? 0;
-        const slotsForVideo =
-          countFilledSlots(selectedElementImageSlots) >= countFilledSlots(scene.elementImageSlots)
-            ? selectedElementImageSlots
-            : scene.elementImageSlots ?? selectedElementImageSlots;
-
-        imagesArray = await resolveElementReferenceImagesForApi({
-          urls: selectedProductImages,
-          slots: slotsForVideo,
-        });
-        const filledSlotCount = countFilledSlots(slotsForVideo);
-        if (filledSlotCount > 0 && imagesArray.length < filledSlotCount) {
-        }
+      if (isStitch && (!generatedImage || !nextGeneratedImage)) {
+        const message = t(
+          "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
+        );
+        setExtendVideoError(message);
+        reportSceneError?.(scene.id + "::stitch", "extend", message);
+        throw new Error("Missing start or end image");
       }
+
+      const videoParams = await buildElementVideoGenerateParams({
+        scene,
+        scriptData,
+        isStitch,
+        generatedImage: isStitch ? generatedImage : undefined,
+        nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
+        selectedProductImages,
+        selectedElementImageSlots,
+      });
+
       const result = await generateVideo({
-        sceneId: isStitch ? scene.id + "::stitch" : scene.id,
-        prompt: scene.voiceDisable
-          ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-          : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
-              scene.audio_description
-            }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
-        images: imagesArray,
-        aspectRatio: scriptData?.aspectRatio,
-        serviceImageType: scriptData.serviceImageType,
+        ...videoParams,
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));
@@ -562,8 +526,6 @@ export function useElementSceneMedia({
             reportSceneError?.(scene.id, "video", msg);
           }
         },
-        artStyleId: scriptData?.artStyleId,
-        artStyle: scriptData?.artStyle,
       });
       if (result) {
         if (isStitch) {

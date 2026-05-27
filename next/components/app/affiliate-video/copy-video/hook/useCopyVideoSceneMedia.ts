@@ -12,6 +12,10 @@ import { useTranslation } from "react-i18next";
 import { CopyVideoScene } from "../../constants";
 import { resolveObjectToPersonifyImageForApi } from "../../elements/utils/elementFormImageUtils";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
+import {
+  buildCopyVideoImageGenerateParams,
+  buildCopyVideoVideoGenerateParams,
+} from "../utils/copyVideoSceneGenerationParams";
 
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
@@ -376,54 +380,17 @@ export function useCopyVideoSceneMedia({
     startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
 
     try {
-      // Parse thumbnailOriginImage data URL to extract base64 + mimeType
-      let referenceImage: { imageBytes: string; mimeType: string } | undefined;
-      if (thumbnailOriginImage) {
-        const match = thumbnailOriginImage.match(/^data:([^;]+);base64,(.+)$/);
-        if (match) {
-          referenceImage = { mimeType: match[1], imageBytes: match[2] };
-        }
-      }
-
-      // Convert selected product images to base64 for API
-      const additionalImages: { imageBytes: string; mimeType: string }[] = [];
-      if (selectedProductImages?.length) {
-        for (const imgUrl of selectedProductImages) {
-          try {
-            const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-            if (dataMatch) {
-              additionalImages.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
-            } else {
-              const resp = await fetch(imgUrl);
-              const blob = await resp.blob();
-              const base64 = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve((reader.result as string).split(",")[1]);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-              additionalImages.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
-            }
-          } catch (err) {
-            console.warn("[handleGenerateImage] Failed to convert product image:", imgUrl, err);
-          }
-        }
-      }
-
-      const noTextStr = noText
-        ? `\nIMPORTANT: Single full-frame image, vertical portrait composition (${scriptData?.aspectRatio} aspect ratio), no collage, no text overlay, no borders.`
-        : "";
+      const imageParams = await buildCopyVideoImageGenerateParams({
+        scene,
+        scriptData,
+        thumbnailOriginImage,
+        selectedProductImages,
+        noText,
+        objectToPersonifyImage,
+      });
 
       const result = await copyVideoGenerateImage({
-        sceneId: scene.id,
-        prompt: `${scene.visual_prompt}`,
-        noText: noText,
-        aspectRatio: scriptData?.aspectRatio,
-        referenceImage,
-        additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-        productImages: selectedProductImages?.length ? selectedProductImages : undefined,
-        objectToPersonifyImage,
-        productImagePrompt: scene.product_image_prompt || undefined,
+        ...imageParams,
         onProgress: (pct) => {
           // Nếu server trả progress thật > giả lập thì dùng progress thật
           setImageProgress((prev) => Math.max(prev, pct));
@@ -516,36 +483,25 @@ export function useCopyVideoSceneMedia({
     }
 
     try {
-      let imagesArray: any[] | undefined = undefined;
-
-      if (isStitch) {
-        if (!generatedImage || !nextGeneratedImage) {
-          const message = t(
-            "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
-          );
-          setExtendVideoError(message);
-          reportSceneError?.(scene.id + "::stitch", "extend", message);
-          throw new Error("Missing start or end image");
-        }
-        imagesArray = [
-          { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType },
-          { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
-        ];
-      } else {
-        imagesArray = generatedImage
-          ? [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }]
-          : undefined;
+      if (isStitch && (!generatedImage || !nextGeneratedImage)) {
+        const message = t(
+          "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
+        );
+        setExtendVideoError(message);
+        reportSceneError?.(scene.id + "::stitch", "extend", message);
+        throw new Error("Missing start or end image");
       }
 
+      const videoParams = buildCopyVideoVideoGenerateParams({
+        scene,
+        scriptData,
+        isStitch,
+        generatedImage,
+        nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
+      });
+
       const result = await generateVideo({
-        sceneId: isStitch ? scene.id + "::stitch" : scene.id,
-        prompt: scene.voiceDisable
-          ? `[MOTION]${scene.motion_description}`
-          : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${
-              scene.translated_content || scene.original_content
-            }`,
-        images: imagesArray,
-        aspectRatio: scriptData?.aspectRatio,
+        ...videoParams,
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));

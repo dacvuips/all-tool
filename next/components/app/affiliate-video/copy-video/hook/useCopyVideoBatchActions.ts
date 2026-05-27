@@ -16,6 +16,11 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene, DB_NAME } from "../../constants";
 import { resolveObjectToPersonifyImageForApi } from "../../elements/utils/elementFormImageUtils";
+import { THUMBNAIL_KEY_PREFIX } from "../../hook/useVideoThumbnail";
+import {
+  buildCopyVideoImageGenerateParams,
+  buildCopyVideoVideoGenerateParams,
+} from "../utils/copyVideoSceneGenerationParams";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -63,36 +68,17 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     "selected-product-images",
     DB_NAME.copyVideo
   );
+  const thumbnailDB = useIndexedDB<string>("scene-thumbnails", DB_NAME.copyVideo);
 
-  /** Helper: convert product image URLs to base64 objects for API */
-  const convertProductImages = useCallback(
-    async (sceneId: string): Promise<{ imageBytes: string; mimeType: string }[]> => {
-      const selected = await selectedProductImagesDB.get(sceneId);
-      if (!selected?.length) return [];
-      const result: { imageBytes: string; mimeType: string }[] = [];
-      for (const imgUrl of selected) {
-        try {
-          const dataMatch = imgUrl.match(/^data:([^;]+);base64,(.+)$/);
-          if (dataMatch) {
-            result.push({ mimeType: dataMatch[1], imageBytes: dataMatch[2] });
-          } else {
-            const resp = await fetch(imgUrl);
-            const blob = await resp.blob();
-            const base64 = await new Promise<string>((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve((reader.result as string).split(",")[1]);
-              reader.onerror = reject;
-              reader.readAsDataURL(blob);
-            });
-            result.push({ mimeType: blob.type || "image/png", imageBytes: base64 });
-          }
-        } catch (err) {
-          console.warn("[BatchActions] Failed to convert product image:", imgUrl, err);
-        }
-      }
-      return result;
-    },
+  const getSceneProductImageUrls = useCallback(
+    async (scene: CopyVideoScene) =>
+      (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages,
     [selectedProductImagesDB]
+  );
+
+  const getSceneThumbnailUrl = useCallback(
+    async (sceneId: string) => (await thumbnailDB.get(`${THUMBNAIL_KEY_PREFIX}${sceneId}`)) ?? null,
+    [thumbnailDB]
   );
 
   // ═══════════════════════════════════════════════════════════════════
@@ -556,16 +542,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         try {
           addBatchGeneratingSceneId(scene.id);
           reportSceneError?.(scene.id, "image", null);
-          const selectedUrls = await selectedProductImagesDB.get(scene.id);
-          const additionalImages = await convertProductImages(scene.id);
-          await copyVideoGenerateImage({
-            sceneId: scene.id,
-            prompt: scene.visual_prompt,
-            aspectRatio: copyVideoFormConfig?.aspectRatio,
-            additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-            productImages: selectedUrls?.length ? selectedUrls : undefined,
-            objectToPersonifyImage,
+          const selectedUrls = await getSceneProductImageUrls(scene);
+          const thumbnailUrl = await getSceneThumbnailUrl(scene.id);
+          const imageParams = await buildCopyVideoImageGenerateParams({
+            scene,
+            scriptData,
+            thumbnailOriginImage: thumbnailUrl,
+            selectedProductImages: selectedUrls,
             noText: scene.noText,
+            objectToPersonifyImage,
+          });
+          await copyVideoGenerateImage({
+            ...imageParams,
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -661,63 +649,30 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           continue;
         }
 
-        // ── prompt_to_video mode: generate video directly from prompt (no image needed) ──
-        if (isPromptToVideo) {
-          try {
-            addBatchGeneratingVideoSceneId(scene.id);
-            reportSceneError?.(scene.id, "video", null);
-            const audioDesc = scene.audio_description || "";
-            await generateVideo({
-              sceneId: scene.id,
-              prompt: scene.voiceDisable
-                ? `[MOTION]${scene.motion_description}`
-                : `[MOTION]${scene.motion_description}${
-                    audioDesc ? `, [AUDIO]${audioDesc}` : ""
-                  }, [DIALOGUE]${scene.original_content}`,
-              aspectRatio: copyVideoFormConfig?.aspectRatio,
-              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-            });
-            completed++;
-            setVideoBatchCompleted(completed);
-          } catch (err: any) {
-            console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
-            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-          } finally {
-            removeBatchGeneratingVideoSceneId(scene.id);
-          }
-          continue;
-        }
-
-        // ── image_to_video mode: need image first ──
-        // If scene has no generated image, try to generate one first
         let existingImage = await getGeneratedImage(scene.id);
         if (!existingImage) {
           if (!scene.visual_prompt) {
-            // No image and no prompt to generate one – skip
             skipped++;
             setVideoBatchSkipped(skipped);
             completed++;
             setVideoBatchCompleted(completed);
             continue;
           }
-          // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
             reportSceneError?.(scene.id, "image", null);
-            const selectedUrls = await selectedProductImagesDB.get(scene.id);
-            const additionalImages = await convertProductImages(scene.id);
-            existingImage = await copyVideoGenerateImage({
-              sceneId: scene.id,
-              prompt: scene.visual_prompt,
-              aspectRatio: copyVideoFormConfig?.aspectRatio,
-              additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-              productImages: selectedUrls?.length ? selectedUrls : undefined,
-              objectToPersonifyImage,
+            const selectedUrls = await getSceneProductImageUrls(scene);
+            const thumbnailUrl = await getSceneThumbnailUrl(scene.id);
+            const imageParams = await buildCopyVideoImageGenerateParams({
+              scene,
+              scriptData,
+              thumbnailOriginImage: thumbnailUrl,
+              selectedProductImages: selectedUrls,
               noText: scene.noText,
+              objectToPersonifyImage,
+            });
+            existingImage = await copyVideoGenerateImage({
+              ...imageParams,
               onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
           } catch (imgErr: any) {
@@ -735,7 +690,6 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             removeBatchGeneratingSceneId(scene.id);
           }
           if (!existingImage) {
-            // Image generation returned nothing – skip video
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -747,21 +701,13 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const audioDesc = scene.audio_description || "";
+          const videoParams = buildCopyVideoVideoGenerateParams({
+            scene,
+            scriptData,
+            generatedImage: existingImage,
+          });
           await generateVideo({
-            sceneId: scene.id,
-            prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}${
-                  audioDesc ? `, [AUDIO]${audioDesc}` : ""
-                }, [DIALOGUE]${scene.original_content}`,
-            images: [
-              {
-                imageBytes: existingImage.imageBytes,
-                mimeType: existingImage.mimeType,
-              },
-            ],
-            aspectRatio: copyVideoFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -886,18 +832,15 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
           reportSceneError?.(scene.id + "::stitch", "extend", null);
           const motion_description = scene.motion_description || "smooth transition between scenes";
+          const videoParams = buildCopyVideoVideoGenerateParams({
+            scene,
+            scriptData,
+            isStitch: true,
+            generatedImage: startImage,
+            nextGeneratedImage: endImage,
+          });
           await generateVideo({
-            sceneId: scene.id + "::stitch",
-            prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}, [AUDIO]${
-                  scene.audio_description
-                }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
-            images: [
-              { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
-              { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
-            ],
-            aspectRatio: copyVideoFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;

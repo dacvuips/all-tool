@@ -17,11 +17,12 @@ import { useToast } from "../../../../../lib/providers/toast-provider";
 import { CopyVideoScene, DB_NAME } from "../../constants";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { THUMBNAIL_KEY_PREFIX } from "../../hook/useVideoThumbnail";
 import { useElementContext } from "../providers/element-provider";
 import {
-  productImageUrlsToApiImages,
-  resolveElementReferenceImagesForApi,
-} from "../utils/elementFormImageUtils";
+  buildElementImageGenerateParams,
+  buildElementVideoGenerateParams,
+} from "../utils/elementSceneGenerationParams";
 import { useElementApi } from "./useElementApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -46,12 +47,12 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     generateAudioTTS,
   } = useElementApi();
   const {
-    elementFormConfig,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
     reportSceneError,
+    scriptData,
   } = useElementContext();
   // Elements: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
@@ -67,26 +68,17 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     "selected-images",
     DB_NAME.generateElement
   );
+  const thumbnailDB = useIndexedDB<string>("scene-thumbnails", DB_NAME.copyVideo);
 
-  /** Ảnh tham chiếu 3 ô – cùng nguồn tab Ảnh (URL IndexedDB + slot trên scene). */
-  const getSceneReferenceImages = useCallback(
-    async (scene: CopyVideoScene) => {
-      const urls = (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages;
-      return resolveElementReferenceImagesForApi({
-        urls,
-        slots: scene.elementImageSlots,
-      });
-    },
+  const getSceneProductImageUrls = useCallback(
+    async (scene: CopyVideoScene) =>
+      (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages,
     [selectedProductImagesDB]
   );
 
-  /** Helper: convert product image URLs to base64 objects for API */
-  const convertProductImages = useCallback(
-    async (sceneId: string): Promise<{ imageBytes: string; mimeType: string }[]> => {
-      const selected = await selectedProductImagesDB.get(sceneId);
-      return productImageUrlsToApiImages(selected ?? undefined);
-    },
-    [selectedProductImagesDB]
+  const getSceneThumbnailUrl = useCallback(
+    async (sceneId: string) => (await thumbnailDB.get(`${THUMBNAIL_KEY_PREFIX}${sceneId}`)) ?? null,
+    [thumbnailDB]
   );
 
   // ═══════════════════════════════════════════════════════════════════
@@ -550,15 +542,17 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         try {
           addBatchGeneratingSceneId(scene.id);
           reportSceneError?.(scene.id, "image", null);
-          const selectedUrls = await selectedProductImagesDB.get(scene.id);
-          const additionalImages = await convertProductImages(scene.id);
-          await elementGenerateImage({
-            sceneId: scene.id,
-            prompt: scene.visual_prompt,
-            aspectRatio: elementFormConfig?.aspectRatio,
-            additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-            productImages: selectedUrls?.length ? selectedUrls : undefined,
+          const selectedUrls = await getSceneProductImageUrls(scene);
+          const thumbnailUrl = await getSceneThumbnailUrl(scene.id);
+          const imageParams = await buildElementImageGenerateParams({
+            scene,
+            scriptData,
+            thumbnailOriginImage: thumbnailUrl,
+            selectedProductImages: selectedUrls,
             noText: scene.noText,
+          });
+          await elementGenerateImage({
+            ...imageParams,
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -654,106 +648,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           continue;
         }
 
-        // ── prompt_to_video mode: generate video directly from prompt (no image needed) ──
-        if (isPromptToVideo) {
-          try {
-            addBatchGeneratingVideoSceneId(scene.id);
-            reportSceneError?.(scene.id, "video", null);
-            const motionPrompt = getSceneMotionPrompt(scene);
-            const audioDesc = scene.audio_description || "";
-            const refImages = await getSceneReferenceImages(scene);
-            await generateVideo({
-              sceneId: scene.id,
-              prompt: scene.voiceDisable
-                ? `[MOTION]${motionPrompt}`
-                : `[MOTION]${motionPrompt}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${
-                    scene.original_content
-                  }`,
-              images: refImages.length > 0 ? refImages : undefined,
-              aspectRatio: elementFormConfig?.aspectRatio,
-              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-            });
-            completed++;
-            setVideoBatchCompleted(completed);
-          } catch (err: any) {
-            console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
-            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-          } finally {
-            removeBatchGeneratingVideoSceneId(scene.id);
-          }
-          continue;
-        }
-
-        // ── image_to_video mode: need image first ──
-        // If scene has no generated image, try to generate one first
-        let existingImage = await getGeneratedImage(scene.id);
-        if (!existingImage) {
-          if (!scene.visual_prompt) {
-            // No image and no prompt to generate one – skip
-            skipped++;
-            setVideoBatchSkipped(skipped);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
-          }
-          // Generate image first
-          try {
-            addBatchGeneratingSceneId(scene.id);
-            reportSceneError?.(scene.id, "image", null);
-            const selectedUrls = await selectedProductImagesDB.get(scene.id);
-            const additionalImages = await convertProductImages(scene.id);
-            existingImage = await elementGenerateImage({
-              sceneId: scene.id,
-              prompt: scene.visual_prompt,
-              aspectRatio: elementFormConfig?.aspectRatio,
-              additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
-              productImages: selectedUrls?.length ? selectedUrls : undefined,
-              noText: scene.noText,
-              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-            });
-          } catch (imgErr: any) {
-            console.error(
-              `[BatchCreateAllVideo] Scene #${scene.sceneNumber} image generation error:`,
-              imgErr
-            );
-            reportSceneError?.(scene.id, "image", imgErr?.message || t("Lỗi tạo ảnh"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
-          } finally {
-            removeBatchGeneratingSceneId(scene.id);
-          }
-          if (!existingImage) {
-            // Image generation returned nothing – skip video
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
-          }
-        }
-
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const motionPrompt = getSceneMotionPrompt(scene);
-          const audioDesc = scene.audio_description || "";
-          const refImages = await getSceneReferenceImages(scene);
+          const selectedUrls = await getSceneProductImageUrls(scene);
+          const videoParams = await buildElementVideoGenerateParams({
+            scene,
+            scriptData,
+            selectedProductImages: selectedUrls,
+            selectedElementImageSlots: scene.elementImageSlots,
+          });
           await generateVideo({
-            sceneId: scene.id,
-            prompt: scene.voiceDisable
-              ? `[MOTION]${motionPrompt}`
-              : `[MOTION]${motionPrompt}${audioDesc ? `, [AUDIO]${audioDesc}` : ""}, [DIALOGUE]${
-                  scene.original_content
-                }`,
-            images: refImages.length > 0 ? refImages : undefined,
-            aspectRatio: elementFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -877,18 +783,15 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
           reportSceneError?.(scene.id + "::stitch", "extend", null);
-          const motion_description = scene.motion_description || "smooth transition between scenes";
+          const videoParams = await buildElementVideoGenerateParams({
+            scene,
+            scriptData,
+            isStitch: true,
+            generatedImage: startImage,
+            nextGeneratedImage: endImage,
+          });
           await generateVideo({
-            sceneId: scene.id + "::stitch",
-            prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motion_description}`
-              : `[MOTION]${scene.motion_description}, [AUDIO]${scene.audio_description}, [DIALOGUE]${scene.original_content}`,
-
-            images: [
-              { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
-              { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
-            ],
-            aspectRatio: elementFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;

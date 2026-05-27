@@ -15,6 +15,10 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { SceneScript, StoryModeTypeEnum } from "../constants";
 import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
+import {
+  buildAffiliateImageGenerateParams,
+  buildAffiliateVideoGenerateParams,
+} from "../shared/affiliateSceneGenerationParams";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -512,15 +516,15 @@ export function useBatchActions(scenes: SceneScript[]) {
         try {
           addBatchGeneratingSceneId(scene.id);
           reportSceneError?.(scene.id, "image", null);
-          await generateImage({
-            sceneId: scene.id,
-            prompt: scene.imageGenPrompt,
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
-            productImages: scene.selectedProductImages?.length
-              ? scene.selectedProductImages
-              : undefined,
+          const imageParams = await buildAffiliateImageGenerateParams({
+            scene,
+            scriptData,
+            selectedProductImages: scene.selectedProductImages,
+            noText: scene.noText,
             objectToPersonifyImage,
-            productImagePrompt: scene.product_image_prompt || undefined,
+          });
+          await generateImage({
+            ...imageParams,
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -616,24 +620,13 @@ export function useBatchActions(scenes: SceneScript[]) {
           continue;
         }
 
-        // ── prompt_to_video mode: generate video directly from prompt (no image needed) ──
         if (isPromptToVideo) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
             reportSceneError?.(scene.id, "video", null);
-            const audioDesc = [
-              scriptData?.voiceGender,
-              scriptData?.voiceStyle,
-              scriptData?.voiceTone,
-            ]
-              .filter(Boolean)
-              .join(", ");
+            const videoParams = buildAffiliateVideoGenerateParams({ scene, scriptData });
             await generateVideo({
-              sceneId: scene.id,
-              prompt: scene.voiceDisable
-                ? `[MOTION]${scene.motionPrompt}`
-                : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              ...videoParams,
               onError: (msg) => reportSceneError?.(scene.id, "video", msg),
             });
             completed++;
@@ -651,31 +644,27 @@ export function useBatchActions(scenes: SceneScript[]) {
           continue;
         }
 
-        // ── image_to_video mode: need image first ──
-        // If scene has no generated image, try to generate one first
         let existingImage = await getGeneratedImage(scene.id);
         if (!existingImage) {
           if (!scene.imageGenPrompt) {
-            // No image and no prompt to generate one – skip
             skipped++;
             setVideoBatchSkipped(skipped);
             completed++;
             setVideoBatchCompleted(completed);
             continue;
           }
-          // Generate image first
           try {
             addBatchGeneratingSceneId(scene.id);
             reportSceneError?.(scene.id, "image", null);
-            existingImage = await generateImage({
-              sceneId: scene.id,
-              prompt: scene.imageGenPrompt,
-              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
-              productImages: scene.selectedProductImages?.length
-                ? scene.selectedProductImages
-                : undefined,
+            const imageParams = await buildAffiliateImageGenerateParams({
+              scene,
+              scriptData,
+              selectedProductImages: scene.selectedProductImages,
+              noText: scene.noText,
               objectToPersonifyImage,
-              productImagePrompt: scene.product_image_prompt || undefined,
+            });
+            existingImage = await generateImage({
+              ...imageParams,
               onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
           } catch (imgErr: any) {
@@ -693,7 +682,6 @@ export function useBatchActions(scenes: SceneScript[]) {
             removeBatchGeneratingSceneId(scene.id);
           }
           if (!existingImage) {
-            // Image generation returned nothing – skip video
             errors++;
             setVideoBatchErrors(errors);
             completed++;
@@ -705,21 +693,13 @@ export function useBatchActions(scenes: SceneScript[]) {
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const audioDesc = [scriptData?.voiceGender, scriptData?.voiceStyle, scriptData?.voiceTone]
-            .filter(Boolean)
-            .join(", ");
+          const videoParams = buildAffiliateVideoGenerateParams({
+            scene,
+            scriptData,
+            generatedImage: existingImage,
+          });
           await generateVideo({
-            sceneId: scene.id,
-            prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motionPrompt}`
-              : `[MOTION]${scene.motionPrompt}, [AUDIO]${audioDesc}, [DIALOGUE]${scene.dialogue}`,
-            images: [
-              {
-                imageBytes: existingImage.imageBytes,
-                mimeType: existingImage.mimeType,
-              },
-            ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -843,17 +823,15 @@ export function useBatchActions(scenes: SceneScript[]) {
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
           reportSceneError?.(scene.id + "::stitch", "extend", null);
-          const motionPrompt = scene.motionPrompt || "smooth transition between scenes";
+          const videoParams = buildAffiliateVideoGenerateParams({
+            scene,
+            scriptData,
+            isStitch: true,
+            generatedImage: startImage,
+            nextGeneratedImage: endImage,
+          });
           await generateVideo({
-            sceneId: scene.id + "::stitch",
-            prompt: scene.voiceDisable
-              ? `[MOTION]${scene.motionPrompt}`
-              : `[MOTION]${scene.motionPrompt}, [AUDIO]${scene.audio}, [DIALOGUE]${scene.dialogue}`,
-            images: [
-              { imageBytes: startImage.imageBytes, mimeType: startImage.mimeType },
-              { imageBytes: endImage.imageBytes, mimeType: endImage.mimeType },
-            ],
-            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            ...videoParams,
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
