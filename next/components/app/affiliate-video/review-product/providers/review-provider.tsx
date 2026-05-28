@@ -5,7 +5,6 @@ import {
   CACHE_KEY,
   DB_NAME,
   ElementAnalysisData,
-  ElementFormConfig,
   ElementFormImage,
   ElementHistoryItem,
   STORE_NAME,
@@ -101,14 +100,14 @@ export function ReviewProvider(props) {
     artStyle: "",
     artStyleId: "",
     serviceImageType: ServiceImageEnum.imageOnly,
+    batchSize: 8,
   };
 
   // ── IndexedDB – shared cache for AI results ──
   const scriptDB = useIndexedDB<any>(REVIEW_STORE_NAME, DB_NAME.generateReview);
 
   const [batchRunning, setBatchRunning] = useState(false);
-  const [reviewFormConfig, setReviewFormConfig] =
-    useState<ElementFormConfig>(DEFAULT_REVIEW_CONFIG);
+  const [reviewFormConfig, setReviewFormConfig] = useState<ReviewFormConfig>(DEFAULT_REVIEW_CONFIG);
 
   // ── Script / analysis data ──
   const [scriptData, setScriptDataRaw] = useState<ReviewAnalysisData | null>(null);

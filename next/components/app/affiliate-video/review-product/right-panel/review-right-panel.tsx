@@ -69,7 +69,7 @@ export const ReviewRightPanel = () => {
         className="bg-white"
       >
         {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={`${t("Thành Phần")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`}>
+        <TabGroup.Tab label={`${t("Sản phẩm")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (

@@ -297,7 +297,7 @@ export function ImageInput({
             <Button
               outline
               className={`flex-grow-0 flex-shrink-0 px-3 bg-white rounded-l-none ${buttonClassName}`}
-              text={t("Thêm ảnh")}
+              text={t("Thêm")}
               unfocusable
               disabled={props.readOnly}
               onClick={() => {

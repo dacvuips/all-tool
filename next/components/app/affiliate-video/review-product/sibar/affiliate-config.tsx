@@ -7,15 +7,14 @@
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
-import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Field, Radio, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
-import { REVIEW_SCRIPT_TAB_QUERY_KEY, ReviewScriptTabEnum, ServiceImageEnum } from "../constants";
 import { useReviewContext } from "../providers/review-provider";
-import { ReviewImagesUpload, ReviewVideoUpload } from "./review-images-upload";
+import { BatchSizeSlider } from "./batch-size-slider";
+import { ReviewImagesUpload } from "./review-images-upload";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
@@ -23,13 +22,7 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, reviewFormConfig } = useReviewContext();
-  const [queryParams, setQueryParams] = useQueryParams({
-    [REVIEW_SCRIPT_TAB_QUERY_KEY]: "",
-  });
-  const reviewParam = queryParams[REVIEW_SCRIPT_TAB_QUERY_KEY] as string | undefined;
 
-  const isImagesToVideo = reviewParam === ReviewScriptTabEnum.imagesToVideo;
-  const isVideoToVideo = reviewParam === ReviewScriptTabEnum.videoToVideo;
   return (
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
@@ -69,47 +62,31 @@ export const AffiliateConfig = () => {
           />
         </div>
 
-        <Field noError label={t("Prompt phân cảnh")}>
-          <Textarea
-            id="scene-prompt-list"
-            className="border-gray-200 min-h-[200px]"
-            maxRows={10}
-            placeholder={`${t("Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ")}:\n${t("1")}. ${t(
-              "Mô tả cảnh đầu"
-            )}...\n${t("2")}. ${t("Mô tả cảnh hai")}...\n${t("3")}. ${t("Mô tả cảnh ba")}...`}
-            value={reviewFormConfig?.prompt}
-            onChange={(v) => patchConfig && patchConfig({ prompt: v })}
-          />
-        </Field>
-        {/* Option cho Images to Video*/}
-        {isImagesToVideo && (
-          <Field label={t("Chế độ nạp ảnh")}>
-            <Radio
-              defaultValue={ServiceImageEnum.imageOnly}
-              selectFirst
-              cols={12}
-              value={reviewFormConfig.serviceImageType}
-              onChange={(val) => patchConfig && patchConfig({ serviceImageType: val })}
-              options={[
-                { label: t("Chỉ có ảnh bắt đầu -> Video"), value: ServiceImageEnum.imageOnly },
-                { label: t("Ảnh bắt đầu và kết thúc -> Video"), value: ServiceImageEnum.startEnd },
-                { label: t("2 ảnh kết hợp -> Video"), value: ServiceImageEnum.startAddEnd },
-              ]}
-            />
-          </Field>
-        )}
-        {isVideoToVideo && (
-          <ReviewVideoUpload
-            videoRef={reviewFormConfig?.videoRef}
-            readOnly={!customer}
-            onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
-          />
-        )}
         {/* Ảnh sản phẩm */}
         <ReviewImagesUpload
           artStyleImg={reviewFormConfig?.artStyleImg}
           readOnly={!customer}
           onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
+        />
+
+        <Field noError label={t("Đặt điểm nổi bật của sản phẩm")}>
+          <Textarea
+            id="scene-prompt-list"
+            className="border-gray-200 min-h-[200px]"
+            maxRows={10}
+            placeholder={`${t("Nhập điểm chính của sản phẩm")}...`}
+            value={reviewFormConfig?.prompt}
+            onChange={(v) => patchConfig && patchConfig({ prompt: v })}
+          />
+        </Field>
+
+        {/* SỐ LƯỢNG PHÂN CẢNH CẦN TẠO (batchSize) */}
+
+        <BatchSizeSlider
+          value={reviewFormConfig?.batchSize ?? 8}
+          onChange={(v) => {
+            if (patchConfig) patchConfig({ batchSize: v });
+          }}
         />
       </div>
     </div>

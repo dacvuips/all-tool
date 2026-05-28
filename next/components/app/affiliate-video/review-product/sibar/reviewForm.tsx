@@ -72,7 +72,9 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex justify-center items-center w-8 h-8 bg-red-500 rounded-full">
             <RiFileCopy2Line className="text-base text-white" />
           </div>
-          <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+          <span className="text-base font-bold text-gray-800">
+            {t("Review Sản Phẩm/ Thời Trang")}
+          </span>
         </div>
         <div className="flex gap-1 items-center">
           {onClose && (

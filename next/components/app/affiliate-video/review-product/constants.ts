@@ -98,12 +98,14 @@ export interface ReviewFormConfig {
   artStyleImg?: ReviewFormImage[];
   objectImg?: ReviewFormImage;
   itemImg?: ReviewFormImage;
+  productImage?: ReviewFormImage;
   /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
   videoRef?: ReviewFormVideo[];
   aspectRatio: AspectRatio;
   artStyle: string;
   artStyleId?: string;
   serviceImageType?: string;
+  batchSize: number;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
