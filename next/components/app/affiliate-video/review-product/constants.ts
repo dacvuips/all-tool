@@ -3,8 +3,6 @@
  * Shared design tokens, types, and constants for the AI Video Generator (Veo 3).
  */
 
-import { ServiceImageEnum } from "./elements/constants";
-
 // ── CSS Design Tokens ──────────────────────────────────────────────────────
 export const CSS = {
   bg: "#080815",
@@ -56,7 +54,7 @@ export interface VideoFormBase {
 export interface AffiliateVideoFormConfig extends VideoFormBase {
   objectToPersonify: string;
   objectToPersonifyCode?: string;
-  objectToPersonifyImage?: ElementFormImage;
+  objectToPersonifyImage?: ReviewFormImage;
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
@@ -77,31 +75,31 @@ export interface CopyVideoFormConfig extends VideoFormBase {
   productImages?: string[];
   objectToPersonify: string;
   objectToPersonifyCode?: string;
-  objectToPersonifyImage?: ElementFormImage;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
-export interface ElementFormImage {
+export interface ReviewFormImage {
   fifeUrl: string;
   imageBytes: string;
   mimeType: string;
   name: string;
 }
 
-export interface ElementFormVideo {
+export interface ReviewFormVideo {
   fifeUrl: string;
   videoBytes: string;
   mimeType: string;
   name: string;
 }
 
-export interface ElementFormConfig {
+export interface ReviewFormConfig {
   prompt: string;
   /** Ảnh tham chiếu – có thể upload nhiều ảnh */
-  artStyleImg?: ElementFormImage[];
-  objectImg?: ElementFormImage;
-  itemImg?: ElementFormImage;
+  artStyleImg?: ReviewFormImage[];
+  objectImg?: ReviewFormImage;
+  itemImg?: ReviewFormImage;
   /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
-  videoRef?: ElementFormVideo[];
+  videoRef?: ReviewFormVideo[];
   aspectRatio: AspectRatio;
   artStyle: string;
   artStyleId?: string;
@@ -190,7 +188,7 @@ export interface ScriptData {
   aspectRatio: "16:9" | "9:16";
   scenes: SceneScript[];
   productImages?: string[];
-  objectToPersonifyImage?: ElementFormImage;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
 export interface TrendingScriptData {
@@ -215,14 +213,12 @@ export const DB_NAME = {
   generateVoice: "generate-voice",
   generateImage: "generate-image",
   copyVideo: "copy-video",
-  generateElement: "generate-element",
   generateReview: "generate-review",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
   generateTrending: "generate-trending",
   copyVideo: "copy-video",
-  generateElement: "generate-element",
   generateReview: "generate-review",
 };
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
@@ -238,9 +234,6 @@ export const CACHE_KEY = {
   lastTrendingScript: "lastTrendingScript",
   trendingInput: "trendingInput",
   trendingHistory: "trendingHistory",
-  lastElementScript: "lastElementScript",
-  elementInput: "elementInput",
-  elementHistory: "elementHistory",
   lastReviewScript: "lastReviewScript",
   reviewInput: "reviewInput",
   reviewHistory: "reviewHistory",
@@ -248,17 +241,17 @@ export const CACHE_KEY = {
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
 
-export interface CopyVideoCharacter {
+export interface ReviewCharacter {
   name: string;
   description: string;
 }
 
-export interface CopyVideoProp {
+export interface ReviewProp {
   name: string;
   description: string;
 }
 
-export interface CopyVideoScene {
+export interface ReviewScene {
   id: string;
   timestamp: string;
   scene_type: "CHARACTER" | "OBJECT";
@@ -272,45 +265,45 @@ export interface CopyVideoScene {
   noText?: boolean;
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
-  elementImageSlots?: (ElementFormImage | undefined)[];
+  reviewImageSlots?: (ReviewFormImage | undefined)[];
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
-  elementVideoSlots?: (ElementFormVideo | undefined)[];
+  reviewVideoSlots?: (ReviewFormVideo | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
 }
 
 export interface CopyVideoAnalysisData {
-  characters: CopyVideoCharacter[];
-  props: CopyVideoProp[];
-  scenes: CopyVideoScene[];
+  characters: ReviewCharacter[];
+  props: ReviewProp[];
+  scenes: ReviewScene[];
   aspectRatio?: string;
   productImages?: string[];
-  objectToPersonifyImage?: ElementFormImage;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
 /** Right panel tabs for element video workflow */
-export enum ElementScriptTabEnum {
+export enum ReviewScriptTabEnum {
   batch = "batch",
   imagesToVideo = "images-to-video",
   videoToVideo = "video-to-video",
 }
 
 /** Query param key for element right-panel active tab (value = ElementScriptTabEnum) */
-export const ELEMENT_SCRIPT_TAB_QUERY_KEY = "elementScriptTab";
+export const REVIEW_SCRIPT_TAB_QUERY_KEY = "reviewScriptTab";
 
-export interface ElementAnalysisData {
-  scenes: ElementScene[];
+export interface ReviewAnalysisData {
+  scenes: ReviewScene[];
   aspectRatio?: string;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
 }
 
-export interface ElementHistoryItem {
+export interface ReviewHistoryItem {
   id: string;
   createdAt: number;
   label: string;
-  data: ElementAnalysisData;
+  data: ReviewAnalysisData;
 }
 export interface CopyVideoHistoryItem {
   id: string;
@@ -319,7 +312,7 @@ export interface CopyVideoHistoryItem {
   data: CopyVideoAnalysisData;
 }
 
-export interface ElementScene {
+export interface ReviewScene {
   id: string;
   timestamp: string;
   scene_type: "CHARACTER" | "OBJECT";
@@ -333,9 +326,9 @@ export interface ElementScene {
   noText?: boolean;
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
-  elementImageSlots?: (ElementFormImage | undefined)[];
+  reviewImageSlots?: (ReviewFormImage | undefined)[];
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
-  elementVideoSlots?: (ElementFormVideo | undefined)[];
+  reviewVideoSlots?: (ReviewFormVideo | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
 }
@@ -423,4 +416,10 @@ export enum ArtStyleMapEnum {
   WATERCOLOR = "Watercolor",
   RENAISSANCE = "Renaissance",
   CRAYON = "Crayon",
+}
+export enum ServiceImageEnum {
+  imageOnly = "image_only",
+  startEnd = "start_end",
+  startAddEnd = "start_add_end",
+  video = "video",
 }

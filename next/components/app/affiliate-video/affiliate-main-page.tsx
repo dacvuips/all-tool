@@ -19,6 +19,7 @@ import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { ElementPage } from "./elements/element-page";
+import { ReviewPage } from "./review-product/review-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
 import { TrendingPage } from "./trending/trending-page";
 
@@ -31,7 +32,7 @@ export default function AffiliateMainPage() {
     // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
       icon: (
-        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+        <div className="px-1 -mr-1 text-xs font-semibold text-red-600 rounded-full border border-red-600">
           {"Hot 🔥"}
         </div>
       ),
@@ -69,7 +70,7 @@ export default function AffiliateMainPage() {
       icon: <RiBookOpenLine />,
       label: t("Review Sản Phẩm"),
       value: "product-review",
-      component: <>{"Đang phát triển"}</>,
+      component: <ReviewPage />,
     },
     {
       icon: <RiBookOpenLine />,
@@ -79,7 +80,7 @@ export default function AffiliateMainPage() {
     },
     {
       icon: (
-        <div className="text-red-600 border border-red-600 rounded-full px-1 font-semibold text-xs -mr-1  ">
+        <div className="px-1 -mr-1 text-xs font-semibold text-red-600 rounded-full border border-red-600">
           {"Hot 🔥"}
         </div>
       ),
@@ -94,7 +95,7 @@ export default function AffiliateMainPage() {
 
   return (
     <div
-      className="flex flex-col h-screen overflow-hidden bg-amber-50"
+      className="flex overflow-hidden flex-col h-screen bg-amber-50"
       style={{ height: `calc(100vh - ${xl ? 150 : 60}px)` }}
     >
       {/* ══ TOP NAV – thanh điều hướng chính ══ */}
@@ -118,7 +119,7 @@ export default function AffiliateMainPage() {
           }
         }}
         flex={false}
-        className="border-transparent pl-0 h-12 flex items-center overflow-x-auto flex-shrink-0"
+        className="flex overflow-x-auto flex-shrink-0 items-center pl-0 h-12 border-transparent"
         tabClassName="px-3 py-2.5"
         titleClassName="text-xs font-medium whitespace-nowrap"
         bodyClassName="flex-1 flex flex-col overflow-hidden relative w-full h-full"
