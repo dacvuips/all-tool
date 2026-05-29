@@ -13,7 +13,7 @@
  *   const all = await db.getAll();
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { DB_NAME_TYPE } from "../constants";
 
 // ── Cache: one promise per dbName ────────────────────────────────────────────
@@ -248,5 +248,8 @@ export function useIndexedDB<T = unknown>(
     }
   }, []);
 
-  return { set, get, remove, clear, getAll, getAllWithKeys };
+  return useMemo(
+    () => ({ set, get, remove, clear, getAll, getAllWithKeys }),
+    [set, get, remove, clear, getAll, getAllWithKeys]
+  );
 }

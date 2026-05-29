@@ -217,6 +217,7 @@ export const DB_NAME = {
   copyVideo: "copy-video",
   generateElement: "generate-element",
   generateReview: "generate-review",
+  affiliateChat: "affiliate-chat",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
@@ -224,7 +225,15 @@ export const STORE_NAME = {
   copyVideo: "copy-video",
   generateElement: "generate-element",
   generateReview: "generate-review",
+  affiliateChat: "affiliate-chat",
 };
+
+/** Phân loại từng loại chat AI (mỗi loại = 1 key IndexedDB riêng) */
+export const AFFILIATE_CHAT_KIND = {
+  trendingGymPt: "trending-gym-pt",
+  trendingGeneral: "trending-general",
+} as const;
+export type AffiliateChatKind = (typeof AFFILIATE_CHAT_KIND)[keyof typeof AFFILIATE_CHAT_KIND];
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
 

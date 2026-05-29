@@ -1,0 +1,120 @@
+/**
+ * batch-size-slider.tsx
+ * Slider chọn số lượng phiên bản / phân cảnh cần tạo.
+ * Nhận label + description động tuỳ theo chế độ (Đơn Lẻ / Cốt truyện).
+ */
+import React from "react";
+import { useTranslation } from "react-i18next";
+import { BsLayers } from "react-icons/bs";
+
+interface BatchSizeSliderProps {
+  /** Giá trị hiện tại */
+  value: number;
+  /** Callback khi giá trị thay đổi */
+  onChange: (value: number) => void;
+  /** Tiêu đề hiển thị (VD: "Số phiên bản" hoặc "Số phân cảnh") */
+  label?: string;
+  /** Mô tả phụ bên dưới slider – dùng {count} làm placeholder cho giá trị */
+  description?: string;
+}
+
+export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
+  value,
+  onChange,
+  label,
+  description,
+}) => {
+  const { t } = useTranslation();
+
+  const [localValue, setLocalValue] = React.useState(value);
+
+  // Đồng bộ state nội bộ khi giá trị từ parent thay đổi
+  React.useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  /** Xử lý khi user kéo slider */
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    setLocalValue(val);
+    onChange(val);
+  };
+
+  // Tiêu đề mặc định nếu không truyền prop label
+  const displayLabel = label || t("Số lượng phân cảnh");
+
+  // Mô tả mặc định nếu không truyền prop description
+  const displayDescription =
+    description?.replace("{count}", String(value)) ||
+    `${t("AI sẽ tự nghĩ ra")} ${value} ${t("ý tưởng khác nhau dựa trên chủ đề bạn chọn.")}`;
+
+  return (
+    <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+      {/* Tiêu đề + icon */}
+      <div className="flex justify-between items-center mb-4 text-purple-900">
+        <h3 className="font-semibold text-sm uppercase tracking-wide">
+          {t(displayLabel)}: {localValue}
+        </h3>
+        <BsLayers className="text-purple-700 text-lg" />
+      </div>
+
+      {/* Thanh slider */}
+      <div className="relative w-full">
+        <input
+          type="range"
+          min={1}
+          max={50}
+          step={1}
+          value={localValue}
+          onChange={handleInputChange}
+          className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-purple-200 accent-purple-600 focus:outline-none"
+          style={{
+            background: `linear-gradient(to right, #9333ea 0%, #9333ea ${
+              ((localValue - 1) / 49) * 100
+            }%, #e9d5ff ${((localValue - 1) / 49) * 100}%, #e9d5ff 100%)`,
+          }}
+        />
+        {/* Custom thumb styles – đảm bảo hiển thị đúng trên mọi trình duyệt */}
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+          input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #9333ea;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #9333ea;
+          }
+          input[type=range]::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #9333ea;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 0 1px #9333ea;
+          }
+        `,
+          }}
+        />
+      </div>
+
+      {/* Các mốc giá trị */}
+      <div className="flex justify-between text-purple-400 text-xs mt-2 font-medium">
+        <span>1</span>
+        <span>10</span>
+        <span>20</span>
+        <span>30</span>
+        <span>40</span>
+        <span>50</span>
+      </div>
+
+      {/* Mô tả phụ */}
+      <p className="text-purple-600 text-xs italic mt-3 leading-relaxed">*{displayDescription}</p>
+    </div>
+  );
+};

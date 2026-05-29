@@ -16,6 +16,7 @@ import {
 
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
+import { ChatbotPage } from "./chatbot/chatbot-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { ElementPage } from "./elements/element-page";
@@ -86,7 +87,7 @@ export default function AffiliateMainPage() {
       ),
       label: t("ChatBot AI"),
       value: "chatbot-ai",
-      component: <>{"Sắp xong rồi"}</>,
+      component: <ChatbotPage />,
     },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
