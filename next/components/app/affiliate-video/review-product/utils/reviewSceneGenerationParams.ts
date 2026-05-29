@@ -47,10 +47,10 @@ export function pickReviewImageSlotsForScene(
 
 /** Video prompt – identical to handleGenerateVideo in useElementSceneMedia. */
 export function buildReviewVideoPrompt(scene: ReviewScene, isStitch?: boolean): string {
-  const motionPrompt = (scene.motion_description || "").trim();
-  const visualPrompt = scene.visual_prompt?.trim() || "";
-  const dialogue = scene.translated_content || scene.original_content || "";
-  const audio = scene.audio_description || "";
+  const motionPrompt = (scene.motionPrompt || "").trim();
+  const visualPrompt = scene.visualPrompt?.trim() || "";
+  const dialogue = scene.dialogue || "";
+  const audio = scene.audio || "";
 
   if (isStitch) {
     return scene.voiceDisable
@@ -73,10 +73,10 @@ export async function buildReviewImageGenerateParams(options: {
 }): Promise<GenerateImageParams> {
   const { scene, scriptData, thumbnailOriginImage, selectedProductImages, noText } = options;
   const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
-
+  console.log(scene, scriptData, thumbnailOriginImage, selectedProductImages, noText);
   return {
     sceneId: scene.id,
-    prompt: `${scene.visual_prompt || ""}`,
+    prompt: `${scene.imageGenPrompt || scene.visualPrompt || ""}`,
     noText: noText ?? scene.noText,
     aspectRatio: scriptData?.aspectRatio,
     artStyle: scriptData?.artStyle,

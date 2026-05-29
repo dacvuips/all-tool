@@ -45,6 +45,10 @@ export enum MediaGenerationJobType {
   GENERATION_ELEMENT_VIDEO = "GENERATION_ELEMENT_VIDEO",
   /** POST /api/app/generation-element-video-to-video/ — element editor video-to-video */
   GENERATION_ELEMENT_VIDEO_TO_VIDEO = "GENERATION_ELEMENT_VIDEO_TO_VIDEO",
+  /** POST /api/app/generation-review-image/ — review product generate image */
+  GENERATION_REVIEW_IMAGE = "GENERATION_REVIEW_IMAGE",
+  /** POST /api/app/generation-review-video/ — review product generate video */
+  GENERATION_REVIEW_VIDEO = "GENERATION_REVIEW_VIDEO",
 }
 
 /** Output cuối khi job tạo ảnh thành công (1 hoặc nhiều ảnh base64/url) */

@@ -1,14 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import {
-  CACHE_KEY,
-  DB_NAME,
-  ElementAnalysisData,
-  ElementFormImage,
-  ElementHistoryItem,
-  STORE_NAME,
-} from "../../constants";
+import { CACHE_KEY, DB_NAME, ElementFormImage, STORE_NAME } from "../../constants";
 import { ServiceImageEnum } from "../../elements/constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import {
@@ -93,14 +87,19 @@ export const ReviewContext = createContext<Partial<ReviewContextType>>({
 export function ReviewProvider(props) {
   const { customer } = useAuth();
   const { t } = useTranslation();
+  const { LANGUAGE_OPTIONS } = useOptionsTranslation();
 
   const DEFAULT_REVIEW_CONFIG: ReviewFormConfig = {
     prompt: "",
+    objectToPersonify: "",
+    objectToPersonifyCode: "",
+    objectToPersonifyImage: undefined,
     aspectRatio: "16:9",
     artStyle: "",
     artStyleId: "",
     serviceImageType: ServiceImageEnum.imageOnly,
     batchSize: 8,
+    language: LANGUAGE_OPTIONS[0].value,
   };
 
   // ── IndexedDB – shared cache for AI results ──
@@ -129,11 +128,11 @@ export function ReviewProvider(props) {
         // 1. Persist as last script for restore-on-revisit
         scriptDB
           .set(CACHE_KEY.lastReviewScript, data)
-          .catch((err) => console.warn("[element] Failed to persist lastElementScript", err));
+          .catch((err) => console.warn("[review] Failed to persist lastReviewScript", err));
 
         // 2. Add to history
         const now = new Date();
-        const newItem: ElementHistoryItem = {
+        const newItem: ReviewHistoryItem = {
           id: `copy-${Date.now()}`,
           createdAt: Date.now(),
           label: `Kịch bản – ${now.toLocaleDateString("vi-VN")} ${now.toLocaleTimeString("vi-VN", {
@@ -144,7 +143,7 @@ export function ReviewProvider(props) {
         };
         setSceneHistory((prev) => {
           const updated = [newItem, ...prev];
-          scriptDB.set(CACHE_KEY.elementHistory, updated).catch(() => {});
+          scriptDB.set(CACHE_KEY.reviewHistory, updated).catch(() => {});
           return updated;
         });
         setSelectedHistoryId(newItem.id);
@@ -155,19 +154,19 @@ export function ReviewProvider(props) {
 
   /** Update scriptData + persist to IndexedDB WITHOUT adding to history (for scene edits) */
   const updateScriptData = useCallback(
-    (data: ElementAnalysisData | null) => {
+    (data: ReviewAnalysisData | null) => {
       setScriptDataRaw(data);
       if (data) {
         scriptDB
-          .set(CACHE_KEY.lastElementScript, data)
-          .catch((err) => console.warn("[element] Failed to persist lastElementScript", err));
+          .set(CACHE_KEY.lastReviewScript, data)
+          .catch((err) => console.warn("[review] Failed to persist lastReviewScript", err));
       }
     },
     [scriptDB]
   );
 
   // ── Scene history state ──
-  const [sceneHistory, setSceneHistory] = useState<ElementHistoryItem[]>([]);
+  const [sceneHistory, setSceneHistory] = useState<ReviewHistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
 
   // ── Batch generating state: refs + per-scene subscriptions ──
@@ -261,23 +260,23 @@ export function ReviewProvider(props) {
   const restoreFromDB = async () => {
     try {
       const [cachedScript, cachedConfig] = await Promise.all([
-        scriptDB.get(CACHE_KEY.lastElementScript),
-        scriptDB.get(CACHE_KEY.elementInput),
+        scriptDB.get(CACHE_KEY.lastReviewScript),
+        scriptDB.get(CACHE_KEY.reviewInput),
       ]);
       if (cachedScript) setScriptDataRaw(cachedScript);
       if (cachedConfig) setReviewFormConfig(normalizeReviewFormConfig(cachedConfig));
     } catch (err) {
-      console.warn("[element] Failed to restore from IndexedDB", err);
+      console.warn("[review] Failed to restore from IndexedDB", err);
     }
   };
 
   /** Refresh history list from IndexedDB */
   const refreshHistory = useCallback(async () => {
     try {
-      const history: ElementHistoryItem[] = (await scriptDB.get(CACHE_KEY.elementHistory)) || [];
+      const history: ReviewHistoryItem[] = (await scriptDB.get(CACHE_KEY.reviewHistory)) || [];
       setSceneHistory(history);
     } catch (err) {
-      console.warn("[element] Failed to load history", err);
+      console.warn("[review] Failed to load history", err);
     }
   }, [scriptDB]);
 
@@ -288,7 +287,7 @@ export function ReviewProvider(props) {
       if (item) {
         setSelectedHistoryId(id);
         setScriptDataRaw(item.data);
-        scriptDB.set(CACHE_KEY.lastElementScript, item.data).catch(() => {});
+        scriptDB.set(CACHE_KEY.lastReviewScript, item.data).catch(() => {});
       }
     },
     [sceneHistory, scriptDB]
@@ -296,7 +295,7 @@ export function ReviewProvider(props) {
 
   /** Clear all history */
   const clearSceneHistory = useCallback(async () => {
-    await scriptDB.set(CACHE_KEY.elementHistory, []);
+    await scriptDB.set(CACHE_KEY.reviewHistory, []);
     setSceneHistory([]);
     setSelectedHistoryId(null);
   }, [scriptDB]);

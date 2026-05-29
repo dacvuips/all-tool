@@ -201,7 +201,7 @@ function ObjectPersonifyImageUpload({
           <div
             role="button"
             tabIndex={0}
-            className="relative flex justify-center items-center w-full h-40 bg-gray-100 cursor-pointer"
+            className="flex relative justify-center items-center w-full h-40 bg-gray-100 cursor-pointer"
             onClick={() => !uploading && setZoomImage(previewSrc)}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -216,7 +216,7 @@ function ObjectPersonifyImageUpload({
               className="object-contain max-w-full max-h-full pointer-events-none"
             />
             {uploading && (
-              <div className="absolute inset-0 flex flex-col gap-2 items-center justify-center bg-white/70">
+              <div className="flex absolute inset-0 flex-col gap-2 justify-center items-center bg-white/70">
                 <RiLoader4Line className="text-3xl text-indigo-500 animate-spin" />
                 <span className="text-sm font-medium text-indigo-600">{t("Đang xử lý")}...</span>
               </div>
@@ -589,16 +589,16 @@ export function ObjectPersonifyPickerDialog({
         `}
       >
         {/* Image */}
-        <div className="aspect-square bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+        <div className="overflow-hidden bg-gradient-to-br from-gray-50 to-gray-100 aspect-square">
           {item.imageUrl ? (
             <Img
               showImageOnClick
               src={item.imageUrl}
               alt={item.name}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+              className="object-cover w-full h-full transition-transform duration-300 group-hover:scale-110"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl text-gray-300">
+            <div className="flex justify-center items-center w-full h-full text-4xl text-gray-300">
               🎭
             </div>
           )}
@@ -645,9 +645,9 @@ export function ObjectPersonifyPickerDialog({
             title={t("Xoá nhân vật")}
           >
             {isDeleting ? (
-              <CgSpinner className="animate-spin text-white text-xs" />
+              <CgSpinner className="text-xs text-white animate-spin" />
             ) : (
-              <RiDeleteBin6Line className="text-white text-xs" />
+              <RiDeleteBin6Line className="text-xs text-white" />
             )}
           </button>
         )}
@@ -658,13 +658,13 @@ export function ObjectPersonifyPickerDialog({
   return (
     <>
       {/* ── Field with pen icon + Input ── */}
-      <div className="border border-gray-200 rounded-xl p-2">
+      <div className="p-2 rounded-xl border border-gray-200">
         <Field
           noError={noError}
           name={name}
           label={
             <span className="flex items-center gap-1.5 justify-between w-full">
-              {label || t("Nhân hoá đồ vật")}
+              {label || t("Nhân vật")}
               <Button
                 outline
                 info
@@ -681,6 +681,13 @@ export function ObjectPersonifyPickerDialog({
             titleClassName="text-sm font-semibold whitespace-nowrap py-2"
             bodyClassName="pt-2"
           >
+            <TabGroup.Tab label={t("Ảnh")}>
+              <ObjectPersonifyImageUpload
+                imageValue={imageValue}
+                onImageChange={handleImageChange}
+                readOnly={readOnly}
+              />
+            </TabGroup.Tab>
             <TabGroup.Tab label={t("Prompt")}>
               <Input
                 id="object-to-personify-input"
@@ -689,13 +696,6 @@ export function ObjectPersonifyPickerDialog({
                 value={selectedDisplayName || value || ""}
                 readOnly={readOnly}
                 onChange={handlePromptChange}
-              />
-            </TabGroup.Tab>
-            <TabGroup.Tab label={t("Ảnh")}>
-              <ObjectPersonifyImageUpload
-                imageValue={imageValue}
-                onImageChange={handleImageChange}
-                readOnly={readOnly}
               />
             </TabGroup.Tab>
           </TabGroup>
@@ -713,7 +713,7 @@ export function ObjectPersonifyPickerDialog({
         }}
       >
         <Dialog.Body>
-          <div className=" ">
+          <div className="">
             {/* ── Back button when creating ── */}
             <div
               className={`flex items-center gap-2  w-full ${
@@ -733,18 +733,18 @@ export function ObjectPersonifyPickerDialog({
             {/* ── Lists (system + customer objects) ── */}
             {!showImageInput &&
               (isLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <CgSpinner className="animate-spin text-2xl text-blue-500" />
+                <div className="flex justify-center items-center py-8">
+                  <CgSpinner className="text-2xl text-blue-500 animate-spin" />
                   <span className="ml-2 text-sm text-gray-500">{t("Đang tải...")}</span>
                 </div>
               ) : (
-                <div className="w-full space-y-4">
+                <div className="space-y-4 w-full">
                   {/* ── Customer Objects Section ("Nhân vật của tôi") ── */}
                   {customerObjects.length > 0 && (
                     <div>
                       <Label
                         text={t("Nhân vật của tôi")}
-                        className="text-sm font-semibold text-purple-700 mb-3"
+                        className="mb-3 text-sm font-semibold text-purple-700"
                       />
                       <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3 max-h-[250px] overflow-y-auto pr-1">
                         {customerObjects.map((item) =>
@@ -759,7 +759,7 @@ export function ObjectPersonifyPickerDialog({
                     <div>
                       <Label
                         text={t("Danh sách nhân vật có sẵn")}
-                        className="text-sm font-semibold text-gray-700 mb-3"
+                        className="mb-3 text-sm font-semibold text-gray-700"
                       />
                       <div className="grid md:grid-cols-4 sm:grid-cols-3 grid-cols-2 gap-3 max-h-[400px] overflow-y-auto pr-1">
                         {serverObjects.map((item) => renderObjectCard(item))}
@@ -769,13 +769,13 @@ export function ObjectPersonifyPickerDialog({
 
                   {/* Empty state */}
                   {serverObjects.length === 0 && customerObjects.length === 0 && (
-                    <div className="text-center py-6 text-sm text-gray-400">
+                    <div className="py-6 text-sm text-center text-gray-400">
                       {t("Chưa có nhân vật nhân hoá nào")}
                     </div>
                   )}
 
                   {/* ── Create new button ── */}
-                  <div className="w-full mt-4 flex items-center justify-center  ">
+                  <div className="flex justify-center items-center mt-4 w-full">
                     <Button
                       primary
                       icon={<RiAddLine />}
@@ -792,7 +792,7 @@ export function ObjectPersonifyPickerDialog({
             {showImageInput && (
               <div className="rounded-xl">
                 {
-                  <div className="border border-gray-200 rounded-xl p-2">
+                  <div className="p-2 rounded-xl border border-gray-200">
                     <div className="flex gap-4 w-full">
                       <div className="w-1/3">
                         {" "}
@@ -805,9 +805,9 @@ export function ObjectPersonifyPickerDialog({
                               placeholder={t("Link Ảnh nhân vật nhân hóa")}
                             />
                             {isGeneratingImage && (
-                              <div className="absolute top-20 inset-0 flex flex-col items-center justify-center bg-white/70 rounded-lg z-10">
-                                <CgSpinner className="animate-spin text-2xl text-blue-500" />
-                                <span className="mt-2 text-sm text-blue-500 font-medium">
+                              <div className="flex absolute inset-0 top-20 z-10 flex-col justify-center items-center rounded-lg bg-white/70">
+                                <CgSpinner className="text-2xl text-blue-500 animate-spin" />
+                                <span className="mt-2 text-sm font-medium text-blue-500">
                                   {t("Đang tạo ảnh nhân vật từ AI...")}
                                 </span>
                               </div>
@@ -838,9 +838,9 @@ export function ObjectPersonifyPickerDialog({
                               onChange={(v) => setObjectPrompt(v)}
                             />
                             {isGenerating && (
-                              <div className="absolute inset-0 flex items-center justify-center bg-white/70 rounded-lg top-5">
-                                <div className="flex items-center gap-2 text-sm text-blue-500">
-                                  <CgSpinner className="animate-spin text-lg" />
+                              <div className="flex absolute inset-0 top-5 justify-center items-center rounded-lg bg-white/70">
+                                <div className="flex gap-2 items-center text-sm text-blue-500">
+                                  <CgSpinner className="text-lg animate-spin" />
                                   {t("Đang tạo prompt...")}
                                 </div>
                               </div>
@@ -850,13 +850,13 @@ export function ObjectPersonifyPickerDialog({
                       </div>
                     </div>
                     {showImageInput && (
-                      <div className="flex items-center justify-end">
+                      <div className="flex justify-end items-center">
                         <Button
                           primary
                           className={`px-4 py-2 text-sm font-semibold transition-all ${
                             canSubmit
-                              ? "bg-blue-600 hover:bg-blue-700 text-white"
-                              : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                              ? "text-white bg-blue-600 hover:bg-blue-700"
+                              : "text-gray-400 bg-gray-200 cursor-not-allowed"
                           }`}
                           text={t("Lưu nhân vật")}
                           onClick={handleSubmit}
@@ -869,8 +869,8 @@ export function ObjectPersonifyPickerDialog({
                 }
                 {/* ── AI prompt helper ── */}
                 <div>
-                  <div className="mt-2 space-y-3 border p-2 border-gray-200 rounded-xl border-dashed">
-                    <h3 className="text-md font-semibold text-yellow-700 flex items-center gap-1 uppercase">
+                  <div className="p-2 mt-2 space-y-3 rounded-xl border border-gray-200 border-dashed">
+                    <h3 className="flex gap-1 items-center font-semibold text-yellow-700 uppercase text-md">
                       <RiBookletLine /> {t("Tạo prompt mô tả nhân vật bằng AI")}
                     </h3>
                     {showPrompt && (
@@ -897,7 +897,7 @@ export function ObjectPersonifyPickerDialog({
                       </>
                     )}
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex gap-2 items-center">
                       <Button
                         info={!showPrompt}
                         disabled={isGenerating || isGeneratingImage}
@@ -917,12 +917,12 @@ export function ObjectPersonifyPickerDialog({
                       {showPrompt && (
                         <Button
                           outline
-                          className="w-full flex items-center justify-center gap-2 py-2 text-sm font-medium border-blue-300 text-blue-600 hover:bg-blue-50 transition-colors rounded-lg"
+                          className="flex gap-2 justify-center items-center py-2 w-full text-sm font-medium text-blue-600 rounded-lg border-blue-300 transition-colors hover:bg-blue-50"
                           onClick={handleGenerateDescription}
                           disabled={isGenerating || objectImages.length === 0}
                         >
                           {isGenerating ? (
-                            <CgSpinner className="animate-spin text-base" />
+                            <CgSpinner className="text-base animate-spin" />
                           ) : (
                             <GenerateAiIcon className="text-base" />
                           )}

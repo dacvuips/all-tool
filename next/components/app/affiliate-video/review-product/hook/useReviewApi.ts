@@ -9,7 +9,16 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, SceneHistoryItem } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
-import { ReviewAnalysisData, ReviewHistoryItem, ServiceImageEnum } from "../constants";
+import {
+  ReviewAnalysisData,
+  ReviewFormImage,
+  ReviewHistoryItem,
+  ServiceImageEnum,
+} from "../constants";
+import {
+  hasObjectToPersonifyImage,
+  objectToPersonifyImageToApiImages,
+} from "../utils/reviewFormImageUtils";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -29,6 +38,10 @@ export interface GenerateSceneFromTextParams {
   text: string;
   /** Config (tuỳ chọn) – nếu không truyền sẽ dùng object rỗng */
   config?: Partial<AffiliateVideoFormConfig>;
+}
+export interface GenerateReviewFromTextParams {
+  /** Config review (tuỳ chọn) */
+  config: Record<string, any>;
 }
 
 export interface GenerateImageParams {
@@ -54,6 +67,7 @@ export interface GenerateImageParams {
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
 export interface GenerateVideoParams {
@@ -222,6 +236,11 @@ export interface GeneratedVideoData {
 
 export interface UseAffiliateVideoApiReturn {
   /**
+   * Gọi API tạo scenes cho review từ prompt text.
+   */
+  generateReview: (params: GenerateReviewFromTextParams) => Promise<ReviewAnalysisData | undefined>;
+
+  /**
    * Gọi API tạo ảnh từ imageGenPrompt.
    * Lưu kết quả base64 vào IndexedDB theo sceneId.
    */
@@ -308,6 +327,27 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   const imageJob = useMediaGenerationJob<{ images: GeneratedImageData[] }>();
   const videoJob = useMediaGenerationJob<GeneratedVideoData>();
 
+  // ── Shared: gọi API /api/app/generation-review-image/ (tạo kịch bản cảnh từ config) ──
+  const callGenerationReviewApi = useCallback(
+    async (body: { config: Record<string, any> }) => {
+      const res = await fetch("/api/app/generation-review-scene/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+
   // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
   const pushToReviewHistory = useCallback(
     async (analysisResult: ReviewAnalysisData) => {
@@ -340,6 +380,43 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
     [reviewScriptDB]
   );
 
+  // ── generateReviewFromText – gọi backend review bằng prompt text ──
+  const generateReview = useCallback(
+    async (params: GenerateReviewFromTextParams): Promise<ReviewAnalysisData | undefined> => {
+      const { config = {} } = params;
+
+      const result = await callGenerationReviewApi({ config });
+      if (!result?.data) return undefined;
+
+      const reviewResult: ReviewAnalysisData = {
+        ...result.data,
+        scenes: Array.isArray(result.data?.scenes)
+          ? result.data.scenes.map((scene) => ({
+              ...scene,
+              id: scene?.id || crypto.randomUUID(),
+              disabled: scene?.disabled ?? false,
+              voiceDisable: scene?.voiceDisable ?? false,
+            }))
+          : [],
+        objectToPersonifyCode: config.objectToPersonify?.trim()
+          ? config.objectToPersonifyCode
+          : undefined,
+        aspectRatio: config.aspectRatio ?? result.data?.aspectRatio,
+        artStyleId: config.artStyleId ?? result.data?.artStyleId,
+        artStyle: config.artStyle ?? result.data?.artStyle,
+        serviceImageType: config.serviceImageType ?? result.data?.serviceImageType,
+      };
+
+      reviewScriptDB
+        .set(CACHE_KEY.lastReviewScript, reviewResult)
+        .catch((e) => console.warn("[review-api] IndexedDB write error", e));
+      await pushToReviewHistory(reviewResult);
+
+      return reviewResult;
+    },
+    [callGenerationReviewApi, reviewScriptDB, pushToReviewHistory]
+  );
+
   // ── generateImage – tạo Job, subscribe progress, trả về ảnh ──
   const reviewGenerateImage = useCallback(
     async (params: GenerateImageParams): Promise<GeneratedImageData | undefined> => {
@@ -351,6 +428,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         additionalImages,
         productImages,
         productImagePrompt,
+        objectToPersonifyImage,
         onProgress,
         onError,
         noText = false,
@@ -368,18 +446,20 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
       }
 
       try {
+        const personifyApiImages = hasObjectToPersonifyImage(objectToPersonifyImage)
+          ? await objectToPersonifyImageToApiImages(objectToPersonifyImage)
+          : [];
+        console.log(params);
+
         onProgress?.(1);
         const { data } = await imageJob.run({
-          url: "/api/app/generation-element-image/",
+          url: "/api/app/generation-review-image/",
           body: {
             prompt,
             images: images.length > 0 ? images : undefined,
-            productImages: productImages?.length ? productImages : undefined,
+            objectToPersonifyImages: personifyApiImages.length ? personifyApiImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
-            noText,
-            aspectRatio,
-            artStyleId,
-            artStyle,
+            config: { numberOfImages: 1, aspectRatio, noText },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),
@@ -687,6 +767,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   }, [scriptDB, customer?._id]);
 
   return {
+    generateReview,
     reviewGenerateImage,
     getGeneratedImage,
     saveGeneratedImage,

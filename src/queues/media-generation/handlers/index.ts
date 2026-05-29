@@ -15,9 +15,11 @@ import {
 import { MediaJobEmitter } from "../job-emitter";
 import { handleCopyVideoGenerateImage } from "./copy-video-generate-image.handler";
 import { handleGenerationElementImage } from "./generation-element-image.handler";
-import { handleGenerationElementVideo } from "./generation-element-video.handler";
 import { handleGenerationElementVideoToVideo } from "./generation-element-video-to-video.handler";
+import { handleGenerationElementVideo } from "./generation-element-video.handler";
 import { handleGenerationImage } from "./generation-image.handler";
+import { handleGenerationReviewImage } from "./generation-review-image.handler";
+import { handleGenerationReviewVideo } from "./generation-review-video.handler";
 import { handleGenerationVideo } from "./generation-video.handler";
 
 export type MediaJobHandlerResult = MediaGenerationImageResult | MediaGenerationVideoResult;
@@ -34,6 +36,9 @@ export const HANDLER_REGISTRY: Record<MediaGenerationJobType, MediaJobHandler> =
   [MediaGenerationJobType.GENERATION_VIDEO]: handleGenerationVideo,
   [MediaGenerationJobType.GENERATION_ELEMENT_VIDEO]: handleGenerationElementVideo,
   [MediaGenerationJobType.GENERATION_ELEMENT_VIDEO_TO_VIDEO]: handleGenerationElementVideoToVideo,
+  [MediaGenerationJobType.GENERATION_REVIEW_IMAGE]: handleGenerationReviewImage,
+
+  [MediaGenerationJobType.GENERATION_REVIEW_VIDEO]: handleGenerationReviewVideo,
 };
 
 /**

@@ -73,6 +73,7 @@ export class MediaGenerationJobError extends Error {
       | "ENQUEUE_FAILED"
       | "JOB_FAILED"
       | "JOB_CANCELLED"
+      | "JOB_NOT_FOUND"
       | "JOB_TIMEOUT"
       | "UNKNOWN",
     public readonly jobId?: string,
@@ -86,6 +87,8 @@ export class MediaGenerationJobError extends Error {
 const DEFAULT_POLL_INTERVAL = 8000;
 /** Gia hạn Redis job watcher (TTL server ~45s) */
 const WATCH_HEARTBEAT_MS = 20_000;
+/** Số lần poll liên tiếp không thấy job trên server → dừng theo dõi */
+const JOB_MISSING_POLL_THRESHOLD = 2;
 
 export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
   /** Theo dõi mọi "instance" run() đang sống để cleanup khi unmount */
@@ -175,6 +178,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
 
       return new Promise<MediaGenerationRunResult<TResult>>((resolve, reject) => {
         let settled = false;
+        let missingPollCount = 0;
         let subscription: { unsubscribe: () => void } | null = null;
         let pollTimer: ReturnType<typeof setInterval> | null = null;
         let watchHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -201,6 +205,33 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           if (idx >= 0) activeHandlesRef.current.splice(idx, 1);
         };
         handle.cleanup = cleanup;
+
+        /** Job đã bị xóa khỏi Mongo (abandon / cleanup) — dừng poll vô hạn */
+        const handleMissingJob = () => {
+          if (settled) return;
+          missingPollCount += 1;
+          if (missingPollCount < JOB_MISSING_POLL_THRESHOLD) return;
+          settled = true;
+          cleanup();
+          reject(
+            new MediaGenerationJobError(
+              "Job không còn trên server (có thể đã huỷ hoặc mất kết nối theo dõi)",
+              "JOB_NOT_FOUND",
+              jobId
+            )
+          );
+        };
+
+        /** Nhận snapshot từ query / poll / subscription */
+        const handleJobSnapshot = (job: MediaGenerationJob | null) => {
+          if (settled) return;
+          if (!job) {
+            handleMissingJob();
+            return;
+          }
+          missingPollCount = 0;
+          processJob(job);
+        };
 
         /** Xử lý 1 snapshot job — quyết định resolve/reject hay tiếp tục */
         const processJob = (job: MediaGenerationJob | null) => {
@@ -246,7 +277,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         try {
           const obs = MediaGenerationJobService.subscribeJobChanged<TResult>(jobId);
           subscription = obs.subscribe({
-            next: (job) => processJob(job),
+            next: (job) => handleJobSnapshot(job),
             error: (err: any) => {
               // Lỗi subscription (WS disconnect, ...) — không reject; poll sẽ kéo tiếp
               console.warn("[useMediaGenerationJob] subscription error:", err?.message);
@@ -258,9 +289,10 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
 
         // 2b. Query initial — xử lý race "job xong trước khi subscribe"
         MediaGenerationJobService.getJob<TResult>(jobId)
-          .then((job) => processJob(job))
+          .then((job) => handleJobSnapshot(job))
           .catch((err) => {
             console.warn("[useMediaGenerationJob] query initial lỗi:", err?.message);
+            handleMissingJob();
           });
 
         // 2c. Poll fallback (nếu enable)
@@ -268,8 +300,8 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           pollTimer = setInterval(() => {
             if (settled) return;
             MediaGenerationJobService.getJob<TResult>(jobId)
-              .then((job) => processJob(job))
-              .catch(() => undefined);
+              .then((job) => handleJobSnapshot(job))
+              .catch(() => handleMissingJob());
           }, pollIntervalMs);
         }
 

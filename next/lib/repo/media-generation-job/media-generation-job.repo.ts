@@ -59,7 +59,7 @@ class MediaGenerationJobRepository extends GraphRepository {
     const res = await this.query({
       query: `mediaGenerationJob(id: $id) { ${FULL_FRAGMENT} }`,
       variablesParams: "($id: String!)",
-      options: { variables: { id }, fetchPolicy: "no-cache" },
+      options: { variables: { id }, fetchPolicy: "no-cache", errorPolicy: "all" },
     });
     return (res.data?.g0 as MediaGenerationJob<T>) ?? null;
   }
@@ -91,7 +91,7 @@ class MediaGenerationJobRepository extends GraphRepository {
     const res = await this.mutate({
       mutation: `touchMediaGenerationJobWatch(id: $id)`,
       variablesParams: "($id: String!)",
-      options: { variables: { id } },
+      options: { variables: { id }, errorPolicy: "all" },
       clearStore: false,
     });
     return Boolean(res.data?.g0);

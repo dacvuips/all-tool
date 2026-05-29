@@ -47,14 +47,14 @@ export function buildAnalysisDataFromNumberedPrompt(
 
   const scenes: ReviewScene[] = items.map((item) => ({
     id: uid(),
-    timestamp: "",
-    scene_type: "OBJECT" as const,
     sceneNumber: item.number,
-    visual_prompt: item.text,
-    motion_description: "",
-    audio_description: "",
-    original_content: "",
-    translated_content: null,
+    camera: "",
+    topicTitle: "",
+    visualPrompt: item.text,
+    imageGenPrompt: item.text,
+    motionPrompt: "",
+    dialogue: "",
+    audio: "",
   }));
 
   return {

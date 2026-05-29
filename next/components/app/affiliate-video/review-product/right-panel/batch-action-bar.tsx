@@ -21,11 +21,11 @@ import {
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input, Select } from "../../../../shared/utilities/form";
-import { CopyVideoScene } from "../../constants";
-import { useCopyVideoBatchActions } from "../hook/useReviewBatchActions";
+import { ReviewScene } from "../constants";
+import { useReviewBatchActions } from "../hook/useReviewBatchActions";
 
 interface BatchActionBarProps {
-  scenes: CopyVideoScene[];
+  scenes: ReviewScene[];
 }
 
 export function BatchActionBar({ scenes }: BatchActionBarProps) {
@@ -103,7 +103,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
     // Export
     handleExportPromptCSV,
-  } = useCopyVideoBatchActions(scenes);
+  } = useReviewBatchActions(scenes);
 
   const actions = [
     {
@@ -298,7 +298,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   <>
                     <span className="whitespace-nowrap">
                       🎬 {t("Video Scene")} #
-                      {scenes.filter((s) => !s.disabled && s.motion_description)[
+                      {scenes.filter((s) => !s.disabled && s.motionPrompt)[
                         videoBatchCurrentIndex
                       ]?.sceneNumber ?? "?"}{" "}
                       — {videoBatchCompleted}/{videoBatchTotal}

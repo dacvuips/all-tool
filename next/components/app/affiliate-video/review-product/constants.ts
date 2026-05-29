@@ -102,10 +102,14 @@ export interface ReviewFormConfig {
   /** Video tham chiếu cho chế độ video-to-video (có thể upload nhiều video) */
   videoRef?: ReviewFormVideo[];
   aspectRatio: AspectRatio;
+  language: string;
   artStyle: string;
   artStyleId?: string;
   serviceImageType?: string;
   batchSize: number;
+  objectToPersonify: string;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
@@ -193,21 +197,6 @@ export interface ScriptData {
   objectToPersonifyImage?: ReviewFormImage;
 }
 
-export interface TrendingScriptData {
-  trendingModeType: TrendingModeTypeEnum;
-  topicTitle: string;
-  artStyle: string;
-  environment: string;
-  characterName: string;
-  characterBaseDescription: string;
-  voiceGender: string;
-  voiceTone: string;
-  voiceStyle: string;
-  aspectRatio: "16:9" | "9:16";
-  scenes: SceneScript[];
-  productImages?: string[];
-}
-
 export const DB_NAME = {
   generateScene: "generate-scene",
   generateScript: "generate-script",
@@ -253,7 +242,8 @@ export interface ReviewProp {
   description: string;
 }
 
-export interface ReviewScene {
+/** Legacy scene shape from copy-video / video analysis */
+export interface CopyVideoLegacyScene {
   id: string;
   timestamp: string;
   scene_type: "CHARACTER" | "OBJECT";
@@ -266,9 +256,7 @@ export interface ReviewScene {
   voiceDisable?: boolean;
   noText?: boolean;
   selectedProductImages?: string[];
-  /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   reviewImageSlots?: (ReviewFormImage | undefined)[];
-  /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   reviewVideoSlots?: (ReviewFormVideo | undefined)[];
   product_image_prompt?: string;
   sceneNumber?: number;
@@ -277,7 +265,7 @@ export interface ReviewScene {
 export interface CopyVideoAnalysisData {
   characters: ReviewCharacter[];
   props: ReviewProp[];
-  scenes: ReviewScene[];
+  scenes: CopyVideoLegacyScene[];
   aspectRatio?: string;
   productImages?: string[];
   objectToPersonifyImage?: ReviewFormImage;
@@ -314,15 +302,17 @@ export interface CopyVideoHistoryItem {
   data: CopyVideoAnalysisData;
 }
 
+/** Scene từ API generation-review */
 export interface ReviewScene {
   id: string;
-  timestamp: string;
-  scene_type: "CHARACTER" | "OBJECT";
-  visual_prompt: string;
-  motion_description: string;
-  audio_description: string;
-  original_content: string;
-  translated_content?: string | null;
+  sceneNumber: number;
+  camera: string;
+  topicTitle: string;
+  visualPrompt: string;
+  imageGenPrompt: string;
+  motionPrompt: string;
+  dialogue: string;
+  audio?: string;
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
@@ -331,8 +321,8 @@ export interface ReviewScene {
   reviewImageSlots?: (ReviewFormImage | undefined)[];
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   reviewVideoSlots?: (ReviewFormVideo | undefined)[];
+  /** Custom prompt override cho ảnh sản phẩm khi tạo ảnh */
   product_image_prompt?: string;
-  sceneNumber?: number;
 }
 
 /** A single entry in the scene generation history */
@@ -345,16 +335,6 @@ export interface SceneHistoryItem {
   label: string;
   /** The generated script data */
   data: ScriptData;
-}
-export interface TrendingHistoryItem {
-  /** Unique ID for this history entry */
-  id: string;
-  /** Timestamp when the scene was generated */
-  createdAt: number;
-  /** Human-readable label (e.g. "Kịch bản – 25/04 14:52") */
-  label: string;
-  /** The generated script data */
-  data: TrendingScriptData;
 }
 
 export enum TAB_TYPE {

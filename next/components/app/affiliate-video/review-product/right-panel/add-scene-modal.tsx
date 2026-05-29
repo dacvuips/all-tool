@@ -18,7 +18,8 @@ import {
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../../shared/utilities/form";
-import { CharacterItem, CopyVideoScene } from "../../constants";
+import { CharacterItem } from "../../constants";
+import { ReviewScene } from "../constants";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type InsertPosition = "above" | "below";
@@ -33,7 +34,7 @@ export interface NewSceneData {
 
 // ── AddSceneModal ──────────────────────────────────────────────────────────
 interface AddSceneModalProps {
-  targetScene: CopyVideoScene;
+  targetScene: ReviewScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onClose: () => void;
@@ -262,11 +263,11 @@ export function AddSceneModal({
 // Nút "+" chèn scene giữa các hàng, hiện modal khi click
 
 interface AddSceneButtonProps {
-  scene: CopyVideoScene;
+  scene: ReviewScene;
   position: InsertPosition;
   characters: CharacterItem[];
   onInsert: (
-    scene: CopyVideoScene,
+    scene: ReviewScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;

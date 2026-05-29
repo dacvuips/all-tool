@@ -9,7 +9,12 @@ import {
 } from "./reviewFormImageUtils";
 
 /** 3 vị trí ảnh tham chiếu trên scene row */
-export const REVIEW_IMAGE_SLOT_KEYS = ["artStyleImg", "objectImg", "itemImg"] as const;
+export const REVIEW_IMAGE_SLOT_KEYS = [
+  "artStyleImg",
+  "objectToPersonifyImage",
+  "objectImg",
+  "itemImg",
+] as const;
 export type ReviewImageSlotKey = typeof REVIEW_IMAGE_SLOT_KEYS[number];
 
 const SCENE_SLOT_COUNT = 3;

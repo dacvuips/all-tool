@@ -11,6 +11,7 @@ import {
   decryptProviderSecret,
   encryptProviderSecret,
 } from "../../../packages/encryption/encrypt-provider";
+import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { CaptchaResponseData } from "../../helpers/validateApiKey";
 
 const AI_MAX_RETRIES = 5;
@@ -628,6 +629,13 @@ export async function resolveArtStylePrompt(opts: {
   }
 }
 
+export interface MediaImageBytes {
+  name: string;
+  imageBytes: string;
+  fifeUrl?: string;
+  mimeType?: string;
+}
+
 export interface AffiliateVideoFormConfig {
   category: string;
   objectToPersonify: string;
@@ -639,6 +647,20 @@ export interface AffiliateVideoFormConfig {
   aspectRatio: "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
   batchSize: number;
   artStyleId?: string;
+}
+
+export interface ReviewFormConfig extends AffiliateVideoFormConfig {
+  prompt: string;
+  artStyle: string;
+  artStyleId?: string;
+  serviceImageType?: string;
+  batchSize: number;
+  objectToPersonify: string;
+  artStyleImg?: MediaImageBytes[];
+  artStyleImgNames?: string[];
+  objectToPersonifyImage?: MediaImageBytes;
+  objectImg?: MediaImageBytes;
+  itemImg?: MediaImageBytes;
 }
 
 export interface TrendingVideoFormConfig {
@@ -683,11 +705,13 @@ function buildCombinedImageReferenceNote(productCustomPrompt?: string): string {
 /** Gộp note nhân hoá + sản phẩm; tránh lặp quy tắc thứ tự ảnh khi cả hai đều có. */
 export function buildImageReferenceNotes(opts: {
   productUrls?: string[];
+  productImages?: ReferenceImageInput[];
   productCustomPrompt?: string;
   personifyImages?: ReferenceImageInput[];
 }): string {
   const productUrls = opts.productUrls?.filter(Boolean) || [];
-  const hasProduct = productUrls.length > 0;
+  const hasProduct =
+    productUrls.length > 0 || filterReferenceImages(opts.productImages).length > 0;
   const hasPersonify = filterReferenceImages(opts.personifyImages).length > 0;
 
   if (!hasProduct && !hasPersonify) return "";
@@ -695,7 +719,43 @@ export function buildImageReferenceNotes(opts: {
     return buildCombinedImageReferenceNote(opts.productCustomPrompt);
   }
   if (hasPersonify) return buildObjectPersonifyImageReferenceNote(opts.personifyImages);
-  return buildProductImageReferenceNote(productUrls, opts.productCustomPrompt);
+  if (productUrls.length > 0) {
+    return buildProductImageReferenceNote(productUrls, opts.productCustomPrompt);
+  }
+  if (opts.productCustomPrompt) return `\n${opts.productCustomPrompt}`;
+  return DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE;
+}
+
+/** Thứ tự ảnh tham chiếu review: artStyle → nhân hoá → object → item. */
+export function collectOrderedReviewReferenceImages(
+  config: ReviewFormConfig
+): ReferenceImageInput[] {
+  const out: ReferenceImageInput[] = [];
+  for (const img of config.artStyleImg ?? []) {
+    out.push(img);
+  }
+  if (config.objectToPersonifyImage) out.push(config.objectToPersonifyImage);
+  if (config.objectImg) out.push(config.objectImg);
+  if (config.itemImg) out.push(config.itemImg);
+  return out;
+}
+
+/** Chuẩn hoá ảnh tham chiếu (URL hoặc base64) để gửi Gemini inlineData. */
+export async function resolveReferenceImagesForGemini(
+  images?: ReferenceImageInput[]
+): Promise<{ imageBytes: string; mimeType: string }[]> {
+  const filtered = filterReferenceImages(images);
+  return Promise.all(
+    filtered.map(async (item) => {
+      if (typeof item === "string") {
+        return fetchImageAsBase64(item);
+      }
+      return {
+        imageBytes: item.imageBytes,
+        mimeType: item.mimeType || "image/png",
+      };
+    })
+  );
 }
 
 export function buildProductImageReferenceNote(urls: string[], customPrompt?: string): string {
@@ -826,4 +886,10 @@ export async function getReCaptchaCredentials(
     projectId: captchaData.ProjectID,
     accessToken: captchaData.accessToken,
   };
+}
+
+export function getImageDisplayName(img: MediaImageBytes): string {
+  const raw = (img.name || "").trim();
+  if (!raw) return "";
+  return raw.replace(/\.[^./\\]+$/, "").trim();
 }

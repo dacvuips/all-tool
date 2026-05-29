@@ -80,7 +80,7 @@ export function CopyVideoProvider(props) {
 
   const DEFAULT_VIDEO_CONFIG: CopyVideoFormConfig = {
     mood: t("Vui vẻ"),
-    language: LANGUAGE_OPTIONS[0].label,
+    language: LANGUAGE_OPTIONS[0].value,
     artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
     aspectRatio: "9:16",
     objectToPersonify: "",

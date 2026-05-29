@@ -16,7 +16,38 @@ import { BatchListPanel } from "./product/batch-list";
 
 import { ImagesToVideoListPanel } from "../../elements/right-panel/images-to-video/images-to-video-list";
 import { VideoToVideoListPanel } from "../../elements/right-panel/video-to-video/video-to-video-list";
-import { REVIEW_SCRIPT_TAB_QUERY_KEY, ReviewScriptTabEnum } from "../constants";
+import { CopyVideoScene } from "../../constants";
+import { REVIEW_SCRIPT_TAB_QUERY_KEY, ReviewScene, ReviewScriptTabEnum } from "../constants";
+
+function normalizeReviewScene(s: ReviewScene, i: number): ReviewScene {
+  return {
+    ...s,
+    id: s.id || `scene-${i}`,
+    sceneNumber: s.sceneNumber ?? i + 1,
+    disabled: s.disabled ?? false,
+    voiceDisable: s.voiceDisable ?? false,
+  };
+}
+
+/** Map review API scenes → legacy shape for element image/video tabs */
+function toCopyVideoScene(s: ReviewScene, i: number): CopyVideoScene {
+  const normalized = normalizeReviewScene(s, i);
+  return {
+    id: normalized.id,
+    timestamp: "",
+    scene_type: "OBJECT",
+    visual_prompt: normalized.visualPrompt || normalized.imageGenPrompt || "",
+    motion_description: normalized.motionPrompt || "",
+    audio_description: normalized.audio || "",
+    original_content: normalized.dialogue || "",
+    sceneNumber: normalized.sceneNumber,
+    disabled: normalized.disabled,
+    voiceDisable: normalized.voiceDisable,
+    noText: normalized.noText,
+    selectedProductImages: normalized.selectedProductImages,
+    product_image_prompt: normalized.product_image_prompt,
+  };
+}
 
 /** Tab JSX order: 0 = Thành phần, 1 = Images to video, 2 = Video to video */
 const scriptTabToIndex = (tab: ReviewScriptTabEnum | undefined): number => {
@@ -74,13 +105,7 @@ export const ReviewRightPanel = () => {
             <AiGeneratingSpinner />
           ) : (
             <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={(scriptData?.scenes || []).map(normalizeReviewScene)}
               characters={[]}
             />
           )}
@@ -90,13 +115,7 @@ export const ReviewRightPanel = () => {
             <AiGeneratingSpinner />
           ) : (
             <ImagesToVideoListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={(scriptData?.scenes || []).map(toCopyVideoScene)}
               characters={[]}
             />
           )}
@@ -106,13 +125,7 @@ export const ReviewRightPanel = () => {
             <AiGeneratingSpinner />
           ) : (
             <VideoToVideoListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={(scriptData?.scenes || []).map(toCopyVideoScene)}
               characters={[]}
             />
           )}

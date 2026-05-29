@@ -1,6 +1,6 @@
 import { GraphQLWsLink } from "@apollo/client/link/subscriptions";
 import { createClient } from "graphql-ws";
-import { GetUserToken } from "./auth.link";
+import { GetCustomerToken, GetShopToken, GetUserToken } from "./auth.link";
 
 let wsLink;
 let wsClient: ReturnType<typeof createClient>;
@@ -25,11 +25,18 @@ if (typeof window !== "undefined") {
       };
     },
     keepAlive: 30_000,
-    retryAttempts: Infinity,
+    retryAttempts: 15,
     retryWait: async function waitForServerHealthyBeforeRetry() {
-      await new Promise((resolve) => setTimeout(resolve, 1000 + Math.random() * 3000));
+      await new Promise((resolve) => setTimeout(resolve, 3000 + Math.random() * 5000));
     },
-    shouldRetry: () => true,
+    shouldRetry: (errOrCloseEvent) => {
+      if (errOrCloseEvent && typeof errOrCloseEvent === "object" && "code" in errOrCloseEvent) {
+        const code = (errOrCloseEvent as CloseEvent).code;
+        // Normal close / going away — do not retry
+        if (code === 1000 || code === 1001) return false;
+      }
+      return true;
+    },
     on: {
       connecting: () => {
         // console.log("ws connecting");
@@ -65,13 +72,20 @@ if (typeof window !== "undefined") {
 }
 
 export function getWebSocketToken() {
-  let token;
   const pathname = location.pathname;
 
-  if (pathname == "/admin" || pathname.startsWith("/admin/")) {
-    token = GetUserToken();
+  if (
+    pathname == "/admin" ||
+    pathname.startsWith("/admin/") ||
+    pathname == "/partner" ||
+    pathname.startsWith("/partner/")
+  ) {
+    return GetUserToken();
   }
-  return token;
+  if (pathname == "/shop" || pathname.startsWith("/shop/")) {
+    return GetShopToken();
+  }
+  return GetCustomerToken();
 }
 
 export const WSLink: GraphQLWsLink = wsLink;

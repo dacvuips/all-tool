@@ -3,6 +3,7 @@ import logger from "../../helpers/logger";
 import { ForbiddenError } from "../../libs/core";
 import { ApiMediaTokenModel } from "../../libs/dal/apiMediaToken/apiMediaToken.model";
 import { Context } from "../../libs/graphql";
+import { MediaImageBytes } from "../app/affiliate-scene/_shared";
 import { processAndUploadImages } from "../helpers/handleUploadGoogleLabImages";
 import {
   buildThrottleError,
@@ -44,7 +45,7 @@ export async function handleVideoGeneration(
     prompt: string;
     images?: Array<
       | string // URL ảnh
-      | { imageBytes: string; mimeType?: string } // base64
+      | MediaImageBytes // base64
     >;
     config?: {
       aspectRatio?: "16:9" | "9:16";
@@ -174,9 +175,12 @@ async function callAisandboxVideoAPICore(
  * Dùng ThrottleGate (Redis-coordinated) khi 429 throttle.
  * Khi lỗi reCAPTCHA + có captchaRetry → lấy captcha mới (hàng đợi 10s), tối đa 10 lần.
  */
-export async function callAisandboxVideoAPI(
-  params: CallAisandboxParams
-): Promise<{ response: any; mediaName: string; accessToken: string; headers?: Record<string, string> }> {
+export async function callAisandboxVideoAPI(params: CallAisandboxParams): Promise<{
+  response: any;
+  mediaName: string;
+  accessToken: string;
+  headers?: Record<string, string>;
+}> {
   const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
   let current = params;
 
@@ -607,9 +611,9 @@ export async function pollAndExtractVideo(params: PollVideoParams): Promise<Poll
     const pollProgress = 50 + Math.min(45, Math.round((pollCount / MAX_POLLS) * 45));
     if (onProgress) {
       // Không await để không block vòng poll khi pubsub chậm
-      Promise.resolve(onProgress(pollProgress, `Đang xử lý video... (${pollCount}/${MAX_POLLS})`)).catch(
-        (err) => logger.warn(`[generation-video] onProgress lỗi: ${err?.message}`)
-      );
+      Promise.resolve(
+        onProgress(pollProgress, `Đang xử lý video... (${pollCount}/${MAX_POLLS})`)
+      ).catch((err) => logger.warn(`[generation-video] onProgress lỗi: ${err?.message}`));
     }
 
     try {

@@ -8,10 +8,12 @@ import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Field, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
+import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
+import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { useReviewContext } from "../providers/review-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 import { ReviewImagesUpload } from "./review-images-upload";
@@ -22,6 +24,7 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, reviewFormConfig } = useReviewContext();
+  const { LANGUAGE_OPTIONS } = useOptionsTranslation();
 
   return (
     <div className="flex-1 bg-white">
@@ -61,14 +64,44 @@ export const AffiliateConfig = () => {
             onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
           />
         </div>
-
+        {/* NGÔN NGỮ LỜI THOẠI */}
+        <div>
+          <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
+            <Select
+              id="language-select"
+              className="border-gray-200"
+              options={LANGUAGE_OPTIONS}
+              onChange={(v) => patchConfig && patchConfig({ language: v })}
+            />
+          </Field>
+        </div>
+        <ObjectPersonifyPickerDialog
+          name="objectToPersonify"
+          value={reviewFormConfig?.objectToPersonify}
+          onChange={(v) =>
+            patchConfig &&
+            patchConfig({
+              objectToPersonify: v,
+              ...(v?.trim() ? { objectToPersonifyImage: undefined } : {}),
+            })
+          }
+          onCodeChange={(code) => patchConfig && patchConfig({ objectToPersonifyCode: code })}
+          imageValue={reviewFormConfig?.objectToPersonifyImage}
+          onImageChange={(v) =>
+            patchConfig &&
+            patchConfig({
+              objectToPersonifyImage: v,
+              ...(v?.imageBytes ? { objectToPersonify: "", objectToPersonifyCode: undefined } : {}),
+            })
+          }
+          readOnly={!customer}
+        />
         {/* Ảnh sản phẩm */}
         <ReviewImagesUpload
           artStyleImg={reviewFormConfig?.artStyleImg}
           readOnly={!customer}
           onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
         />
-
         <Field noError label={t("Đặt điểm nổi bật của sản phẩm")}>
           <Textarea
             id="scene-prompt-list"
@@ -79,9 +112,7 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />
         </Field>
-
         {/* SỐ LƯỢNG PHÂN CẢNH CẦN TẠO (batchSize) */}
-
         <BatchSizeSlider
           value={reviewFormConfig?.batchSize ?? 8}
           onChange={(v) => {

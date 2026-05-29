@@ -52,6 +52,7 @@ export function Field({
 
   const id = useUUID();
   const child = Children.toArray(props.children)[0] as JSX.Element;
+  const isNativeElement = typeof child.type === "string";
   const childProps = useMemoCompare(child.props);
   const error = useMemo(
     () => (errors && errors[name] ? errors[name].message : null) || props.error,
@@ -125,6 +126,28 @@ export function Field({
       }
       if (childProps.onChange) childProps.onChange(val, extraVal);
     }
+  };
+
+  const controlStyle =
+    !!otherLocales?.length && selectedLocale !== multiLocales[0].value
+      ? { ...childProps.style, display: "none" }
+      : { ...childProps.style };
+
+  const controlProps = {
+    value,
+    onChange,
+    name,
+    id: `${name}-${id}`,
+    readOnly:
+      props.readOnly ||
+      props.disabled ||
+      childProps.readOnly ||
+      readOnly ||
+      isSubmitting,
+    required: props.required || childProps.required,
+    error,
+    style: controlStyle,
+    ...(props.noFocus != null && !isNativeElement ? { noFocus: props.noFocus } : {}),
   };
 
   useEffect(() => {
@@ -202,32 +225,12 @@ export function Field({
             control={control}
             render={() => (
               <>
-                {cloneElement(child, {
-                  ...childProps,
-                  value,
-                  onChange,
-                  name,
-                  id: `${name}-${id}`,
-                  noFocus: props.noFocus,
-                  readOnly:
-                    props.readOnly ||
-                    props.disabled ||
-                    childProps.readOnly ||
-                    readOnly ||
-                    isSubmitting,
-                  required: props.required || childProps.required,
-
-                  error,
-                  style:
-                    !!otherLocales?.length && selectedLocale !== multiLocales[0].value
-                      ? {
-                          ...childProps.style,
-                          display: "none",
-                        }
-                      : {
-                          ...childProps.style,
-                        },
-                })}
+                {cloneElement(
+                  child,
+                  isNativeElement
+                    ? { ...childProps, style: controlStyle }
+                    : { ...childProps, ...controlProps }
+                )}
               </>
             )}
           />
@@ -261,7 +264,7 @@ export function Field({
               ? {
                   value: childProps.value,
                   onChange: childProps.onChange,
-                  noFocus: props.noFocus,
+                  ...(props.noFocus != null && !isNativeElement ? { noFocus: props.noFocus } : {}),
                   readOnly: props.readOnly || childProps.readOnly || readOnly || isSubmitting,
                   required: props.required || childProps.required,
 

@@ -6,14 +6,17 @@
  */
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
+import { RiCloseLine } from "react-icons/ri";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
 
+import { MdPreview } from "react-icons/md";
+import { getImageDisplayName } from "../../elements/utils/elementFormImageUtils";
 import { ReviewScriptTabEnum } from "../constants";
+import { useReviewApi } from "../hook/useReviewApi";
 import { useReviewContext } from "../providers/review-provider";
-import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
+import { getArtStyleImages } from "../utils/reviewFormImageUtils";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
@@ -21,10 +24,11 @@ import { AffiliateSubmit } from "./affiliate-submit";
 export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const toast = useToast();
+  const { generateReview } = useReviewApi();
   const { reviewFormConfig, setBatchRunning, setScriptData, setScriptTab, persistReviewInput } =
     useReviewContext();
   // ── Submit: tách prompt đánh số (1., 2., …) → từng cảnh ──
-  const handleSubmit = useCallback(
+  const handleReviewSubmit = useCallback(
     async (_formData: any) => {
       const promptText = (reviewFormConfig?.prompt ?? "").trim();
       if (!promptText) {
@@ -36,12 +40,16 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(true);
         persistReviewInput?.();
 
-        const result = buildAnalysisDataFromNumberedPrompt(
-          promptText,
-          reviewFormConfig?.aspectRatio,
-          reviewFormConfig?.artStyleId,
-          reviewFormConfig?.artStyle
-        );
+        const artStyleImages = getArtStyleImages(reviewFormConfig).map((img) => ({
+          ...img,
+          name: getImageDisplayName(img), // "non_bao_hiem.webp" → "non_bao_hiem"
+        }));
+        const result = await generateReview({
+          config: {
+            ...reviewFormConfig,
+            artStyleImg: artStyleImages,
+          },
+        });
         if (!result?.scenes?.length) {
           toast.error(
             `${t("Không tách được cảnh nào từ prompt")}. ${t("Dùng định dạng")}: ${t(
@@ -55,22 +63,34 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
         setScriptTab?.(ReviewScriptTabEnum.batch);
         toast.success(t("Đã tạo {{count}} cảnh từ prompt", { count: result.scenes.length }));
       } catch (err: any) {
-        console.error("[ElementForm] parse prompt error:", err);
+        console.error("[ReviewForm] generate review error:", err);
         toast.error(err?.message || t("Lỗi khi phân tích prompt"));
       } finally {
         setBatchRunning?.(false);
       }
     },
-    [reviewFormConfig, persistReviewInput, setBatchRunning, setScriptData, setScriptTab, t, toast]
+    [
+      generateReview,
+      reviewFormConfig,
+      persistReviewInput,
+      setBatchRunning,
+      setScriptData,
+      setScriptTab,
+      toast,
+    ]
   );
 
   return (
-    <Form onSubmit={handleSubmit} defaultValues={reviewFormConfig} className="flex flex-col h-full">
+    <Form
+      onSubmit={handleReviewSubmit}
+      defaultValues={reviewFormConfig}
+      className="flex flex-col h-full"
+    >
       {/* ── Header: Tạo Nhân Vật (cố định) ── */}
       <div className="flex flex-shrink-0 justify-between items-center px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex gap-2 items-center">
           <div className="flex justify-center items-center w-8 h-8 bg-red-500 rounded-full">
-            <RiFileCopy2Line className="text-base text-white" />
+            <MdPreview className="text-base text-white" />
           </div>
           <span className="text-base font-bold text-gray-800">
             {t("Review Sản Phẩm/ Thời Trang")}

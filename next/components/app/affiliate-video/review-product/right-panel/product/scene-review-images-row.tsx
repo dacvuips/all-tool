@@ -37,12 +37,14 @@ export function SceneReviewImagesRow({
   const [slots, setSlots] = useState<(ReviewFormImage | undefined)[]>(() =>
     savedSlots?.length ? [...savedSlots] : [...autoMatched]
   );
-  const [manualMask, setManualMask] = useState<boolean[]>([false, false, false]);
+  const [manualMask, setManualMask] = useState<boolean[]>(() =>
+    Array.from({ length: SLOT_COUNT }, () => false)
+  );
   const lastNotifiedRef = useRef<string>("");
 
   useEffect(() => {
     setSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched]);
-    setManualMask([false, false, false]);
+    setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
     lastNotifiedRef.current = "";
   }, [sceneId]);
 

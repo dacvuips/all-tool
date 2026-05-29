@@ -362,7 +362,7 @@ export function useReviewSceneMedia({
   // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateImage = async () => {
-    if (generatingImage || !scene.visual_prompt) return;
+    if (generatingImage || !(scene.imageGenPrompt || scene.visualPrompt)) return;
 
     // ── Check concurrency limit ──
     const currentImageGenerating = batchGeneratingSceneIdsRef?.current?.size ?? 0;
@@ -555,8 +555,8 @@ export function useReviewSceneMedia({
   };
 
   const handleGenerateVideoToVideo = async () => {
-    const motionPrompt = (scene.motion_description || "").trim();
-    const visualPrompt = scene.visual_prompt?.trim();
+    const motionPrompt = (scene.motionPrompt || "").trim();
+    const visualPrompt = scene.visualPrompt?.trim();
 
     const countFilledVideoSlots = (arr?: (ElementFormVideo | undefined)[]) =>
       arr?.filter((s) => s && (s.videoBytes || s.fifeUrl)).length ?? 0;
@@ -616,8 +616,8 @@ export function useReviewSceneMedia({
         prompt: scene.voiceDisable
           ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
           : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
-              scene.audio_description
-            }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
+              scene.audio ?? ""
+            }, [DIALOGUE]${scene.dialogue ?? ""}`,
         images: imagesArray,
         video: {
           videoBytes: videoPayload.videoBytes,

@@ -25,7 +25,7 @@ import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../../shared/utilities/form";
 import { Img } from "../../../../../shared/utilities/misc";
-import { CharacterItem, CopyVideoScene, DB_NAME } from "../../../constants";
+import { CharacterItem, DB_NAME } from "../../../constants";
 import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
@@ -45,10 +45,11 @@ import { SceneReviewImagesRow } from "./scene-review-images-row";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type EditField =
-  | "visual_prompt"
-  | "motion_description"
-  | "original_content"
-  | "audio_description"
+  | "imageGenPrompt"
+  | "motionPrompt"
+  | "dialogue"
+  | "audio"
+  | "visualPrompt"
   | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
@@ -410,7 +411,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <SceneReviewImagesRow
           sceneId={scene.id}
-          prompt={scene.visual_prompt || ""}
+          prompt={[scene.visualPrompt, scene.imageGenPrompt].filter(Boolean).join(" ").trim()}
           reviewFormConfig={reviewFormConfig}
           savedSlots={scene.reviewImageSlots}
           readOnly={isDisabled}
@@ -444,7 +445,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onOpenGallery={() => setShowGalleryDialog(true)}
             originThumbnailUrl={thumbnailOriginImage}
             originThumbnailLoading={thumbnailLoading}
-            sceneTimestamp={scene.timestamp}
             errorMessage={imageError}
           />
         )}
@@ -479,11 +479,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         renderImagePrompt={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
             {renderEditablePrompt(
-              "visual_prompt",
-              scene.visual_prompt,
+              "imageGenPrompt",
+              scene.imageGenPrompt,
               "text-gray-600",
               <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
-                PROMPT
+                IMAGE PROMPT
               </span>
             )}
           </div>
@@ -491,32 +491,24 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         renderVideoPrompts={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
             {renderEditablePrompt(
-              "visual_prompt",
-              scene.visual_prompt,
-              "text-gray-600",
-              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
-                PROMPT
-              </span>
-            )}
-            {renderEditablePrompt(
-              "motion_description",
-              scene.motion_description,
+              "motionPrompt",
+              scene.motionPrompt,
               "text-teal-700",
               <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
                 [MOTION]:
               </span>
             )}
             {renderEditablePrompt(
-              "audio_description",
-              scene.audio_description ?? "",
+              "audio",
+              scene.audio ?? "",
               "text-purple-700",
               <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [AUDIO]:
               </span>
             )}
             {renderEditablePrompt(
-              "original_content",
-              scene.original_content ?? "",
+              "dialogue",
+              scene.dialogue ?? "",
               "text-green-700 italic",
               <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [DIALOGUE]:
@@ -568,7 +560,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SceneRowGroupProps {
-  scene: CopyVideoScene;
+  scene: ReviewScene;
   index: number;
   nextSceneId?: string;
   isDisabled: boolean;
@@ -577,7 +569,7 @@ interface SceneRowGroupProps {
   forcedTab?: SceneTabKey | null;
   onToggleNoText: (sceneId: string) => void;
   onInsert: (
-    scene: CopyVideoScene,
+    scene: ReviewScene,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;

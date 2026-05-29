@@ -28,14 +28,20 @@ export function getSceneImageSlotCount(serviceImageType?: string): number {
   return serviceImageType === ServiceImageEnum.imageOnly ? 1 : 2;
 }
 
-/** Danh sách ảnh tham chiếu theo thứ tự upload (artStyle → object → item). */
+/** Danh sách ảnh tham chiếu theo thứ tự sidebar (artStyle → nhân hoá → object → item). */
 export function getOrderedReviewImages(
-  config?: Pick<ReviewFormConfig, "artStyleImg" | "objectImg" | "itemImg">
+  config?: Pick<
+    ReviewFormConfig,
+    "artStyleImg" | "objectToPersonifyImage" | "objectImg" | "itemImg"
+  >
 ): ReviewFormImage[] {
   if (!config) return [];
   const images: ReviewFormImage[] = [];
   for (const img of getArtStyleImages(config)) {
     if (img.imageBytes || img.fifeUrl) images.push(img);
+  }
+  if (config.objectToPersonifyImage?.imageBytes || config.objectToPersonifyImage?.fifeUrl) {
+    images.push(config.objectToPersonifyImage);
   }
   if (config.objectImg?.imageBytes || config.objectImg?.fifeUrl) {
     images.push(config.objectImg);

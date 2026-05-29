@@ -234,6 +234,23 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Update review image slots (3 ô ảnh tham chiếu) + derived product image URLs */
+  const handleUpdateReviewImageSlots = async (
+    sceneId: string,
+    slots: any[],
+    imageUrls: string[]
+  ) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, reviewImageSlots: slots, selectedProductImages: imageUrls } : s
+    );
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleUpdateReviewImageSlots] Failed to persist:", err);
+    }
+  };
+
   /** Update element video slots (1 ô video tham chiếu) */
   const handleUpdateElementVideoSlots = async (
     sceneId: string,
@@ -380,6 +397,7 @@ export function SharedBatchListPanel({
               onToggleNoText={handleToggleNoText}
               onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
               onUpdateElementImageSlots={handleUpdateElementImageSlots}
+              onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
               onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
               forcedTab={globalTab}
               {...sceneRowExtraProps}

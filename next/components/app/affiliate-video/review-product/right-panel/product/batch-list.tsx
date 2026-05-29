@@ -3,7 +3,8 @@
  * Thin wrapper around SharedBatchListPanel for the "elements" module.
  * Handles context-specific persistence (IndexedDB) and API calls.
  */
-import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../../constants";
+import { CACHE_KEY, CharacterItem, DB_NAME, STORE_NAME } from "../../../constants";
+import { ReviewScene } from "../../constants";
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../../shared/batch-list";
 import { useReviewApi } from "../../hook/useReviewApi";
@@ -12,7 +13,7 @@ import { BatchActionBar } from "../batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
 
 interface BatchListPanelProps {
-  scenes: CopyVideoScene[];
+  scenes: ReviewScene[];
   characters: CharacterItem[];
 }
 
@@ -93,23 +94,27 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
 
       return {
         id: crypto.randomUUID(),
-        timestamp: "",
-        scene_type: "",
-        visual_prompt: result?.visualPrompt || data.description || "(AI generated)",
-        motion_description: "",
-        original_content: "",
-        audio_description: "",
+        sceneNumber,
+        camera: result?.camera || data.cameraAngle || "",
+        topicTitle: "",
+        visualPrompt: result?.visualPrompt || data.description || "(AI generated)",
+        imageGenPrompt: result?.imagePrompt || data.description || "(AI generated)",
+        motionPrompt: result?.motionPrompt || "",
+        dialogue: result?.dialogue || data.voiceover || "",
+        audio: result?.audio || data.audio || "",
       };
     } catch (err) {
       console.error("[elements/handleInsert] API error:", err);
       return {
         id: crypto.randomUUID(),
-        timestamp: "",
-        scene_type: "",
-        visual_prompt: data.description || "(AI generated)",
-        motion_description: "",
-        original_content: "",
-        audio_description: "",
+        sceneNumber,
+        camera: data.cameraAngle || "",
+        topicTitle: "",
+        visualPrompt: data.description || "(AI generated)",
+        imageGenPrompt: data.description || "(AI generated)",
+        motionPrompt: "",
+        dialogue: data.voiceover || "",
+        audio: data.audio || "",
       };
     }
   };

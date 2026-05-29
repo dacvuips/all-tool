@@ -40,6 +40,43 @@ export const AffiliateVideoResponseSchema = {
   },
   required: ["topicTitle", "characterBaseDescription", "scenes"],
 };
+
+export const ReviewResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    artStyle: { type: Type.STRING },
+    environment: { type: Type.STRING },
+    voiceGender: { type: Type.STRING },
+    voiceTone: { type: Type.STRING },
+    voiceStyle: { type: Type.STRING },
+    audioPrompt: { type: Type.STRING },
+    scenes: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          topicTitle: { type: Type.STRING },
+          sceneNumber: { type: Type.INTEGER },
+          camera: { type: Type.STRING },
+          motionPrompt: { type: Type.STRING },
+          audio: { type: Type.STRING },
+          dialogue: { type: Type.STRING },
+          visualEffects: { type: Type.STRING },
+          visualPrompt: { type: Type.STRING },
+        },
+        required: [
+          "sceneNumber",
+          "motionPrompt",
+          "dialogue",
+          "visualEffects",
+          "topicTitle",
+          "visualPrompt",
+        ],
+      },
+    },
+  },
+  required: ["scenes"],
+};
 export enum StoryModeTypeEnum {
   prompt_to_video = "prompt_to_video",
   image_to_video = "image_to_video",

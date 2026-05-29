@@ -70,19 +70,27 @@ function payloadToGraphQL(payload: MediaGenerationJobPubsubPayload): Record<stri
   };
 }
 
-/** Kiểm tra ownership: throw nếu job không thuộc về user hiện tại */
-async function ensureJobOwner(jobId: string, context: Context): Promise<IMediaGenerationJob> {
+/** Poll / heartbeat: trả null/false thay vì throw — tránh log ồn khi job đã xóa khỏi Mongo. */
+async function findJobOwnedOrNull(
+  jobId: string,
+  context: Context
+): Promise<IMediaGenerationJob | null> {
   if (!context.isAuth) {
     throw new Error("Bạn cần đăng nhập");
   }
   const job = (await mediaGenerationJobService.findOne({
     _id: jobId,
   })) as unknown as IMediaGenerationJob | null;
+  if (!job) return null;
+  if ((job as any).customerId !== context.id) return null;
+  return job;
+}
+
+/** Cancel / retry: throw rõ ràng khi job không tồn tại hoặc không thuộc user. */
+async function ensureJobOwner(jobId: string, context: Context): Promise<IMediaGenerationJob> {
+  const job = await findJobOwnedOrNull(jobId, context);
   if (!job) {
     throw new Error("Không tìm thấy job");
-  }
-  if ((job as any).customerId !== context.id) {
-    throw new Error("Bạn không có quyền truy cập job này");
   }
   return job;
 }
@@ -144,7 +152,7 @@ export default {
         args: { id: string },
         context: Context
       ) => {
-        const job = await ensureJobOwner(args.id, context);
+        const job = await findJobOwnedOrNull(args.id, context);
         return toGraphQLJob(job);
       },
     },
@@ -179,7 +187,8 @@ export default {
         args: { id: string },
         context: Context
       ) => {
-        await ensureJobOwner(args.id, context);
+        const job = await findJobOwnedOrNull(args.id, context);
+        if (!job) return false;
         return refreshJobWatch(args.id, context.id);
       },
     },

@@ -14,7 +14,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { CopyVideoScene, DB_NAME } from "../../constants";
+import { DB_NAME } from "../../constants";
+import { ReviewScene } from "../constants";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { THUMBNAIL_KEY_PREFIX } from "../../hook/useVideoThumbnail";
@@ -29,15 +30,15 @@ import { useReviewApi } from "./useReviewApi";
 export const DEFAULT_IMAGE_CONCURRENCY = 2;
 export const DEFAULT_VIDEO_CONCURRENCY = 2;
 
-function getSceneMotionPrompt(scene: CopyVideoScene): string {
-  return (scene.motion_description || "").trim() || (scene.visual_prompt || "").trim();
+function getSceneMotionPrompt(scene: ReviewScene): string {
+  return (scene.motionPrompt || "").trim() || (scene.visualPrompt || "").trim();
 }
 
-function sceneHasVideoPrompt(scene: CopyVideoScene): boolean {
+function sceneHasVideoPrompt(scene: ReviewScene): boolean {
   return !!getSceneMotionPrompt(scene);
 }
 
-export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
+export function useReviewBatchActions(scenes: ReviewScene[]) {
   const { t } = useTranslation();
   const {
     reviewGenerateImage,
@@ -68,7 +69,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   const thumbnailDB = useIndexedDB<string>("scene-thumbnails", DB_NAME.generateReview);
 
   const getSceneProductImageUrls = useCallback(
-    async (scene: CopyVideoScene) =>
+    async (scene: ReviewScene) =>
       (await selectedProductImagesDB.get(scene.id)) ?? scene.selectedProductImages,
     [selectedProductImagesDB]
   );
@@ -90,8 +91,8 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     const eligibleScenes = scenes.filter((s) => !s.disabled);
     if (eligibleScenes.length === 0) return "";
     return eligibleScenes
-      .filter((s) => s.original_content)
-      .map((s) => `"${s.original_content}"`)
+      .filter((s) => s.dialogue)
+      .map((s) => `"${s.dialogue}"`)
       .join("\n");
   }, [scenes]);
 
@@ -213,7 +214,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     if (batchRunning) return;
     let cancelled = false;
     (async () => {
-      const eligible = scenes.filter((s) => !s.disabled && s.visual_prompt);
+      const eligible = scenes.filter((s) => !s.disabled && (s.imageGenPrompt || s.visualPrompt));
       let pending = 0;
       let available = 0;
       for (const scene of eligible) {
@@ -252,7 +253,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         } else {
           // image_to_video mode: count as pending if it has a generated image OR an visual_prompt
           const img = await getGeneratedImage(scene.id);
-          if (img || scene.visual_prompt) pending++;
+          if (img || scene.imageGenPrompt || scene.visualPrompt) pending++;
         }
       }
       if (!cancelled) {
@@ -528,7 +529,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         }
 
         // Skip scenes without an image prompt
-        if (!scene.visual_prompt) {
+        if (!(scene.imageGenPrompt || scene.visualPrompt)) {
           skipped++;
           setBatchSkipped(skipped);
           completed++;
@@ -721,7 +722,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     }
 
     // Build pairs: each pair = (scene[i], scene[i+1]) where both have generated images
-    const pairs: { scene: CopyVideoScene; nextScene: CopyVideoScene }[] = [];
+    const pairs: { scene: ReviewScene; nextScene: ReviewScene }[] = [];
     for (let i = 0; i < eligibleScenes.length - 1; i++) {
       pairs.push({ scene: eligibleScenes[i], nextScene: eligibleScenes[i + 1] });
     }
@@ -875,10 +876,10 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     const rows = enabledScenes.map((s) =>
       [
         String(s.sceneNumber),
-        escapeCSV(s.visual_prompt || ""),
-        escapeCSV(s.visual_prompt || ""),
-        escapeCSV(s.motion_description || ""),
-        escapeCSV(s.original_content || ""),
+        escapeCSV(s.visualPrompt || ""),
+        escapeCSV(s.imageGenPrompt || ""),
+        escapeCSV(s.motionPrompt || ""),
+        escapeCSV(s.dialogue || ""),
       ].join(",")
     );
 
