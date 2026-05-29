@@ -8,7 +8,7 @@ import { ReviewFormConfig, ReviewFormImage } from "../../constants";
 import { matchReviewImagesInPrompt } from "../../utils/matchElementImagesInPrompt";
 import { SceneReviewImageSlot } from "../scene-review-image-slot";
 
-const SLOT_COUNT = 3;
+const SLOT_COUNT = 4;
 
 export interface SceneReviewImagesRowProps {
   sceneId: string;
@@ -114,6 +114,7 @@ export function SceneReviewImagesRow({
             value={slots[i]}
             readOnly={readOnly}
             onChange={(v) => handleSlotChange(i, v)}
+            imageClass="w-11 h-11"
           />
         ))}
       </div>

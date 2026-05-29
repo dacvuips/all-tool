@@ -38,7 +38,7 @@ import { ServiceImageEnum } from "../../constants";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
-import { AddSceneButton, InsertPosition, NewSceneData } from "../add-scene-modal";
+import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -226,7 +226,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     }
   }, [editValue]);
 
-  const isImageOnly = elementFormConfig.serviceImageType === ServiceImageEnum.imageOnly;
+  const isImageOnly = elementFormConfig?.serviceImageType === ServiceImageEnum.imageOnly;
   console.log(isImageOnly);
 
   /** Renders editable prompt cell content */
