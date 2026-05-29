@@ -280,7 +280,7 @@ export function AddSceneButton({ scene, position, characters, onInsert }: AddSce
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Tooltip text
-  const tooltipText = position === "above" ? t("Thêm cảnh phía trên") : t("Thêm cảnh phía dưới");
+  const tooltipText = position === "above" ? t("Thêm cảnh phía trước") : t("Thêm cảnh phía sau");
 
   const showTooltip = () => {
     const rect = btnRef.current?.getBoundingClientRect();
@@ -326,7 +326,7 @@ export function AddSceneButton({ scene, position, characters, onInsert }: AddSce
         onClick={() => setIsModalOpen(true)}
         onMouseEnter={showTooltip}
         onMouseLeave={hideTooltip}
-        className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center cursor-pointer shadow-md transition-all hover:scale-110 z-10 relative"
+        className="w-6 h-6 rounded-full bg-purple-500 hover:bg-purple-600 border-2 border-purple-300 text-white flex items-center justify-center cursor-pointer shadow-md transition-colors z-10 relative"
       >
         <RiAddLine className="text-xs" />
       </button>

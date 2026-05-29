@@ -637,7 +637,7 @@ export function SceneRowGroup({
 
   return (
     <div className="relative group" onMouseEnter={enter} onMouseLeave={leave}>
-      {/* Add ABOVE button – centered on top border, only visible on hover */}
+      {/* Add ABOVE button – centered on top border, only visible on hover
       {index === 0 && (
         <div
           className={`absolute -top-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
@@ -651,7 +651,7 @@ export function SceneRowGroup({
             onInsert={onInsert}
           />
         </div>
-      )}
+      )} */}
 
       {/* Scene data row */}
       <SceneBatchRow
@@ -671,7 +671,7 @@ export function SceneRowGroup({
         onUpdateSelectedProductImages={onUpdateSelectedProductImages}
       />
 
-      {/* Add BELOW button – centered on bottom border, only visible on hover */}
+      {/* Add BELOW button – centered on bottom border, only visible on hover
       <div
         className={`absolute -bottom-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
           hovered ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -683,7 +683,7 @@ export function SceneRowGroup({
           characters={characters}
           onInsert={onInsert}
         />
-      </div>
+      </div> */}
     </div>
   );
 }

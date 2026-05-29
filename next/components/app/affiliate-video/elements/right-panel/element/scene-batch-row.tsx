@@ -613,7 +613,7 @@ export function SceneRowGroup({
 
   return (
     <div className="flex relative flex-col group" onMouseEnter={enter} onMouseLeave={leave}>
-      {/* Add ABOVE button – centered on top border, only visible on hover */}
+      {/* Add ABOVE button – centered on top border, only visible on hover
       {index === 0 && (
         <div
           className={`absolute -top-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
@@ -627,7 +627,7 @@ export function SceneRowGroup({
             onInsert={onInsert}
           />
         </div>
-      )}
+      )} */}
 
       {/* Scene data row – flex-1 so it fills the grid cell height */}
       <div className="flex-1">
@@ -649,7 +649,7 @@ export function SceneRowGroup({
         />
       </div>
 
-      {/* Add BELOW button – always at the bottom of the group, only visible on hover */}
+      {/* Add BELOW button – always at the bottom of the group, only visible on hover
       <div
         className={`flex justify-center py-1.5 transition-all duration-200 ${
           hovered ? "opacity-100" : "opacity-0 pointer-events-none"
@@ -661,7 +661,7 @@ export function SceneRowGroup({
           characters={characters}
           onInsert={onInsert}
         />
-      </div>
+      </div> */}
     </div>
   );
 }
