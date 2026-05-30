@@ -496,14 +496,19 @@ export function useReviewSceneMedia({
         throw new Error("Missing start or end image");
       }
 
+      if (!isStitch && !generatedImage) {
+        const message = t("Cần tạo ảnh trước khi tạo video");
+        setVideoError(message);
+        reportSceneError?.(scene.id, "video", message);
+        throw new Error("Missing generated image");
+      }
+
       const videoParams = await buildReviewVideoGenerateParams({
         scene,
         scriptData,
         isStitch,
-        generatedImage: isStitch ? generatedImage : undefined,
+        generatedImage,
         nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
-        selectedProductImages,
-        selectedReviewImageSlots,
       });
 
       const result = await generateVideo({

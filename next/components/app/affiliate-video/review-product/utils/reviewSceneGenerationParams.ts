@@ -11,7 +11,6 @@ import type {
 } from "../hook/useReviewApi";
 import {
   productImageUrlsToApiImages,
-  resolveReviewReferenceImagesForApi,
 } from "./reviewFormImageUtils";
 
 export type ElementScriptLike =
@@ -96,8 +95,6 @@ export async function buildReviewVideoGenerateParams(options: {
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
-  selectedProductImages?: string[];
-  selectedReviewImageSlots?: (ReviewFormImage | undefined)[];
 }): Promise<GenerateVideoParams> {
   const {
     scene,
@@ -105,8 +102,6 @@ export async function buildReviewVideoGenerateParams(options: {
     isStitch,
     generatedImage,
     nextGeneratedImage,
-    selectedProductImages,
-    selectedReviewImageSlots,
   } = options;
 
   let images: GenerateVideoParams["images"];
@@ -119,15 +114,10 @@ export async function buildReviewVideoGenerateParams(options: {
       { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType },
       { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
     ];
+  } else if (generatedImage) {
+    images = [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }];
   } else {
-    const slotsForVideo = pickReviewImageSlotsForScene(scene, selectedReviewImageSlots);
-    images = await resolveReviewReferenceImagesForApi({
-      urls: selectedProductImages,
-      slots: slotsForVideo,
-    });
-    if (!images?.length) {
-      images = undefined;
-    }
+    images = undefined;
   }
 
   return {

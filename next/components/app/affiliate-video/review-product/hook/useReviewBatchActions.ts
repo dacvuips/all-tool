@@ -646,14 +646,22 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           continue;
         }
 
+        const sceneImage = await getGeneratedImage(scene.id);
+        if (!sceneImage) {
+          skipped++;
+          setVideoBatchSkipped(skipped);
+          completed++;
+          setVideoBatchCompleted(completed);
+          continue;
+        }
+
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const selectedUrls = await getSceneProductImageUrls(scene);
           const videoParams = await buildReviewVideoGenerateParams({
             scene,
             scriptData,
-            selectedProductImages: selectedUrls,
+            generatedImage: sceneImage,
           });
           await generateVideo({
             ...videoParams,
