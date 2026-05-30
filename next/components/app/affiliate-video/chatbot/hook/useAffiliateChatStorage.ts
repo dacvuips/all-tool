@@ -45,7 +45,7 @@ export function useAffiliateChatStorage(
       (m) =>
         (m.role === "user" || m.role === "assistant") &&
         typeof m.content === "string" &&
-        m.content.trim().length > 0
+        (m.content.trim().length > 0 || (m.attachments?.length ?? 0) > 0)
     );
   }, [db, storageKey]);
 

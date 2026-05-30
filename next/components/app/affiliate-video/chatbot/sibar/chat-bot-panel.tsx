@@ -1,6 +1,6 @@
 /**
- * trending-chat-panel.tsx
- * Chat AI trong panel trending – gọi Gemini qua /api/app/affiliate-trending-chat/
+ * chat-bot-panel.tsx
+ * Chat AI sidebar chatbot – gọi Gemini qua /api/app/affiliate-chat-bot/
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -51,7 +51,17 @@ function messagesPersistSnapshot(messages: AffiliateChatMessage[]): string {
   return JSON.stringify(
     messages
       .filter((m) => m.id !== AFFILIATE_CHAT_WELCOME_ID)
-      .map((m) => ({ id: m.id, role: m.role, content: m.content }))
+      .map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        attachments: m.attachments?.map((a) => ({
+          kind: a.kind,
+          mimeType: a.mimeType,
+          name: a.name,
+          dataLen: a.data?.length ?? 0,
+        })),
+      }))
   );
 }
 
@@ -219,10 +229,9 @@ export function ChatBotSidebar() {
     if (snapshot === lastPersistedSnapshotRef.current) return;
 
     try {
-      const withoutMedia = current.map(({ attachments: _a, ...m }) => m);
-      await persistRef.current(withoutMedia);
+      await persistRef.current(current);
     } catch (err) {
-      console.warn("[trending-chat] IndexedDB persist failed", err);
+      console.warn("[chat-bot] IndexedDB persist failed", err);
       return;
     }
 
@@ -451,7 +460,7 @@ export function ChatBotSidebar() {
     try {
       await clearStoredMessages();
     } catch (err) {
-      console.warn("[trending-chat] IndexedDB clear failed", err);
+      console.warn("[chat-bot] IndexedDB clear failed", err);
     }
   }, [welcomeMessage, clearStoredMessages]);
 
