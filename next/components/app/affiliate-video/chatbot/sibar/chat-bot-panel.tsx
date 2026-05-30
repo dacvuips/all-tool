@@ -4,15 +4,33 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiDeleteBinLine, RiLoader4Line, RiSendPlaneFill } from "react-icons/ri";
+import {
+  RiAttachment2,
+  RiCloseLine,
+  RiDeleteBinLine,
+  RiLoader4Line,
+  RiSendPlaneFill,
+} from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { AFFILIATE_CHAT_KIND } from "../../constants";
 
-import { AFFILIATE_CHAT_WELCOME_ID, AffiliateChatMessage } from "../hook/affiliateChatTypes";
+import {
+  AFFILIATE_CHAT_WELCOME_ID,
+  AffiliateChatMediaAttachment,
+  AffiliateChatMessage,
+} from "../hook/affiliateChatTypes";
 import { useAffiliateChatStorage } from "../hook/useAffiliateChatStorage";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 const CHAT_KIND = AFFILIATE_CHAT_KIND.trendingGymPt;
+
+const MAX_PENDING_ATTACHMENTS = 10;
+const MAX_IMAGE_MB = 10;
+const MAX_VIDEO_MB = 30;
+const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"];
+const FILE_ACCEPT =
+  "image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo,.jpg,.jpeg,.png,.webp,.gif,.mp4,.webm,.mov,.avi";
 
 const WELCOME_I18N_KEY =
   "Xin chào! Tôi có thể gợi ý ý tưởng mẹo vặt, nhân vật, kịch bản scene và prompt cho video của bạn.";
@@ -37,6 +55,123 @@ function messagesPersistSnapshot(messages: AffiliateChatMessage[]): string {
   );
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+      if (base64) resolve(base64);
+      else reject(new Error("Failed to read file as base64"));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function base64ToBlobUrl(base64: string, mimeType: string): string {
+  const byteChars = atob(base64);
+  const byteNumbers = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  return URL.createObjectURL(new Blob([byteNumbers], { type: mimeType }));
+}
+
+function detectMediaKind(file: File): "image" | "video" | null {
+  if (ACCEPTED_IMAGE_TYPES.includes(file.type) || /\.(jpe?g|png|webp|gif)$/i.test(file.name)) {
+    return "image";
+  }
+  if (ACCEPTED_VIDEO_TYPES.includes(file.type) || /\.(mp4|webm|mov|avi)$/i.test(file.name)) {
+    return "video";
+  }
+  return null;
+}
+
+function ChatMessageMedia({ attachments }: { attachments: AffiliateChatMediaAttachment[] }) {
+  if (!attachments.length) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1.5">
+      {attachments.map((att, i) => (
+        <ChatMediaThumb key={`${att.kind}-${i}-${att.name || ""}`} attachment={att} />
+      ))}
+    </div>
+  );
+}
+
+function ChatMediaThumb({ attachment }: { attachment: AffiliateChatMediaAttachment }) {
+  const previewSrc = useMemo(() => {
+    if (!attachment.data) return null;
+    return base64ToBlobUrl(
+      attachment.data,
+      attachment.mimeType || (attachment.kind === "video" ? "video/mp4" : "image/png")
+    );
+  }, [attachment.data, attachment.kind, attachment.mimeType]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc?.startsWith("blob:")) URL.revokeObjectURL(previewSrc);
+    };
+  }, [previewSrc]);
+
+  if (!previewSrc) return null;
+
+  return (
+    <div className="overflow-hidden w-16 h-16 bg-black/20 rounded-lg">
+      {attachment.kind === "video" ? (
+        <video src={previewSrc} className="object-cover w-full h-full" muted playsInline />
+      ) : (
+        <img src={previewSrc} alt="" className="object-cover w-full h-full" />
+      )}
+    </div>
+  );
+}
+
+function PendingAttachmentThumb({
+  attachment,
+  onRemove,
+}: {
+  attachment: AffiliateChatMediaAttachment;
+  onRemove: () => void;
+}) {
+  const previewSrc = useMemo(() => {
+    if (!attachment.data) return null;
+    return base64ToBlobUrl(
+      attachment.data,
+      attachment.mimeType || (attachment.kind === "video" ? "video/mp4" : "image/png")
+    );
+  }, [attachment.data, attachment.kind, attachment.mimeType]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc?.startsWith("blob:")) URL.revokeObjectURL(previewSrc);
+    };
+  }, [previewSrc]);
+
+  if (!previewSrc) return null;
+
+  return (
+    <div className="relative flex-shrink-0 w-14 h-14">
+      <div className="overflow-hidden w-full h-full bg-gray-100 rounded-lg border border-gray-200">
+        {attachment.kind === "video" ? (
+          <video src={previewSrc} className="object-cover w-full h-full" muted playsInline />
+        ) : (
+          <img src={previewSrc} alt="" className="object-cover w-full h-full" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex absolute -top-1 -right-1 justify-center items-center w-5 h-5 text-white bg-gray-800 rounded-full hover:bg-gray-900"
+        aria-label="Remove"
+      >
+        <RiCloseLine className="text-sm" />
+      </button>
+    </div>
+  );
+}
+
 export function ChatBotSidebar() {
   const { t } = useTranslation();
   const toast = useToast();
@@ -53,9 +188,13 @@ export function ChatBotSidebar() {
   const [messages, setMessages] = useState<AffiliateChatMessage[]>(() => [welcomeMessage]);
   const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState("");
+  const [pendingAttachments, setPendingAttachments] = useState<AffiliateChatMediaAttachment[]>(
+    []
+  );
   const [loading, setLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
@@ -80,7 +219,8 @@ export function ChatBotSidebar() {
     if (snapshot === lastPersistedSnapshotRef.current) return;
 
     try {
-      await persistRef.current(current);
+      const withoutMedia = current.map(({ attachments: _a, ...m }) => m);
+      await persistRef.current(withoutMedia);
     } catch (err) {
       console.warn("[trending-chat] IndexedDB persist failed", err);
       return;
@@ -106,6 +246,7 @@ export function ChatBotSidebar() {
     let cancelled = false;
     setHydrated(false);
     setInput("");
+    setPendingAttachments([]);
     lastPersistedSnapshotRef.current = "";
     persistSeqRef.current += 1;
     if (persistDebounceRef.current) {
@@ -158,21 +299,88 @@ export function ChatBotSidebar() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  const processFiles = useCallback(
+    async (files: FileList | File[]) => {
+      const list = Array.from(files);
+      if (list.length === 0) return;
+
+      const remaining = MAX_PENDING_ATTACHMENTS - pendingAttachments.length;
+      if (remaining <= 0) {
+        toast.error(t("Tối đa {{count}} file đính kèm", { count: MAX_PENDING_ATTACHMENTS }));
+        return;
+      }
+
+      const toAdd: AffiliateChatMediaAttachment[] = [];
+
+      for (const file of list.slice(0, remaining)) {
+        const kind = detectMediaKind(file);
+        if (!kind) {
+          toast.error(t("Chỉ hỗ trợ ảnh (JPG, PNG, WebP, GIF) hoặc video (MP4, WebM, MOV, AVI)"));
+          continue;
+        }
+
+        const maxMb = kind === "video" ? MAX_VIDEO_MB : MAX_IMAGE_MB;
+        const sizeMB = file.size / (1024 * 1024);
+        if (sizeMB > maxMb) {
+          toast.error(
+            `${file.name}: ${t("File quá lớn")}. ${t("Tối đa")} ${maxMb}MB (${sizeMB.toFixed(1)}MB)`
+          );
+          continue;
+        }
+
+        try {
+          const data = await fileToBase64(file);
+          toAdd.push({
+            kind,
+            mimeType:
+              file.type || (kind === "video" ? "video/mp4" : "image/png"),
+            data,
+            name: file.name,
+          });
+        } catch {
+          toast.error(t("Không đọc được file: {{name}}", { name: file.name }));
+        }
+      }
+
+      if (toAdd.length > 0) {
+        setPendingAttachments((prev) => [...prev, ...toAdd].slice(0, MAX_PENDING_ATTACHMENTS));
+      }
+    },
+    [pendingAttachments.length, t, toast]
+  );
+
+  const onFilesSelected = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (files?.length) void processFiles(files);
+      e.target.value = "";
+    },
+    [processFiles]
+  );
+
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading || !chatBotId) return;
+    const attachments = pendingAttachments;
+    if ((!text && attachments.length === 0) || loading || !chatBotId) return;
 
-    const userMsg: AffiliateChatMessage = { id: newId(), role: "user", content: text };
+    const userMsg: AffiliateChatMessage = {
+      id: newId(),
+      role: "user",
+      content: text,
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
     const apiMessages = [
       ...messages.filter((m) => m.id !== AFFILIATE_CHAT_WELCOME_ID),
       userMsg,
     ].map((m) => ({
       role: m.role,
       content: m.content,
+      ...(m.attachments?.length ? { attachments: m.attachments } : {}),
     }));
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    setPendingAttachments([]);
     setLoading(true);
 
     try {
@@ -215,16 +423,28 @@ export function ChatBotSidebar() {
       toast.error(err?.message || t("Gửi tin nhắn thất bại"));
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
       setInput(text);
+      setPendingAttachments(attachments);
       schedulePersist();
     } finally {
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, loading, messages, chatBotId, toast, t, flushPersist, schedulePersist]);
+  }, [
+    input,
+    pendingAttachments,
+    loading,
+    messages,
+    chatBotId,
+    toast,
+    t,
+    flushPersist,
+    schedulePersist,
+  ]);
 
   const clearChat = useCallback(async () => {
     setMessages([welcomeMessage]);
     setInput("");
+    setPendingAttachments([]);
     lastPersistedSnapshotRef.current = "";
     persistSeqRef.current += 1;
     if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
@@ -281,7 +501,10 @@ export function ChatBotSidebar() {
                   : "bg-gray-100 text-gray-800 rounded-bl-md"
               }`}
             >
-              {m.content}
+              {m.attachments?.length ? (
+                <ChatMessageMedia attachments={m.attachments} />
+              ) : null}
+              {m.content ? <span>{m.content}</span> : null}
             </div>
           </div>
         ))}
@@ -295,29 +518,78 @@ export function ChatBotSidebar() {
         )}
       </div>
 
-      <div className="p-3 bg-white border-t border-gray-200">
-        <div className="flex gap-2 items-end">
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            disabled={loading || !chatBotId}
-            rows={2}
-            placeholder={
-              chatBotId ? t("Nhập câu hỏi...") : t("Chọn chatbot (Dùng ngay) để bắt đầu chat")
-            }
-            className="flex-1 px-3 py-2 text-sm rounded-xl border border-gray-200 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50"
-          />
-          <button
-            type="button"
-            onClick={sendMessage}
-            disabled={loading || !input.trim() || !chatBotId}
-            className="flex flex-shrink-0 justify-center items-center w-10 h-10 text-white rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
-            title={t("Gửi")}
+      <div className="bg-white border-t border-gray-200">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={FILE_ACCEPT}
+          multiple
+          className="hidden"
+          onChange={onFilesSelected}
+          disabled={loading || !chatBotId}
+        />
+        {pendingAttachments.length > 0 ? (
+          <div className="flex gap-2 px-3 pt-2 overflow-x-auto">
+            {pendingAttachments.map((att, index) => (
+              <PendingAttachmentThumb
+                key={`${att.kind}-${index}-${att.name || att.data.slice(0, 12)}`}
+                attachment={att}
+                onRemove={() =>
+                  setPendingAttachments((prev) => prev.filter((_, i) => i !== index))
+                }
+              />
+            ))}
+          </div>
+        ) : null}
+        <div className="p-3">
+          <div
+            className={`relative rounded-xl border border-gray-200 focus-within:ring-2 focus-within:ring-primary/30 ${
+              loading || !chatBotId ? "bg-gray-50" : "bg-white"
+            }`}
           >
-            <RiSendPlaneFill />
-          </button>
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={onKeyDown}
+              disabled={loading || !chatBotId}
+              rows={2}
+              placeholder={
+                chatBotId
+                  ? t("Nhập câu hỏi...")
+                  : t("Chọn chatbot (Dùng ngay) để bắt đầu chat")
+              }
+              className="block w-full px-3 py-2 pr-[5.5rem] pb-11 text-sm bg-transparent rounded-xl border-0 resize-none focus:outline-none disabled:cursor-not-allowed"
+            />
+            <div className="absolute right-2 bottom-2 flex gap-1 items-center">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={
+                  loading ||
+                  !chatBotId ||
+                  pendingAttachments.length >= MAX_PENDING_ATTACHMENTS
+                }
+                className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-gray-600 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t("Đính kèm ảnh / video")}
+              >
+                <RiAttachment2 />
+              </button>
+              <button
+                type="button"
+                onClick={sendMessage}
+                disabled={
+                  loading ||
+                  (!input.trim() && pendingAttachments.length === 0) ||
+                  !chatBotId
+                }
+                className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-white rounded-lg bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t("Gửi")}
+              >
+                <RiSendPlaneFill />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

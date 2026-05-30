@@ -354,7 +354,7 @@ function isServiceUnavailableError(err: any): boolean {
  * - Các lỗi khác → throw ngay.
  * - Tối đa thử 5 key. Nếu quá 5 key → throw error ngay.
  */
-const MAX_KEY_RETRIES = 5;
+const MAX_KEY_RETRIES = 10;
 
 export async function callWithKeyRotation<T>(
   entries: GeminiClientEntry[],
@@ -710,8 +710,7 @@ export function buildImageReferenceNotes(opts: {
   personifyImages?: ReferenceImageInput[];
 }): string {
   const productUrls = opts.productUrls?.filter(Boolean) || [];
-  const hasProduct =
-    productUrls.length > 0 || filterReferenceImages(opts.productImages).length > 0;
+  const hasProduct = productUrls.length > 0 || filterReferenceImages(opts.productImages).length > 0;
   const hasPersonify = filterReferenceImages(opts.personifyImages).length > 0;
 
   if (!hasProduct && !hasPersonify) return "";

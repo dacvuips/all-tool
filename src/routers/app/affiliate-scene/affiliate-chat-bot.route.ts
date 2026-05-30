@@ -12,16 +12,28 @@ import {
 
 const MAX_MESSAGES = 40;
 const MAX_MESSAGE_CHARS = 8000;
+const MAX_ATTACHMENTS_PER_MESSAGE = 10;
+/** ~10MB ảnh / ~30MB video (ước lượng từ độ dài base64). */
+const MAX_IMAGE_BASE64_CHARS = Math.ceil((10 * 1024 * 1024 * 4) / 3);
+const MAX_VIDEO_BASE64_CHARS = Math.ceil((30 * 1024 * 1024 * 4) / 3);
 
 const SYSTEM_INSTRUCTION = `Bạn là trợ lý AI chuyên tạo video affiliate trending (mẹo vặt, nhân hoá đồ vật, kịch bản ngắn TikTok/Reels).
 Nhiệm vụ: gợi ý objectToPersonify, tipContent, cải thiện kịch bản/scene, dialogue, visual prompt (tiếng Anh cho phần hình ảnh).
 Trả lời súc tích, thực tế. Khi user cần cấu hình, có thể đưa ví dụ JSON ngắn gọn.`;
 
 type ChatRole = "user" | "assistant";
+type ChatMediaKind = "image" | "video";
+
+interface ChatMediaAttachment {
+  kind: ChatMediaKind;
+  mimeType: string;
+  data: string;
+}
 
 interface ChatMessage {
   role: ChatRole;
   content: string;
+  attachments?: ChatMediaAttachment[];
 }
 
 interface TrendingChatContext {
@@ -48,11 +60,71 @@ function buildContextNote(ctx?: TrendingChatContext): string {
   return `\n\n*** CẤU HÌNH HIỆN TẠI ***\n${lines.join("\n")}`;
 }
 
+function normalizeBase64Payload(data: string): string {
+  const trimmed = data.trim();
+  const match = trimmed.match(/^data:([^;]+);base64,([\s\S]+)$/);
+  return match ? match[2] : trimmed;
+}
+
+function sanitizeAttachments(raw?: ChatMediaAttachment[]): ChatMediaAttachment[] {
+  if (!Array.isArray(raw) || raw.length === 0) return [];
+
+  const out: ChatMediaAttachment[] = [];
+  for (const item of raw.slice(0, MAX_ATTACHMENTS_PER_MESSAGE)) {
+    if (item?.kind !== "image" && item?.kind !== "video") continue;
+    const data = normalizeBase64Payload(typeof item.data === "string" ? item.data : "");
+    if (!data) continue;
+
+    const maxChars = item.kind === "video" ? MAX_VIDEO_BASE64_CHARS : MAX_IMAGE_BASE64_CHARS;
+    if (data.length > maxChars) {
+      throw Object.assign(
+        new Error(
+          item.kind === "video"
+            ? "Video đính kèm quá lớn (tối đa ~30MB)"
+            : "Ảnh đính kèm quá lớn (tối đa ~10MB)"
+        ),
+        { statusCode: 400 }
+      );
+    }
+
+    const mimeType =
+      (typeof item.mimeType === "string" && item.mimeType.trim()) ||
+      (item.kind === "video" ? "video/mp4" : "image/png");
+
+    out.push({ kind: item.kind, mimeType, data });
+  }
+  return out;
+}
+
+function messageHasPayload(m: ChatMessage): boolean {
+  return Boolean(m.content?.trim()) || (m.attachments?.length ?? 0) > 0;
+}
+
+function buildGeminiParts(m: ChatMessage) {
+  const parts: { text?: string; inlineData?: { data: string; mimeType: string } }[] = [];
+
+  for (const att of m.attachments || []) {
+    parts.push({
+      inlineData: {
+        data: att.data,
+        mimeType: att.mimeType,
+      },
+    });
+  }
+
+  const text = m.content?.trim();
+  if (text) parts.push({ text });
+
+  return parts;
+}
+
 function toGeminiContents(messages: ChatMessage[]) {
-  return messages.map((m) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content.trim() }],
-  }));
+  return messages
+    .map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: buildGeminiParts(m),
+    }))
+    .filter((m) => m.parts.length > 0);
 }
 
 export default [
@@ -76,12 +148,14 @@ export default [
           return res.status(400).json({ message: "Chatbot không tồn tại" });
         }
 
-        const messages = (body.messages || []).filter(
-          (m) =>
-            (m.role === "user" || m.role === "assistant") &&
-            typeof m.content === "string" &&
-            m.content.trim().length > 0
-        );
+        const messages = (body.messages || [])
+          .filter((m) => m.role === "user" || m.role === "assistant")
+          .map((m) => ({
+            role: m.role as ChatRole,
+            content: typeof m.content === "string" ? m.content : "",
+            attachments: sanitizeAttachments(m.attachments),
+          }))
+          .filter(messageHasPayload);
 
         if (messages.length === 0) {
           return res.status(400).json({ message: "Thiếu tin nhắn" });
@@ -95,6 +169,7 @@ export default [
         const trimmed = messages.slice(-MAX_MESSAGES).map((m) => ({
           role: m.role,
           content: m.content.slice(0, MAX_MESSAGE_CHARS),
+          attachments: m.attachments,
         }));
 
         await checkRequestLimit(context.id);
