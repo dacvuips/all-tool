@@ -3,11 +3,14 @@
  * Chat AI sidebar chatbot – gọi Gemini qua /api/app/affiliate-chat-bot/
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import copy from "copy-to-clipboard";
 import { useTranslation } from "react-i18next";
 import {
   RiAttachment2,
+  RiCheckLine,
   RiCloseLine,
   RiDeleteBinLine,
+  RiFileCopyLine,
   RiLoader4Line,
   RiSendPlaneFill,
 } from "react-icons/ri";
@@ -98,6 +101,60 @@ function detectMediaKind(file: File): "image" | "video" | null {
   return null;
 }
 
+function ChatMessageBubble({ message }: { message: AffiliateChatMessage }) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const [copied, setCopied] = useState(false);
+  const isUser = message.role === "user";
+  const hasContent = Boolean(message.content?.trim());
+
+  const handleCopy = useCallback(() => {
+    if (!message.content) return;
+    copy(message.content);
+    setCopied(true);
+    toast.success(t("Đã sao chép"));
+    setTimeout(() => setCopied(false), 2000);
+  }, [message.content, t, toast]);
+
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div
+        className={`group relative max-w-[92%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
+          isUser ? "bg-primary text-white rounded-br-md" : "bg-gray-100 text-gray-800 rounded-bl-md"
+        }`}
+      >
+        {hasContent ? (
+          <button
+            type="button"
+            onClick={handleCopy}
+            className={`absolute top-1.5 right-1.5 p-1 rounded transition-all opacity-0 group-hover:opacity-100 ${
+              copied ? "opacity-100" : ""
+            } ${
+              isUser
+                ? "text-white/70 hover:text-white hover:bg-white/10"
+                : "text-gray-400 hover:text-gray-600 hover:bg-gray-200/60"
+            }`}
+            title={t("Sao chép")}
+            aria-label={t("Sao chép")}
+          >
+            {copied ? (
+              <RiCheckLine className={`text-sm ${isUser ? "text-white" : "text-green-500"}`} />
+            ) : (
+              <RiFileCopyLine className="text-sm" />
+            )}
+          </button>
+        ) : null}
+        {message.attachments?.length ? (
+          <ChatMessageMedia attachments={message.attachments} />
+        ) : null}
+        {message.content ? (
+          <span className={hasContent ? "block pr-6" : undefined}>{message.content}</span>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function ChatMessageMedia({ attachments }: { attachments: AffiliateChatMediaAttachment[] }) {
   if (!attachments.length) return null;
 
@@ -128,7 +185,7 @@ function ChatMediaThumb({ attachment }: { attachment: AffiliateChatMediaAttachme
   if (!previewSrc) return null;
 
   return (
-    <div className="overflow-hidden w-16 h-16 bg-black/20 rounded-lg">
+    <div className="overflow-hidden w-16 h-16 rounded-lg bg-black/20">
       {attachment.kind === "video" ? (
         <video src={previewSrc} className="object-cover w-full h-full" muted playsInline />
       ) : (
@@ -198,9 +255,7 @@ export function ChatBotSidebar() {
   const [messages, setMessages] = useState<AffiliateChatMessage[]>(() => [welcomeMessage]);
   const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState("");
-  const [pendingAttachments, setPendingAttachments] = useState<AffiliateChatMediaAttachment[]>(
-    []
-  );
+  const [pendingAttachments, setPendingAttachments] = useState<AffiliateChatMediaAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -341,8 +396,7 @@ export function ChatBotSidebar() {
           const data = await fileToBase64(file);
           toAdd.push({
             kind,
-            mimeType:
-              file.type || (kind === "video" ? "video/mp4" : "image/png"),
+            mimeType: file.type || (kind === "video" ? "video/mp4" : "image/png"),
             data,
             name: file.name,
           });
@@ -480,10 +534,7 @@ export function ChatBotSidebar() {
         <div className="flex flex-col flex-1 min-w-0">
           <span className="text-sm font-semibold text-gray-800">{t("Chat")}</span>
           {selectedPromptName ? (
-            <span
-              className="text-xs font-medium truncate text-primary"
-              title={selectedPromptName}
-            >
+            <span className="text-xs font-medium truncate text-primary" title={selectedPromptName}>
               {selectedPromptName}
             </span>
           ) : null}
@@ -502,20 +553,7 @@ export function ChatBotSidebar() {
 
       <div ref={listRef} className="overflow-y-auto flex-1 px-3 py-3 space-y-3 min-h-0">
         {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-            <div
-              className={`max-w-[92%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-                m.role === "user"
-                  ? "bg-primary text-white rounded-br-md"
-                  : "bg-gray-100 text-gray-800 rounded-bl-md"
-              }`}
-            >
-              {m.attachments?.length ? (
-                <ChatMessageMedia attachments={m.attachments} />
-              ) : null}
-              {m.content ? <span>{m.content}</span> : null}
-            </div>
-          </div>
+          <ChatMessageBubble key={m.id} message={m} />
         ))}
         {loading && (
           <div className="flex justify-start">
@@ -538,14 +576,12 @@ export function ChatBotSidebar() {
           disabled={loading || !chatBotId}
         />
         {pendingAttachments.length > 0 ? (
-          <div className="flex gap-2 px-3 pt-2 overflow-x-auto">
+          <div className="flex overflow-x-auto gap-2 px-3 pt-2">
             {pendingAttachments.map((att, index) => (
               <PendingAttachmentThumb
                 key={`${att.kind}-${index}-${att.name || att.data.slice(0, 12)}`}
                 attachment={att}
-                onRemove={() =>
-                  setPendingAttachments((prev) => prev.filter((_, i) => i !== index))
-                }
+                onRemove={() => setPendingAttachments((prev) => prev.filter((_, i) => i !== index))}
               />
             ))}
           </div>
@@ -564,20 +600,16 @@ export function ChatBotSidebar() {
               disabled={loading || !chatBotId}
               rows={2}
               placeholder={
-                chatBotId
-                  ? t("Nhập câu hỏi...")
-                  : t("Chọn chatbot (Dùng ngay) để bắt đầu chat")
+                chatBotId ? t("Nhập câu hỏi...") : t("Chọn chatbot (Dùng ngay) để bắt đầu chat")
               }
               className="block w-full px-3 py-2 pr-[5.5rem] pb-11 text-sm bg-transparent rounded-xl border-0 resize-none focus:outline-none disabled:cursor-not-allowed"
             />
-            <div className="absolute right-2 bottom-2 flex gap-1 items-center">
+            <div className="flex absolute right-2 bottom-2 gap-1 items-center">
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={
-                  loading ||
-                  !chatBotId ||
-                  pendingAttachments.length >= MAX_PENDING_ATTACHMENTS
+                  loading || !chatBotId || pendingAttachments.length >= MAX_PENDING_ATTACHMENTS
                 }
                 className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-gray-600 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
                 title={t("Đính kèm ảnh / video")}
@@ -588,9 +620,7 @@ export function ChatBotSidebar() {
                 type="button"
                 onClick={sendMessage}
                 disabled={
-                  loading ||
-                  (!input.trim() && pendingAttachments.length === 0) ||
-                  !chatBotId
+                  loading || (!input.trim() && pendingAttachments.length === 0) || !chatBotId
                 }
                 className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-white rounded-lg bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
                 title={t("Gửi")}
