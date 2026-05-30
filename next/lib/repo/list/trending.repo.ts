@@ -1,6 +1,15 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
 
+export enum TrendingTypeEnum {
+  CHATBOT = "CHATBOT",
+  PROMPT = "PROMPT",
+}
+
+export const TRENDING_TYPE_OPTIONS = [
+  { value: TrendingTypeEnum.PROMPT, label: t("Prompt") },
+  { value: TrendingTypeEnum.CHATBOT, label: t("Chatbot") },
+];
 export interface Trending extends BaseModel {
   name: string;
   imageUrls: string[];
@@ -14,6 +23,7 @@ export interface Trending extends BaseModel {
   monthlyCount: number;
   des: string;
   promptShort: string;
+  type: TrendingTypeEnum;
 }
 
 export class TrendingRepository extends CrudRepository<Trending> {
@@ -35,6 +45,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     des: String
     promptShort: String
     prompt: String
+    type: TrendingTypeEnum
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -52,6 +63,7 @@ export class TrendingRepository extends CrudRepository<Trending> {
     des: String
     promptShort: String
     prompt: String
+    type: TrendingTypeEnum
   `);
 }
 

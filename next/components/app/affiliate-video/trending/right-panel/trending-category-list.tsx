@@ -88,10 +88,10 @@ const TrendingCard = ({
             rounded
             src={firstImage}
             alt={item.name}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">
+          <div className="flex justify-center items-center w-full h-full text-3xl text-gray-600">
             🎬
           </div>
         )}{" "}
@@ -122,7 +122,7 @@ const TrendingCard = ({
 
       {/* Edit/Delete buttons for customer's own items */}
       {onEdit && onDelete && (
-        <div className="absolute top-2 left-2 z-10 flex p-1  gap-2 opacity-100 transition-opacity border bg-white bg-opacity-80 rounded-lg border-white  ">
+        <div className="flex absolute top-2 left-2 z-10 gap-2 p-1 bg-white bg-opacity-80 rounded-lg border border-white opacity-100 transition-opacity">
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -147,7 +147,7 @@ const TrendingCard = ({
       )}
 
       {/* Title row: Name + Bookmark + Copy */}
-      <div className=" flex items-start gap-2 w-full">
+      <div className="flex gap-2 items-start w-full">
         <div className="flex items-center gap-1.5 justify-between min-w-0 flex-1">
           {/* Category tag */}
           {categoryName && (
@@ -155,7 +155,7 @@ const TrendingCard = ({
               🌿 {categoryName}
             </div>
           )}
-          <div className="flex items-center gap-1">
+          <div className="flex gap-1 items-center">
             <Button
               onClick={(e) => {
                 e.stopPropagation();
@@ -164,9 +164,9 @@ const TrendingCard = ({
               }}
               outline
               info
-              className="rounded-lg px-1 h-7 whitespace-nowrap font-normal text-10"
+              className="px-1 h-7 font-normal whitespace-nowrap rounded-lg text-10"
               text={t("Dùng ngay")}
-              icon={<BsMagic className="text-14 " />}
+              icon={<BsMagic className="text-14" />}
             ></Button>
             {/* Info button */}
             {(item.des || onShowInfo) && (
@@ -177,35 +177,35 @@ const TrendingCard = ({
                 }}
                 className="rounded-full p-0.5 h-7 w-7  border bg-white hover:bg-blue-50"
                 tooltip={t("Xem hướng dẫn")}
-                icon={<RiFileList3Line className="text-20 text-blue-400" />}
+                icon={<RiFileList3Line className="text-blue-400 text-20" />}
               />
             )}
           </div>
         </div>
       </div>
 
-      <div className="flex-1  font-bold text-primary line-clamp-1 leading-snug m-0  items-center pl-1">
+      <div className="flex-1 items-center pl-1 m-0 font-bold leading-snug text-primary line-clamp-1">
         {item.name}
       </div>
       {/* Prompt section (dark, max 3 lines) */}
       {item.promptShort && (
-        <div className=" bg-white rounded-lg border border-gray-200 border-dashed">
-          <p className="text-12 text-gray-400 leading-relaxed line-clamp-3 m-0 max-w-full overflow-ellipsis text-ellipsis-2 px-2  ">
+        <div className="bg-white rounded-lg border border-gray-200 border-dashed">
+          <p className="px-2 m-0 max-w-full leading-relaxed text-gray-400 overflow-ellipsis text-12 line-clamp-3 text-ellipsis-2">
             {item.promptShort}
           </p>
         </div>
       )}
 
       {/* Footer: stats + hashtags */}
-      <div className="mt-auto flex items-center gap-3 flex-wrap">
+      <div className="flex flex-wrap gap-3 items-center mt-auto">
         {/* Fire count */}
         <span className="flex items-center gap-1 text-[10px] text-gray-500">
-          <RiFireLine className="text-orange-400/70 text-xs" />
+          <RiFireLine className="text-xs text-orange-400/70" />
           {item.count || 0}
         </span>
         {/* Eye count */}
         <span className="flex items-center gap-1 text-[10px] text-gray-500">
-          <RiEyeLine className="text-gray-500 text-xs" />0
+          <RiEyeLine className="text-xs text-gray-500" />0
         </span>
       </div>
     </div>
@@ -288,12 +288,12 @@ const CategorySection = ({
   );
 
   return (
-    <div className="rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-xl">
       {/* Category header */}
-      <div className="flex items-center justify-end gap-2 mb-2">
+      <div className="flex gap-2 justify-end items-center mb-2">
         <Button
           onClick={loadCategories}
-          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
+          className="px-3 bg-white rounded-full border transition-all cursor-pointer"
           tooltip={t("Làm mới")}
           icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
         />{" "}
@@ -306,7 +306,7 @@ const CategorySection = ({
             }
             onOpenCreate?.();
           }}
-          className="px-3 rounded-full whitespace-nowrap h-9"
+          className="px-3 h-9 whitespace-nowrap rounded-full"
           text={t("Tạo mới")}
           icon={<RiAddLine className="text-sm" />}
           disabled={!customer}
@@ -315,8 +315,8 @@ const CategorySection = ({
 
       {/* Loading state */}
       {isLoading && !hasLoaded && (
-        <div className="flex items-center justify-center py-6">
-          <CgSpinner className="animate-spin text-xl text-blue-400 mr-2" />
+        <div className="flex justify-center items-center py-6">
+          <CgSpinner className="mr-2 text-xl text-blue-400 animate-spin" />
           <span className="text-xs text-gray-500">{t("Đang tải...")}</span>
         </div>
       )}
@@ -358,7 +358,7 @@ const CategorySection = ({
 
       {/* Empty state */}
       {hasLoaded && !isLoading && items.length === 0 && (
-        <div className="text-center py-6 text-xs text-gray-500">
+        <div className="py-6 text-xs text-center text-gray-500">
           {t("Chưa có trending nào trong danh mục này")}
         </div>
       )}
@@ -388,7 +388,7 @@ const CategoryTabBar = ({
     const myTab = {
       id: MY_TRENDING_ID,
       name: (
-        <div className="whitespace-nowrap gap-1 flex">
+        <div className="flex gap-1 whitespace-nowrap">
           <RiUserHeartFill />
           {t("Của tôi")}
         </div>
@@ -399,7 +399,7 @@ const CategoryTabBar = ({
   }, [categories, t]);
 
   return (
-    <div className="relative flex-shrink-0 flex flex-row gap-2 items-center">
+    <div className="flex relative flex-row flex-shrink-0 gap-2 items-center">
       <div
         ref={scrollRef}
         className="flex items-center gap-1.5 overflow-x-auto v-scrollbar py-1 w-full pb-2 no-scrollbar   rounded-lg px-1.5"
@@ -421,7 +421,7 @@ const CategoryTabBar = ({
                 }
               `}
             >
-              {tab.isHot && <RiFireFill className="text-orange text-12 " />}
+              {tab.isHot && <RiFireFill className="text-orange text-12" />}
               {tab.name}
             </button>
           );
@@ -480,13 +480,13 @@ const DescriptionInfoDialog = ({
       maxWidth="95vw"
     >
       <Dialog.Body>
-        <div className="space-y-3 py-2">
+        <div className="py-2 space-y-3">
           {item.des ? (
-            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+            <div className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
               {item.des}
             </div>
           ) : (
-            <div className="text-sm text-gray-400 italic">{t("Chưa có mô tả")}</div>
+            <div className="text-sm italic text-gray-400">{t("Chưa có mô tả")}</div>
           )}
         </div>
       </Dialog.Body>
@@ -518,7 +518,6 @@ const CreateEditTrendingDialog = ({
   const [price, setPrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Reset form when dialog opens/editItem changes
   useEffect(() => {
     if (isOpen) {
       if (editItem) {
@@ -569,7 +568,7 @@ const CreateEditTrendingDialog = ({
       onOverlayClick={() => {}}
     >
       <Dialog.Body>
-        <div className="space-y-3 py-2">
+        <div className="py-2 space-y-3">
           <NotifyText
             color="green"
             text={t(
@@ -608,7 +607,7 @@ const CreateEditTrendingDialog = ({
               maxRows={4}
             />
           </Field>
-          <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
+          <Field name="trendingCategoryIds" label={t("Danh mục hiển thị")} cols={12}>
             <Select
               multi
               autocompletePromise={(props) =>
@@ -627,7 +626,7 @@ const CreateEditTrendingDialog = ({
               }
             />
           </Field>
-          <div className="flex items-center gap-3">
+          <div className="flex gap-3 items-center">
             <span className="text-sm font-medium text-gray-700">{t("Công khai")}</span>
             <Switch value={isPublish} onChange={setIsPublish} />
           </div>
@@ -637,8 +636,14 @@ const CreateEditTrendingDialog = ({
               "Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
             )}`}
           />
+          <NotifyText
+            color="green"
+            text={t(
+              "Bạn hoàn toàn có thể kiếm thêm thu nhập từ prompt bạn đưa lên bạn nhé! Kiếm tiền cùng tôi ngay bây giờ!, Liên hệ Admin"
+            )}
+          />
         </div>
-        <div className="flex items-center justify-end gap-2 w-full">
+        <div className="flex gap-2 justify-end items-center w-full">
           <Button text={t("Huỷ")} outline className="rounded-lg" onClick={onClose} />
           <Button
             primary
@@ -768,12 +773,12 @@ const CustomerTrendingSection = ({
   };
 
   return (
-    <div className="rounded-xl overflow-hidden">
+    <div className="overflow-hidden rounded-xl">
       {/* Header with Create button */}
-      <div className="flex items-center justify-end gap-2 mb-2">
+      <div className="flex gap-2 justify-end items-center mb-2">
         <Button
           onClick={() => loadItems(page, searchText)}
-          className="px-3 transition-all cursor-pointer border rounded-full bg-white"
+          className="px-3 bg-white rounded-full border transition-all cursor-pointer"
           tooltip={t("Làm mới")}
           icon={<RiRefreshLine className={`text-sm ${isLoading ? "animate-spin" : ""}`} />}
         />
@@ -792,8 +797,8 @@ const CustomerTrendingSection = ({
 
       {/* Loading */}
       {isLoading && !hasLoaded && (
-        <div className="flex items-center justify-center py-6">
-          <CgSpinner className="animate-spin text-xl text-blue-400 mr-2" />
+        <div className="flex justify-center items-center py-6">
+          <CgSpinner className="mr-2 text-xl text-blue-400 animate-spin" />
           <span className="text-xs text-gray-500">{t("Đang tải...")}</span>
         </div>
       )}
@@ -835,8 +840,8 @@ const CustomerTrendingSection = ({
 
       {/* Empty */}
       {hasLoaded && !isLoading && items.length === 0 && (
-        <div className="text-center py-10">
-          <div className="text-gray-400 text-sm mb-3">{t("Bạn chưa tạo trending nào")}</div>
+        <div className="py-10 text-center">
+          <div className="mb-3 text-sm text-gray-400">{t("Bạn chưa tạo trending nào")}</div>
           <Button
             primary
             onClick={() => {
@@ -977,9 +982,9 @@ export const TrendingCategoryList = () => {
   // ── Loading state ──
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <CgSpinner className="animate-spin text-3xl text-blue-500 mb-3" />
-        <span className="text-sm text-gray-400 font-medium">
+      <div className="flex flex-col justify-center items-center py-16">
+        <CgSpinner className="mb-3 text-3xl text-blue-500 animate-spin" />
+        <span className="text-sm font-medium text-gray-400">
           {t("Đang tải danh sách trending...")}
         </span>
       </div>
@@ -989,12 +994,12 @@ export const TrendingCategoryList = () => {
   // ── Empty state ──
   if (hasLoaded && categories.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 px-4">
+      <div className="flex flex-col justify-center items-center px-4 py-16">
         <div className="w-16 h-16 rounded-full bg-[#1a2332] flex items-center justify-center mb-3">
           <span className="text-2xl">🔥</span>
         </div>
-        <h3 className="text-sm font-semibold text-gray-300 mb-1">{t("Chưa có trending nào")}</h3>
-        <p className="text-xs text-gray-500 text-center mb-4">
+        <h3 className="mb-1 text-sm font-semibold text-gray-300">{t("Chưa có trending nào")}</h3>
+        <p className="mb-4 text-xs text-center text-gray-500">
           {t("Các trending sẽ xuất hiện khi được quản trị viên thiết lập")}
         </p>
         <button
@@ -1011,7 +1016,7 @@ export const TrendingCategoryList = () => {
   return (
     <div className="flex flex-col h-full bg-[#0f1923]">
       {/* Categories list */}
-      <div className="flex-1 overflow-y-auto v-scrollbar p-2 xs:p-3 space-y-4">
+      <div className="overflow-y-auto flex-1 p-2 space-y-4 v-scrollbar xs:p-3">
         {/* Category tabs + Search + Create button */}
         <div>
           {/* Tab bar */}
@@ -1024,7 +1029,7 @@ export const TrendingCategoryList = () => {
           />
 
           {/* Search input + Create button */}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex gap-2 items-center mt-1">
             <div className="flex-1">
               <SearchInput value={searchInput} onChange={setSearchInput} />
             </div>

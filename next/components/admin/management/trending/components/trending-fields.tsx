@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { TRENDING_TYPE_OPTIONS } from "../../../../../lib/repo/list/trending.repo";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { Field, ImageInput, Input, Textarea } from "../../../../shared/utilities/form";
 import { Select } from "../../../../shared/utilities/form/select";
@@ -14,6 +15,9 @@ export function TrendingFields() {
       </Field>
       <Field name="name" label={t("Tên trending")} cols={12} required>
         <Input />
+      </Field>
+      <Field name="type" label={t("Loại")} cols={6}>
+        <Select native options={TRENDING_TYPE_OPTIONS} />
       </Field>
       <Field name="prompt" label={t("Prompt mô tả")} cols={12}>
         <Textarea />

@@ -70,6 +70,8 @@ export interface TrendingVideoFormConfig extends VideoFormBase {
   trendingModeType: TrendingModeTypeEnum;
   /** ID của trending item đang được sử dụng (nếu user chọn "Dùng ngay") */
   promptId?: string;
+  /** Tên hiển thị của prompt/chatbot đang chọn */
+  promptName?: string;
 }
 
 export interface CopyVideoFormConfig extends VideoFormBase {

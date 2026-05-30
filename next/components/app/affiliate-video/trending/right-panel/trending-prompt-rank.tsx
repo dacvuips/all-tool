@@ -103,17 +103,17 @@ const RankRow = ({
       )}
 
       {/* Thumbnail */}
-      <div className="flex-shrink-0 w-10 h-10 rounded-lg overflow-hidden border border-gray-100">
+      <div className="overflow-hidden flex-shrink-0 w-10 h-10 rounded-lg border border-gray-100">
         {firstImage ? (
           <Img
             showImageOnClick
             lazyload={false}
             src={firstImage}
             alt={item.name}
-            className="w-full h-full object-cover"
+            className="object-cover w-full h-full"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-lg">
+          <div className="flex justify-center items-center w-full h-full text-lg bg-gradient-to-br from-gray-100 to-gray-200">
             🎬
           </div>
         )}
@@ -132,7 +132,7 @@ const RankRow = ({
       {/* Monthly count (main metric) */}
       <div className="flex-shrink-0 flex items-center gap-1.5">
         <div className="flex flex-col items-end">
-          <div className="flex items-center gap-1">
+          <div className="flex gap-1 items-center">
             <RiFireFill
               className={`text-sm ${isTopThree ? "text-orange-400" : "text-orange-300"}`}
             />
@@ -171,16 +171,16 @@ const StatsCards = ({ total, topItem }: { total: number; topItem?: TrendingPubli
     <div className="grid grid-cols-2 gap-2 mb-3">
       {/* Top Creator */}
       <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 bg-white to-yellow-50 rounded-xl px-3 py-2.5 border border-amber-100">
-        <div className="w-8 h-8 rounded-full overflow-hidden border-2 border-amber-200 flex-shrink-0 ">
+        <div className="overflow-hidden flex-shrink-0 w-8 h-8 rounded-full border-2 border-amber-200">
           {topItem?.imageUrls?.[0] ? (
             <Img
               lazyload={false}
               src={topItem.imageUrls[0]}
               alt={topItem.name}
-              className="w-full h-full object-cover"
+              className="object-cover w-full h-full"
             />
           ) : (
-            <div className="w-full h-full bg-amber-100 flex items-center justify-center text-sm">
+            <div className="flex justify-center items-center w-full h-full text-sm bg-amber-100">
               🏆
             </div>
           )}
@@ -193,8 +193,8 @@ const StatsCards = ({ total, topItem }: { total: number; topItem?: TrendingPubli
 
       {/* Total Prompts */}
       <div className="flex items-center gap-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl px-3 py-2.5 border border-blue-100">
-        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-          <RiFireFill className="text-blue-500 text-sm" />
+        <div className="flex flex-shrink-0 justify-center items-center w-8 h-8 bg-blue-100 rounded-full">
+          <RiFireFill className="text-sm text-blue-500" />
         </div>
         <div className="min-w-0">
           <div className="text-[10px] text-blue-500 font-medium">{t("Tổng prompt")}</div>
@@ -307,8 +307,8 @@ export const TrendingPromptRank = ({}: {}) => {
 
   if (!customer) {
     return (
-      <div className="flex flex-col items-center justify-center py-16">
-        <span className="text-sm text-gray-400 font-medium">
+      <div className="flex flex-col justify-center items-center py-16">
+        <span className="text-sm font-medium text-gray-400">
           {t("Vui lòng đăng nhập để sử dụng tính năng này")}
         </span>
       </div>
@@ -317,12 +317,12 @@ export const TrendingPromptRank = ({}: {}) => {
 
   return (
     <div className="flex flex-col h-full bg-[#0f1923]">
-      <div className="flex-1 overflow-y-auto v-scrollbar p-2 xs:p-3 space-y-3">
+      <div className="overflow-y-auto flex-1 p-2 space-y-3 v-scrollbar xs:p-3">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <RiTrophyFill className="text-amber-400 text-lg" />
-            <h3 className="text-sm font-bold text-gray-800 m-0">{t("Bảng xếp hạng Prompt")}</h3>
+        <div className="flex justify-between items-center">
+          <div className="flex gap-2 items-center">
+            <RiTrophyFill className="text-lg text-amber-400" />
+            <h3 className="m-0 text-sm font-bold text-gray-800">{t("Bảng xếp hạng Prompt")}</h3>
           </div>
           <button
             onClick={handleRefresh}
@@ -341,8 +341,8 @@ export const TrendingPromptRank = ({}: {}) => {
 
         {/* Loading indicator inline */}
         {isLoading && (
-          <div className="flex items-center justify-center py-3">
-            <CgSpinner className="animate-spin text-xl text-blue-400 mr-2" />
+          <div className="flex justify-center items-center py-3">
+            <CgSpinner className="mr-2 text-xl text-blue-400 animate-spin" />
             <span className="text-xs text-gray-400">{t("Đang tải...")}</span>
           </div>
         )}
@@ -350,8 +350,8 @@ export const TrendingPromptRank = ({}: {}) => {
         {/* Content area – mờ khi loading nhưng không unmount */}
         <div
           className={`${
-            isLoading ? "opacity-40 pointer-events-none" : ""
-          } transition-opacity duration-200`}
+            isLoading ? "opacity-40 pointer-events-none" : "transition-opacity duration-200"
+          }`}
         >
           {/* Rank list */}
           {hasLoaded && items.length > 0 && (
@@ -383,11 +383,11 @@ export const TrendingPromptRank = ({}: {}) => {
 
           {/* Empty state */}
           {hasLoaded && !isLoading && items.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mb-3">
+            <div className="flex flex-col justify-center items-center py-12">
+              <div className="flex justify-center items-center mb-3 w-14 h-14 bg-gray-100 rounded-full">
                 <RiTrophyFill className="text-2xl text-gray-300" />
               </div>
-              <div className="text-sm text-gray-400 font-medium mb-1">
+              <div className="mb-1 text-sm font-medium text-gray-400">
                 {t("Chưa có dữ liệu xếp hạng")}
               </div>
               <div className="text-xs text-gray-400">

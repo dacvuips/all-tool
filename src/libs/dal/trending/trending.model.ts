@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { ITrending } from "./trending.interface";
+import { ITrending, TrendingTypeEnum } from "./trending.interface";
 
 const Schema = mongoose.Schema;
 const trendingSchema = new Schema(
@@ -22,6 +22,7 @@ const trendingSchema = new Schema(
     monthlyCount: { type: Number, default: 0 },
     des: { type: String },
     promptShort: { type: String },
+    type: { type: String, enum: TrendingTypeEnum, default: TrendingTypeEnum.CHATBOT },
   },
   { timestamps: true }
 );

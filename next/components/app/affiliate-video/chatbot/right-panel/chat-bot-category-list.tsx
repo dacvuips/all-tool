@@ -66,7 +66,7 @@ const ChatBotCard = ({
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void;
   onEdit?: (item: TrendingPublicItem) => void;
   onDelete?: (item: TrendingPublicItem) => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
@@ -160,7 +160,7 @@ const ChatBotCard = ({
               onClick={(e) => {
                 e.stopPropagation();
                 if (!customer) toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
-                else onUseTrending(item.id);
+                else onUseTrending(item.id, item.name);
               }}
               outline
               info
@@ -226,13 +226,13 @@ const CategorySection = ({
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void;
   loadCategories: () => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
   onOpenCreate?: () => void;
 }) => {
   const { t } = useTranslation();
-  const { getTrendingsByCategoryId } = useAffiliateVideoApi();
+  const { getChatbotsByCategoryId } = useAffiliateVideoApi();
   const { customer } = useAuth();
   const toast = useToast();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
@@ -248,7 +248,7 @@ const CategorySection = ({
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
-        const result = await getTrendingsByCategoryId(
+        const result = await getChatbotsByCategoryId(
           effectiveCategoryId,
           pageNum,
           ITEMS_PER_PAGE,
@@ -264,7 +264,7 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getTrendingsByCategoryId, effectiveCategoryId, searchText]
+    [getChatbotsByCategoryId, effectiveCategoryId, searchText]
   );
 
   // Auto-load on mount and when search changes
@@ -589,18 +589,18 @@ const CreateEditTrendingDialog = ({
               cols={3}
             />
           </Field>
-          <Field label={t("Tên prompt")} required>
-            <Input value={name} onChange={setName} placeholder={t("Nhập tên prompt...")} />
+          <Field label={t("Tên chatbot")} required>
+            <Input value={name} onChange={setName} placeholder={t("Nhập tên chatbot...")} />
           </Field>
           <Field label={t("Prompt")} required>
             <Textarea
               value={prompt}
               onChange={setPrompt}
-              placeholder={t("Nhập prompt mô tả...")}
+              placeholder={t("Nhập mô tả...")}
               maxRows={6}
             />
           </Field>
-          <Field label={t("Hướng dẫn sử dụng prompt")}>
+          <Field label={t("Hướng dẫn sử dụng chatbot")}>
             <Textarea
               value={des}
               onChange={setDes}
@@ -608,7 +608,7 @@ const CreateEditTrendingDialog = ({
               maxRows={4}
             />
           </Field>
-          <Field name="trendingCategoryIds" label={t("Danh mục trending")} cols={12}>
+          <Field name="trendingCategoryIds" label={t("Danh mục hiển thị")} cols={12}>
             <Select
               multi
               autocompletePromise={(props) =>
@@ -637,6 +637,12 @@ const CreateEditTrendingDialog = ({
               "Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
             )}`}
           />
+          <NotifyText
+            color="green"
+            text={t(
+              "Bạn hoàn toàn có thể kiếm thêm thu nhập từ prompt bạn đưa lên bạn nhé! Kiếm tiền cùng tôi ngay bây giờ!, Liên hệ Admin"
+            )}
+          />
         </div>
         <div className="flex gap-2 justify-end items-center w-full">
           <Button text={t("Huỷ")} outline className="rounded-lg" onClick={onClose} />
@@ -661,17 +667,17 @@ const CustomerTrendingSection = ({
   categories,
 }: {
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void;
   categories: TrendingCategoryPublicItem[];
 }) => {
   const { t } = useTranslation();
   const Alert = useAlert();
   const toast = useToast();
   const {
-    getCustomerTrendingList,
-    updateCustomerTrending,
-    deleteCustomerTrending,
-    createCustomerTrending,
+    getCustomerChatbotList,
+    updateCustomerChatbot,
+    deleteCustomerChatbot,
+    createCustomerChatbot,
   } = useAffiliateVideoApi();
   const { customer } = useAuth();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
@@ -690,7 +696,7 @@ const CustomerTrendingSection = ({
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
-        const result = await getCustomerTrendingList(pageNum, ITEMS_PER_PAGE, search || undefined);
+        const result = await getCustomerChatbotList(pageNum, ITEMS_PER_PAGE, search || undefined);
         setItems(result.data);
         setTotal(result.total);
       } catch {
@@ -701,7 +707,7 @@ const CustomerTrendingSection = ({
         setHasLoaded(true);
       }
     },
-    [getCustomerTrendingList]
+    [getCustomerChatbotList]
   );
 
   useEffect(() => {
@@ -729,14 +735,11 @@ const CustomerTrendingSection = ({
   };
 
   const handleDelete = async (item: TrendingPublicItem) => {
-    const confirmed = await Alert.danger(
-      t("Xác nhận xoá"),
-      t("Bạn có chắc muốn xoá trending này?")
-    );
+    const confirmed = await Alert.danger(t("Xác nhận xoá"), t("Bạn có chắc muốn xoá chatbot này?"));
     if (!confirmed) return;
-    const ok = await deleteCustomerTrending(item.id);
+    const ok = await deleteCustomerChatbot(item.id);
     if (ok) {
-      toast.success(t("Đã xoá trending"));
+      toast.success(t("Đã xoá chatbot"));
       loadItems(page, searchText);
     }
   };
@@ -748,17 +751,17 @@ const CustomerTrendingSection = ({
 
   const handleSave = async (data: CustomerTrendingInput, id?: string): Promise<boolean> => {
     if (id) {
-      const result = await updateCustomerTrending(id, data);
+      const result = await updateCustomerChatbot(id, data);
       if (result) {
-        toast.success(t("Đã cập nhật trending"));
+        toast.success(t("Đã cập nhật chatbot"));
         loadItems(page, searchText);
         return true;
       }
       return false;
     } else {
-      const result = await createCustomerTrending(data);
+      const result = await createCustomerChatbot(data);
       if (result) {
-        toast.success(t("Đã tạo trending mới"));
+        toast.success(t("Đã tạo chatbot mới"));
         loadItems(1, searchText);
         setPage(1);
         return true;
@@ -880,9 +883,8 @@ const CustomerTrendingSection = ({
 export const ChatBotCategoryList = () => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
-    useAffiliateVideoApi();
-  const { patchConfig, setPendingPrompt, openSidebar } = useAffiliateVideoContext();
+  const { getActiveTrendingCategoryList, createCustomerChatbot } = useAffiliateVideoApi();
+  const { patchConfig, openSidebar } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -935,22 +937,17 @@ export const ChatBotCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → gọi backend lấy prompt theo trending ID → gắn vào config
+  // Khi user click "Dùng ngay" → gắn chatbot ID + tên prompt vào config, mở sidebar chat
   const handleUseTrending = useCallback(
-    async (trendingId: string) => {
-      const prompt = await getTrendingPromptById(trendingId);
-      if (!prompt) return;
+    async (trendingId: string, promptName: string) => {
       if (patchConfig) {
-        patchConfig({ tipContent: prompt, promptId: trendingId } as any);
-      }
-      if (setPendingPrompt) {
-        setPendingPrompt(prompt);
+        patchConfig({ promptId: trendingId, promptName });
       }
       if (openSidebar) {
         openSidebar();
       }
     },
-    [getTrendingPromptById, patchConfig, setPendingPrompt, openSidebar]
+    [patchConfig, openSidebar]
   );
 
   // Handle info button click for non-customer cards
@@ -962,16 +959,16 @@ export const ChatBotCategoryList = () => {
   // Handle create from dialog
   const handleCreateSave = useCallback(
     async (data: CustomerTrendingInput): Promise<boolean> => {
-      const result = await createCustomerTrending(data);
+      const result = await createCustomerChatbot(data);
       if (result) {
-        toast.success(t("Đã tạo trending mới"));
+        toast.success(t("Đã tạo chatbot mới"));
         // Switch to "Của tôi" tab to see the new item
         setActiveCategoryId(MY_TRENDING_ID);
         return true;
       }
       return false;
     },
-    [createCustomerTrending, toast, t]
+    [createCustomerChatbot, toast, t]
   );
 
   // ── Loading state ──

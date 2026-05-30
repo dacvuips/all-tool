@@ -25,4 +25,10 @@ export type ITrending = TimestampEntity & {
   des?: string;
   /** Prompt ngắn (150 ký tự đầu) */
   promptShort?: string;
+  /** Loại */
+  type?: TrendingTypeEnum;
 };
+export enum TrendingTypeEnum {
+  CHATBOT = "CHATBOT",
+  PROMPT = "PROMPT",
+}

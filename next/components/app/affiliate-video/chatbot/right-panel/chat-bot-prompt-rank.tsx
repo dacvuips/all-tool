@@ -110,7 +110,7 @@ const RankRow = ({
             lazyload={false}
             src={firstImage}
             alt={item.name}
-            className="object-cover w-full h-full"
+            className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div className="flex justify-center items-center w-full h-full text-lg bg-gradient-to-br from-gray-100 to-gray-200">

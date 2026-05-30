@@ -1,6 +1,6 @@
 /**
- * Lưu / khôi phục hội thoại chat AI theo loại (chatKind) + user trong IndexedDB.
- * Key: `{chatKind}:{userId}` — mỗi loại chat và mỗi user một bản ghi riêng.
+ * Lưu / khôi phục hội thoại chat AI theo chatKind + user + chatbotId trong IndexedDB.
+ * Key: `{chatKind}:{userId}:{chatBotId}` — mỗi chatbot một hội thoại riêng.
  */
 
 import { useCallback, useMemo } from "react";
@@ -15,13 +15,18 @@ import {
 
 export function buildAffiliateChatStorageKey(
   chatKind: AffiliateChatKind,
-  userId?: string | null
+  userId?: string | null,
+  chatBotId?: string | null
 ): string {
   const uid = (userId && String(userId).trim()) || "guest";
-  return `${chatKind}:${uid}`;
+  const botId = (chatBotId && String(chatBotId).trim()) || "__none__";
+  return `${chatKind}:${uid}:${botId}`;
 }
 
-export function useAffiliateChatStorage(chatKind: AffiliateChatKind) {
+export function useAffiliateChatStorage(
+  chatKind: AffiliateChatKind,
+  chatBotId?: string | null
+) {
   const { customer } = useAuth();
   const db = useIndexedDB<AffiliateChatStorageRecord>(
     STORE_NAME.affiliateChat,
@@ -29,8 +34,8 @@ export function useAffiliateChatStorage(chatKind: AffiliateChatKind) {
   );
 
   const storageKey = useMemo(
-    () => buildAffiliateChatStorageKey(chatKind, customer?._id),
-    [chatKind, customer?._id]
+    () => buildAffiliateChatStorageKey(chatKind, customer?._id, chatBotId),
+    [chatKind, customer?._id, chatBotId]
   );
 
   const loadMessages = useCallback(async (): Promise<AffiliateChatMessage[]> => {

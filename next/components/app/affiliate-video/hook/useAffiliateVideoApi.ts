@@ -19,6 +19,7 @@ import {
   TrendingCategoryService,
   TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
+import { TrendingTypeEnum } from "../../../../lib/repo/list/trending.repo";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -395,6 +396,17 @@ export interface UseAffiliateVideoApiReturn {
     categoryId?: string,
     page?: number,
     limit?: number,
+    search?: string,
+    type?: TrendingTypeEnum
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy danh sách chatbot items theo category ID, có phân trang.
+   */
+  getChatbotsByCategoryId: (
+    categoryId?: string,
+    page?: number,
+    limit?: number,
     search?: string
   ) => Promise<TrendingsByCategoryResult>;
 
@@ -404,7 +416,7 @@ export interface UseAffiliateVideoApiReturn {
   getTrendingPromptById: (trendingId: string) => Promise<string | null>;
 
   /**
-   * Lấy danh sách trending do customer hiện tại tạo, có phân trang.
+   * Lấy danh sách trending (PROMPT) do customer hiện tại tạo, có phân trang.
    */
   getCustomerTrendingList: (
     page?: number,
@@ -413,12 +425,21 @@ export interface UseAffiliateVideoApiReturn {
   ) => Promise<TrendingsByCategoryResult>;
 
   /**
-   * Customer tạo trending mới.
+   * Lấy danh sách chatbot (CHATBOT) do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerChatbotList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Customer tạo trending mới (type PROMPT).
    */
   createCustomerTrending: (data: CustomerTrendingInput) => Promise<any | undefined>;
 
   /**
-   * Customer sửa trending của mình.
+   * Customer sửa trending của mình (type PROMPT).
    */
   updateCustomerTrending: (
     id: string,
@@ -426,9 +447,27 @@ export interface UseAffiliateVideoApiReturn {
   ) => Promise<any | undefined>;
 
   /**
-   * Customer xoá trending của mình.
+   * Customer xoá trending của mình (type PROMPT).
    */
   deleteCustomerTrending: (id: string) => Promise<boolean>;
+
+  /**
+   * Customer tạo chatbot mới (type CHATBOT).
+   */
+  createCustomerChatbot: (data: CustomerTrendingInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa chatbot của mình (type CHATBOT).
+   */
+  updateCustomerChatbot: (
+    id: string,
+    data: Partial<CustomerTrendingInput>
+  ) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá chatbot của mình (type CHATBOT).
+   */
+  deleteCustomerChatbot: (id: string) => Promise<boolean>;
 
   /**
    * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
@@ -1394,8 +1433,34 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
   // ── getTrendingsByCategoryId – lấy trending items theo category ID, phân trang ──
   const getTrendingsByCategoryId = useCallback(
+    async (
+      categoryId?: string,
+      page: number = 1,
+      limit: number = 10,
+      search?: string,
+      type: TrendingTypeEnum = TrendingTypeEnum.PROMPT
+    ) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(
+        categoryId,
+        page,
+        limit,
+        search,
+        type
+      );
+    },
+    []
+  );
+
+  // ── getChatbotsByCategoryId – lấy chatbot items theo category ID, phân trang ──
+  const getChatbotsByCategoryId = useCallback(
     async (categoryId?: string, page: number = 1, limit: number = 10, search?: string) => {
-      return TrendingCategoryService.getTrendingsByCategoryId(categoryId, page, limit, search);
+      return TrendingCategoryService.getTrendingsByCategoryId(
+        categoryId,
+        page,
+        limit,
+        search,
+        TrendingTypeEnum.CHATBOT
+      );
     },
     []
   );
@@ -1421,7 +1486,15 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
-  // ── createCustomerTrending – customer tạo trending mới ──
+  // ── getCustomerChatbotList – lấy danh sách chatbot của customer ──
+  const getCustomerChatbotList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getCustomerChatbotList(page, limit, search);
+    },
+    []
+  );
+
+  // ── createCustomerTrending – customer tạo trending mới (type PROMPT) ──
   const createCustomerTrending = useCallback(
     async (data: CustomerTrendingInput): Promise<any | undefined> => {
       try {
@@ -1457,7 +1530,42 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
-  // ── updateCustomerTrending – customer sửa trending của mình ──
+  const createCustomerChatbot = useCallback(
+    async (data: CustomerTrendingInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerChatbot($data: CreateCustomerChatbotInput!) {
+              createCustomerChatbot(data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerChatbot] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerChatbot] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo chatbot");
+          return undefined;
+        }
+
+        return json.data?.createCustomerChatbot;
+      } catch (err: any) {
+        console.error("[createCustomerChatbot] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── updateCustomerTrending – customer sửa trending của mình (type PROMPT) ──
   const updateCustomerTrending = useCallback(
     async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
       try {
@@ -1493,7 +1601,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
-  // ── deleteCustomerTrending – customer xoá trending của mình ──
+  // ── deleteCustomerTrending – customer xoá trending của mình (type PROMPT) ──
   const deleteCustomerTrending = useCallback(
     async (id: string): Promise<boolean> => {
       try {
@@ -1523,6 +1631,78 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         return true;
       } catch (err: any) {
         console.error("[deleteCustomerTrending] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
+  // ── updateCustomerChatbot – customer sửa chatbot của mình (type CHATBOT) ──
+  const updateCustomerChatbot = useCallback(
+    async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerChatbot($id: ID!, $data: UpdateCustomerChatbotInput!) {
+              updateCustomerChatbot(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerChatbot] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerChatbot] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa chatbot");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerChatbot;
+      } catch (err: any) {
+        console.error("[updateCustomerChatbot] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  // ── deleteCustomerChatbot – customer xoá chatbot của mình (type CHATBOT) ──
+  const deleteCustomerChatbot = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerChatbot($id: ID!) {
+              deleteCustomerChatbot(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerChatbot] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerChatbot] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá chatbot");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerChatbot] Error:", err);
         return false;
       }
     },
@@ -1687,11 +1867,16 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     deleteCustomerObjectToPersonify,
     getActiveTrendingCategoryList,
     getTrendingsByCategoryId,
+    getChatbotsByCategoryId,
     getTrendingPromptById,
     getCustomerTrendingList,
+    getCustomerChatbotList,
     createCustomerTrending,
     updateCustomerTrending,
     deleteCustomerTrending,
+    createCustomerChatbot,
+    updateCustomerChatbot,
+    deleteCustomerChatbot,
     getTrendingRank,
     generateTrendingSingle,
     generateTrendingScene,

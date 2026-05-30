@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import {
   callWithKeyRotation,
@@ -66,10 +67,14 @@ export default [
 
         const body = req.body as {
           messages?: ChatMessage[];
-          context?: TrendingChatContext;
-          textContext?: string;
+          chatBotId?: string;
           chatKind?: string;
         };
+
+        const chatBot = await TrendingModel.findById(body.chatBotId);
+        if (!chatBot) {
+          return res.status(400).json({ message: "Chatbot không tồn tại" });
+        }
 
         const messages = (body.messages || []).filter(
           (m) =>
@@ -95,9 +100,8 @@ export default [
         await checkRequestLimit(context.id);
         const clients = await getAvailableGeminiClients();
 
-        const customPrompt = typeof body.textContext === "string" ? body.textContext.trim() : "";
+        const customPrompt = typeof chatBot.prompt === "string" ? chatBot.prompt.trim() : "";
         const baseInstruction = customPrompt || SYSTEM_INSTRUCTION;
-        const systemText = baseInstruction + buildContextNote(body.context);
 
         const response = await callWithKeyRotation(
           clients,
@@ -106,7 +110,7 @@ export default [
               model: "gemini-3.5-flash",
               contents: toGeminiContents(trimmed),
               config: {
-                systemInstruction: systemText,
+                systemInstruction: baseInstruction,
                 temperature: 0.7,
               },
             }),

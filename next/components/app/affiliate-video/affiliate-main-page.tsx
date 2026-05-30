@@ -15,6 +15,7 @@ import {
 } from "react-icons/ri";
 
 import { useScreen } from "../../../lib/hooks/useScreen";
+import { TrendingTypeEnum } from "../../../lib/repo/list/trending.repo";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { ChatbotPage } from "./chatbot/chatbot-page";
 import { TAB_TYPE } from "./constants";
@@ -38,8 +39,18 @@ export default function AffiliateMainPage() {
         </div>
       ),
       label: t("Trending"),
-      value: "trending",
+      value: TrendingTypeEnum.PROMPT,
       component: <TrendingPage />,
+    },
+    {
+      icon: (
+        <div className="px-1 -mr-1 text-xs font-semibold text-blue-600 rounded-full border border-blue-600">
+          {"New 🆕"}
+        </div>
+      ),
+      label: t("ChatBot AI"),
+      value: TrendingTypeEnum.CHATBOT,
+      component: <ChatbotPage />,
     },
     {
       icon: <RiFileTextLine />,
@@ -78,16 +89,6 @@ export default function AffiliateMainPage() {
       label: t("Chuyên thời trang"),
       value: "fashion-review",
       component: <>{"Sắp xong rồi"}</>,
-    },
-    {
-      icon: (
-        <div className="px-1 -mr-1 text-xs font-semibold text-red-600 rounded-full border border-red-600">
-          {"Hot 🔥"}
-        </div>
-      ),
-      label: t("ChatBot AI"),
-      value: "chatbot-ai",
-      component: <ChatbotPage />,
     },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },

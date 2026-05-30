@@ -1,5 +1,6 @@
 import { t } from "../../functions/i18n";
 import { BaseModel, CrudRepository } from "../crud.repo";
+import { TrendingTypeEnum } from "./trending.repo";
 
 export interface TrendingCategory extends BaseModel {
   name: string;
@@ -40,7 +41,7 @@ export interface TrendingsByCategoryResult {
   pagination?: { limit?: number; page?: number; total?: number };
 }
 
-/** Input data for creating/updating customer trending */
+/** Input data for creating/updating customer trending / chatbot */
 export interface CustomerTrendingInput {
   name: string;
   prompt?: string;
@@ -49,6 +50,7 @@ export interface CustomerTrendingInput {
   isPublish?: boolean;
   trendingCategoryIds?: string[];
   price?: number;
+  type?: TrendingTypeEnum;
 }
 
 export class TrendingCategoryRepository extends CrudRepository<TrendingCategory> {
@@ -103,10 +105,11 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     categoryId?: string,
     page: number = 1,
     limit: number = 10,
-    search?: string
+    search?: string,
+    type: TrendingTypeEnum = TrendingTypeEnum.PROMPT
   ): Promise<TrendingsByCategoryResult> {
     try {
-      const filter: any = { isActive: true };
+      const filter: any = { isActive: true, type };
       if (categoryId) {
         filter.trendingCategoryIds = { $in: [categoryId] };
       }
@@ -169,13 +172,14 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           filter: {
             isPublish: true,
             isActive: true,
+            type: TrendingTypeEnum.PROMPT,
           },
           page,
           limit,
           search: search || undefined,
           order: { createdAt: -1 },
         },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive`,
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive type`,
         cache: false,
       });
       return {
@@ -185,6 +189,42 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
       };
     } catch (err) {
       console.error("[getCustomerTrendingList] Error:", err);
+      return { data: [], total: 0 };
+    }
+  }
+
+  /**
+   * Lấy danh sách chatbot do chính customer hiện tại tạo, có phân trang.
+   */
+  async getCustomerChatbotList(
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    try {
+      const result = await this.getAll({
+        apiName: "getCustomerChatbotList",
+        query: {
+          filter: {
+            isPublish: true,
+            isActive: true,
+            type: TrendingTypeEnum.CHATBOT,
+          },
+          page,
+          limit,
+          search: search || undefined,
+          order: { createdAt: -1 },
+        },
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive type`,
+        cache: false,
+      });
+      return {
+        data: (result.data || []) as any as TrendingPublicItem[],
+        total: result.total || 0,
+        pagination: result.pagination,
+      };
+    } catch (err) {
+      console.error("[getCustomerChatbotList] Error:", err);
       return { data: [], total: 0 };
     }
   }
@@ -205,7 +245,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           page,
           limit,
           search: search || undefined,
-          filter: { isActive: true },
+          filter: { isActive: true, type: TrendingTypeEnum.PROMPT },
           order: { monthlyCount: -1 },
         },
         fragment: `id name imageUrls count price promptShort monthlyCount`,

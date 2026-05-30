@@ -7,13 +7,12 @@ import { useTranslation } from "react-i18next";
 import { RiDeleteBinLine, RiLoader4Line, RiSendPlaneFill } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { AFFILIATE_CHAT_KIND } from "../../constants";
-import { getAffiliateChatSystemPrompt } from "../hook/affiliate-chat-prompts";
+
 import { AFFILIATE_CHAT_WELCOME_ID, AffiliateChatMessage } from "../hook/affiliateChatTypes";
 import { useAffiliateChatStorage } from "../hook/useAffiliateChatStorage";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 const CHAT_KIND = AFFILIATE_CHAT_KIND.trendingGymPt;
-const TEXT_CONTEXT = getAffiliateChatSystemPrompt(CHAT_KIND);
 
 const WELCOME_I18N_KEY =
   "Xin chào! Tôi có thể gợi ý ý tưởng mẹo vặt, nhân vật, kịch bản scene và prompt cho video của bạn.";
@@ -42,8 +41,11 @@ export function ChatBotSidebar() {
   const { t } = useTranslation();
   const toast = useToast();
   const { affiliateVideoFormConfig, trendingScriptData } = useAffiliateVideoContext();
+  const chatBotId = affiliateVideoFormConfig?.promptId;
+  const selectedPromptName = affiliateVideoFormConfig?.promptName;
+
   const { loadMessages, persistMessages, clearStoredMessages, storageKey } =
-    useAffiliateChatStorage(CHAT_KIND);
+    useAffiliateChatStorage(CHAT_KIND, chatBotId);
 
   const welcomeText = t(WELCOME_I18N_KEY);
   const welcomeMessage = useMemo(() => createWelcomeMessage(welcomeText), [welcomeText]);
@@ -103,8 +105,14 @@ export function ChatBotSidebar() {
   useEffect(() => {
     let cancelled = false;
     setHydrated(false);
+    setInput("");
     lastPersistedSnapshotRef.current = "";
     persistSeqRef.current += 1;
+    if (persistDebounceRef.current) {
+      clearTimeout(persistDebounceRef.current);
+      persistDebounceRef.current = null;
+    }
+    setMessages([createWelcomeMessage(t(WELCOME_I18N_KEY))]);
 
     (async () => {
       const saved = await loadMessages();
@@ -124,7 +132,7 @@ export function ChatBotSidebar() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ hydrate khi storageKey đổi
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ hydrate khi storageKey (chatBotId) đổi
   }, [storageKey, loadMessages]);
 
   useEffect(() => {
@@ -150,21 +158,9 @@ export function ChatBotSidebar() {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
-  const buildContext = useCallback(
-    () => ({
-      tipContent: affiliateVideoFormConfig?.tipContent,
-      category: affiliateVideoFormConfig?.category,
-      mood: affiliateVideoFormConfig?.mood,
-      language: affiliateVideoFormConfig?.language,
-      artStyle: affiliateVideoFormConfig?.artStyle,
-      sceneCount: trendingScriptData?.scenes?.length ?? 0,
-    }),
-    [affiliateVideoFormConfig, trendingScriptData]
-  );
-
   const sendMessage = useCallback(async () => {
     const text = input.trim();
-    if (!text || loading) return;
+    if (!text || loading || !chatBotId) return;
 
     const userMsg: AffiliateChatMessage = { id: newId(), role: "user", content: text };
     const apiMessages = [
@@ -185,9 +181,8 @@ export function ChatBotSidebar() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
-          context: buildContext(),
           chatKind: CHAT_KIND,
-          textContext: TEXT_CONTEXT,
+          chatBotId,
         }),
       });
 
@@ -225,7 +220,7 @@ export function ChatBotSidebar() {
       setLoading(false);
       inputRef.current?.focus();
     }
-  }, [input, loading, messages, buildContext, toast, t, flushPersist, schedulePersist]);
+  }, [input, loading, messages, chatBotId, toast, t, flushPersist, schedulePersist]);
 
   const clearChat = useCallback(async () => {
     setMessages([welcomeMessage]);
@@ -253,7 +248,17 @@ export function ChatBotSidebar() {
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-white">
       <div className="flex gap-2 justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
-        <span className="text-sm font-semibold text-gray-800">{t("Chat")}</span>
+        <div className="flex flex-col flex-1 min-w-0">
+          <span className="text-sm font-semibold text-gray-800">{t("Chat")}</span>
+          {selectedPromptName ? (
+            <span
+              className="text-xs font-medium truncate text-primary"
+              title={selectedPromptName}
+            >
+              {selectedPromptName}
+            </span>
+          ) : null}
+        </div>
         <button
           type="button"
           onClick={clearChat}
@@ -297,15 +302,17 @@ export function ChatBotSidebar() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            disabled={loading}
+            disabled={loading || !chatBotId}
             rows={2}
-            placeholder={t("Nhập câu hỏi...")}
+            placeholder={
+              chatBotId ? t("Nhập câu hỏi...") : t("Chọn chatbot (Dùng ngay) để bắt đầu chat")
+            }
             className="flex-1 px-3 py-2 text-sm rounded-xl border border-gray-200 resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50"
           />
           <button
             type="button"
             onClick={sendMessage}
-            disabled={loading || !input.trim()}
+            disabled={loading || !input.trim() || !chatBotId}
             className="flex flex-shrink-0 justify-center items-center w-10 h-10 text-white rounded-xl bg-primary hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed"
             title={t("Gửi")}
           >

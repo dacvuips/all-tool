@@ -1,6 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
-import { Trending, TrendingService } from "../../../../lib/repo/list/trending.repo";
+import {
+  Trending,
+  TRENDING_TYPE_OPTIONS,
+  TrendingService,
+} from "../../../../lib/repo/list/trending.repo";
 
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
@@ -54,6 +58,12 @@ export function TrendingPage() {
                   label={t("Tên trending")}
                   render={(item: Trending) => (
                     <DataTable.CellText value={item.name} className="font-semibold" />
+                  )}
+                />
+                <DataTable.Column
+                  label={t("Loại")}
+                  render={(item: Trending) => (
+                    <DataTable.CellStatus options={TRENDING_TYPE_OPTIONS} value={item.type} />
                   )}
                 />
                 <DataTable.Column
