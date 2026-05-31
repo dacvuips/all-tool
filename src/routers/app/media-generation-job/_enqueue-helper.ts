@@ -16,6 +16,10 @@ import {
   MediaGenerationJobType,
 } from "../../../libs/dal/mediaGenerationJob";
 import { enqueueMediaGenerationJob } from "../../../queues/media-generation/media-generation.queue";
+import {
+  FAILED_JOB_RETENTION_MS,
+  scheduleTerminalMediaJobDeletion,
+} from "../../../queues/media-generation/job-emitter";
 
 export type CreateAndEnqueueArgs = {
   customerId: string;
@@ -52,12 +56,19 @@ export async function createAndEnqueueMediaJob(
   } catch (err: any) {
     // 3. Nếu enqueue fail → đánh dấu FAILED ngay để FE không subscribe vô tận
     logger.error(`[createAndEnqueueMediaJob] enqueue ${jobId} lỗi: ${err?.message}`);
+    const completedAt = new Date();
     await mediaGenerationJobService.updateOne(jobId, {
       status: MediaGenerationJobStatus.FAILED,
       errorMessage: "Không thể đưa job vào hàng đợi. Vui lòng thử lại sau.",
       errorCode: 503,
-      completedAt: new Date(),
+      completedAt,
     } as any);
+    scheduleTerminalMediaJobDeletion(
+      jobId,
+      MediaGenerationJobStatus.FAILED,
+      completedAt,
+      FAILED_JOB_RETENTION_MS
+    );
     const wrapped: any = new Error("Không thể đưa job vào hàng đợi. Vui lòng thử lại sau.");
     wrapped.statusCode = 503;
     throw wrapped;

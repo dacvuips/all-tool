@@ -10,6 +10,8 @@
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
  *   7. **Job watcher**: chỉ chạy khi Redis key `mgj:watch:{jobId}` còn (subscription / touchWatch).
+ *   8. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 30 phút kể từ `completedAt`.
+ *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
  *
  * Không bật **auto-retry**: API generation tốn quota, retry ngầm dễ ngốn credit. User retry thủ công.
  */
@@ -24,7 +26,12 @@ import {
   isMediaJobTerminal,
 } from "../../libs/dal/mediaGenerationJob";
 import { getMediaJobHandler } from "./handlers";
-import { abandonMediaJobNoWatcher, MediaJobEmitter } from "./job-emitter";
+import {
+  abandonMediaJobNoWatcher,
+  FAILED_JOB_RETENTION_MS,
+  MediaJobEmitter,
+  SUCCESS_JOB_RETENTION_MS,
+} from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
 import {
   isJobWatched,
@@ -37,6 +44,9 @@ const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
 
 /** Mọi job Redis được giữ tối đa 72h, sau đó cleanup (state vẫn còn ở Mongo). */
 const MEDIA_GENERATION_JOB_RETENTION_MS = 72 * 60 * 60 * 1000;
+
+/** Tần suất quét xóa doc Mongo terminal (FAILED / SUCCEEDED) hết hạn. */
+const MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
 
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
 export type MediaQueueJobPayload = {
@@ -216,6 +226,67 @@ export async function resumeStaleMediaJobs(): Promise<number> {
     logger.error(`[MediaGenerationQueue] resumeStaleMediaJobs lỗi: ${err?.message}`);
     return 0;
   }
+}
+
+/**
+ * Xóa doc Mongo terminal đã hết hạn.
+ * - FAILED: `completedAt` cũ hơn 30 phút (kể từ lúc fail).
+ * - SUCCEEDED: `completedAt` cũ hơn 10 phút.
+ */
+export async function cleanupExpiredTerminalMediaJobs(): Promise<{
+  failed: number;
+  succeeded: number;
+}> {
+  try {
+    const now = Date.now();
+    const failedCutoff = new Date(now - FAILED_JOB_RETENTION_MS);
+    const successCutoff = new Date(now - SUCCESS_JOB_RETENTION_MS);
+
+    const [failedResult, successResult] = await Promise.all([
+      MediaGenerationJobModel.deleteMany({
+        status: MediaGenerationJobStatus.FAILED,
+        completedAt: { $lt: failedCutoff, $ne: null },
+      }),
+      MediaGenerationJobModel.deleteMany({
+        status: MediaGenerationJobStatus.SUCCEEDED,
+        completedAt: { $lt: successCutoff, $ne: null },
+      }),
+    ]);
+
+    const failed = (failedResult as any).deletedCount ?? 0;
+    const succeeded = (successResult as any).deletedCount ?? 0;
+    if (failed > 0 || succeeded > 0) {
+      logger.info(
+        `[MediaGenerationQueue] Cleanup sweep: removed ${failed} FAILED, ${succeeded} SUCCEEDED`
+      );
+    }
+    return { failed, succeeded };
+  } catch (err: any) {
+    logger.error(`[MediaGenerationQueue] cleanupExpiredTerminalMediaJobs lỗi: ${err?.message}`);
+    return { failed: 0, succeeded: 0 };
+  }
+}
+
+let mediaJobCleanupSweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Bật sweep định kỳ — idempotent, gọi 1 lần khi worker start. */
+export function startMediaJobCleanupSweep(): void {
+  if (mediaJobCleanupSweepTimer) return;
+
+  const run = () => {
+    cleanupExpiredTerminalMediaJobs().catch((err) =>
+      logger.error("[MediaGenerationQueue] cleanup sweep lỗi", err)
+    );
+  };
+
+  run();
+  mediaJobCleanupSweepTimer = setInterval(run, MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS);
+  if (typeof mediaJobCleanupSweepTimer.unref === "function") {
+    mediaJobCleanupSweepTimer.unref();
+  }
+  logger.info(
+    `[MediaGenerationQueue] Terminal job cleanup sweep every ${MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS / 60000} min`
+  );
 }
 
 /**

@@ -40,7 +40,9 @@ const LOCK_TTL_MS = 60 * 1000; // 60 giây
 /** Tần suất heartbeat tự động (gia hạn lock dù handler không gọi progress) */
 const HEARTBEAT_MS = 15 * 1000; // 15 giây
 /** Giữ job SUCCEEDED để poll fallback vẫn lấy được resultData khi WS lỗi */
-const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 10 phút
+export const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 10 phút
+/** Giữ job FAILED để client poll/retry; xóa 30 phút sau completedAt (sweep 5 phút/lần) */
+export const FAILED_JOB_RETENTION_MS = 30 * 60 * 1000; // 30 phút
 
 /** Payload phát qua pubsub — gửi xuống GraphQL Subscription resolver */
 export type MediaGenerationJobPubsubPayload = {
@@ -92,6 +94,39 @@ async function publishChange(doc: IMediaGenerationJob): Promise<void> {
 /** Hàm tiện ích: tính thời điểm hết hạn lock kế tiếp */
 function nextLockExpiresAt(): Date {
   return new Date(Date.now() + LOCK_TTL_MS);
+}
+
+/**
+ * Xóa doc Mongo sau retention (best-effort, nhanh khi process còn sống).
+ * Sweep định kỳ `cleanupExpiredTerminalMediaJobs()` là lớp backup sau restart.
+ */
+export function scheduleTerminalMediaJobDeletion(
+  jobId: string,
+  status: MediaGenerationJobStatus.SUCCEEDED | MediaGenerationJobStatus.FAILED,
+  completedAt: Date,
+  retentionMs: number
+): void {
+  setTimeout(async () => {
+    try {
+      const model = mediaGenerationJobService.model;
+      const deleted = await model.deleteOne({
+        _id: jobId,
+        status,
+        completedAt,
+      });
+      if (deleted.deletedCount) {
+        logger.info(
+          `[MediaJobEmitter] DELETED jobId=${jobId} status=${status} sau ${Math.round(
+            retentionMs / 1000
+          )}s retention`
+        );
+      }
+    } catch (err: any) {
+      logger.warn(
+        `[MediaJobEmitter] xóa job ${status} thất bại jobId=${jobId}: ${err?.message}`
+      );
+    }
+  }, retentionMs);
 }
 
 /**
@@ -315,26 +350,12 @@ export class MediaJobEmitter {
       await publishChange(doc as unknown as IMediaGenerationJob);
       await clearJobWatch(this.jobId);
       const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
-      setTimeout(async () => {
-        try {
-          const deleted = await model.deleteOne({
-            _id: this.jobId,
-            status: MediaGenerationJobStatus.SUCCEEDED,
-            completedAt,
-          });
-          if (deleted.deletedCount) {
-            logger.info(
-              `[MediaJobEmitter] DELETED jobId=${this.jobId} sau ${Math.round(
-                SUCCESS_JOB_RETENTION_MS / 1000
-              )}s retention`
-            );
-          }
-        } catch (err: any) {
-          logger.warn(
-            `[MediaJobEmitter] xóa job SUCCEEDED thất bại jobId=${this.jobId}: ${err?.message}`
-          );
-        }
-      }, SUCCESS_JOB_RETENTION_MS);
+      scheduleTerminalMediaJobDeletion(
+        this.jobId,
+        MediaGenerationJobStatus.SUCCEEDED,
+        completedAt,
+        SUCCESS_JOB_RETENTION_MS
+      );
     } else {
       logger.warn(`[MediaJobEmitter] succeed jobId=${this.jobId} nhưng không còn giữ lock`);
     }
@@ -368,6 +389,14 @@ export class MediaJobEmitter {
     if (doc) {
       logger.info(`[MediaJobEmitter] FAIL jobId=${this.jobId} ${errorMessage}`);
       await publishChange(doc as unknown as IMediaGenerationJob);
+      await clearJobWatch(this.jobId);
+      const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+      scheduleTerminalMediaJobDeletion(
+        this.jobId,
+        MediaGenerationJobStatus.FAILED,
+        completedAt,
+        FAILED_JOB_RETENTION_MS
+      );
     }
   }
 }
