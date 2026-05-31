@@ -1,7 +1,5 @@
 import { Request, Response } from "express";
-import { recaptchaTokenService } from "../../libs/dal/recaptchaToken";
 import { ActionEnum } from "../app/affiliate-scene/_shared";
-import { fetchCaptchaData, validateApiKey } from "../helpers/validateApiKey";
 
 export default [
   {
@@ -11,18 +9,23 @@ export default [
     action: async (req: Request, res: Response) => {
       const { type } = req.query as { type?: ActionEnum };
 
-      // Validate apiKey & kiểm tra token hợp lệ
-      await validateApiKey(req, recaptchaTokenService);
+      // throw error 501
+      throw new Error(
+        "The system is currently undergoing maintenance. Please try again later, or contact the administrator for further assistance"
+      );
 
-      // Lấy links & captcha data
-      const captchaData = await fetchCaptchaData({
-        type,
-        logPrefix: "recaptcha",
-      });
+      // // Validate apiKey & kiểm tra token hợp lệ
+      // await validateApiKey(req, recaptchaTokenService);
 
-      res.json({
-        reCaptchaToken: captchaData.captcha,
-      });
+      // // Lấy links & captcha data
+      // const captchaData = await fetchCaptchaData({
+      //   type,
+      //   logPrefix: "recaptcha",
+      // });
+
+      // res.json({
+      //   reCaptchaToken: captchaData.captcha,
+      // });
     },
   },
 ];

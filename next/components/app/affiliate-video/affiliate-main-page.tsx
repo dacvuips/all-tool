@@ -11,6 +11,7 @@ import {
   RiFileCopy2Line,
   RiFileTextLine,
   RiGridLine,
+  RiImage2Fill,
   RiListOrdered,
 } from "react-icons/ri";
 
@@ -88,6 +89,12 @@ export default function AffiliateMainPage() {
       icon: <RiBookOpenLine />,
       label: t("Chuyên thời trang"),
       value: "fashion-review",
+      component: <>{"Sắp xong rồi"}</>,
+    },
+    {
+      icon: <RiImage2Fill />,
+      label: t("Chuyên Sửa Ảnh"),
+      value: "edit-image",
       component: <>{"Sắp xong rồi"}</>,
     },
 
