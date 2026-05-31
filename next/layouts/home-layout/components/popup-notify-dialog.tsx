@@ -58,7 +58,7 @@ const PopupNotifyDialogItem = ({ item, ...props }) => {
         >
           <i
             onClick={() => setLoCalStorage(item.id)}
-            className="absolute p-2 text-lg text-white bg-black bg-opacity-50 border border-white rounded-full cursor-pointer -top-4 z-100 -right-2 text-24"
+            className="absolute -right-2 -top-4 p-2 text-lg text-white bg-black bg-opacity-50 rounded-full border border-white cursor-pointer z-100 text-24"
           >
             <HiOutlineX />
           </i>
@@ -79,7 +79,7 @@ const PopupNotifyDialogItem = ({ item, ...props }) => {
         >
           <i
             onClick={() => setLoCalStorage(item.id)}
-            className="absolute p-2 text-lg text-white bg-black bg-opacity-50 border border-white rounded-full cursor-pointer -top-4 z-100 -right-2 text-24"
+            className="absolute -right-2 -top-4 p-2 text-lg text-white bg-black bg-opacity-50 rounded-full border border-white cursor-pointer z-100 text-24"
           >
             <HiOutlineX />
           </i>

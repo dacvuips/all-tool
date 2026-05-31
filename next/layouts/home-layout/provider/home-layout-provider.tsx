@@ -39,6 +39,7 @@ export function HomeLayoutProvider(props) {
   const [categoryGlobal, setCategoryGlobal] = useState<string>(null);
 
   useEffect(() => {
+    getPopupNotify();
     if (customer) {
       getWalletInfo();
     }
