@@ -40,9 +40,9 @@ const LOCK_TTL_MS = 60 * 1000; // 60 giây
 /** Tần suất heartbeat tự động (gia hạn lock dù handler không gọi progress) */
 const HEARTBEAT_MS = 15 * 1000; // 15 giây
 /** Giữ job SUCCEEDED để poll fallback vẫn lấy được resultData khi WS lỗi */
-export const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 10 phút
-/** Giữ job FAILED để client poll/retry; xóa 30 phút sau completedAt (sweep 5 phút/lần) */
-export const FAILED_JOB_RETENTION_MS = 30 * 60 * 1000; // 30 phút
+export const SUCCESS_JOB_RETENTION_MS = 5 * 60 * 1000; // 5 phút
+/** Giữ job FAILED để client poll/retry; xóa 3 phút sau completedAt (sweep 5 phút/lần) */
+export const FAILED_JOB_RETENTION_MS = 3 * 60 * 1000; // 30 phút
 
 /** Payload phát qua pubsub — gửi xuống GraphQL Subscription resolver */
 export type MediaGenerationJobPubsubPayload = {
@@ -122,9 +122,7 @@ export function scheduleTerminalMediaJobDeletion(
         );
       }
     } catch (err: any) {
-      logger.warn(
-        `[MediaJobEmitter] xóa job ${status} thất bại jobId=${jobId}: ${err?.message}`
-      );
+      logger.warn(`[MediaJobEmitter] xóa job ${status} thất bại jobId=${jobId}: ${err?.message}`);
     }
   }, retentionMs);
 }
@@ -238,7 +236,9 @@ export class MediaJobEmitter {
     }
 
     logger.info(
-      `[MediaJobEmitter] claim OK jobId=${id} workerId=${WORKER_INSTANCE_ID} attempts=${(doc as any).attempts}`
+      `[MediaJobEmitter] claim OK jobId=${id} workerId=${WORKER_INSTANCE_ID} attempts=${
+        (doc as any).attempts
+      }`
     );
     await publishChange(doc as unknown as IMediaGenerationJob);
     const emitter = new MediaJobEmitter(id, (doc as any).customerId);
@@ -349,7 +349,9 @@ export class MediaJobEmitter {
       // Publish trước để client đang subscribe nhận kết quả realtime.
       await publishChange(doc as unknown as IMediaGenerationJob);
       await clearJobWatch(this.jobId);
-      const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+      const completedAt = (doc as any).completedAt
+        ? new Date((doc as any).completedAt)
+        : new Date();
       scheduleTerminalMediaJobDeletion(
         this.jobId,
         MediaGenerationJobStatus.SUCCEEDED,
@@ -390,7 +392,9 @@ export class MediaJobEmitter {
       logger.info(`[MediaJobEmitter] FAIL jobId=${this.jobId} ${errorMessage}`);
       await publishChange(doc as unknown as IMediaGenerationJob);
       await clearJobWatch(this.jobId);
-      const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+      const completedAt = (doc as any).completedAt
+        ? new Date((doc as any).completedAt)
+        : new Date();
       scheduleTerminalMediaJobDeletion(
         this.jobId,
         MediaGenerationJobStatus.FAILED,
@@ -405,10 +409,7 @@ export class MediaJobEmitter {
  * Đánh dấu một job là CANCELLED.
  * Hoạt động bất kể job đang ở worker nào — vì status terminal là điểm dừng cho mọi emitter.
  */
-export async function markMediaJobCancelled(
-  jobId: string,
-  customerId: string
-): Promise<boolean> {
+export async function markMediaJobCancelled(jobId: string, customerId: string): Promise<boolean> {
   const model = mediaGenerationJobService.model;
   const doc = await model.findOneAndUpdate(
     {

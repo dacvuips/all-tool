@@ -7,13 +7,13 @@ import type { ApiLinkData } from "./validateApiKey";
 export const TIME = 10_000;
 
 /** Thời gian block link khi không có tài khoản online (ms). */
-export const CAPTCHA_LINK_BAN_TIME_MS = 30 * 60 * 1000;
+export const CAPTCHA_LINK_BAN_TIME_MS = 2 * 60 * 1000;
 
 const SLOT_PREFIX = "aisandbox:captcha_link_slot:";
 const BAN_PREFIX = "aisandbox:captcha_link_ban:";
 
 /** Khoảng chờ giữa các vòng quay link khi tất cả slot đang bận. */
-const ALL_BUSY_POLL_MS = 500;
+const ALL_BUSY_POLL_MS = 1000;
 
 /** Tối đa chờ slot trống trước khi báo quá tải. */
 const MAX_WAIT_FOR_SLOT_MS = 120_000;
@@ -22,7 +22,11 @@ const MAX_WAIT_FOR_SLOT_MS = 120_000;
 const DEFAULT_SLOT_NUMBER = 1;
 
 function linkId(link: ApiLinkData): string {
-  return crypto.createHash("sha256").update(`${link.url}|${link.apiKey || ""}`).digest("hex").slice(0, 16);
+  return crypto
+    .createHash("sha256")
+    .update(`${link.url}|${link.apiKey || ""}`)
+    .digest("hex")
+    .slice(0, 16);
 }
 
 export function captchaLinkSlotKey(link: ApiLinkData): string {
@@ -161,9 +165,7 @@ export async function acquireCaptchaLinkWithSlot(
     await new Promise((resolve) => setTimeout(resolve, ALL_BUSY_POLL_MS));
   }
 
-  const err: any = new Error(
-    "Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút."
-  );
+  const err: any = new Error("Hệ thống hiện tại đang quá tải. Vui lòng thử lại sau ít phút.");
   err.statusCode = 502;
   throw err;
 }

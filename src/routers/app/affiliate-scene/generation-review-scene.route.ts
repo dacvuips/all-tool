@@ -62,17 +62,14 @@ export default [
         }
         const artStyleImgNames = body.config.artStyleImgNames?.join(", ");
 
-        const prompt = `
+        const prompt = `You are a specialist in product photography and videography.
 Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.  
-
 Use the following contextual settings: {{objectToPersonify}},  {{language}}, {{prompt}}.
- 
-
 Return valid JSON only with this structure:
 {
   "scenes": [
    {
-  "topicTitle": "a short title for each scene in {{language}}",
+  "topicTitle": "a short title for each s cene in {{language}}",
   "artStyle": "{{artStyle}}", 
   "visualPrompt":"English Use exactly ONE random image name from ${
     artStyleImgNames || "none"
