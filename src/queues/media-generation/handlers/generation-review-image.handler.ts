@@ -20,6 +20,11 @@ export type GenerationReviewImagePayload = {
   noText?: boolean;
   artStyleId?: string;
   artStyle?: string;
+  config?: {
+    numberOfImages?: number;
+    aspectRatio?: "16:9" | "9:16";
+    noText?: boolean;
+  };
 };
 
 const LOG_PREFIX = "generation-image";
@@ -49,13 +54,14 @@ export async function handleGenerationReviewImage(
 - Treat the uploaded image as immutable source truth.
 - Any deviation from the original product appearance is prohibited.
 `;
-  const noTextStr = !payload.noText ? NO_TEXT_NOTE : "";
+  const noText = payload.noText ?? payload.config?.noText;
+  const aspectRatio = payload.aspectRatio ?? payload.config?.aspectRatio;
+  const noTextStr = !noText ? NO_TEXT_NOTE : "";
   const fullPrompt = `${artStyleText} ${payload.prompt} ${noTextStr} ${rule}`;
-
   const images = await runImagePipeline({
     customerId: job.customerId,
     prompt: fullPrompt,
-    aspectRatio: payload.aspectRatio,
+    aspectRatio,
     imageGroups: { userImages: payload.images },
     emitter,
     logPrefix: LOG_PREFIX,
