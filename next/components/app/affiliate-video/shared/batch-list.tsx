@@ -4,7 +4,7 @@
  * Dùng chung cho single, copy-video, trending
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
@@ -12,6 +12,7 @@ import { RiImageFill, RiText, RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
+import { reorderScenesWithNumbers, SortableCardGrid } from "../../../shared/utilities/sortable";
 import { CharacterItem } from "../constants";
 import { SceneTabKey } from "./scene-card-tabs";
 import { BaseHistoryItem, SceneHistoryDropdown } from "./scene-history-dropdown";
@@ -267,6 +268,71 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Kéo-thả đổi thứ tự – UI ngay, IndexedDB nền (không chặn thả) */
+  const handleReorderScenes = useCallback(
+    (reordered: any[]) => {
+      const updated = reorderScenesWithNumbers(reordered);
+      setSceneList(updated);
+      void Promise.resolve(onSyncScenes(updated)).catch((err) =>
+        console.error("[handleReorderScenes] Failed to persist:", err)
+      );
+    },
+    [onSyncScenes]
+  );
+
+  const getSceneId = useCallback((scene: { id: string }) => scene.id, []);
+
+  const renderSceneRow = useCallback(
+    (scene: any, index: number) => (
+      <SceneRowComponent
+        scene={scene}
+        index={index}
+        nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
+        isDisabled={!!scene.disabled}
+        characters={characters}
+        hideImageColumn={hideImageColumn}
+        onInsert={handleInsert}
+        onUpdateScene={handleUpdateScene}
+        onToggleDisable={handleToggleDisable}
+        onToggleVoiceDisable={handleToggleVoiceDisable}
+        onToggleNoText={handleToggleNoText}
+        onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+        onUpdateElementImageSlots={handleUpdateElementImageSlots}
+        onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
+        onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
+        forcedTab={globalTab}
+        {...sceneRowExtraProps}
+      />
+    ),
+    [
+      sceneList.length,
+      characters,
+      hideImageColumn,
+      globalTab,
+      sceneRowExtraProps,
+      handleInsert,
+      handleUpdateScene,
+      handleToggleDisable,
+      handleToggleVoiceDisable,
+      handleToggleNoText,
+      handleUpdateSelectedProductImages,
+      handleUpdateElementImageSlots,
+      handleUpdateReviewImageSlots,
+      handleUpdateElementVideoSlots,
+    ]
+  );
+
+  const renderSceneDragOverlay = useCallback(
+    (scene: { sceneNumber?: number }) => (
+      <div className="flex justify-center items-center w-full h-full min-h-[100px] rounded-xl bg-gradient-to-br from-gray-50 to-white border border-gray-200">
+        <span className="px-3 py-1.5 text-xs font-bold text-white bg-gray-800 rounded-full">
+          {t("Cảnh")} #{scene.sceneNumber}
+        </span>
+      </div>
+    ),
+    [t]
+  );
+
   if (!customer) {
     return (
       <div className="flex flex-col justify-center items-center py-16">
@@ -378,32 +444,18 @@ export function SharedBatchListPanel({
         />
       </div>
 
-      {/* ── Scrollable card grid – responsive columns ── */}
+      {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}
       <div className="overflow-auto flex-1 p-2 v-scrollbar sm:p-3">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 [&>*]:overflow-visible">
-          {sceneList.map((scene, index) => (
-            <SceneRowComponent
-              key={`${selectedHistoryId || "default"}-${scene.id}`}
-              scene={scene}
-              index={index}
-              nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
-              isDisabled={!!scene.disabled}
-              characters={characters}
-              hideImageColumn={hideImageColumn}
-              onInsert={handleInsert}
-              onUpdateScene={handleUpdateScene}
-              onToggleDisable={handleToggleDisable}
-              onToggleVoiceDisable={handleToggleVoiceDisable}
-              onToggleNoText={handleToggleNoText}
-              onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
-              onUpdateElementImageSlots={handleUpdateElementImageSlots}
-              onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
-              onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
-              forcedTab={globalTab}
-              {...sceneRowExtraProps}
-            />
-          ))}
-        </div>
+        <SortableCardGrid
+          items={sceneList}
+          getItemId={getSceneId}
+          onReorder={handleReorderScenes}
+          renderItem={renderSceneRow}
+          renderDragOverlay={renderSceneDragOverlay}
+          keyPrefix={selectedHistoryId || "default"}
+          gridClassName="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
+          useDragHandle
+        />
       </div>
     </div>
   );
