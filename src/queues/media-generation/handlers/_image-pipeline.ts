@@ -8,7 +8,7 @@
  * tự check cancel, handler không cần kiểm tra thủ công.
  */
 import logger from "../../../helpers/logger";
-import { GeneratedImage, generateImageWithFlow2 } from "../../../routers/api-media/flow2-image-generation";
+import { GeneratedImage, generateImageWithFlow2 } from "../../../routers/api-media/flow2/image-generation";
 import { MediaJobEmitter } from "../job-emitter";
 
 import { UploadableReferenceImage } from "../../../routers/app/affiliate-scene/_shared";

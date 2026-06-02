@@ -5,7 +5,7 @@
 import { incrementVideoCount } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationVideoResult } from "../../../libs/dal/mediaGenerationJob";
 import { MediaJobEmitter } from "../job-emitter";
-import { runVideoPipeline } from "./_video-pipeline";
+import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
 
 export type GenerationVideoPayload = {
   prompt: string;
@@ -24,12 +24,11 @@ export async function handleGenerationVideo(
 
   await emitter.progress(10, "Đang chuẩn bị tạo video...");
 
-  const result = await runVideoPipeline({
+  const result = await runFlow2VideoPipeline({
     customerId: job.customerId,
     prompt: payload.prompt,
     aspectRatio: payload.config?.aspectRatio,
     images: payload.images,
-    apiMode: "text-or-reference",
     emitter,
     logPrefix: "generation-video",
   });
