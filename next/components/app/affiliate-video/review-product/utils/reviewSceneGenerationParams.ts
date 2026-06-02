@@ -69,10 +69,17 @@ export async function buildReviewImageGenerateParams(options: {
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
   noText?: boolean;
+  objectToPersonifyImage?: ReviewFormImage;
 }): Promise<GenerateImageParams> {
-  const { scene, scriptData, thumbnailOriginImage, selectedProductImages, noText } = options;
+  const {
+    scene,
+    scriptData,
+    thumbnailOriginImage,
+    selectedProductImages,
+    noText,
+    objectToPersonifyImage,
+  } = options;
   const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
-  console.log(scene, scriptData, thumbnailOriginImage, selectedProductImages, noText);
   return {
     sceneId: scene.id,
     prompt: `${scene.imageGenPrompt || scene.visualPrompt || ""}`,
@@ -85,6 +92,7 @@ export async function buildReviewImageGenerateParams(options: {
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     productImagePrompt: scene.product_image_prompt || undefined,
     serviceImageType: scriptData?.serviceImageType,
+    objectToPersonifyImage,
   };
 }
 

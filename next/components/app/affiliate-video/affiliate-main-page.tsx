@@ -97,6 +97,12 @@ export default function AffiliateMainPage() {
       value: "edit-image",
       component: <>{"Sắp xong rồi"}</>,
     },
+    {
+      icon: <RiImage2Fill />,
+      label: t("Làm Phim"),
+      value: "make-film",
+      component: <>{"Sắp xong rồi"}</>,
+    },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
     // { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },

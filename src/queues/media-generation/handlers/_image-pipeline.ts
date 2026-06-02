@@ -8,9 +8,12 @@
  * tự check cancel, handler không cần kiểm tra thủ công.
  */
 import logger from "../../../helpers/logger";
-import { callAisandboxImageAPI, GeneratedImage } from "../../../routers/api-media/handle-image-generation";
-import { processAndUploadImages } from "../../../routers/helpers/handleUploadGoogleLabImages";
+import {
+  callAisandboxImageAPI,
+  GeneratedImage,
+} from "../../../routers/api-media/handle-image-generation";
 import { ActionEnum } from "../../../routers/app/affiliate-scene/_shared";
+import { processAndUploadImages } from "../../../routers/helpers/handleUploadGoogleLabImages";
 import { CaptchaResponseData, fetchCaptchaData } from "../../../routers/helpers/validateApiKey";
 import { MediaJobEmitter } from "../job-emitter";
 
@@ -44,10 +47,15 @@ export type RunImagePipelineArgs = {
  * Chạy toàn bộ pipeline tạo ảnh. Trả về mảng ảnh kết quả.
  * Throw lỗi nếu fail (worker bắt + chuyển sang FAILED).
  */
-export async function runImagePipeline(
-  args: RunImagePipelineArgs
-): Promise<GeneratedImage[]> {
-  const { customerId, prompt, aspectRatio, imageGroups, emitter, logPrefix = "generation-image" } = args;
+export async function runImagePipeline(args: RunImagePipelineArgs): Promise<GeneratedImage[]> {
+  const {
+    customerId,
+    prompt,
+    aspectRatio,
+    imageGroups,
+    emitter,
+    logPrefix = "generation-image",
+  } = args;
 
   /** Upload tất cả ảnh theo nhóm theo thứ tự, gắn captcha hiện tại */
   const uploadAll = async (captcha: CaptchaResponseData): Promise<string[]> => {
@@ -57,7 +65,12 @@ export async function runImagePipeline(
 
     let personifyNames: string[] = [];
     if (personifyImages.length > 0) {
-      personifyNames = await processAndUploadImages(personifyImages, accessToken, projectId, customerId);
+      personifyNames = await processAndUploadImages(
+        personifyImages,
+        accessToken,
+        projectId,
+        customerId
+      );
     }
     let userNames: string[] = [];
     if (userImages.length > 0) {
@@ -65,7 +78,12 @@ export async function runImagePipeline(
     }
     let productNames: string[] = [];
     if (productImageUrls.length > 0) {
-      productNames = await processAndUploadImages(productImageUrls, accessToken, projectId, customerId);
+      productNames = await processAndUploadImages(
+        productImageUrls,
+        accessToken,
+        projectId,
+        customerId
+      );
     }
     return [...personifyNames, ...userNames, ...productNames];
   };

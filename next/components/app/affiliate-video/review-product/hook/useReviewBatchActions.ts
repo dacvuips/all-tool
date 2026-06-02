@@ -24,6 +24,7 @@ import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
 } from "../utils/reviewSceneGenerationParams";
+import { resolveObjectToPersonifyImageForApi } from "../utils/reviewFormImageUtils";
 import { useReviewApi } from "./useReviewApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -54,7 +55,16 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     removeBatchGeneratingVideoSceneId,
     reportSceneError,
     scriptData,
+    reviewFormConfig,
   } = useReviewContext();
+
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: reviewFormConfig?.objectToPersonify,
+    objectToPersonifyCode: reviewFormConfig?.objectToPersonifyCode,
+    objectToPersonifyImage: reviewFormConfig?.objectToPersonifyImage,
+    fallbackImage: scriptData?.objectToPersonifyImage,
+  });
+
   // Reviews: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
   const toast = useToast();
@@ -548,6 +558,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             thumbnailOriginImage: thumbnailUrl,
             selectedProductImages: selectedUrls,
             noText: scene.noText,
+            objectToPersonifyImage,
           });
           await reviewGenerateImage({
             ...imageParams,

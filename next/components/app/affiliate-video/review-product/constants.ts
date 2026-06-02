@@ -287,6 +287,8 @@ export interface ReviewAnalysisData {
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
+  objectToPersonifyCode?: string;
+  objectToPersonifyImage?: ReviewFormImage;
 }
 
 export interface ReviewHistoryItem {

@@ -775,29 +775,41 @@ export type ReferenceImageInput =
 
 export type UploadableReferenceImage = string | { imageBytes: string; mimeType?: string };
 
+function stripDataUrlBase64(input: string, fallbackMimeType = "image/png"): { imageBytes: string; mimeType: string } {
+  const trimmed = input.trim();
+  const base64Marker = ";base64,";
+  if (trimmed.startsWith("data:")) {
+    const idx = trimmed.indexOf(base64Marker);
+    if (idx !== -1) {
+      return {
+        mimeType: trimmed.slice(5, idx) || fallbackMimeType,
+        imageBytes: trimmed.slice(idx + base64Marker.length),
+      };
+    }
+  }
+  return { imageBytes: trimmed, mimeType: fallbackMimeType };
+}
+
 function normalizeReferenceImageItem(item: ReferenceImageInput): UploadableReferenceImage | null {
   if (!item) return null;
 
   if (typeof item === "string") {
     const s = item.trim();
     if (!s) return null;
-    const dataMatch = s.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataMatch) return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+    if (s.startsWith("data:")) return stripDataUrlBase64(s);
     return s;
   }
 
   let bytes = item.imageBytes?.trim();
   if (!bytes && item.fifeUrl?.trim()) {
     const url = item.fifeUrl.trim();
-    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataMatch) return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+    if (url.startsWith("data:")) return stripDataUrlBase64(url);
     return url;
   }
   if (!bytes) return null;
 
-  const dataMatch = bytes.match(/^data:([^;]+);base64,(.+)$/);
-  if (dataMatch) {
-    return { imageBytes: dataMatch[2], mimeType: dataMatch[1] };
+  if (bytes.startsWith("data:")) {
+    return stripDataUrlBase64(bytes, item.mimeType || "image/png");
   }
   return { imageBytes: bytes, mimeType: item.mimeType || "image/png" };
 }

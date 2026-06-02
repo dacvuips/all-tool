@@ -26,6 +26,9 @@ export default [
         const body = req.body as {
           prompt: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
+          productImages?: string[];
+          objectToPersonifyImages?: Array<string | { imageBytes: string; mimeType?: string }>;
+          productImagePrompt?: string;
           aspectRatio?: "16:9" | "9:16";
           noText?: boolean;
           artStyleId?: string;

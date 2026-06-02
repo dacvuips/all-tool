@@ -1,5 +1,24 @@
 import logger from "../../helpers/logger";
 
+/** Tách raw base64 khỏi data URL (`data:image/webp;base64,...`). Google upload API cần base64 thuần. */
+export function stripDataUrlFromBase64(
+  input: string,
+  fallbackMimeType = "image/jpeg"
+): { imageBytes: string; mimeType: string } {
+  const trimmed = input.trim();
+  const base64Marker = ";base64,";
+  if (trimmed.startsWith("data:")) {
+    const idx = trimmed.indexOf(base64Marker);
+    if (idx !== -1) {
+      return {
+        mimeType: trimmed.slice(5, idx) || fallbackMimeType,
+        imageBytes: trimmed.slice(idx + base64Marker.length),
+      };
+    }
+  }
+  return { imageBytes: trimmed, mimeType: fallbackMimeType };
+}
+
 /**
  * Kiểm tra xem chuỗi có phải là URL ảnh không.
  */
@@ -77,20 +96,21 @@ export async function processAndUploadImages(
     let mimeType: string;
 
     if (typeof item === "string") {
+      const trimmed = item.trim();
       // Kiểm tra xem có phải URL không
-      if (isImageUrl(item)) {
-        const fetched = await fetchImageAsBase64(item);
+      if (isImageUrl(trimmed)) {
+        const fetched = await fetchImageAsBase64(trimmed);
         imageBytes = fetched.imageBytes;
         mimeType = fetched.mimeType;
       } else {
-        // Coi như là base64 string trực tiếp
-        imageBytes = item;
-        mimeType = "image/jpeg";
+        const stripped = stripDataUrlFromBase64(trimmed);
+        imageBytes = stripped.imageBytes;
+        mimeType = stripped.mimeType;
       }
     } else {
-      // Object { imageBytes, mimeType }
-      imageBytes = item.imageBytes;
-      mimeType = item.mimeType || "image/jpeg";
+      const stripped = stripDataUrlFromBase64(item.imageBytes, item.mimeType || "image/jpeg");
+      imageBytes = stripped.imageBytes;
+      mimeType = stripped.mimeType;
     }
 
     logger.info(`[processImages] Upload ảnh ${index + 1}/${images.length} (mimeType: ${mimeType})`);

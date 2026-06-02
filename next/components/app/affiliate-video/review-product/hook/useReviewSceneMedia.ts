@@ -15,6 +15,7 @@ import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 import { ReviewFormImage, ReviewFormVideo, ReviewScene } from "../constants";
 import { useReviewContext } from "../providers/review-provider";
 import {
+  resolveObjectToPersonifyImageForApi,
   resolveReviewReferenceImagesForApi,
   resolveReviewReferenceVideoForApi,
 } from "../utils/reviewFormImageUtils";
@@ -153,7 +154,15 @@ export function useReviewSceneMedia({
     subscribeSceneError,
     reportSceneError,
     scriptData,
+    reviewFormConfig,
   } = useReviewContext();
+
+  const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
+    objectToPersonify: reviewFormConfig?.objectToPersonify,
+    objectToPersonifyCode: reviewFormConfig?.objectToPersonifyCode,
+    objectToPersonifyImage: reviewFormConfig?.objectToPersonifyImage,
+    fallbackImage: scriptData?.objectToPersonifyImage,
+  });
 
   const reportVideoError = useCallback(
     (message: string) => {
@@ -391,6 +400,7 @@ export function useReviewSceneMedia({
         thumbnailOriginImage,
         selectedProductImages,
         noText,
+        objectToPersonifyImage,
       });
 
       const result = await reviewGenerateImage({

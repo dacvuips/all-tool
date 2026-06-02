@@ -18,6 +18,7 @@ import {
 import {
   hasObjectToPersonifyImage,
   objectToPersonifyImageToApiImages,
+  stripDataUrlFromImageBytes,
 } from "../utils/reviewFormImageUtils";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -401,6 +402,9 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         objectToPersonifyCode: config.objectToPersonify?.trim()
           ? config.objectToPersonifyCode
           : undefined,
+        objectToPersonifyImage: hasObjectToPersonifyImage(config.objectToPersonifyImage)
+          ? config.objectToPersonifyImage
+          : undefined,
         aspectRatio: config.aspectRatio ?? result.data?.aspectRatio,
         artStyleId: config.artStyleId ?? result.data?.artStyleId,
         artStyle: config.artStyle ?? result.data?.artStyle,
@@ -436,20 +440,23 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyle,
       } = params;
 
-      // Gom ảnh tham chiếu (reference + additional)
+      // Gom ảnh tham chiếu (reference + additional) — base64 thuần, không data URL
       const images: { imageBytes: string; mimeType: string }[] = [];
       if (referenceImage) {
-        images.push({ imageBytes: referenceImage.imageBytes, mimeType: referenceImage.mimeType });
+        images.push(stripDataUrlFromImageBytes(referenceImage.imageBytes, referenceImage.mimeType));
       }
       if (additionalImages?.length) {
-        images.push(...additionalImages);
+        images.push(
+          ...additionalImages.map((img) =>
+            stripDataUrlFromImageBytes(img.imageBytes, img.mimeType || "image/png")
+          )
+        );
       }
 
       try {
         const personifyApiImages = hasObjectToPersonifyImage(objectToPersonifyImage)
           ? await objectToPersonifyImageToApiImages(objectToPersonifyImage)
           : [];
-        console.log(params);
 
         onProgress?.(1);
         const { data } = await imageJob.run({
@@ -458,6 +465,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
             prompt,
             images: images.length > 0 ? images : undefined,
             objectToPersonifyImages: personifyApiImages.length ? personifyApiImages : undefined,
+            productImages: productImages?.length ? productImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
             noText,
             aspectRatio,

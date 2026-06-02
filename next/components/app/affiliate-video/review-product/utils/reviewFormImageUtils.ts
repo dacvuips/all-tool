@@ -196,6 +196,25 @@ export function resolveObjectToPersonifyImageForApi(opts: {
   return image;
 }
 
+/** Tách base64 thuần khỏi data URL trước khi gửi API upload. */
+export function stripDataUrlFromImageBytes(
+  input: string,
+  fallbackMimeType = "image/png"
+): { imageBytes: string; mimeType: string } {
+  const trimmed = input.trim();
+  const base64Marker = ";base64,";
+  if (trimmed.startsWith("data:")) {
+    const idx = trimmed.indexOf(base64Marker);
+    if (idx !== -1) {
+      return {
+        mimeType: trimmed.slice(5, idx) || fallbackMimeType,
+        imageBytes: trimmed.slice(idx + base64Marker.length),
+      };
+    }
+  }
+  return { imageBytes: trimmed, mimeType: fallbackMimeType };
+}
+
 /** Convert một ElementFormImage → payload API (hoặc undefined nếu thiếu dữ liệu). */
 async function reviewFormImageToApiPayload(
   img: ReviewFormImage
@@ -203,17 +222,11 @@ async function reviewFormImageToApiPayload(
   if (!img.imageBytes && !img.fifeUrl) return undefined;
   try {
     if (img.imageBytes) {
-      const raw = img.imageBytes.trim();
-      const dataMatch = raw.match(/^data:([^;]+);base64,(.+)$/);
-      return {
-        imageBytes: dataMatch ? dataMatch[2] : raw,
-        mimeType: dataMatch ? dataMatch[1] : img.mimeType || "image/png",
-      };
+      return stripDataUrlFromImageBytes(img.imageBytes, img.mimeType || "image/png");
     }
     const url = img.fifeUrl;
-    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataMatch) {
-      return { mimeType: dataMatch[1], imageBytes: dataMatch[2] };
+    if (url.startsWith("data:")) {
+      return stripDataUrlFromImageBytes(url, img.mimeType || "image/png");
     }
     const resp = await fetch(url);
     const blob = await resp.blob();
