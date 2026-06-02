@@ -9,7 +9,14 @@ import {
   retryWithThrottleGate,
   videoThrottleGate,
 } from "../helpers/retry-throttle";
-import { CaptchaResponseData } from "../helpers/validateApiKey";
+import {
+  CAPTCHA_GENERATION_MAX_RETRIES,
+  CaptchaResponseData,
+  detectAisandboxCaptchaError,
+  fetchCaptchaData,
+  isCaptchaValidationError,
+  throwAisandboxCaptchaError,
+} from "../helpers/validateApiKey";
 import { pollAndExtractVideo } from "./handle-video-generation";
 
 /**
@@ -91,6 +98,11 @@ interface CallAisandboxParams {
   Seed?: string;
   headers?: Record<string, string>;
   uploadedVideoNames?: string[]; // Thêm param mới cho video input (dùng cho video-to-video)
+  captchaRetry?: {
+    actionType?: string;
+    logPrefix: string;
+    onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxParams>;
+  };
 }
 
 /**
@@ -102,12 +114,33 @@ interface CallAisandboxParams {
 export async function callAisandboxVideoAPI(
   params: CallAisandboxParams
 ): Promise<{ response: any; mediaName: string }> {
-  return retryWithThrottleGate(
-    () => {
-      return callVideoToVideoAPI(params);
-    },
-    { label: "generation-video-to-video", gate: videoThrottleGate }
-  );
+  const maxAttempts = params.captchaRetry ? CAPTCHA_GENERATION_MAX_RETRIES : 1;
+  let current = params;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await retryWithThrottleGate(
+        () => callVideoToVideoAPI(current),
+        { label: "generation-video-to-video", gate: videoThrottleGate }
+      );
+    } catch (err: any) {
+      const retry = current.captchaRetry;
+      if (isCaptchaValidationError(err) && retry && attempt < maxAttempts) {
+        logger.warn(
+          `[${retry.logPrefix}] Google Captcha thất bại, lấy captcha mới (${attempt}/${maxAttempts})...`
+        );
+        const freshCaptcha = await fetchCaptchaData({
+          type: retry.actionType,
+          logPrefix: retry.logPrefix,
+        });
+        current = await retry.onRefresh(freshCaptcha);
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throwAisandboxCaptchaError();
 }
 
 // ── Helpers dùng chung ──────────────────────────────────────────────────────
@@ -166,30 +199,8 @@ async function sendAndParseResponse(
     }
 
     const errText = await resp.text();
-    let isCaptchaError = false;
-    if (resp.status === 403) {
-      try {
-        const errJson = JSON.parse(errText);
-        if (
-          errJson?.error?.message?.includes("reCAPTCHA") ||
-          errJson?.error?.details?.some((d: any) => d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
-        ) {
-          isCaptchaError = true;
-        }
-      } catch {
-        if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
-          isCaptchaError = true;
-        }
-      }
-    }
-
-    if (isCaptchaError) {
-      const err: any = new Error(
-        `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
-      );
-      err.isCaptchaError = true;
-      err.statusCode = 403;
-      throw err;
+    if (detectAisandboxCaptchaError(resp.status, errText)) {
+      throwAisandboxCaptchaError();
     }
 
     const err: any = new Error(`Aisandbox API error ${resp.status}: ${errText}`);

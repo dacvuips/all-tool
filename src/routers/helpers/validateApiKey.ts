@@ -174,7 +174,53 @@ function detectCaptchaNoAccountOnline(status: number, errText: string): boolean 
 export const CAPTCHA_GENERATION_MAX_RETRIES = 10;
 
 export function isCaptchaValidationError(err: any): boolean {
-  return err?.isCaptchaError === true;
+  return err?.isCaptchaError === true || err?.isRetryableCaptchaError === true;
+}
+
+/** Nhận diện lỗi reCAPTCHA / unusual activity trong text response (Google Aisandbox hoặc Flow2). */
+export function isRecaptchaRelatedErrorText(text?: string): boolean {
+  if (!text) return false;
+  const upper = text.toUpperCase();
+  return (
+    upper.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY") ||
+    upper.includes("CAPTCHA_FAILED") ||
+    upper.includes("RECAPTCHA EVALUATION FAILED") ||
+    (upper.includes("RECAPTCHA") && upper.includes("FAILED"))
+  );
+}
+
+/**
+ * Phát hiện lỗi captcha từ HTTP response Aisandbox (403 hoặc body chứa reCAPTCHA/unusual activity).
+ */
+export function detectAisandboxCaptchaError(status: number, errText: string): boolean {
+  if (isRecaptchaRelatedErrorText(errText)) return true;
+
+  if (status === 403) {
+    try {
+      const errJson = JSON.parse(errText);
+      if (isRecaptchaRelatedErrorText(errJson?.error?.message)) return true;
+      if (
+        errJson?.error?.details?.some(
+          (d: { reason?: string }) =>
+            d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY" || isRecaptchaRelatedErrorText(d.reason)
+        )
+      ) {
+        return true;
+      }
+    } catch {
+      // errText đã được kiểm tra ở trên
+    }
+  }
+
+  return false;
+}
+
+/** Throw lỗi captcha chuẩn — `callAisandbox*API` retry khi có `captchaRetry`. */
+export function throwAisandboxCaptchaError(): never {
+  const err: any = new Error("Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.");
+  err.isCaptchaError = true;
+  err.statusCode = 403;
+  throw err;
 }
 
 /** Cập nhật token/captcha mới; giữ nguyên uploadedImageNames / mediaId đã upload. */
