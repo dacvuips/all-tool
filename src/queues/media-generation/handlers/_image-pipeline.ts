@@ -1,20 +1,14 @@
 /**
  * Pipeline tạo ảnh dùng chung cho **mọi** image handler:
  *
- *   fetchCaptcha → uploadImages → callAisandboxImageAPI (có captchaRetry)
+ *   chuẩn hoá ảnh base64/url → gọi Flow2 create request → poll status
  *
  * Mỗi handler chỉ cần truyền `prompt` đã ráp xong + danh sách `images` cần upload.
  * Helper này tự gọi `emitter.progress(...)` ở các milestone — vì `progress()` cũng
  * tự check cancel, handler không cần kiểm tra thủ công.
  */
 import logger from "../../../helpers/logger";
-import {
-  callAisandboxImageAPI,
-  GeneratedImage,
-} from "../../../routers/api-media/handle-image-generation";
-import { ActionEnum } from "../../../routers/app/affiliate-scene/_shared";
-import { processAndUploadImages } from "../../../routers/helpers/handleUploadGoogleLabImages";
-import { CaptchaResponseData, fetchCaptchaData } from "../../../routers/helpers/validateApiKey";
+import { GeneratedImage, generateImageWithFlow2 } from "../../../routers/api-media/flow2/image-generation";
 import { MediaJobEmitter } from "../job-emitter";
 
 import { UploadableReferenceImage } from "../../../routers/app/affiliate-scene/_shared";
@@ -37,6 +31,8 @@ export type RunImagePipelineArgs = {
   /** Prompt đã ráp xong (artStyle + prompt + reference notes + noText) */
   prompt: string;
   aspectRatio?: "16:9" | "9:16";
+  variantCount?: number;
+  imageModel?: string;
   imageGroups: ImageGroups;
   emitter: MediaJobEmitter;
   /** Prefix log để phân biệt giữa các handler */
@@ -52,92 +48,32 @@ export async function runImagePipeline(args: RunImagePipelineArgs): Promise<Gene
     customerId,
     prompt,
     aspectRatio,
+    variantCount,
+    imageModel,
     imageGroups,
     emitter,
     logPrefix = "generation-image",
   } = args;
 
-  /** Upload tất cả ảnh theo nhóm theo thứ tự, gắn captcha hiện tại */
-  const uploadAll = async (captcha: CaptchaResponseData): Promise<string[]> => {
-    const { personifyImages = [], userImages = [], productImageUrls = [] } = imageGroups;
-    const accessToken = captcha.accessToken;
-    const projectId = captcha.ProjectID;
+  const { personifyImages = [], userImages = [], productImageUrls = [] } = imageGroups;
+  const orderedInputs = [...personifyImages, ...userImages, ...productImageUrls];
 
-    let personifyNames: string[] = [];
-    if (personifyImages.length > 0) {
-      personifyNames = await processAndUploadImages(
-        personifyImages,
-        accessToken,
-        projectId,
-        customerId
-      );
-    }
-    let userNames: string[] = [];
-    if (userImages.length > 0) {
-      userNames = await processAndUploadImages(userImages, accessToken, projectId, customerId);
-    }
-    let productNames: string[] = [];
-    if (productImageUrls.length > 0) {
-      productNames = await processAndUploadImages(
-        productImageUrls,
-        accessToken,
-        projectId,
-        customerId
-      );
-    }
-    return [...personifyNames, ...userNames, ...productNames];
-  };
+  await emitter.progress(20, "Đang chuẩn hoá ảnh tham chiếu...");
+  logger.info(`[${logPrefix}] Bắt đầu gọi Flow2 tạo ảnh (user ${customerId})`);
 
-  /** captchaRetry: khi Google trả lỗi reCAPTCHA → lấy captcha mới + upload lại ảnh */
-  const captchaRetry = {
-    actionType: ActionEnum.IMAGE_GENERATION,
-    logPrefix,
-    onRefresh: async (freshCaptcha: CaptchaResponseData) => {
-      const uploadedImageNames = await uploadAll(freshCaptcha);
-      return {
-        prompt,
-        aspectRatio,
-        uploadedImageNames,
-        recaptchaToken: freshCaptcha.captcha,
-        sessionId: freshCaptcha.sessionId,
-        projectId: freshCaptcha.ProjectID,
-        accessToken: freshCaptcha.accessToken,
-        headers: freshCaptcha.Headers,
-        onProgress: async (progress: number, message?: string) => {
-          await emitter.progress(progress, message);
-        },
-        captchaRetry,
-      };
-    },
-  };
-
-  await emitter.progress(15, "Đang lấy captcha...");
-  const captcha = await fetchCaptchaData({
-    type: ActionEnum.IMAGE_GENERATION,
-    logPrefix,
-  });
-
-  await emitter.progress(25, "Đang upload ảnh tham chiếu...");
-  const uploadedImageNames = await uploadAll(captcha);
-
-  await emitter.progress(40, "Đang gửi yêu cầu tạo ảnh...");
-  logger.info(`[${logPrefix}] Bắt đầu gọi API tạo ảnh (user ${customerId})`);
-
-  const images = await callAisandboxImageAPI({
+  const { requestId, images } = await generateImageWithFlow2({
     prompt,
     aspectRatio,
-    uploadedImageNames,
-    recaptchaToken: captcha.captcha,
-    sessionId: captcha.sessionId,
-    projectId: captcha.ProjectID,
-    accessToken: captcha.accessToken,
-    headers: captcha.Headers,
+    variantCount,
+    imageModel,
+    imageInputs: orderedInputs,
+    imageInputTypes: new Array(orderedInputs.length).fill("reference"),
     onProgress: async (progress, message) => {
-      // callAisandboxImageAPI bắn progress 70 + 90 — chuyển tiếp qua emitter
       await emitter.progress(progress, message);
     },
-    captchaRetry,
   });
 
+  logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);
+  await emitter.progress(95, "Đang hoàn tất dữ liệu ảnh...");
   return images;
 }
