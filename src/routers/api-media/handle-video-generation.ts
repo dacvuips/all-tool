@@ -14,9 +14,11 @@ import {
 import {
   CAPTCHA_GENERATION_MAX_RETRIES,
   CaptchaResponseData,
+  detectAisandboxCaptchaError,
   fetchCaptchaData,
   getApiSetting,
   isCaptchaValidationError,
+  throwAisandboxCaptchaError,
 } from "../helpers/validateApiKey";
 // Re-export các helper SSE legacy (giữ tương thích nếu còn import cũ; logic mới dùng Job pattern).
 export {
@@ -316,30 +318,8 @@ async function sendAndParseResponse(
     }
 
     const errText = await resp.text();
-    let isCaptchaError = false;
-    if (resp.status === 403) {
-      try {
-        const errJson = JSON.parse(errText);
-        if (
-          errJson?.error?.message?.includes("reCAPTCHA") ||
-          errJson?.error?.details?.some((d: any) => d.reason === "PUBLIC_ERROR_UNUSUAL_ACTIVITY")
-        ) {
-          isCaptchaError = true;
-        }
-      } catch (e) {
-        if (errText.includes("reCAPTCHA") || errText.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY")) {
-          isCaptchaError = true;
-        }
-      }
-    }
-
-    if (isCaptchaError) {
-      const err: any = new Error(
-        `Google xác minh Captcha thất bại. Vui lòng thử lại sau 2-3 phút.`
-      );
-      err.isCaptchaError = true;
-      err.statusCode = 403;
-      throw err;
+    if (detectAisandboxCaptchaError(resp.status, errText)) {
+      throwAisandboxCaptchaError();
     }
 
     const err: any = new Error(`Aisandbox API error ${resp.status}: ${errText}`);

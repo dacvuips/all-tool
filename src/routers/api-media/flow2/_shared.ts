@@ -65,6 +65,9 @@ export async function createFlow2Request(body: {
     const errText = await resp.text();
     const err: any = new Error(`Flow2 create request error ${resp.status}: ${errText}`);
     err.statusCode = resp.status;
+    if (isFlow2RetryableCaptchaError(errText)) {
+      err.isRetryableCaptchaError = true;
+    }
     throw err;
   }
 
@@ -126,23 +129,41 @@ function hasImmediateError(statusData: Flow2StatusResponse): boolean {
   return !nonErrorHints.some((hint) => normalized.includes(hint));
 }
 
-export function isUnusualActivityErrorText(input?: string): boolean {
-  if (!input) return false;
-  return input.toUpperCase().includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY");
+export function isFlow2RetryableCaptchaError(...inputs: (string | undefined)[]): boolean {
+  return inputs.some((input) => {
+    if (!input) return false;
+    const upper = input.toUpperCase();
+    return (
+      upper.includes("PUBLIC_ERROR_UNUSUAL_ACTIVITY") ||
+      upper.includes("CAPTCHA_FAILED") ||
+      upper.includes("RECAPTCHA EVALUATION FAILED") ||
+      (upper.includes("RECAPTCHA") && upper.includes("FAILED"))
+    );
+  });
 }
 
-export function isCaptchaFailedErrorText(input?: string): boolean {
-  if (!input) return false;
-  return input.toUpperCase().includes("CAPTCHA_FAILED");
+/** Flow2 trả status dạng `failed: PUBLIC_ERROR_UNUSUAL_ACTIVITY: ...`, không chỉ `failed`. */
+export function isFlow2FailedStatus(status: string): boolean {
+  if (!status) return false;
+  if (["failed", "error", "cancelled", "canceled"].includes(status)) return true;
+  if (status.startsWith("failed:") || status.startsWith("failed ")) return true;
+  return isFlow2RetryableCaptchaError(status);
+}
+
+export function isFlow2SuccessStatus(status: string): boolean {
+  if (!status) return false;
+  if (["done", "completed", "succeeded", "success", "finished"].includes(status)) return true;
+  return (
+    status.startsWith("done") ||
+    status.startsWith("completed") ||
+    status.startsWith("succeeded") ||
+    status.startsWith("success") ||
+    status.startsWith("finished")
+  );
 }
 
 function markRetryableCaptchaError(err: any, errorText: string, status: string): void {
-  if (
-    isUnusualActivityErrorText(errorText) ||
-    isUnusualActivityErrorText(status) ||
-    isCaptchaFailedErrorText(errorText) ||
-    isCaptchaFailedErrorText(status)
-  ) {
+  if (isFlow2RetryableCaptchaError(errorText, status)) {
     err.isRetryableCaptchaError = true;
   }
 }
@@ -166,14 +187,14 @@ export async function waitForFlow2Result<T>(params: {
     const statusData = await getFlow2RequestStatus(params.requestId);
     const status = pickStatus(statusData);
 
-    if (["failed", "error", "cancelled", "canceled"].includes(status) || hasImmediateError(statusData)) {
+    if (isFlow2FailedStatus(status) || hasImmediateError(statusData)) {
       const errorText = pickError(statusData) || status || "Unknown error";
       const err: any = new Error(`Flow2 xử lý thất bại: ${errorText}`);
       markRetryableCaptchaError(err, errorText, status);
       throw err;
     }
 
-    if (["done", "completed", "succeeded", "success", "finished"].includes(status)) {
+    if (isFlow2SuccessStatus(status)) {
       await safeProgress(params.onProgress, 90, params.doneProgressMessage);
       const items = await params.extract(statusData);
       if (items.length === 0) {
