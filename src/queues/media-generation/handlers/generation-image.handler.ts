@@ -28,6 +28,7 @@ export type GenerationImagePayload = {
     numberOfImages?: number;
     aspectRatio?: "16:9" | "9:16";
     noText?: boolean;
+    imageModel?: string;
   };
 };
 
@@ -58,6 +59,8 @@ export async function handleGenerationImage(
     customerId: job.customerId,
     prompt: fullPrompt,
     aspectRatio: payload.config?.aspectRatio,
+    variantCount: payload.config?.numberOfImages,
+    imageModel: payload.config?.imageModel,
     imageGroups: {
       personifyImages: personifyImageRefs,
       userImages: payload.images,
