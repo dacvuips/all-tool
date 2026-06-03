@@ -1,4 +1,7 @@
-import { fetchImageAsBase64, stripDataUrlFromBase64 } from "../../helpers/handleUploadGoogleLabImages";
+import {
+  fetchImageAsBase64,
+  stripDataUrlFromBase64,
+} from "../../helpers/handleUploadGoogleLabImages";
 import {
   createFlow2Request,
   Flow2StatusResponse,
@@ -26,7 +29,7 @@ export type GeneratedImage = {
   mimeType?: string;
 };
 
-const DEFAULT_IMAGE_MODEL = "NANO_BANANA_2";
+const DEFAULT_IMAGE_MODEL = "NANO_BANANA_PRO";
 
 function looksLikeRawBase64Image(value: string): boolean {
   return looksLikeRawBase64(value, 128);

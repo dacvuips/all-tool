@@ -10,8 +10,10 @@
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
  *   7. **Job watcher**: chỉ chạy khi Redis key `mgj:watch:{jobId}` còn (subscription / touchWatch).
- *   8. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 30 phút kể từ `completedAt`.
+ *   8. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 15 phút kể từ `completedAt`.
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
+ *   9. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
+ *      sau 5 lần claim vẫn treo → FAILED (504).
  *
  * Không bật **auto-retry**: API generation tốn quota, retry ngầm dễ ngốn credit. User retry thủ công.
  */
@@ -28,7 +30,10 @@ import {
 import { getMediaJobHandler } from "./handlers";
 import {
   abandonMediaJobNoWatcher,
+  failOrphanedProcessingMediaJob,
   FAILED_JOB_RETENTION_MS,
+  HEARTBEAT_MS,
+  LOCK_TTL_MS,
   MediaJobEmitter,
   SUCCESS_JOB_RETENTION_MS,
 } from "./job-emitter";
@@ -47,6 +52,15 @@ const MEDIA_GENERATION_JOB_RETENTION_MS = 72 * 60 * 60 * 1000;
 
 /** Tần suất quét xóa doc Mongo terminal (FAILED / SUCCEEDED) hết hạn. */
 const MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
+/** Quét job PROCESSING không cập nhật (treo Flow2 / worker chết). */
+const MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS = 60 * 1000; // 1 phút
+/**
+ * Không có heartbeat/progress trong khoảng này → coi là treo.
+ * = 2× LOCK_TTL + 1× HEARTBEAT (worker sống phải gia hạn lock mỗi 15–60s).
+ */
+export const MEDIA_JOB_STALE_PROCESSING_MS = LOCK_TTL_MS * 2 + HEARTBEAT_MS;
+/** Số lần reclaim tối đa (mỗi lần claim tăng `attempts`) trước khi FAILED. */
+export const MEDIA_JOB_MAX_STALE_RECOVERIES = 5;
 
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
 export type MediaQueueJobPayload = {
@@ -230,9 +244,84 @@ export async function resumeStaleMediaJobs(): Promise<number> {
 
 /**
  * Xóa doc Mongo terminal đã hết hạn.
- * - FAILED: `completedAt` cũ hơn 30 phút (kể từ lúc fail).
+ * - FAILED: `completedAt` cũ hơn 10 phút (kể từ lúc fail).
  * - SUCCEEDED: `completedAt` cũ hơn 10 phút.
  */
+/**
+ * Job PROCESSING mà lock hết hạn / null và `updatedAt` quá cũ → re-enqueue hoặc FAILED.
+ * Bắt trường hợp worker crash, nodemon restart không enqueue lại, hoặc poll Flow2 treo.
+ */
+export async function recoverStaleProcessingMediaJobs(): Promise<{
+  requeued: number;
+  failed: number;
+}> {
+  try {
+    const now = new Date();
+    const staleCutoff = new Date(Date.now() - MEDIA_JOB_STALE_PROCESSING_MS);
+
+    const jobs = (await mediaGenerationJobService.findAll({
+      filter: {
+        status: MediaGenerationJobStatus.PROCESSING,
+        updatedAt: { $lt: staleCutoff },
+        $or: [{ lockExpiresAt: null }, { lockExpiresAt: { $lt: now } }],
+      },
+      limit: 200,
+      order: { updatedAt: 1 },
+    } as any)) as unknown as IMediaGenerationJob[];
+
+    let requeued = 0;
+    let failed = 0;
+
+    for (const job of jobs) {
+      const jobId = String((job as any)._id);
+      const attempts = (job as any).attempts ?? 1;
+
+      if (attempts >= MEDIA_JOB_MAX_STALE_RECOVERIES) {
+        const ok = await failOrphanedProcessingMediaJob(
+          jobId,
+          `Job treo quá lâu ở PROCESSING (đã thử ${attempts} lần). Vui lòng tạo job mới.`,
+          504
+        );
+        if (ok) failed++;
+        continue;
+      }
+
+      await MediaGenerationJobModel.updateOne(
+        { _id: jobId, status: MediaGenerationJobStatus.PROCESSING },
+        {
+          $set: {
+            lockExpiresAt: null,
+            workerInstanceId: null,
+            message: "Đang thử lại (job bị treo, khôi phục tự động)...",
+          },
+        }
+      );
+
+      try {
+        await enqueueMediaGenerationJob(jobId);
+        requeued++;
+        logger.warn(
+          `[MediaGenerationQueue] Re-enqueue stale PROCESSING jobId=${jobId} attempts=${attempts}`
+        );
+      } catch (err: any) {
+        logger.error(
+          `[MediaGenerationQueue] Re-enqueue stale jobId=${jobId} lỗi: ${err?.message}`
+        );
+      }
+    }
+
+    if (requeued > 0 || failed > 0) {
+      logger.info(
+        `[MediaGenerationQueue] Stale PROCESSING sweep: requeued=${requeued}, failed=${failed}`
+      );
+    }
+    return { requeued, failed };
+  } catch (err: any) {
+    logger.error(`[MediaGenerationQueue] recoverStaleProcessingMediaJobs lỗi: ${err?.message}`);
+    return { requeued: 0, failed: 0 };
+  }
+}
+
 export async function cleanupExpiredTerminalMediaJobs(): Promise<{
   failed: number;
   succeeded: number;
@@ -268,24 +357,45 @@ export async function cleanupExpiredTerminalMediaJobs(): Promise<{
 }
 
 let mediaJobCleanupSweepTimer: ReturnType<typeof setInterval> | null = null;
+let mediaJobStaleRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 
 /** Bật sweep định kỳ — idempotent, gọi 1 lần khi worker start. */
 export function startMediaJobCleanupSweep(): void {
   if (mediaJobCleanupSweepTimer) return;
 
-  const run = () => {
+  const runTerminalCleanup = () => {
     cleanupExpiredTerminalMediaJobs().catch((err) =>
       logger.error("[MediaGenerationQueue] cleanup sweep lỗi", err)
     );
   };
 
-  run();
-  mediaJobCleanupSweepTimer = setInterval(run, MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS);
+  runTerminalCleanup();
+  mediaJobCleanupSweepTimer = setInterval(runTerminalCleanup, MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS);
   if (typeof mediaJobCleanupSweepTimer.unref === "function") {
     mediaJobCleanupSweepTimer.unref();
   }
   logger.info(
     `[MediaGenerationQueue] Terminal job cleanup sweep every ${MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS / 60000} min`
+  );
+}
+
+/** Quét job PROCESSING treo — idempotent, gọi 1 lần khi worker start. */
+export function startStaleProcessingRecoverySweep(): void {
+  if (mediaJobStaleRecoveryTimer) return;
+
+  const run = () => {
+    recoverStaleProcessingMediaJobs().catch((err) =>
+      logger.error("[MediaGenerationQueue] stale PROCESSING sweep lỗi", err)
+    );
+  };
+
+  run();
+  mediaJobStaleRecoveryTimer = setInterval(run, MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS);
+  if (typeof mediaJobStaleRecoveryTimer.unref === "function") {
+    mediaJobStaleRecoveryTimer.unref();
+  }
+  logger.info(
+    `[MediaGenerationQueue] Stale PROCESSING recovery every ${MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS / 1000}s (threshold ${MEDIA_JOB_STALE_PROCESSING_MS / 1000}s)`
   );
 }
 
