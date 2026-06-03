@@ -89,7 +89,12 @@ export interface UseSceneMediaReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noText }: UseSceneMediaParams): UseSceneMediaReturn {
+export function useSceneMedia({
+  scene,
+  nextSceneId,
+  selectedProductImages,
+  noText,
+}: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
 
   // ── Lấy concurrency limits từ plan của user ───
@@ -146,7 +151,8 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
     objectToPersonifyCode: affiliateVideoFormConfig?.objectToPersonifyCode,
-    fallbackImage: scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
+    fallbackImage:
+      scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
   });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
@@ -273,7 +279,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
       setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
     } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
     }
@@ -282,7 +288,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   useEffect(() => {
     if (isBatchGeneratingVideo && !generatingVideo) {
       setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
     } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
       stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
     }
