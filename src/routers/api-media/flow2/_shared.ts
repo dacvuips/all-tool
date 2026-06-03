@@ -1,10 +1,16 @@
 import logger from "../../../helpers/logger";
-import { getApiSetting } from "../../helpers/validateApiKey";
+import {
+  CAPTCHA_GENERATION_MAX_RETRIES,
+  getApiSetting,
+} from "../../helpers/validateApiKey";
 
 export type Flow2StatusResponse = Record<string, unknown>;
 
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
-export const FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX = 3;
+/** Số lần tạo request Flow2 mới khi gặp lỗi reCAPTCHA / unusual activity (cùng mức Google Aisandbox). */
+export const FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX = CAPTCHA_GENERATION_MAX_RETRIES;
+/** Chờ giữa mỗi lần retry — tăng theo attempt (Flow2/captcha cần thời gian hồi). */
+export const FLOW2_CAPTCHA_RETRY_BASE_DELAY_MS = 5_000;
 
 export async function getFlow2Config(): Promise<{ baseUrl: string; token: string }> {
   const links = await getApiSetting(FLOW2_SETTING_KEY);
@@ -168,6 +174,24 @@ function markRetryableCaptchaError(err: any, errorText: string, status: string):
   }
 }
 
+/** Nhận diện lỗi captcha từ Error (kể cả khi chỉ còn message). */
+export function isFlow2RetryableError(err: any): boolean {
+  if (err?.isRetryableCaptchaError === true) return true;
+  return isFlow2RetryableCaptchaError(err?.message);
+}
+
+function formatFlow2FailureMessage(errorText: string): string {
+  const trimmed = errorText.trim();
+  const stripped = trimmed.replace(/^flow2 xử lý thất bại:\s*/i, "").trim();
+  return `Flow2 xử lý thất bại: ${stripped || trimmed || "Unknown error"}`;
+}
+
+async function delayBeforeFlow2CaptchaRetry(attempt: number): Promise<void> {
+  const delayMs = FLOW2_CAPTCHA_RETRY_BASE_DELAY_MS * attempt;
+  logger.info(`[flow2] Chờ ${delayMs}ms trước khi retry captcha (lần ${attempt + 1})...`);
+  await new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
 export async function waitForFlow2Result<T>(params: {
   requestId: string;
   timeoutMs?: number;
@@ -183,13 +207,14 @@ export async function waitForFlow2Result<T>(params: {
   const pollIntervalMs = params.pollIntervalMs || 2_500;
   const startedAt = Date.now();
 
+  
   while (Date.now() - startedAt < timeoutMs) {
     const statusData = await getFlow2RequestStatus(params.requestId);
     const status = pickStatus(statusData);
 
     if (isFlow2FailedStatus(status) || hasImmediateError(statusData)) {
       const errorText = pickError(statusData) || status || "Unknown error";
-      const err: any = new Error(`Flow2 xử lý thất bại: ${errorText}`);
+      const err: any = new Error(formatFlow2FailureMessage(errorText));
       markRetryableCaptchaError(err, errorText, status);
       throw err;
     }
@@ -229,16 +254,20 @@ export async function runFlow2WithRetry<T>(params: {
       return result;
     } catch (err: any) {
       lastError = err;
-      if (err?.isRetryableCaptchaError && attempt < FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX) {
+      if (isFlow2RetryableError(err) && attempt < FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX) {
         logger.warn(
-          `[flow2-${params.logTag}] Retry do captcha error (${attempt}/${FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX})`
+          `[flow2-${params.logTag}] Captcha/unusual activity — retry ${attempt}/${FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX}: ${err?.message}`
         );
         await safeProgress(params.onProgress, 60, params.retryProgressMessage(attempt + 1));
+        await delayBeforeFlow2CaptchaRetry(attempt);
         continue;
       }
       throw err;
     }
   }
 
+  if (lastError && isFlow2RetryableError(lastError)) {
+    lastError.message = `${lastError.message} (đã thử ${FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX} lần)`;
+  }
   throw lastError;
 }

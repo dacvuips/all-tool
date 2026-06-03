@@ -36,13 +36,14 @@ const WORKER_INSTANCE_ID = `worker-${Date.now()}-${Math.random().toString(36).sl
  * Trade-off: TTL ngắn → recovery nhanh khi crash, nhưng nguy cơ 2 worker chạy song song
  * nếu heartbeat trễ. TTL dài → an toàn race nhưng job kẹt lâu khi server chết.
  */
-const LOCK_TTL_MS = 60 * 1000; // 60 giây
+/** Thời gian worker giữ lock; hết hạn → job PROCESSING có thể bị worker khác reclaim. */
+export const LOCK_TTL_MS = 60 * 1000;
 /** Tần suất heartbeat tự động (gia hạn lock dù handler không gọi progress) */
-const HEARTBEAT_MS = 15 * 1000; // 15 giây
+export const HEARTBEAT_MS = 15 * 1000;
 /** Giữ job SUCCEEDED để poll fallback vẫn lấy được resultData khi WS lỗi */
-export const SUCCESS_JOB_RETENTION_MS = 5 * 60 * 1000; // 5 phút
-/** Giữ job FAILED để client poll/retry; xóa 3 phút sau completedAt (sweep 5 phút/lần) */
-export const FAILED_JOB_RETENTION_MS = 3 * 60 * 1000; // 30 phút
+export const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 5 phút
+/** Giữ job FAILED để client poll/retry; xóa 10 phút sau completedAt (sweep 5 phút/lần) */
+export const FAILED_JOB_RETENTION_MS = 30 * 60 * 1000;
 
 /** Payload phát qua pubsub — gửi xuống GraphQL Subscription resolver */
 export type MediaGenerationJobPubsubPayload = {
@@ -432,6 +433,47 @@ export async function markMediaJobCancelled(jobId: string, customerId: string): 
   if (!doc) return false;
   await publishChange(doc as unknown as IMediaGenerationJob);
   await clearJobWatch(jobId);
+  return true;
+}
+
+/**
+ * Đánh dấu FAILED job PROCESSING mồ côi (không worker, lock hết hạn) — dùng từ stale sweep.
+ */
+export async function failOrphanedProcessingMediaJob(
+  jobId: string,
+  errorMessage: string,
+  errorCode = 504
+): Promise<boolean> {
+  const model = mediaGenerationJobService.model;
+  const doc = await model.findOneAndUpdate(
+    {
+      _id: jobId,
+      status: MediaGenerationJobStatus.PROCESSING,
+    },
+    {
+      $set: {
+        status: MediaGenerationJobStatus.FAILED,
+        message: errorMessage,
+        errorMessage,
+        errorCode,
+        completedAt: new Date(),
+        workerInstanceId: null,
+        lockExpiresAt: null,
+      },
+    },
+    { new: true }
+  );
+  if (!doc) return false;
+  logger.warn(`[MediaJobEmitter] FAIL orphaned jobId=${jobId}: ${errorMessage}`);
+  await publishChange(doc as unknown as IMediaGenerationJob);
+  await clearJobWatch(jobId);
+  const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+  scheduleTerminalMediaJobDeletion(
+    jobId,
+    MediaGenerationJobStatus.FAILED,
+    completedAt,
+    FAILED_JOB_RETENTION_MS
+  );
   return true;
 }
 

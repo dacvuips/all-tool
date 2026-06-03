@@ -8,6 +8,7 @@ import {
   mediaGenerationQueue,
   resumeStaleMediaJobs,
   startMediaJobCleanupSweep,
+  startStaleProcessingRecoverySweep,
 } from "./media-generation";
 import logger from "../helpers/logger";
 
@@ -22,6 +23,7 @@ export function startQueues(): void {
     mediaGenerationQueue.defaultQueue();
     logger.info("MediaGenerationJob queue worker started");
     startMediaJobCleanupSweep();
+    startStaleProcessingRecoverySweep();
     // Re-enqueue các job stale (PROCESSING/QUEUED) sau khi server vừa restart.
     // Delay 2s để worker process kịp register trước khi nhận lại job cũ.
     setTimeout(() => {
