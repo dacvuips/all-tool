@@ -14,13 +14,13 @@ import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
 
 import { useElementContext } from "../providers/element-provider";
 import {
-  buildElementImageGenerateParams,
-  buildElementVideoGenerateParams,
-} from "../utils/elementSceneGenerationParams";
-import {
   resolveElementReferenceImagesForApi,
   resolveElementReferenceVideoForApi,
 } from "../utils/elementFormImageUtils";
+import {
+  buildElementImageGenerateParams,
+  buildElementVideoGenerateParams,
+} from "../utils/elementSceneGenerationParams";
 import { GeneratedImageData, GeneratedVideoData, useElementApi } from "./useElementApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
@@ -286,7 +286,7 @@ export function useElementSceneMedia({
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
       setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
     } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
     }
@@ -295,7 +295,7 @@ export function useElementSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingVideo && !generatingVideo) {
       setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
     } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
       stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
     }
@@ -304,7 +304,7 @@ export function useElementSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
     } else if (
       !isBatchGeneratingExtendVideo &&
       !generatingExtendVideo &&
@@ -381,7 +381,7 @@ export function useElementSceneMedia({
     addBatchGeneratingSceneId(scene.id);
 
     // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
 
     try {
       const imageParams = await buildElementImageGenerateParams({

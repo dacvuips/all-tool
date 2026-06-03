@@ -81,22 +81,11 @@ export default function AffiliateMainPage() {
 
     {
       icon: <RiBookOpenLine />,
-      label: t("Review Sản Phẩm"),
+      label: `${t("Review Sản Phẩm")}/${t("thời trang")}`,
       value: "product-review",
       component: <ReviewPage />,
     },
-    {
-      icon: <RiBookOpenLine />,
-      label: t("Chuyên thời trang"),
-      value: "fashion-review",
-      component: <>{"Sắp xong rồi"}</>,
-    },
-    {
-      icon: <RiImage2Fill />,
-      label: t("Chuyên Sửa Ảnh"),
-      value: "edit-image",
-      component: <>{"Sắp xong rồi"}</>,
-    },
+
     {
       icon: <RiImage2Fill />,
       label: t("Làm Phim"),
