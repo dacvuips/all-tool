@@ -17,7 +17,7 @@ export default {
       value: {
         link: [
           {
-            url: "https://aitipmart.site",
+            url: "https://viettheo.site",
             apiKey: "",
           },
         ],

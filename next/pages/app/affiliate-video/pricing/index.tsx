@@ -11,7 +11,7 @@ export default function Page() {
     <>
       <NextSeo
         openGraph={{
-          url: "https://aitipmart.site/pricing",
+          url: "https://viettheo.site/pricing",
           title: t("Bảng Giá Dịch Vụ"),
           description: t(
             "Chọn gói phù hợp với bạn - Trải nghiệm toàn bộ sức mạnh AI trong sáng tạo video"

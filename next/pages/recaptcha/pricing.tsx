@@ -11,7 +11,7 @@ export default function Page(props) {
     <>
       <NextSeo
         openGraph={{
-          url: "https://aitipmart.site",
+          url: "https://viettheo.site",
           title: t("Viet Theo Veo - Gói reCAPTCHA"),
           description: t("Chọn gói reCAPTCHA phù hợp để bảo vệ ứng dụng của bạn"),
           images: [{ url: "/assets/img/logo-icon.png" }],

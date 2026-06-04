@@ -11,7 +11,7 @@ export default function Page(props) {
     <>
       <NextSeo
         openGraph={{
-          url: "https://aitipmart.site",
+          url: "https://viettheo.site",
           title: t("Viet Theo Veo - Công Cụ AI Miễn Phí"),
           description: t("Viet Theo Veo - Công Cụ AI Miễn Phí"),
           images: [{ url: "/assets/img/logo-icon.png" }],

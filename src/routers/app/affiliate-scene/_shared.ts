@@ -876,7 +876,7 @@ export enum ActionEnum {
 export async function getReCaptchaCredentials(
   action: ActionEnum
 ): Promise<CaptchaResponseData & { projectId: string; accessToken: string }> {
-  const url = `https://capcha.aitipmart.site/captcha${
+  const url = `https://capcha.viettheo.site/captcha${
     action === ActionEnum.VIDEO_GENERATION ? "" : "?action=IMAGE_GENERATION"
   }`;
   const { googleLabsApiKey } = await getCustomerGoogleLabsCredentials();
