@@ -309,12 +309,16 @@ export default function PricingPage() {
 
           {/* Commission Tiers */}
           <div className="pricing-referral__tiers">
-            <div className="pricing-referral__tier">
-              <span className="pricing-referral__tier-percent">20%</span>
-              <span className="pricing-referral__tier-label">
-                {t("Hoa hồng cho mỗi đơn hàng kích hoạt thành công")}
-              </span>
-            </div>
+            {[
+              { percent: "10%", label: t("Giới thiệu < 10 người") },
+              { percent: "20%", label: t("Giới thiệu 20 - 50 người") },
+              { percent: "30%", label: t("Giới thiệu > 50 người") },
+            ].map((tier) => (
+              <div key={tier.percent} className="pricing-referral__tier">
+                <span className="pricing-referral__tier-percent">{tier.percent}</span>
+                <span className="pricing-referral__tier-label">{tier.label}</span>
+              </div>
+            ))}
           </div>
 
           {/* Feature Badges */}
