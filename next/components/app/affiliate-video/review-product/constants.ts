@@ -283,6 +283,8 @@ export const REVIEW_SCRIPT_TAB_QUERY_KEY = "reviewScriptTab";
 
 export interface ReviewAnalysisData {
   scenes: ReviewScene[];
+  imagesToVideoScenes?: ReviewScene[];
+  videoToVideoScenes?: ReviewScene[];
   aspectRatio?: string;
   artStyleId?: string;
   artStyle?: string;

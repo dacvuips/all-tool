@@ -6,25 +6,14 @@
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
-import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
-import { RiImageFill, RiText, RiVideoFill } from "react-icons/ri";
+import { RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
-import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
-import { Button } from "../../../shared/utilities/form";
 import { reorderScenesWithNumbers, SortableCardGrid } from "../../../shared/utilities/sortable";
 import { CharacterItem } from "../constants";
+import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
 import { SceneTabKey } from "./scene-card-tabs";
-import { BaseHistoryItem, SceneHistoryDropdown } from "./scene-history-dropdown";
 
-/** Cấu hình dropdown lịch sử – data từ provider (IndexedDB) */
-export interface BatchListHistoryConfig<TData = unknown> {
-  items: BaseHistoryItem<TData>[];
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-  onClear: () => void | Promise<void>;
-  formatOptionLabel?: (item: BaseHistoryItem<TData>) => string;
-}
+export type { BatchListHistoryConfig };
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -253,10 +242,7 @@ export function SharedBatchListPanel({
   };
 
   /** Update element video slots (1 ô video tham chiếu) */
-  const handleUpdateElementVideoSlots = async (
-    sceneId: string,
-    slots: any[]
-  ) => {
+  const handleUpdateElementVideoSlots = async (sceneId: string, slots: any[]) => {
     const updated = sceneList.map((s) =>
       s.id === sceneId ? { ...s, elementVideoSlots: slots } : s
     );
@@ -356,96 +342,19 @@ export function SharedBatchListPanel({
 
   // ── Render ──
   return (
-    <div className="flex overflow-hidden flex-col h-full">
-      {history && (
-        <div className="px-3 pt-3 bg-white shrink-0">
-          <SceneHistoryDropdown
-            items={history.items}
-            selectedId={history.selectedId}
-            onSelect={history.onSelect}
-            onClear={history.onClear}
-            formatOptionLabel={history.formatOptionLabel}
-          />
-        </div>
-      )}
-
-      {/* Action buttons bar */}
-      <ActionBarComponent scenes={sceneList} />
-
-      {/* ── Sticky global toggle bar ── */}
-      <div className="flex sticky top-0 z-20 gap-3 items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
-        {/* Scene count label */}
-        <div className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide">
-          <RiVideoFill className="text-sm text-teal-500" />
-          {sceneList.length} {t("Cảnh")}
-        </div>
-
-        {/* Spacer */}
-        <div className="flex-1" />
-
-        {/* ── Global tab selector ── */}
-        <div className="flex gap-1 items-center">
-          <div className="relative">
-            <select
-              value={globalTab || ""}
-              onChange={(e) => setGlobalTab((e.target.value as SceneTabKey) || null)}
-              className="py-1 pr-5 pl-6 text-xs font-semibold text-gray-600 bg-white rounded-lg border border-gray-200 shadow-sm transition-colors appearance-none cursor-pointer outline-none hover:border-gray-300 focus:border-primary focus:ring-1 focus:ring-primary/30"
-            >
-              <option value="image">{t("Ảnh")}</option>
-              <option value="video">{t("Video")}</option>
-              <option value="extend">{t("Video nối")}</option>
-            </select>
-            {/* icon tương ứng với lựa chọn hiện tại */}
-            <span className="absolute left-1.5 top-2 -translate-y-1/2 pointer-events-none flex items-center">
-              {globalTab === "image" && <RiImageFill className="w-3 h-3 text-pink-500" />}
-              {globalTab === "video" && (
-                <AiOutlineVideoCamera className="w-3 h-3 text-purple-500" />
-              )}
-              {globalTab === "extend" && (
-                <AiOutlineVideoCameraAdd className="w-3 h-3 text-primary" />
-              )}
-              {!globalTab && <RiVideoFill className="w-3 h-3 text-gray-400" />}
-            </span>
-          </div>
-        </div>
-
-        {/* Toggle all NoText */}
-        <Button
-          onClick={handleToggleAllNoText}
-          className={`w-7 h-7 rounded-lg shadow-sm ${
-            sceneList.every((s) => s.noText)
-              ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-              : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
-          }`}
-          iconClassName="text-sm"
-          icon={sceneList.every((s) => s.noText) ? <RiText /> : <NoTextIcon />}
-          tooltip={
-            sceneList.every((s) => s.noText)
-              ? t("Đang cho phép hiển thị 'Chữ' trong tất cả")
-              : t("Không cho phép hiển thị 'Chữ' trong tất cả")
-          }
-          placement="bottom"
-        />
-
-        {/* Toggle all VoiceDisable */}
-        <Button
-          onClick={handleToggleAllVoiceDisable}
-          className={`w-7 h-7 rounded-lg shadow-sm ${
-            sceneList.every((s) => s.voiceDisable)
-              ? "text-red-500 bg-red-50 hover:bg-red-100"
-              : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-          }`}
-          iconClassName="text-sm"
-          icon={sceneList.every((s) => s.voiceDisable) ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
-          tooltip={
-            sceneList.every((s) => s.voiceDisable) ? t("Bật thoại tất cả") : t("Tắt thoại tất cả")
-          }
-          placement="bottom"
-        />
-      </div>
+    <div className="flex overflow-auto flex-col h-full v-scrollbar">
+      <BatchListHeader
+        scenes={sceneList}
+        history={history}
+        globalTab={globalTab}
+        onGlobalTabChange={setGlobalTab}
+        onToggleAllNoText={handleToggleAllNoText}
+        onToggleAllVoiceDisable={handleToggleAllVoiceDisable}
+        ActionBarComponent={ActionBarComponent}
+      />
 
       {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}
-      <div className="overflow-auto flex-1 p-2 v-scrollbar sm:p-3">
+      <div className="flex-1 p-2 sm:p-3">
         <SortableCardGrid
           items={sceneList}
           getItemId={getSceneId}

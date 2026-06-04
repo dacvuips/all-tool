@@ -14,10 +14,18 @@ import { useReviewContext } from "../providers/review-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./product/batch-list";
 
-import { ImagesToVideoListPanel } from "../../elements/right-panel/images-to-video/images-to-video-list";
-import { VideoToVideoListPanel } from "../../elements/right-panel/video-to-video/video-to-video-list";
 import { CopyVideoScene } from "../../constants";
-import { REVIEW_SCRIPT_TAB_QUERY_KEY, ReviewScene, ReviewScriptTabEnum } from "../constants";
+import {
+  REVIEW_SCRIPT_TAB_QUERY_KEY,
+  ReviewAnalysisData,
+  ReviewScene,
+  ReviewScriptTabEnum,
+} from "../constants";
+import {
+  getScenesForTab,
+  REVIEW_SCRIPT_TAB_ENUM,
+  sceneListKeyForTab,
+} from "../../shared/script-tab-scenes";
 
 function normalizeReviewScene(s: ReviewScene, i: number): ReviewScene {
   return {
@@ -80,8 +88,11 @@ export const ReviewRightPanel = () => {
     parseScriptTabParam(queryParams[REVIEW_SCRIPT_TAB_QUERY_KEY] as string | undefined)
   );
 
-  // Label tab Batch List kèm số lượng scene
-  const sceneCount = scriptData?.scenes?.length ?? 0;
+  const batchSceneCount = getScenesForTab(
+    scriptData,
+    ReviewScriptTabEnum.batch,
+    REVIEW_SCRIPT_TAB_ENUM
+  ).length;
 
   return (
     <div className="flex overflow-hidden flex-col flex-1">
@@ -100,17 +111,24 @@ export const ReviewRightPanel = () => {
         className="bg-white"
       >
         {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={`${t("Sản phẩm")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`}>
+        <TabGroup.Tab
+          label={`${t("Sản phẩm")}${batchSceneCount > 0 ? ` (${batchSceneCount})` : ""}`}
+        >
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
             <BatchListPanel
-              scenes={(scriptData?.scenes || []).map(normalizeReviewScene)}
+              scenes={getScenesForTab<ReviewScene>(
+                scriptData as ReviewAnalysisData | null,
+                ReviewScriptTabEnum.batch,
+                REVIEW_SCRIPT_TAB_ENUM
+              ).map(normalizeReviewScene)}
               characters={[]}
+              sceneListKey={sceneListKeyForTab(ReviewScriptTabEnum.batch, REVIEW_SCRIPT_TAB_ENUM)}
             />
           )}
         </TabGroup.Tab>
-        <TabGroup.Tab label={t("Images To Video")}>
+        {/* <TabGroup.Tab label={t("Images To Video")}>
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
@@ -129,7 +147,7 @@ export const ReviewRightPanel = () => {
               characters={[]}
             />
           )}
-        </TabGroup.Tab>
+        </TabGroup.Tab> */}
       </TabGroup>
     </div>
   );

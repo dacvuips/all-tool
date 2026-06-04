@@ -311,6 +311,10 @@ export const ELEMENT_SCRIPT_TAB_QUERY_KEY = "elementScriptTab";
 
 export interface ElementAnalysisData {
   scenes: ElementScene[];
+  /** Danh sách riêng tab Images to video */
+  imagesToVideoScenes?: ElementScene[];
+  /** Danh sách riêng tab Video to video */
+  videoToVideoScenes?: ElementScene[];
   aspectRatio?: string;
   artStyleId?: string;
   artStyle?: string;

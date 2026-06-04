@@ -17,6 +17,7 @@ import {
   SceneErrors,
   useSceneErrorBroadcast,
 } from "../../hook/useSceneErrorBroadcast";
+import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import { ServiceImageEnum } from "../constants";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -263,7 +264,7 @@ export function ElementProvider(props) {
         scriptDB.get(CACHE_KEY.lastElementScript),
         scriptDB.get(CACHE_KEY.elementInput),
       ]);
-      if (cachedScript) setScriptDataRaw(cachedScript);
+      if (cachedScript) setScriptDataRaw(ensureTabSceneLists(cachedScript));
       if (cachedConfig) setElementFormConfig(normalizeElementFormConfig(cachedConfig));
     } catch (err) {
       console.warn("[element] Failed to restore from IndexedDB", err);
@@ -286,7 +287,7 @@ export function ElementProvider(props) {
       const item = sceneHistory.find((h) => h.id === id);
       if (item) {
         setSelectedHistoryId(id);
-        setScriptDataRaw(item.data);
+        setScriptDataRaw(ensureTabSceneLists(item.data));
         scriptDB.set(CACHE_KEY.lastElementScript, item.data).catch(() => {});
       }
     },

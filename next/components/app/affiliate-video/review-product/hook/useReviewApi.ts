@@ -9,6 +9,7 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, SceneHistoryItem } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import {
   ReviewAnalysisData,
   ReviewFormImage,
@@ -389,7 +390,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
       const result = await callGenerationReviewApi({ config });
       if (!result?.data) return undefined;
 
-      const reviewResult: ReviewAnalysisData = {
+      const reviewResult: ReviewAnalysisData = ensureTabSceneLists({
         ...result.data,
         scenes: Array.isArray(result.data?.scenes)
           ? result.data.scenes.map((scene) => ({
@@ -409,7 +410,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyleId: config.artStyleId ?? result.data?.artStyleId,
         artStyle: config.artStyle ?? result.data?.artStyle,
         serviceImageType: config.serviceImageType ?? result.data?.serviceImageType,
-      };
+      });
 
       reviewScriptDB
         .set(CACHE_KEY.lastReviewScript, reviewResult)
