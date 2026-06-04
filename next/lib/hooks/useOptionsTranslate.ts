@@ -884,8 +884,8 @@ export const useOptionsTranslation = () => {
 
   const DEFAULT_VIDEO_CONFIG: AffiliateVideoFormConfig = {
     category: CATEGORY_OPTIONS[0].label,
-    objectToPersonify: t("Một quả chuối tươi"),
-    tipContent: t("Cách ăn chuối tốt nhất"),
+    objectToPersonify: "",
+    tipContent: "",
     mood: t("Vui vẻ"),
     language: LANGUAGE_OPTIONS[0].label,
     artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
