@@ -577,7 +577,9 @@ const CreateEditTrendingDialog = ({
           />{" "}
           <NotifyText
             color="indigo"
-            text={t("Hãy đưa ra những prompt hay, độc đáo để kiếm thêm thu nhập ngay bạn nhé!")}
+            text={t(
+              "Hãy đưa ra những prompt hay, độc đáo, thu hút người dùng để kiếm thêm thu nhập ngay bạn nhé!"
+            )}
           />
           <Field label={t("Danh sách ảnh")}>
             <ImageInput
@@ -635,12 +637,6 @@ const CreateEditTrendingDialog = ({
             text={`${t("Lưu ý")}: ${t(
               "Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
             )}`}
-          />
-          <NotifyText
-            color="green"
-            text={t(
-              "Bạn hoàn toàn có thể kiếm thêm thu nhập từ prompt bạn đưa lên bạn nhé! Kiếm tiền cùng tôi ngay bây giờ!, Liên hệ Admin"
-            )}
           />
         </div>
         <div className="flex gap-2 justify-end items-center w-full">
@@ -1035,6 +1031,12 @@ export const TrendingCategoryList = () => {
             </div>
           </div>
         </div>
+        <NotifyText
+          color="green"
+          text={t(
+            "Bạn hoàn toàn có thể kiếm thêm thu nhập từ 'Prompt' bạn đưa lên bạn nhé! Kiếm tiền cùng tôi ngay bây giờ!, hãy tạo mới và công khai trending của bạn để kiếm thêm thu nhập!"
+          )}
+        />
 
         {/* "Của tôi" tab → CustomerTrendingSection */}
         {activeCategoryId === MY_TRENDING_ID ? (
