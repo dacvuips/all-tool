@@ -16,7 +16,7 @@ const PLAN_KEY_MAP: Record<string, string> = {
   [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
   [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
   [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
-  [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
+  [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
 };
 
 /** Plans to display on pricing page (excludes Free) */
@@ -25,8 +25,16 @@ const PLAN_ORDER = [
   SubscriptionPlanEnum.BASIC,
   SubscriptionPlanEnum.STANDARD,
   SubscriptionPlanEnum.PROFESSIONAL,
-  SubscriptionPlanEnum.UNLIMITED,
+  SubscriptionPlanEnum.ENTERPRISE,
 ];
+
+const getPlanTierIndex = (plan: SubscriptionPlanEnum) => PLAN_ORDER.indexOf(plan);
+
+const isPlanLowerThan = (plan: SubscriptionPlanEnum, thanPlan: SubscriptionPlanEnum) => {
+  const planIndex = getPlanTierIndex(plan);
+  const thanIndex = getPlanTierIndex(thanPlan);
+  return planIndex >= 0 && thanIndex >= 0 && planIndex < thanIndex;
+};
 
 interface PlanConfig {
   plan: SubscriptionPlanEnum;
@@ -54,7 +62,7 @@ const PLAN_META: Record<
   }
 > = {
   [SubscriptionPlanEnum.TRIAL]: {
-    label: "Trial",
+    label: "Dùng thử cao cấp",
     icon: "📦",
     badgeColor: "bg-gray-100",
     badgeTextColor: "text-gray-700",
@@ -94,8 +102,8 @@ const PLAN_META: Record<
     borderColor: "border-green-200",
     badgeLabel: "Chuyên nghiệp",
   },
-  [SubscriptionPlanEnum.UNLIMITED]: {
-    label: "Gói Không Giới Hạn",
+  [SubscriptionPlanEnum.ENTERPRISE]: {
+    label: "Gói Enterprise",
     icon: "💎",
     badgeColor: "bg-yellow-500",
     badgeTextColor: "text-white",
@@ -216,6 +224,7 @@ export default function PricingPage() {
           {planConfigs.map((config) => {
             const meta = PLAN_META[config.plan];
             const isCurrent = currentPlan === config.plan;
+            const isLowerPlan = !!currentPlan && isPlanLowerThan(config.plan, currentPlan);
             const features = getFeatures(config);
             const isHighlight = meta.highlight;
 
@@ -235,7 +244,7 @@ export default function PricingPage() {
                     {config.plan === SubscriptionPlanEnum.BASIC && "⭐"}
                     {config.plan === SubscriptionPlanEnum.STANDARD && "⚡"}
                     {config.plan === SubscriptionPlanEnum.PROFESSIONAL && "🚀"}
-                    {config.plan === SubscriptionPlanEnum.UNLIMITED && "💎"}
+                    {config.plan === SubscriptionPlanEnum.ENTERPRISE && "💎"}
                   </div>
                   <h3>{t(meta.label)}</h3>
                 </div>
@@ -272,12 +281,22 @@ export default function PricingPage() {
                 {/* CTA */}
                 <div className="pricing-card__cta">
                   {isCurrent ? (
-                    <button className="pricing-card__btn pricing-card__btn--current" disabled>
+                    <button
+                      className="pricing-card__btn pricing-card__btn--current-success"
+                      disabled
+                    >
                       {t("Đang sử dụng")}
                     </button>
                   ) : config.plan === SubscriptionPlanEnum.TRIAL ? (
                     <button className="pricing-card__btn pricing-card__btn--current" disabled>
                       {t("Liên hệ admin")}
+                    </button>
+                  ) : isLowerPlan ? (
+                    <button
+                      className="whitespace-nowrap pricing-card__btn pricing-card__btn--current"
+                      disabled
+                    >
+                      {t("Gói thấp hơn gói hiện tại")}
                     </button>
                   ) : (
                     <button

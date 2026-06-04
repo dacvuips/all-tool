@@ -23,7 +23,7 @@ const PLAN_KEY_MAP: Record<string, string> = {
   [SubscriptionPlanEnum.BASIC]: "basic",
   [SubscriptionPlanEnum.STANDARD]: "standard",
   [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
-  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+  [SubscriptionPlanEnum.ENTERPRISE]: "enterprise",
 };
 
 /** Ordered list of plans to display */
@@ -33,7 +33,7 @@ const PLAN_ORDER = [
   SubscriptionPlanEnum.BASIC,
   SubscriptionPlanEnum.STANDARD,
   SubscriptionPlanEnum.PROFESSIONAL,
-  SubscriptionPlanEnum.UNLIMITED,
+  SubscriptionPlanEnum.ENTERPRISE,
 ];
 
 /** Accent colour per plan for card styling */
@@ -63,7 +63,7 @@ const PLAN_COLORS: Record<string, { bg: string; border: string; badge: string }>
     border: "border-purple-300",
     badge: "bg-purple-500",
   },
-  [SubscriptionPlanEnum.UNLIMITED]: {
+  [SubscriptionPlanEnum.ENTERPRISE]: {
     bg: "bg-yellow-50",
     border: "border-yellow-300",
     badge: "bg-yellow-600",

@@ -10,7 +10,7 @@ const SUBSCRIPTION_BADGE: Record<string, string> = {
   basic: "bg-blue-100 text-blue-800",
   standard: "bg-green-100 text-green-800",
   professional: "bg-purple-100 text-purple-800",
-  unlimited: "bg-yellow-100 text-yellow-900",
+  enterprise: "bg-yellow-100 text-yellow-900",
 };
 
 function formatSubscription(subscription?: string) {

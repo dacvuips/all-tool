@@ -7,7 +7,7 @@ const schema = gql`
     basic
     standard
     professional
-    unlimited
+    enterprise
   }
 
   extend type Query {

@@ -30,7 +30,7 @@ const PLAN_KEY_MAP: Record<string, string> = {
   [SubscriptionPlanEnum.BASIC]: "basic",
   [SubscriptionPlanEnum.STANDARD]: "standard",
   [SubscriptionPlanEnum.PROFESSIONAL]: "professional",
-  [SubscriptionPlanEnum.UNLIMITED]: "unlimited",
+  [SubscriptionPlanEnum.ENTERPRISE]: "enterprise",
 };
 
 /** Giá trị mặc định cho gói Free */

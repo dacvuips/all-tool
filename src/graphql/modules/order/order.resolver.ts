@@ -186,7 +186,7 @@ const Mutation = {
       [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
       [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
       [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
-      [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
+      [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
     };
 
     const planKey = PLAN_KEY_MAP[subscriptionPlan];

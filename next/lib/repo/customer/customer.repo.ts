@@ -7,7 +7,7 @@ export enum SubscriptionPlanEnum {
   BASIC = "basic",
   STANDARD = "standard",
   PROFESSIONAL = "professional",
-  UNLIMITED = "unlimited",
+  ENTERPRISE = "enterprise",
 }
 
 export type GooglePackage = {

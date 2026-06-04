@@ -328,7 +328,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
     [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
     [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
-    [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
+    [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
   };
 
   private async _activateSubscription(

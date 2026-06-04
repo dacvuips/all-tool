@@ -9,7 +9,7 @@ export default {
   settings: [
     // Unlimited
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-video-limit`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-video-limit`,
       name: t("Unlimited - Giới hạn video (-1 = không giới hạn)"),
       type: Type.number,
       isPrivate: false,
@@ -18,7 +18,7 @@ export default {
       value: -1,
     },
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-image-limit`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-image-limit`,
       name: t("Unlimited - Giới hạn ảnh (-1 = không giới hạn)"),
       type: Type.number,
       isPrivate: false,
@@ -27,7 +27,7 @@ export default {
       value: -1,
     },
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-request-limit`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-request-limit`,
       name: t("Unlimited - Giới hạn generation text (-1 = không giới hạn)"),
       type: Type.number,
       isPrivate: false,
@@ -36,7 +36,7 @@ export default {
       value: -1,
     },
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-image-stream-count`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-image-stream-count`,
       name: t("Unlimited - Số luồng ảnh đồng thời (-1 = không giới hạn)"),
       type: Type.number,
       isPrivate: false,
@@ -45,7 +45,7 @@ export default {
       value: -1,
     },
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-video-stream-count`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-video-stream-count`,
       name: t("Unlimited - Số luồng video đồng thời (-1 = không giới hạn)"),
       type: Type.number,
       isPrivate: false,
@@ -54,7 +54,7 @@ export default {
       value: -1,
     },
     {
-      key: `pk-${SubscriptionPlanEnum.UNLIMITED}-price`,
+      key: `pk-${SubscriptionPlanEnum.ENTERPRISE}-price`,
       name: t("Unlimited - Giá (VNĐ)"),
       type: Type.number,
       isPrivate: false,

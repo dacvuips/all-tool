@@ -21,7 +21,7 @@ const PLAN_KEY_MAP: Record<string, string> = {
   [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
   [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
   [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
-  [SubscriptionPlanEnum.UNLIMITED]: SubscriptionPlanEnum.UNLIMITED,
+  [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
 };
 
 /** Plans to display (excludes Free) */
@@ -29,7 +29,7 @@ const PLAN_ORDER = [
   SubscriptionPlanEnum.BASIC,
   SubscriptionPlanEnum.STANDARD,
   SubscriptionPlanEnum.PROFESSIONAL,
-  SubscriptionPlanEnum.UNLIMITED,
+  SubscriptionPlanEnum.ENTERPRISE,
 ];
 
 interface PlanConfig {
@@ -87,8 +87,8 @@ export function CheckoutPaymentForm() {
       borderActive: "border-green-500",
       badgeLabel: t("Chuyên nghiệp"),
     },
-    [SubscriptionPlanEnum.UNLIMITED]: {
-      label: t("Gói Không Giới Hạn"),
+    [SubscriptionPlanEnum.ENTERPRISE]: {
+      label: t("Gói Enterprise"),
       icon: "💎",
       accentColor: "text-yellow-600",
       accentBg: "bg-yellow-50",
