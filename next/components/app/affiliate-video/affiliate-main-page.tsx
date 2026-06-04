@@ -7,6 +7,7 @@
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
 import {
+  RiAppStoreLine,
   RiBookOpenLine,
   RiFileCopy2Line,
   RiFileTextLine,
@@ -53,6 +54,13 @@ export default function AffiliateMainPage() {
       value: TrendingTypeEnum.CHATBOT,
       component: <ChatbotPage />,
     },
+    {
+      icon: <RiAppStoreLine />,
+      label: t("Flow App"),
+      value: TrendingTypeEnum.CHATBOT,
+      component: <ChatbotPage />,
+    },
+
     {
       icon: <RiFileTextLine />,
       label: t("Đơn Lẻ"),

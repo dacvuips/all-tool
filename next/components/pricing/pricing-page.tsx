@@ -354,9 +354,6 @@ export default function PricingPage() {
 
       {/* Contact Footer */}
       <div className="pricing-contact">
-        <p className="pricing-contact__line">
-          {`${t("Liên hệ hỗ trợ")}: ${"Zalo: 097.352.2962 - 037.7733.100"}`}
-        </p>
         <p className="pricing-contact__line pricing-contact__line--sub">
           {t("Thanh toán qua chuyển khoản ngân hàng hoặc ví điện tử.")}
         </p>

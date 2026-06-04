@@ -3,6 +3,8 @@ import { BaseModel, CrudRepository } from "../crud.repo";
 
 export enum TrendingTypeEnum {
   CHATBOT = "CHATBOT",
+  FLOW_APP = "FLOW_APP",
+  AI_STUDIO_APP = "AI_STUDIO_APP",
   PROMPT = "PROMPT",
 }
 

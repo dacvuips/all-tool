@@ -135,12 +135,12 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
   if (loading) return <Spinner />;
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gray-100">
       {!hideHeader && (
         <>
           {/* Header */}
           <div className="sticky top-14 z-40 bg-white shadow-sm">
-            <div className="flex items-center gap-4 max-w-screen-xl mx-auto px-6 py-3">
+            <div className="flex gap-4 items-center px-6 py-3 mx-auto max-w-screen-xl">
               <Link
                 href="/recaptcha"
                 className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary"
@@ -149,9 +149,9 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
                 {sm && <span>{t("Quay lại")}</span>}
               </Link>
               <div className="w-px h-5 bg-gray-300" />
-              <div className="flex items-center gap-2">
+              <div className="flex gap-2 items-center">
                 <HiShieldCheck className="text-xl text-green-500" />
-                <h1 className="text-base font-bold text-gray-800 m-0">{t("Gói reCAPTCHA")}</h1>
+                <h1 className="m-0 text-base font-bold text-gray-800">{t("Gói reCAPTCHA")}</h1>
               </div>
             </div>
             <div className="h-[3px] bg-gradient-to-r from-green-500 via-green-600 to-green-300" />
@@ -160,9 +160,9 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
       )}
 
       {/* Hero */}
-      <div className="text-center py-10 px-4">
+      <div className="px-4 py-10 text-center">
         <div
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-4"
+          className="inline-flex gap-2 items-center px-4 py-2 mb-4 text-sm font-semibold rounded-full"
           style={{
             background:
               "linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(59, 130, 246, 0.1) 100%)",
@@ -171,10 +171,10 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
         >
           <span>⚡</span> {t("Nâng tầm ứng dụng của bạn")}
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
+        <h2 className="mb-3 text-2xl font-bold text-gray-900 sm:text-3xl">
           {t("Chọn Gói Giải ReCAPTCHA Flow")}
         </h2>
-        <p className="text-sm sm:text-base text-gray-500 max-w-lg mx-auto">
+        <p className="mx-auto max-w-lg text-sm text-gray-500 sm:text-base">
           {t(
             "Giải reCAPTCHA Flow giúp bạn vượt qua các bước xác minh captcha generate Image banana và Veo 3 nhanh chóng. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
           )}
@@ -182,13 +182,13 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
       </div>
 
       {/* Cards */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+      <div className="px-4 pb-10 mx-auto max-w-6xl sm:px-6 lg:px-8">
         {loading ? (
           <div className="flex justify-center py-16">
             <Spinner />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const features = getFeatures(plan);
               const isHighlight = plan.highlight;
@@ -212,7 +212,7 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
                   )}
 
                   {/* Plan name & icon */}
-                  <div className="flex items-center gap-3 mb-4 mt-2">
+                  <div className="flex gap-3 items-center mt-2 mb-4">
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg ${plan.badgeBg} bg-opacity-10`}
                     >
@@ -235,17 +235,17 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
                       {formatPrice(plan.price)}
                     </span>
                     {plan.price > 0 && (
-                      <span className="text-sm text-gray-400 ml-1">/{t("tháng")}</span>
+                      <span className="ml-1 text-sm text-gray-400">/{t("tháng")}</span>
                     )}
                   </div>
 
                   {/* Divider */}
-                  <div className="h-px bg-gray-100 mb-4" />
+                  <div className="mb-4 h-px bg-gray-100" />
 
                   {/* Features */}
                   <ul className="space-y-2.5 mb-6">
                     {features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                      <li key={i} className="flex gap-2 items-start text-sm text-gray-600">
                         <HiCheck className="text-green-500 text-base mt-0.5 flex-shrink-0" />
                         <span>{feature}</span>
                       </li>
@@ -278,14 +278,14 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
       </div>
 
       {/* Info Section */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">{t("Tại sao cần reCAPTCHA?")}</h3>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div className="flex items-start gap-3">
+      <div className="px-4 pb-10 mx-auto max-w-6xl sm:px-6 lg:px-8">
+        <div className="p-6 bg-white rounded-2xl border border-gray-200 sm:p-8">
+          <h3 className="mb-4 text-lg font-bold text-gray-900">{t("Tại sao cần reCAPTCHA?")}</h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">🤖</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">
+                <p className="mb-1 text-sm font-semibold text-gray-800">
                   {t("Thuốc giải reCAPTCHA cho Flow")}
                 </p>
                 <p className="text-xs text-gray-500">
@@ -295,19 +295,19 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">⏱️</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">
+                <p className="mb-1 text-sm font-semibold text-gray-800">
                   {t("Tốc độ xử lý nhanh")}
                 </p>
                 <p className="text-xs text-gray-500">{t("Giải reCAPTCHA chỉ mất chưa đến 2s ")}</p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">⚡</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Chịu tải cao")}</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">{t("Chịu tải cao")}</p>
                 <p className="text-xs text-gray-500">
                   {t("Xử lý hàng ngàn request/giây đảm bảo không gián đoạn")}
                 </p>
@@ -318,9 +318,8 @@ export default function RecaptchaPricingPage({ hideHeader = false }: { hideHeade
       </div>
 
       {/* Contact Footer */}
-      <div className="text-center py-8 px-4">
-        <p className="text-sm text-gray-600">{`${t("Liên hệ hỗ trợ")}: ${"Zalo: 037.7733.100"}`}</p>
-        <p className="text-xs text-gray-400 mt-1">
+      <div className="px-4 py-8 text-center">
+        <p className="mt-1 text-xs text-gray-400">
           {t("Thanh toán qua chuyển khoản ngân hàng hoặc ví điện tử.")}
         </p>
       </div>

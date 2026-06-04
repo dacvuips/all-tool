@@ -138,12 +138,12 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
   if (loading) return <Spinner />;
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <div className="min-h-screen bg-gray-100">
       {!hideHeader && (
         <>
           {/* Header */}
           <div className="sticky top-14 z-40 bg-white shadow-sm">
-            <div className="flex items-center gap-4 max-w-screen-xl mx-auto px-6 py-3">
+            <div className="flex gap-4 items-center px-6 py-3 mx-auto max-w-screen-xl">
               <Link
                 href="/api-generate-media"
                 className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary"
@@ -152,9 +152,9 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                 {sm && <span>{t("Quay lại")}</span>}
               </Link>
               <div className="w-px h-5 bg-gray-300" />
-              <div className="flex items-center gap-2">
+              <div className="flex gap-2 items-center">
                 <HiShieldCheck className="text-xl" style={{ color: "#7c3aed" }} />
-                <h1 className="text-base font-bold text-gray-800 m-0">{t("Gói API Media")}</h1>
+                <h1 className="m-0 text-base font-bold text-gray-800">{t("Gói API Media")}</h1>
               </div>
             </div>
             <div
@@ -166,9 +166,9 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
       )}
 
       {/* Hero */}
-      <div className="text-center py-10 px-4">
+      <div className="px-4 py-10 text-center">
         <div
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold mb-4"
+          className="inline-flex gap-2 items-center px-4 py-2 mb-4 text-sm font-semibold rounded-full"
           style={{
             background:
               "linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(236, 72, 153, 0.10) 100%)",
@@ -177,10 +177,10 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
         >
           <span>⚡</span> {t("Nâng tầm ứng dụng của bạn")}
         </div>
-        <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">
+        <h2 className="mb-3 text-2xl font-bold text-gray-900 sm:text-3xl">
           {t("Chọn Gói Giải API Media")}
         </h2>
-        <p className="text-sm sm:text-base text-gray-500 max-w-lg mx-auto">
+        <p className="mx-auto max-w-lg text-sm text-gray-500 sm:text-base">
           {t(
             "Giải API Media giúp bạn tiết kiệm thời gian và chi phí khi sử dụng API generate Image Banana 2 và Veo 3. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
           )}
@@ -188,13 +188,13 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
       </div>
 
       {/* Cards */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
+      <div className="px-4 pb-10 mx-auto max-w-6xl sm:px-6 lg:px-8">
         {loading ? (
           <div className="flex justify-center py-16">
             <Spinner />
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {plans.map((plan) => {
               const features = getFeatures(plan);
               const isHighlight = plan.highlight;
@@ -211,7 +211,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                   {plan.badgeLabel && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                       <span
-                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold text-white"
+                        className="inline-flex items-center px-3 py-1 text-xs font-bold text-white rounded-full"
                         style={{ backgroundColor: plan.badgeBg }}
                       >
                         {t(plan.badgeLabel)}
@@ -220,9 +220,9 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                   )}
 
                   {/* Plan name & icon */}
-                  <div className="flex items-center gap-3 mb-4 mt-2">
+                  <div className="flex gap-3 items-center mt-2 mb-4">
                     <div
-                      className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
+                      className="flex justify-center items-center w-10 h-10 text-lg rounded-lg"
                       style={{ backgroundColor: plan.iconBg }}
                     >
                       {plan.icon}
@@ -246,17 +246,17 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                       {formatPrice(plan.price)}
                     </span>
                     {plan.price > 0 && (
-                      <span className="text-sm text-gray-400 ml-1">/{t("tháng")}</span>
+                      <span className="ml-1 text-sm text-gray-400">/{t("tháng")}</span>
                     )}
                   </div>
 
                   {/* Divider */}
-                  <div className="h-px bg-gray-100 mb-4" />
+                  <div className="mb-4 h-px bg-gray-100" />
 
                   {/* Features */}
                   <ul className="space-y-2.5 mb-6">
                     {features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-600">
+                      <li key={i} className="flex gap-2 items-start text-sm text-gray-600">
                         <HiCheck
                           className="text-base mt-0.5 flex-shrink-0"
                           style={{ color: plan.accentColor }}
@@ -292,14 +292,14 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
       </div>
 
       {/* Info Section */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pb-10">
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 sm:p-8">
-          <h3 className="text-lg font-bold text-gray-900 mb-4">{t("Tại sao cần API Media?")}</h3>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <div className="flex items-start gap-3">
+      <div className="px-4 pb-10 mx-auto max-w-6xl sm:px-6 lg:px-8">
+        <div className="p-6 bg-white rounded-2xl border border-gray-200 sm:p-8">
+          <h3 className="mb-4 text-lg font-bold text-gray-900">{t("Tại sao cần API Media?")}</h3>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">💰</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Tiết kiệm chi phí")}</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">{t("Tiết kiệm chi phí")}</p>
                 <p className="text-xs text-gray-500">
                   {t(
                     "Chi phí sử dụng khi gen Banana 2 /Veo 3 của các gói thấp hơn so với việc mua lẻ"
@@ -307,10 +307,10 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">🛡️</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Đề phòng lừa đảo")}</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">{t("Đề phòng lừa đảo")}</p>
                 <p className="text-xs text-gray-500">
                   {t(
                     "Nhiều đơn vị lừa đảo, giả mạo bán API gen Video/ảnh, cần test để tránh mất tiền oan. Chúng tôi cho phép test trước khi mua."
@@ -318,10 +318,10 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                 </p>
               </div>
             </div>
-            <div className="flex items-start gap-3">
+            <div className="flex gap-3 items-start">
               <span className="text-2xl">⚡</span>
               <div>
-                <p className="text-sm font-semibold text-gray-800 mb-1">{t("Chịu tải cao")}</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">{t("Chịu tải cao")}</p>
                 <p className="text-xs text-gray-500">
                   {t("Xử lý hàng ngàn request/giây đảm bảo không gián đoạn")}
                 </p>
@@ -332,9 +332,8 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
       </div>
 
       {/* Contact Footer */}
-      <div className="text-center py-8 px-4">
-        <p className="text-sm text-gray-600">{`${t("Liên hệ hỗ trợ")}: ${"Zalo: 037.7733.100"}`}</p>
-        <p className="text-xs text-gray-400 mt-1">
+      <div className="px-4 py-8 text-center">
+        <p className="mt-1 text-xs text-gray-400">
           {t("Thanh toán qua chuyển khoản ngân hàng hoặc ví điện tử.")}
         </p>
       </div>
