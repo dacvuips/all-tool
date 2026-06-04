@@ -275,22 +275,22 @@ export function CheckoutPaymentForm() {
             {t("Chi tiết gói")} {t(meta?.label)}
           </h4>
           <ul className="space-y-1.5">
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>
                 {formatNumber(config.requestQuantity)} request / {t("tháng")}
               </span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("Hỗ trợ reCAPTCHA v2 & v3")}</span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("API Key riêng biệt")}</span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("Bảo mật cao")}</span>
             </li>
           </ul>
@@ -305,22 +305,22 @@ export function CheckoutPaymentForm() {
             {t("Chi tiết gói")} {t(meta?.label)}
           </h4>
           <ul className="space-y-1.5">
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>
                 {formatNumber(config.requestQuantity)} {t("lượt tạo")} / {t("tháng")}
               </span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("Generate Image Banana 2 & Video Veo 3")}</span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("API Key riêng biệt")}</span>
             </li>
-            <li className="flex items-center gap-2 text-xs text-gray-700">
-              <HiCheck className="text-green-500 flex-shrink-0" />
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("Chịu tải cao")}</span>
             </li>
           </ul>
@@ -335,32 +335,32 @@ export function CheckoutPaymentForm() {
           {t("Chi tiết gói")} {t(meta?.label)}
         </h4>
         <ul className="space-y-1.5">
-          <li className="flex items-center gap-2 text-xs text-gray-700">
-            <HiCheck className="text-green-500 flex-shrink-0" />
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
             <span>
               {t("Tạo tối đa")} {formatNumber(config.videoLimit)} video / {t("ngày")}
             </span>
           </li>
-          <li className="flex items-center gap-2 text-xs text-gray-700">
-            <HiCheck className="text-green-500 flex-shrink-0" />
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
             <span>
               {t("Tạo tối đa")} {formatNumber(config.imageLimit)} {t("hình ảnh")} / {t("ngày")}
             </span>
           </li>
-          <li className="flex items-center gap-2 text-xs text-gray-700">
-            <HiCheck className="text-green-500 flex-shrink-0" />
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
             <span>
               {t("Tối đa")} {formatNumber(config.videoStreamCount)} {t("luồng video cùng lúc")}
             </span>
           </li>
-          <li className="flex items-center gap-2 text-xs text-gray-700">
-            <HiCheck className="text-green-500 flex-shrink-0" />
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
             <span>
               {t("Tối đa")} {formatNumber(config.imageStreamCount)} {t("luồng tạo ảnh cùng lúc")}
             </span>
           </li>
-          <li className="flex items-center gap-2 text-xs text-gray-700">
-            <HiCheck className="text-green-500 flex-shrink-0" />
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
             <span>{t("Không giới hạn câu prompt chuyển động")}</span>
           </li>
         </ul>
@@ -379,7 +379,7 @@ export function CheckoutPaymentForm() {
     <div className="flex flex-col min-h-[60vh] pb-10 bg-gray-100">
       {/* Sticky Toolbar */}
       <div className="sticky top-14 z-40 bg-white shadow-sm">
-        <div className="flex items-center gap-4 max-w-screen-xl mx-auto px-6 py-3">
+        <div className="flex gap-4 items-center px-6 py-3 mx-auto max-w-screen-xl">
           <div
             onClick={() => router.back()}
             className="flex items-center gap-1.5 text-sm font-medium text-gray-700 no-underline transition-colors hover:text-primary cursor-pointer"
@@ -388,16 +388,16 @@ export function CheckoutPaymentForm() {
             <span>{t("Quay lại")}</span>
           </div>
           <div className="w-px h-5 bg-gray-300" />
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2 items-center">
             <RiSecurePaymentLine className="text-xl text-green-500" />
-            <h1 className="text-base font-bold text-gray-800 m-0">{headerTitle}</h1>
+            <h1 className="m-0 text-base font-bold text-gray-800">{headerTitle}</h1>
           </div>
         </div>
         {/* Green accent bar */}
         <div className="h-[3px] bg-gradient-to-r from-green-500 via-green-600 to-green-300" />
       </div>
 
-      <div className="container flex flex-col flex-1 justify-center items-center mx-auto pt-4">
+      <div className="container flex flex-col flex-1 justify-center items-center pt-4 mx-auto">
         <div className="flex overflow-hidden flex-col gap-y-4 p-4 w-full max-w-lg bg-white rounded-2xl border border-t-4 border-gray-200 shadow-sm border-t-primary">
           {/* Chọn gói subscription */}
           <div>
@@ -458,7 +458,7 @@ export function CheckoutPaymentForm() {
 
                       {/* Plan info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                        <div className="flex gap-2 items-center">
                           <span
                             className={`text-sm font-semibold ${
                               isSelected ? meta.accentColor : "text-gray-800"
@@ -559,7 +559,7 @@ export function CheckoutPaymentForm() {
                   </>
                 }
                 onClick={handleCheckout}
-                disabled={isLoading || !selectedPlan || true}
+                disabled={isLoading || !selectedPlan}
               />
             )}
           </div>

@@ -928,7 +928,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     const rows = enabledScenes.map((s) =>
       [
         String(s.sceneNumber),
-        escapeCSV(s.visual_prompt || ""),
+        escapeCSV(s.timestamp || ""),
         escapeCSV(s.visual_prompt || ""),
         escapeCSV(s.motion_description || ""),
         escapeCSV(s.original_content || ""),

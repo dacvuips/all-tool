@@ -920,7 +920,6 @@ export function useBatchActions(scenes: SceneScript[]) {
       [
         String(s.sceneNumber),
         escapeCSV(s.camera || ""),
-        escapeCSV(s.visualPrompt || ""),
         escapeCSV(s.imageGenPrompt || ""),
         escapeCSV(s.motionPrompt || ""),
         escapeCSV(s.dialogue || ""),

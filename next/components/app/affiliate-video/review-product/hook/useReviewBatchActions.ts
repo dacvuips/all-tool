@@ -895,7 +895,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     const rows = enabledScenes.map((s) =>
       [
         String(s.sceneNumber),
-        escapeCSV(s.visualPrompt || ""),
+        escapeCSV(s.camera || ""),
         escapeCSV(s.imageGenPrompt || ""),
         escapeCSV(s.motionPrompt || ""),
         escapeCSV(s.dialogue || ""),
