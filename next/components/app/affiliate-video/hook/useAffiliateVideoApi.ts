@@ -13,13 +13,13 @@ import {
   ArtStylesByCategoryResult,
   CustomerArtStyleInput,
 } from "../../../../lib/repo/list/artStyleCategory.repo";
+import { TrendingTypeEnum } from "../../../../lib/repo/list/trending.repo";
 import {
   CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingCategoryService,
   TrendingsByCategoryResult,
 } from "../../../../lib/repo/list/trendingCategory.repo";
-import { TrendingTypeEnum } from "../../../../lib/repo/list/trending.repo";
 import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
@@ -478,6 +478,14 @@ export interface UseAffiliateVideoApiReturn {
     search?: string
   ) => Promise<TrendingsByCategoryResult>;
 
+  /**
+   * Lấy bảng xếp hạng chatbot theo monthlyCount (giảm dần).
+   */
+  getChatbotRank: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
   generateTrendingSingle: (
     data: TrendingVideoFormConfig
   ) => Promise<TrendingScriptData | undefined>;
@@ -1485,6 +1493,12 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     },
     []
   );
+  const getChatbotRank = useCallback(
+    async (page: number = 1, limit: number = 20, search?: string) => {
+      return TrendingCategoryService.getChatbotRank(page, limit, search);
+    },
+    []
+  );
 
   // ── getCustomerChatbotList – lấy danh sách chatbot của customer ──
   const getCustomerChatbotList = useCallback(
@@ -1889,5 +1903,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     createCustomerArtStyle,
     updateCustomerArtStyle,
     deleteCustomerArtStyle,
+    getChatbotRank,
   };
 }

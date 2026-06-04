@@ -43,7 +43,7 @@ export const AffiliateVideoRightPanel = () => {
           <ChatBotCategoryList />
         </TabGroup.Tab>
 
-        <TabGroup.Tab label={t("Bảng xếp hạng prompt")}>
+        <TabGroup.Tab label={t("Bảng xếp hạng")}>
           <ChatBotPromptRank />
         </TabGroup.Tab>
       </TabGroup>

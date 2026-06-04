@@ -261,6 +261,34 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
       return { data: [], total: 0 };
     }
   }
+  async getChatbotRank(
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    try {
+      const result = await this.getAll({
+        apiName: "getTrendingsByCategoryId",
+        query: {
+          page,
+          limit,
+          search: search || undefined,
+          filter: { isActive: true, type: TrendingTypeEnum.CHATBOT },
+          order: { monthlyCount: -1 },
+        },
+        fragment: `id name imageUrls count price promptShort monthlyCount`,
+        cache: false,
+      });
+      return {
+        data: (result.data || []) as any as TrendingPublicItem[],
+        total: result.total || 0,
+        pagination: result.pagination,
+      };
+    } catch (err) {
+      console.error("[getChatbotRank] Error:", err);
+      return { data: [], total: 0 };
+    }
+  }
 }
 
 export const TrendingCategoryService = new TrendingCategoryRepository();
