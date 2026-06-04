@@ -38,14 +38,14 @@ import { useLocale } from "../lib/providers/locale-provider";
 import { Pagination, QueryInput } from "../lib/repo/crud.repo";
 import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/notification.repo";
 
+import { GooglePackagePopoverContent } from "../components/admin/management/customer/components/customer-google-package-cell";
 import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { NotifyDropdown } from "../components/shared/common/notify-dropdown";
-import { formatDate, parseNumber } from "../lib/helpers/parser";
+import { parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
-import { GooglePackagePopoverContent } from "../components/admin/management/customer/components/customer-google-package-cell";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
 import { useHomeLayoutContext } from "./home-layout/provider/home-layout-provider";
@@ -121,7 +121,7 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
       {/* {!isBlockPage && <HomePopupNotify />} */}
       {/* <RewardPointNotifyDialog /> */}
       <HomePageDeactiveDialog isOpen={!!isBlockPage} pageDeactiveDialogValue={isBlockPage?.value} />
-      <header className="flex fixed top-0 left-0 z-200 items-center w-full h-14 bg-white shadow">
+      <header className="flex fixed top-0 left-0 items-center w-full h-14 bg-white shadow z-200">
         <div className="w-full bg-white">
           <div className="flex flex-row justify-between items-center pr-1 pl-5 w-full h-14">
             <div className="flex flex-row justify-around items-center">
@@ -352,7 +352,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
       )}
 
       <>
-        <div className="flex fixed top-0 left-0 z-200 flex-row items-center w-full h-14 bg-white shadow">
+        <div className="flex fixed top-0 left-0 flex-row items-center w-full h-14 bg-white shadow z-200">
           <div className="flex flex-row gap-2 justify-between px-4 w-full">
             <div className="flex flex-row gap-2 items-center">
               <Link href="/" className="block">
@@ -677,7 +677,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
           )}
           <div
             className={`bg-white rounded-xl border border-gray-100 overflow-hidden ${
-              compact ? "fixed left-4 right-4 max-w-sm mx-auto" : "absolute left-0 mt-2 w-80"
+              compact ? "fixed right-4 left-4 mx-auto max-w-sm" : "absolute left-0 mt-2 w-80"
             }`}
             style={{
               zIndex: 211,
@@ -686,7 +686,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
             }}
           >
             <div className="px-4 pt-3 pb-2">
-              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+              <div className="text-xs font-bold tracking-wider text-gray-400 uppercase">
                 {t("Dịch vụ")}
               </div>
             </div>
@@ -703,7 +703,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
                   }`}
                 >
                   <div
-                    className="flex items-center justify-center w-10 h-10 rounded-lg text-white text-lg flex-shrink-0 transition-transform duration-200 group-hover:scale-105"
+                    className="flex flex-shrink-0 justify-center items-center w-10 h-10 text-lg text-white rounded-lg transition-transform duration-200 group-hover:scale-105"
                     style={{ background: service.gradient }}
                   >
                     {service.icon}
@@ -719,7 +719,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
                     <div className="text-xs text-gray-400 mt-0.5 leading-tight">{service.desc}</div>
                   </div>
                   {isActive(service.href) && (
-                    <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary" />
                   )}
                 </button>
               ))}
@@ -740,7 +740,7 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
     <>
       <div
         ref={packageRef}
-        className="flex items-center h-8 border border-gray-300 rounded-lg gray-50 overflow-hidden text-sm cursor-default"
+        className="flex overflow-hidden items-center h-8 text-sm rounded-lg border border-gray-300 cursor-default gray-50"
       >
         <span className="px-2.5 text-gray-700 font-semibold whitespace-nowrap">
           {t("Gói")}:{" "}

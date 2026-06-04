@@ -9,6 +9,7 @@ export function HomePageDeactiveDialog({ ...props }) {
       width={600}
       slideFromBottom="none"
       title={t("Thông báo")}
+      onOverlayClick={() => {}}
       {...props}
     >
       <Dialog.Body>

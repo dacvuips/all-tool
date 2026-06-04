@@ -26,7 +26,7 @@ export function SlideCaptchaVerifyDialog({
       onClose={() => setOpenSlideVerify(undefined)}
     >
       <Dialog.Body>
-        <div className="w-full mb-2 font-semibold text-center text-gray-500 uppercase">
+        <div className="mb-2 w-full font-semibold text-center text-gray-500 uppercase">
           {t("xác thực bảo mật")}
         </div>
         <SlideVertify
@@ -34,7 +34,7 @@ export function SlideCaptchaVerifyDialog({
           height={height}
           // resultHeight={25}
           r={Math.floor(Math.random() * 11)}
-          imgUrl={["/assets/img/verify-image.jpg", "/assets/img/verify-image-1.jpg"]}
+          imgUrl={["/assets/img/verify-image-2.jpg", "/assets/img/verify-image-3.jpg"]}
           text={t("Vuốt sang phải")}
           resultSuccessText={t("Thành công")}
           resultFailText={t("Thất bại")}
