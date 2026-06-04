@@ -89,7 +89,12 @@ export interface UseSceneMediaReturn {
 
 // ── Hook ───────────────────────────────────────────────────────────────────
 
-export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noText }: UseSceneMediaParams): UseSceneMediaReturn {
+export function useSceneMedia({
+  scene,
+  nextSceneId,
+  selectedProductImages,
+  noText,
+}: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
 
   // ── Lấy concurrency limits từ plan của user ───
@@ -146,7 +151,8 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
     objectToPersonifyCode: affiliateVideoFormConfig?.objectToPersonifyCode,
-    fallbackImage: scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
+    fallbackImage:
+      scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
   });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
@@ -273,7 +279,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
       setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
     } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
     }
@@ -282,7 +288,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   useEffect(() => {
     if (isBatchGeneratingVideo && !generatingVideo) {
       setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
     } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
       stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
     }
@@ -291,7 +297,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
   useEffect(() => {
     if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
     } else if (
       !isBatchGeneratingExtendVideo &&
       !generatingExtendVideo &&
@@ -368,7 +374,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
     addBatchGeneratingSceneId(scene.id);
 
     // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
 
     try {
       const imageParams = await buildAffiliateImageGenerateParams({
@@ -460,7 +466,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -468,7 +474,7 @@ export function useSceneMedia({ scene, nextSceneId, selectedProductImages, noTex
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 

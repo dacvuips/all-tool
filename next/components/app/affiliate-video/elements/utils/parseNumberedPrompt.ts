@@ -1,4 +1,5 @@
 import { ElementAnalysisData, ElementScene, uid } from "../../constants";
+import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 
 /** Một dòng prompt đã tách theo số thứ tự (1., 2., …) */
 export interface NumberedPromptItem {
@@ -56,10 +57,10 @@ export function buildAnalysisDataFromNumberedPrompt(
     translated_content: null,
   }));
 
-  return {
+  return ensureTabSceneLists({
     scenes,
     aspectRatio,
     artStyleId,
     artStyle,
-  };
+  });
 }

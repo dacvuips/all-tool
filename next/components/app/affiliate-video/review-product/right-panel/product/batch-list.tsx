@@ -3,7 +3,9 @@
  * Thin wrapper around SharedBatchListPanel for the "elements" module.
  * Handles context-specific persistence (IndexedDB) and API calls.
  */
-import { CACHE_KEY, CharacterItem, DB_NAME, STORE_NAME } from "../../../constants";
+import { CharacterItem, DB_NAME, STORE_NAME } from "../../../constants";
+import { CACHE_KEY } from "../../constants";
+import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { ReviewScene } from "../../constants";
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../../shared/batch-list";
@@ -15,9 +17,14 @@ import { SceneRowGroup } from "./scene-batch-row";
 interface BatchListPanelProps {
   scenes: ReviewScene[];
   characters: CharacterItem[];
+  sceneListKey?: TabSceneListKey;
 }
 
-export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
+export function BatchListPanel({
+  scenes,
+  characters,
+  sceneListKey = "scenes",
+}: BatchListPanelProps) {
   const {
     scriptData,
     updateScriptData,
@@ -33,21 +40,18 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
    *  Also updates history item if a history entry is selected. */
   const handlePersistScenes = async (updatedScenes: any[]) => {
     try {
-      const current = await db.get(CACHE_KEY.lastElementScript);
-      await db.set(CACHE_KEY.lastElementScript, {
-        ...(current ?? scriptData),
-        scenes: updatedScenes as any,
-      });
+      const current = await db.get(CACHE_KEY.lastReviewScript);
+      const merged = mergeSceneListIntoData(current ?? scriptData, sceneListKey, updatedScenes);
+      await db.set(CACHE_KEY.lastReviewScript, merged);
 
-      // Also update the selected history item in elementHistory
       if (selectedHistoryId) {
-        const history: any[] = (await db.get(CACHE_KEY.elementHistory)) || [];
+        const history: any[] = (await db.get(CACHE_KEY.reviewHistory)) || [];
         const updatedHistory = history.map((item: any) =>
           item.id === selectedHistoryId
-            ? { ...item, data: { ...item.data, scenes: updatedScenes as any } }
+            ? { ...item, data: mergeSceneListIntoData(item.data, sceneListKey, updatedScenes) }
             : item
         );
-        await db.set(CACHE_KEY.elementHistory, updatedHistory);
+        await db.set(CACHE_KEY.reviewHistory, updatedHistory);
       }
     } catch (err) {
       console.error("[elements/BatchListPanel] Failed to persist to IndexedDB:", err);
@@ -57,11 +61,9 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   /** Persist scenes + sync parent context state */
   const handleSyncScenes = async (updatedScenes: any[]) => {
     try {
-      await db.set(CACHE_KEY.lastElementScript, {
-        ...scriptData,
-        scenes: updatedScenes as any,
-      });
-      updateScriptData?.({ ...scriptData, scenes: updatedScenes as any });
+      const merged = mergeSceneListIntoData(scriptData, sceneListKey, updatedScenes);
+      await db.set(CACHE_KEY.lastReviewScript, merged);
+      updateScriptData?.(merged);
     } catch (err) {
       console.error("[elements/BatchListPanel] Failed to sync:", err);
     }

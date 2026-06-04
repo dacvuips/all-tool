@@ -9,7 +9,17 @@ import { useTranslation } from "react-i18next";
 import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
-import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
+import {
+  CopyVideoScene,
+  ELEMENT_SCRIPT_TAB_QUERY_KEY,
+  ElementAnalysisData,
+  ElementScriptTabEnum,
+} from "../../constants";
+import {
+  ELEMENT_SCRIPT_TAB_ENUM,
+  getScenesForTab,
+  sceneListKeyForTab,
+} from "../../shared/script-tab-scenes";
 import { useElementContext } from "../providers/element-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./element/batch-list";
@@ -35,6 +45,25 @@ const parseScriptTabParam = (value: string | undefined): ElementScriptTabEnum | 
   return undefined;
 };
 
+function normalizeElementScene(s: CopyVideoScene, i: number): CopyVideoScene {
+  return {
+    ...s,
+    id: s.id || `scene-${i}`,
+    sceneNumber: i + 1,
+    disabled: s.disabled ?? false,
+    voiceDisable: s.voiceDisable ?? false,
+  };
+}
+
+function elementScenesForTab(
+  scriptData: ElementAnalysisData | null | undefined,
+  tab: ElementScriptTabEnum
+): CopyVideoScene[] {
+  return getScenesForTab<CopyVideoScene>(scriptData, tab, ELEMENT_SCRIPT_TAB_ENUM).map(
+    normalizeElementScene
+  );
+}
+
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const ElementRightPanel = () => {
   const { t } = useTranslation();
@@ -47,8 +76,18 @@ export const ElementRightPanel = () => {
     parseScriptTabParam(queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined)
   );
 
-  // Label tab Batch List kèm số lượng scene
-  const sceneCount = scriptData?.scenes?.length ?? 0;
+  const batchSceneCount = getScenesForTab(scriptData, ElementScriptTabEnum.batch, ELEMENT_SCRIPT_TAB_ENUM)
+    .length;
+  const imagesToVideoSceneCount = getScenesForTab(
+    scriptData,
+    ElementScriptTabEnum.imagesToVideo,
+    ELEMENT_SCRIPT_TAB_ENUM
+  ).length;
+  const videoToVideoSceneCount = getScenesForTab(
+    scriptData,
+    ElementScriptTabEnum.videoToVideo,
+    ELEMENT_SCRIPT_TAB_ENUM
+  ).length;
 
   return (
     <div className="flex overflow-hidden flex-col flex-1">
@@ -67,51 +106,48 @@ export const ElementRightPanel = () => {
         className="bg-white"
       >
         {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
-        <TabGroup.Tab label={`${t("Thành Phần")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`}>
+        <TabGroup.Tab
+          label={`${t("Thành Phần")}${batchSceneCount > 0 ? ` (${batchSceneCount})` : ""}`}
+        >
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
             <BatchListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={elementScenesForTab(scriptData, ElementScriptTabEnum.batch)}
               characters={[]}
+              sceneListKey={sceneListKeyForTab(ElementScriptTabEnum.batch, ELEMENT_SCRIPT_TAB_ENUM)}
             />
           )}
         </TabGroup.Tab>
-        <TabGroup.Tab label={t("Images To Video")}>
+        <TabGroup.Tab
+          label={`${t("Images To Video")}${imagesToVideoSceneCount > 0 ? ` (${imagesToVideoSceneCount})` : ""}`}
+        >
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
             <ImagesToVideoListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={elementScenesForTab(scriptData, ElementScriptTabEnum.imagesToVideo)}
               characters={[]}
+              sceneListKey={sceneListKeyForTab(
+                ElementScriptTabEnum.imagesToVideo,
+                ELEMENT_SCRIPT_TAB_ENUM
+              )}
             />
           )}
         </TabGroup.Tab>
-        <TabGroup.Tab label={t("Video To Video")}>
+        <TabGroup.Tab
+          label={`${t("Video To Video")}${videoToVideoSceneCount > 0 ? ` (${videoToVideoSceneCount})` : ""}`}
+        >
           {batchRunning ? (
             <AiGeneratingSpinner />
           ) : (
             <VideoToVideoListPanel
-              scenes={(scriptData?.scenes || []).map((s, i) => ({
-                ...s,
-                id: s.id || `scene-${i}`,
-                sceneNumber: i + 1,
-                disabled: s.disabled ?? false,
-                voiceDisable: s.voiceDisable ?? false,
-              }))}
+              scenes={elementScenesForTab(scriptData, ElementScriptTabEnum.videoToVideo)}
               characters={[]}
+              sceneListKey={sceneListKeyForTab(
+                ElementScriptTabEnum.videoToVideo,
+                ELEMENT_SCRIPT_TAB_ENUM
+              )}
             />
           )}
         </TabGroup.Tab>

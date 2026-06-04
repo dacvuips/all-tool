@@ -35,7 +35,7 @@ import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
-import { AddSceneButton, InsertPosition, NewSceneData } from "./add-scene-modal";
+import { InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type EditField =
@@ -260,7 +260,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         /* ── Display mode ── */
         <div className="relative">
           <span
-            className={`text-xs ${textColor} leading-relaxed  whitespace-pre-line`}
+            className={`text-xs leading-relaxed whitespace-pre-line ${textColor}`}
             style={
               expandedField !== field
                 ? {
@@ -303,10 +303,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             <button
               onClick={() => handleCopy(field, text)}
               title="Copy prompt"
-              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-green-600 hover:bg-green-50 transition-all cursor-pointer border-0 bg-transparent"
+              className="flex justify-center items-center w-6 h-6 text-gray-400 bg-transparent rounded-md border-0 transition-all cursor-pointer hover:text-green-600 hover:bg-green-50"
             >
               {copiedField === field ? (
-                <span className="text-green-500 text-xs font-bold">✓</span>
+                <span className="text-xs font-bold text-green-500">✓</span>
               ) : (
                 <RiFileCopyLine className="text-sm" />
               )}
@@ -315,7 +315,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             <button
               onClick={() => openEdit(field)}
               title={t("Chỉnh sửa")}
-              className="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer border-0 bg-transparent"
+              className="flex justify-center items-center w-6 h-6 text-gray-400 bg-transparent rounded-md border-0 transition-all cursor-pointer hover:text-blue-600 hover:bg-blue-50"
             >
               <RiPencilLine className="text-sm" />
             </button>
@@ -340,11 +340,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       }}
     >
       {/* ── Card Header: Scene number + toggle buttons ── */}
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b border-gray-100">
+      <div className="flex justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-100">
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white whitespace-nowrap mr-1">
           {`${t("Cảnh")} #${scene.sceneNumber}`}
         </span>
-        <div className="flex items-center gap-1">
+        <div className="flex gap-1 items-center">
           <Button
             onClick={() => onToggleDisable(scene.id)}
             className={`w-6 h-6 px-2 rounded-md shadow-sm ${
@@ -395,7 +395,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         {/* Product Select Image */}
         {productImages.length > 0 && (
           <div className="relative mt-1.5">
-            <span className="text-xs font-bold text-blue-600 mr-1 uppercase tracking-wide">
+            <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
               {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
             </span>
             <div className="flex flex-wrap gap-1.5 mt-1">
@@ -418,11 +418,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   <Img
                     src={imgUrl}
                     alt={`Product ${idx + 1}`}
-                    className="w-full h-full object-cover"
+                    className="object-cover w-full h-full"
                     lazyload={false}
                   />
                   {selectedProductImages.includes(imgUrl) && (
-                    <div className="absolute inset-0 bg-blue-500/10 pointer-events-none" />
+                    <div className="absolute inset-0 pointer-events-none bg-blue-500/10" />
                   )}
                 </label>
               ))}
@@ -434,7 +434,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             )}
             {selectedProductImages.length > 0 && (
               <div className="mt-2">
-                <span className="text-9 font-semibold text-blue-600 uppercase tracking-wide">
+                <span className="font-semibold tracking-wide text-blue-600 uppercase text-9">
                   {t("Prompt SP")}:
                 </span>
                 <textarea
@@ -469,6 +469,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         }}
         renderImageTab={() => (
           <SceneCardImageTab
+            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
             generatedImage={generatedImage}
             generatingImage={generatingImage}
             imageProgress={imageProgress}
@@ -515,7 +516,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               "imageGenPrompt",
               scene.imageGenPrompt,
               "text-gray-600",
-              <span className="text-xs font-bold text-orange mr-1 uppercase tracking-wide">
+              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
                 IMAGE PROMPT
               </span>
             )}
@@ -527,7 +528,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               "motionPrompt",
               scene.motionPrompt,
               "text-teal-700",
-              <span className="text-xs font-bold text-teal mr-1 uppercase tracking-wide">
+              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
                 [MOTION]:
               </span>
             )}
@@ -535,7 +536,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               "audio",
               scene.audio ?? "",
               "text-purple-700",
-              <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
+              <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [AUDIO]:
               </span>
             )}
@@ -543,7 +544,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
               "dialogue",
               scene.dialogue ?? "",
               "text-green-700 italic",
-              <span className="text-xs font-bold text-green-600 mt-2 mr-1 uppercase tracking-wide inline-block">
+              <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [DIALOGUE]:
               </span>
             )}
@@ -752,20 +753,20 @@ function ImageGalleryDialog({
             placeholder={t("Tìm theo key...")}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full py-2 pr-3 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+            className="py-2 pr-3 w-full text-sm rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
           />
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex justify-center items-center py-16">
             <RiLoader4Line className="text-3xl animate-spin text-primary" />
           </div>
         )}
 
         {/* Empty state */}
         {!loading && filteredImages.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <div className="flex flex-col justify-center items-center py-16 text-gray-400">
             <RiImageFill className="mb-3 text-5xl" />
             <p className="text-base">{t("Chưa có ảnh nào")}</p>
             <p className="mt-1 text-sm">{t("Ảnh được tạo từ AI sẽ xuất hiện ở đây")}</p>
@@ -778,7 +779,7 @@ function ImageGalleryDialog({
             {filteredImages.map((item) => (
               <div
                 key={item.key}
-                className="relative overflow-hidden transition-all border-2 border-transparent rounded-xl cursor-pointer group hover:border-primary hover:shadow-lg"
+                className="overflow-hidden relative rounded-xl border-2 border-transparent transition-all cursor-pointer group hover:border-primary hover:shadow-lg"
                 onClick={() => onSelect(item.data)}
               >
                 <div className="relative aspect-[9/16] bg-gray-50">
@@ -787,12 +788,12 @@ function ImageGalleryDialog({
                     lazyload={false}
                     src={`data:${item.data.mimeType};base64,${item.data.imageBytes}`}
                     alt={item.key}
-                    className="  rounded-md object-cover border    border-dashed border-green-300 shadow-sm"
+                    className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
                     ratio916
                   />
 
                   {/* Hover overlay */}
-                  <div className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 bg-black/30 group-hover:opacity-100 rounded-xl">
+                  <div className="flex absolute inset-0 justify-center items-center rounded-xl opacity-0 transition-opacity bg-black/30 group-hover:opacity-100">
                     <span className="px-3 py-1.5 text-xs font-semibold text-white bg-primary rounded-full shadow-lg">
                       {t("Chọn ảnh")}
                     </span>

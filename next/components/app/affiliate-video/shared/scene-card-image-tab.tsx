@@ -17,6 +17,8 @@ import { SceneMediaError } from "./scene-media-error";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
+  /** Aspect ratio của ảnh */
+  aspectRatio: "16:9" | "9:16";
   /** Dữ liệu ảnh đã generate (null nếu chưa có) */
   generatedImage: GeneratedImageData | null;
   /** Đang trong quá trình generate ảnh */
@@ -53,6 +55,7 @@ export interface SceneCardImageTabProps {
 
 export function SceneCardImageTab({
   generatedImage,
+  aspectRatio,
   generatingImage,
   imageProgress,
   sceneNumber,
@@ -88,6 +91,8 @@ export function SceneCardImageTab({
     // Reset input để có thể chọn lại cùng file
     e.target.value = "";
   };
+
+  const imagePaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
   return (
     <div className={`flex flex-col gap-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
       {/* ── Origin Thumbnail (chỉ hiển thị cho copy-video) ── */}
@@ -124,21 +129,19 @@ export function SceneCardImageTab({
       <div className="flex gap-2 justify-center items-center group">
         {generatedImage ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
-            {/* Ảnh đã generate */}
-            <div className="w-full min-h-20">
-              <Img
-                showImageOnClick
-                lazyload={false}
-                src={
-                  generatedImage.imageBytes
-                    ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
-                    : generatedImage.imageUrl || generatedImage.fifeUrl || ""
-                }
-                alt={`Scene ${sceneNumber}`}
-                className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
-                ratio916
-              />
-            </div>
+            {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
+            <Img
+              showImageOnClick
+              lazyload={false}
+              percent={parseFloat(imagePaddingTop)}
+              src={
+                generatedImage.imageBytes
+                  ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
+                  : generatedImage.imageUrl || generatedImage.fifeUrl || ""
+              }
+              alt={`Scene ${sceneNumber}`}
+              className="w-full rounded-md border border-green-300 border-dashed shadow-sm overflow-hidden"
+            />
             {/* Action buttons bên dưới ảnh */}
             <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
               {/* Tải ảnh */}

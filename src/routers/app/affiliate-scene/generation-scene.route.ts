@@ -5,16 +5,17 @@ import { Context } from "../../../libs/graphql";
 import { AffiliateVideoResponseSchema, StoryModeTypeEnum } from "../constanst";
 import {
   AffiliateVideoFormConfig,
-  callWithKeyRotation,
-  checkRequestLimit,
-  getAvailableGeminiClients,
-  incrementRequestCount,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
+  callWithKeyRotation,
+  checkRequestLimit,
   filterReferenceImages,
+  getAvailableGeminiClients,
+  incrementRequestCount,
   interpolateTemplate,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
+  resolveReferenceImagesForGemini,
 } from "./_shared";
 
 export default [
@@ -125,12 +126,29 @@ CRITICAL RULE: Always keep character and environment identical.
           personifyImageNote +
           productImageNote;
 
+        const personifyImageBase64List = usePersonifyImage
+          ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
+          : [];
+
         const response = await callWithKeyRotation(
           clients,
           (ai) =>
             ai.models.generateContent({
               model: "gemini-3-flash-preview",
-              contents: interpolatedText,
+              contents: [
+                {
+                  role: "user",
+                  parts: [
+                    ...personifyImageBase64List.map((image) => ({
+                      inlineData: {
+                        data: image.imageBytes,
+                        mimeType: image.mimeType,
+                      },
+                    })),
+                    { text: interpolatedText },
+                  ],
+                },
+              ],
               config: {
                 responseMimeType: "application/json",
                 responseSchema: AffiliateVideoResponseSchema,

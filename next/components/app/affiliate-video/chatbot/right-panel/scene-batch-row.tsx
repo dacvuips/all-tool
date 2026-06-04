@@ -465,6 +465,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         }}
         renderImageTab={() => (
           <SceneCardImageTab
+            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
             generatedImage={generatedImage}
             generatingImage={generatingImage}
             imageProgress={imageProgress}

@@ -296,7 +296,7 @@ export function useReviewSceneMedia({
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
       setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
     } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
     }
@@ -305,7 +305,7 @@ export function useReviewSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingVideo && !generatingVideo) {
       setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
     } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
       stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
     }
@@ -314,7 +314,7 @@ export function useReviewSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
     } else if (
       !isBatchGeneratingExtendVideo &&
       !generatingExtendVideo &&
@@ -391,7 +391,7 @@ export function useReviewSceneMedia({
     addBatchGeneratingSceneId(scene.id);
 
     // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
 
     try {
       const imageParams = await buildReviewImageGenerateParams({
@@ -484,7 +484,7 @@ export function useReviewSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -492,7 +492,7 @@ export function useReviewSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 

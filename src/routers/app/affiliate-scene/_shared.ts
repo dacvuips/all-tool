@@ -686,7 +686,7 @@ const PRODUCT_IMAGE_REFERENCE_RULES =
 const OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES =
   "preserve the character's exact appearance, shape, color, material, and identifying features—including the face with the correct proportions of eyes, nose, and mouth—as well as the character's size, 100% identical to the first reference image when generating images. Do NOT transform the character into a personified/anthropomorphized version, and do not arbitrarily add or remove anything. For example, if the first image shows a young man, the second image must also be a young man (a different one is not allowed; it must not be a woman). Do not change the accessories or clothing the man is wearing, and do not change his hairstyle. For example, if the accessory in the first scene is a hat, the second image must also feature a hat, not a shirt";
 
-export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nIMPORTANT: This prompt applies to the 2nd image onward. You MUST ${PRODUCT_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
+export const DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE = `\nIMPORTANT: This prompt applies to the 2nd image onward. You MUST ${PRODUCT_IMAGE_REFERENCE_RULES}.`;
 
 export const DEFAULT_OBJECT_PERSONIFY_IMAGE_REFERENCE_NOTE = `\nIMPORTANT: This prompt applies to the first image. You MUST ${OBJECT_PERSONIFY_IMAGE_REFERENCE_RULES}. ${IMAGE_REFERENCE_ORDER_RULE}`;
 
@@ -775,7 +775,10 @@ export type ReferenceImageInput =
 
 export type UploadableReferenceImage = string | { imageBytes: string; mimeType?: string };
 
-function stripDataUrlBase64(input: string, fallbackMimeType = "image/png"): { imageBytes: string; mimeType: string } {
+function stripDataUrlBase64(
+  input: string,
+  fallbackMimeType = "image/png"
+): { imageBytes: string; mimeType: string } {
   const trimmed = input.trim();
   const base64Marker = ";base64,";
   if (trimmed.startsWith("data:")) {

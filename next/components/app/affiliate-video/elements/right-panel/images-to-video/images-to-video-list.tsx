@@ -6,6 +6,7 @@
 import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../../constants";
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../../shared/batch-list";
+import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { useElementApi } from "../../hook/useElementApi";
 import { useElementContext } from "../../providers/element-provider";
 import { BatchActionBar } from "../batch-action-bar";
@@ -14,9 +15,14 @@ import { SceneRowGroup } from "./scene-batch-row";
 interface ImagesToVideoListPanelProps {
   scenes: CopyVideoScene[];
   characters: CharacterItem[];
+  sceneListKey?: TabSceneListKey;
 }
 
-export function ImagesToVideoListPanel({ scenes, characters }: ImagesToVideoListPanelProps) {
+export function ImagesToVideoListPanel({
+  scenes,
+  characters,
+  sceneListKey = "imagesToVideoScenes",
+}: ImagesToVideoListPanelProps) {
   const {
     scriptData,
     updateScriptData,
@@ -33,17 +39,14 @@ export function ImagesToVideoListPanel({ scenes, characters }: ImagesToVideoList
   const handlePersistScenes = async (updatedScenes: any[]) => {
     try {
       const current = await db.get(CACHE_KEY.lastElementScript);
-      await db.set(CACHE_KEY.lastElementScript, {
-        ...(current ?? scriptData),
-        scenes: updatedScenes as any,
-      });
+      const merged = mergeSceneListIntoData(current ?? scriptData, sceneListKey, updatedScenes);
+      await db.set(CACHE_KEY.lastElementScript, merged);
 
-      // Also update the selected history item in elementHistory
       if (selectedHistoryId) {
         const history: any[] = (await db.get(CACHE_KEY.elementHistory)) || [];
         const updatedHistory = history.map((item: any) =>
           item.id === selectedHistoryId
-            ? { ...item, data: { ...item.data, scenes: updatedScenes as any } }
+            ? { ...item, data: mergeSceneListIntoData(item.data, sceneListKey, updatedScenes) }
             : item
         );
         await db.set(CACHE_KEY.elementHistory, updatedHistory);
@@ -56,11 +59,9 @@ export function ImagesToVideoListPanel({ scenes, characters }: ImagesToVideoList
   /** Persist scenes + sync parent context state */
   const handleSyncScenes = async (updatedScenes: any[]) => {
     try {
-      await db.set(CACHE_KEY.lastElementScript, {
-        ...scriptData,
-        scenes: updatedScenes as any,
-      });
-      updateScriptData?.({ ...scriptData, scenes: updatedScenes as any });
+      const merged = mergeSceneListIntoData(scriptData, sceneListKey, updatedScenes);
+      await db.set(CACHE_KEY.lastElementScript, merged);
+      updateScriptData?.(merged);
     } catch (err) {
       console.error("[elements/ImagesToVideoListPanel] Failed to sync:", err);
     }

@@ -231,7 +231,7 @@ const RankSearchInput = ({
 // ── Main Component ──────────────────────────────────────────────────────
 export const ChatBotPromptRank = ({}: {}) => {
   const { t } = useTranslation();
-  const { getTrendingRank } = useAffiliateVideoApi();
+  const { getChatbotRank } = useAffiliateVideoApi();
   const { customer } = useAuth();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -259,7 +259,7 @@ export const ChatBotPromptRank = ({}: {}) => {
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
-        const result: TrendingsByCategoryResult = await getTrendingRank(
+        const result: TrendingsByCategoryResult = await getChatbotRank(
           pageNum,
           RANK_PER_PAGE,
           search || undefined
@@ -274,7 +274,7 @@ export const ChatBotPromptRank = ({}: {}) => {
         setHasLoaded(true);
       }
     },
-    [getTrendingRank]
+    [getChatbotRank]
   );
 
   // Reset page when search changes
@@ -322,7 +322,7 @@ export const ChatBotPromptRank = ({}: {}) => {
         <div className="flex justify-between items-center">
           <div className="flex gap-2 items-center">
             <RiTrophyFill className="text-lg text-amber-400" />
-            <h3 className="m-0 text-sm font-bold text-gray-800">{t("Bảng xếp hạng Prompt")}</h3>
+            <h3 className="m-0 text-sm font-bold text-gray-800">{t("Bảng xếp hạng ChatBot")}</h3>
           </div>
           <button
             onClick={handleRefresh}

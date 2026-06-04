@@ -43,7 +43,7 @@ import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
-import { AddSceneButton, InsertPosition, NewSceneData } from "../add-scene-modal";
+import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 import { SceneElementVideosRow } from "./scene-element-videos-row";
 
@@ -474,6 +474,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         }}
         renderImageTab={() => (
           <SceneCardImageTab
+            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
             generatedImage={generatedImage}
             generatingImage={generatingImage}
             imageProgress={imageProgress}

@@ -12,8 +12,8 @@
  *
  * @param videoBase64 - Raw base64 string of the source video (no data-URI prefix)
  * @param mimeType    - e.g. "video/mp4"
- * @param timestamp   - Scene timestamp string, e.g. "00:00 - 00:01" or "01:23 - 01:30"
- *                      The hook seeks to the START time of the range.
+ * @param timestamp   - Scene timestamp string, e.g. "00:15 - 00:17" or "01:23 - 01:30"
+ *                      The hook seeks to the END time of the range (e.g. 00:17).
  */
 import { useEffect, useRef, useState } from "react";
 import { CopyVideoScene, DB_NAME } from "../constants";
@@ -49,12 +49,12 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(blob);
 }
 
-/** Extract the start time from a timestamp range like "00:05 - 00:10" */
-function getStartTimeFromRange(timestampRange: string): number {
+/** Extract the end time from a timestamp range like "00:15 - 00:17" */
+function getEndTimeFromRange(timestampRange: string): number {
   if (!timestampRange) return 0;
-  // Split by " - " or "-" to get start part
   const parts = timestampRange.split(/\s*-\s*/);
-  return parseTimestamp(parts[0] || "00:00");
+  const timePart = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+  return parseTimestamp(timePart || "00:00");
 }
 
 export interface VideoThumbnailResult {
@@ -90,7 +90,7 @@ export function useVideoThumbnail(
     abortRef.current = false;
     setLoading(true);
 
-    const seekTime = getStartTimeFromRange(timestamp);
+    const seekTime = getEndTimeFromRange(timestamp);
     const videoSrc = base64ToBlobUrl(videoBase64, mimeType);
 
     const video = document.createElement("video");
@@ -239,7 +239,7 @@ export async function extractAndSaveThumbnails(
   for (const scene of scenes) {
     if (!scene.id || !scene.timestamp) continue;
     try {
-      const seekTime = getStartTimeFromRange(scene.timestamp);
+      const seekTime = getEndTimeFromRange(scene.timestamp);
       const dataUrl = await captureFrameAtTime(video, seekTime);
       await thumbnailDB.set(`${THUMBNAIL_KEY_PREFIX}${scene.id}`, dataUrl);
     } catch (err) {

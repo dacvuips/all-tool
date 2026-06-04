@@ -155,7 +155,8 @@ export function useCopyVideoSceneMedia({
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: copyVideoFormConfig?.objectToPersonify,
     objectToPersonifyCode: copyVideoFormConfig?.objectToPersonifyCode,
-    fallbackImage: scriptData?.objectToPersonifyImage ?? copyVideoFormConfig?.objectToPersonifyImage,
+    fallbackImage:
+      scriptData?.objectToPersonifyImage ?? copyVideoFormConfig?.objectToPersonifyImage,
   });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
@@ -282,7 +283,7 @@ export function useCopyVideoSceneMedia({
   useEffect(() => {
     if (isBatchGenerating && !generatingImage) {
       setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
     } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
     }
@@ -291,7 +292,7 @@ export function useCopyVideoSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingVideo && !generatingVideo) {
       setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
     } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
       stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
     }
@@ -300,7 +301,7 @@ export function useCopyVideoSceneMedia({
   useEffect(() => {
     if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
     } else if (
       !isBatchGeneratingExtendVideo &&
       !generatingExtendVideo &&
@@ -377,7 +378,7 @@ export function useCopyVideoSceneMedia({
     addBatchGeneratingSceneId(scene.id);
 
     // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 120_000);
+    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
 
     try {
       const imageParams = await buildCopyVideoImageGenerateParams({
@@ -470,7 +471,7 @@ export function useCopyVideoSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 300_000);
+      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -478,7 +479,7 @@ export function useCopyVideoSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 300_000);
+      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 

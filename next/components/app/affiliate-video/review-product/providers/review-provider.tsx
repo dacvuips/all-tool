@@ -10,6 +10,7 @@ import {
   SceneErrors,
   useSceneErrorBroadcast,
 } from "../../hook/useSceneErrorBroadcast";
+import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import {
   ReviewAnalysisData,
   ReviewFormConfig,
@@ -263,7 +264,7 @@ export function ReviewProvider(props) {
         scriptDB.get(CACHE_KEY.lastReviewScript),
         scriptDB.get(CACHE_KEY.reviewInput),
       ]);
-      if (cachedScript) setScriptDataRaw(cachedScript);
+      if (cachedScript) setScriptDataRaw(ensureTabSceneLists(cachedScript));
       if (cachedConfig) setReviewFormConfig(normalizeReviewFormConfig(cachedConfig));
     } catch (err) {
       console.warn("[review] Failed to restore from IndexedDB", err);
@@ -286,7 +287,7 @@ export function ReviewProvider(props) {
       const item = sceneHistory.find((h) => h.id === id);
       if (item) {
         setSelectedHistoryId(id);
-        setScriptDataRaw(item.data);
+        setScriptDataRaw(ensureTabSceneLists(item.data));
         scriptDB.set(CACHE_KEY.lastReviewScript, item.data).catch(() => {});
       }
     },
