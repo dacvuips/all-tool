@@ -1,11 +1,16 @@
 /**
- * Pipeline tạo video qua Flow2 (text-to-video / multi-image-to-video).
+ * Pipeline tạo video qua Flow2 (text-to-video / image-to-video).
  *
- *   chuẩn hoá ảnh base64/url → gọi Flow2 create request → poll status → trả videoUri
+ *   chuẩn hoá ảnh base64/url → xác định video_mode → gọi Flow2 create request → poll status → trả videoUri
  */
 import logger from "../../../helpers/logger";
 import { PollVideoResult } from "../../../routers/api-media/handle-video-generation";
-import { generateVideoWithFlow2 } from "../../../routers/api-media/flow2/video-generation";
+import {
+  Flow2VideoMode,
+  generateVideoWithFlow2,
+  resolveFlow2VideoMode,
+} from "../../../routers/api-media/flow2/video-generation";
+import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { MediaJobEmitter } from "../job-emitter";
 
 export type RunFlow2VideoPipelineArgs = {
@@ -14,6 +19,10 @@ export type RunFlow2VideoPipelineArgs = {
   aspectRatio?: "16:9" | "9:16";
   videoQuality?: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
+  /** frame | component — ưu tiên hơn serviceImageType nếu có */
+  videoMode?: Flow2VideoMode | string;
+  /** Fallback map sang video_mode khi client gửi serviceImageType (Element Editor) */
+  serviceImageType?: ServiceImageEnum;
   emitter: MediaJobEmitter;
   logPrefix?: string;
 };
@@ -27,18 +36,32 @@ export async function runFlow2VideoPipeline(
     aspectRatio,
     videoQuality,
     images = [],
+    videoMode,
+    serviceImageType,
     emitter,
     logPrefix = "generation-video",
   } = args;
 
+  const imageCount = images.length;
+  const resolvedVideoMode = resolveFlow2VideoMode({
+    explicitMode: videoMode,
+    serviceImageType,
+    imageCount,
+  });
+
   await emitter.progress(20, "Đang chuẩn hoá ảnh tham chiếu...");
-  logger.info(`[${logPrefix}] Bắt đầu gọi Flow2 tạo video (user ${customerId})`);
+  logger.info(
+    `[${logPrefix}] Bắt đầu gọi Flow2 tạo video (user ${customerId}, video_mode=${
+      resolvedVideoMode ?? "text"
+    }, images=${imageCount})`
+  );
 
   const { requestId, video } = await generateVideoWithFlow2({
     prompt,
     aspectRatio,
     videoQuality,
     imageInputs: images,
+    videoMode: resolvedVideoMode,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },

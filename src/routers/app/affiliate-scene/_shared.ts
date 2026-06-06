@@ -847,6 +847,17 @@ export function buildObjectPersonifyImageScriptNote(images?: ReferenceImageInput
   return `\n\n*** ẢNH THAM CHIẾU NHÂN HOÁ ĐỒ VẬT ***\nCó ảnh tham chiếu nhân hoá đồ vật (base64 hoặc URL). Hãy dùng để mô tả chính xác hơn nhân vật nhân hoá trong visual_prompt.${urlPart}`;
 }
 
+// ── Flow2 video_mode (frame | component) ─────────────────────────────────────
+
+export type { Flow2VideoMode } from "../../api-media/flow2/video-mode";
+export {
+  FLOW2_VIDEO_MODE,
+  normalizeFlow2VideoMode,
+  resolveFlow2VideoMode,
+  mapServiceImageTypeToFlow2VideoMode,
+  assertFlow2VideoImageCount,
+} from "../../api-media/flow2/video-mode";
+
 /**
  * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config
  */

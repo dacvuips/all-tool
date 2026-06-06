@@ -28,6 +28,7 @@ import {
   CopyVideoHistoryItem,
   DB_NAME,
   ElementFormImage,
+  Flow2VideoModeEnum,
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
@@ -1082,7 +1083,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body: {
             prompt,
             images,
-            config: { aspectRatio, generateAudio },
+            config: { aspectRatio, generateAudio, videoMode: Flow2VideoModeEnum.FRAME },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),

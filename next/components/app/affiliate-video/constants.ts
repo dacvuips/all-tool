@@ -235,7 +235,7 @@ export const AFFILIATE_CHAT_KIND = {
   trendingGymPt: "trending-gym-pt",
   trendingGeneral: "trending-general",
 } as const;
-export type AffiliateChatKind = (typeof AFFILIATE_CHAT_KIND)[keyof typeof AFFILIATE_CHAT_KIND];
+export type AffiliateChatKind = typeof AFFILIATE_CHAT_KIND[keyof typeof AFFILIATE_CHAT_KIND];
 export type DB_NAME_TYPE = keyof typeof DB_NAME | string;
 export const DB_VERSION = 1;
 
@@ -438,4 +438,10 @@ export enum ArtStyleMapEnum {
   WATERCOLOR = "Watercolor",
   RENAISSANCE = "Renaissance",
   CRAYON = "Crayon",
+}
+
+export type Flow2VideoMode = "component" | "frame";
+export enum Flow2VideoModeEnum {
+  COMPONENT = "component",
+  FRAME = "frame",
 }

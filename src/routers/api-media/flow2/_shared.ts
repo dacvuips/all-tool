@@ -1,8 +1,5 @@
 import logger from "../../../helpers/logger";
-import {
-  CAPTCHA_GENERATION_MAX_RETRIES,
-  getApiSetting,
-} from "../../helpers/validateApiKey";
+import { CAPTCHA_GENERATION_MAX_RETRIES, getApiSetting } from "../../helpers/validateApiKey";
 
 export type Flow2StatusResponse = Record<string, unknown>;
 
@@ -207,7 +204,6 @@ export async function waitForFlow2Result<T>(params: {
   const pollIntervalMs = params.pollIntervalMs || 2_500;
   const startedAt = Date.now();
 
-  
   while (Date.now() - startedAt < timeoutMs) {
     const statusData = await getFlow2RequestStatus(params.requestId);
     const status = pickStatus(statusData);

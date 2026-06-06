@@ -1,3 +1,4 @@
+import logger from "../../../helpers/logger";
 import {
   createFlow2Request,
   Flow2StatusResponse,
@@ -8,15 +9,37 @@ import {
   waitForFlow2Result,
 } from "./_shared";
 import { Flow2ImageInput, normalizeImageToDataUrl } from "./image-generation";
+import {
+  Flow2VideoMode,
+  resolveFlow2VideoMode,
+} from "./video-mode";
+
+export type { Flow2VideoMode } from "./video-mode";
+export {
+  FLOW2_VIDEO_MODE,
+  normalizeFlow2VideoMode,
+  resolveFlow2VideoMode,
+  mapServiceImageTypeToFlow2VideoMode,
+} from "./video-mode";
 
 export type Flow2VideoQuality = "lite_relaxed" | string;
 
 export type Flow2CreateVideoRequestParams = {
   prompt: string;
-  /** 0–3 ảnh: không có → gen_text_video; có → gen_multi_image_video */
+  /**
+   * Ảnh đầu vào:
+   * - 0 ảnh → `gen_text_video`
+   * - 1–3 ảnh → `gen_image_video` kèm `videoMode`
+   */
   imageInputs?: Flow2ImageInput[];
   aspectRatio?: "16:9" | "9:16";
   videoQuality?: Flow2VideoQuality;
+  /**
+   * Chế độ ảnh trên Flow2 (`video_mode`):
+   * - `frame` — startImage (1 ảnh) hoặc startImage + endImage (2 ảnh)
+   * - `component` — Reference (1–3 ảnh)
+   */
+  videoMode?: Flow2VideoMode;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
 };
 
@@ -36,7 +59,11 @@ function looksLikeVideoUrl(value: string): boolean {
     lower.includes(".webm") ||
     lower.includes(".mov") ||
     lower.includes("/video") ||
-    lower.includes("video")
+    lower.includes("video") ||
+    lower.includes("flow-content.google") ||
+    lower.includes("googleusercontent.com") ||
+    lower.includes("storage.googleapis.com") ||
+    lower.includes("fife")
   );
 }
 
@@ -49,6 +76,7 @@ function collectVideoLikeStrings(value: unknown, out: string[], forceDive = fals
     const trimmed = input.trim();
     if (
       trimmed.startsWith("data:video/") ||
+      isHttpUrl(trimmed) ||
       looksLikeVideoUrl(trimmed) ||
       looksLikeRawBase64Video(trimmed)
     ) {
@@ -77,12 +105,27 @@ function collectVideoLikeStrings(value: unknown, out: string[], forceDive = fals
     "video_uri",
     "videoUrl",
     "video_url",
+    "videoBytes",
+    "video_bytes",
+    "videoBase64",
+    "video_base64",
     "file_url",
     "fileUrl",
     "url",
     "urls",
+    "uri",
     "fifeUrl",
+    "fife_url",
     "downloadUri",
+    "download_uri",
+    "media",
+    "mediaContent",
+    "artifact",
+    "artifacts",
+    "content",
+    "payload",
+    "response",
+    "body",
     "output",
     "outputs",
     "result",
@@ -97,6 +140,9 @@ function collectVideoLikeStrings(value: unknown, out: string[], forceDive = fals
       key.toLowerCase().includes("video") ||
       key.toLowerCase().includes("file") ||
       key.toLowerCase().includes("url") ||
+      key.toLowerCase().includes("uri") ||
+      key.toLowerCase().includes("media") ||
+      key.toLowerCase().includes("fife") ||
       key.toLowerCase().includes("result") ||
       key.toLowerCase().includes("output");
 
@@ -131,7 +177,15 @@ export async function extractFlow2Videos(
   const found: string[] = [];
   collectVideoLikeStrings(statusData, found);
   const deduped = Array.from(new Set(found)).slice(0, 3);
-  if (deduped.length === 0) return [];
+  if (deduped.length === 0) {
+    const preview = JSON.stringify(statusData);
+    logger.warn(
+      `[flow2-video] Không trích được video từ response Flow2: ${preview.slice(0, 2000)}${
+        preview.length > 2000 ? "…" : ""
+      }`
+    );
+    return [];
+  }
   return Promise.all(deduped.map(normalizeResultVideo));
 }
 
@@ -142,6 +196,7 @@ export async function createFlow2VideoRequest(
   const aspect_ratio = params.aspectRatio || "16:9";
   const video_quality = params.videoQuality || DEFAULT_VIDEO_QUALITY;
 
+  // Text-to-video — không cần ảnh, không có video_mode
   if (imageInputs.length === 0) {
     return createFlow2Request({
       type: "gen_text_video",
@@ -153,14 +208,26 @@ export async function createFlow2VideoRequest(
     });
   }
 
+  // Image-to-video — bắt buộc có video_mode (frame | component)
+  const video_mode =
+    params.videoMode ??
+    resolveFlow2VideoMode({
+      imageCount: imageInputs.length,
+    });
+
+  if (!video_mode) {
+    throw new Error("Thiếu video_mode khi tạo video có ảnh tham chiếu");
+  }
+
   const image_base64s = await Promise.all(imageInputs.map(normalizeImageToDataUrl));
 
   return createFlow2Request({
-    type: "gen_multi_image_video",
+    type: "gen_image_video",
     params: {
       prompt: params.prompt,
       aspect_ratio,
       image_base64s,
+      video_mode,
       video_quality,
     },
   });

@@ -7,7 +7,13 @@ import { useMediaGenerationJob } from "../../../../../lib/hooks/useMediaGenerati
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { AffiliateVideoFormConfig, CACHE_KEY, DB_NAME, SceneHistoryItem } from "../../constants";
+import {
+  AffiliateVideoFormConfig,
+  CACHE_KEY,
+  DB_NAME,
+  Flow2VideoModeEnum,
+  SceneHistoryItem,
+} from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import {
@@ -533,7 +539,17 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyle,
         serviceImageType,
       } = params;
-
+      const videoMode = (serviceImageType: ServiceImageEnum) => {
+        switch (serviceImageType) {
+          case ServiceImageEnum.imageOnly:
+            return Flow2VideoModeEnum.FRAME;
+          case ServiceImageEnum.startEnd:
+            return Flow2VideoModeEnum.FRAME;
+          case ServiceImageEnum.startAddEnd:
+            return Flow2VideoModeEnum.COMPONENT;
+        }
+        return Flow2VideoModeEnum.COMPONENT;
+      };
       try {
         onProgress?.(1);
         onStatusMessage?.("Đang gửi yêu cầu tạo video...");
@@ -543,7 +559,14 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           body: {
             prompt,
             images,
-            config: { aspectRatio, generateAudio, artStyleId, artStyle, serviceImageType },
+            config: {
+              aspectRatio,
+              generateAudio,
+              artStyleId,
+              artStyle,
+              serviceImageType,
+              videoMode: videoMode(serviceImageType),
+            },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),

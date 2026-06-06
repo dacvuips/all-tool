@@ -3,6 +3,7 @@
  * Hook chứa tất cả các hàm gọi API cho module affiliate-video.
  */
 import { useCallback } from "react";
+import { useMediaGenerationJob } from "../../../../../lib/hooks/useMediaGenerationJob";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
@@ -12,11 +13,11 @@ import {
   CopyVideoAnalysisData,
   CopyVideoHistoryItem,
   DB_NAME,
+  Flow2VideoModeEnum,
   SceneHistoryItem,
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
-import { useMediaGenerationJob } from "../../../../../lib/hooks/useMediaGenerationJob";
 import { ServiceImageEnum } from "../constants";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -449,7 +450,17 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         artStyle,
         serviceImageType,
       } = params;
-
+      const videoMode = (serviceImageType: ServiceImageEnum) => {
+        switch (serviceImageType) {
+          case ServiceImageEnum.imageOnly:
+            return Flow2VideoModeEnum.FRAME;
+          case ServiceImageEnum.startEnd:
+            return Flow2VideoModeEnum.FRAME;
+          case ServiceImageEnum.startAddEnd:
+            return Flow2VideoModeEnum.COMPONENT;
+        }
+        return Flow2VideoModeEnum.COMPONENT;
+      };
       try {
         onProgress?.(1);
         onStatusMessage?.("Đang gửi yêu cầu tạo video...");
@@ -459,7 +470,14 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           body: {
             prompt,
             images,
-            config: { aspectRatio, generateAudio, artStyleId, artStyle, serviceImageType },
+            config: {
+              aspectRatio,
+              generateAudio,
+              artStyleId,
+              artStyle,
+              serviceImageType,
+              videoMode: videoMode(serviceImageType),
+            },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),

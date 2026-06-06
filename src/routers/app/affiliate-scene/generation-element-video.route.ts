@@ -8,7 +8,7 @@ import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { ServiceImageEnum } from "../constanst";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
-import { checkVideoLimit } from "./_shared";
+import { checkVideoLimit, Flow2VideoMode } from "./_shared";
 
 export default [
   {
@@ -29,6 +29,7 @@ export default [
             artStyleId?: string;
             artStyle?: string;
             serviceImageType?: ServiceImageEnum;
+            videoMode?: Flow2VideoMode;
           };
           _metadata?: Record<string, unknown>;
         };
