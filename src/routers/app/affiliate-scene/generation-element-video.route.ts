@@ -1,5 +1,5 @@
 /**
- * Route POST tạo video trong Element Editor. Trả `{ jobId }`.
+ * Route POST tạo video trong Element Editor (Flow2). Trả `{ jobId }`.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
