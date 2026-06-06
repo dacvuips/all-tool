@@ -392,10 +392,6 @@ export function useCopyVideoSceneMedia({
 
       const result = await copyVideoGenerateImage({
         ...imageParams,
-        onProgress: (pct) => {
-          // Nếu server trả progress thật > giả lập thì dùng progress thật
-          setImageProgress((prev) => Math.max(prev, pct));
-        },
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
@@ -413,8 +409,8 @@ export function useCopyVideoSceneMedia({
       console.error("[handleGenerateImage] Error:", err);
     } finally {
       stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
-      setGeneratingImage(false);
       removeBatchGeneratingSceneId(scene.id);
+      setGeneratingImage(false);
     }
   };
 
@@ -506,8 +502,6 @@ export function useCopyVideoSceneMedia({
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));
-          } else {
-            setVideoProgress((prev) => Math.max(prev, pct));
           }
         },
         onStatusMessage: (msg) => {
@@ -543,8 +537,8 @@ export function useCopyVideoSceneMedia({
         removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
       } else {
         stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
-        setGeneratingVideo(false);
         removeBatchGeneratingVideoSceneId(scene.id);
+        setGeneratingVideo(false);
       }
     }
   };
