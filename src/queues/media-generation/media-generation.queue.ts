@@ -22,16 +22,16 @@ import { BaseQueue } from "../../base/baseQueue";
 import logger from "../../helpers/logger";
 import {
   IMediaGenerationJob,
-  mediaGenerationJobService,
-  MediaGenerationJobModel,
-  MediaGenerationJobStatus,
   isMediaJobTerminal,
+  MediaGenerationJobModel,
+  mediaGenerationJobService,
+  MediaGenerationJobStatus,
 } from "../../libs/dal/mediaGenerationJob";
 import { getMediaJobHandler } from "./handlers";
 import {
   abandonMediaJobNoWatcher,
-  failOrphanedProcessingMediaJob,
   FAILED_JOB_RETENTION_MS,
+  failOrphanedProcessingMediaJob,
   HEARTBEAT_MS,
   LOCK_TTL_MS,
   MediaJobEmitter,
@@ -63,13 +63,17 @@ export const MEDIA_JOB_STALE_PROCESSING_MS = LOCK_TTL_MS * 2 + HEARTBEAT_MS;
 export const MEDIA_JOB_MAX_STALE_RECOVERIES = 5;
 
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
+
+/** Sô lượng worker cho queue */
+const MEDIA_GENERATION_QUEUE_WORKERS = 100;
+
 export type MediaQueueJobPayload = {
   jobId: string;
 };
 
 class MediaGenerationQueue extends BaseQueue {
   constructor() {
-    super("MediaGenerationJob", 3, {
+    super("MediaGenerationJob", MEDIA_GENERATION_QUEUE_WORKERS, {
       removeOnSuccess: true,
       removeOnFailure: false, // giữ failed job để có thể inspect; cleanup retention sẽ dọn
       stallIntervalMs: MEDIA_GENERATION_STALL_INTERVAL_MS,
@@ -96,7 +100,9 @@ class MediaGenerationQueue extends BaseQueue {
     }
 
     this.logger.info(
-      `[MediaGenerationJob] LOADED jobId=${jobId} type=${(jobDoc as any).type} status=${(jobDoc as any).status}`
+      `[MediaGenerationJob] LOADED jobId=${jobId} type=${(jobDoc as any).type} status=${
+        (jobDoc as any).status
+      }`
     );
 
     // Idempotency: nếu đã terminal (CANCELLED / SUCCEEDED / FAILED), không xử lý nữa.
@@ -116,7 +122,9 @@ class MediaGenerationQueue extends BaseQueue {
       const ageMs = Date.now() - createdAt;
       if (ageMs < MEDIA_JOB_WATCH_GRACE_MS) {
         this.logger.info(
-          `[MediaGenerationJob] jobId=${jobId} chưa có watcher (${Math.round(ageMs)}ms), hoãn ${MEDIA_JOB_WATCH_RETRY_DELAY_MS}ms`
+          `[MediaGenerationJob] jobId=${jobId} chưa có watcher (${Math.round(
+            ageMs
+          )}ms), hoãn ${MEDIA_JOB_WATCH_RETRY_DELAY_MS}ms`
         );
         await enqueueMediaGenerationJob(jobId, { delayMs: MEDIA_JOB_WATCH_RETRY_DELAY_MS });
         return;
@@ -146,9 +154,7 @@ class MediaGenerationQueue extends BaseQueue {
       }
 
       const message =
-        err?.response?.data?.message ||
-        err?.message ||
-        "Lỗi không xác định khi tạo media";
+        err?.response?.data?.message || err?.message || "Lỗi không xác định khi tạo media";
       const statusCode = err?.statusCode || err?.status || 500;
       this.logger.error(`MediaGenerationJob ${jobId} thất bại: ${message}`, err);
 
@@ -211,7 +217,9 @@ export async function resumeStaleMediaJobs(): Promise<number> {
     );
     if ((resetResult as any).modifiedCount > 0) {
       logger.info(
-        `[MediaGenerationQueue] Reset lock cho ${(resetResult as any).modifiedCount} job PROCESSING từ phiên trước`
+        `[MediaGenerationQueue] Reset lock cho ${
+          (resetResult as any).modifiedCount
+        } job PROCESSING từ phiên trước`
       );
     }
 
@@ -304,9 +312,7 @@ export async function recoverStaleProcessingMediaJobs(): Promise<{
           `[MediaGenerationQueue] Re-enqueue stale PROCESSING jobId=${jobId} attempts=${attempts}`
         );
       } catch (err: any) {
-        logger.error(
-          `[MediaGenerationQueue] Re-enqueue stale jobId=${jobId} lỗi: ${err?.message}`
-        );
+        logger.error(`[MediaGenerationQueue] Re-enqueue stale jobId=${jobId} lỗi: ${err?.message}`);
       }
     }
 
@@ -375,7 +381,9 @@ export function startMediaJobCleanupSweep(): void {
     mediaJobCleanupSweepTimer.unref();
   }
   logger.info(
-    `[MediaGenerationQueue] Terminal job cleanup sweep every ${MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS / 60000} min`
+    `[MediaGenerationQueue] Terminal job cleanup sweep every ${
+      MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS / 60000
+    } min`
   );
 }
 
@@ -395,7 +403,9 @@ export function startStaleProcessingRecoverySweep(): void {
     mediaJobStaleRecoveryTimer.unref();
   }
   logger.info(
-    `[MediaGenerationQueue] Stale PROCESSING recovery every ${MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS / 1000}s (threshold ${MEDIA_JOB_STALE_PROCESSING_MS / 1000}s)`
+    `[MediaGenerationQueue] Stale PROCESSING recovery every ${
+      MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS / 1000
+    }s (threshold ${MEDIA_JOB_STALE_PROCESSING_MS / 1000}s)`
   );
 }
 
