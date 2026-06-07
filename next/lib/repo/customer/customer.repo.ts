@@ -37,6 +37,7 @@ export interface Customer extends BaseModel {
   rewardPoint?: number; //Điểm thưởng
   bankVerifiedId?: string; // Ngân hàng đã xác thực
   hasReward?: boolean; // Có thưởng
+  hasActivatedTrial?: boolean; // Đã kích hoạt gói dùng thử
   intro?: CustomerIntro; // giới thiệu
   province?: string;
   district?: string;
@@ -67,6 +68,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }
     rewardPoint: Int
     bankVerifiedId:String
+    hasActivatedTrial
     googlePackage {
       subscription: String
       videoCount: Int
@@ -102,6 +104,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     rewardPoint: Int
     bankVerifiedId:String
     hasReward
+    hasActivatedTrial
     province: String
     district: String
     ward: String

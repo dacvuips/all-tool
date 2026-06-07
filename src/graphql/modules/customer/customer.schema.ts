@@ -79,6 +79,8 @@ const schema = gql`
     bankVerifiedId: String
     "Có thưởng"
     hasReward: Boolean
+    "Đã kích hoạt gói dùng thử"
+    hasActivatedTrial: Boolean
     "Giới thiệu"
     intro: CustomerIntro
     "Tỉnh/Thành phố"

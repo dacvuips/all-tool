@@ -138,6 +138,7 @@ export default {
           updateFields["googlePackage.expiryPackageDate"] = new Date(
             now.getTime() + 24 * 60 * 60 * 1000
           );
+          updateFields.hasActivatedTrial = true;
         } else if (subscription) {
           // Các gói khác: hạn 1 tháng
           const expiryDate = new Date(now);

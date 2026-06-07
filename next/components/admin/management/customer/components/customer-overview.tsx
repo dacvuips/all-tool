@@ -133,7 +133,15 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
         </div>
         <div className="flex flex-row">
           <div className="relative w-full border-gray-200 sm:pl-4 sm:border-l">
-            <div className="text-sm font-semibold text-gray-600 pb-0.5">{t("Trạng thái")}</div>
+            <div className="text-sm font-semibold text-gray-600 pb-0.5">{t("Gói dùng thử")}</div>
+            <div
+              className={`font-semibold text-base ${
+                customer.hasActivatedTrial ? "text-amber-700" : "text-gray-400"
+              }`}
+            >
+              {customer.hasActivatedTrial ? t("Đã kích hoạt 1 lần") : t("Chưa kích hoạt")}
+            </div>
+            <div className="text-sm font-semibold text-gray-600 pb-0.5 mt-2">{t("Trạng thái")}</div>
             <div
               className={`uppercase font-semibold text-base text-${
                 CUSTOMER_STATUS_OPTIONS.find((x) => x.value == customer.status)?.color

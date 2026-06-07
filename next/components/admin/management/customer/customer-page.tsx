@@ -124,6 +124,19 @@ export function CustomerPage(props) {
               <CustomerGooglePackageCell googlePackage={item.googlePackage} />
             )}
           />
+          <DataTable.Column
+            center
+            label={t("Gói dùng thử")}
+            render={(item: Customer) =>
+              item.hasActivatedTrial ? (
+                <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800 whitespace-nowrap">
+                  {t("Đã kích hoạt")}
+                </span>
+              ) : (
+                <span className="text-sm text-gray-400">—</span>
+              )
+            }
+          />
 
           <DataTable.Column
             right

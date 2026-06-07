@@ -35,6 +35,7 @@ const customerSchema = new Schema(
     rewardPoint: { type: Number, default: 0 },
     bankVerifiedId: { type: String },
     hasReward: { type: Boolean, default: false },
+    hasActivatedTrial: { type: Boolean, default: false },
     intro: {
       type: {
         order: Boolean,
