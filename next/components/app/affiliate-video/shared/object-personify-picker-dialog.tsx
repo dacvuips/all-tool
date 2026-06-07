@@ -36,7 +36,6 @@ import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
 import { Button, Field, ImageInput, Input, Label, Textarea } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
-import { TabGroup } from "../../../shared/utilities/tab";
 import { ElementFormImage } from "../constants";
 import {
   getElementFormImagePreviewSrc,
@@ -71,6 +70,50 @@ const DEFAULT_PROMPT = `SYS Style Prompt Generator, Please describe the characte
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
+
+type ObjectPersonifyFieldTab = "image" | "prompt";
+
+function ObjectPersonifyFieldTabBar({
+  activeTab,
+  imageLabel,
+  promptLabel,
+  onChange,
+}: {
+  activeTab: ObjectPersonifyFieldTab;
+  imageLabel: string;
+  promptLabel: string;
+  onChange: (tab: ObjectPersonifyFieldTab) => void;
+}) {
+  const tabs: { id: ObjectPersonifyFieldTab; label: string }[] = [
+    { id: "image", label: imageLabel },
+    { id: "prompt", label: promptLabel },
+  ];
+
+  return (
+    <div className="relative w-full overflow-hidden bg-white border-b border-gray-200">
+      <div className="relative flex items-center text-center">
+        {tabs.map((tab) => {
+          const isActive = activeTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              className={`relative flex flex-col flex-1 items-center py-2 text-sm font-semibold whitespace-nowrap cursor-pointer ${
+                isActive ? "text-gray-800" : "text-gray-600 hover:text-gray-800"
+              }`}
+              onClick={() => onChange(tab.id)}
+            >
+              {tab.label}
+              {isActive && (
+                <span className="absolute bottom-0 left-2 right-2 h-1 rounded-t bg-primary" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -350,8 +393,7 @@ export function ObjectPersonifyPickerDialog({
   const [customerObjects, setCustomerObjects] = useState<ObjectToPersonifyPublic[]>([]);
   const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
 
-  // ── Selected display name (for showing in the input) ──
-  const [selectedDisplayName, setSelectedDisplayName] = useState("");
+  const [fieldTab, setFieldTab] = useState<ObjectPersonifyFieldTab>("image");
 
   // ── Load server objects (system) ──
   const loadServerObjects = useCallback(async () => {
@@ -465,34 +507,33 @@ export function ObjectPersonifyPickerDialog({
   // ── Handle server/customer object selection ──
   const handleSelectObject = (item: ObjectToPersonifyPublic) => {
     onImageChange?.(undefined);
-    if (onChange) {
-      onChange(item.name);
-    }
-    if (onCodeChange) {
-      onCodeChange(item.code);
-    }
-    setSelectedDisplayName(item.name);
+    onChange?.(item.name);
+    onCodeChange?.(item.code);
     setIsDialogOpen(false);
   };
 
-  const handlePromptChange = (v: string) => {
-    if (onChange) onChange(v);
-    setSelectedDisplayName(v);
-    if (!v?.trim()) {
-      if (onCodeChange) onCodeChange("");
-    } else {
-      onImageChange?.(undefined);
-    }
-  };
+  const handlePromptChange = useCallback(
+    (v: string) => {
+      onChange?.(v);
+      if (!v?.trim()) {
+        onCodeChange?.("");
+      } else if (imageValue?.imageBytes) {
+        onImageChange?.(undefined);
+      }
+    },
+    [onChange, onCodeChange, onImageChange, imageValue]
+  );
 
-  const handleImageChange = (image: ElementFormImage | undefined) => {
-    onImageChange?.(image);
-    if (image?.imageBytes) {
-      if (onChange) onChange("");
-      if (onCodeChange) onCodeChange("");
-      setSelectedDisplayName("");
-    }
-  };
+  const handleImageChange = useCallback(
+    (image: ElementFormImage | undefined) => {
+      onImageChange?.(image);
+      if (image?.imageBytes) {
+        onChange?.("");
+        onCodeChange?.("");
+      }
+    },
+    [onChange, onCodeChange, onImageChange]
+  );
 
   // ── Handle delete customer object ──
   const handleDeleteCustomerObject = async (e: React.MouseEvent, item: ObjectToPersonifyPublic) => {
@@ -508,8 +549,7 @@ export function ObjectPersonifyPickerDialog({
         setCustomerObjects((prev) => prev.filter((o) => o.id !== item.id));
         // If currently selected, clear selection
         if (value === item.code) {
-          if (onChange) onChange("");
-          setSelectedDisplayName("");
+          onChange?.("");
         }
       }
     } catch {
@@ -540,14 +580,8 @@ export function ObjectPersonifyPickerDialog({
       });
 
       if (result) {
-        // Auto-select the new custom object
-        if (onChange) {
-          onChange(result.name);
-        }
-        if (onCodeChange) {
-          onCodeChange(result.code);
-        }
-        setSelectedDisplayName(result.name);
+        onChange?.(result.name);
+        onCodeChange?.(result.code);
 
         // Add to local customer objects list
         setCustomerObjects((prev) => [result, ...prev]);
@@ -661,7 +695,6 @@ export function ObjectPersonifyPickerDialog({
       <div className="p-2 rounded-xl border border-gray-200">
         <Field
           noError={noError}
-          name={name}
           label={
             <span className="flex items-center gap-1.5 justify-between w-full">
               {label || t("Nhân vật")}
@@ -676,29 +709,33 @@ export function ObjectPersonifyPickerDialog({
             </span>
           }
         >
-          <TabGroup
-            name="object-personify-field"
-            titleClassName="text-sm font-semibold whitespace-nowrap py-2"
-            bodyClassName="pt-2"
-          >
-            <TabGroup.Tab label={t("Ảnh")}>
-              <ObjectPersonifyImageUpload
-                imageValue={imageValue}
-                onImageChange={handleImageChange}
-                readOnly={readOnly}
-              />
-            </TabGroup.Tab>
-            <TabGroup.Tab label={t("Prompt")}>
-              <Input
-                id="object-to-personify-input"
-                className="border-gray-200"
-                placeholder={`${t("VD")}: ${t("Một quả chuối tươi")}`}
-                value={selectedDisplayName || value || ""}
-                readOnly={readOnly}
-                onChange={handlePromptChange}
-              />
-            </TabGroup.Tab>
-          </TabGroup>
+          <div className="w-full">
+            <ObjectPersonifyFieldTabBar
+              activeTab={fieldTab}
+              imageLabel={t("Ảnh")}
+              promptLabel={t("Prompt")}
+              onChange={setFieldTab}
+            />
+            <div className="pt-2">
+              {fieldTab === "image" ? (
+                <ObjectPersonifyImageUpload
+                  imageValue={imageValue}
+                  onImageChange={handleImageChange}
+                  readOnly={readOnly}
+                />
+              ) : (
+                <Textarea
+                  name={name}
+                  id="object-to-personify-input"
+                  className="border-gray-200"
+                  placeholder={`${t("VD")}: ${t("Một quả chuối tươi")}`}
+                  value={value || ""}
+                  readOnly={readOnly}
+                  onChange={handlePromptChange}
+                />
+              )}
+            </div>
+          </div>
         </Field>
       </div>
       {/* ── Dialog ── */}
