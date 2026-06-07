@@ -52,11 +52,9 @@ export class ResetGooglePackageJob {
       // Lấy thông số gói Free từ settings
       const freeDefaults = await loadFreePackageDefaults();
 
-      // Lấy tất cả customer có subscription KHÔNG phải Trial (bao gồm cả Free)
+      // Lấy tất cả customer có gói Google (bao gồm Trial)
       const customers = await CustomerModel.find({
-        "googlePackage.subscription": {
-          $nin: [SubscriptionPlanEnum.TRIAL],
-        },
+        "googlePackage.subscription": { $exists: true },
       }).lean();
 
       logger.info(
@@ -70,8 +68,14 @@ export class ResetGooglePackageJob {
       for (const customer of customers) {
         try {
           const pkg = customer.googlePackage || {};
+          const isTrial = pkg.subscription === SubscriptionPlanEnum.TRIAL;
           const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
           const expiryDate = pkg.expiryPackageDate ? new Date(pkg.expiryPackageDate) : null;
+
+          // Trial còn hạn: không reset count hàng ngày, chờ hết hạn mới downgrade
+          if (isTrial && expiryDate && expiryDate > now) {
+            continue;
+          }
 
           if (isFree || (expiryDate && expiryDate > now)) {
             // Gói Free hoặc gói còn hạn → chỉ reset count về 0
