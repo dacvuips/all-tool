@@ -250,6 +250,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
             value={videoConfig?.productImages}
             onChange={(v) => patchConfig && patchConfig({ productImages: v })}
             readOnly={!customer}
+            limit={5}
           />
         </Field>
 
