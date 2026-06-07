@@ -6,6 +6,7 @@
  */
 import { useTranslation } from "react-i18next";
 import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
+import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
@@ -14,12 +15,16 @@ import { AffiliateSubmit } from "./affiliate-submit";
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
+  const toast = useToast();
   const { handleSubmit, defaultVideoConfig, videoConfig, trendingModeType, patchConfig } =
     useAffiliateVideoContext();
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
   const wrappedSubmit = (data: any, promptText?: string) => {
-    // Merge objectToPersonifyCode from provider state – react-hook-form doesn't track this field
+    if (!videoConfig?.promptId || !videoConfig?.tipContent?.trim()) {
+      toast.error(t("Vui lòng chọn trending prompt tương ứng"));
+      return;
+    }
     const mergedData = {
       ...data,
       aspectRatio: videoConfig?.aspectRatio ?? data.aspectRatio,

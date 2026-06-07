@@ -74,6 +74,17 @@ export interface TrendingVideoFormConfig extends VideoFormBase {
   promptName?: string;
 }
 
+/** Xóa lựa chọn prompt/chatbot và nội dung prompt – không giữ qua reload hoặc sau khi tạo cảnh */
+export function withoutPromptSelection(config: TrendingVideoFormConfig): TrendingVideoFormConfig {
+  const {
+    promptId: _promptId,
+    promptName: _promptName,
+    tipContent: _tipContent,
+    ...rest
+  } = config;
+  return { ...rest, tipContent: "" };
+}
+
 export interface CopyVideoFormConfig extends VideoFormBase {
   sourceVideo?: { base64: string; mimeType: string };
   productImages?: string[];

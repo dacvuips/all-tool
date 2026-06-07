@@ -13,6 +13,7 @@ import {
   TrendingModeTypeEnum,
   TrendingScriptData,
   TrendingVideoFormConfig,
+  withoutPromptSelection,
 } from "../../constants";
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
@@ -322,9 +323,10 @@ export function AffiliateVideoProvider(props: {
   const restoreConfigFromDB = async () => {
     try {
       const cachedConfig = await scriptDB.get(CACHE_KEY.trendingInput);
-      console.log(cachedConfig);
       if (cachedConfig) {
-        setAffiliateVideoFormConfig(cachedConfig);
+        const restored = withoutPromptSelection(cachedConfig);
+        setAffiliateVideoFormConfig(restored);
+        persistConfig(restored);
       }
     } catch (err) {
       console.warn("[affiliate-video] Failed to restore config from IndexedDB", err);
@@ -343,8 +345,12 @@ export function AffiliateVideoProvider(props: {
 
       if (scriptResult) {
         setTrendingScriptData(scriptResult);
-        // Refresh history to include the new entry
         refreshTrendingHistory();
+        setAffiliateVideoFormConfig((prev) => {
+          const next = withoutPromptSelection(prev);
+          persistConfig(next);
+          return next;
+        });
       }
       setBatchRunning(false);
       return scriptResult;
