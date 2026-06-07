@@ -91,7 +91,12 @@ export type IMediaGenerationJob = TimestampEntity & {
   progress: number;
   /** Thông điệp tiến độ hiện tại (tiếng Việt, đã dịch nếu có) */
   message?: string;
-  /** Input payload — worker dùng để chạy lại; có thể chứa prompt, urls, base64 nhỏ */
+  /**
+   * Key Redis chứa request payload (ưu tiên).
+   * Worker đọc qua `loadMediaJobPayload()` — TTL ~1 giờ.
+   */
+  dataRedisKey?: string | null;
+  /** @deprecated Dùng `dataRedisKey` + Redis. Giữ cho job cũ chưa migrate. */
   requestPayload?: Record<string, unknown>;
   /** Kết quả cuối khi `status = SUCCEEDED` */
   resultData?: Record<string, unknown>;

@@ -6,6 +6,7 @@ import { incrementVideoCount } from "../../../routers/app/affiliate-scene/_share
 import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { Flow2VideoMode } from "../../../routers/api-media/flow2/video-generation";
 import { IMediaGenerationJob, MediaGenerationVideoResult } from "../../../libs/dal/mediaGenerationJob";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
 
@@ -27,7 +28,7 @@ export async function handleGenerationVideo(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationVideoResult> {
-  const payload = (job.requestPayload || {}) as GenerationVideoPayload;
+  const payload = await loadMediaJobPayload<GenerationVideoPayload>(job);
 
   await emitter.progress(10, "Đang chuẩn bị tạo video...");
 

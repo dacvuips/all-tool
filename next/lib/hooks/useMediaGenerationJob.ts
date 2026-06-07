@@ -1,22 +1,18 @@
 /**
- * Hook dùng chung cho mọi luồng tạo media (ảnh/video) qua backend Job mới.
+ * Hook dùng chung cho mọi luồng tạo media (ảnh/video) qua backend Job.
  *
- *   1. `POST` API enqueue → backend trả `{ jobId }`.
- *      Server đã gọi `markJobWatched` trước enqueue → worker thường pickup ngay (không chờ WS).
- *   2. Client `await touchWatch(jobId)` ngay sau POST → gia hạn TTL Redis (job video dài > 60s).
- *   3. Mở GraphQL subscription `mediaGenerationJobChanged(jobId)` (push realtime).
- *   4. Query một lần `mediaGenerationJob(id)` — xử lý race job xong trước khi subscription kết nối.
- *   5. Fallback poll mỗi 8s nếu socket im lặng.
- *   6. Heartbeat `touchWatch` mỗi 20s — giữ watcher sống suốt pipeline (bắt buộc cho video dài).
- *   7. Resolve khi `SUCCEEDED`; reject khi `FAILED` / `CANCELLED`.
+ *   1. `POST` API enqueue → backend kiểm tra giới hạn luồng, lưu Redis, tạo job → trả `{ jobId }`.
+ *   2. Mở GraphQL subscription `mediaGenerationJobChanged(jobId)` (push realtime).
+ *   3. Query một lần `mediaGenerationJob(id)` — xử lý race job xong trước khi subscription kết nối.
+ *   4. Fallback poll mỗi 8s nếu socket im lặng.
+ *   5. Resolve khi `SUCCEEDED`; reject khi `FAILED` / `CANCELLED`.
  *
  * Edge cases đã xử lý:
  *   - Component unmount giữa chừng — cleanup mọi subscription/timer/promise (không leak).
- *   - Mất kết nối WS — apollo tự reconnect; poll fallback + touchWatch heartbeat vẫn giữ job.
+ *   - Mất kết nối WS — apollo tự reconnect; poll fallback vẫn theo dõi job.
  *   - Job xong trước khi subscribe — query initial sẽ phát hiện và resolve.
  *   - User huỷ — gọi `cancel(jobId)` → reject Promise + worker dừng emit.
  *   - Server restart — bee-queue stalled detector + worker idempotent; client chỉ cần đợi.
- *   - touchWatch lần đầu fail — vẫn theo dõi; server primed watch + subscription backup.
  *
  * Cách dùng tối thiểu:
  *
@@ -47,7 +43,7 @@ export type MediaGenerationRunResult<T> = {
 export type MediaGenerationRunOptions<TBody = any> = {
   /** REST URL POST để enqueue (vd `/api/app/generation-element-image/`) */
   url: string;
-  /** Body POST — backend sẽ lưu thành `requestPayload` */
+  /** Body POST — backend lưu lên Redis rồi tạo job */
   body: TBody;
   /** Headers tuỳ chỉnh (nếu cần) */
   headers?: Record<string, string>;
@@ -87,11 +83,6 @@ export class MediaGenerationJobError extends Error {
 }
 
 const DEFAULT_POLL_INTERVAL = 8000;
-/**
- * Gia hạn Redis job watcher định kỳ (ms).
- * Phải nhỏ hơn đáng kể so với TTL server (MEDIA_JOB_WATCH_TTL_SEC = 60s) để job video dài không bị cắt.
- */
-const WATCH_HEARTBEAT_MS = 20_000;
 /** Số lần poll liên tiếp không thấy job trên server → dừng theo dõi */
 const JOB_MISSING_POLL_THRESHOLD = 2;
 
@@ -178,19 +169,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         );
       }
 
-      // ── 2. Gia hạn watcher ngay sau enqueue ───────────────────────────────
-      // Server đã markJobWatched trước enqueue; await touchWatch ở đây refresh TTL sớm
-      // (tránh key hết 60s nếu WS/subscription chậm) mà không chặn worker start.
-      try {
-        await MediaGenerationJobService.touchWatch(jobId);
-      } catch (err: any) {
-        console.warn(
-          "[useMediaGenerationJob] touchWatch lần đầu lỗi (job vẫn có thể chạy nhờ server primed watch):",
-          err?.message
-        );
-      }
-
-      // ── 3. Theo dõi job qua subscription + poll fallback ──────────────────
+      // ── 2. Theo dõi job qua subscription + poll fallback ──────────────────
       const updateGuard = buildProgressGuard(opts.onProgress, opts.onStatusMessage);
 
       return new Promise<MediaGenerationRunResult<TResult>>((resolve, reject) => {
@@ -198,7 +177,6 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         let missingPollCount = 0;
         let subscription: { unsubscribe: () => void } | null = null;
         let pollTimer: ReturnType<typeof setInterval> | null = null;
-        let watchHeartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
         /** Dọn dẹp mọi resource — gọi 1 lần */
         const cleanup = () => {
@@ -214,16 +192,12 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
             clearInterval(pollTimer);
             pollTimer = null;
           }
-          if (watchHeartbeatTimer) {
-            clearInterval(watchHeartbeatTimer);
-            watchHeartbeatTimer = null;
-          }
           const idx = activeHandlesRef.current.indexOf(handle);
           if (idx >= 0) activeHandlesRef.current.splice(idx, 1);
         };
         handle.cleanup = cleanup;
 
-        /** Job đã bị xóa khỏi Mongo (abandon / cleanup) — dừng poll vô hạn */
+        /** Job đã bị xóa khỏi Mongo — dừng poll vô hạn */
         const handleMissingJob = () => {
           if (settled) return;
           missingPollCount += 1;
@@ -232,7 +206,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           cleanup();
           reject(
             new MediaGenerationJobError(
-              "Job không còn trên server (có thể đã huỷ hoặc mất kết nối theo dõi)",
+              "Job không còn trên server (có thể đã huỷ hoặc hết hạn)",
               "JOB_NOT_FOUND",
               jobId
             )
@@ -287,13 +261,12 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           }
         };
 
-        // 3a. Subscribe realtime (server markJobWatched lại khi WS connect — backup)
+        // 2a. Subscribe realtime
         try {
           const obs = MediaGenerationJobService.subscribeJobChanged<TResult>(jobId);
           subscription = obs.subscribe({
             next: (job) => handleJobSnapshot(job),
             error: (err: any) => {
-              // Lỗi subscription (WS disconnect, ...) — không reject; poll sẽ kéo tiếp
               console.warn("[useMediaGenerationJob] subscription error:", err?.message);
             },
           });
@@ -301,7 +274,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           console.warn("[useMediaGenerationJob] không subscribe được:", err?.message);
         }
 
-        // 3b. Query initial — xử lý race "job xong trước khi subscribe"
+        // 2b. Query initial — xử lý race "job xong trước khi subscribe"
         MediaGenerationJobService.getJob<TResult>(jobId)
           .then((job) => handleJobSnapshot(job))
           .catch((err) => {
@@ -309,7 +282,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
             handleMissingJob();
           });
 
-        // 3c. Poll fallback (nếu enable)
+        // 2c. Poll fallback (nếu enable)
         if (pollIntervalMs > 0) {
           pollTimer = setInterval(() => {
             if (settled) return;
@@ -318,12 +291,6 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
               .catch(() => handleMissingJob());
           }, pollIntervalMs);
         }
-
-        // 3d. Heartbeat job watcher — bắt buộc cho job dài; refresh TTL trước khi 60s hết hạn
-        watchHeartbeatTimer = setInterval(() => {
-          if (settled) return;
-          MediaGenerationJobService.touchWatch(jobId).catch(() => undefined);
-        }, WATCH_HEARTBEAT_MS);
       });
     },
     [buildProgressGuard]

@@ -14,10 +14,11 @@ import {
   ReferenceImageInput,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
 
-/** Payload mong đợi trong `job.requestPayload` */
+/** Payload mong đợi trong Redis (`dataRedisKey`) */
 export type GenerationImagePayload = {
   prompt: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
@@ -40,7 +41,7 @@ export async function handleGenerationImage(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationImageResult> {
-  const payload = (job.requestPayload || {}) as GenerationImagePayload;
+  const payload = await loadMediaJobPayload<GenerationImagePayload>(job);
 
   await emitter.progress(10, "Đang chuẩn bị tạo ảnh...");
 

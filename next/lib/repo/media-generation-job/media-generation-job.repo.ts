@@ -86,17 +86,6 @@ class MediaGenerationJobRepository extends GraphRepository {
     return res.data?.g0 ?? null;
   }
 
-  /** Gia hạn job watcher — gọi ngay sau enqueue + định kỳ (video dài). TTL server 60s. */
-  async touchWatch(id: string): Promise<boolean> {
-    const res = await this.mutate({
-      mutation: `touchMediaGenerationJobWatch(id: $id)`,
-      variablesParams: "($id: String!)",
-      options: { variables: { id }, errorPolicy: "all" },
-      clearStore: false,
-    });
-    return Boolean(res.data?.g0);
-  }
-
   /**
    * Subscribe events của 1 job. Backend filter theo (jobId, customerId).
    *

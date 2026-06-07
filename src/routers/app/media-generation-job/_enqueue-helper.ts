@@ -1,16 +1,14 @@
 /**
- * Helper dùng chung cho mọi route POST tạo media: validate → tạo `MediaGenerationJob` doc → enqueue.
+ * Helper dùng chung cho mọi route POST tạo media.
  *
- * Thiết kế:
- *   - Route gọi `createAndEnqueueMediaJob({ ... })` rồi trả `{ jobId, status }` cho client.
- *   - **Start nhanh:** trước khi enqueue, ghi Redis `mgj:watch:{jobId}` (markJobWatched) để worker
- *     không phải chờ client subscribe/touchWatch — tránh delay 5s×N do race POST → WS.
- *   - Client vẫn bắt buộc touchWatch định kỳ cho job dài (video): TTL Redis hết hạn nếu đóng tab.
- *   - Nếu enqueue Redis fail, doc Mongo *vẫn* tồn tại nhưng worker không pickup → caller sẽ
- *     biết qua exception và có thể trả 503 cho user.
- *   - `metadata` là dictionary tự do từ client (sceneId, clientRequestId, ...) — không dùng cho
- *     logic backend, chỉ phản hồi lại qua subscription/query để client map về UI.
+ * Luồng mới:
+ *   1. Kiểm tra giới hạn luồng (imageStreamCount / videoStreamCount theo customer).
+ *   2. Sinh jobId → ghi payload lên Redis (TTL 1 giờ).
+ *   3. Tạo doc Mongo (chỉ metadata + dataRedisKey, không lưu payload).
+ *   4. Enqueue bee-queue → worker đọc Redis khi chạy.
+ *   5. Trả `{ jobId, status }` cho client subscribe/poll.
  */
+import mongoose from "mongoose";
 import logger from "../../../helpers/logger";
 import {
   IMediaGenerationJob,
@@ -18,12 +16,16 @@ import {
   MediaGenerationJobStatus,
   MediaGenerationJobType,
 } from "../../../libs/dal/mediaGenerationJob";
+import { assertMediaStreamAvailable } from "../../../queues/media-generation/media-job-concurrency";
+import {
+  buildMediaJobDataKey,
+  saveMediaJobPayload,
+} from "../../../queues/media-generation/media-job-data";
 import { enqueueMediaGenerationJob } from "../../../queues/media-generation/media-generation.queue";
 import {
   FAILED_JOB_RETENTION_MS,
   scheduleTerminalMediaJobDeletion,
 } from "../../../queues/media-generation/job-emitter";
-import { markJobWatched } from "../../../queues/media-generation/media-job-watch";
 
 export type CreateAndEnqueueArgs = {
   customerId: string;
@@ -40,40 +42,45 @@ export type CreateAndEnqueueResult = {
 export async function createAndEnqueueMediaJob(
   args: CreateAndEnqueueArgs
 ): Promise<CreateAndEnqueueResult> {
-  // 1. Tạo doc Mongo ở trạng thái QUEUED
+  // 1. Kiểm tra số job đang chạy/chờ so với giới hạn luồng của customer
+  await assertMediaStreamAvailable(args.customerId, args.type);
+
+  // 2. Sinh jobId trước để dùng làm key Redis
+  const jobId = new mongoose.Types.ObjectId().toString();
+  const dataRedisKey = buildMediaJobDataKey(jobId);
+
+  // 3. Ghi payload lên Redis (bắt buộc trước khi tạo job Mongo)
+  await saveMediaJobPayload(jobId, args.requestPayload);
+
+  // 4. Tạo doc Mongo — không lưu requestPayload
   const doc = (await mediaGenerationJobService.create({
+    _id: jobId,
     customerId: args.customerId,
     type: args.type,
     status: MediaGenerationJobStatus.QUEUED,
     progress: 0,
     message: "Đang chờ trong hàng đợi...",
-    requestPayload: args.requestPayload,
+    dataRedisKey,
     metadata: args.metadata || {},
     attempts: 0,
   } as Partial<IMediaGenerationJob>)) as unknown as IMediaGenerationJob;
 
-  const jobId = String((doc as any)._id);
+  const createdJobId = String((doc as any)._id);
 
   try {
-    // 2. Primed job watcher TRƯỚC enqueue — worker pickup lần đầu đã thấy key Redis.
-    //    Best-effort: lỗi Redis vẫn enqueue; worker retry sau MEDIA_JOB_WATCH_RETRY_DELAY_MS (1.5s).
-    //    TTL được gia hạn bởi client touchWatch — job dài không bị cắt sau 60s.
-    await markJobWatched(jobId, args.customerId);
-
-    // 3. Enqueue vào bee-queue (delay 0 — chạy ngay khi có worker slot)
-    await enqueueMediaGenerationJob(jobId);
+    // 5. Enqueue vào bee-queue
+    await enqueueMediaGenerationJob(createdJobId);
   } catch (err: any) {
-    // 4. Nếu enqueue fail → đánh dấu FAILED ngay để FE không subscribe vô tận
-    logger.error(`[createAndEnqueueMediaJob] enqueue ${jobId} lỗi: ${err?.message}`);
+    logger.error(`[createAndEnqueueMediaJob] enqueue ${createdJobId} lỗi: ${err?.message}`);
     const completedAt = new Date();
-    await mediaGenerationJobService.updateOne(jobId, {
+    await mediaGenerationJobService.updateOne(createdJobId, {
       status: MediaGenerationJobStatus.FAILED,
       errorMessage: "Không thể đưa job vào hàng đợi. Vui lòng thử lại sau.",
       errorCode: 503,
       completedAt,
     } as any);
     scheduleTerminalMediaJobDeletion(
-      jobId,
+      createdJobId,
       MediaGenerationJobStatus.FAILED,
       completedAt,
       FAILED_JOB_RETENTION_MS
@@ -84,7 +91,7 @@ export async function createAndEnqueueMediaJob(
   }
 
   return {
-    jobId,
+    jobId: createdJobId,
     status: MediaGenerationJobStatus.QUEUED,
   };
 }

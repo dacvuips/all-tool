@@ -7,6 +7,7 @@ import {
   resolveArtStylePrompt,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
 
@@ -27,7 +28,7 @@ export async function handleGenerationElementImage(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationImageResult> {
-  const payload = (job.requestPayload || {}) as GenerationElementImagePayload;
+  const payload = await loadMediaJobPayload<GenerationElementImagePayload>(job);
 
   await emitter.progress(10, "Đang chuẩn bị tạo ảnh...");
 

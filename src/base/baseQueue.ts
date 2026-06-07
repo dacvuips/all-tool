@@ -248,8 +248,12 @@ export abstract class BaseQueue extends EventEmitter {
               if (waiting == 0) {
                 const jobs = await this._queues[id].getJobs("active", { start: 0, size: 1 });
                 if (jobs.length == 0) {
-                  this.logger.info("detroy error queue");
+                  // Health báo active nhưng không có job thật → recreate worker
+                  this.logger.warn(
+                    `[${this.name}:${id}] Phantom active count — recreate queue worker`
+                  );
                   this._queues[id].destroy();
+                  this.applyProcessToQueue(id);
                 }
               }
               this.logger.info(`Processing [${active}/${waiting}]`);

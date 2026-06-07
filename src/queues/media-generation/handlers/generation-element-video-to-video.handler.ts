@@ -9,6 +9,7 @@ import {
   resolveArtStylePrompt,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationVideoResult } from "../../../libs/dal/mediaGenerationJob";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runVideoPipeline } from "./_video-pipeline";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
@@ -33,7 +34,7 @@ export async function handleGenerationElementVideoToVideo(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationVideoResult> {
-  const payload = (job.requestPayload || {}) as GenerationElementVideoToVideoPayload;
+  const payload = await loadMediaJobPayload<GenerationElementVideoToVideoPayload>(job);
 
   if (!payload?.video?.videoBytes) {
     const err: any = new Error("Thiếu video tham chiếu");

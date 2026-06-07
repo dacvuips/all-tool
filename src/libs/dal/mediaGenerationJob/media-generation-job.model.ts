@@ -35,6 +35,9 @@ const mediaGenerationJobSchema = new Schema(
     },
     progress: { type: Number, default: 0, min: 0, max: 100 },
     message: { type: String },
+    /** Key Redis `mgj:data:{jobId}` — payload request không lưu Mongo */
+    dataRedisKey: { type: String },
+    /** Giữ cho job cũ; job mới không ghi field này */
     requestPayload: { type: Schema.Types.Mixed },
     resultData: { type: Schema.Types.Mixed },
     errorMessage: { type: String },

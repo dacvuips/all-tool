@@ -13,6 +13,7 @@ import {
   resolveArtStylePrompt,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
 
@@ -34,7 +35,7 @@ export async function handleGenerationReviewVideo(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationVideoResult> {
-  const payload = (job.requestPayload || {}) as GenerationReviewVideoPayload;
+  const payload = await loadMediaJobPayload<GenerationReviewVideoPayload>(job);
 
   await emitter.progress(10, "Đang chuẩn bị tạo video...");
 

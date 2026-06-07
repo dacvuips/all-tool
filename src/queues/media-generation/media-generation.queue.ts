@@ -9,11 +9,11 @@
  *   4. Nhận `resultData` → emitter.succeed(...).
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
- *   7. **Job watcher**: worker chạy khi Redis key `mgj:watch:{jobId}` còn (primed lúc enqueue + touchWatch client).
- *      Nếu chưa có key trong grace 30s → re-enqueue delay 1.5s (fallback race hiếm).
- *   8. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 15 phút kể từ `completedAt`.
+ *   7. **Giới hạn luồng**: route kiểm tra số job QUEUED/PROCESSING theo `imageStreamCount`/`videoStreamCount`.
+ *   8. **Payload Redis**: worker đọc `dataRedisKey` (TTL 1 giờ) thay vì `requestPayload` Mongo.
+ *   9. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 15 phút kể từ `completedAt`.
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
- *   9. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
+ *   10. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
  *      sau 5 lần claim vẫn treo → FAILED (504).
  *
  * Không bật **auto-retry**: API generation tốn quota, retry ngầm dễ ngốn credit. User retry thủ công.
@@ -27,10 +27,10 @@ import {
   MediaGenerationJobModel,
   mediaGenerationJobService,
   MediaGenerationJobStatus,
+  MediaGenerationJobType,
 } from "../../libs/dal/mediaGenerationJob";
 import { getMediaJobHandler } from "./handlers";
 import {
-  abandonMediaJobNoWatcher,
   FAILED_JOB_RETENTION_MS,
   failOrphanedProcessingMediaJob,
   HEARTBEAT_MS,
@@ -39,12 +39,7 @@ import {
   SUCCESS_JOB_RETENTION_MS,
 } from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
-import {
-  isJobWatched,
-  markJobWatched,
-  MEDIA_JOB_WATCH_GRACE_MS,
-  MEDIA_JOB_WATCH_RETRY_DELAY_MS,
-} from "./media-job-watch";
+import { assertMediaStreamAvailable } from "./media-job-concurrency";
 
 /** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
 const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
@@ -80,7 +75,7 @@ class MediaGenerationQueue extends BaseQueue {
       removeOnFailure: false, // giữ failed job để có thể inspect; cleanup retention sẽ dọn
       stallIntervalMs: MEDIA_GENERATION_STALL_INTERVAL_MS,
       jobRetentionMs: MEDIA_GENERATION_JOB_RETENTION_MS,
-      activateDelayedJobs: true, // hoãn pickup khi chưa có job watcher
+      activateDelayedJobs: true,
     });
   }
 
@@ -113,29 +108,6 @@ class MediaGenerationQueue extends BaseQueue {
       this.logger.info(
         `MediaGenerationJob ${jobId} đã ở trạng thái terminal (${(jobDoc as any).status}), bỏ qua.`
       );
-      return;
-    }
-
-    // Chỉ chạy khi client còn subscribe / heartbeat job (job watcher).
-    // Sau server-side markJobWatched lúc enqueue, nhánh này hiếm — chủ yếu fallback race Redis.
-    if (!(await isJobWatched(jobId))) {
-      const createdAt = (jobDoc as any).createdAt
-        ? new Date((jobDoc as any).createdAt).getTime()
-        : Date.now();
-      const ageMs = Date.now() - createdAt;
-      if (ageMs < MEDIA_JOB_WATCH_GRACE_MS) {
-        this.logger.info(
-          `[MediaGenerationJob] jobId=${jobId} chưa có watcher (${Math.round(
-            ageMs
-          )}ms), hoãn ${MEDIA_JOB_WATCH_RETRY_DELAY_MS}ms`
-        );
-        await enqueueMediaGenerationJob(jobId, { delayMs: MEDIA_JOB_WATCH_RETRY_DELAY_MS });
-        return;
-      }
-      this.logger.info(
-        `[MediaGenerationJob] jobId=${jobId} không có watcher sau grace — huỷ và xóa`
-      );
-      await abandonMediaJobNoWatcher(jobId, (jobDoc as any).customerId);
       return;
     }
 
@@ -368,6 +340,47 @@ export async function cleanupExpiredTerminalMediaJobs(): Promise<{
 let mediaJobCleanupSweepTimer: ReturnType<typeof setInterval> | null = null;
 let mediaJobStaleRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 
+/**
+ * Khôi phục bee-job đang "active" mồ côi sau nodemon/server restart.
+ *
+ * Khi worker cũ chết, bee-queue vẫn giữ job ở Redis state "active" nhưng không ai
+ * chạy handler → Mongo mãi QUEUED. `checkStalledJobs()` chỉ dùng `stallIntervalMs`
+ * (20 phút) nên quá chậm — xóa active mồ côi ngay, rồi `resumeStaleMediaJobs()`
+ * sẽ enqueue lại từ Mongo.
+ */
+export async function recoverStalledBeeJobsOnStartup(): Promise<number> {
+  try {
+    const q = mediaGenerationQueue.queue();
+    const activeJobs = await q.getJobs("active", { start: 0, size: 500 });
+    if (activeJobs.length === 0) return 0;
+
+    let removed = 0;
+    for (const beeJob of activeJobs) {
+      try {
+        const mongoJobId = (beeJob as any).data?.jobId;
+        await beeJob.remove();
+        removed++;
+        logger.warn(
+          `[MediaGenerationQueue] Xóa bee-job active mồ côi beeJobId=${beeJob.id} mongoJobId=${mongoJobId}`
+        );
+      } catch (err: any) {
+        logger.error(
+          `[MediaGenerationQueue] remove bee-job ${beeJob.id} lỗi: ${err?.message}`
+        );
+      }
+    }
+    if (removed > 0) {
+      logger.warn(
+        `[MediaGenerationQueue] Đã dọn ${removed} bee-job active mồ côi — sẽ re-enqueue từ Mongo`
+      );
+    }
+    return removed;
+  } catch (err: any) {
+    logger.error(`[MediaGenerationQueue] recoverStalledBeeJobsOnStartup lỗi: ${err?.message}`);
+    return 0;
+  }
+}
+
 /** Bật sweep định kỳ — idempotent, gọi 1 lần khi worker start. */
 export function startMediaJobCleanupSweep(): void {
   if (mediaJobCleanupSweepTimer) return;
@@ -425,6 +438,11 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
   if (status === MediaGenerationJobStatus.SUCCEEDED) return false;
   if (status === MediaGenerationJobStatus.PROCESSING) return false;
   const customerId = (job as any).customerId as string;
+  const jobType = (job as any).type as MediaGenerationJobType;
+
+  // Kiểm tra lại giới hạn luồng trước khi retry
+  await assertMediaStreamAvailable(customerId, jobType);
+
   // Reset trạng thái về QUEUED để worker pickup lại
   await mediaGenerationJobService.updateOne(jobId, {
     status: MediaGenerationJobStatus.QUEUED,
@@ -436,10 +454,6 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
     completedAt: null,
     startedAt: null,
   } as any);
-  // Primed watch trước enqueue — cùng lý do createAndEnqueueMediaJob (start retry ngay, không chờ WS)
-  if (customerId) {
-    await markJobWatched(jobId, customerId);
-  }
   await enqueueMediaGenerationJob(jobId);
   return true;
 }

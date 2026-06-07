@@ -1,7 +1,8 @@
 /**
  * Route POST tạo ảnh trong affiliate scene (có productImages / objectToPersonifyImages).
  *
- * Trả `{ jobId }`. Client subscribe `mediaGenerationJobChanged(jobId)` để nhận kết quả.
+ * Kiểm tra giới hạn luồng ảnh → lưu payload Redis → tạo job → trả `{ jobId }`.
+ * Client subscribe `mediaGenerationJobChanged(jobId)` để nhận kết quả.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";

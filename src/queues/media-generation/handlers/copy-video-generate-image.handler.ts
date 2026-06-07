@@ -11,6 +11,7 @@ import {
   ReferenceImageInput,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
+import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
 
@@ -35,7 +36,7 @@ export async function handleCopyVideoGenerateImage(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
 ): Promise<MediaGenerationImageResult> {
-  const payload = (job.requestPayload || {}) as CopyVideoGenerateImagePayload;
+  const payload = await loadMediaJobPayload<CopyVideoGenerateImagePayload>(job);
 
   await emitter.progress(10, "Đang chuẩn bị tạo ảnh...");
 

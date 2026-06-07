@@ -25,7 +25,6 @@ import {
   markMediaJobCancelled,
   MediaGenerationJobPubsubPayload,
 } from "../../../queues/media-generation/job-emitter";
-import { markJobWatched, refreshJobWatch } from "../../../queues/media-generation/media-job-watch";
 import { retryMediaGenerationJob } from "../../../queues/media-generation/media-generation.queue";
 
 /** Chuẩn hoá doc Mongo → object trả về cho GraphQL */
@@ -131,12 +130,6 @@ export default {
       Đẩy lại 1 job FAILED vào queue (reset progress).
       """
       retryMediaGenerationJob(id: String!): MediaGenerationJob
-
-      """
-      Gia hạn job watcher (heartbeat). Client gọi ngay sau POST + mỗi ~20s.
-      Server markJobWatched lúc enqueue; mutation này refresh TTL Redis (60s).
-      """
-      touchMediaGenerationJobWatch(id: String!): Boolean
     }
 
     extend type Subscription {
@@ -183,33 +176,16 @@ export default {
         })) as unknown as IMediaGenerationJob | null;
         return toGraphQLJob(updated);
       },
-      touchMediaGenerationJobWatch: async (
-        _root: unknown,
-        args: { id: string },
-        context: Context
-      ) => {
-        const job = await findJobOwnedOrNull(args.id, context);
-        if (!job) return false;
-        return refreshJobWatch(args.id, context.id);
-      },
     },
     Subscription: {
       mediaGenerationJobChanged: {
         // Resolver: chuyển payload sang shape GraphQL trước khi gửi cho client
         resolve: (payload: MediaGenerationJobPubsubPayload) => payloadToGraphQL(payload),
         subscribe: withFilter(
-          // QUAN TRỌNG: hàm subscribe KHÔNG được async/await — phải trả AsyncIterator trực tiếp.
-          // Nếu dùng async, withFilter nhận Promise<AsyncIterator> thay vì AsyncIterator thật,
-          // dẫn đến thiếu method .return() và crash "asyncIterator.return is not a function".
-          //
-          // Giải pháp: trả iterator ngay, còn markJobWatched chạy nền (không chờ).
-          // Ownership được kiểm tra ở filter function bên dưới (theo customerId).
-          ((_root: unknown, args: { jobId: string }, context: Context) => {
+          ((_root: unknown, _args: { jobId: string }, context: Context) => {
             if (!context.isAuth) {
               throw new Error("Bạn cần đăng nhập để theo dõi job");
             }
-            // Chạy nền — không block việc trả AsyncIterator
-            markJobWatched(args.jobId, context.id).catch((): void => undefined);
             return pubsub.asyncIterator(CONSTANTS.SOCKET_EVENT_NAME.MEDIA_GENERATION_JOB);
           }) as any,
           (

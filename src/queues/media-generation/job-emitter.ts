@@ -21,7 +21,7 @@ import {
 } from "../../libs/dal/mediaGenerationJob";
 import { pubsub } from "../../libs/graphql/pub-sub";
 import { MediaJobCancelledError } from "./job-errors";
-import { clearJobWatch, isJobWatched } from "./media-job-watch";
+import { clearMediaJobPayload } from "./media-job-data";
 
 /**
  * UUID duy nhất cho mỗi process Node. Nodemon restart → ID mới.
@@ -257,14 +257,6 @@ export class MediaJobEmitter {
   async progress(progress: number, message?: string): Promise<void> {
     if (this.terminated) return;
 
-    // Client không còn subscribe / heartbeat → dừng sớm, tránh tốn quota API
-    if (!(await isJobWatched(this.jobId))) {
-      this.terminated = true;
-      this.stopHeartbeat();
-      await abandonMediaJobNoWatcher(this.jobId, this.customerId);
-      throw new MediaJobCancelledError(this.jobId);
-    }
-
     const clamped = Math.max(0, Math.min(99, Math.round(progress)));
     const model = mediaGenerationJobService.model;
 
@@ -349,7 +341,7 @@ export class MediaJobEmitter {
       logger.info(`[MediaJobEmitter] SUCCEED jobId=${this.jobId}`);
       // Publish trước để client đang subscribe nhận kết quả realtime.
       await publishChange(doc as unknown as IMediaGenerationJob);
-      await clearJobWatch(this.jobId);
+      await clearMediaJobPayload((doc as any).dataRedisKey);
       const completedAt = (doc as any).completedAt
         ? new Date((doc as any).completedAt)
         : new Date();
@@ -392,7 +384,7 @@ export class MediaJobEmitter {
     if (doc) {
       logger.info(`[MediaJobEmitter] FAIL jobId=${this.jobId} ${errorMessage}`);
       await publishChange(doc as unknown as IMediaGenerationJob);
-      await clearJobWatch(this.jobId);
+      await clearMediaJobPayload((doc as any).dataRedisKey);
       const completedAt = (doc as any).completedAt
         ? new Date((doc as any).completedAt)
         : new Date();
@@ -432,7 +424,7 @@ export async function markMediaJobCancelled(jobId: string, customerId: string): 
   );
   if (!doc) return false;
   await publishChange(doc as unknown as IMediaGenerationJob);
-  await clearJobWatch(jobId);
+  await clearMediaJobPayload((doc as any).dataRedisKey);
   return true;
 }
 
@@ -466,7 +458,7 @@ export async function failOrphanedProcessingMediaJob(
   if (!doc) return false;
   logger.warn(`[MediaJobEmitter] FAIL orphaned jobId=${jobId}: ${errorMessage}`);
   await publishChange(doc as unknown as IMediaGenerationJob);
-  await clearJobWatch(jobId);
+  await clearMediaJobPayload((doc as any).dataRedisKey);
   const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
   scheduleTerminalMediaJobDeletion(
     jobId,
@@ -474,46 +466,5 @@ export async function failOrphanedProcessingMediaJob(
     completedAt,
     FAILED_JOB_RETENTION_MS
   );
-  return true;
-}
-
-/**
- * Huỷ job vì không còn client watch (đóng tab / mất kết nối).
- * Publish CANCELLED để FE còn kết nối nhận được, rồi xóa Mongo.
- */
-export async function abandonMediaJobNoWatcher(
-  jobId: string,
-  customerId: string
-): Promise<boolean> {
-  const model = mediaGenerationJobService.model;
-  const doc = await model.findOneAndUpdate(
-    {
-      _id: jobId,
-      customerId,
-      status: { $nin: MEDIA_JOB_TERMINAL_STATUSES },
-    },
-    {
-      $set: {
-        status: MediaGenerationJobStatus.CANCELLED,
-        completedAt: new Date(),
-        message: "Client không còn theo dõi job",
-        workerInstanceId: null,
-        lockExpiresAt: null,
-      },
-    },
-    { new: true }
-  );
-  if (!doc) {
-    await clearJobWatch(jobId);
-    return false;
-  }
-  logger.info(`[MediaJobEmitter] ABANDON (no watcher) jobId=${jobId}`);
-  await publishChange(doc as unknown as IMediaGenerationJob);
-  await clearJobWatch(jobId);
-  try {
-    await model.deleteOne({ _id: jobId });
-  } catch (err: any) {
-    logger.warn(`[MediaJobEmitter] xóa job abandon jobId=${jobId}: ${err?.message}`);
-  }
   return true;
 }

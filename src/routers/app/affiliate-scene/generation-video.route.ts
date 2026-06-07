@@ -1,5 +1,6 @@
 /**
- * Route POST tạo video (affiliate scene). Trả `{ jobId }`.
+ * Route POST tạo video (affiliate scene).
+ * Kiểm tra giới hạn luồng video → lưu payload Redis → tạo job → trả `{ jobId }`.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
