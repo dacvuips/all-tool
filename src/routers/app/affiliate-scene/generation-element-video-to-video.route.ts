@@ -23,10 +23,14 @@ export default [
         const body = req.body as {
           prompt: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
+          noText?: boolean;
+          voiceDisable?: boolean;
           video: { videoBytes: string | null; mimeType: string };
           config?: {
             aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
+            noText?: boolean;
+            voiceDisable?: boolean;
             artStyleId?: string;
             artStyle?: string;
             serviceImageType?: ServiceImageEnum;

@@ -75,7 +75,7 @@ export function SceneCardExtendVideoTab({
   };
 
   const extVideoSrc = getExtendVideoSrc();
-  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
 
   /* Không có scene kế tiếp → hiển thị thông báo */
   if (!nextSceneId) {

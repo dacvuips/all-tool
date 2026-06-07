@@ -90,6 +90,10 @@ export interface GenerateVideoParams {
   >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /** Bật/tắt text (watermark/chữ) trong video tạo ra */
+  noText?: boolean;
+  /** Tắt thoại / audio trong video */
+  voiceDisable?: boolean;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
   /** Callback nhận progress 0-100 */
@@ -532,6 +536,8 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         images,
         aspectRatio,
         generateAudio,
+        noText,
+        voiceDisable,
         onProgress,
         onStatusMessage,
         onError,
@@ -539,6 +545,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyle,
         serviceImageType,
       } = params;
+      const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
       const videoMode = (serviceImageType: ServiceImageEnum) => {
         switch (serviceImageType) {
           case ServiceImageEnum.imageOnly:
@@ -559,9 +566,13 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           body: {
             prompt,
             images,
+            noText,
+            voiceDisable,
             config: {
               aspectRatio,
-              generateAudio,
+              generateAudio: resolvedGenerateAudio,
+              noText,
+              voiceDisable,
               artStyleId,
               artStyle,
               serviceImageType,
@@ -614,6 +625,8 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         images,
         aspectRatio,
         generateAudio,
+        noText,
+        voiceDisable,
         onProgress,
         onStatusMessage,
         onError,
@@ -622,6 +635,8 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         serviceImageType,
         video,
       } = params;
+
+      const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
 
       try {
         onProgress?.(1);
@@ -633,7 +648,17 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
             prompt,
             images,
             video,
-            config: { aspectRatio, generateAudio, artStyleId, artStyle, serviceImageType },
+            noText,
+            voiceDisable,
+            config: {
+              aspectRatio,
+              generateAudio: resolvedGenerateAudio,
+              noText,
+              voiceDisable,
+              artStyleId,
+              artStyle,
+              serviceImageType,
+            },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),

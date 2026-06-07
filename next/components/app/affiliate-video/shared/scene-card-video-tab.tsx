@@ -90,7 +90,7 @@ export function SceneCardVideoTab({
   };
 
   const videoSrc = getVideoSrc();
-  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
 
   return (
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>

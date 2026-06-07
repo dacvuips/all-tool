@@ -639,6 +639,9 @@ export function useReviewSceneMedia({
         },
         aspectRatio: scriptData?.aspectRatio,
         serviceImageType: scriptData.serviceImageType,
+        noText: scene.noText,
+        voiceDisable: scene.voiceDisable,
+        generateAudio: scene.voiceDisable ? false : undefined,
         onStatusMessage: (msg) => {
           setVideoStatusMessage(msg);
         },

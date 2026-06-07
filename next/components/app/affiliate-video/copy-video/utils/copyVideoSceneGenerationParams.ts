@@ -93,5 +93,8 @@ export function buildCopyVideoVideoGenerateParams(options: {
     prompt: buildCopyVideoVideoPrompt(scene, isStitch),
     images,
     aspectRatio: scriptData?.aspectRatio,
+    noText: scene.noText,
+    voiceDisable: scene.voiceDisable,
+    generateAudio: scene.voiceDisable ? false : undefined,
   };
 }

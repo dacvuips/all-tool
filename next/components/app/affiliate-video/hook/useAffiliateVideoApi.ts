@@ -132,6 +132,10 @@ export interface GenerateVideoParams {
   >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /** Bật/tắt text (watermark/chữ) trong video tạo ra */
+  noText?: boolean;
+  /** Tắt thoại / audio trong video */
+  voiceDisable?: boolean;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
   /** Callback nhận progress 0-100 */
@@ -1069,10 +1073,14 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         images,
         aspectRatio,
         generateAudio,
+        noText,
+        voiceDisable,
         onProgress,
         onStatusMessage,
         onError,
       } = params;
+
+      const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
 
       try {
         onProgress?.(1);
@@ -1083,7 +1091,15 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body: {
             prompt,
             images,
-            config: { aspectRatio, generateAudio, videoMode: Flow2VideoModeEnum.FRAME },
+            noText,
+            voiceDisable,
+            config: {
+              aspectRatio,
+              generateAudio: resolvedGenerateAudio,
+              noText,
+              voiceDisable,
+              videoMode: Flow2VideoModeEnum.FRAME,
+            },
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),

@@ -92,5 +92,8 @@ export function buildAffiliateVideoGenerateParams(options: {
     prompt: buildAffiliateVideoPrompt(scene, scriptData, isStitch),
     images,
     aspectRatio: scriptData?.aspectRatio,
+    noText: scene.noText,
+    voiceDisable: scene.voiceDisable,
+    generateAudio: scene.voiceDisable ? false : undefined,
   };
 }

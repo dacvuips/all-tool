@@ -135,5 +135,8 @@ export async function buildElementVideoGenerateParams(options: {
     serviceImageType: scriptData?.serviceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,
+    noText: scene.noText,
+    voiceDisable: scene.voiceDisable,
+    generateAudio: scene.voiceDisable ? false : undefined,
   };
 }

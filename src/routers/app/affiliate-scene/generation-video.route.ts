@@ -23,11 +23,15 @@ export default [
         const body = req.body as {
           prompt: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
+          noText?: boolean;
+          voiceDisable?: boolean;
           /** frame = startImage/endImage; component = Reference (1–3 ảnh) */
           video_mode?: string;
           config?: {
             aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
+            noText?: boolean;
+            voiceDisable?: boolean;
             videoMode?: string;
             serviceImageType?: string;
           };
