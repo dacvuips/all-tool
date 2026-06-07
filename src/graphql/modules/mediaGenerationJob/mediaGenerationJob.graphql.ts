@@ -133,7 +133,8 @@ export default {
       retryMediaGenerationJob(id: String!): MediaGenerationJob
 
       """
-      Gia hạn job watcher (heartbeat). Gọi định kỳ khi job đang chạy lâu (video).
+      Gia hạn job watcher (heartbeat). Client gọi ngay sau POST + mỗi ~20s.
+      Server markJobWatched lúc enqueue; mutation này refresh TTL Redis (60s).
       """
       touchMediaGenerationJobWatch(id: String!): Boolean
     }

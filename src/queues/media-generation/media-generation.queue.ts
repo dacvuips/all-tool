@@ -9,7 +9,8 @@
  *   4. Nhận `resultData` → emitter.succeed(...).
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
- *   7. **Job watcher**: chỉ chạy khi Redis key `mgj:watch:{jobId}` còn (subscription / touchWatch).
+ *   7. **Job watcher**: worker chạy khi Redis key `mgj:watch:{jobId}` còn (primed lúc enqueue + touchWatch client).
+ *      Nếu chưa có key trong grace 30s → re-enqueue delay 1.5s (fallback race hiếm).
  *   8. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 15 phút kể từ `completedAt`.
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
  *   9. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
@@ -40,6 +41,7 @@ import {
 import { MediaJobCancelledError } from "./job-errors";
 import {
   isJobWatched,
+  markJobWatched,
   MEDIA_JOB_WATCH_GRACE_MS,
   MEDIA_JOB_WATCH_RETRY_DELAY_MS,
 } from "./media-job-watch";
@@ -114,7 +116,8 @@ class MediaGenerationQueue extends BaseQueue {
       return;
     }
 
-    // Chỉ chạy khi client còn subscribe / heartbeat job (job watcher)
+    // Chỉ chạy khi client còn subscribe / heartbeat job (job watcher).
+    // Sau server-side markJobWatched lúc enqueue, nhánh này hiếm — chủ yếu fallback race Redis.
     if (!(await isJobWatched(jobId))) {
       const createdAt = (jobDoc as any).createdAt
         ? new Date((jobDoc as any).createdAt).getTime()
@@ -421,6 +424,7 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
   const status = (job as any).status as MediaGenerationJobStatus;
   if (status === MediaGenerationJobStatus.SUCCEEDED) return false;
   if (status === MediaGenerationJobStatus.PROCESSING) return false;
+  const customerId = (job as any).customerId as string;
   // Reset trạng thái về QUEUED để worker pickup lại
   await mediaGenerationJobService.updateOne(jobId, {
     status: MediaGenerationJobStatus.QUEUED,
@@ -432,6 +436,10 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
     completedAt: null,
     startedAt: null,
   } as any);
+  // Primed watch trước enqueue — cùng lý do createAndEnqueueMediaJob (start retry ngay, không chờ WS)
+  if (customerId) {
+    await markJobWatched(jobId, customerId);
+  }
   await enqueueMediaGenerationJob(jobId);
   return true;
 }

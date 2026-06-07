@@ -1,22 +1,43 @@
 /**
  * Job watcher — Redis TTL cho biết client còn đang theo dõi job (subscription / heartbeat).
  *
- * Key: `mgj:watch:{jobId}` → customerId, TTL 45s (gia hạn khi subscribe hoặc touch).
- * Worker chỉ chạy pipeline khi key tồn tại (sau grace period cho race POST → subscribe).
+ * Key: `mgj:watch:{jobId}` → customerId, TTL MEDIA_JOB_WATCH_TTL_SEC.
+ *
+ * Luồng khởi tạo (sau tối ưu start nhanh):
+ *   1. `createAndEnqueueMediaJob` gọi `markJobWatched` **trước** enqueue → worker pickup ngay, không chờ WS.
+ *   2. Client `touchWatch` ngay sau POST + mỗi WATCH_HEARTBEAT_MS (FE) → gia hạn TTL suốt job dài (video).
+ *   3. GraphQL subscription cũng gọi `markJobWatched` khi connect — lớp backup.
+ *
+ * Worker chỉ chạy pipeline khi key tồn tại. Nếu client đóng tab và không refresh TTL,
+ * key hết hạn → `emitter.progress()` huỷ job (tránh tốn quota API vô hạn).
+ *
+ * Quan hệ timing (giữ ổn định):
+ *   - TTL (60s) > 2 × heartbeat FE (20s) + buffer mạng (~15s).
+ *   - Retry delay (1.5s) chỉ dùng khi key chưa kịp tạo (Redis lag / race hiếm).
  */
 import logger from "../../helpers/logger";
 import redis from "../../helpers/redis";
 
 const KEY_PREFIX = "mgj:watch:";
 
-/** TTL key watch (giây) — hết hạn ≈ client đóng tab / mất WS */
-export const MEDIA_JOB_WATCH_TTL_SEC = 45;
+/**
+ * TTL key watch (giây).
+ * Gia hạn bởi: markJobWatched, refreshJobWatch (touchWatch), subscribe lần đầu.
+ * Hết TTL ≈ không còn client theo dõi → worker dừng ở milestone progress tiếp theo.
+ */
+export const MEDIA_JOB_WATCH_TTL_SEC = 60;
 
-/** Sau khi tạo job, chờ tối đa bao lâu để client subscribe (ms) */
+/**
+ * Sau khi tạo job, chờ tối đa bao lâu để có watcher (ms).
+ * Dùng khi worker pickup mà key chưa tồn tại — hiếm sau khi server primed watch lúc enqueue.
+ */
 export const MEDIA_JOB_WATCH_GRACE_MS = 30_000;
 
-/** Hoãn pickup lại khi chưa có watcher nhưng còn trong grace */
-export const MEDIA_JOB_WATCH_RETRY_DELAY_MS = 5_000;
+/**
+ * Hoãn pickup lại khi chưa có watcher nhưng còn trong grace (ms).
+ * Giảm từ 5s → 1.5s: retry nhanh hơn nếu race Redis/Mongo; không ảnh hưởng job đã có key.
+ */
+export const MEDIA_JOB_WATCH_RETRY_DELAY_MS = 1_500;
 
 function watchKey(jobId: string): string {
   return `${KEY_PREFIX}${jobId}`;
