@@ -38,7 +38,13 @@ import { useLocale } from "../lib/providers/locale-provider";
 import { Pagination, QueryInput } from "../lib/repo/crud.repo";
 import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/notification.repo";
 
-import { GooglePackagePopoverContent } from "../components/admin/management/customer/components/customer-google-package-cell";
+import {
+  formatSubscription,
+  getPackageClasses,
+  getPackageStyle,
+  GooglePackagePopoverContent,
+} from "../components/admin/management/customer/components/customer-google-package-cell";
+import { SubscriptionPlanEnum } from "../lib/repo/customer/customer.repo";
 import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
@@ -735,18 +741,22 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const packageRef = useRef();
+  const subscription = customer?.googlePackage?.subscription;
+  const packageStyle = getPackageStyle(subscription || SubscriptionPlanEnum.TRIAL);
+  const packageClasses = getPackageClasses(packageStyle);
+  const subscriptionLabel = subscription
+    ? formatSubscription(subscription)
+    : t("Dùng thử");
 
   return (
     <>
       <div
         ref={packageRef}
-        className="flex overflow-hidden items-center h-8 text-sm rounded-lg border border-gray-300 cursor-default gray-50"
+        className={`flex overflow-hidden items-center h-8 text-sm rounded-lg cursor-default ${packageClasses.container}`}
       >
-        <span className="px-2.5 text-gray-700 font-semibold whitespace-nowrap">
+        <span className={`px-2.5 font-semibold whitespace-nowrap ${packageStyle.text}`}>
           {t("Gói")}:{" "}
-          <span className="text-gray-900">
-            {customer?.googlePackage?.subscription || t("Dùng thử")}
-          </span>
+          <span className="uppercase">{subscriptionLabel}</span>
         </span>
       </div>
       <Popover reference={packageRef} trigger="hover" placement="bottom" arrow maxWidth={320}>
