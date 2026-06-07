@@ -37,8 +37,8 @@ export interface SceneCardVideoTabProps {
   hasImage: boolean;
   /** Chế độ prompt_to_video (không cần ảnh trước) */
   isPromptToVideo?: boolean;
-  /** Aspect ratio cho video dialog */
-  aspectRatio?: string;
+  /** Aspect ratio của video (preview + dialog) */
+  aspectRatio?: "16:9" | "9:16";
   /** Thông báo lỗi khi chưa có ảnh */
   onImageRequired?: () => void;
   /** Lỗi tạo video (hiển thị inline) */
@@ -90,6 +90,7 @@ export function SceneCardVideoTab({
   };
 
   const videoSrc = getVideoSrc();
+  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
 
   return (
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -100,10 +101,10 @@ export function SceneCardVideoTab({
             <div className="w-full min-h-20">
               {videoSrc ? (
                 <>
-                  {/* Video container 16:9 */}
+                  {/* Video preview — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
                   <div
                     className="relative w-full rounded-md overflow-hidden border-2 border-purple-300 shadow-sm"
-                    style={{ paddingTop: "56.25%" }}
+                    style={{ paddingTop: videoPaddingTop }}
                   >
                     <video
                       src={videoSrc}
@@ -142,7 +143,7 @@ export function SceneCardVideoTab({
                 /* Video placeholder khi có data nhưng không có src */
                 <div
                   className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
-                  style={{ paddingTop: "56.25%" }}
+                  style={{ paddingTop: videoPaddingTop }}
                 >
                   <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
                 </div>

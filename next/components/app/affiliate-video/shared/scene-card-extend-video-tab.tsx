@@ -35,8 +35,8 @@ export interface SceneCardExtendVideoTabProps {
   isDisabled?: boolean;
   /** Có scene kế tiếp không (bắt buộc để tạo video nối) */
   nextSceneId?: string;
-  /** Aspect ratio cho video dialog */
-  aspectRatio?: string;
+  /** Aspect ratio của video (preview + dialog) */
+  aspectRatio?: "16:9" | "9:16";
   /** Lỗi tạo video nối (hiển thị inline) */
   errorMessage?: string | null;
 
@@ -75,6 +75,7 @@ export function SceneCardExtendVideoTab({
   };
 
   const extVideoSrc = getExtendVideoSrc();
+  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
 
   /* Không có scene kế tiếp → hiển thị thông báo */
   if (!nextSceneId) {
@@ -95,10 +96,10 @@ export function SceneCardExtendVideoTab({
             <div className="w-full min-h-20">
               {extVideoSrc ? (
                 <>
-                  {/* Video container 16:9 */}
+                  {/* Video preview — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
                   <div
                     className="relative w-full rounded-md overflow-hidden border-2 border-teal-300 shadow-sm"
-                    style={{ paddingTop: "56.25%" }}
+                    style={{ paddingTop: videoPaddingTop }}
                   >
                     <video
                       src={extVideoSrc}
@@ -141,7 +142,7 @@ export function SceneCardExtendVideoTab({
                 /* Video placeholder */
                 <div
                   className="relative w-full rounded-xl border-2 border-teal-300 bg-teal-50"
-                  style={{ paddingTop: "56.25%" }}
+                  style={{ paddingTop: videoPaddingTop }}
                 >
                   <RiVideoFill className="absolute inset-0 m-auto text-teal-400 text-xl" />
                 </div>
