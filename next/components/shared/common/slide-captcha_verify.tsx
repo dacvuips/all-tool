@@ -34,7 +34,11 @@ export function SlideCaptchaVerifyDialog({
           height={height}
           // resultHeight={25}
           r={Math.floor(Math.random() * 11)}
-          imgUrl={["/assets/img/verify-image-2.jpg", "/assets/img/verify-image-3.jpg"]}
+          imgUrl={[
+            "/assets/img/verify-image-4.jpg",
+            "/assets/img/verify-image-2.jpg",
+            "/assets/img/verify-image-3.jpg",
+          ]}
           text={t("Vuốt sang phải")}
           resultSuccessText={t("Thành công")}
           resultFailText={t("Thất bại")}
