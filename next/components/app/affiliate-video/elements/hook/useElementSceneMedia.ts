@@ -508,11 +508,6 @@ export function useElementSceneMedia({
 
       const result = await generateVideo({
         ...videoParams,
-        onProgress: (pct) => {
-          if (isStitch) {
-            setExtendVideoProgress((prev) => Math.max(prev, pct));
-          }
-        },
         onStatusMessage: (msg) => {
           if (!isStitch) setVideoStatusMessage(msg);
         },
