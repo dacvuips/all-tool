@@ -23,6 +23,7 @@ import {
   buildElementImageGenerateParams,
   buildElementVideoGenerateParams,
 } from "../utils/elementSceneGenerationParams";
+import { uriToBlob } from "../../shared/videoDownloadUtils";
 import { useElementApi } from "./useElementApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -442,10 +443,8 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         let blob: Blob | null = null;
 
         if (vid.videoUri) {
-          // Fetch entire video content first, then download
           try {
-            const res = await fetch(vid.videoUri);
-            blob = await res.blob();
+            blob = await uriToBlob(vid.videoUri);
           } catch (fetchErr) {
             console.error(
               `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,

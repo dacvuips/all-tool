@@ -24,6 +24,7 @@ import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
 } from "../utils/reviewSceneGenerationParams";
+import { uriToBlob } from "../../shared/videoDownloadUtils";
 import { resolveObjectToPersonifyImageForApi } from "../utils/reviewFormImageUtils";
 import { useReviewApi } from "./useReviewApi";
 
@@ -450,10 +451,8 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
         let blob: Blob | null = null;
 
         if (vid.videoUri) {
-          // Fetch entire video content first, then download
           try {
-            const res = await fetch(vid.videoUri);
-            blob = await res.blob();
+            blob = await uriToBlob(vid.videoUri);
           } catch (fetchErr) {
             console.error(
               `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,

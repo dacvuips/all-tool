@@ -15,6 +15,11 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
+import {
+  base64ToBlob,
+  triggerBlobDownload,
+  uriToBlob,
+} from "../shared/videoDownloadUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -571,35 +576,19 @@ export function useSceneMedia({
   const handleDownloadVideo = async () => {
     if (!generatedVideo) return;
     try {
+      let blob: Blob | null = null;
+      let ext = "mp4";
+
       if (generatedVideo.videoUri) {
-        // Download từ URI
-        const res = await fetch(generatedVideo.videoUri);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `scene-${scene.sceneNumber}-video.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        blob = await uriToBlob(generatedVideo.videoUri);
+        ext = blob.type.split("/")[1] || "mp4";
       } else if (generatedVideo.videoBytes) {
-        // Download từ base64
-        const byteChars = atob(generatedVideo.videoBytes);
-        const byteNumbers = new Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNumbers[i] = byteChars.charCodeAt(i);
-        }
-        const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedVideo.mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const ext = generatedVideo.mimeType.split("/")[1] || "mp4";
-        a.download = `scene-${scene.sceneNumber}-video.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        blob = base64ToBlob(generatedVideo.videoBytes, generatedVideo.mimeType);
+        ext = generatedVideo.mimeType.split("/")[1] || "mp4";
+      }
+
+      if (blob) {
+        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-video.${ext}`);
       }
     } catch (err) {
       console.error("[handleDownloadVideo] Error:", err);
@@ -614,35 +603,19 @@ export function useSceneMedia({
   const handleDownloadExtendVideo = async () => {
     if (!generatedExtendVideo) return;
     try {
+      let blob: Blob | null = null;
+      let ext = "mp4";
+
       if (generatedExtendVideo.videoUri) {
-        const res = await fetch(generatedExtendVideo.videoUri);
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `scene-${scene.sceneNumber}-stitch-video.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        blob = await uriToBlob(generatedExtendVideo.videoUri);
+        ext = blob.type.split("/")[1] || "mp4";
       } else if (generatedExtendVideo.videoBytes) {
-        const byteChars = atob(generatedExtendVideo.videoBytes);
-        const byteNumbers = new Array(byteChars.length);
-        for (let i = 0; i < byteChars.length; i++) {
-          byteNumbers[i] = byteChars.charCodeAt(i);
-        }
-        const blob = new Blob([new Uint8Array(byteNumbers)], {
-          type: generatedExtendVideo.mimeType,
-        });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        const ext = generatedExtendVideo.mimeType.split("/")[1] || "mp4";
-        a.download = `scene-${scene.sceneNumber}-stitch-video.${ext}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        blob = base64ToBlob(generatedExtendVideo.videoBytes, generatedExtendVideo.mimeType);
+        ext = generatedExtendVideo.mimeType.split("/")[1] || "mp4";
+      }
+
+      if (blob) {
+        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-stitch-video.${ext}`);
       }
     } catch (err) {
       console.error("[handleDownloadExtendVideo] Error:", err);

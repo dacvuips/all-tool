@@ -21,6 +21,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
+import { uriToBlob } from "../../shared/videoDownloadUtils";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -442,10 +443,8 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         let blob: Blob | null = null;
 
         if (vid.videoUri) {
-          // Fetch entire video content first, then download
           try {
-            const res = await fetch(vid.videoUri);
-            blob = await res.blob();
+            blob = await uriToBlob(vid.videoUri);
           } catch (fetchErr) {
             console.error(
               `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,

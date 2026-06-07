@@ -19,6 +19,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
+import { uriToBlob } from "../shared/videoDownloadUtils";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -416,10 +417,8 @@ export function useBatchActions(scenes: SceneScript[]) {
         let blob: Blob | null = null;
 
         if (vid.videoUri) {
-          // Fetch entire video content first, then download
           try {
-            const res = await fetch(vid.videoUri);
-            blob = await res.blob();
+            blob = await uriToBlob(vid.videoUri);
           } catch (fetchErr) {
             console.error(
               `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
