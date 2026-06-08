@@ -68,6 +68,29 @@ export abstract class BaseQueue extends EventEmitter {
     return this._queues[id];
   }
 
+  /**
+   * Khởi động lại bee-queue consumer khi job kẹt ở `waiting` (Redis ECONNRESET / worker im lặng).
+   * Idempotent — gọi nhiều lần an toàn.
+   */
+  restartQueueConsumer(id?: string): void {
+    if (!id) {
+      id = IS_DEBUG ? "dev" : "prod";
+    }
+    const q = this.getQueueIfExists(id);
+    if (!q) {
+      this.queue(id);
+      this.logger.warn(`[${this.name}:${id}] Consumer started (queue was missing)`);
+      return;
+    }
+    try {
+      q.destroy();
+      this.applyProcessToQueue(id);
+      this.logger.warn(`[${this.name}:${id}] Consumer restarted`);
+    } catch (err) {
+      this.logger.error(`[${this.name}:${id}] restartQueueConsumer lỗi`, err);
+    }
+  }
+
   /** Trạng thái queue: running = worker đã start và queue phản hồi, active/waiting từ Redis. */
   async getQueueStatus(
     id?: string

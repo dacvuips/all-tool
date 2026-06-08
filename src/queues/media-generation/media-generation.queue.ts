@@ -15,6 +15,8 @@
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
  *   10. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
  *      sau 5 lần claim vẫn treo → FAILED (504).
+ *   11. **Orphaned QUEUED**: mỗi 60s quét job Mongo QUEUED chưa pickup > 2 phút → re-enqueue;
+ *      nếu bee-queue `waiting > 0` mà `active = 0` → restart consumer (không cần restart server).
  *
  * Không bật **auto-retry**: API generation tốn quota, retry ngầm dễ ngốn credit. User retry thủ công.
  */
@@ -49,8 +51,10 @@ const MEDIA_GENERATION_JOB_RETENTION_MS = 72 * 60 * 60 * 1000;
 
 /** Tần suất quét xóa doc Mongo terminal (FAILED / SUCCEEDED) hết hạn. */
 const MEDIA_JOB_CLEANUP_SWEEP_INTERVAL_MS = 5 * 60 * 1000; // 5 phút
-/** Quét job PROCESSING không cập nhật (treo Flow2 / worker chết). */
+/** Quét job PROCESSING / QUEUED mồ côi (treo Flow2 / consumer bee-queue chết). */
 const MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS = 60 * 1000; // 1 phút
+/** Job Mongo QUEUED chưa từng pickup (`startedAt` null) quá lâu → re-enqueue. */
+export const MEDIA_JOB_ORPHANED_QUEUED_MS = 2 * 60 * 1000; // 2 phút
 /**
  * Không có heartbeat/progress trong khoảng này → coi là treo.
  * = 2× LOCK_TTL + 1× HEARTBEAT (worker sống phải gia hạn lock mỗi 15–60s).
@@ -234,6 +238,74 @@ export async function resumeStaleMediaJobs(): Promise<number> {
  * Job PROCESSING mà lock hết hạn / null và `updatedAt` quá cũ → re-enqueue hoặc FAILED.
  * Bắt trường hợp worker crash, nodemon restart không enqueue lại, hoặc poll Flow2 treo.
  */
+/**
+ * Khôi phục job Mongo QUEUED không được worker pickup (bee-queue consumer chết sau Redis blip).
+ *
+ * 1. `waiting > 0` && `active = 0` → restart bee-queue consumer (fix chính, không cần restart server).
+ * 2. Mongo `QUEUED` + `startedAt` null + `updatedAt` cũ > 2 phút → re-enqueue (backup).
+ */
+export async function recoverOrphanedQueuedMediaJobs(): Promise<{
+  consumerRestarted: boolean;
+  requeued: number;
+}> {
+  let consumerRestarted = false;
+  let requeued = 0;
+
+  try {
+    const status = await getMediaGenerationQueueStatus();
+
+    if (!status.running) {
+      mediaGenerationQueue.defaultQueue();
+      consumerRestarted = true;
+      logger.warn("[MediaGenerationQueue] Queue chưa chạy — đã khởi động consumer");
+    } else if (status.waiting > 0 && status.active === 0) {
+      mediaGenerationQueue.restartQueueConsumer();
+      consumerRestarted = true;
+      logger.warn(
+        `[MediaGenerationQueue] Restart consumer: waiting=${status.waiting}, active=${status.active}`
+      );
+    }
+
+    const staleCutoff = new Date(Date.now() - MEDIA_JOB_ORPHANED_QUEUED_MS);
+    const jobs = (await mediaGenerationJobService.findAll({
+      filter: {
+        status: MediaGenerationJobStatus.QUEUED,
+        startedAt: null,
+        updatedAt: { $lt: staleCutoff },
+      },
+      limit: 200,
+      order: { updatedAt: 1 },
+    } as any)) as unknown as IMediaGenerationJob[];
+
+    for (const job of jobs) {
+      const jobId = String((job as any)._id);
+      try {
+        await mediaGenerationJobService.updateOne(jobId, {
+          message: "Đang thử lại (tự động khôi phục hàng đợi)...",
+        } as any);
+        await enqueueMediaGenerationJob(jobId);
+        requeued++;
+        logger.warn(`[MediaGenerationQueue] Re-enqueue orphaned QUEUED jobId=${jobId}`);
+      } catch (err: any) {
+        logger.error(
+          `[MediaGenerationQueue] Re-enqueue orphaned QUEUED jobId=${jobId} lỗi: ${err?.message}`
+        );
+      }
+    }
+
+    if (consumerRestarted || requeued > 0) {
+      logger.info(
+        `[MediaGenerationQueue] Orphaned QUEUED sweep: consumerRestarted=${consumerRestarted}, requeued=${requeued}`
+      );
+    }
+
+    return { consumerRestarted, requeued };
+  } catch (err: any) {
+    logger.error(`[MediaGenerationQueue] recoverOrphanedQueuedMediaJobs lỗi: ${err?.message}`);
+    return { consumerRestarted: false, requeued: 0 };
+  }
+}
+
 export async function recoverStaleProcessingMediaJobs(): Promise<{
   requeued: number;
   failed: number;
@@ -403,13 +475,16 @@ export function startMediaJobCleanupSweep(): void {
   );
 }
 
-/** Quét job PROCESSING treo — idempotent, gọi 1 lần khi worker start. */
+/** Quét job PROCESSING / QUEUED treo — idempotent, gọi 1 lần khi worker start. */
 export function startStaleProcessingRecoverySweep(): void {
   if (mediaJobStaleRecoveryTimer) return;
 
   const run = () => {
     recoverStaleProcessingMediaJobs().catch((err) =>
       logger.error("[MediaGenerationQueue] stale PROCESSING sweep lỗi", err)
+    );
+    recoverOrphanedQueuedMediaJobs().catch((err) =>
+      logger.error("[MediaGenerationQueue] orphaned QUEUED sweep lỗi", err)
     );
   };
 
@@ -419,9 +494,11 @@ export function startStaleProcessingRecoverySweep(): void {
     mediaJobStaleRecoveryTimer.unref();
   }
   logger.info(
-    `[MediaGenerationQueue] Stale PROCESSING recovery every ${
+    `[MediaGenerationQueue] Recovery sweep every ${
       MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS / 1000
-    }s (threshold ${MEDIA_JOB_STALE_PROCESSING_MS / 1000}s)`
+    }s (PROCESSING stale ${MEDIA_JOB_STALE_PROCESSING_MS / 1000}s, QUEUED orphan ${
+      MEDIA_JOB_ORPHANED_QUEUED_MS / 1000
+    }s)`
   );
 }
 
