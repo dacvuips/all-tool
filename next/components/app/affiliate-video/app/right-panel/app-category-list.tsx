@@ -27,6 +27,7 @@ import { parseNumber } from "../../../../../lib/helpers/parser";
 import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { TrendingTypeEnum } from "../../../../../lib/repo/list/trending.repo";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { NotifyText } from "../../../../shared/common/notify-text";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
@@ -42,21 +43,25 @@ import {
 } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { PaginationComponent } from "../../../../shared/utilities/pagination/pagination-component";
+import { useAffiliateVideoContext } from "../../chatbot/providers/affiliate-video-provider";
 import {
   CustomerTrendingInput,
   TrendingCategoryPublicItem,
   TrendingPublicItem,
   useAffiliateVideoApi,
 } from "../../hook/useAffiliateVideoApi";
-import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { AppTrendingType, AppTypeConfig, useAppTypeConfig } from "../useAppTypeConfig";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 5;
+
+const filterItemsByType = (items: TrendingPublicItem[], type: TrendingTypeEnum) =>
+  items.filter((item) => !item.type || item.type === type);
 const ALL_CATEGORY_ID = "__all__";
 const MY_TRENDING_ID = "__my__";
 
-// ── TrendingCard – hiển thị 1 trending item (dark theme) ─────────────────
-const TrendingCard = ({
+// ── AppItemCard – hiển thị 1 app item ────────────────────────────────────
+const AppItemCard = ({
   item,
   categoryName,
   onUseTrending,
@@ -66,7 +71,7 @@ const TrendingCard = ({
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
   onEdit?: (item: TrendingPublicItem) => void;
   onDelete?: (item: TrendingPublicItem) => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
@@ -75,7 +80,12 @@ const TrendingCard = ({
   const toast = useToast();
   const { customer } = useAuth();
   const [isBookmarked, setIsBookmarked] = useState(false);
+  const [useCount, setUseCount] = useState(item.count || 0);
   const firstImage = item.imageUrls?.[0];
+
+  useEffect(() => {
+    setUseCount(item.count || 0);
+  }, [item.count]);
 
   return (
     <div className="group relative rounded-xl  overflow-hidden bg-white p-1.5 gap-2  transition-all duration-300 border border-primary-dark  flex flex-col hover:shadow-2xl cursor-pointer hover:shadow-primary-100 hover:border-success-dark hover:border-2">
@@ -157,10 +167,14 @@ const TrendingCard = ({
           )}
           <div className="flex gap-1 items-center">
             <Button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (!customer) toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
-                else onUseTrending(item.id);
+                if (!customer) {
+                  toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
+                  return;
+                }
+                const ok = await onUseTrending(item.id, item.name);
+                if (ok) setUseCount((prev) => prev + 1);
               }}
               outline
               info
@@ -201,7 +215,7 @@ const TrendingCard = ({
         {/* Fire count */}
         <span className="flex items-center gap-1 text-[10px] text-gray-500">
           <RiFireLine className="text-xs text-orange-400/70" />
-          {item.count || 0}
+          {useCount}
         </span>
         {/* Eye count */}
         <span className="flex items-center gap-1 text-[10px] text-gray-500">
@@ -221,18 +235,20 @@ const CategorySection = ({
   loadCategories,
   onShowInfo,
   onOpenCreate,
+  config,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
   loadCategories: () => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
   onOpenCreate?: () => void;
+  config: AppTypeConfig;
 }) => {
   const { t } = useTranslation();
-  const { getTrendingsByCategoryId } = useAffiliateVideoApi();
+  const { getByCategoryId, type: itemType } = config;
   const { customer } = useAuth();
   const toast = useToast();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
@@ -248,13 +264,13 @@ const CategorySection = ({
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
-        const result = await getTrendingsByCategoryId(
+        const result = await getByCategoryId(
           effectiveCategoryId,
           pageNum,
           ITEMS_PER_PAGE,
           search || undefined
         );
-        setItems(result.data);
+        setItems(filterItemsByType(result.data, itemType));
         setTotal(result.total);
       } catch {
         setItems([]);
@@ -264,14 +280,14 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getTrendingsByCategoryId, effectiveCategoryId, searchText]
+    [getByCategoryId, effectiveCategoryId, searchText, itemType]
   );
 
-  // Auto-load on mount and when search changes
+  // Auto-load on mount and when search/type changes
   useEffect(() => {
     setPage(1);
     setHasLoaded(false);
-  }, [searchText]);
+  }, [searchText, itemType]);
 
   useEffect(() => {
     if (!hasLoaded) {
@@ -330,7 +346,7 @@ const CategorySection = ({
             }`}
           >
             {items.map((item) => (
-              <TrendingCard
+              <AppItemCard
                 key={item.id}
                 item={item}
                 categoryName={category?.name}
@@ -501,12 +517,14 @@ const CreateEditTrendingDialog = ({
   editItem,
   categories,
   onSave,
+  config,
 }: {
   isOpen: boolean;
   onClose: () => void;
   editItem: TrendingPublicItem | null;
   categories: TrendingCategoryPublicItem[];
   onSave: (data: CustomerTrendingInput, id?: string) => Promise<boolean>;
+  config: AppTypeConfig;
 }) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
@@ -518,6 +536,7 @@ const CreateEditTrendingDialog = ({
   const [price, setPrice] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Reset form when dialog opens/editItem changes
   useEffect(() => {
     if (isOpen) {
       if (editItem) {
@@ -562,7 +581,7 @@ const CreateEditTrendingDialog = ({
       dialog
       isOpen={isOpen}
       onClose={onClose}
-      title={editItem ? t("Sửa prompt") : t("Tạo prompt")}
+      title={editItem ? t(config.editDialogTitle) : t(config.createDialogTitle)}
       width="560px"
       maxWidth="95vw"
       onOverlayClick={() => {}}
@@ -572,13 +591,13 @@ const CreateEditTrendingDialog = ({
           <NotifyText
             color="green"
             text={t(
-              "Prompt của bạn được nhiều người dùng và được lên top thì bạn sẽ được nâng cấp gói hoặc một khoản tiền thưởng tương ứng với giá trị."
+              "App của bạn được nhiều người dùng và được lên top thì bạn sẽ được nâng cấp gói hoặc một khoản tiền thưởng tương ứng với giá trị."
             )}
           />{" "}
           <NotifyText
             color="indigo"
             text={t(
-              "Hãy đưa ra những prompt hay, độc đáo, thu hút người dùng để kiếm thêm thu nhập ngay bạn nhé!"
+              "Hãy đưa ra những App hay, độc đáo, thu hút người dùng để kiếm thêm thu nhập ngay bạn nhé!"
             )}
           />
           <Field label={t("Danh sách ảnh")}>
@@ -590,18 +609,25 @@ const CreateEditTrendingDialog = ({
               cols={3}
             />
           </Field>
-          <Field label={t("Tên prompt")} required>
-            <Input value={name} onChange={setName} placeholder={t("Nhập tên prompt...")} />
+          <Field label={t(config.nameFieldLabel)} required>
+            <Input value={name} onChange={setName} placeholder={t(config.namePlaceholder)} />
           </Field>
-          <Field label={t("Prompt")} required>
+          <Field
+            label={t("Prompt tạo App hoặc link tới app của bạn")}
+            description={`${t("Prompt tạo App")}
+${t("Link tới app của bạn...")}
+${t("VD")}: https://aistudio.google.com/apps/drive/XXXX
+https://labs.google/fx/tools/flow/shared/tool/XXXX`}
+            required
+          >
             <Textarea
               value={prompt}
               onChange={setPrompt}
-              placeholder={t("Nhập prompt mô tả...")}
-              maxRows={6}
+              placeholder={t("Nhập Prompt tạo App hoặc link tới app của bạn...")}
+              maxRows={4}
             />
           </Field>
-          <Field label={t("Hướng dẫn sử dụng prompt")}>
+          <Field label={t(config.guideFieldLabel)}>
             <Textarea
               value={des}
               onChange={setDes}
@@ -635,7 +661,7 @@ const CreateEditTrendingDialog = ({
           <NotifyText
             color="pink"
             text={`${t("Lưu ý")}: ${t(
-              "Khi bạn chọn 'Công khai', Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
+              "Khi bạn chọn 'Công khai', App sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
             )}`}
           />
         </div>
@@ -660,20 +686,17 @@ const CustomerTrendingSection = ({
   searchText,
   onUseTrending,
   categories,
+  config,
 }: {
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
   categories: TrendingCategoryPublicItem[];
+  config: AppTypeConfig;
 }) => {
   const { t } = useTranslation();
   const Alert = useAlert();
   const toast = useToast();
-  const {
-    getCustomerTrendingList,
-    updateCustomerTrending,
-    deleteCustomerTrending,
-    createCustomerTrending,
-  } = useAffiliateVideoApi();
+  const { getCustomerList, update, delete: deleteItem, create, type: itemType } = config;
   const { customer } = useAuth();
   const [items, setItems] = useState<TrendingPublicItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -691,8 +714,8 @@ const CustomerTrendingSection = ({
     async (pageNum: number, search?: string) => {
       setIsLoading(true);
       try {
-        const result = await getCustomerTrendingList(pageNum, ITEMS_PER_PAGE, search || undefined);
-        setItems(result.data);
+        const result = await getCustomerList(pageNum, ITEMS_PER_PAGE, search || undefined);
+        setItems(filterItemsByType(result.data, itemType));
         setTotal(result.total);
       } catch {
         setItems([]);
@@ -702,13 +725,13 @@ const CustomerTrendingSection = ({
         setHasLoaded(true);
       }
     },
-    [getCustomerTrendingList]
+    [getCustomerList, itemType]
   );
 
   useEffect(() => {
     setPage(1);
     setHasLoaded(false);
-  }, [searchText]);
+  }, [searchText, itemType]);
 
   useEffect(() => {
     if (!hasLoaded) {
@@ -730,14 +753,11 @@ const CustomerTrendingSection = ({
   };
 
   const handleDelete = async (item: TrendingPublicItem) => {
-    const confirmed = await Alert.danger(
-      t("Xác nhận xoá"),
-      t("Bạn có chắc muốn xoá trending này?")
-    );
+    const confirmed = await Alert.danger(t("Xác nhận xoá"), t(config.deleteConfirm));
     if (!confirmed) return;
-    const ok = await deleteCustomerTrending(item.id);
+    const ok = await deleteItem(item.id);
     if (ok) {
-      toast.success(t("Đã xoá trending"));
+      toast.success(t(config.deleteSuccess));
       loadItems(page, searchText);
     }
   };
@@ -749,17 +769,17 @@ const CustomerTrendingSection = ({
 
   const handleSave = async (data: CustomerTrendingInput, id?: string): Promise<boolean> => {
     if (id) {
-      const result = await updateCustomerTrending(id, data);
+      const result = await update(id, data);
       if (result) {
-        toast.success(t("Đã cập nhật trending"));
+        toast.success(t(config.updateSuccess));
         loadItems(page, searchText);
         return true;
       }
       return false;
     } else {
-      const result = await createCustomerTrending(data);
+      const result = await create(data);
       if (result) {
-        toast.success(t("Đã tạo trending mới"));
+        toast.success(t(config.createSuccess));
         loadItems(1, searchText);
         setPage(1);
         return true;
@@ -808,7 +828,7 @@ const CustomerTrendingSection = ({
             }`}
           >
             {items.map((item) => (
-              <TrendingCard
+              <AppItemCard
                 key={item.id}
                 item={item}
                 onUseTrending={onUseTrending}
@@ -862,6 +882,7 @@ const CustomerTrendingSection = ({
         editItem={editItem}
         categories={categories}
         onSave={handleSave}
+        config={config}
       />
 
       {/* Info Dialog */}
@@ -877,13 +898,15 @@ const CustomerTrendingSection = ({
   );
 };
 
-// ── TrendingCategoryList – main component ───────────────────────────────
-export const TrendingCategoryList = () => {
+// ── AppCategoryList – main component ────────────────────────────────────
+export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
+  const config = useAppTypeConfig(type);
+  const { getActiveTrendingCategoryList, getTrendingPromptById, recordAppTrendingUse } =
     useAffiliateVideoApi();
-  const { patchConfig, setPendingPrompt, openSidebar } = useAffiliateVideoContext();
+  const { create } = config;
+  const { patchConfig, openSidebar, setPendingPrompt } = useAffiliateVideoContext();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -895,10 +918,20 @@ export const TrendingCategoryList = () => {
 
   // Create dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [myListKey, setMyListKey] = useState(0);
 
   // Info dialog state (for non-customer items)
   const [infoDialogOpen, setInfoDialogOpen] = useState(false);
   const [infoItem, setInfoItem] = useState<TrendingPublicItem | null>(null);
+
+  // Reset filter state khi đổi tab type
+  useEffect(() => {
+    setActiveCategoryId(ALL_CATEGORY_ID);
+    setSearchInput("");
+    setDebouncedSearch("");
+    setMyListKey((k) => k + 1);
+    setHasLoaded(false);
+  }, [type]);
 
   // Debounce search input
   useEffect(() => {
@@ -936,13 +969,21 @@ export const TrendingCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → gọi backend lấy prompt theo trending ID → gắn vào config
+  // Khi user click "Dùng ngay" → lấy prompt/link từ backend, hiển thị ở sidebar trái
   const handleUseTrending = useCallback(
-    async (trendingId: string) => {
+    async (trendingId: string, promptName: string): Promise<boolean> => {
       const prompt = await getTrendingPromptById(trendingId);
-      if (!prompt) return;
+      if (!prompt) {
+        toast.error(t("Không lấy được prompt"));
+        return false;
+      }
+      const recorded = await recordAppTrendingUse(trendingId);
+      if (!recorded) {
+        toast.error(t("Không ghi nhận được lượt dùng"));
+        return false;
+      }
       if (patchConfig) {
-        patchConfig({ tipContent: prompt, promptId: trendingId } as any);
+        patchConfig({ tipContent: prompt, promptId: trendingId, promptName });
       }
       if (setPendingPrompt) {
         setPendingPrompt(prompt);
@@ -950,8 +991,17 @@ export const TrendingCategoryList = () => {
       if (openSidebar) {
         openSidebar();
       }
+      return true;
     },
-    [getTrendingPromptById, patchConfig, setPendingPrompt, openSidebar]
+    [
+      getTrendingPromptById,
+      recordAppTrendingUse,
+      patchConfig,
+      setPendingPrompt,
+      openSidebar,
+      toast,
+      t,
+    ]
   );
 
   // Handle info button click for non-customer cards
@@ -963,16 +1013,16 @@ export const TrendingCategoryList = () => {
   // Handle create from dialog
   const handleCreateSave = useCallback(
     async (data: CustomerTrendingInput): Promise<boolean> => {
-      const result = await createCustomerTrending(data);
+      const result = await create(data);
       if (result) {
-        toast.success(t("Đã tạo trending mới"));
-        // Switch to "Của tôi" tab to see the new item
+        toast.success(t(config.createSuccess));
+        setMyListKey((k) => k + 1);
         setActiveCategoryId(MY_TRENDING_ID);
         return true;
       }
       return false;
     },
-    [createCustomerTrending, toast, t]
+    [create, config.createSuccess, toast, t]
   );
 
   // ── Loading state ──
@@ -1031,19 +1081,14 @@ export const TrendingCategoryList = () => {
             </div>
           </div>
         </div>
-        <NotifyText
-          color="green"
-          text={t(
-            "Bạn hoàn toàn có thể kiếm thêm thu nhập từ 'Prompt' bạn đưa lên bạn nhé! Kiếm tiền cùng tôi ngay bây giờ!, hãy tạo mới và công khai trending của bạn để kiếm thêm thu nhập!"
-          )}
-        />
-
-        {/* "Của tôi" tab → CustomerTrendingSection */}
+        <NotifyText color="green" text={t(config.notifyText)} />
         {activeCategoryId === MY_TRENDING_ID ? (
           <CustomerTrendingSection
+            key={myListKey}
             searchText={debouncedSearch}
             onUseTrending={handleUseTrending}
             categories={categories}
+            config={config}
           />
         ) : activeCategoryId === ALL_CATEGORY_ID ? (
           <CategorySection
@@ -1053,6 +1098,7 @@ export const TrendingCategoryList = () => {
             loadCategories={loadCategories}
             onShowInfo={handleShowInfo}
             onOpenCreate={() => setCreateDialogOpen(true)}
+            config={config}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -1065,6 +1111,7 @@ export const TrendingCategoryList = () => {
               loadCategories={loadCategories}
               onShowInfo={handleShowInfo}
               onOpenCreate={() => setCreateDialogOpen(true)}
+              config={config}
             />
           ))
         )}
@@ -1077,6 +1124,7 @@ export const TrendingCategoryList = () => {
         editItem={null}
         categories={categories}
         onSave={async (data) => handleCreateSave(data)}
+        config={config}
       />
 
       {/* Info Dialog (for non-customer items) */}

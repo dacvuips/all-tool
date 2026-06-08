@@ -1,11 +1,22 @@
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { trendingService } from "../../../libs/dal/trending";
+import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { TrendingTypeEnum } from "../../../libs/dal/trending/trending.interface";
 import { Context } from "../../../libs/graphql";
 
+const APP_TRENDING_TYPES = new Set([TrendingTypeEnum.FLOW_APP, TrendingTypeEnum.AI_STUDIO_APP]);
+
+const PROMPT_SHORT_RATIO = 0.2;
+
+const getPromptShort = (prompt: string) => {
+  const length = Math.ceil(prompt.length * PROMPT_SHORT_RATIO);
+  if (length <= 1) return "";
+  return prompt.substring(0, length);
+};
+
 const preparePromptShort = (data: Record<string, any>) => {
-  if (data.prompt) {
-    data.promptShort = data.prompt.substring(0, 150);
+  if (data.prompt !== undefined) {
+    data.promptShort = data.prompt ? getPromptShort(data.prompt) : "";
   }
 };
 
@@ -56,9 +67,7 @@ const updateCustomerItem = async (
   const { id, data } = args;
   const doc = await verifyCustomerOwnership(id, customerId);
   verifyCustomerType(doc, type, label);
-  if (data.prompt !== undefined) {
-    data.promptShort = data.prompt ? data.prompt.substring(0, 150) : "";
-  }
+  preparePromptShort(data);
   if (data.isPublish === false) {
     data.isActive = false;
   }
@@ -102,6 +111,12 @@ const Query = {
   getCustomerChatbotList: async (root: any, args: any, context: Context) => {
     return fetchCustomerListByType(args, context, TrendingTypeEnum.CHATBOT);
   },
+  getCustomerFlowAppList: async (root: any, args: any, context: Context) => {
+    return fetchCustomerListByType(args, context, TrendingTypeEnum.FLOW_APP);
+  },
+  getCustomerAiStudioAppList: async (root: any, args: any, context: Context) => {
+    return fetchCustomerListByType(args, context, TrendingTypeEnum.AI_STUDIO_APP);
+  },
 };
 
 const Mutation = {
@@ -114,9 +129,7 @@ const Mutation = {
   updateTrending: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
     const { id, data } = args;
-    if (data.prompt !== undefined) {
-      data.promptShort = data.prompt ? data.prompt.substring(0, 150) : "";
-    }
+    preparePromptShort(data);
     return await trendingService.updateOne(id, data);
   },
   deleteOneTrending: async (root: any, args: any, context: Context) => {
@@ -141,6 +154,41 @@ const Mutation = {
   },
   deleteCustomerChatbot: async (root: any, args: any, context: Context) => {
     return deleteCustomerItem(args, context, TrendingTypeEnum.CHATBOT, "chatbot");
+  },
+  createCustomerFlowApp: async (root: any, args: any, context: Context) => {
+    return createCustomerItem(args, context, TrendingTypeEnum.FLOW_APP);
+  },
+  updateCustomerFlowApp: async (root: any, args: any, context: Context) => {
+    return updateCustomerItem(args, context, TrendingTypeEnum.FLOW_APP, "flow app");
+  },
+  deleteCustomerFlowApp: async (root: any, args: any, context: Context) => {
+    return deleteCustomerItem(args, context, TrendingTypeEnum.FLOW_APP, "flow app");
+  },
+  createCustomerAiStudioApp: async (root: any, args: any, context: Context) => {
+    return createCustomerItem(args, context, TrendingTypeEnum.AI_STUDIO_APP);
+  },
+  updateCustomerAiStudioApp: async (root: any, args: any, context: Context) => {
+    return updateCustomerItem(args, context, TrendingTypeEnum.AI_STUDIO_APP, "AI studio app");
+  },
+  deleteCustomerAiStudioApp: async (root: any, args: any, context: Context) => {
+    return deleteCustomerItem(args, context, TrendingTypeEnum.AI_STUDIO_APP, "AI studio app");
+  },
+  recordAppTrendingUse: async (root: any, args: any, context: Context) => {
+    context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+    const { id } = args;
+    const trending = await trendingService.findOne({ _id: id });
+    if (!trending) throw new Error("Không tìm thấy app");
+    const doc = (trending as any)._doc || trending;
+    if (!APP_TRENDING_TYPES.has(doc.type)) {
+      throw new Error("Chỉ áp dụng cho Flow App và AI Studio App");
+    }
+    const updated = await TrendingModel.findByIdAndUpdate(
+      id,
+      { $inc: { count: 1, monthlyCount: 1 } },
+      { new: true }
+    );
+    if (!updated) throw new Error("Không tìm thấy app");
+    return updated;
   },
 };
 

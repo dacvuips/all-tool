@@ -19,6 +19,7 @@ import {
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { TrendingTypeEnum } from "../../../lib/repo/list/trending.repo";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
+import { AppPage } from "./app/app-page";
 import { ChatbotPage } from "./chatbot/chatbot-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
@@ -45,20 +46,16 @@ export default function AffiliateMainPage() {
       component: <TrendingPage />,
     },
     {
-      icon: (
-        <div className="px-1 -mr-1 text-xs font-semibold text-blue-600 rounded-full border border-blue-600">
-          {"New 🆕"}
-        </div>
-      ),
+      icon: "🆕",
       label: t("ChatBot AI"),
       value: TrendingTypeEnum.CHATBOT,
       component: <ChatbotPage />,
     },
     {
       icon: <RiAppStoreLine />,
-      label: t("Flow App"),
-      value: TrendingTypeEnum.CHATBOT,
-      component: <ChatbotPage />,
+      label: t("App"),
+      value: "app",
+      component: <AppPage />,
     },
 
     {

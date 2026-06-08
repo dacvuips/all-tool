@@ -400,7 +400,7 @@ const CreateEditArtStyleDialog = ({
           <NotifyText
             color="pink"
             text={`${t("Lưu ý")}: ${t(
-              "Phong cách sẽ được công khai cho tất cả người dùng sử dụng sau khi admin duyệt"
+              "Khi bạn chọn 'Công khai', Phong cách sẽ được công khai cho tất cả người dùng sử dụng sau khi admin duyệt"
             )}`}
           />
         </div>

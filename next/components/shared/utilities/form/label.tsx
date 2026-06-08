@@ -41,7 +41,9 @@ export function Label({ ...props }: PropsType) {
         {props.children}
       </label>
       {props.description && (
-        <div className="text-sm text-gray-600 pl-1 -mt-0.5 mb-1">{props.description}</div>
+        <div className="text-sm text-gray-600 pl-1 -mt-0.5 mb-1 whitespace-pre-line">
+          {props.description}
+        </div>
       )}
     </>
   );

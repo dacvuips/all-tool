@@ -11,6 +11,8 @@ export enum TrendingTypeEnum {
 export const TRENDING_TYPE_OPTIONS = [
   { value: TrendingTypeEnum.PROMPT, label: t("Prompt") },
   { value: TrendingTypeEnum.CHATBOT, label: t("Chatbot") },
+  { value: TrendingTypeEnum.FLOW_APP, label: t("Flow App") },
+  { value: TrendingTypeEnum.AI_STUDIO_APP, label: t("AI Studio App") },
 ];
 export interface Trending extends BaseModel {
   name: string;

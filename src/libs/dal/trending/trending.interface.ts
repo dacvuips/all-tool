@@ -31,4 +31,6 @@ export type ITrending = TimestampEntity & {
 export enum TrendingTypeEnum {
   CHATBOT = "CHATBOT",
   PROMPT = "PROMPT",
+  FLOW_APP = "FLOW_APP",
+  AI_STUDIO_APP = "AI_STUDIO_APP",
 }

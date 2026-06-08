@@ -23,6 +23,7 @@ export interface TrendingPublicItem {
   isPublish: boolean;
   monthlyCount: number;
   isActive: boolean;
+  type?: TrendingTypeEnum;
 }
 
 /** Public trending category with resolved trending items */
@@ -122,7 +123,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           filter,
           order: { count: -1 },
         },
-        fragment: `id name imageUrls  count price promptShort trendingCategoryIds isPublish isActive`,
+        fragment: `id name imageUrls count price promptShort trendingCategoryIds isPublish isActive type`,
         cache: false,
       });
       return {
@@ -158,6 +159,25 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
   }
 
   /**
+   * Ghi nhận lượt dùng Flow App / AI Studio App (tăng count + monthlyCount).
+   */
+  async recordAppTrendingUse(trendingId: string): Promise<boolean> {
+    try {
+      const result = await this.mutate({
+        mutation: `recordAppTrendingUse(id: "${trendingId}") { id count monthlyCount }`,
+        options: {
+          fetchPolicy: "no-cache",
+        },
+      });
+      this.handleError(result);
+      return !!result.data?.["g0"]?.id;
+    } catch (err) {
+      console.error("[recordAppTrendingUse] Error:", err);
+      return false;
+    }
+  }
+
+  /**
    * Lấy danh sách trending do chính customer hiện tại tạo, có phân trang.
    */
   async getCustomerTrendingList(
@@ -165,32 +185,13 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     limit: number = 10,
     search?: string
   ): Promise<TrendingsByCategoryResult> {
-    try {
-      const result = await this.getAll({
-        apiName: "getCustomerTrendingList",
-        query: {
-          filter: {
-            isPublish: true,
-            isActive: true,
-            type: TrendingTypeEnum.PROMPT,
-          },
-          page,
-          limit,
-          search: search || undefined,
-          order: { createdAt: -1 },
-        },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive type`,
-        cache: false,
-      });
-      return {
-        data: (result.data || []) as any as TrendingPublicItem[],
-        total: result.total || 0,
-        pagination: result.pagination,
-      };
-    } catch (err) {
-      console.error("[getCustomerTrendingList] Error:", err);
-      return { data: [], total: 0 };
-    }
+    return this.getCustomerItemList(
+      "getCustomerTrendingList",
+      TrendingTypeEnum.PROMPT,
+      page,
+      limit,
+      search
+    );
   }
 
   /**
@@ -201,32 +202,13 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     limit: number = 10,
     search?: string
   ): Promise<TrendingsByCategoryResult> {
-    try {
-      const result = await this.getAll({
-        apiName: "getCustomerChatbotList",
-        query: {
-          filter: {
-            isPublish: true,
-            isActive: true,
-            type: TrendingTypeEnum.CHATBOT,
-          },
-          page,
-          limit,
-          search: search || undefined,
-          order: { createdAt: -1 },
-        },
-        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive type`,
-        cache: false,
-      });
-      return {
-        data: (result.data || []) as any as TrendingPublicItem[],
-        total: result.total || 0,
-        pagination: result.pagination,
-      };
-    } catch (err) {
-      console.error("[getCustomerChatbotList] Error:", err);
-      return { data: [], total: 0 };
-    }
+    return this.getCustomerItemList(
+      "getCustomerChatbotList",
+      TrendingTypeEnum.CHATBOT,
+      page,
+      limit,
+      search
+    );
   }
 
   /**
@@ -238,17 +220,82 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     limit: number = 20,
     search?: string
   ): Promise<TrendingsByCategoryResult> {
+    return this.getRankByType(TrendingTypeEnum.PROMPT, page, limit, search);
+  }
+  async getChatbotRank(
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    return this.getRankByType(TrendingTypeEnum.CHATBOT, page, limit, search);
+  }
+
+  async getCustomerFlowAppList(
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    return this.getCustomerItemList(
+      "getCustomerFlowAppList",
+      TrendingTypeEnum.FLOW_APP,
+      page,
+      limit,
+      search
+    );
+  }
+
+  async getCustomerAiStudioAppList(
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    return this.getCustomerItemList(
+      "getCustomerAiStudioAppList",
+      TrendingTypeEnum.AI_STUDIO_APP,
+      page,
+      limit,
+      search
+    );
+  }
+
+  async getFlowAppRank(
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    return this.getRankByType(TrendingTypeEnum.FLOW_APP, page, limit, search);
+  }
+
+  async getAiStudioAppRank(
+    page: number = 1,
+    limit: number = 20,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
+    return this.getRankByType(TrendingTypeEnum.AI_STUDIO_APP, page, limit, search);
+  }
+
+  private async getCustomerItemList(
+    apiName: string,
+    type: TrendingTypeEnum,
+    page: number = 1,
+    limit: number = 10,
+    search?: string
+  ): Promise<TrendingsByCategoryResult> {
     try {
       const result = await this.getAll({
-        apiName: "getTrendingsByCategoryId",
+        apiName,
         query: {
+          // Chỉ lọc theo type – backend tự gắn customerId.
+          // Không lọc isPublish/isActive để customer thấy cả item mới tạo/chưa duyệt.
+          filter: {
+            type,
+          },
           page,
           limit,
           search: search || undefined,
-          filter: { isActive: true, type: TrendingTypeEnum.PROMPT },
-          order: { monthlyCount: -1 },
+          order: { createdAt: -1 },
         },
-        fragment: `id name imageUrls count price promptShort monthlyCount`,
+        fragment: `id name imageUrls prompt count price promptShort des isPublish trendingCategoryIds createdAt monthlyCount isActive type`,
         cache: false,
       });
       return {
@@ -257,11 +304,13 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
         pagination: result.pagination,
       };
     } catch (err) {
-      console.error("[getTrendingRank] Error:", err);
+      console.error(`[${apiName}] Error:`, err);
       return { data: [], total: 0 };
     }
   }
-  async getChatbotRank(
+
+  private async getRankByType(
+    type: TrendingTypeEnum,
     page: number = 1,
     limit: number = 20,
     search?: string
@@ -273,7 +322,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
           page,
           limit,
           search: search || undefined,
-          filter: { isActive: true, type: TrendingTypeEnum.CHATBOT },
+          filter: { isActive: true, type },
           order: { monthlyCount: -1 },
         },
         fragment: `id name imageUrls count price promptShort monthlyCount`,
@@ -285,7 +334,7 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
         pagination: result.pagination,
       };
     } catch (err) {
-      console.error("[getChatbotRank] Error:", err);
+      console.error(`[getRankByType:${type}] Error:`, err);
       return { data: [], total: 0 };
     }
   }

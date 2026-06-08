@@ -416,9 +416,34 @@ export interface UseAffiliateVideoApiReturn {
   ) => Promise<TrendingsByCategoryResult>;
 
   /**
+   * Lấy danh sách flow app items theo category ID, có phân trang.
+   */
+  getFlowAppsByCategoryId: (
+    categoryId?: string,
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy danh sách AI studio app items theo category ID, có phân trang.
+   */
+  getAiStudioAppsByCategoryId: (
+    categoryId?: string,
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
    * Lấy prompt của trending theo ID.
    */
   getTrendingPromptById: (trendingId: string) => Promise<string | null>;
+
+  /**
+   * Ghi nhận lượt dùng Flow App / AI Studio App.
+   */
+  recordAppTrendingUse: (trendingId: string) => Promise<boolean>;
 
   /**
    * Lấy danh sách trending (PROMPT) do customer hiện tại tạo, có phân trang.
@@ -433,6 +458,24 @@ export interface UseAffiliateVideoApiReturn {
    * Lấy danh sách chatbot (CHATBOT) do customer hiện tại tạo, có phân trang.
    */
   getCustomerChatbotList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy danh sách flow app (FLOW_APP) do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerFlowAppList: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy danh sách AI studio app (AI_STUDIO_APP) do customer hiện tại tạo, có phân trang.
+   */
+  getCustomerAiStudioAppList: (
     page?: number,
     limit?: number,
     search?: string
@@ -475,6 +518,42 @@ export interface UseAffiliateVideoApiReturn {
   deleteCustomerChatbot: (id: string) => Promise<boolean>;
 
   /**
+   * Customer tạo flow app mới (type FLOW_APP).
+   */
+  createCustomerFlowApp: (data: CustomerTrendingInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa flow app của mình (type FLOW_APP).
+   */
+  updateCustomerFlowApp: (
+    id: string,
+    data: Partial<CustomerTrendingInput>
+  ) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá flow app của mình (type FLOW_APP).
+   */
+  deleteCustomerFlowApp: (id: string) => Promise<boolean>;
+
+  /**
+   * Customer tạo AI studio app mới (type AI_STUDIO_APP).
+   */
+  createCustomerAiStudioApp: (data: CustomerTrendingInput) => Promise<any | undefined>;
+
+  /**
+   * Customer sửa AI studio app của mình (type AI_STUDIO_APP).
+   */
+  updateCustomerAiStudioApp: (
+    id: string,
+    data: Partial<CustomerTrendingInput>
+  ) => Promise<any | undefined>;
+
+  /**
+   * Customer xoá AI studio app của mình (type AI_STUDIO_APP).
+   */
+  deleteCustomerAiStudioApp: (id: string) => Promise<boolean>;
+
+  /**
    * Lấy bảng xếp hạng trending theo monthlyCount (giảm dần).
    */
   getTrendingRank: (
@@ -487,6 +566,24 @@ export interface UseAffiliateVideoApiReturn {
    * Lấy bảng xếp hạng chatbot theo monthlyCount (giảm dần).
    */
   getChatbotRank: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy bảng xếp hạng flow app theo monthlyCount (giảm dần).
+   */
+  getFlowAppRank: (
+    page?: number,
+    limit?: number,
+    search?: string
+  ) => Promise<TrendingsByCategoryResult>;
+
+  /**
+   * Lấy bảng xếp hạng AI studio app theo monthlyCount (giảm dần).
+   */
+  getAiStudioAppRank: (
     page?: number,
     limit?: number,
     search?: string
@@ -1490,9 +1587,39 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
+  const getFlowAppsByCategoryId = useCallback(
+    async (categoryId?: string, page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(
+        categoryId,
+        page,
+        limit,
+        search,
+        TrendingTypeEnum.FLOW_APP
+      );
+    },
+    []
+  );
+
+  const getAiStudioAppsByCategoryId = useCallback(
+    async (categoryId?: string, page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getTrendingsByCategoryId(
+        categoryId,
+        page,
+        limit,
+        search,
+        TrendingTypeEnum.AI_STUDIO_APP
+      );
+    },
+    []
+  );
+
   // ── getTrendingPromptById – lấy prompt của trending theo ID ──
   const getTrendingPromptById = useCallback(async (trendingId: string): Promise<string | null> => {
     return TrendingCategoryService.getTrendingPromptById(trendingId);
+  }, []);
+
+  const recordAppTrendingUse = useCallback(async (trendingId: string): Promise<boolean> => {
+    return TrendingCategoryService.recordAppTrendingUse(trendingId);
   }, []);
 
   // ── getCustomerTrendingList – lấy danh sách trending của customer ──
@@ -1517,10 +1644,38 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     []
   );
 
+  const getFlowAppRank = useCallback(
+    async (page: number = 1, limit: number = 20, search?: string) => {
+      return TrendingCategoryService.getFlowAppRank(page, limit, search);
+    },
+    []
+  );
+
+  const getAiStudioAppRank = useCallback(
+    async (page: number = 1, limit: number = 20, search?: string) => {
+      return TrendingCategoryService.getAiStudioAppRank(page, limit, search);
+    },
+    []
+  );
+
   // ── getCustomerChatbotList – lấy danh sách chatbot của customer ──
   const getCustomerChatbotList = useCallback(
     async (page: number = 1, limit: number = 10, search?: string) => {
       return TrendingCategoryService.getCustomerChatbotList(page, limit, search);
+    },
+    []
+  );
+
+  const getCustomerFlowAppList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getCustomerFlowAppList(page, limit, search);
+    },
+    []
+  );
+
+  const getCustomerAiStudioAppList = useCallback(
+    async (page: number = 1, limit: number = 10, search?: string) => {
+      return TrendingCategoryService.getCustomerAiStudioAppList(page, limit, search);
     },
     []
   );
@@ -1740,6 +1895,216 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
+  const createCustomerFlowApp = useCallback(
+    async (data: CustomerTrendingInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerFlowApp($data: CreateCustomerFlowAppInput!) {
+              createCustomerFlowApp(data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerFlowApp] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerFlowApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo flow app");
+          return undefined;
+        }
+
+        return json.data?.createCustomerFlowApp;
+      } catch (err: any) {
+        console.error("[createCustomerFlowApp] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  const updateCustomerFlowApp = useCallback(
+    async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerFlowApp($id: ID!, $data: UpdateCustomerFlowAppInput!) {
+              updateCustomerFlowApp(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerFlowApp] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerFlowApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa flow app");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerFlowApp;
+      } catch (err: any) {
+        console.error("[updateCustomerFlowApp] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  const deleteCustomerFlowApp = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerFlowApp($id: ID!) {
+              deleteCustomerFlowApp(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerFlowApp] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerFlowApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá flow app");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerFlowApp] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
+  const createCustomerAiStudioApp = useCallback(
+    async (data: CustomerTrendingInput): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation CreateCustomerAiStudioApp($data: CreateCustomerAiStudioAppInput!) {
+              createCustomerAiStudioApp(data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[createCustomerAiStudioApp] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[createCustomerAiStudioApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi tạo AI studio app");
+          return undefined;
+        }
+
+        return json.data?.createCustomerAiStudioApp;
+      } catch (err: any) {
+        console.error("[createCustomerAiStudioApp] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  const updateCustomerAiStudioApp = useCallback(
+    async (id: string, data: Partial<CustomerTrendingInput>): Promise<any | undefined> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation UpdateCustomerAiStudioApp($id: ID!, $data: UpdateCustomerAiStudioAppInput!) {
+              updateCustomerAiStudioApp(id: $id, data: $data) { id name imageUrls prompt des isPublish price count promptShort trendingCategoryIds type }
+            }`,
+            variables: { id, data },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[updateCustomerAiStudioApp] HTTP error:", res.status);
+          return undefined;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[updateCustomerAiStudioApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi sửa AI studio app");
+          return undefined;
+        }
+
+        return json.data?.updateCustomerAiStudioApp;
+      } catch (err: any) {
+        console.error("[updateCustomerAiStudioApp] Error:", err);
+        return undefined;
+      }
+    },
+    [toast]
+  );
+
+  const deleteCustomerAiStudioApp = useCallback(
+    async (id: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/graphql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: `mutation DeleteCustomerAiStudioApp($id: ID!) {
+              deleteCustomerAiStudioApp(id: $id) { id name }
+            }`,
+            variables: { id },
+          }),
+        });
+
+        if (!res.ok) {
+          console.error("[deleteCustomerAiStudioApp] HTTP error:", res.status);
+          return false;
+        }
+
+        const json = await res.json();
+        if (json.errors?.length) {
+          console.error("[deleteCustomerAiStudioApp] GraphQL errors:", json.errors);
+          toast.error(json.errors[0]?.message || "Lỗi xoá AI studio app");
+          return false;
+        }
+
+        return true;
+      } catch (err: any) {
+        console.error("[deleteCustomerAiStudioApp] Error:", err);
+        return false;
+      }
+    },
+    [toast]
+  );
+
   // ── Art Style APIs ──────────────────────────────────────────────────────
 
   // ── getActiveArtStyleCategoryList – lấy danh sách art style category active ──
@@ -1899,15 +2264,26 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getActiveTrendingCategoryList,
     getTrendingsByCategoryId,
     getChatbotsByCategoryId,
+    getFlowAppsByCategoryId,
+    getAiStudioAppsByCategoryId,
     getTrendingPromptById,
+    recordAppTrendingUse,
     getCustomerTrendingList,
     getCustomerChatbotList,
+    getCustomerFlowAppList,
+    getCustomerAiStudioAppList,
     createCustomerTrending,
     updateCustomerTrending,
     deleteCustomerTrending,
     createCustomerChatbot,
     updateCustomerChatbot,
     deleteCustomerChatbot,
+    createCustomerFlowApp,
+    updateCustomerFlowApp,
+    deleteCustomerFlowApp,
+    createCustomerAiStudioApp,
+    updateCustomerAiStudioApp,
+    deleteCustomerAiStudioApp,
     getTrendingRank,
     generateTrendingSingle,
     generateTrendingScene,
@@ -1921,5 +2297,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     updateCustomerArtStyle,
     deleteCustomerArtStyle,
     getChatbotRank,
+    getFlowAppRank,
+    getAiStudioAppRank,
   };
 }

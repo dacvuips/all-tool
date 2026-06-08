@@ -10,6 +10,10 @@ const schema = gql`
     getCustomerTrendingList(q: QueryGetListInput): TrendingPageData
     "Lấy danh sách chatbot do chính customer hiện tại tạo (type CHATBOT)"
     getCustomerChatbotList(q: QueryGetListInput): TrendingPageData
+    "Lấy danh sách flow app do chính customer hiện tại tạo (type FLOW_APP)"
+    getCustomerFlowAppList(q: QueryGetListInput): TrendingPageData
+    "Lấy danh sách AI studio app do chính customer hiện tại tạo (type AI_STUDIO_APP)"
+    getCustomerAiStudioAppList(q: QueryGetListInput): TrendingPageData
     # Add Query
   }
 
@@ -29,6 +33,20 @@ const schema = gql`
     updateCustomerChatbot(id: ID!, data: UpdateCustomerChatbotInput!): Trending
     "Customer xoá chatbot của mình (type CHATBOT)"
     deleteCustomerChatbot(id: ID!): Trending
+    "Customer tạo flow app mới (tự động gán customerId, type FLOW_APP)"
+    createCustomerFlowApp(data: CreateCustomerFlowAppInput!): Trending
+    "Customer sửa flow app của mình (type FLOW_APP)"
+    updateCustomerFlowApp(id: ID!, data: UpdateCustomerFlowAppInput!): Trending
+    "Customer xoá flow app của mình (type FLOW_APP)"
+    deleteCustomerFlowApp(id: ID!): Trending
+    "Customer tạo AI studio app mới (tự động gán customerId, type AI_STUDIO_APP)"
+    createCustomerAiStudioApp(data: CreateCustomerAiStudioAppInput!): Trending
+    "Customer sửa AI studio app của mình (type AI_STUDIO_APP)"
+    updateCustomerAiStudioApp(id: ID!, data: UpdateCustomerAiStudioAppInput!): Trending
+    "Customer xoá AI studio app của mình (type AI_STUDIO_APP)"
+    deleteCustomerAiStudioApp(id: ID!): Trending
+    "Ghi nhận lượt dùng Flow App / AI Studio App (tăng count + monthlyCount)"
+    recordAppTrendingUse(id: ID!): Trending
     # Add Mutation
   }
 
@@ -85,6 +103,74 @@ const schema = gql`
 
   input UpdateCustomerChatbotInput {
     "Tên chatbot"
+    name: String
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+  }
+
+  input CreateCustomerFlowAppInput {
+    "Tên flow app"
+    name: String!
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+  }
+
+  input UpdateCustomerFlowAppInput {
+    "Tên flow app"
+    name: String
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+  }
+
+  input CreateCustomerAiStudioAppInput {
+    "Tên AI studio app"
+    name: String!
+    "Danh sách URL ảnh"
+    imageUrls: [String]
+    "Prompt mô tả"
+    prompt: String
+    "Mô tả"
+    des: String
+    "Trạng thái xuất bản"
+    isPublish: Boolean
+    "Danh sách ID danh mục trending"
+    trendingCategoryIds: [ID]
+    "Giá"
+    price: Float
+  }
+
+  input UpdateCustomerAiStudioAppInput {
+    "Tên AI studio app"
     name: String
     "Danh sách URL ảnh"
     imageUrls: [String]
@@ -190,6 +276,8 @@ const schema = gql`
   enum TrendingTypeEnum {
     CHATBOT
     PROMPT
+    FLOW_APP
+    AI_STUDIO_APP
   }
   type TrendingPageData {
     data: [Trending]

@@ -636,7 +636,7 @@ const CreateEditTrendingDialog = ({
           <NotifyText
             color="pink"
             text={`${t("Lưu ý")}: ${t(
-              "Prompt sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
+              "Khi bạn chọn 'Công khai', Chatbot sẽ được công khai cho tất tả người dùng sử dụng sau khi admin duyệt"
             )}`}
           />
         </div>

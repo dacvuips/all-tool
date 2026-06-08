@@ -1,5 +1,9 @@
+import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { TRENDING_TYPE_OPTIONS } from "../../../../../lib/repo/list/trending.repo";
+import {
+  TRENDING_TYPE_OPTIONS,
+  TrendingTypeEnum,
+} from "../../../../../lib/repo/list/trending.repo";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
 import { Field, ImageInput, Input, Textarea } from "../../../../shared/utilities/form";
 import { Select } from "../../../../shared/utilities/form/select";
@@ -7,19 +11,28 @@ import { Switch } from "../../../../shared/utilities/form/switch";
 
 export function TrendingFields() {
   const { t } = useTranslation();
-
+  const { watch } = useFormContext();
+  const type = watch("type");
   return (
     <>
       <Field name="imageUrls" label={t("Danh sách ảnh")} cols={12}>
         <ImageInput largeImage cover multi />
       </Field>
-      <Field name="name" label={t("Tên trending")} cols={12} required>
+      <Field name="name" label={t("Tên trending")} cols={6} required>
         <Input />
       </Field>
       <Field name="type" label={t("Loại")} cols={6}>
         <Select native options={TRENDING_TYPE_OPTIONS} />
       </Field>
-      <Field name="prompt" label={t("Prompt mô tả")} cols={12}>
+      <Field
+        name="prompt"
+        label={
+          type === TrendingTypeEnum.PROMPT || type === TrendingTypeEnum.CHATBOT
+            ? t("Prompt mô tả")
+            : t("Link của App")
+        }
+        cols={12}
+      >
         <Textarea />
       </Field>
       <Field name="des" label={t("Mô tả")} cols={12}>
