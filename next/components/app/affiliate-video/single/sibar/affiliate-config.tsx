@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
-import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
+import { RiCameraLensFill, RiFilmFill, RiLoader4Fill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
@@ -18,6 +18,7 @@ import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
+import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
 
@@ -38,6 +39,7 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
     storyModeType ||
     StoryModeTypeEnum.image_to_video;
   const [currentStoryModeType, setCurrentStoryModeType] = useState<StoryModeTypeEnum>(initialMode);
+  const [isSuggestLoading, setIsSuggestLoading] = useState(false);
 
   // Sync from URL param when it changes (e.g. browser back/forward)
   useEffect(() => {
@@ -51,6 +53,27 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
       }
     }
   }, [router.query.storyModeType]);
+
+  const tipContentLabel = (
+    <span className="flex items-center gap-1.5 w-full">
+      {t("Nội dung mẹo")}
+      <SuggestButton
+        className="w-full"
+        suggestParams={{
+          category: videoConfig?.category,
+          mood: videoConfig?.mood,
+          language: videoConfig?.language,
+        }}
+        onLoadingChange={setIsSuggestLoading}
+        onSuggestResult={(result) =>
+          patchConfig?.({
+            objectToPersonify: result.objectToPersonify,
+            tipContent: result.tipContent,
+          })
+        }
+      />
+    </span>
+  );
 
   return (
     <div className="flex-1 bg-white">
@@ -231,14 +254,24 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
 
         {/* NỘI DUNG MẸO (tipContent) */}
         <div>
-          <Field noError name="tipContent" label={t("Nội dung mẹo")}>
-            <Textarea
-              id="tip-content-input"
-              className="border-gray-200"
-              placeholder={`${t("VD")}: ${t("Cách ăn chuối tốt nhất")}`}
-              onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
-              maxRows={4}
-            />
+          <Field noError name="tipContent" label={tipContentLabel}>
+            <div
+              className={`relative ${isSuggestLoading ? "opacity-40 pointer-events-none cursor-wait" : ""}`}
+            >
+              <Textarea
+                id="tip-content-input"
+                className="border-gray-200"
+                placeholder={`${t("VD")}: ${t("Cách ăn chuối tốt nhất")}`}
+                onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
+                readOnly={isSuggestLoading}
+                maxRows={4}
+              />
+              {isSuggestLoading && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <RiLoader4Fill className="text-lg text-gray-400 animate-spin" />
+                </div>
+              )}
+            </div>
           </Field>
         </div>
 

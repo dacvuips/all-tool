@@ -7,7 +7,6 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { GenerateAiIcon } from "../../../../../public/assets/svg/generate-ai";
 import { Button } from "../../../../shared/utilities/form";
-import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 export const AffiliateSubmit = () => {
@@ -18,20 +17,6 @@ export const AffiliateSubmit = () => {
   return (
     <div className="flex-shrink-0 px-4 pb-4 pt-2 bg-white border-t border-gray-100">
       <div className="flex  gap-2 items-center justify-between">
-        <SuggestButton
-          className="w-full"
-          suggestParams={{
-            category: videoConfig?.category,
-            mood: videoConfig?.mood,
-            language: videoConfig?.language,
-          }}
-          onSuggestResult={(result) =>
-            patchConfig?.({
-              objectToPersonify: result.objectToPersonify,
-              tipContent: result.tipContent,
-            })
-          }
-        />
         <Button
           submit
           className="w-full"

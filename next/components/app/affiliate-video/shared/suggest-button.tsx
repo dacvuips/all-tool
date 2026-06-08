@@ -17,12 +17,14 @@ import {
 export type SuggestButtonProps = {
   suggestParams?: SuggestConfigParams;
   onSuggestResult?: (result: SuggestConfigResult) => void;
+  onLoadingChange?: (loading: boolean) => void;
   className?: string;
 };
 
 export const SuggestButton = ({
   suggestParams,
   onSuggestResult,
+  onLoadingChange,
   className = "h-7 px-2",
 }: SuggestButtonProps) => {
   const { t } = useTranslation();
@@ -34,6 +36,7 @@ export const SuggestButton = ({
   const handleSuggestConfig = async () => {
     if (isLoading) return;
     setIsLoading(true);
+    onLoadingChange?.(true);
     try {
       const result = await suggestConfig(suggestParams ?? {});
       if (result) {
@@ -45,6 +48,7 @@ export const SuggestButton = ({
       // Lỗi đã được xử lý bằng toast trong suggestConfig
     } finally {
       setIsLoading(false);
+      onLoadingChange?.(false);
     }
   };
 
@@ -54,7 +58,7 @@ export const SuggestButton = ({
       info
       onClick={handleSuggestConfig}
       disabled={isLoading || !customer}
-      className={className}
+      className="px-1 h-6"
       icon={
         isLoading ? (
           <RiLoader4Fill className="text-xs animate-spin" />
