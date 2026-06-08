@@ -4,9 +4,9 @@
  * `voiceDisable`: when true, strip [AUDIO]/[DIALOGUE] tags and append silent-video note.
  * `prompt`: top-level ưu tiên hơn `config.prompt`.
  */
-export const NO_TEXT_NOTE = `\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`;
+export const NO_TEXT_NOTE = `\n Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.`;
 
-export const VOICE_DISABLE_NOTE = `\nImportant: Do not include any dialogue or voice-over. Focus solely on the visual elements, actions, and camera movements in each scene.`;
+export const VOICE_DISABLE_NOTE = `\n silent video, no audio, no sound, no voice`;
 
 export type VideoPromptOptions = {
   noText?: boolean;

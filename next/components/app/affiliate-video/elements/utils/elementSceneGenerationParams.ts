@@ -2,14 +2,16 @@
  * Shared payloads for element image/video generation (single scene + batch).
  * Batch handlers must call these so each item uses the same API params as the per-scene UI.
  */
+import { CopyVideoScene, ElementAnalysisData, ElementFormImage } from "../../constants";
+import type {
+  GeneratedImageData,
+  GenerateImageParams,
+  GenerateVideoParams,
+} from "../hook/useElementApi";
 import {
-  CopyVideoScene,
-  ElementAnalysisData,
-  ElementFormImage,
-} from "../../constants";
-import type { GeneratedImageData } from "../hook/useElementApi";
-import type { GenerateImageParams, GenerateVideoParams } from "../hook/useElementApi";
-import { productImageUrlsToApiImages, resolveElementReferenceImagesForApi } from "./elementFormImageUtils";
+  productImageUrlsToApiImages,
+  resolveElementReferenceImagesForApi,
+} from "./elementFormImageUtils";
 
 export type ElementScriptLike =
   | Pick<ElementAnalysisData, "aspectRatio" | "artStyle" | "artStyleId" | "serviceImageType">
@@ -51,13 +53,21 @@ export function buildElementVideoPrompt(scene: CopyVideoScene, isStitch?: boolea
 
   if (isStitch) {
     return scene.voiceDisable
-      ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-      : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+      ? `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+          motionPrompt ? `[MOTION]${motionPrompt}` : ""
+        }`
+      : `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+          motionPrompt ? `[MOTION]${motionPrompt}` : ""
+        }, ${audio ? `[AUDIO]${audio}` : ""}, ${dialogue ? `[DIALOGUE]${dialogue}` : ""}`;
   }
 
   return scene.voiceDisable
-    ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-    : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+    ? `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+        motionPrompt ? `[MOTION]${motionPrompt}` : ""
+      }`
+    : `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+        motionPrompt ? `[MOTION]${motionPrompt}` : ""
+      }, ${audio ? `[AUDIO]${audio}` : ""}, ${dialogue ? `[DIALOGUE]${dialogue}` : ""}`;
 }
 
 /** Image generation params – identical to handleGenerateImage in useElementSceneMedia. */

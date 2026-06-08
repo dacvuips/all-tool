@@ -9,9 +9,7 @@ import type {
   GenerateImageParams,
   GenerateVideoParams,
 } from "../hook/useReviewApi";
-import {
-  productImageUrlsToApiImages,
-} from "./reviewFormImageUtils";
+import { productImageUrlsToApiImages } from "./reviewFormImageUtils";
 
 export type ElementScriptLike =
   | Pick<ElementAnalysisData, "aspectRatio" | "artStyle" | "artStyleId" | "serviceImageType">
@@ -53,13 +51,21 @@ export function buildReviewVideoPrompt(scene: ReviewScene, isStitch?: boolean): 
 
   if (isStitch) {
     return scene.voiceDisable
-      ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-      : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+      ? `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+          motionPrompt ? `[MOTION]${motionPrompt}` : ""
+        }`
+      : `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+          motionPrompt ? `[MOTION]${motionPrompt}` : ""
+        }, ${audio ? `[AUDIO]${audio}` : ""}, ${dialogue ? `[DIALOGUE]${dialogue}` : ""}`;
   }
 
   return scene.voiceDisable
-    ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-    : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+    ? `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+        motionPrompt ? `[MOTION]${motionPrompt}` : ""
+      }`
+    : `${visualPrompt ? `[VISUAL PROMPT]${visualPrompt}` : ""} ${
+        motionPrompt ? `[MOTION]${motionPrompt}` : ""
+      }, ${audio ? `[AUDIO]${audio}` : ""}, ${dialogue ? `[DIALOGUE]${dialogue}` : ""}`;
 }
 
 /** Image generation params – identical to handleGenerateImage in useElementSceneMedia. */
@@ -104,13 +110,7 @@ export async function buildReviewVideoGenerateParams(options: {
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
 }): Promise<GenerateVideoParams> {
-  const {
-    scene,
-    scriptData,
-    isStitch,
-    generatedImage,
-    nextGeneratedImage,
-  } = options;
+  const { scene, scriptData, isStitch, generatedImage, nextGeneratedImage } = options;
 
   let images: GenerateVideoParams["images"];
 

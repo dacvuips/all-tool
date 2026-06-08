@@ -1,21 +1,16 @@
 /**
  * Shared payloads for copy-video image/video generation (single scene + batch).
  */
-import type { CopyVideoScene } from "../../constants";
-import type { CopyVideoAnalysisData } from "../../constants";
+import type { CopyVideoAnalysisData, CopyVideoScene, ElementFormImage } from "../../constants";
+import { productImageUrlsToApiImages } from "../../elements/utils/elementFormImageUtils";
+import { parseThumbnailReferenceImage } from "../../elements/utils/elementSceneGenerationParams";
 import type {
   GenerateImageParams,
   GenerateVideoParams,
   GeneratedImageData,
 } from "../hook/useCopyVideoApi";
-import type { ElementFormImage } from "../../constants";
-import { parseThumbnailReferenceImage } from "../../elements/utils/elementSceneGenerationParams";
-import { productImageUrlsToApiImages } from "../../elements/utils/elementFormImageUtils";
 
-export type CopyVideoScriptLike =
-  | Pick<CopyVideoAnalysisData, "aspectRatio">
-  | null
-  | undefined;
+export type CopyVideoScriptLike = Pick<CopyVideoAnalysisData, "aspectRatio"> | null | undefined;
 
 export { parseThumbnailReferenceImage };
 
@@ -58,12 +53,20 @@ export function buildCopyVideoVideoPrompt(scene: CopyVideoScene, isStitch?: bool
 
   if (isStitch) {
     return scene.voiceDisable
-      ? `[MOTION]${motion}`
-      : `[MOTION]${motion}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+      ? motion
+        ? `[MOTION]${motion}`
+        : ""
+      : `${motion ? `[MOTION]${motion}` : ""}, ${audio ? `[AUDIO]${audio}` : ""}, ${
+          dialogue ? `[DIALOGUE]${dialogue}` : ""
+        }`;
   }
   return scene.voiceDisable
-    ? `[MOTION]${motion}`
-    : `[MOTION]${motion}, [AUDIO]${audio}, [DIALOGUE]${dialogue}`;
+    ? motion
+      ? `[MOTION]${motion}`
+      : ""
+    : `${motion ? `[MOTION]${motion}` : ""}, ${audio ? `[AUDIO]${audio}` : ""}, ${
+        dialogue ? `[DIALOGUE]${dialogue}` : ""
+      }`;
 }
 
 export function buildCopyVideoVideoGenerateParams(options: {
