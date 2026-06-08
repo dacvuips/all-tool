@@ -16,15 +16,16 @@ import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
-import { buildVideoPrompt, getVideoPromptOptionsFromPayload } from "./_video-prompt";
+import { buildVideoPromptFromPayload } from "./_video-prompt";
 
 export type GenerationReviewVideoPayload = {
-  prompt: string;
+  prompt?: string;
   images?: Array<string | MediaImageBytes>;
   noText?: boolean;
   voiceDisable?: boolean;
   video_mode?: Flow2VideoMode | string;
   config?: {
+    prompt?: string;
     aspectRatio?: "16:9" | "9:16";
     generateAudio?: boolean;
     noText?: boolean;
@@ -54,10 +55,7 @@ export async function handleGenerationReviewVideo(
     artStyleText = resolvedArtStylePrompt;
   }
 
-  const videoPrompt = buildVideoPrompt(
-    `${artStyleText} ${payload.prompt}`.trim(),
-    getVideoPromptOptionsFromPayload(payload)
-  );
+  const videoPrompt = buildVideoPromptFromPayload(payload, { prepend: artStyleText });
 
   const result = await runFlow2VideoPipeline({
     customerId: job.customerId,

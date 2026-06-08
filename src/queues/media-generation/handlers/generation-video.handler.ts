@@ -12,16 +12,17 @@ import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { MediaJobEmitter } from "../job-emitter";
 import { loadMediaJobPayload } from "../media-job-data";
 import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
-import { buildVideoPrompt, getVideoPromptOptionsFromPayload } from "./_video-prompt";
+import { buildVideoPromptFromPayload } from "./_video-prompt";
 
 export type GenerationVideoPayload = {
-  prompt: string;
+  prompt?: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
   noText?: boolean;
   voiceDisable?: boolean;
   /** Alias top-level — ưu tiên thấp hơn config.videoMode */
   video_mode?: Flow2VideoMode | string;
   config?: {
+    prompt?: string;
     aspectRatio?: "16:9" | "9:16";
     generateAudio?: boolean;
     noText?: boolean;
@@ -40,10 +41,7 @@ export async function handleGenerationVideo(
 
   await emitter.progress(10, "Đang chuẩn bị tạo video...");
 
-  const fullPrompt = buildVideoPrompt(
-    payload.prompt,
-    getVideoPromptOptionsFromPayload(payload)
-  );
+  const fullPrompt = buildVideoPromptFromPayload(payload);
 
   const result = await runFlow2VideoPipeline({
     customerId: job.customerId,

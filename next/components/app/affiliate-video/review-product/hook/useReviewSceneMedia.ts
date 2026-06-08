@@ -22,6 +22,7 @@ import {
 import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
+  buildReviewVideoPrompt,
 } from "../utils/reviewSceneGenerationParams";
 import {
   base64ToBlob,
@@ -569,9 +570,6 @@ export function useReviewSceneMedia({
   };
 
   const handleGenerateVideoToVideo = async () => {
-    const motionPrompt = (scene.motionPrompt || "").trim();
-    const visualPrompt = scene.visualPrompt?.trim();
-
     const countFilledVideoSlots = (arr?: (ElementFormVideo | undefined)[]) =>
       arr?.filter((s) => s && (s.videoBytes || s.fifeUrl)).length ?? 0;
     const videoSlotsForApi =
@@ -627,11 +625,7 @@ export function useReviewSceneMedia({
       }
       const result = await generateVideoToVideo({
         sceneId: scene.id,
-        prompt: scene.voiceDisable
-          ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-          : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
-              scene.audio ?? ""
-            }, [DIALOGUE]${scene.dialogue ?? ""}`,
+        prompt: buildReviewVideoPrompt(scene),
         images: imagesArray,
         video: {
           videoBytes: videoPayload.videoBytes,

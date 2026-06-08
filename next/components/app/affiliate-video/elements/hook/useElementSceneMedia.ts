@@ -20,6 +20,7 @@ import {
 import {
   buildElementImageGenerateParams,
   buildElementVideoGenerateParams,
+  buildElementVideoPrompt,
 } from "../utils/elementSceneGenerationParams";
 import {
   base64ToBlob,
@@ -548,9 +549,6 @@ export function useElementSceneMedia({
   };
 
   const handleGenerateVideoToVideo = async () => {
-    const motionPrompt = (scene.motion_description || "").trim();
-    const visualPrompt = scene.visual_prompt?.trim();
-
     const countFilledVideoSlots = (arr?: (ElementFormVideo | undefined)[]) =>
       arr?.filter((s) => s && (s.videoBytes || s.fifeUrl)).length ?? 0;
     const videoSlotsForApi =
@@ -606,11 +604,7 @@ export function useElementSceneMedia({
       }
       const result = await generateVideoToVideo({
         sceneId: scene.id,
-        prompt: scene.voiceDisable
-          ? `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}`
-          : `[VISUAL PROMPT]${visualPrompt} [MOTION]${motionPrompt}, [AUDIO]${
-              scene.audio_description
-            }, [DIALOGUE]${scene.translated_content || scene.original_content}`,
+        prompt: buildElementVideoPrompt(scene),
         images: imagesArray,
         video: {
           videoBytes: videoPayload.videoBytes,

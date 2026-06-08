@@ -13,10 +13,10 @@ import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runVideoPipeline } from "./_video-pipeline";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
-import { buildVideoPrompt, getVideoPromptOptionsFromPayload } from "./_video-prompt";
+import { buildVideoPromptFromPayload } from "./_video-prompt";
 
 export type GenerationElementVideoToVideoPayload = {
-  prompt: string;
+  prompt?: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
   noText?: boolean;
   voiceDisable?: boolean;
@@ -25,6 +25,7 @@ export type GenerationElementVideoToVideoPayload = {
     mimeType: string;
   };
   config?: {
+    prompt?: string;
     aspectRatio?: "16:9" | "9:16";
     generateAudio?: boolean;
     noText?: boolean;
@@ -60,10 +61,7 @@ export async function handleGenerationElementVideoToVideo(
     artStyleText = resolvedArtStylePrompt;
   }
 
-  const videoPrompt = buildVideoPrompt(
-    `${artStyleText} ${payload.prompt}`.trim(),
-    getVideoPromptOptionsFromPayload(payload)
-  );
+  const videoPrompt = buildVideoPromptFromPayload(payload, { prepend: artStyleText });
 
   const result = await runVideoPipeline({
     customerId: job.customerId,

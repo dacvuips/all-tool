@@ -8,6 +8,7 @@ import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { ServiceImageEnum } from "../constanst";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { resolvePayloadPrompt } from "../../../queues/media-generation/handlers/_video-prompt";
 import { checkVideoLimit, Flow2VideoMode } from "./_shared";
 
 export default [
@@ -21,11 +22,12 @@ export default [
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
 
         const body = req.body as {
-          prompt: string;
+          prompt?: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
           noText?: boolean;
           voiceDisable?: boolean;
           config?: {
+            prompt?: string;
             aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
             noText?: boolean;
@@ -38,7 +40,7 @@ export default [
           _metadata?: Record<string, unknown>;
         };
 
-        if (!body?.prompt) {
+        if (!resolvePayloadPrompt(body)) {
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
