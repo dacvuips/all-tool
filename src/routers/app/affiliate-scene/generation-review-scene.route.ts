@@ -71,9 +71,9 @@ Return valid JSON only with this structure:
    {
   "topicTitle": "a short title for each s cene in {{language}}",
   "artStyle": "{{artStyle}}", 
-  "visualPrompt":"English Use exactly ONE random image name from ${
+  "visualPrompt":"English Use exactly ONE reference image name from ${
     artStyleImgNames || "none"
-  } as the main product reference image for this scene.Select only ONE reference image by name. - Analyze the uploaded product image and generate new actions for the product shown in the image based on the exact randomly assigned name (for example: holding and rotating left or right, moving, opening and closing, etc.).- from a realistic POV (Point of View) perspective. - Maintain realistic lighting and accurate surface textures that match the actual product. - Based on the product’s characteristics, the product must interact naturally with relevant surrounding objects (for example: a mop should interact with the floor, etc.).",
+  } as the main product reference image for this scene. Assign reference images sequentially across all {{batchSize}} scenes in list order: Scene 1 uses the first image name, Scene 2 uses the second, and so on. When all image names have been used, restart from the first image and continue cycling in order until every scene has been assigned exactly one reference image. Select only ONE reference image by name per scene. - Analyze the uploaded product image and generate new actions for the product shown in the image based on the exact sequentially assigned name (for example: holding and rotating left or right, moving, opening and closing, etc.). - from a realistic POV (Point of View) perspective. - Maintain realistic lighting and accurate surface textures that match the actual product. - Based on the product’s characteristics, the product must interact naturally with relevant surrounding objects (for example: a mop should interact with the floor, etc.).",
   "environment": "Accurately and thoroughly describe the environment shown in the image.",
   "voiceGender": "male or female",
   "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
