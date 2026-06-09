@@ -260,7 +260,7 @@ export async function generateVideoWithFlow2(
     onProgress: params.onProgress,
     createProgressMessage: "Đang gửi request tạo video lên Flow2...",
     createdProgressMessage: () => "",
-    retryProgressMessage: (attempt) => `Flow2 gặp lỗi captcha, đang retry lần ${attempt}...`,
+    retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
     runOnce: async () => {
       const created = await createFlow2VideoRequest(params);
       await safeProgress(

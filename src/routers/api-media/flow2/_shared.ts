@@ -6,6 +6,8 @@ export type Flow2StatusResponse = Record<string, unknown>;
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
 /** Số lần tạo request Flow2 mới khi gặp lỗi reCAPTCHA / unusual activity (cùng mức Google Aisandbox). */
 export const FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX = CAPTCHA_GENERATION_MAX_RETRIES;
+/** Số lần retry khi Flow2 trả `video_generation_failed` / `image_generation_failed` (lỗi tạm thời). */
+export const FLOW2_GENERATION_FAILED_RETRY_MAX = 3;
 /** Chờ giữa mỗi lần retry — tăng theo attempt (Flow2/captcha cần thời gian hồi). */
 export const FLOW2_CAPTCHA_RETRY_BASE_DELAY_MS = 5_000;
 
@@ -145,6 +147,18 @@ export function isFlow2RetryableCaptchaError(...inputs: (string | undefined)[]):
   });
 }
 
+/** Flow2 đôi khi trả lỗi tạm thời khi model không tạo được media — retry tạo request mới. */
+export function isFlow2RetryableGenerationError(...inputs: (string | undefined)[]): boolean {
+  return inputs.some((input) => {
+    if (!input) return false;
+    const normalized = input.toLowerCase();
+    return (
+      normalized.includes("video_generation_failed") ||
+      normalized.includes("image_generation_failed")
+    );
+  });
+}
+
 /** Flow2 trả status dạng `failed: PUBLIC_ERROR_UNUSUAL_ACTIVITY: ...`, không chỉ `failed`. */
 export function isFlow2FailedStatus(status: string): boolean {
   if (!status) return false;
@@ -165,16 +179,30 @@ export function isFlow2SuccessStatus(status: string): boolean {
   );
 }
 
-function markRetryableCaptchaError(err: any, errorText: string, status: string): void {
+function markFlow2RetryableError(err: any, errorText: string, status: string): void {
   if (isFlow2RetryableCaptchaError(errorText, status)) {
     err.isRetryableCaptchaError = true;
   }
+  if (isFlow2RetryableGenerationError(errorText, status)) {
+    err.isRetryableGenerationError = true;
+  }
 }
 
-/** Nhận diện lỗi captcha từ Error (kể cả khi chỉ còn message). */
+function getFlow2RetryMaxAttempts(err: any): number {
+  if (err?.isRetryableGenerationError || isFlow2RetryableGenerationError(err?.message)) {
+    return FLOW2_GENERATION_FAILED_RETRY_MAX;
+  }
+  return FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX;
+}
+
+/** Nhận diện lỗi Flow2 có thể retry (captcha hoặc generation_failed). */
 export function isFlow2RetryableError(err: any): boolean {
   if (err?.isRetryableCaptchaError === true) return true;
-  return isFlow2RetryableCaptchaError(err?.message);
+  if (err?.isRetryableGenerationError === true) return true;
+  return (
+    isFlow2RetryableCaptchaError(err?.message) ||
+    isFlow2RetryableGenerationError(err?.message)
+  );
 }
 
 function formatFlow2FailureMessage(errorText: string): string {
@@ -211,7 +239,7 @@ export async function waitForFlow2Result<T>(params: {
     if (isFlow2FailedStatus(status) || hasImmediateError(statusData)) {
       const errorText = pickError(statusData) || status || "Unknown error";
       const err: any = new Error(formatFlow2FailureMessage(errorText));
-      markRetryableCaptchaError(err, errorText, status);
+      markFlow2RetryableError(err, errorText, status);
       throw err;
     }
 
@@ -242,17 +270,23 @@ export async function runFlow2WithRetry<T>(params: {
   runOnce: () => Promise<T>;
 }): Promise<T> {
   let lastError: any;
+  let maxAttempts = FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX;
 
-  for (let attempt = 1; attempt <= FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       await safeProgress(params.onProgress, 40, params.createProgressMessage);
       const result = await params.runOnce();
       return result;
     } catch (err: any) {
       lastError = err;
-      if (isFlow2RetryableError(err) && attempt < FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX) {
+      maxAttempts = getFlow2RetryMaxAttempts(err);
+      if (isFlow2RetryableError(err) && attempt < maxAttempts) {
+        const reason =
+          err?.isRetryableGenerationError || isFlow2RetryableGenerationError(err?.message)
+            ? "generation failed"
+            : "captcha/unusual activity";
         logger.warn(
-          `[flow2-${params.logTag}] Captcha/unusual activity — retry ${attempt}/${FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX}: ${err?.message}`
+          `[flow2-${params.logTag}] ${reason} — retry ${attempt}/${maxAttempts}: ${err?.message}`
         );
         await safeProgress(params.onProgress, 60, params.retryProgressMessage(attempt + 1));
         await delayBeforeFlow2CaptchaRetry(attempt);
@@ -263,7 +297,8 @@ export async function runFlow2WithRetry<T>(params: {
   }
 
   if (lastError && isFlow2RetryableError(lastError)) {
-    lastError.message = `${lastError.message} (đã thử ${FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX} lần)`;
+    const tried = getFlow2RetryMaxAttempts(lastError);
+    lastError.message = `${lastError.message} (đã thử ${tried} lần)`;
   }
   throw lastError;
 }
