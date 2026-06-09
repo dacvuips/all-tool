@@ -5,11 +5,14 @@ import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import { AffiliateVideoResponseSchema } from "../constanst";
 import {
+  assertGeminiTextResponse,
+  assertNonEmptyScenesArray,
   callWithKeyRotation,
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
   interpolateTrendingTemplate,
+  parseGeminiJsonResponse,
   resolveArtStylePrompt,
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
@@ -111,52 +114,45 @@ CRITICAL RULE: Always keep character and environment identical.
           "generation-scene"
         );
 
-        let parsed: any;
-        try {
-          const rawParsed = JSON.parse(response.text || "{}");
+        const responseText = assertGeminiTextResponse(response);
+        const rawParsed = parseGeminiJsonResponse(responseText) as any;
+        assertNonEmptyScenesArray(rawParsed.scenes);
 
-          // Map to the desired structure
-          if (rawParsed.scenes && Array.isArray(rawParsed.scenes)) {
-            parsed = {
-              topicTitle: rawParsed.topicTitle || "",
-              artStyle: rawParsed.artStyle || "",
-              characterName: rawParsed.characterName || "",
-              characterBaseDescription: rawParsed.characterBaseDescription || "",
-              environment: rawParsed.environment || "",
-              voiceGender: rawParsed.voiceGender || "",
-              voiceTone: rawParsed.voiceTone || "",
-              voiceStyle: rawParsed.voiceStyle || "",
-              audioPrompt: rawParsed.audioPrompt || "",
-              cast: rawParsed.cast?.length
-                ? rawParsed.cast
-                : [
-                    {
-                      name: rawParsed.characterName || "",
-                      tag: "main",
-                      description: rawParsed.characterBaseDescription || "",
-                    },
-                  ],
-              scenes: rawParsed.scenes.map((scene: any) => ({
-                sceneNumber: scene.sceneNumber,
-                camera: scene.camera || "",
-                motionPrompt: `${rawParsed.characterBaseDescription} [${scene.camera}]: ${
-                  scene.motionPrompt
-                }, Visual atmosphere: ${scene.visualEffects || ""}`,
-                imageGenPrompt: IsTrendingSingle
-                  ? body.config.tipContent
-                  : `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
-                    "",
-                audio:
-                  `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
-                dialogue: scene.dialogue || "",
-              })),
-            };
-          } else {
-            parsed = rawParsed;
-          }
-        } catch {
-          parsed = { raw: response.text };
-        }
+        const parsed = {
+          topicTitle: rawParsed.topicTitle || "",
+          artStyle: rawParsed.artStyle || "",
+          characterName: rawParsed.characterName || "",
+          characterBaseDescription: rawParsed.characterBaseDescription || "",
+          environment: rawParsed.environment || "",
+          voiceGender: rawParsed.voiceGender || "",
+          voiceTone: rawParsed.voiceTone || "",
+          voiceStyle: rawParsed.voiceStyle || "",
+          audioPrompt: rawParsed.audioPrompt || "",
+          cast: rawParsed.cast?.length
+            ? rawParsed.cast
+            : [
+                {
+                  name: rawParsed.characterName || "",
+                  tag: "main",
+                  description: rawParsed.characterBaseDescription || "",
+                },
+              ],
+          scenes: rawParsed.scenes.map((scene: any) => ({
+            sceneNumber: scene.sceneNumber,
+            camera: scene.camera || "",
+            motionPrompt: `${rawParsed.characterBaseDescription} [${scene.camera}]: ${
+              scene.motionPrompt
+            }, Visual atmosphere: ${scene.visualEffects || ""}`,
+            imageGenPrompt: IsTrendingSingle
+              ? body.config.tipContent
+              : `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
+                "",
+            audio:
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+            dialogue: scene.dialogue || "",
+          })),
+        };
+
         if (body.config.promptId) {
           await TrendingModel.findByIdAndUpdate(body.config.promptId, {
             $inc: { count: 1, monthlyCount: 1 },

@@ -4,6 +4,8 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { ReviewResponseSchema } from "../constanst";
 import {
+  assertGeminiTextResponse,
+  assertNonEmptyScenesArray,
   buildImageReferenceNotes,
   callGeminiWithRetry,
   checkRequestLimit,
@@ -12,6 +14,7 @@ import {
   getImageDisplayName,
   incrementRequestCount,
   interpolateTemplate,
+  parseGeminiJsonResponse,
   resolveArtStylePrompt,
   resolveReferenceImagesForGemini,
   ReviewFormConfig,
@@ -129,48 +132,39 @@ Return valid JSON only with this structure:
           clients
         );
 
-        let parsed: any;
-        try {
-          const rawParsed = JSON.parse(response.text || "{}");
+        const responseText = assertGeminiTextResponse(response);
+        const rawParsed = parseGeminiJsonResponse(responseText) as any;
+        assertNonEmptyScenesArray(rawParsed.scenes);
 
-          // Map to the desired structure
-          if (rawParsed.scenes && Array.isArray(rawParsed.scenes)) {
-            parsed = {
-              artStyle: rawParsed.artStyle || "",
-              environment: rawParsed.environment || "",
-              voiceGender: rawParsed.voiceGender || "",
-              voiceTone: rawParsed.voiceTone || "",
-              voiceStyle: rawParsed.voiceStyle || "",
-              audioPrompt: rawParsed.audioPrompt || "",
-
-              cast: rawParsed.cast?.length
-                ? rawParsed.cast
-                : [
-                    {
-                      name: rawParsed.characterName || "",
-                      tag: "main",
-                    },
-                  ],
-              scenes: rawParsed.scenes.map((scene: any) => ({
-                visualPrompt: scene.visualPrompt || "",
-                topicTitle: scene.topicTitle || "",
-                sceneNumber: scene.sceneNumber,
-                camera: scene.camera || "",
-                motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
-                  scene.visualEffects || ""
-                }`,
-                imageGenPrompt: `[${scene.camera}] POV shot: ${scene.visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
-                audio:
-                  `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
-                dialogue: scene.dialogue || "",
-              })),
-            };
-          } else {
-            parsed = rawParsed;
-          }
-        } catch {
-          parsed = { raw: response.text };
-        }
+        const parsed = {
+          artStyle: rawParsed.artStyle || "",
+          environment: rawParsed.environment || "",
+          voiceGender: rawParsed.voiceGender || "",
+          voiceTone: rawParsed.voiceTone || "",
+          voiceStyle: rawParsed.voiceStyle || "",
+          audioPrompt: rawParsed.audioPrompt || "",
+          cast: rawParsed.cast?.length
+            ? rawParsed.cast
+            : [
+                {
+                  name: rawParsed.characterName || "",
+                  tag: "main",
+                },
+              ],
+          scenes: rawParsed.scenes.map((scene: any) => ({
+            visualPrompt: scene.visualPrompt || "",
+            topicTitle: scene.topicTitle || "",
+            sceneNumber: scene.sceneNumber,
+            camera: scene.camera || "",
+            motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
+              scene.visualEffects || ""
+            }`,
+            imageGenPrompt: `[${scene.camera}] POV shot: ${scene.visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
+            audio:
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+            dialogue: scene.dialogue || "",
+          })),
+        };
 
         await incrementRequestCount(context.id);
         return res.json({ success: true, data: parsed });

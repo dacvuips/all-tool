@@ -6,10 +6,13 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import {
+  assertGeminiTextResponse,
+  assertNonEmptyTextField,
   callWithKeyRotation,
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
+  parseGeminiJsonResponse,
 } from "./_shared";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
@@ -89,12 +92,9 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
           "generation-style-text"
         );
 
-        let parsed: any;
-        try {
-          parsed = JSON.parse(response.text || "{}");
-        } catch {
-          parsed = { raw: response.text };
-        }
+        const responseText = assertGeminiTextResponse(response);
+        const parsed = parseGeminiJsonResponse(responseText);
+        assertNonEmptyTextField(parsed.text);
 
         await incrementRequestCount(context.id);
         res.json({ success: true, data: parsed });

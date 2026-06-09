@@ -5,10 +5,13 @@ import logger from "../../../helpers/logger";
 
 import { Context } from "../../../libs/graphql";
 import {
+  assertGeminiTextResponse,
+  assertNonEmptyScenesArray,
   callGeminiWithRetry,
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
+  parseGeminiJsonResponse,
   resolveArtStylePrompt,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
@@ -330,12 +333,9 @@ export default [
           clients
         );
 
-        let parsed: any;
-        try {
-          parsed = JSON.parse(response.text || "{}");
-        } catch {
-          parsed = { raw: response.text };
-        }
+        const responseText = assertGeminiTextResponse(response);
+        const parsed = parseGeminiJsonResponse(responseText);
+        assertNonEmptyScenesArray(parsed.scenes);
 
         await incrementRequestCount(context.id);
         res.json({ success: true, data: parsed });

@@ -629,6 +629,53 @@ export async function incrementRequestCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.requestCount": 1 } });
 }
 
+/** Gemini trả text rỗng → coi là thất bại, không tính quota. */
+export function assertGeminiTextResponse(response: { text?: string | null }): string {
+  const text = (response.text || "").trim();
+  if (!text) {
+    const err: any = new Error("AI không trả kết quả");
+    err.statusCode = 502;
+    throw err;
+  }
+  return text;
+}
+
+/** Parse JSON từ Gemini; không fallback — lỗi parse/format → 502. */
+export function parseGeminiJsonResponse(responseText: string): Record<string, unknown> {
+  try {
+    const parsed = JSON.parse(responseText);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      const err: any = new Error("AI trả kết quả không đúng định dạng");
+      err.statusCode = 502;
+      throw err;
+    }
+    return parsed as Record<string, unknown>;
+  } catch (e: any) {
+    if (e?.statusCode) throw e;
+    const err: any = new Error("AI trả kết quả không đúng định dạng JSON");
+    err.statusCode = 502;
+    throw err;
+  }
+}
+
+/** Scene generation phải có ít nhất 1 scene — không thì không tính quota. */
+export function assertNonEmptyScenesArray(scenes: unknown): void {
+  if (!Array.isArray(scenes) || scenes.length === 0) {
+    const err: any = new Error("AI không trả danh sách scene hợp lệ");
+    err.statusCode = 502;
+    throw err;
+  }
+}
+
+/** Style-text generation phải có field text không rỗng. */
+export function assertNonEmptyTextField(text: unknown): void {
+  if (typeof text !== "string" || !text.trim()) {
+    const err: any = new Error("AI không trả nội dung text hợp lệ");
+    err.statusCode = 502;
+    throw err;
+  }
+}
+
 /**
  * Resolve objectToPersonify prompt from DB.
  * - Nếu FE chưa gửi objectToPersonify → dùng objectDoc.prompt

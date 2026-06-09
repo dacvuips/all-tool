@@ -45,7 +45,7 @@ export async function loadMediaJobPayload<T extends Record<string, unknown>>(job
       if (raw) {
         return JSON.parse(raw) as T;
       }
-      const err: any = new Error("Dữ liệu job đã hết hạn trên Redis. Vui lòng tạo job mới.");
+      const err: any = new Error("Lỗi google hãy tạo lại");
       err.statusCode = 410;
       throw err;
     } catch (err: any) {
