@@ -45,6 +45,10 @@ import { ObjectToPersonifyPublic, useAffiliateVideoApi } from "../hook/useAffili
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+type ObjectPersonifyFieldTab = "image" | "prompt";
+
+export type { ObjectPersonifyFieldTab };
+
 export interface ObjectPersonifyPickerDialogProps {
   /** Current objectToPersonify value */
   value?: string;
@@ -64,14 +68,15 @@ export interface ObjectPersonifyPickerDialogProps {
   imageValue?: ElementFormImage;
   onImageChange?: (image: ElementFormImage | undefined) => void;
   readOnly?: boolean;
+  /** Tab Ảnh / Prompt bên ngoài field nhân hoá (controlled) */
+  fieldTab?: ObjectPersonifyFieldTab;
+  onFieldTabChange?: (tab: ObjectPersonifyFieldTab) => void;
 }
 
 const DEFAULT_PROMPT = `SYS Style Prompt Generator, Please describe the character in the image in the most detailed and complete manner possible (skin tone, hair color, description of eyes, nose, mouth, eyebrows, skin wrinkles, clothing stitching, accessories, dimensions, materials, colors of all parts, style, lighting, atmosphere, effects, 8k resolution, etc.). Do not use abbreviations, do not add creative elements, and describe every single part of the character.`;
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
-
-type ObjectPersonifyFieldTab = "image" | "prompt";
 
 function ObjectPersonifyFieldTabBar({
   activeTab,
@@ -355,6 +360,8 @@ export function ObjectPersonifyPickerDialog({
   imageValue,
   onImageChange,
   readOnly,
+  fieldTab: fieldTabProp,
+  onFieldTabChange,
 }: ObjectPersonifyPickerDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -393,7 +400,12 @@ export function ObjectPersonifyPickerDialog({
   const [customerObjects, setCustomerObjects] = useState<ObjectToPersonifyPublic[]>([]);
   const [isLoadingCustomer, setIsLoadingCustomer] = useState(false);
 
-  const [fieldTab, setFieldTab] = useState<ObjectPersonifyFieldTab>("image");
+  const [internalFieldTab, setInternalFieldTab] = useState<ObjectPersonifyFieldTab>("image");
+  const fieldTab = fieldTabProp ?? internalFieldTab;
+  const setFieldTab = (tab: ObjectPersonifyFieldTab) => {
+    onFieldTabChange?.(tab);
+    if (fieldTabProp === undefined) setInternalFieldTab(tab);
+  };
 
   // ── Load server objects (system) ──
   const loadServerObjects = useCallback(async () => {

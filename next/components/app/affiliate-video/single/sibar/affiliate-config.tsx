@@ -17,7 +17,7 @@ import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
+import { ObjectPersonifyFieldTab, ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchSizeSlider } from "./batch-size-slider";
@@ -40,6 +40,8 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
     StoryModeTypeEnum.image_to_video;
   const [currentStoryModeType, setCurrentStoryModeType] = useState<StoryModeTypeEnum>(initialMode);
   const [isSuggestLoading, setIsSuggestLoading] = useState(false);
+  const [objectPersonifyFieldTab, setObjectPersonifyFieldTab] =
+    useState<ObjectPersonifyFieldTab>("image");
 
   // Sync from URL param when it changes (e.g. browser back/forward)
   useEffect(() => {
@@ -65,16 +67,18 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
           language: videoConfig?.language,
         }}
         onLoadingChange={setIsSuggestLoading}
-        onSuggestResult={(result) =>
+        onSuggestResult={(result) => {
+          console.log(result);
           patchConfig?.({
             objectToPersonify: result.objectToPersonify,
             tipContent: result.tipContent,
-          })
-        }
+          });
+          setObjectPersonifyFieldTab("prompt");
+        }}
       />
     </span>
   );
-
+console.log(videoConfig);
   return (
     <div className="flex-1 bg-white">
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
@@ -230,6 +234,8 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
           <ObjectPersonifyPickerDialog
             name="objectToPersonify"
             value={videoConfig?.objectToPersonify}
+            fieldTab={objectPersonifyFieldTab}
+            onFieldTabChange={setObjectPersonifyFieldTab}
             onChange={(v) =>
               patchConfig &&
               patchConfig({
@@ -256,11 +262,14 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
         <div>
           <Field noError name="tipContent" label={tipContentLabel}>
             <div
-              className={`relative ${isSuggestLoading ? "opacity-40 pointer-events-none cursor-wait" : ""}`}
+              className={`relative ${
+                isSuggestLoading ? "opacity-40 pointer-events-none cursor-wait" : ""
+              }`}
             >
               <Textarea
                 id="tip-content-input"
                 className="border-gray-200"
+                value={videoConfig?.tipContent || ""}
                 placeholder={`${t("VD")}: ${t("Cách ăn chuối tốt nhất")}`}
                 onChange={(v) => patchConfig && patchConfig({ tipContent: v })}
                 readOnly={isSuggestLoading}
