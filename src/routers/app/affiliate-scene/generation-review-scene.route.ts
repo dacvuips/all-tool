@@ -5,7 +5,7 @@ import { Context } from "../../../libs/graphql";
 import { ReviewResponseSchema } from "../constanst";
 import {
   buildImageReferenceNotes,
-  callWithKeyRotation,
+  callGeminiWithRetry,
   checkRequestLimit,
   collectOrderedReviewReferenceImages,
   getAvailableGeminiClients,
@@ -99,8 +99,7 @@ Return valid JSON only with this structure:
         const interpolatedText = interpolateTemplate(prompt, body.config) + imageReferenceNote;
 
         const clients = await getAvailableGeminiClients();
-        const response = await callWithKeyRotation(
-          clients,
+        const response = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
               model: "gemini-2.5-flash",
@@ -126,7 +125,8 @@ Return valid JSON only with this structure:
                 responseSchema: ReviewResponseSchema,
               },
             }),
-          "generation-review"
+          "generation-review",
+          clients
         );
 
         let parsed: any;

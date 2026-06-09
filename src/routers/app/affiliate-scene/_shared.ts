@@ -333,6 +333,40 @@ function isRateLimitOrQuotaError(err: any): boolean {
   return false;
 }
 
+/** Nhận diện trang lỗi Cloudflare 524 (HTML hoặc status code). */
+export function isCloudflare524Html(text: string): boolean {
+  if (!text) return false;
+  return (
+    text.includes("524: A timeout occurred") ||
+    text.includes("Error code 524") ||
+    (text.includes("cf-error-details") && text.includes("524"))
+  );
+}
+
+/**
+ * Kiểm tra timeout / Cloudflare 524 / gateway timeout — có thể retry.
+ */
+export function isTimeoutOr524Error(err: any): boolean {
+  const numericCode = err?.code || err?.statusCode || err?.httpCode;
+  if (numericCode === 524 || numericCode === 504 || numericCode === 408) return true;
+  if (Number(err?.status) === 524 || Number(err?.status) === 504) return true;
+
+  const msg = (err?.message || "").toString();
+  if (
+    msg.includes("524") ||
+    msg.includes("504") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("A timeout occurred") ||
+    msg.includes("timeout") ||
+    isCloudflare524Html(msg)
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Kiểm tra xem error có phải lỗi 503 (Service Unavailable) không.
  */
@@ -423,6 +457,16 @@ export async function callWithKeyRotation<T>(
         continue;
       }
 
+      if (isTimeoutOr524Error(err)) {
+        logger.warn(
+          `[${label}] ${keyLabel} bị timeout/524 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 6-10s rồi retry.`
+        );
+        const delayMs = Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        keyIdx = (keyIdx + 1) % entries.length;
+        continue;
+      }
+
       // Lỗi khác (400, 401, 403, 500...) → throw ngay
       logger.error(`[${label}] ${keyLabel} lỗi không thể retry: ${err?.message}`);
       throw err;
@@ -432,6 +476,19 @@ export async function callWithKeyRotation<T>(
   // Tất cả key đều thất bại
   logger.error(`[${label}] Tất cả ${entries.length} API key đều thất bại (hết quota daily).`);
   throw lastError;
+}
+
+/**
+ * Gọi Gemini với đầy đủ retry: xoay API key (429/503/524) + retry toàn bộ (exponential backoff).
+ * Dùng thay cho `retryAICall(() => callWithKeyRotation(...))` ở các route affiliate-scene.
+ */
+export async function callGeminiWithRetry<T>(
+  fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
+  label: string,
+  clients?: GeminiClientEntry[]
+): Promise<T> {
+  const entries = clients ?? (await getAvailableGeminiClients());
+  return retryAICall(() => callWithKeyRotation(entries, fn, label), label);
 }
 
 /**

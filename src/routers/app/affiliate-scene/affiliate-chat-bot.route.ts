@@ -4,7 +4,7 @@ import logger from "../../../helpers/logger";
 import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import {
-  callWithKeyRotation,
+  callGeminiWithRetry,
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
@@ -178,8 +178,7 @@ export default [
         const customPrompt = typeof chatBot.prompt === "string" ? chatBot.prompt.trim() : "";
         const baseInstruction = customPrompt || SYSTEM_INSTRUCTION;
 
-        const response = await callWithKeyRotation(
-          clients,
+        const response = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
               model: "gemini-3.5-flash",
@@ -189,7 +188,8 @@ export default [
                 temperature: 0.7,
               },
             }),
-          "affiliate-trending-chat"
+          "affiliate-trending-chat",
+          clients
         );
 
         const reply = (response.text || "").trim();

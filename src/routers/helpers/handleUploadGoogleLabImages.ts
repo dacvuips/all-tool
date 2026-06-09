@@ -51,26 +51,84 @@ function getMimeTypeFromUrl(url: string, contentType?: string): string {
   return mimeMap[ext || ""] || "image/jpeg";
 }
 
+const IMAGE_FETCH_MAX_RETRIES = 3;
+
+function isCloudflare524Html(text: string): boolean {
+  if (!text) return false;
+  return (
+    text.includes("524: A timeout occurred") ||
+    text.includes("Error code 524") ||
+    (text.includes("cf-error-details") && text.includes("524"))
+  );
+}
+
+function isRetryableFetchError(status: number, bodyText: string): boolean {
+  return status === 524 || status === 504 || status === 408 || isCloudflare524Html(bodyText);
+}
+
 /**
  * Fetch ảnh từ URL và chuyển thành base64 string.
  * Trả về { imageBytes (base64), mimeType }.
+ * Tự retry khi gặp Cloudflare 524 / gateway timeout.
  */
 export async function fetchImageAsBase64(url: string): Promise<{ imageBytes: string; mimeType: string }> {
-  logger.info(`[processImages] Đang fetch ảnh từ URL: ${url}`);
-  const resp = await fetch(url);
-  if (!resp.ok) {
-    const err: any = new Error(`Không thể fetch ảnh từ URL (${resp.status}): ${url}`);
-    err.statusCode = 400;
-    throw err;
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= IMAGE_FETCH_MAX_RETRIES; attempt++) {
+    try {
+      logger.info(`[processImages] Đang fetch ảnh từ URL (lần ${attempt}): ${url}`);
+      const resp = await fetch(url);
+      const contentType = resp.headers.get("content-type") || "";
+      const arrayBuffer = await resp.arrayBuffer();
+      const bodyText = contentType.includes("text/html")
+        ? Buffer.from(arrayBuffer).toString("utf-8")
+        : "";
+
+      if (!resp.ok || isCloudflare524Html(bodyText)) {
+        if (isRetryableFetchError(resp.status, bodyText) && attempt < IMAGE_FETCH_MAX_RETRIES) {
+          logger.warn(
+            `[processImages] Fetch ảnh bị 524/timeout (${resp.status}), retry lần ${attempt}/${IMAGE_FETCH_MAX_RETRIES}: ${url}`
+          );
+          await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+          continue;
+        }
+        const err: any = new Error(
+          isCloudflare524Html(bodyText)
+            ? `Timeout 524 khi fetch ảnh: ${url}`
+            : `Không thể fetch ảnh từ URL (${resp.status}): ${url}`
+        );
+        err.statusCode = isCloudflare524Html(bodyText) ? 524 : 400;
+        throw err;
+      }
+
+      const mimeType = getMimeTypeFromUrl(url, contentType);
+      const imageBytes = Buffer.from(arrayBuffer).toString("base64");
+      logger.info(
+        `[processImages] Fetch thành công, size: ${imageBytes.length} chars, mimeType: ${mimeType}`
+      );
+      return { imageBytes, mimeType };
+    } catch (err: any) {
+      lastError = err;
+      const msg = (err?.message || "").toString();
+      const retryable =
+        err?.statusCode === 524 ||
+        err?.code === "ETIMEDOUT" ||
+        err?.code === "ECONNRESET" ||
+        msg.includes("524") ||
+        msg.includes("timeout");
+
+      if (retryable && attempt < IMAGE_FETCH_MAX_RETRIES) {
+        logger.warn(
+          `[processImages] Lỗi fetch ảnh, retry lần ${attempt}/${IMAGE_FETCH_MAX_RETRIES}: ${msg}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+        continue;
+      }
+      throw err;
+    }
   }
-  const contentType = resp.headers.get("content-type") || undefined;
-  const mimeType = getMimeTypeFromUrl(url, contentType);
-  const arrayBuffer = await resp.arrayBuffer();
-  const imageBytes = Buffer.from(arrayBuffer).toString("base64");
-  logger.info(
-    `[processImages] Fetch thành công, size: ${imageBytes.length} chars, mimeType: ${mimeType}`
-  );
-  return { imageBytes, mimeType };
+
+  throw lastError;
 }
 
 /**

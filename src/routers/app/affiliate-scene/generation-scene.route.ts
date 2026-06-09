@@ -7,7 +7,7 @@ import {
   AffiliateVideoFormConfig,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
-  callWithKeyRotation,
+  callGeminiWithRetry,
   checkRequestLimit,
   filterReferenceImages,
   getAvailableGeminiClients,
@@ -130,8 +130,7 @@ CRITICAL RULE: Always keep character and environment identical.
           ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
           : [];
 
-        const response = await callWithKeyRotation(
-          clients,
+        const response = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
               model: "gemini-3-flash-preview",
@@ -154,7 +153,8 @@ CRITICAL RULE: Always keep character and environment identical.
                 responseSchema: AffiliateVideoResponseSchema,
               },
             }),
-          "generation-scene"
+          "generation-scene",
+          clients
         );
 
         let parsed: any;

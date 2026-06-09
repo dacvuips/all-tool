@@ -5,7 +5,7 @@ import logger from "../../../helpers/logger";
 
 import { Context } from "../../../libs/graphql";
 import {
-  callWithKeyRotation,
+  callGeminiWithRetry,
   checkRequestLimit,
   getAvailableGeminiClients,
   incrementRequestCount,
@@ -300,8 +300,7 @@ export default [
           personifyImageNote +
           productImageNote;
 
-        const response = await callWithKeyRotation(
-          clients,
+        const response = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
               model: "gemini-2.5-flash",
@@ -327,7 +326,8 @@ export default [
                 responseSchema: CopyVideoAnalysisResponseSchema,
               },
             }),
-          "copy-video-analysis"
+          "copy-video-analysis",
+          clients
         );
 
         let parsed: any;

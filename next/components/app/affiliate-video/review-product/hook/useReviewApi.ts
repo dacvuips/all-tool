@@ -38,6 +38,44 @@ const REVIEW_STORE_NAME = "generate-review";
 /** Max history entries kept in IndexedDB */
 const MAX_SCENE_HISTORY = 50;
 const MAX_REVIEW_HISTORY = 50;
+const API_FETCH_MAX_RETRIES = 3;
+
+function isCloudflare524Html(text: string): boolean {
+  return (
+    text.includes("524: A timeout occurred") ||
+    text.includes("Error code 524") ||
+    (text.includes("cf-error-details") && text.includes("524"))
+  );
+}
+
+function isRetryableApiStatus(status: number, bodyText: string): boolean {
+  return status === 524 || status === 504 || status === 408 || isCloudflare524Html(bodyText);
+}
+
+async function fetchWith524Retry(
+  url: string,
+  options: RequestInit,
+  maxRetries = API_FETCH_MAX_RETRIES
+): Promise<Response> {
+  let lastResponse: Response | undefined;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const res = await fetch(url, options);
+    const bodyText = await res.clone().text();
+
+    if (!isRetryableApiStatus(res.status, bodyText)) {
+      return new Response(bodyText, { status: res.status, headers: res.headers });
+    }
+
+    lastResponse = new Response(bodyText, { status: res.status, headers: res.headers });
+    if (attempt < maxRetries) {
+      await new Promise((resolve) => setTimeout(resolve, 3000 * attempt));
+      continue;
+    }
+  }
+
+  return lastResponse!;
+}
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -342,7 +380,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   // ── Shared: gọi API /api/app/generation-review-image/ (tạo kịch bản cảnh từ config) ──
   const callGenerationReviewApi = useCallback(
     async (body: { config: Record<string, any> }) => {
-      const res = await fetch("/api/app/generation-review-scene/", {
+      const res = await fetchWith524Retry("/api/app/generation-review-scene/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

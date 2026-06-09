@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callWithKeyRotation, checkRequestLimit, getAvailableGeminiClients } from "./_shared";
+import { callGeminiWithRetry, checkRequestLimit, getAvailableGeminiClients } from "./_shared";
 
 export default [
   {
@@ -57,8 +57,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           required: ["objectToPersonify", "tipContent"],
         };
 
-        const result = await callWithKeyRotation(
-          clients,
+        const result = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
               model: "gemini-3-flash-preview",
@@ -68,7 +67,8 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
                 responseSchema: suggestSchema as any,
               },
             }),
-          "suggest-config"
+          "suggest-config",
+          clients
         );
 
         const responseText = result.text;
