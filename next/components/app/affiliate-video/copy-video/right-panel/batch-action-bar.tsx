@@ -456,7 +456,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                 </Button>
               </div>
               {dialogueExportText ? (
-                <pre className="w-full rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-700 px-4 py-3 whitespace-pre-wrap leading-relaxed font-mono">
+                <pre className="w-full max-h-48 overflow-y-auto v-scrollbar rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-700 px-4 py-3 whitespace-pre-wrap leading-relaxed font-mono">
                   {dialogueExportText}
                 </pre>
               ) : (
