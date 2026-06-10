@@ -41,7 +41,7 @@ import {
   SUCCESS_JOB_RETENTION_MS,
 } from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
-import { assertMediaStreamAvailable } from "./media-job-concurrency";
+import { assertMediaStreamAvailable, canStartMediaJobProcessing } from "./media-job-concurrency";
 
 /** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
 const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
@@ -65,8 +65,14 @@ export const MEDIA_JOB_MAX_STALE_RECOVERIES = 5;
 
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
 
-/** Sô lượng worker cho queue */
+/** Số worker bee-queue — giới hạn tải toàn cục, tránh OOM khi nhiều job video chạy song song. */
 const MEDIA_GENERATION_QUEUE_WORKERS = 100;
+
+/** Job QUEUED chờ slot PROCESSING — re-enqueue sau khoảng này (ms). */
+const MEDIA_JOB_STREAM_DEFER_MS = 5_000;
+
+/** Khoảng cách giữa các job khi resume sau restart — tránh thundering herd. */
+const MEDIA_JOB_RESUME_STAGGER_MS = 300;
 
 export type MediaQueueJobPayload = {
   jobId: string;
@@ -113,6 +119,22 @@ class MediaGenerationQueue extends BaseQueue {
         `MediaGenerationJob ${jobId} đã ở trạng thái terminal (${(jobDoc as any).status}), bỏ qua.`
       );
       return;
+    }
+
+    // Giới hạn luồng theo customer: job QUEUED chỉ pickup khi còn slot PROCESSING.
+    // Tránh race enqueue (nhiều POST đồng thời) hoặc resume sau restart làm quá tải server.
+    if ((jobDoc as any).status === MediaGenerationJobStatus.QUEUED) {
+      const canStart = await canStartMediaJobProcessing(
+        (jobDoc as any).customerId,
+        (jobDoc as any).type
+      );
+      if (!canStart) {
+        this.logger.info(
+          `[MediaGenerationJob] DEFER jobId=${jobId} (đã đạt giới hạn luồng PROCESSING)`
+        );
+        await enqueueMediaGenerationJob(jobId, { delayMs: MEDIA_JOB_STREAM_DEFER_MS });
+        return;
+      }
     }
 
     // Thử claim worker lock — nếu worker khác đang giữ thì skip.
@@ -218,6 +240,9 @@ export async function resumeStaleMediaJobs(): Promise<number> {
       const jobId = String((job as any)._id);
       try {
         await enqueueMediaGenerationJob(jobId);
+        if (MEDIA_JOB_RESUME_STAGGER_MS > 0) {
+          await new Promise((resolve) => setTimeout(resolve, MEDIA_JOB_RESUME_STAGGER_MS));
+        }
       } catch (err: any) {
         logger.error(`[MediaGenerationQueue] Resume jobId=${jobId} lỗi: ${err?.message}`);
       }
@@ -436,9 +461,7 @@ export async function recoverStalledBeeJobsOnStartup(): Promise<number> {
           `[MediaGenerationQueue] Xóa bee-job active mồ côi beeJobId=${beeJob.id} mongoJobId=${mongoJobId}`
         );
       } catch (err: any) {
-        logger.error(
-          `[MediaGenerationQueue] remove bee-job ${beeJob.id} lỗi: ${err?.message}`
-        );
+        logger.error(`[MediaGenerationQueue] remove bee-job ${beeJob.id} lỗi: ${err?.message}`);
       }
     }
     if (removed > 0) {

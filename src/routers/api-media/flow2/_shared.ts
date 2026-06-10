@@ -11,6 +11,62 @@ export const FLOW2_GENERATION_FAILED_RETRY_MAX = 3;
 /** Chờ giữa mỗi lần retry — tăng theo attempt (Flow2/captcha cần thời gian hồi). */
 export const FLOW2_CAPTCHA_RETRY_BASE_DELAY_MS = 5_000;
 
+/** Số lần retry khi gọi Flow2 API gặp lỗi mạng tạm thời (fetch failed, ECONNRESET...). */
+export const FLOW2_NETWORK_RETRY_MAX = 3;
+/** Chờ giữa mỗi lần retry mạng — tăng theo attempt. */
+export const FLOW2_NETWORK_RETRY_BASE_DELAY_MS = 2_000;
+
+export function isRetryableNetworkError(err: unknown): boolean {
+  if (!err) return false;
+  const anyErr = err as { message?: string; code?: string; cause?: { message?: string; code?: string } };
+  const parts = [
+    anyErr.message,
+    anyErr.code,
+    anyErr.cause?.message,
+    anyErr.cause?.code,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    parts.includes("fetch failed") ||
+    parts.includes("econnreset") ||
+    parts.includes("econnrefused") ||
+    parts.includes("etimedout") ||
+    parts.includes("enotfound") ||
+    parts.includes("socket hang up") ||
+    parts.includes("network") ||
+    parts.includes("aborted")
+  );
+}
+
+async function delayMs(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchFlow2WithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= FLOW2_NETWORK_RETRY_MAX; attempt++) {
+    try {
+      return await fetch(url, init);
+    } catch (err) {
+      lastError = err;
+      if (!isRetryableNetworkError(err) || attempt >= FLOW2_NETWORK_RETRY_MAX) {
+        throw err;
+      }
+      const delay = FLOW2_NETWORK_RETRY_BASE_DELAY_MS * attempt;
+      logger.warn(
+        `[flow2] Lỗi mạng khi gọi ${url} (lần ${attempt}/${FLOW2_NETWORK_RETRY_MAX}): ${
+          (err as Error)?.message
+        } — retry sau ${delay}ms`
+      );
+      await delayMs(delay);
+    }
+  }
+  throw lastError;
+}
+
 export async function getFlow2Config(): Promise<{ baseUrl: string; token: string }> {
   const links = await getApiSetting(FLOW2_SETTING_KEY);
   const selected = links.find((item) => item?.url && item?.apiKey);
@@ -57,7 +113,7 @@ export async function createFlow2Request(body: {
 }): Promise<{ requestId: string; raw: Record<string, unknown> }> {
   const { baseUrl, token } = await getFlow2Config();
 
-  const resp = await fetch(`${baseUrl}/api/requests`, {
+  const resp = await fetchFlow2WithRetry(`${baseUrl}/api/requests`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -92,7 +148,7 @@ export async function createFlow2Request(body: {
 
 export async function getFlow2RequestStatus(requestId: string): Promise<Flow2StatusResponse> {
   const { baseUrl, token } = await getFlow2Config();
-  const resp = await fetch(`${baseUrl}/api/requests/${requestId}`, {
+  const resp = await fetchFlow2WithRetry(`${baseUrl}/api/requests/${requestId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 

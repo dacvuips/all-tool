@@ -59,6 +59,49 @@ export async function countActiveMediaJobs(
   });
 }
 
+/** Đếm job đang PROCESSING (đã chiếm slot worker thực tế). */
+export async function countProcessingMediaJobs(
+  customerId: string,
+  category: MediaStreamCategory
+): Promise<number> {
+  return MediaGenerationJobModel.countDocuments({
+    customerId,
+    type: { $in: getJobTypesByCategory(category) },
+    status: MediaGenerationJobStatus.PROCESSING,
+  });
+}
+
+async function getMediaStreamLimit(
+  customerId: string,
+  category: MediaStreamCategory
+): Promise<number> {
+  const customer = await CustomerModel.findById(customerId)
+    .select("googlePackage.imageStreamCount googlePackage.videoStreamCount")
+    .lean();
+
+  if (!customer) return 0;
+
+  return category === "image"
+    ? customer.googlePackage?.imageStreamCount ?? 1
+    : customer.googlePackage?.videoStreamCount ?? 1;
+}
+
+/**
+ * Worker pickup: còn slot PROCESSING trống không?
+ * Khác assertMediaStreamAvailable (enqueue) — chỉ đếm PROCESSING, không đếm QUEUED đang chờ.
+ */
+export async function canStartMediaJobProcessing(
+  customerId: string,
+  type: MediaGenerationJobType
+): Promise<boolean> {
+  const category = getMediaStreamCategory(type);
+  const limit = await getMediaStreamLimit(customerId, category);
+  if (limit <= 0) return false;
+
+  const processingCount = await countProcessingMediaJobs(customerId, category);
+  return processingCount < limit;
+}
+
 /**
  * Kiểm tra customer còn slot luồng trống không.
  * Throw 429 nếu đã đạt giới hạn `imageStreamCount` / `videoStreamCount`.
@@ -68,20 +111,12 @@ export async function assertMediaStreamAvailable(
   type: MediaGenerationJobType
 ): Promise<void> {
   const category = getMediaStreamCategory(type);
-  const customer = await CustomerModel.findById(customerId)
-    .select("googlePackage.imageStreamCount googlePackage.videoStreamCount")
-    .lean();
-
-  if (!customer) {
+  const limit = await getMediaStreamLimit(customerId, category);
+  if (limit <= 0) {
     const err: any = new Error("Không tìm thấy thông tin khách hàng");
     err.statusCode = 404;
     throw err;
   }
-
-  const limit =
-    category === "image"
-      ? customer.googlePackage?.imageStreamCount ?? 1
-      : customer.googlePackage?.videoStreamCount ?? 1;
 
   const activeCount = await countActiveMediaJobs(customerId, category);
 
