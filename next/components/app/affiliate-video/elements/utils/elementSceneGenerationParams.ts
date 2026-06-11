@@ -3,6 +3,7 @@
  * Batch handlers must call these so each item uses the same API params as the per-scene UI.
  */
 import { CopyVideoScene, ElementAnalysisData, ElementFormImage } from "../../constants";
+import { ServiceImageEnum } from "../constants";
 import type {
   GeneratedImageData,
   GenerateImageParams,
@@ -24,6 +25,14 @@ export function resolveElementAspectRatio(
   fallbackAspectRatio?: string
 ): string | undefined {
   return scriptData?.aspectRatio ?? fallbackAspectRatio;
+}
+
+/** Ưu tiên serviceImageType trong script; fallback sidebar config khi script chưa có hoặc đổi sau submit. */
+export function resolveElementServiceImageType(
+  scriptData?: ElementScriptLike,
+  fallbackServiceImageType?: ServiceImageEnum
+): ServiceImageEnum | undefined {
+  return scriptData?.serviceImageType ?? fallbackServiceImageType;
 }
 
 /** Parse scene thumbnail data URL → reference image for image API. */
@@ -84,12 +93,21 @@ export async function buildElementImageGenerateParams(options: {
   scriptData?: ElementScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
   aspectRatio?: string;
+  /** Fallback khi scriptData chưa có serviceImageType */
+  serviceImageType?: ServiceImageEnum;
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
   noText?: boolean;
 }): Promise<GenerateImageParams> {
-  const { scene, scriptData, aspectRatio, thumbnailOriginImage, selectedProductImages, noText } =
-    options;
+  const {
+    scene,
+    scriptData,
+    aspectRatio,
+    serviceImageType,
+    thumbnailOriginImage,
+    selectedProductImages,
+    noText,
+  } = options;
   const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
 
   return {
@@ -103,7 +121,7 @@ export async function buildElementImageGenerateParams(options: {
     additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     productImagePrompt: scene.product_image_prompt || undefined,
-    serviceImageType: scriptData?.serviceImageType,
+    serviceImageType: resolveElementServiceImageType(scriptData, serviceImageType),
   };
 }
 
@@ -113,6 +131,8 @@ export async function buildElementVideoGenerateParams(options: {
   scriptData?: ElementScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
   aspectRatio?: string;
+  /** Fallback khi scriptData chưa có serviceImageType */
+  serviceImageType?: ServiceImageEnum;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
@@ -123,6 +143,7 @@ export async function buildElementVideoGenerateParams(options: {
     scene,
     scriptData,
     aspectRatio,
+    serviceImageType,
     isStitch,
     generatedImage,
     nextGeneratedImage,
@@ -156,7 +177,7 @@ export async function buildElementVideoGenerateParams(options: {
     prompt: buildElementVideoPrompt(scene, isStitch),
     images,
     aspectRatio: resolveElementAspectRatio(scriptData, aspectRatio),
-    serviceImageType: scriptData?.serviceImageType,
+    serviceImageType: resolveElementServiceImageType(scriptData, serviceImageType),
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,
     noText: scene.noText,

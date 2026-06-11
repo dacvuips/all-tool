@@ -11,7 +11,6 @@ import {
   AffiliateVideoFormConfig,
   CACHE_KEY,
   DB_NAME,
-  Flow2VideoModeEnum,
   SceneHistoryItem,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
@@ -584,17 +583,6 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         serviceImageType,
       } = params;
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
-      const videoMode = (serviceImageType: ServiceImageEnum) => {
-        switch (serviceImageType) {
-          case ServiceImageEnum.imageOnly:
-            return Flow2VideoModeEnum.FRAME;
-          case ServiceImageEnum.startEnd:
-            return Flow2VideoModeEnum.FRAME;
-          case ServiceImageEnum.startAddEnd:
-            return Flow2VideoModeEnum.COMPONENT;
-        }
-        return Flow2VideoModeEnum.COMPONENT;
-      };
       try {
         onProgress?.(1);
         onStatusMessage?.("Đang gửi yêu cầu tạo video...");
@@ -614,7 +602,6 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
               artStyleId,
               artStyle,
               serviceImageType,
-              videoMode: videoMode(serviceImageType),
             },
             _metadata: { sceneId },
           },

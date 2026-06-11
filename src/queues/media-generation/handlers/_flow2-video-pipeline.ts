@@ -19,10 +19,10 @@ export type RunFlow2VideoPipelineArgs = {
   aspectRatio?: "16:9" | "9:16";
   videoQuality?: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
-  /** frame | component — ưu tiên hơn serviceImageType nếu có */
-  videoMode?: Flow2VideoMode | string;
-  /** Fallback map sang video_mode khi client gửi serviceImageType (Element Editor) */
+  /** Chế độ nạp ảnh — quyết định video_mode (image_only/start_end → frame; start_add_end → component) */
   serviceImageType?: ServiceImageEnum;
+  /** Fallback: video_mode client gửi trực tiếp khi không có serviceImageType */
+  videoMode?: Flow2VideoMode | string;
   emitter: MediaJobEmitter;
   logPrefix?: string;
 };
@@ -44,8 +44,8 @@ export async function runFlow2VideoPipeline(
 
   const imageCount = images.length;
   const resolvedVideoMode = resolveFlow2VideoMode({
-    explicitMode: videoMode,
     serviceImageType,
+    explicitMode: videoMode,
     imageCount,
   });
 

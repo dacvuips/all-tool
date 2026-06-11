@@ -1,4 +1,5 @@
 import { ElementAnalysisData, ElementScene, uid } from "../../constants";
+import { ServiceImageEnum } from "../constants";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 
 /** Một dòng prompt đã tách theo số thứ tự (1., 2., …) */
@@ -40,7 +41,8 @@ export function buildAnalysisDataFromNumberedPrompt(
   prompt: string,
   aspectRatio?: string,
   artStyleId?: string,
-  artStyle?: string
+  artStyle?: string,
+  serviceImageType?: ServiceImageEnum
 ): ElementAnalysisData | null {
   const items = parseNumberedPrompt(prompt);
   if (items.length === 0) return null;
@@ -62,5 +64,6 @@ export function buildAnalysisDataFromNumberedPrompt(
     aspectRatio,
     artStyleId,
     artStyle,
+    serviceImageType,
   });
 }

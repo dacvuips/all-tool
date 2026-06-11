@@ -548,6 +548,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             scene,
             scriptData,
             aspectRatio: elementFormConfig?.aspectRatio,
+            serviceImageType: elementFormConfig?.serviceImageType,
             thumbnailOriginImage: thumbnailUrl,
             selectedProductImages: selectedUrls,
             noText: scene.noText,
@@ -657,6 +658,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             scene,
             scriptData,
             aspectRatio: elementFormConfig?.aspectRatio,
+            serviceImageType: elementFormConfig?.serviceImageType,
             selectedProductImages: selectedUrls,
             selectedElementImageSlots: scene.elementImageSlots,
           });
@@ -789,6 +791,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             scene,
             scriptData,
             aspectRatio: elementFormConfig?.aspectRatio,
+            serviceImageType: elementFormConfig?.serviceImageType,
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,

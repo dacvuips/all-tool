@@ -13,7 +13,6 @@ import {
   CopyVideoAnalysisData,
   CopyVideoHistoryItem,
   DB_NAME,
-  Flow2VideoModeEnum,
   SceneHistoryItem,
   STORE_NAME,
 } from "../../constants";
@@ -457,17 +456,6 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         serviceImageType,
       } = params;
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
-      const videoMode = (serviceImageType: ServiceImageEnum) => {
-        switch (serviceImageType) {
-          case ServiceImageEnum.imageOnly:
-            return Flow2VideoModeEnum.FRAME;
-          case ServiceImageEnum.startEnd:
-            return Flow2VideoModeEnum.FRAME;
-          case ServiceImageEnum.startAddEnd:
-            return Flow2VideoModeEnum.COMPONENT;
-        }
-        return Flow2VideoModeEnum.COMPONENT;
-      };
       try {
         onProgress?.(1);
         onStatusMessage?.("Đang gửi yêu cầu tạo video...");
@@ -487,7 +475,6 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
               artStyleId,
               artStyle,
               serviceImageType,
-              videoMode: videoMode(serviceImageType),
             },
             _metadata: { sceneId },
           },

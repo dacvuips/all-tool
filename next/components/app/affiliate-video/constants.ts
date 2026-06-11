@@ -115,7 +115,7 @@ export interface ElementFormConfig {
   aspectRatio: AspectRatio;
   artStyle: string;
   artStyleId?: string;
-  serviceImageType?: string;
+  serviceImageType?: ServiceImageEnum;
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";

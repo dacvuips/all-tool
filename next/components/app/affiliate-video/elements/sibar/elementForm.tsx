@@ -39,7 +39,8 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           promptText,
           elementFormConfig?.aspectRatio,
           elementFormConfig?.artStyleId,
-          elementFormConfig?.artStyle
+          elementFormConfig?.artStyle,
+          elementFormConfig?.serviceImageType
         );
         if (!result?.scenes?.length) {
           toast.error(

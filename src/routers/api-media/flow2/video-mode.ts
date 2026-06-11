@@ -77,10 +77,10 @@ export function mapServiceImageTypeToFlow2VideoMode(
 }
 
 export type ResolveFlow2VideoModeInput = {
-  /** `video_mode` / `videoMode` từ request body hoặc config */
-  explicitMode?: string | null;
-  /** Fallback từ Element Editor (`serviceImageType`) */
+  /** Chế độ nạp ảnh từ Element Editor — quyết định video_mode */
   serviceImageType?: ServiceImageEnum;
+  /** Fallback: `video_mode` / `videoMode` client gửi trực tiếp khi không có serviceImageType */
+  explicitMode?: string | null;
   imageCount: number;
 };
 
@@ -88,8 +88,8 @@ export type ResolveFlow2VideoModeInput = {
  * Xác định `video_mode` khi gọi Flow2 `gen_image_video`.
  *
  * Thứ tự ưu tiên:
- * 1. `explicitMode` (video_mode client gửi lên)
- * 2. `serviceImageType` (image_only / start_end → frame; start_add_end → component)
+ * 1. `serviceImageType` (image_only / start_end → frame; start_add_end → component)
+ * 2. `explicitMode` (video_mode client gửi lên — fallback khi không có serviceImageType)
  * 3. Suy luận theo số ảnh: 3 ảnh → component; 1–2 ảnh → frame (start/end)
  *
  * Trả `undefined` khi không có ảnh (text-to-video).
@@ -98,16 +98,16 @@ export function resolveFlow2VideoMode(input: ResolveFlow2VideoModeInput): Flow2V
   const { imageCount } = input;
   if (imageCount <= 0) return undefined;
 
-  const fromExplicit = normalizeFlow2VideoMode(input.explicitMode);
-  if (fromExplicit) {
-    assertFlow2VideoImageCount(fromExplicit, imageCount);
-    return fromExplicit;
-  }
-
   const fromServiceType = mapServiceImageTypeToFlow2VideoMode(input.serviceImageType);
   if (fromServiceType) {
     assertFlow2VideoImageCount(fromServiceType, imageCount);
     return fromServiceType;
+  }
+
+  const fromExplicit = normalizeFlow2VideoMode(input.explicitMode);
+  if (fromExplicit) {
+    assertFlow2VideoImageCount(fromExplicit, imageCount);
+    return fromExplicit;
   }
 
   const inferred: Flow2VideoMode =
