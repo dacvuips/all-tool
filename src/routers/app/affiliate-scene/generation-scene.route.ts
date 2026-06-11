@@ -5,17 +5,17 @@ import { Context } from "../../../libs/graphql";
 import { AffiliateVideoResponseSchema, StoryModeTypeEnum } from "../constanst";
 import {
   AffiliateVideoFormConfig,
-  buildObjectPersonifyImageScriptNote,
-  buildProductImageScriptNote,
   assertGeminiTextResponse,
   assertNonEmptyScenesArray,
+  buildObjectPersonifyImageScriptNote,
+  buildProductImageScriptNote,
   callGeminiWithRetry,
   checkRequestLimit,
   filterReferenceImages,
   getAvailableGeminiClients,
   incrementRequestCount,
-  parseGeminiJsonResponse,
   interpolateTemplate,
+  parseGeminiJsonResponse,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
   resolveReferenceImagesForGemini,
@@ -136,7 +136,7 @@ CRITICAL RULE: Always keep character and environment identical.
         const response = await callGeminiWithRetry(
           (ai) =>
             ai.models.generateContent({
-              model: "gemini-3-flash-preview",
+              model: "gemini-3.5-flash",
               contents: [
                 {
                   role: "user",
@@ -198,8 +198,7 @@ CRITICAL RULE: Always keep character and environment identical.
                 ? `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
                   ""
                 : "",
-            audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+            audio: `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
             dialogue: scene.dialogue || "",
           })),
         };

@@ -40,8 +40,8 @@ export interface SceneCardImageTabProps {
   /** Mở Gallery dialog */
   onOpenGallery: () => void;
 
-  // ── Optional: Origin thumbnail (copy-video only) ──
-  /** URL ảnh gốc (thumbnail từ video gốc, chỉ dùng cho copy-video) */
+  // ── Optional: Origin thumbnail (copy-video / storyboard) ──
+  /** URL ảnh gốc (thumbnail video hoặc panel storyboard đã cắt) */
   originThumbnailUrl?: string | null;
   /** Đang loading origin thumbnail */
   originThumbnailLoading?: boolean;
@@ -95,7 +95,7 @@ export function SceneCardImageTab({
   const imagePaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
   return (
     <div className={`flex flex-col gap-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-      {/* ── Origin Thumbnail (chỉ hiển thị cho copy-video) ── */}
+      {/* ── Origin Thumbnail (copy-video / storyboard) ── */}
       {(originThumbnailUrl || originThumbnailLoading) && (
         <div className="flex flex-col">
           {originThumbnailLoading ? (

@@ -5,7 +5,7 @@
  * - Responsive: trên mobile hiển thị dạng card
  * Extracted from batch-list.tsx – className only, Tailwind CSS
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
@@ -20,40 +20,29 @@ import {
   RiSearchLine,
   RiText,
 } from "react-icons/ri";
-import { useToast } from "../../../../../../lib/providers/toast-provider";
-import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
-import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
-import { Button, Input } from "../../../../../shared/utilities/form";
-import { Img } from "../../../../../shared/utilities/misc";
-import {
-  CharacterItem,
-  CopyVideoScene,
-  DB_NAME,
-  ElementFormImage,
-  ElementFormVideo,
-} from "../../../constants";
-import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
-import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
-import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
-import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
-import { GeneratedImageData } from "../../hook/useElementApi";
 
-import { useIndexedDB } from "../../../hook/useIndexedDB";
-import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
-import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
-import { useElementContext } from "../../providers/element-provider";
-import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
-import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
-import { InsertPosition, NewSceneData } from "../add-scene-modal";
-import { SceneElementImagesRow } from "./scene-element-images-row";
-import { SceneElementVideosRow } from "./scene-element-videos-row";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
+import { Dialog } from "../../../../shared/utilities/dialog/dialog";
+import { Button, Input } from "../../../../shared/utilities/form";
+import { Img } from "../../../../shared/utilities/misc";
+import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
+import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
+import { useIndexedDB } from "../../hook/useIndexedDB";
+import { useSceneMedia } from "../../hook/useSceneMedia";
+import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
+import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
+import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
+import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
+import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { InsertPosition, NewSceneData } from "./add-scene-modal";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 export type EditField =
-  | "visual_prompt"
-  | "motion_description"
-  | "original_content"
-  | "audio_description"
+  | "imageGenPrompt"
+  | "motionPrompt"
+  | "dialogue"
+  | "audio"
   | "product_image_prompt";
 
 /** Số ký tự tối đa trước khi cắt */
@@ -67,6 +56,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   scene,
   isDisabled,
   isGroupHovered,
+  storyModeType,
   hideImageColumn,
   nextSceneId,
   forcedTab,
@@ -77,14 +67,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleVoiceDisable,
   onToggleNoText,
   onUpdateSelectedProductImages,
-  onUpdateElementImageSlots,
-  onUpdateElementVideoSlots,
 }: {
-  scene: CopyVideoScene;
+  scene: SceneScript;
   index: number;
   nextSceneId?: string;
   isDisabled: boolean;
   isGroupHovered?: boolean;
+  storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
   /** Tab được ép chọn đồng loạt từ bên ngoài */
   forcedTab?: SceneTabKey | null;
@@ -95,12 +84,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
-  onUpdateElementImageSlots?: (
-    sceneId: string,
-    slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
-  ) => void;
-  onUpdateElementVideoSlots?: (sceneId: string, slots: (ElementFormVideo | undefined)[]) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -116,29 +99,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  // ── Thumbnail from IndexedDB (saved during video analysis) ──
-  const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
-    scene.id
-  );
-  const { scriptData, elementFormConfig } = useElementContext();
-  const aspectRatio = resolveElementAspectRatio(
-    scriptData,
-    elementFormConfig?.aspectRatio
-  ) as "16:9" | "9:16";
 
-  // ── Ảnh tham chiếu 3 ô (per-scene) ──
+  // ── Product image selection (per-scene, persisted in IndexedDB) ──
+  const storyboardContext = useAffiliateVideoContext();
+  const { scriptData, affiliateVideoFormConfig } = storyboardContext;
+  const productImages = scriptData?.productImages || affiliateVideoFormConfig?.productImages || [];
   const selectedProductImagesDB = useIndexedDB<string[]>(
-    "selected-images",
-    DB_NAME.generateElement
+    "selected-product-images",
+    DB_NAME.generateScene
   );
   const [selectedProductImages, setSelectedProductImages] = useState<string[]>(
     scene.selectedProductImages || []
   );
-  const [selectedElementImageSlots, setSelectedElementImageSlots] = useState<
-    (ElementFormImage | undefined)[]
-  >(scene.elementImageSlots || []);
 
   useEffect(() => {
+    // Prefer scene-level data; fall back to separate DB for backward compat
     if (scene.selectedProductImages?.length) {
       setSelectedProductImages(scene.selectedProductImages);
     } else {
@@ -149,37 +124,20 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     }
   }, [scene.id, scene.selectedProductImages]);
 
-  useEffect(() => {
-    setSelectedElementImageSlots(scene.elementImageSlots || []);
-  }, [scene.id, scene.elementImageSlots]);
-
-  const handleElementImageSlotsChange = useCallback(
-    (slots: (ElementFormImage | undefined)[]) => {
-      const urls = elementImageSlotsToUrls(slots);
-      setSelectedElementImageSlots(slots);
-      setSelectedProductImages(urls);
-      selectedProductImagesDB.set(scene.id, urls);
-      onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(scene.id, slots, urls);
+  const handleToggleProductImage = useCallback(
+    (imageUrl: string) => {
+      setSelectedProductImages((prev) => {
+        const next = prev.includes(imageUrl)
+          ? prev.filter((url) => url !== imageUrl)
+          : [...prev, imageUrl];
+        // 1. Keep the legacy per-scene DB in sync
+        selectedProductImagesDB.set(scene.id, next);
+        // 2. Persist into sceneHistory & lastScript
+        onUpdateSelectedProductImages?.(scene.id, next);
+        return next;
+      });
     },
-    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages, onUpdateElementImageSlots]
-  );
-
-  // ── Video tham chiếu 1 ô (per-scene) ──
-  const [selectedElementVideoSlots, setSelectedElementVideoSlots] = useState<
-    (ElementFormVideo | undefined)[]
-  >(scene.elementVideoSlots || []);
-
-  useEffect(() => {
-    setSelectedElementVideoSlots(scene.elementVideoSlots || []);
-  }, [scene.id, scene.elementVideoSlots]);
-
-  const handleElementVideoSlotsChange = useCallback(
-    (slots: (ElementFormVideo | undefined)[]) => {
-      setSelectedElementVideoSlots(slots);
-      onUpdateElementVideoSlots?.(scene.id, slots);
-    },
-    [scene.id, onUpdateElementVideoSlots]
+    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages]
   );
 
   // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
@@ -192,34 +150,43 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     generatedImage,
     generatingImage,
     imageProgress,
-    imageError,
     generatedVideo,
     generatingVideo,
     videoProgress,
-    videoError,
-    handleGenerateImage,
+
     generatedExtendVideo,
     generatingExtendVideo,
     extendVideoProgress,
+    imageError,
+    videoError,
     extendVideoError,
+    handleGenerateImage,
     handleSetImage,
     handleGenerateVideo,
     handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
-    handleGenerateVideoToVideo,
-  } = useElementSceneMedia({
+  } = useSceneMedia({
     scene,
     nextSceneId,
-    thumbnailOriginImage,
     selectedProductImages,
-    selectedElementImageSlots,
-    selectedElementVideoSlots,
     noText: scene.noText,
+    providerContext: storyboardContext,
   });
+  const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
-  const videoPaddingTop = "56.25%";
+  /** Ảnh panel đã cắt từ storyboard – hiển thị phía trên (Ảnh gốc) */
+  const storyboardOriginUrl = useMemo(() => {
+    const crop = scene.storyboardCropImage;
+    if (!crop?.imageBytes) return null;
+    return `data:${crop.mimeType || "image/png"};base64,${crop.imageBytes}`;
+  }, [scene.storyboardCropImage]);
+
+  const aspectRatio = (scriptData?.aspectRatio ??
+    affiliateVideoFormConfig?.aspectRatio ??
+    "9:16") as "16:9" | "9:16";
+  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openEdit = (field: EditField) => {
@@ -389,7 +356,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         onMouseLeave?.();
       }}
     >
-      {/* ── Card Header ── */}
+      {/* ── Card Header: Scene number + toggle buttons ── */}
       <div className="flex justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-100">
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white whitespace-nowrap mr-1">
           {`${t("Cảnh")} #${scene.sceneNumber}`}
@@ -419,7 +386,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             icon={scene.noText ? <RiText /> : <NoTextIcon />}
             tooltip={
               scene.noText
-                ? t("Đang cho phép hiển thị 'Chữ' trong ảnh")
+                ? t("Đang cho phép hiển thị Chữ' trong ảnh")
                 : t("Không cho phép hiển thị 'Chữ' trong ảnh")
             }
             placement="bottom"
@@ -440,33 +407,73 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         </div>
       </div>
 
-      {/* ── Video tham chiếu (1 ô, match tên video trong prompt) ── */}
+      {/* ── Prompt section (product images only) ── */}
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <SceneElementVideosRow
-          sceneId={scene.id}
-          prompt={scene.visual_prompt || ""}
-          elementFormConfig={elementFormConfig}
-          savedSlots={scene.elementVideoSlots}
-          readOnly={isDisabled}
-          onSlotsChange={handleElementVideoSlotsChange}
-        />
+        {/* Product Select Image */}
+        {productImages.length > 0 && (
+          <div className="relative mt-1.5">
+            <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
+              {`  ${t("Chọn ảnh SP để gắn vào ảnh và video")}:`}
+            </span>
+            <div className="flex flex-wrap gap-1.5 mt-1">
+              {productImages.map((imgUrl, idx) => (
+                <label
+                  key={idx}
+                  className={`relative cursor-pointer rounded-lg overflow-hidden border-2 transition-all duration-200 ${
+                    selectedProductImages.includes(imgUrl)
+                      ? "border-blue-500 shadow-md ring-1 ring-blue-300"
+                      : "border-gray-200 hover:border-gray-300 opacity-60 hover:opacity-100"
+                  }`}
+                  style={{ width: 48, height: 48 }}
+                >
+                  <input
+                    type="checkbox"
+                    className="absolute top-0.5 left-0.5 z-10 w-3.5 h-3.5 accent-blue-500 cursor-pointer"
+                    checked={selectedProductImages.includes(imgUrl)}
+                    onChange={() => handleToggleProductImage(imgUrl)}
+                  />
+                  <Img
+                    src={imgUrl}
+                    alt={`Product ${idx + 1}`}
+                    className="object-cover w-full h-full"
+                    lazyload={false}
+                  />
+                  {selectedProductImages.includes(imgUrl) && (
+                    <div className="absolute inset-0 pointer-events-none bg-blue-500/10" />
+                  )}
+                </label>
+              ))}
+            </div>
+            {selectedProductImages.length > 0 && (
+              <span className="text-9 text-blue-500 mt-0.5 block">
+                {t("Đã chọn")} {selectedProductImages.length}/{productImages.length}
+              </span>
+            )}
+            {selectedProductImages.length > 0 && (
+              <div className="mt-2">
+                <span className="font-semibold tracking-wide text-blue-600 uppercase text-9">
+                  {t("Prompt SP")}:
+                </span>
+                <textarea
+                  value={localProductPrompt}
+                  onChange={(e) => setLocalProductPrompt(e.target.value)}
+                  onBlur={() => onUpdateScene(scene.id, "product_image_prompt", localProductPrompt)}
+                  placeholder={t(
+                    "Nhập prompt tùy chỉnh cho ảnh sản phẩm... (để trống sẽ dùng prompt mặc định)"
+                  )}
+                  rows={2}
+                  className="w-full mt-1 rounded-lg border border-blue-200 bg-blue-50/50 text-xs text-gray-700 px-2 py-1.5 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200 resize-none transition-colors placeholder-gray-400 leading-relaxed"
+                />
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Ảnh tham chiếu (3 ô, match tên trong prompt) ── */}
-      <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-        <SceneElementImagesRow
-          sceneId={scene.id}
-          prompt={scene.visual_prompt || ""}
-          elementFormConfig={elementFormConfig}
-          savedSlots={scene.elementImageSlots}
-          readOnly={isDisabled}
-          onSlotsChange={handleElementImageSlotsChange}
-        />
-      </div>
-      {/* ── Media tabs ── */}
+      {/* ── Media tabs (Hình ảnh / Video đơn / Video nối) ── */}
       <SceneCardTabs
-        hideImageTab={true}
-        hideExtendTab={true}
+        hideImageTab={isPromptToVideo || !!hideImageColumn}
+        hideExtendTab={isPromptToVideo || !nextSceneId}
         forcedTab={forcedTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
@@ -489,9 +496,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onDownloadImage={handleDownloadImage}
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
-            originThumbnailUrl={thumbnailOriginImage}
-            originThumbnailLoading={thumbnailLoading}
-            sceneTimestamp={scene.timestamp}
+            originThumbnailUrl={storyboardOriginUrl}
             errorMessage={imageError}
           />
         )}
@@ -500,13 +505,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             generatedVideo={generatedVideo}
             generatingVideo={generatingVideo}
             videoProgress={videoProgress}
-            isDisabled={isDisabled || true}
+            isDisabled={isDisabled}
             hasImage={!!generatedImage}
-            isPromptToVideo
+            isPromptToVideo={isPromptToVideo}
             aspectRatio={aspectRatio}
             errorMessage={videoError}
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
-            onGenerateVideo={() => handleGenerateVideoToVideo()}
+            onGenerateVideo={() => handleGenerateVideo()}
             onDownloadVideo={handleDownloadVideo}
           />
         )}
@@ -526,11 +531,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         renderImagePrompt={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
             {renderEditablePrompt(
-              "visual_prompt",
-              scene.visual_prompt,
+              "imageGenPrompt",
+              scene.imageGenPrompt,
               "text-gray-600",
               <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
-                PROMPT
+                IMAGE PROMPT
               </span>
             )}
           </div>
@@ -538,32 +543,24 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         renderVideoPrompts={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
             {renderEditablePrompt(
-              "visual_prompt",
-              scene.visual_prompt,
-              "text-gray-600",
-              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
-                PROMPT
-              </span>
-            )}
-            {renderEditablePrompt(
-              "motion_description",
-              scene.motion_description,
+              "motionPrompt",
+              scene.motionPrompt,
               "text-teal-700",
               <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
                 [MOTION]:
               </span>
             )}
             {renderEditablePrompt(
-              "audio_description",
-              scene.audio_description ?? "",
+              "audio",
+              scene.audio ?? "",
               "text-purple-700",
               <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [AUDIO]:
               </span>
             )}
             {renderEditablePrompt(
-              "original_content",
-              scene.original_content ?? "",
+              "dialogue",
+              scene.dialogue ?? "",
               "text-green-700 italic",
               <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [DIALOGUE]:
@@ -572,6 +569,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           </div>
         )}
       />
+
+      {/* Hidden file input for upload */}
       <input
         ref={fileInputRef}
         type="file"
@@ -596,6 +595,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           e.target.value = "";
         }}
       />
+      {/* Gallery Dialog */}
       <ImageGalleryDialog
         isOpen={showGalleryDialog}
         onClose={() => setShowGalleryDialog(false)}
@@ -615,29 +615,24 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface SceneRowGroupProps {
-  scene: CopyVideoScene;
+  scene: SceneScript;
   index: number;
   nextSceneId?: string;
   isDisabled: boolean;
   characters: CharacterItem[];
+  storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
   forcedTab?: SceneTabKey | null;
-  onToggleNoText: (sceneId: string) => void;
   onInsert: (
-    scene: CopyVideoScene,
+    scene: SceneScript,
     position: InsertPosition,
     data: NewSceneData
   ) => Promise<void> | void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
+  onToggleNoText: (sceneId: string) => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
-  onUpdateElementImageSlots?: (
-    sceneId: string,
-    slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
-  ) => void;
-  onUpdateElementVideoSlots?: (sceneId: string, slots: (ElementFormVideo | undefined)[]) => void;
 }
 
 export function SceneRowGroup({
@@ -646,6 +641,7 @@ export function SceneRowGroup({
   nextSceneId,
   isDisabled,
   characters,
+  storyModeType,
   forcedTab,
   onInsert,
   onUpdateScene,
@@ -653,15 +649,13 @@ export function SceneRowGroup({
   onToggleVoiceDisable,
   onToggleNoText,
   onUpdateSelectedProductImages,
-  onUpdateElementImageSlots,
-  onUpdateElementVideoSlots,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
   const leave = () => setHovered(false);
 
   return (
-    <div className="flex relative flex-col group" onMouseEnter={enter} onMouseLeave={leave}>
+    <div className="relative group" onMouseEnter={enter} onMouseLeave={leave}>
       {/* Add ABOVE button – centered on top border, only visible on hover
       {index === 0 && (
         <div
@@ -678,30 +672,27 @@ export function SceneRowGroup({
         </div>
       )} */}
 
-      {/* Scene data row – flex-1 so it fills the grid cell height */}
-      <div className="flex-1">
-        <SceneBatchRow
-          scene={scene}
-          index={index}
-          nextSceneId={nextSceneId}
-          isDisabled={isDisabled}
-          isGroupHovered={hovered}
-          forcedTab={forcedTab}
-          onMouseEnter={enter}
-          onMouseLeave={leave}
-          onUpdateScene={onUpdateScene}
-          onToggleDisable={onToggleDisable}
-          onToggleVoiceDisable={onToggleVoiceDisable}
-          onToggleNoText={onToggleNoText}
-          onUpdateSelectedProductImages={onUpdateSelectedProductImages}
-          onUpdateElementImageSlots={onUpdateElementImageSlots}
-          onUpdateElementVideoSlots={onUpdateElementVideoSlots}
-        />
-      </div>
+      {/* Scene data row */}
+      <SceneBatchRow
+        scene={scene}
+        index={index}
+        nextSceneId={nextSceneId}
+        isDisabled={isDisabled}
+        isGroupHovered={hovered}
+        storyModeType={storyModeType}
+        forcedTab={forcedTab}
+        onMouseEnter={enter}
+        onMouseLeave={leave}
+        onUpdateScene={onUpdateScene}
+        onToggleDisable={onToggleDisable}
+        onToggleVoiceDisable={onToggleVoiceDisable}
+        onToggleNoText={onToggleNoText}
+        onUpdateSelectedProductImages={onUpdateSelectedProductImages}
+      />
 
-      {/* Add BELOW button – always at the bottom of the group, only visible on hover
+      {/* Add BELOW button – centered on bottom border, only visible on hover
       <div
-        className={`flex justify-center py-1.5 transition-all duration-200 ${
+        className={`absolute -bottom-3 left-0 right-0 flex justify-center z-20 transition-all duration-200 ${
           hovered ? "opacity-100" : "opacity-0 pointer-events-none"
         }`}
       >

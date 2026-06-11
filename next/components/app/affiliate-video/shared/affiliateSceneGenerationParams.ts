@@ -46,17 +46,28 @@ export function buildAffiliateVideoPrompt(
 export async function buildAffiliateImageGenerateParams(options: {
   scene: SceneScript;
   scriptData?: AffiliateScriptLike;
+  /** Fallback khi scriptData chưa có aspectRatio */
+  aspectRatio?: string;
   selectedProductImages?: string[];
   noText?: boolean;
   objectToPersonifyImage?: ElementFormImage;
 }): Promise<GenerateImageParams> {
-  const { scene, scriptData, selectedProductImages, noText, objectToPersonifyImage } = options;
+  const { scene, scriptData, aspectRatio, selectedProductImages, noText, objectToPersonifyImage } =
+    options;
   const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
+
+  const storyboardReference = scene.storyboardCropImage
+    ? {
+        imageBytes: scene.storyboardCropImage.imageBytes,
+        mimeType: scene.storyboardCropImage.mimeType,
+      }
+    : undefined;
 
   return {
     sceneId: scene.id,
     prompt: scene.imageGenPrompt || "",
-    aspectRatio: scriptData?.aspectRatio,
+    aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
+    referenceImage: storyboardReference,
     additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
@@ -68,11 +79,13 @@ export async function buildAffiliateImageGenerateParams(options: {
 export function buildAffiliateVideoGenerateParams(options: {
   scene: SceneScript;
   scriptData?: AffiliateScriptLike;
+  /** Fallback khi scriptData chưa có aspectRatio */
+  aspectRatio?: string;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
 }): GenerateVideoParams {
-  const { scene, scriptData, isStitch, generatedImage, nextGeneratedImage } = options;
+  const { scene, scriptData, aspectRatio, isStitch, generatedImage, nextGeneratedImage } = options;
 
   let images: GenerateVideoParams["images"];
   if (isStitch) {
@@ -91,7 +104,7 @@ export function buildAffiliateVideoGenerateParams(options: {
     sceneId: isStitch ? scene.id + "::stitch" : scene.id,
     prompt: buildAffiliateVideoPrompt(scene, scriptData, isStitch),
     images,
-    aspectRatio: scriptData?.aspectRatio,
+    aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,

@@ -18,6 +18,14 @@ export type ElementScriptLike =
   | null
   | undefined;
 
+/** Ưu tiên aspectRatio trong script; fallback sidebar config khi script chưa có hoặc đổi sau submit. */
+export function resolveElementAspectRatio(
+  scriptData?: ElementScriptLike,
+  fallbackAspectRatio?: string
+): string | undefined {
+  return scriptData?.aspectRatio ?? fallbackAspectRatio;
+}
+
 /** Parse scene thumbnail data URL → reference image for image API. */
 export function parseThumbnailReferenceImage(
   thumbnailOriginImage?: string | null
@@ -74,18 +82,21 @@ export function buildElementVideoPrompt(scene: CopyVideoScene, isStitch?: boolea
 export async function buildElementImageGenerateParams(options: {
   scene: CopyVideoScene;
   scriptData?: ElementScriptLike;
+  /** Fallback khi scriptData chưa có aspectRatio */
+  aspectRatio?: string;
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
   noText?: boolean;
 }): Promise<GenerateImageParams> {
-  const { scene, scriptData, thumbnailOriginImage, selectedProductImages, noText } = options;
+  const { scene, scriptData, aspectRatio, thumbnailOriginImage, selectedProductImages, noText } =
+    options;
   const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
 
   return {
     sceneId: scene.id,
     prompt: `${scene.visual_prompt || ""}`,
     noText: noText ?? scene.noText,
-    aspectRatio: scriptData?.aspectRatio,
+    aspectRatio: resolveElementAspectRatio(scriptData, aspectRatio),
     artStyle: scriptData?.artStyle,
     artStyleId: scriptData?.artStyleId,
     referenceImage: parseThumbnailReferenceImage(thumbnailOriginImage),
@@ -100,6 +111,8 @@ export async function buildElementImageGenerateParams(options: {
 export async function buildElementVideoGenerateParams(options: {
   scene: CopyVideoScene;
   scriptData?: ElementScriptLike;
+  /** Fallback khi scriptData chưa có aspectRatio */
+  aspectRatio?: string;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
@@ -109,6 +122,7 @@ export async function buildElementVideoGenerateParams(options: {
   const {
     scene,
     scriptData,
+    aspectRatio,
     isStitch,
     generatedImage,
     nextGeneratedImage,
@@ -141,7 +155,7 @@ export async function buildElementVideoGenerateParams(options: {
     sceneId: isStitch ? scene.id + "::stitch" : scene.id,
     prompt: buildElementVideoPrompt(scene, isStitch),
     images,
-    aspectRatio: scriptData?.aspectRatio,
+    aspectRatio: resolveElementAspectRatio(scriptData, aspectRatio),
     serviceImageType: scriptData?.serviceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,

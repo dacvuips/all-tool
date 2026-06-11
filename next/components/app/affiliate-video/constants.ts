@@ -57,6 +57,8 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   objectToPersonify: string;
   objectToPersonifyCode?: string;
   objectToPersonifyImage?: ElementFormImage;
+  /** Ảnh storyboard tham chiếu – có thể upload nhiều ảnh */
+  storyboardImage?: ElementFormImage[];
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   batchSize: number;
@@ -76,12 +78,7 @@ export interface TrendingVideoFormConfig extends VideoFormBase {
 
 /** Xóa lựa chọn prompt/chatbot và nội dung prompt – không giữ qua reload hoặc sau khi tạo cảnh */
 export function withoutPromptSelection(config: TrendingVideoFormConfig): TrendingVideoFormConfig {
-  const {
-    promptId: _promptId,
-    promptName: _promptName,
-    tipContent: _tipContent,
-    ...rest
-  } = config;
+  const { promptId: _promptId, promptName: _promptName, tipContent: _tipContent, ...rest } = config;
   return { ...rest, tipContent: "" };
 }
 
@@ -173,6 +170,14 @@ export interface AudioVoiceConfig {
   fullPrompt: string;
 }
 
+/** Vùng cắt panel storyboard – tọa độ chuẩn hoá 0–1 */
+export interface StoryboardCropRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 export interface SceneScript {
   id: string;
   sceneNumber: number;
@@ -188,6 +193,10 @@ export interface SceneScript {
   aspectRatio?: "16:9" | "9:16";
   selectedProductImages?: string[];
   product_image_prompt?: string;
+  /** Vùng cắt panel trên ảnh storyboard gốc */
+  cropRegion?: StoryboardCropRegion;
+  /** Ảnh panel đã cắt từ storyboard */
+  storyboardCropImage?: ElementFormImage;
 }
 
 export interface ScriptData {
@@ -200,10 +209,38 @@ export interface ScriptData {
   voiceGender: string;
   voiceTone: string;
   voiceStyle: string;
+  /** Nhịp điệu đọc – từ phân tích storyboard */
+  voicePacing?: string;
+  /** Prompt casting giọng đọc đầy đủ */
+  audioPrompt?: string;
   aspectRatio: "16:9" | "9:16";
   scenes: SceneScript[];
   productImages?: string[];
   objectToPersonifyImage?: ElementFormImage;
+  /** Ảnh storyboard gốc dùng để phân tích */
+  storyboardImage?: ElementFormImage[];
+}
+
+/** Một phân cảnh trả về từ AI phân tích storyboard */
+export interface StoryboardAnalysisScene {
+  sceneNumber: number;
+  cropRegion: StoryboardCropRegion;
+  camera?: string;
+  dialogue: string;
+  motionPrompt: string;
+  audio: string;
+  visualDescription: string;
+}
+
+/** Kết quả AI phân tích ảnh storyboard */
+export interface StoryboardAnalysisData {
+  topicTitle: string;
+  voiceGender: string;
+  voiceTone: string;
+  voiceStyle: string;
+  voicePacing: string;
+  audioPrompt: string;
+  scenes: StoryboardAnalysisScene[];
 }
 
 export interface TrendingScriptData {
@@ -266,6 +303,9 @@ export const CACHE_KEY = {
   lastReviewScript: "lastReviewScript",
   reviewInput: "reviewInput",
   reviewHistory: "reviewHistory",
+  lastStoryboardScript: "lastStoryboardScript",
+  storyboardInput: "storyboardInput",
+  storyboardHistory: "storyboardHistory",
 };
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
