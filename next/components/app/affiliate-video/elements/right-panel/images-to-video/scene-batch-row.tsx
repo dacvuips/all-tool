@@ -112,10 +112,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     scene.id
   );
   const { scriptData, elementFormConfig } = useElementContext();
-  const aspectRatio = resolveElementAspectRatio(
-    scriptData,
-    elementFormConfig?.aspectRatio
-  ) as "16:9" | "9:16";
+  const aspectRatio = resolveElementAspectRatio(scriptData, elementFormConfig?.aspectRatio) as
+    | "16:9"
+    | "9:16";
 
   // ── Ảnh tham chiếu 3 ô (per-scene) ──
   const selectedProductImagesDB = useIndexedDB<string[]>(
@@ -232,7 +231,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [editValue]);
 
   const isImageOnly = elementFormConfig?.serviceImageType === ServiceImageEnum.imageOnly;
-  console.log(isImageOnly);
 
   /** Renders editable prompt cell content */
   const renderEditablePrompt = (
