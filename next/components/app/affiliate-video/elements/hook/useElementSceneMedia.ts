@@ -21,6 +21,7 @@ import {
   buildElementImageGenerateParams,
   buildElementVideoGenerateParams,
   buildElementVideoPrompt,
+  resolveElementAspectRatio,
 } from "../utils/elementSceneGenerationParams";
 import {
   base64ToBlob,
@@ -158,7 +159,10 @@ export function useElementSceneMedia({
     subscribeSceneError,
     reportSceneError,
     scriptData,
+    elementFormConfig,
   } = useElementContext();
+
+  const aspectRatio = resolveElementAspectRatio(scriptData, elementFormConfig?.aspectRatio);
 
   const reportVideoError = useCallback(
     (message: string) => {
@@ -393,6 +397,7 @@ export function useElementSceneMedia({
       const imageParams = await buildElementImageGenerateParams({
         scene,
         scriptData,
+        aspectRatio: elementFormConfig?.aspectRatio,
         thumbnailOriginImage,
         selectedProductImages,
         noText,
@@ -500,6 +505,7 @@ export function useElementSceneMedia({
       const videoParams = await buildElementVideoGenerateParams({
         scene,
         scriptData,
+        aspectRatio: elementFormConfig?.aspectRatio,
         isStitch,
         generatedImage: isStitch ? generatedImage : undefined,
         nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
@@ -610,7 +616,7 @@ export function useElementSceneMedia({
           videoBytes: videoPayload.videoBytes,
           mimeType: videoPayload.mimeType,
         },
-        aspectRatio: scriptData?.aspectRatio,
+        aspectRatio,
         serviceImageType: scriptData.serviceImageType,
         noText: scene.noText,
         voiceDisable: scene.voiceDisable,

@@ -54,6 +54,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     removeBatchGeneratingVideoSceneId,
     reportSceneError,
     scriptData,
+    elementFormConfig,
   } = useElementContext();
   // Elements: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
@@ -546,6 +547,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const imageParams = await buildElementImageGenerateParams({
             scene,
             scriptData,
+            aspectRatio: elementFormConfig?.aspectRatio,
             thumbnailOriginImage: thumbnailUrl,
             selectedProductImages: selectedUrls,
             noText: scene.noText,
@@ -654,6 +656,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const videoParams = await buildElementVideoGenerateParams({
             scene,
             scriptData,
+            aspectRatio: elementFormConfig?.aspectRatio,
             selectedProductImages: selectedUrls,
             selectedElementImageSlots: scene.elementImageSlots,
           });
@@ -785,6 +788,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           const videoParams = await buildElementVideoGenerateParams({
             scene,
             scriptData,
+            aspectRatio: elementFormConfig?.aspectRatio,
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,

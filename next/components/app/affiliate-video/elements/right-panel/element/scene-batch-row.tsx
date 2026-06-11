@@ -36,6 +36,7 @@ import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
+import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
@@ -111,6 +112,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     scene.id
   );
   const { scriptData, elementFormConfig } = useElementContext();
+  const aspectRatio = resolveElementAspectRatio(
+    scriptData,
+    elementFormConfig?.aspectRatio
+  ) as "16:9" | "9:16";
 
   // ── Ảnh tham chiếu 3 ô (per-scene) ──
   const selectedProductImagesDB = useIndexedDB<string[]>(
@@ -433,7 +438,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         }}
         renderImageTab={() => (
           <SceneCardImageTab
-            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
+            aspectRatio={aspectRatio}
             generatedImage={generatedImage}
             generatingImage={generatingImage}
             imageProgress={imageProgress}
@@ -457,7 +462,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             isDisabled={isDisabled}
             hasImage={!!generatedImage}
             isPromptToVideo
-            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
+            aspectRatio={aspectRatio}
             errorMessage={videoError}
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
             onGenerateVideo={() => handleGenerateVideo()}
@@ -471,7 +476,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             extendVideoProgress={extendVideoProgress}
             isDisabled={isDisabled}
             nextSceneId={nextSceneId}
-            aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
+            aspectRatio={aspectRatio}
             errorMessage={extendVideoError}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
             onDownloadExtendVideo={handleDownloadExtendVideo}
