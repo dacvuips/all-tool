@@ -69,11 +69,28 @@ export function SceneElementImagesRow({
   );
   const lastNotifiedRef = useRef<string>("");
 
+  const savedSlotsKey = useMemo(
+    () =>
+      savedSlots
+        ?.map((s, i) => {
+          if (!s) return `${i}:`;
+          return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
+        })
+        .join("|") ?? "",
+    [savedSlots]
+  );
+
   useEffect(() => {
     setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched], slotCount));
     setManualMask(Array.from({ length: slotCount }, () => false));
     lastNotifiedRef.current = "";
   }, [sceneId, slotCount]);
+
+  useEffect(() => {
+    if (!savedSlots?.length) return;
+    setSlots(trimSlots([...savedSlots], slotCount));
+    setManualMask(Array.from({ length: slotCount }, (_, i) => !!savedSlots[i]));
+  }, [savedSlotsKey, slotCount]);
 
   useEffect(() => {
     setSlots((prev) => trimSlots(prev, slotCount));

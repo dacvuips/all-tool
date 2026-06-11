@@ -9,7 +9,13 @@ import React, { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload } from "react-icons/ai";
 import { HiOutlineArrowDownTray } from "react-icons/hi2";
-import { RiGalleryLine, RiImageFill, RiLoader4Line, RiUploadCloud2Line } from "react-icons/ri";
+import {
+  RiCheckLine,
+  RiGalleryLine,
+  RiImageFill,
+  RiLoader4Line,
+  RiUploadCloud2Line,
+} from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
@@ -49,6 +55,13 @@ export interface SceneCardImageTabProps {
   sceneTimestamp?: string;
   /** Lỗi tạo/upload ảnh (hiển thị inline) */
   errorMessage?: string | null;
+
+  /** Số nút gắn ảnh vào ô tham chiếu (bằng số slot) */
+  slotAssignCount?: number;
+  /** Các slot (0-based) đã gắn ảnh generate hiện tại */
+  assignedSlotIndices?: number[];
+  /** Gắn ảnh đã generate vào ô tham chiếu theo index (0-based) */
+  onAssignToSlot?: (slotIndex: number) => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -68,6 +81,9 @@ export function SceneCardImageTab({
   originThumbnailLoading,
   sceneTimestamp,
   errorMessage,
+  slotAssignCount = 0,
+  assignedSlotIndices = [],
+  onAssignToSlot,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,18 +146,46 @@ export function SceneCardImageTab({
         {generatedImage ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
             {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
-            <Img
-              showImageOnClick
-              lazyload={false}
-              percent={parseFloat(imagePaddingTop)}
-              src={
-                generatedImage.imageBytes
-                  ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
-                  : generatedImage.imageUrl || generatedImage.fifeUrl || ""
-              }
-              alt={`Scene ${sceneNumber}`}
-              className="w-full rounded-md border border-green-300 border-dashed shadow-sm overflow-hidden"
-            />
+            <div className="relative w-full">
+              <Img
+                showImageOnClick
+                lazyload={false}
+                percent={parseFloat(imagePaddingTop)}
+                src={
+                  generatedImage.imageBytes
+                    ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
+                    : generatedImage.imageUrl || generatedImage.fifeUrl || ""
+                }
+                alt={`Scene ${sceneNumber}`}
+                className="w-full rounded-md border border-green-300 border-dashed shadow-sm overflow-hidden"
+              />
+              {slotAssignCount > 0 && onAssignToSlot && (
+                <div className="absolute top-0 left-0 z-10 flex gap-1.5 p-1">
+                  {Array.from({ length: slotAssignCount }, (_, i) => {
+                    const isAssigned = assignedSlotIndices.includes(i);
+                    return (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAssignToSlot(i);
+                        }}
+                        title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
+                        className={`flex items-center gap-0.5 min-w-[28px] h-7 px-1.5 rounded-md text-sm font-bold shadow-md transition-all ${
+                          isAssigned
+                            ? "bg-white ring-2 ring-green-500"
+                            : "bg-black hover:bg-gray-900"
+                        }`}
+                      >
+                        {isAssigned && <RiCheckLine className="text-base text-green-600" />}
+                        <span className={isAssigned ? "text-green-600" : "text-white"}>{i + 1}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             {/* Action buttons bên dưới ảnh */}
             <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
               {/* Tải ảnh */}

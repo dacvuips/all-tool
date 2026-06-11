@@ -5,7 +5,7 @@
  * - Responsive: trên mobile hiển thị dạng card
  * Extracted from batch-list.tsx – className only, Tailwind CSS
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
@@ -37,6 +37,7 @@ import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
 import { ServiceImageEnum } from "../../constants";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
+import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
@@ -52,6 +53,19 @@ export type EditField =
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
+
+function isSlotMatchingGeneratedImage(
+  slot: ElementFormImage | undefined,
+  generated: GeneratedImageData
+): boolean {
+  if (!slot) return false;
+  if (generated.imageBytes && slot.imageBytes) {
+    return slot.imageBytes === generated.imageBytes;
+  }
+  const genUrl = generated.fifeUrl || generated.imageUrl || "";
+  const slotUrl = slot.fifeUrl || "";
+  return !!(genUrl && slotUrl && genUrl === slotUrl);
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SceneBatchRow – mỗi hàng scene trong bảng
@@ -231,6 +245,45 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [editValue]);
 
   const isImageOnly = elementFormConfig?.serviceImageType === ServiceImageEnum.imageOnly;
+  const imageSlotCount = getSceneImageSlotCount(elementFormConfig?.serviceImageType);
+
+  const assignedSlotIndices = useMemo(() => {
+    if (!generatedImage) return [];
+    return selectedElementImageSlots.reduce<number[]>((acc, slot, i) => {
+      if (isSlotMatchingGeneratedImage(slot, generatedImage)) acc.push(i);
+      return acc;
+    }, []);
+  }, [generatedImage, selectedElementImageSlots]);
+
+  const handleAssignGeneratedImageToSlot = useCallback(
+    (slotIndex: number) => {
+      if (!generatedImage || isDisabled) return;
+      const existingSlot = selectedElementImageSlots[slotIndex];
+      const elementImage: ElementFormImage = {
+        fifeUrl: generatedImage.fifeUrl || generatedImage.imageUrl || "",
+        imageBytes: generatedImage.imageBytes || "",
+        mimeType: generatedImage.mimeType || "image/png",
+        name:
+          existingSlot?.name ||
+          `generated-scene-${scene.sceneNumber}-slot-${slotIndex + 1}`,
+      };
+      const nextSlots = [...selectedElementImageSlots];
+      while (nextSlots.length < imageSlotCount) nextSlots.push(undefined);
+      nextSlots[slotIndex] = elementImage;
+      handleElementImageSlotsChange(nextSlots.slice(0, imageSlotCount));
+      toast.success(t("Đã gắn ảnh vào ô {{n}}", { n: slotIndex + 1 }));
+    },
+    [
+      generatedImage,
+      isDisabled,
+      selectedElementImageSlots,
+      imageSlotCount,
+      scene.sceneNumber,
+      handleElementImageSlotsChange,
+      toast,
+      t,
+    ]
+  );
 
   /** Renders editable prompt cell content */
   const renderEditablePrompt = (
@@ -419,14 +472,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
           slotSource="artStyleImg"
-          savedSlots={scene.elementImageSlots}
+          savedSlots={selectedElementImageSlots}
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
         />
       </div>
       {/* ── Media tabs ── */}
       <SceneCardTabs
-        hideImageTab={!!hideImageColumn || isImageOnly}
         hideExtendTab={true}
         forcedTab={forcedTab}
         tabStatus={{
@@ -454,6 +506,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             originThumbnailLoading={thumbnailLoading}
             sceneTimestamp={scene.timestamp}
             errorMessage={imageError}
+            slotAssignCount={imageSlotCount}
+            assignedSlotIndices={assignedSlotIndices}
+            onAssignToSlot={handleAssignGeneratedImageToSlot}
           />
         )}
         renderVideoTab={() => (
