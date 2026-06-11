@@ -136,7 +136,7 @@ export function BatchListPanel({
       onPersistScenes={handlePersistScenes}
       onSyncScenes={handleSyncScenes}
       onBuildInsertedScene={handleBuildInsertedScene}
-      ActionBarComponent={BatchActionBar}
+      ActionBarComponent={(props) => <BatchActionBar {...props} componentTab />}
       SceneRowComponent={SceneRowGroup}
     />
   );

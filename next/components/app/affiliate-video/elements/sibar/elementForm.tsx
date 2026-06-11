@@ -11,6 +11,7 @@ import { RiCloseLine, RiListOrdered } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
 import { ElementScriptTabEnum } from "../../constants";
+import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
 import { AffiliateConfig } from "./affiliate-config";
@@ -40,7 +41,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           elementFormConfig?.aspectRatio,
           elementFormConfig?.artStyleId,
           elementFormConfig?.artStyle,
-          elementFormConfig?.serviceImageType
+          ServiceImageEnum.startAddEnd
         );
         if (!result?.scenes?.length) {
           toast.error(

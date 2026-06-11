@@ -189,6 +189,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     selectedProductImages,
     selectedElementImageSlots,
     noText: scene.noText,
+    componentTab: true,
   });
 
   const videoPaddingTop = "56.25%";

@@ -22,6 +22,9 @@ export function getImageMatchToken(img: ElementFormImage): string {
   return getImageDisplayName(img).toLowerCase();
 }
 
+/** Tab Thành phần: luôn 3 ô reference → Flow2 video_mode `component`. */
+export const ELEMENT_COMPONENT_IMAGE_SLOT_COUNT = 3;
+
 /** Số ô ảnh trên mỗi scene theo chế độ nạp ảnh (Images to Video). */
 export function getSceneImageSlotCount(serviceImageType?: string): number {
   return serviceImageType === ServiceImageEnum.imageOnly ? 1 : 2;
@@ -106,10 +109,14 @@ export const ELEMENT_SCENE_IMAGE_SLOT_COUNT = 3;
 export async function resolveElementReferenceImagesForApi(options: {
   urls?: string[];
   slots?: (ElementFormImage | undefined)[];
+  /** Giới hạn số ảnh gửi API — mặc định 3; nên truyền theo serviceImageType. */
+  slotCount?: number;
 }): Promise<{ imageBytes: string; mimeType: string }[]> {
-  const fromSlots = await elementImageSlotsToApiImages(options.slots);
+  const slotCount = options.slotCount ?? ELEMENT_SCENE_IMAGE_SLOT_COUNT;
+  const fromSlots = await elementImageSlotsToApiImages(options.slots, slotCount);
   if (fromSlots.length > 0) return fromSlots;
-  return productImageUrlsToApiImages(options.urls);
+  const fromUrls = await productImageUrlsToApiImages(options.urls);
+  return fromUrls.slice(0, slotCount);
 }
 
 /** Ảnh nhân hoá đồ vật (tab Ảnh) → payload cho generation-image / copy-video-generate-image. */

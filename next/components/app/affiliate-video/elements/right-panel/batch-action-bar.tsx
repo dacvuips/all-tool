@@ -20,9 +20,11 @@ import { useCopyVideoBatchActions } from "../hook/useElementBatchActions";
 
 interface BatchActionBarProps {
   scenes: CopyVideoScene[];
+  /** Tab Thành phần: batch video dùng component mode */
+  componentTab?: boolean;
 }
 
-export function BatchActionBar({ scenes }: BatchActionBarProps) {
+export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
   const { t } = useTranslation();
   const {
     // Voice export dialog
@@ -96,7 +98,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
     // Export
     handleExportPromptCSV,
-  } = useCopyVideoBatchActions(scenes);
+  } = useCopyVideoBatchActions(scenes, { componentTab });
 
   const actions = [
     {

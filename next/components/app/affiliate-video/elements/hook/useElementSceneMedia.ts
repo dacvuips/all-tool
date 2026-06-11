@@ -47,6 +47,8 @@ interface UseSceneMediaParams {
   selectedElementVideoSlots?: (ElementFormVideo | undefined)[];
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
   noText?: boolean;
+  /** Tab Thành phần: luôn component mode + 3 slot ảnh tham chiếu */
+  componentTab?: boolean;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -111,6 +113,7 @@ export function useElementSceneMedia({
   selectedElementImageSlots,
   selectedElementVideoSlots,
   noText,
+  componentTab,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
 
@@ -514,6 +517,7 @@ export function useElementSceneMedia({
         nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
         selectedProductImages,
         selectedElementImageSlots,
+        componentTab,
       });
 
       const result = await generateVideo({

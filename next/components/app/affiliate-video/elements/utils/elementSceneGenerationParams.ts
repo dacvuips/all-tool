@@ -10,6 +10,8 @@ import type {
   GenerateVideoParams,
 } from "../hook/useElementApi";
 import {
+  ELEMENT_COMPONENT_IMAGE_SLOT_COUNT,
+  getSceneImageSlotCount,
   productImageUrlsToApiImages,
   resolveElementReferenceImagesForApi,
 } from "./elementFormImageUtils";
@@ -138,6 +140,8 @@ export async function buildElementVideoGenerateParams(options: {
   nextGeneratedImage?: GeneratedImageData | null;
   selectedProductImages?: string[];
   selectedElementImageSlots?: (ElementFormImage | undefined)[];
+  /** Tab Thành phần: luôn component mode (start_add_end) + 3 slot ảnh tham chiếu */
+  componentTab?: boolean;
 }): Promise<GenerateVideoParams> {
   const {
     scene,
@@ -149,8 +153,12 @@ export async function buildElementVideoGenerateParams(options: {
     nextGeneratedImage,
     selectedProductImages,
     selectedElementImageSlots,
+    componentTab,
   } = options;
 
+  const resolvedServiceImageType = componentTab
+    ? ServiceImageEnum.startAddEnd
+    : resolveElementServiceImageType(scriptData, serviceImageType);
   let images: GenerateVideoParams["images"];
 
   if (isStitch) {
@@ -162,10 +170,14 @@ export async function buildElementVideoGenerateParams(options: {
       { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
     ];
   } else {
+    const slotCount = componentTab
+      ? ELEMENT_COMPONENT_IMAGE_SLOT_COUNT
+      : getSceneImageSlotCount(resolvedServiceImageType);
     const slotsForVideo = pickElementImageSlotsForScene(scene, selectedElementImageSlots);
     images = await resolveElementReferenceImagesForApi({
       urls: selectedProductImages,
       slots: slotsForVideo,
+      slotCount,
     });
     if (!images?.length) {
       images = undefined;
@@ -177,7 +189,7 @@ export async function buildElementVideoGenerateParams(options: {
     prompt: buildElementVideoPrompt(scene, isStitch),
     images,
     aspectRatio: resolveElementAspectRatio(scriptData, aspectRatio),
-    serviceImageType: resolveElementServiceImageType(scriptData, serviceImageType),
+    serviceImageType: resolvedServiceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,
     noText: scene.noText,

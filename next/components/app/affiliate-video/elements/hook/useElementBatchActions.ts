@@ -38,7 +38,16 @@ function sceneHasVideoPrompt(scene: CopyVideoScene): boolean {
   return !!getSceneMotionPrompt(scene);
 }
 
-export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
+export type ElementBatchActionsOptions = {
+  /** Tab Thành phần: luôn component mode + 3 slot ảnh tham chiếu khi tạo video */
+  componentTab?: boolean;
+};
+
+export function useCopyVideoBatchActions(
+  scenes: CopyVideoScene[],
+  options: ElementBatchActionsOptions = {}
+) {
+  const { componentTab } = options;
   const { t } = useTranslation();
   const {
     elementGenerateImage,
@@ -661,6 +670,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             serviceImageType: elementFormConfig?.serviceImageType,
             selectedProductImages: selectedUrls,
             selectedElementImageSlots: scene.elementImageSlots,
+            componentTab,
           });
           await generateVideo({
             ...videoParams,

@@ -1,13 +1,15 @@
 /**
  * Hàng 3 ô ảnh tham chiếu theo scene – auto-match tên ảnh trong prompt (tối đa 3, theo thứ tự xuất hiện).
+ * Tab Thành phần luôn cố định 3 slot → Flow2 video_mode component.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElementFormConfig, ElementFormImage } from "../../../constants";
+import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
 import { matchElementImagesInPrompt } from "../../utils/matchElementImagesInPrompt";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
 
-const SLOT_COUNT = 3;
+const SLOT_COUNT = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
 
 export interface SceneElementImagesRowProps {
   sceneId: string;
@@ -54,7 +56,6 @@ export function SceneElementImagesRow({
 
   const notifyParent = useCallback(
     (next: (ElementFormImage | undefined)[]) => {
-      // Key theo từng slot (không chỉ URL) — tránh bỏ qua sync khi đổi ảnh cùng URL / thứ tự slot
       const key = next
         .map((s, i) => {
           if (!s) return `${i}:`;
