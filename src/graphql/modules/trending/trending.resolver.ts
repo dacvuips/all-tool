@@ -3,7 +3,7 @@ import { trendingService } from "../../../libs/dal/trending";
 import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { TrendingTypeEnum } from "../../../libs/dal/trending/trending.interface";
 import { Context } from "../../../libs/graphql";
-
+import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
 const APP_TRENDING_TYPES = new Set([TrendingTypeEnum.FLOW_APP, TrendingTypeEnum.AI_STUDIO_APP]);
 
 const PROMPT_SHORT_RATIO = 0.2;
@@ -101,11 +101,15 @@ const Query = {
   getTrendingPromptById: async (root: any, args: any, context: Context) => {
     context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
     const { id } = args;
+    const customerId = context.id;
+
+    // Bảo vệ server-side: chỉ trả prompt khi customer có quyền (owner / miễn phí / đã mua)
+    await CheckTrendingAccess.requireAccess(customerId, id);
+
     const trending = await trendingService.findOne({ _id: id });
     if (!trending) return null;
     return { id: trending._id, prompt: trending.prompt };
-  },
-  getCustomerTrendingList: async (root: any, args: any, context: Context) => {
+  },  getCustomerTrendingList: async (root: any, args: any, context: Context) => {
     return fetchCustomerListByType(args, context, TrendingTypeEnum.PROMPT);
   },
   getCustomerChatbotList: async (root: any, args: any, context: Context) => {

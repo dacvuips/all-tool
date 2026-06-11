@@ -54,6 +54,25 @@ export interface CustomerTrendingInput {
   type?: TrendingTypeEnum;
 }
 
+/** Trạng thái mua của customer cho 1 trending item */
+export interface TrendingPurchaseStatus {
+  trendingId: string;
+  orderId: string;
+  status: string;
+  paidAt?: string;
+  price?: number;
+}
+
+/** Kết quả mutation useTrendingItem – gộp thanh toán + lấy prompt */
+export interface UseTrendingItemResult {
+  id: string;
+  prompt: string;
+  orderId: string | null;
+  alreadyOwned: boolean;
+  charged: boolean;
+  chargedAmount: number;
+}
+
 export class TrendingCategoryRepository extends CrudRepository<TrendingCategory> {
   apiName: string = "TrendingCategory";
   displayName: string = t("danh mục trending");
@@ -174,6 +193,48 @@ export class TrendingCategoryRepository extends CrudRepository<TrendingCategory>
     } catch (err) {
       console.error("[recordAppTrendingUse] Error:", err);
       return false;
+    }
+  }
+
+  /**
+   * Mua (nếu chưa mua) + lấy prompt trong 1 lần gọi.
+   * Gộp thanh toán mPoint và trả prompt – dùng khi bấm "Dùng ngay".
+   */
+  async useTrendingItem(trendingId: string): Promise<UseTrendingItemResult | null> {
+    try {
+      const result = await this.mutate({
+        mutation: `useTrendingItem(trendingId: "${trendingId}") {
+          id prompt orderId alreadyOwned charged chargedAmount
+        }`,
+        options: { fetchPolicy: "no-cache" },
+      });
+      this.handleError(result);
+      return (result.data?.["g0"] as UseTrendingItemResult) || null;
+    } catch (err) {
+      console.error("[useTrendingItem] Error:", err);
+      throw err;
+    }
+  }
+
+  /**
+   * Batch lấy trạng thái mua PAID của customer cho nhiều trending item.
+   * Dùng khi render list card – hiển thị badge "Đã mua".
+   */
+  async getMyTrendingPurchases(trendingIds: string[]): Promise<TrendingPurchaseStatus[]> {
+    if (!trendingIds.length) return [];
+    try {
+      const idsArg = trendingIds.map((id) => `"${id}"`).join(", ");
+      const result = await this.query({
+        query: `getMyTrendingPurchases(trendingIds: [${idsArg}]) {
+          trendingId orderId status paidAt price
+        }`,
+        options: { fetchPolicy: "network-only" },
+      });
+      this.handleError(result);
+      return (result.data?.["g0"] as TrendingPurchaseStatus[]) || [];
+    } catch (err) {
+      console.error("[getMyTrendingPurchases] Error:", err);
+      return [];
     }
   }
 

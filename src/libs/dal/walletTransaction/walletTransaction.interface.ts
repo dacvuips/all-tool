@@ -15,6 +15,8 @@ export enum WalletTransactionTypeEnum {
   AFFILIATE_ORDER = "AFFILIATE_ORDER", // Đơn hàng affiliate
   DEPOSIT_WITH_PAYPAL = "DEPOSIT_WITH_PAYPA", // Nạp tiền vào ví với paypal
   BUY_PACKAGE = "BUY_PACKAGE", // Mua gói / Nạp tiền từ đơn hàng
+  BUY_TRENDING_ITEM = "BUY_TRENDING_ITEM", // Mua trending / chatbot / app item
+  REFUND_TRENDING_ITEM = "REFUND_TRENDING_ITEM", // Hoàn tiền mua trending item
 }
 
 export enum WalletTransactionSideEnum {
@@ -42,6 +44,8 @@ export enum WalletInfoKeyEnum {
   DEPOSIT_WITH_PAYPAL_ORDER_ID = "DEPOSIT_WITH_PAYPAl_ORDER_ID", // Nạp tiền vào ví với paypal
 
   PAYPAL_TRANSACTION_ID = "PAYPAL_TRANSACTION_ID", // Mã giao dịch paypal
+  TRENDING_ID = "TRENDING_ID", // ID trending item
+  TRENDING_PURCHASE_ORDER_ID = "TRENDING_PURCHASE_ORDER_ID", // ID đơn mua trending item
 }
 
 export type IWalletTransaction = TimestampEntity & {

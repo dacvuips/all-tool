@@ -120,7 +120,7 @@ export const AffiliateConfig = () => {
                   <div className="flex gap-2 mt-2">
                     <Button
                       primary
-                      className="flex-1 h-8 text-xs rounded-lg"
+                      className="flex-1 h-8 whitespace-nowrap text-xs rounded-lg"
                       text={t("Mở link")}
                       icon={<RiExternalLinkLine className="text-sm" />}
                       onClick={() => window.open(link, "_blank", "noopener,noreferrer")}

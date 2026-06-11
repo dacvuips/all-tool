@@ -51,6 +51,10 @@ import {
   useAffiliateVideoApi,
 } from "../../hook/useAffiliateVideoApi";
 import { AppTrendingType, AppTypeConfig, useAppTypeConfig } from "../useAppTypeConfig";
+import {
+  TrendingPurchaseBadge,
+  useTrendingPurchaseFlow,
+} from "../../shared/use-trending-purchase-flow";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 5;
@@ -68,13 +72,16 @@ const AppItemCard = ({
   onEdit,
   onDelete,
   onShowInfo,
+  purchaseOrderId,
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<boolean>;
   onEdit?: (item: TrendingPublicItem) => void;
   onDelete?: (item: TrendingPublicItem) => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
+  /** ID đơn PAID – hiển thị badge "Đã mua" */
+  purchaseOrderId?: string;
 }) => {
   const { t } = useTranslation();
   const toast = useToast();
@@ -166,6 +173,7 @@ const AppItemCard = ({
             </div>
           )}
           <div className="flex gap-1 items-center">
+            <TrendingPurchaseBadge orderId={purchaseOrderId} />
             <Button
               onClick={async (e) => {
                 e.stopPropagation();
@@ -173,7 +181,7 @@ const AppItemCard = ({
                   toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
                   return;
                 }
-                const ok = await onUseTrending(item.id, item.name);
+                const ok = await onUseTrending(item);
                 if (ok) setUseCount((prev) => prev + 1);
               }}
               outline
@@ -236,16 +244,20 @@ const CategorySection = ({
   onShowInfo,
   onOpenCreate,
   config,
+  loadPurchasesForItems,
+  purchaseMap,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<boolean>;
   loadCategories: () => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
   onOpenCreate?: () => void;
   config: AppTypeConfig;
+  loadPurchasesForItems?: (items: TrendingPublicItem[]) => Promise<void>;
+  purchaseMap?: Record<string, { orderId?: string }>;
 }) => {
   const { t } = useTranslation();
   const { getByCategoryId, type: itemType } = config;
@@ -272,6 +284,7 @@ const CategorySection = ({
         );
         setItems(filterItemsByType(result.data, itemType));
         setTotal(result.total);
+        loadPurchasesForItems?.(filterItemsByType(result.data, itemType));
       } catch {
         setItems([]);
         setTotal(0);
@@ -280,7 +293,7 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getByCategoryId, effectiveCategoryId, searchText, itemType]
+    [getByCategoryId, effectiveCategoryId, searchText, itemType, loadPurchasesForItems]
   );
 
   // Auto-load on mount and when search/type changes
@@ -352,6 +365,7 @@ const CategorySection = ({
                 categoryName={category?.name}
                 onUseTrending={onUseTrending}
                 onShowInfo={onShowInfo}
+                purchaseOrderId={purchaseMap?.[item.id]?.orderId}
               />
             ))}
           </div>
@@ -689,7 +703,7 @@ const CustomerTrendingSection = ({
   config,
 }: {
   searchText?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void | Promise<boolean>;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<boolean>;
   categories: TrendingCategoryPublicItem[];
   config: AppTypeConfig;
 }) => {
@@ -903,10 +917,11 @@ export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
   const { t } = useTranslation();
   const toast = useToast();
   const config = useAppTypeConfig(type);
-  const { getActiveTrendingCategoryList, getTrendingPromptById, recordAppTrendingUse } =
-    useAffiliateVideoApi();
+  const { getActiveTrendingCategoryList, recordAppTrendingUse } = useAffiliateVideoApi();
   const { create } = config;
   const { patchConfig, openSidebar, setPendingPrompt } = useAffiliateVideoContext();
+  const { requestUse, loadPurchasesForItems, purchaseMap, PurchaseConfirmDialog } =
+    useTrendingPurchaseFlow();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -969,39 +984,54 @@ export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → lấy prompt/link từ backend, hiển thị ở sidebar trái
+  /**
+   * Khi user bấm "Dùng ngay":
+   * 1. useTrendingItem – thanh toán mPoint (nếu cần) + lấy prompt
+   * 2. Ghi nhận lượt dùng app + mở sidebar
+   */
   const handleUseTrending = useCallback(
-    async (trendingId: string, promptName: string): Promise<boolean> => {
-      const prompt = await getTrendingPromptById(trendingId);
-      if (!prompt) {
-        toast.error(t("Không lấy được prompt"));
+    async (item: TrendingPublicItem, isOwnItem = false): Promise<boolean> => {
+      try {
+        const result = await requestUse(item, isOwnItem);
+        if (!result) return false;
+
+        if (result.charged) {
+          toast.success(t("Thanh toán thành công"));
+        }
+
+        const prompt = result.prompt;
+        if (!prompt) {
+          toast.error(t("Không lấy được prompt"));
+          return false;
+        }
+
+        const recorded = await recordAppTrendingUse(item.id);
+        if (!recorded) {
+          toast.error(t("Không ghi nhận được lượt dùng"));
+          return false;
+        }
+
+        if (patchConfig) {
+          patchConfig({ tipContent: prompt, promptId: item.id, promptName: item.name });
+        }
+        if (setPendingPrompt) {
+          setPendingPrompt(prompt);
+        }
+        if (openSidebar) {
+          openSidebar();
+        }
+        return true;
+      } catch (err: any) {
+        toast.error(err?.message || t("Không thể sử dụng item này"));
         return false;
       }
-      const recorded = await recordAppTrendingUse(trendingId);
-      if (!recorded) {
-        toast.error(t("Không ghi nhận được lượt dùng"));
-        return false;
-      }
-      if (patchConfig) {
-        patchConfig({ tipContent: prompt, promptId: trendingId, promptName });
-      }
-      if (setPendingPrompt) {
-        setPendingPrompt(prompt);
-      }
-      if (openSidebar) {
-        openSidebar();
-      }
-      return true;
     },
-    [
-      getTrendingPromptById,
-      recordAppTrendingUse,
-      patchConfig,
-      setPendingPrompt,
-      openSidebar,
-      toast,
-      t,
-    ]
+    [requestUse, recordAppTrendingUse, patchConfig, setPendingPrompt, openSidebar, toast, t]
+  );
+
+  const handleUseOwnTrending = useCallback(
+    (item: TrendingPublicItem) => handleUseTrending(item, true),
+    [handleUseTrending]
   );
 
   // Handle info button click for non-customer cards
@@ -1086,7 +1116,7 @@ export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
           <CustomerTrendingSection
             key={myListKey}
             searchText={debouncedSearch}
-            onUseTrending={handleUseTrending}
+            onUseTrending={handleUseOwnTrending}
             categories={categories}
             config={config}
           />
@@ -1099,6 +1129,8 @@ export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
             onShowInfo={handleShowInfo}
             onOpenCreate={() => setCreateDialogOpen(true)}
             config={config}
+            loadPurchasesForItems={loadPurchasesForItems}
+            purchaseMap={purchaseMap}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -1112,10 +1144,14 @@ export const AppCategoryList = ({ type }: { type: AppTrendingType }) => {
               onShowInfo={handleShowInfo}
               onOpenCreate={() => setCreateDialogOpen(true)}
               config={config}
+              loadPurchasesForItems={loadPurchasesForItems}
+              purchaseMap={purchaseMap}
             />
           ))
         )}
       </div>
+
+      {PurchaseConfirmDialog}
 
       {/* Create Dialog (from header button) */}
       <CreateEditTrendingDialog

@@ -447,6 +447,22 @@ export interface UseAffiliateVideoApiReturn {
   getTrendingPromptById: (trendingId: string) => Promise<string | null>;
 
   /**
+   * Mua (nếu chưa mua) + lấy prompt – gộp thanh toán mPoint và trả prompt.
+   */
+  useTrendingItem: (
+    trendingId: string
+  ) => Promise<import("../../../../lib/repo/list/trendingCategory.repo").UseTrendingItemResult | null>;
+
+  /**
+   * Batch lấy trạng thái mua PAID của customer cho nhiều trending item.
+   */
+  getMyTrendingPurchases: (
+    trendingIds: string[]
+  ) => Promise<
+    import("../../../../lib/repo/list/trendingCategory.repo").TrendingPurchaseStatus[]
+  >;
+
+  /**
    * Ghi nhận lượt dùng Flow App / AI Studio App.
    */
   recordAppTrendingUse: (trendingId: string) => Promise<boolean>;
@@ -1758,6 +1774,16 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     return TrendingCategoryService.getTrendingPromptById(trendingId);
   }, []);
 
+  /** Mua (nếu chưa mua) + lấy prompt – mutation useTrendingItem gộp thanh toán */
+  const useTrendingItem = useCallback(async (trendingId: string) => {
+    return TrendingCategoryService.useTrendingItem(trendingId);
+  }, []);
+
+  /** Batch lấy trạng thái mua cho list UI */
+  const getMyTrendingPurchases = useCallback(async (trendingIds: string[]) => {
+    return TrendingCategoryService.getMyTrendingPurchases(trendingIds);
+  }, []);
+
   const recordAppTrendingUse = useCallback(async (trendingId: string): Promise<boolean> => {
     return TrendingCategoryService.recordAppTrendingUse(trendingId);
   }, []);
@@ -2411,6 +2437,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getFlowAppsByCategoryId,
     getAiStudioAppsByCategoryId,
     getTrendingPromptById,
+    useTrendingItem,
+    getMyTrendingPurchases,
     recordAppTrendingUse,
     getCustomerTrendingList,
     getCustomerChatbotList,

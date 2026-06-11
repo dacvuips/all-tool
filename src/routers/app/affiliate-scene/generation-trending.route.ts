@@ -3,6 +3,7 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
+import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
 import { AffiliateVideoResponseSchema } from "../constanst";
 import {
   assertGeminiTextResponse,
@@ -35,6 +36,11 @@ export default [
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
+        }
+
+        // Nếu dùng prompt từ trending item → phải đã mua / owner / miễn phí
+        if (body.config.promptId) {
+          await CheckTrendingAccess.requireAccess(context.id, body.config.promptId);
         }
 
         // Kiểm tra giới hạn request trước khi tạo

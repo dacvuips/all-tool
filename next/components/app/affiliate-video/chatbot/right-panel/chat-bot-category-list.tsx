@@ -48,6 +48,10 @@ import {
   TrendingPublicItem,
   useAffiliateVideoApi,
 } from "../../hook/useAffiliateVideoApi";
+import {
+  TrendingPurchaseBadge,
+  useTrendingPurchaseFlow,
+} from "../../shared/use-trending-purchase-flow";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -63,13 +67,15 @@ const ChatBotCard = ({
   onEdit,
   onDelete,
   onShowInfo,
+  purchaseOrderId,
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   onEdit?: (item: TrendingPublicItem) => void;
   onDelete?: (item: TrendingPublicItem) => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
+  purchaseOrderId?: string;
 }) => {
   const { t } = useTranslation();
   const toast = useToast();
@@ -157,10 +163,13 @@ const ChatBotCard = ({
           )}
           <div className="flex gap-1 items-center">
             <Button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (!customer) toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
-                else onUseTrending(item.id, item.name);
+                if (!customer) {
+                  toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
+                  return;
+                }
+                await onUseTrending(item);
               }}
               outline
               info
@@ -168,6 +177,7 @@ const ChatBotCard = ({
               text={t("Dùng ngay")}
               icon={<BsMagic className="text-14" />}
             ></Button>
+            <TrendingPurchaseBadge orderId={purchaseOrderId} />
             {/* Info button */}
             {(item.des || onShowInfo) && (
               <Button
@@ -221,15 +231,19 @@ const CategorySection = ({
   loadCategories,
   onShowInfo,
   onOpenCreate,
+  loadPurchasesForItems,
+  purchaseMap,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   loadCategories: () => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
   onOpenCreate?: () => void;
+  loadPurchasesForItems?: (items: TrendingPublicItem[]) => Promise<void>;
+  purchaseMap?: Record<string, { orderId?: string }>;
 }) => {
   const { t } = useTranslation();
   const { getChatbotsByCategoryId } = useAffiliateVideoApi();
@@ -256,6 +270,7 @@ const CategorySection = ({
         );
         setItems(result.data);
         setTotal(result.total);
+        loadPurchasesForItems?.(result.data);
       } catch {
         setItems([]);
         setTotal(0);
@@ -264,7 +279,7 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getChatbotsByCategoryId, effectiveCategoryId, searchText]
+    [getChatbotsByCategoryId, effectiveCategoryId, searchText, loadPurchasesForItems]
   );
 
   // Auto-load on mount and when search changes
@@ -336,6 +351,7 @@ const CategorySection = ({
                 categoryName={category?.name}
                 onUseTrending={onUseTrending}
                 onShowInfo={onShowInfo}
+                purchaseOrderId={purchaseMap?.[item.id]?.orderId}
               />
             ))}
           </div>
@@ -663,7 +679,7 @@ const CustomerTrendingSection = ({
   categories,
 }: {
   searchText?: string;
-  onUseTrending: (trendingId: string, promptName: string) => void;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   categories: TrendingCategoryPublicItem[];
 }) => {
   const { t } = useTranslation();
@@ -881,6 +897,8 @@ export const ChatBotCategoryList = () => {
   const toast = useToast();
   const { getActiveTrendingCategoryList, createCustomerChatbot } = useAffiliateVideoApi();
   const { patchConfig, openSidebar } = useAffiliateVideoContext();
+  const { requestUse, loadPurchasesForItems, purchaseMap, PurchaseConfirmDialog } =
+    useTrendingPurchaseFlow();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -933,17 +951,37 @@ export const ChatBotCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → gắn chatbot ID + tên prompt vào config, mở sidebar chat
+  /**
+   * Khi user bấm "Dùng ngay":
+   * 1. useTrendingItem – thanh toán mPoint (nếu cần)
+   * 2. Gắn chatbot ID vào config + mở sidebar
+   */
   const handleUseTrending = useCallback(
-    async (trendingId: string, promptName: string) => {
-      if (patchConfig) {
-        patchConfig({ promptId: trendingId, promptName });
-      }
-      if (openSidebar) {
-        openSidebar();
+    async (item: TrendingPublicItem, isOwnItem = false) => {
+      try {
+        const result = await requestUse(item, isOwnItem);
+        if (!result) return;
+
+        if (result.charged) {
+          toast.success(t("Thanh toán thành công"));
+        }
+
+        if (patchConfig) {
+          patchConfig({ promptId: item.id, promptName: item.name });
+        }
+        if (openSidebar) {
+          openSidebar();
+        }
+      } catch (err: any) {
+        toast.error(err?.message || t("Không thể sử dụng item này"));
       }
     },
-    [patchConfig, openSidebar]
+    [requestUse, patchConfig, openSidebar, toast, t]
+  );
+
+  const handleUseOwnTrending = useCallback(
+    (item: TrendingPublicItem) => handleUseTrending(item, true),
+    [handleUseTrending]
   );
 
   // Handle info button click for non-customer cards
@@ -1033,7 +1071,7 @@ export const ChatBotCategoryList = () => {
         {activeCategoryId === MY_TRENDING_ID ? (
           <CustomerTrendingSection
             searchText={debouncedSearch}
-            onUseTrending={handleUseTrending}
+            onUseTrending={handleUseOwnTrending}
             categories={categories}
           />
         ) : activeCategoryId === ALL_CATEGORY_ID ? (
@@ -1044,6 +1082,8 @@ export const ChatBotCategoryList = () => {
             loadCategories={loadCategories}
             onShowInfo={handleShowInfo}
             onOpenCreate={() => setCreateDialogOpen(true)}
+            loadPurchasesForItems={loadPurchasesForItems}
+            purchaseMap={purchaseMap}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -1056,10 +1096,14 @@ export const ChatBotCategoryList = () => {
               loadCategories={loadCategories}
               onShowInfo={handleShowInfo}
               onOpenCreate={() => setCreateDialogOpen(true)}
+              loadPurchasesForItems={loadPurchasesForItems}
+              purchaseMap={purchaseMap}
             />
           ))
         )}
       </div>
+
+      {PurchaseConfirmDialog}
 
       {/* Create Dialog (from header button) */}
       <CreateEditTrendingDialog
