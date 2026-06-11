@@ -32,10 +32,12 @@ import {
   SceneHistoryItem,
   ScriptData,
   STORE_NAME,
+  StoryboardAnalysisData,
   TrendingHistoryItem,
   TrendingScriptData,
   TrendingVideoFormConfig,
 } from "../constants";
+import { mapStoryboardAnalysisToScriptData } from "../storyboard/utils/mapStoryboardAnalysisToScriptData";
 import {
   buildObjectToPersonifyApiFields,
   getObjectToPersonifyMode,
@@ -358,6 +360,18 @@ export interface UseAffiliateVideoApiReturn {
    * Tự động lưu kết quả vào IndexedDB.
    */
   analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
+
+  /**
+   * Phân tích ảnh storyboard → AI trả về số phân cảnh, vùng cắt, lời thoại, motion, giọng đọc.
+   * Tự động cắt panel bằng canvas và map sang ScriptData.
+   */
+  analyzeStoryboard: (data: AffiliateVideoFormConfig) => Promise<ScriptData | undefined>;
+
+  /** Lấy lịch sử phân tích storyboard (IndexedDB riêng, không dùng chung single/batch). */
+  getStoryboardHistory: () => Promise<SceneHistoryItem[]>;
+
+  /** Xóa toàn bộ lịch sử storyboard. */
+  clearStoryboardHistory: () => Promise<void>;
 
   /**
    * Gọi API generate style description text từ images.
@@ -748,6 +762,38 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [scriptDB]
   );
 
+  // ── Helper: push storyboard ScriptData vào history riêng ──
+  const pushToStoryboardHistory = useCallback(
+    async (scriptResult: ScriptData) => {
+      try {
+        const existing: SceneHistoryItem[] =
+          (await scriptDB.get(CACHE_KEY.storyboardHistory)) || [];
+
+        const now = new Date();
+        const label = `Storyboard – ${now.toLocaleDateString("vi-VN", {
+          day: "2-digit",
+          month: "2-digit",
+        })} ${now.toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })}`;
+
+        const newItem: SceneHistoryItem = {
+          id: crypto.randomUUID(),
+          createdAt: now.getTime(),
+          label,
+          data: scriptResult,
+        };
+
+        const updated = [newItem, ...existing].slice(0, MAX_SCENE_HISTORY);
+        await scriptDB.set(CACHE_KEY.storyboardHistory, updated);
+      } catch (e) {
+        console.warn("[affiliate-video-api] Failed to push storyboard history", e);
+      }
+    },
+    [scriptDB]
+  );
+
   // ── Helper: push a ScriptData into history array in IndexedDB ──
   const pushToTrendingHistory = useCallback(
     async (scriptResult: TrendingScriptData) => {
@@ -993,6 +1039,80 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       return analysisResult;
     },
     [callCopyVideoAnalysisApi, copyVideoScriptDB, pushToCopyVideoHistory, toast]
+  );
+
+  // ── Shared: gọi API /api/app/storyboard-analysis/ ──
+  const callStoryboardAnalysisApi = useCallback(
+    async (body: {
+      storyboardImageBase64: string;
+      mimeType?: string;
+      artStyle?: string;
+      artStyleId?: string;
+      language?: string;
+      aspectRatio?: string;
+      tipContent?: string;
+      productImages?: string[];
+    }) => {
+      const res = await fetch("/api/app/storyboard-analysis/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        toast.error(message);
+        return undefined;
+      }
+
+      return res.json();
+    },
+    [toast]
+  );
+
+  // ── analyzeStoryboard (storyboard flow – phân tích ảnh storyboard) ──
+  const analyzeStoryboard = useCallback(
+    async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
+      const storyboardImage = data.storyboardImage?.[0];
+      if (!storyboardImage?.imageBytes) {
+        toast.error("Chưa upload ảnh storyboard");
+        return undefined;
+      }
+
+      const result = await callStoryboardAnalysisApi({
+        storyboardImageBase64: storyboardImage.imageBytes,
+        mimeType: storyboardImage.mimeType,
+        artStyle: data.artStyle,
+        artStyleId: data.artStyleId || undefined,
+        language: data.language,
+        aspectRatio: data.aspectRatio,
+        tipContent: data.tipContent,
+        productImages: data.productImages,
+      });
+
+      if (!result?.data) return undefined;
+
+      const analysis: StoryboardAnalysisData = result.data;
+      const scriptData = await mapStoryboardAnalysisToScriptData(
+        analysis,
+        data,
+        storyboardImage
+      );
+
+      scriptDB
+        .set(CACHE_KEY.storyboardInput, data)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      scriptDB
+        .set(CACHE_KEY.lastStoryboardScript, scriptData)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+
+      await pushToStoryboardHistory(scriptData);
+
+      return scriptData;
+    },
+    [callStoryboardAnalysisApi, scriptDB, pushToStoryboardHistory, toast]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
@@ -1386,6 +1506,20 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const clearTrendingHistory = useCallback(async (): Promise<void> => {
     if (!customer?._id) return;
     await scriptDB.set(CACHE_KEY.trendingHistory, []);
+  }, [scriptDB, customer?._id]);
+
+  const getStoryboardHistory = useCallback(async (): Promise<SceneHistoryItem[]> => {
+    if (!customer?._id) return [];
+    try {
+      return (await scriptDB.get(CACHE_KEY.storyboardHistory)) || [];
+    } catch {
+      return [];
+    }
+  }, [scriptDB, customer?._id]);
+
+  const clearStoryboardHistory = useCallback(async (): Promise<void> => {
+    if (!customer?._id) return;
+    await scriptDB.set(CACHE_KEY.storyboardHistory, []);
   }, [scriptDB, customer?._id]);
 
   // ── generateStyleText – gọi API tạo mô tả phong cách từ AI ──
@@ -2256,6 +2390,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     getSceneHistory,
     clearSceneHistory,
     analyzeVideoForCopy,
+    analyzeStoryboard,
+    getStoryboardHistory,
+    clearStoryboardHistory,
     generateStyleText,
     getActiveObjectToPersonifyList,
     getCustomerObjectToPersonifyList,

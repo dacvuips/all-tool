@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SceneScript } from "../constants";
+import { AffiliateVideoFormConfig, SceneScript, ScriptData } from "../constants";
 import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
 import {
   buildAffiliateImageGenerateParams,
@@ -28,6 +28,24 @@ import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
+/** Context slice từ provider module (storyboard/trending dùng provider riêng, không phải single). */
+export type AffiliateVideoProviderSlice = Partial<{
+  scriptData: ScriptData | null;
+  affiliateVideoFormConfig: AffiliateVideoFormConfig;
+  batchGeneratingSceneIdsRef: React.MutableRefObject<Set<string>>;
+  batchGeneratingVideoSceneIdsRef: React.MutableRefObject<Set<string>>;
+  addBatchGeneratingSceneId: (id: string) => void;
+  removeBatchGeneratingSceneId: (id: string) => void;
+  addBatchGeneratingVideoSceneId: (id: string) => void;
+  removeBatchGeneratingVideoSceneId: (id: string) => void;
+  subscribeBatchState: (
+    sceneId: string,
+    callback: (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
+  ) => () => void;
+  subscribeSceneError: (sceneId: string, callback: (errors: any) => void) => () => void;
+  reportSceneError: (sceneId: string, kind: any, message: string | null) => void;
+}>;
+
 interface UseSceneMediaParams {
   /** Scene hiện tại */
   scene: SceneScript;
@@ -35,6 +53,8 @@ interface UseSceneMediaParams {
   /** Danh sách URL ảnh sản phẩm được chọn cho scene này */
   selectedProductImages?: string[];
   noText?: boolean;
+  /** Provider context của module hiện tại (bắt buộc khi không dùng single provider, vd. storyboard) */
+  providerContext?: AffiliateVideoProviderSlice;
 }
 
 // ── Return type ────────────────────────────────────────────────────────────
@@ -99,6 +119,7 @@ export function useSceneMedia({
   nextSceneId,
   selectedProductImages,
   noText,
+  providerContext,
 }: UseSceneMediaParams): UseSceneMediaReturn {
   const { t } = useTranslation();
 
@@ -131,6 +152,7 @@ export function useSceneMedia({
 
   const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
     useAffiliateVideoApi();
+  const singleContext = useAffiliateVideoContext();
   const {
     batchGeneratingSceneIdsRef,
     batchGeneratingVideoSceneIdsRef,
@@ -141,9 +163,18 @@ export function useSceneMedia({
     subscribeBatchState,
     subscribeSceneError,
     reportSceneError,
-    scriptData,
-    affiliateVideoFormConfig,
-  } = useAffiliateVideoContext();
+    scriptData: contextScriptData,
+    affiliateVideoFormConfig: contextFormConfig,
+  } = { ...singleContext, ...providerContext };
+
+  const scriptData = contextScriptData
+    ? {
+        ...contextScriptData,
+        aspectRatio:
+          contextScriptData.aspectRatio ?? providerContext?.affiliateVideoFormConfig?.aspectRatio,
+      }
+    : null;
+  const affiliateVideoFormConfig = providerContext?.affiliateVideoFormConfig ?? contextFormConfig;
 
   const reportVideoError = useCallback(
     (message: string) => {
@@ -385,6 +416,7 @@ export function useSceneMedia({
       const imageParams = await buildAffiliateImageGenerateParams({
         scene,
         scriptData,
+        aspectRatio: affiliateVideoFormConfig?.aspectRatio,
         selectedProductImages,
         noText,
         objectToPersonifyImage,
@@ -492,6 +524,7 @@ export function useSceneMedia({
       const videoParams = buildAffiliateVideoGenerateParams({
         scene,
         scriptData,
+        aspectRatio: affiliateVideoFormConfig?.aspectRatio,
         isStitch,
         generatedImage,
         nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,

@@ -101,7 +101,10 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
             <RiFileCopy2Line className="text-white text-base" />
           </div>
-          <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
+            <span className="text-xs text-gray-500">{t("Tạo phân cảnh theo video gốc ")}</span>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {onClose && (

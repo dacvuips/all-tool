@@ -5,36 +5,34 @@
  * Light theme – className only, Tailwind CSS
  */
 import { useTranslation } from "react-i18next";
-import { RiCloseLine, RiFilmFill, RiGridLine } from "react-icons/ri";
+import { RiCloseLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
-import { TAB_TYPE } from "../../constants";
 
+import { IoAppsSharp } from "react-icons/io5";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
-export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: TAB_TYPE }) => {
+export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } =
     useAffiliateVideoContext();
 
-  /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
+  /** Merge các field storyboard từ provider – react-hook-form không track hết */
   const wrappedSubmit = (data: any, promptText?: string) => {
-    // Merge objectToPersonifyCode from provider state – react-hook-form doesn't track this field
     const mergedData = {
       ...data,
-      batchSize: videoConfig?.batchSize ?? 8,
-      storyModeType,
-      objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
+      storyModeType: storyModeType ?? data.storyModeType,
+      storyboardImage: videoConfig?.storyboardImage,
+      aspectRatio: videoConfig?.aspectRatio ?? data.aspectRatio,
+      artStyle: videoConfig?.artStyle ?? data.artStyle,
       artStyleId: videoConfig?.artStyleId,
+      language: videoConfig?.language ?? data.language,
+      tipContent: videoConfig?.tipContent ?? data.tipContent,
       productImages: videoConfig?.productImages,
-      objectToPersonifyImage: videoConfig?.objectToPersonifyImage,
     };
-    if (type === TAB_TYPE.single) {
-      const { batchSize, ...rest } = mergedData;
-      return handleSubmit?.(rest, promptText);
-    }
+
     return handleSubmit?.(mergedData, promptText);
   };
 
@@ -48,28 +46,13 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
       <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-            {type === TAB_TYPE.single ? (
-              <RiFilmFill className="text-white text-base" />
-            ) : (
-              <RiGridLine className="text-white text-base" />
-            )}
+            <IoAppsSharp className="text-white text-base" />
           </div>
-
           <div className="flex flex-col">
-            {type === TAB_TYPE.single ? (
-              <span className="text-base font-bold text-gray-800">{t("Đơn Lẻ")}</span>
-            ) : (
-              <span className="text-base font-bold text-gray-800">{t("Kịch Bản")}</span>
-            )}
-            {type === TAB_TYPE.single ? (
-              <span className="text-xs text-gray-500">
-                {t("AI tư tạo phân cảnh theo kịch bản  ")}
-              </span>
-            ) : (
-              <span className="text-xs text-gray-500">
-                {t("Tạo phân cảnh theo kịch bản tùy chỉnh ")}
-              </span>
-            )}
+            <span className="text-base font-bold text-gray-800">
+              {t("Tạo cảnh theo Storyboard")}
+            </span>
+            <span className="text-xs text-gray-500">{t("Tạo phân cảnh từ ảnh storyboard")}</span>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -87,7 +70,7 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="flex-1 min-h-0 overflow-y-auto v-scrollbar bg-white">
-        <AffiliateConfig type={type} />
+        <AffiliateConfig />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

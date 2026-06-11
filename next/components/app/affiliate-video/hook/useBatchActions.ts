@@ -24,23 +24,37 @@ import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
+import type { AffiliateVideoProviderSlice } from "./useSceneMedia";
 
 // ─── Concurrency limits ───
 export { DEFAULT_IMAGE_CONCURRENCY, DEFAULT_VIDEO_CONCURRENCY } from "./useConcurrencyLimits";
 
-export function useBatchActions(scenes: SceneScript[]) {
+export function useBatchActions(
+  scenes: SceneScript[],
+  providerContext?: AffiliateVideoProviderSlice
+) {
   const { t } = useTranslation();
   const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
     useAffiliateVideoApi();
+  const singleContext = useAffiliateVideoContext();
   const {
-    scriptData,
+    scriptData: contextScriptData,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
-    affiliateVideoFormConfig,
+    affiliateVideoFormConfig: contextFormConfig,
     reportSceneError,
-  } = useAffiliateVideoContext();
+  } = { ...singleContext, ...providerContext };
+
+  const affiliateVideoFormConfig = providerContext?.affiliateVideoFormConfig ?? contextFormConfig;
+  const scriptData = contextScriptData
+    ? {
+        ...contextScriptData,
+        aspectRatio:
+          contextScriptData.aspectRatio ?? affiliateVideoFormConfig?.aspectRatio,
+      }
+    : null;
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
     objectToPersonifyCode: affiliateVideoFormConfig?.objectToPersonifyCode,
@@ -518,6 +532,7 @@ export function useBatchActions(scenes: SceneScript[]) {
           const imageParams = await buildAffiliateImageGenerateParams({
             scene,
             scriptData,
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             selectedProductImages: scene.selectedProductImages,
             noText: scene.noText,
             objectToPersonifyImage,
@@ -623,7 +638,11 @@ export function useBatchActions(scenes: SceneScript[]) {
           try {
             addBatchGeneratingVideoSceneId(scene.id);
             reportSceneError?.(scene.id, "video", null);
-            const videoParams = buildAffiliateVideoGenerateParams({ scene, scriptData });
+            const videoParams = buildAffiliateVideoGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+            });
             await generateVideo({
               ...videoParams,
               onError: (msg) => reportSceneError?.(scene.id, "video", msg),
@@ -658,6 +677,7 @@ export function useBatchActions(scenes: SceneScript[]) {
             const imageParams = await buildAffiliateImageGenerateParams({
               scene,
               scriptData,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
               selectedProductImages: scene.selectedProductImages,
               noText: scene.noText,
               objectToPersonifyImage,
@@ -695,6 +715,7 @@ export function useBatchActions(scenes: SceneScript[]) {
           const videoParams = buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             generatedImage: existingImage,
           });
           await generateVideo({
@@ -825,6 +846,7 @@ export function useBatchActions(scenes: SceneScript[]) {
           const videoParams = buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
+            aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,

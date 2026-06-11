@@ -15,16 +15,17 @@ import {
   RiListOrdered,
 } from "react-icons/ri";
 
+import { IoAppsSharp } from "react-icons/io5";
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { TrendingTypeEnum } from "../../../lib/repo/list/trending.repo";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { AppPage } from "./app/app-page";
-import { ChatbotPage } from "./chatbot/chatbot-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { ElementPage } from "./elements/element-page";
 import { ReviewPage } from "./review-product/review-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
+import { StoryboardPage } from "./storyboard/storyboard-page";
 import { TrendingPage } from "./trending/trending-page";
 
 export default function AffiliateMainPage() {
@@ -44,12 +45,12 @@ export default function AffiliateMainPage() {
       value: TrendingTypeEnum.PROMPT,
       component: <TrendingPage />,
     },
-    {
-      icon: "🔥",
-      label: t("ChatBot AI"),
-      value: TrendingTypeEnum.CHATBOT,
-      component: <ChatbotPage />,
-    },
+    // {
+    //   icon: "🔥",
+    //   label: t("ChatBot AI"),
+    //   value: TrendingTypeEnum.CHATBOT,
+    //   component: <ChatbotPage />,
+    // },
     {
       icon: "🔥",
       label: t("App"),
@@ -88,6 +89,12 @@ export default function AffiliateMainPage() {
       label: `${t("Review Sản Phẩm")}/${t("thời trang")}`,
       value: "product-review",
       component: <ReviewPage />,
+    },
+    {
+      icon: <IoAppsSharp />,
+      label: t("Storyboard"),
+      value: "storyboard",
+      component: <StoryboardPage />,
     },
 
     {

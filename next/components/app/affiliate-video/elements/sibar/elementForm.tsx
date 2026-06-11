@@ -6,7 +6,7 @@
  */
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
+import { RiCloseLine, RiListOrdered } from "react-icons/ri";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
@@ -73,9 +73,14 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
       <div className="flex flex-shrink-0 justify-between items-center px-4 pt-4 pb-3 border-b border-gray-100">
         <div className="flex gap-2 items-center">
           <div className="flex justify-center items-center w-8 h-8 bg-red-500 rounded-full">
-            <RiFileCopy2Line className="text-base text-white" />
+            <RiListOrdered className="text-base text-white" />
           </div>
-          <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+          <div className="flex flex-col">
+            <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+            <span className="text-xs text-gray-500">
+              {t("Tạo phân cảnh theo hàng loạt từ prompt tùy chỉnh")}
+            </span>
+          </div>
         </div>
         <div className="flex gap-1 items-center">
           {onClose && (
