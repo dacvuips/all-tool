@@ -33,10 +33,14 @@ const ELEMENT_SCRIPT_TAB_KEY = "element-script-tab";
 /** Migrate legacy single artStyleImg to array. */
 function normalizeElementFormConfig(config: ElementFormConfig): ElementFormConfig {
   const raw = config.artStyleImg as ElementFormImage | ElementFormImage[] | undefined;
+  const withServiceImageType = {
+    ...config,
+    serviceImageType: config.serviceImageType ?? ServiceImageEnum.imageOnly,
+  };
   if (raw != null && !Array.isArray(raw)) {
-    return { ...config, artStyleImg: [raw] };
+    return { ...withServiceImageType, artStyleImg: [raw] };
   }
-  return config;
+  return withServiceImageType;
 }
 
 function readStoredScriptTab(): ElementScriptTabEnum {
@@ -279,8 +283,18 @@ export function ElementProvider(props) {
         scriptDB.get(CACHE_KEY.lastElementScript),
         scriptDB.get(CACHE_KEY.elementInput),
       ]);
-      if (cachedScript) setScriptDataRaw(ensureTabSceneLists(cachedScript));
-      if (cachedConfig) setElementFormConfig(normalizeElementFormConfig(cachedConfig));
+      const normalizedConfig = cachedConfig
+        ? normalizeElementFormConfig(cachedConfig)
+        : undefined;
+      if (cachedScript) {
+        const script = ensureTabSceneLists(cachedScript);
+        setScriptDataRaw(
+          normalizedConfig?.serviceImageType
+            ? { ...script, serviceImageType: normalizedConfig.serviceImageType }
+            : script
+        );
+      }
+      if (normalizedConfig) setElementFormConfig(normalizedConfig);
     } catch (err) {
       console.warn("[element] Failed to restore from IndexedDB", err);
     }
@@ -325,12 +339,22 @@ export function ElementProvider(props) {
     }
   }, [elementFormConfig, scriptDB]);
 
-  const patchConfig = (partial: Partial<ElementFormConfig>) => {
-    setElementFormConfig((prev) => {
-      const next = { ...prev, ...partial };
-      return next;
-    });
-  };
+  const patchConfig = useCallback(
+    (partial: Partial<ElementFormConfig>) => {
+      setElementFormConfig((prev) => ({ ...prev, ...partial }));
+      if (partial.serviceImageType !== undefined) {
+        setScriptDataRaw((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, serviceImageType: partial.serviceImageType };
+          scriptDB
+            .set(CACHE_KEY.lastElementScript, next)
+            .catch((err) => console.warn("[element] Failed to persist serviceImageType", err));
+          return next;
+        });
+      }
+    },
+    [scriptDB]
+  );
 
   return (
     <ElementContext.Provider

@@ -30,12 +30,12 @@ export function resolveElementAspectRatio(
   return scriptData?.aspectRatio ?? fallbackAspectRatio;
 }
 
-/** Ưu tiên serviceImageType trong script; fallback sidebar config khi script chưa có hoặc đổi sau submit. */
+/** Ưu tiên sidebar config (live); fallback scriptData khi sidebar chưa có giá trị. */
 export function resolveElementServiceImageType(
   scriptData?: ElementScriptLike,
   fallbackServiceImageType?: ServiceImageEnum
 ): ServiceImageEnum | undefined {
-  return scriptData?.serviceImageType ?? fallbackServiceImageType;
+  return fallbackServiceImageType ?? scriptData?.serviceImageType;
 }
 
 /** Parse scene thumbnail data URL → reference image for image API. */

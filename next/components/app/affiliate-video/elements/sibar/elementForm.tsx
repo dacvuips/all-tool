@@ -9,20 +9,47 @@ import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiListOrdered } from "react-icons/ri";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { Form } from "../../../../shared/utilities/form";
-import { ElementScriptTabEnum } from "../../constants";
+import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
+/** serviceImageType ghi vào scriptData khi submit — theo tab right-panel đang active */
+function resolveSubmitServiceImageType(
+  activeTab: ElementScriptTabEnum | undefined,
+  configType?: ServiceImageEnum
+): ServiceImageEnum {
+  if (activeTab === ElementScriptTabEnum.imagesToVideo) {
+    return configType ?? ServiceImageEnum.imageOnly;
+  }
+  if (activeTab === ElementScriptTabEnum.batch) {
+    return ServiceImageEnum.startAddEnd;
+  }
+  return configType ?? ServiceImageEnum.imageOnly;
+}
+
 // ── TextToVideoTab – sidebar chính ─────────────────────────────────────────
 export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { elementFormConfig, setBatchRunning, setScriptData, setScriptTab, persistElementInput } =
-    useElementContext();
+  const {
+    elementFormConfig,
+    scriptTab,
+    setBatchRunning,
+    setScriptData,
+    setScriptTab,
+    persistElementInput,
+  } = useElementContext();
+  const [queryParams] = useQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "" });
+  const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
+  const activeTab: ElementScriptTabEnum =
+    tabParam && Object.values(ElementScriptTabEnum).includes(tabParam as ElementScriptTabEnum)
+      ? (tabParam as ElementScriptTabEnum)
+      : scriptTab ?? ElementScriptTabEnum.batch;
   // ── Submit: tách prompt đánh số (1., 2., …) → từng cảnh ──
   const handleSubmit = useCallback(
     async (_formData: any) => {
@@ -41,7 +68,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           elementFormConfig?.aspectRatio,
           elementFormConfig?.artStyleId,
           elementFormConfig?.artStyle,
-          ServiceImageEnum.startAddEnd
+          resolveSubmitServiceImageType(activeTab, elementFormConfig?.serviceImageType)
         );
         if (!result?.scenes?.length) {
           toast.error(
@@ -62,7 +89,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [elementFormConfig, persistElementInput, setBatchRunning, setScriptData, setScriptTab, t, toast]
+    [activeTab, elementFormConfig, persistElementInput, setBatchRunning, setScriptData, setScriptTab, t, toast]
   );
 
   return (

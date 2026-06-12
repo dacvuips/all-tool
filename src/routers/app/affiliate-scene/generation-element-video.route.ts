@@ -6,9 +6,9 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
+import { resolvePayloadPrompt } from "../../../queues/media-generation/handlers/_video-prompt";
 import { ServiceImageEnum } from "../constanst";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
-import { resolvePayloadPrompt } from "../../../queues/media-generation/handlers/_video-prompt";
 import { checkVideoLimit, Flow2VideoMode } from "./_shared";
 
 export default [
@@ -47,6 +47,7 @@ export default [
         await checkVideoLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
+        console.log("requestPayload", requestPayload);
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,
           type: MediaGenerationJobType.GENERATION_ELEMENT_VIDEO,
