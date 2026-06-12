@@ -15,6 +15,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
+import { downloadGeneratedImage, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
 import {
   base64ToBlob,
   triggerBlobDownload,
@@ -150,7 +151,7 @@ export function useSceneMedia({
   const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo } =
+  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo, saveGeneratedVideo } =
     useAffiliateVideoApi();
   const singleContext = useAffiliateVideoContext();
   const {
@@ -351,10 +352,18 @@ export function useSceneMedia({
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // // Re-check whenever batch generating state changes (image may have been saved)
   useEffect(() => {
-    getGeneratedImage(scene.id).then((img) => {
-      if (img) setGeneratedImage(img);
+    getGeneratedImage(scene.id).then(async (img) => {
+      if (!img) return;
+      setGeneratedImage(img);
+      if (!img.imageBytes && getGeneratedImageUrl(img)) {
+        const enriched = await enrichGeneratedImageWithBase64(img);
+        if (enriched.imageBytes) {
+          await saveGeneratedImage(scene.id, enriched);
+          setGeneratedImage(enriched);
+        }
+      }
     });
-  }, [scene.id, isBatchGenerating]);
+  }, [scene.id, isBatchGenerating, getGeneratedImage, saveGeneratedImage]);
 
   // // ── Load ảnh của scene kế tiếp từ IndexedDB ──
   useEffect(() => {
@@ -371,10 +380,18 @@ export function useSceneMedia({
   // ── Load video đã tạo trước đó từ IndexedDB ──
   // Re-check whenever batch video generating state changes (video may have been saved)
   useEffect(() => {
-    getGeneratedVideo(scene.id).then((vid) => {
-      if (vid) setGeneratedVideo(vid);
+    getGeneratedVideo(scene.id).then(async (vid) => {
+      if (!vid) return;
+      setGeneratedVideo(vid);
+      if (!vid.videoBytes && vid.videoUri) {
+        const enriched = await enrichGeneratedVideoWithBase64(vid);
+        if (enriched.videoBytes) {
+          await saveGeneratedVideo(scene.id, enriched);
+          setGeneratedVideo(enriched);
+        }
+      }
     });
-  }, [scene.id, isBatchGeneratingVideo]);
+  }, [scene.id, isBatchGeneratingVideo, getGeneratedVideo, saveGeneratedVideo]);
 
   // ── Load video nối (stitch) đã tạo trước đó từ IndexedDB ──
   useEffect(() => {
@@ -427,6 +444,11 @@ export function useSceneMedia({
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
+        },
+        onMediaUpdate: (data) => {
+          setGeneratedImage(data);
+          setImageError(null);
+          reportSceneError?.(scene.id, "image", null);
         },
       });
 
@@ -521,7 +543,7 @@ export function useSceneMedia({
         throw new Error("Missing start or end image");
       }
 
-      const videoParams = buildAffiliateVideoGenerateParams({
+      const videoParams = await buildAffiliateVideoGenerateParams({
         scene,
         scriptData,
         aspectRatio: affiliateVideoFormConfig?.aspectRatio,
@@ -547,6 +569,17 @@ export function useSceneMedia({
           } else {
             setVideoError(msg);
             reportSceneError?.(scene.id, "video", msg);
+          }
+        },
+        onMediaUpdate: (data) => {
+          if (isStitch) {
+            setGeneratedExtendVideo(data);
+            setExtendVideoError(null);
+            reportSceneError?.(scene.id + "::stitch", "extend", null);
+          } else {
+            setGeneratedVideo(data);
+            setVideoError(null);
+            reportSceneError?.(scene.id, "video", null);
           }
         },
       });
@@ -581,23 +614,14 @@ export function useSceneMedia({
   // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
   // Tên file: scene-{sceneNumber}-image.{ext}
   // ─────────────────────────────────────────────────────────────────────────
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!generatedImage) return;
-    const byteChars = atob(generatedImage.imageBytes);
-    const byteNumbers = new Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) {
-      byteNumbers[i] = byteChars.charCodeAt(i);
+    try {
+      const ext = generatedImage.mimeType.split("/")[1] || "png";
+      await downloadGeneratedImage(generatedImage, `scene-${scene.sceneNumber}-image.${ext}`);
+    } catch (err) {
+      console.error("[handleDownloadImage] Error:", err);
     }
-    const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedImage.mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const ext = generatedImage.mimeType.split("/")[1] || "png";
-    a.download = `scene-${scene.sceneNumber}-image.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -612,12 +636,12 @@ export function useSceneMedia({
       let blob: Blob | null = null;
       let ext = "mp4";
 
-      if (generatedVideo.videoUri) {
-        blob = await uriToBlob(generatedVideo.videoUri);
-        ext = blob.type.split("/")[1] || "mp4";
-      } else if (generatedVideo.videoBytes) {
+      if (generatedVideo.videoBytes) {
         blob = base64ToBlob(generatedVideo.videoBytes, generatedVideo.mimeType);
         ext = generatedVideo.mimeType.split("/")[1] || "mp4";
+      } else if (generatedVideo.videoUri) {
+        blob = await uriToBlob(generatedVideo.videoUri);
+        ext = blob.type.split("/")[1] || "mp4";
       }
 
       if (blob) {

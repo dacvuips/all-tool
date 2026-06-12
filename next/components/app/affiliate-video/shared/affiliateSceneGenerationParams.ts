@@ -5,6 +5,7 @@ import type { ElementFormImage, SceneScript } from "../constants";
 import type { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { productImageUrlsToApiImages } from "../elements/utils/elementFormImageUtils";
 import type { GenerateImageParams, GenerateVideoParams } from "../hook/useAffiliateVideoApi";
+import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
 
 export type AffiliateScriptLike =
   | {
@@ -76,7 +77,7 @@ export async function buildAffiliateImageGenerateParams(options: {
   };
 }
 
-export function buildAffiliateVideoGenerateParams(options: {
+export async function buildAffiliateVideoGenerateParams(options: {
   scene: SceneScript;
   scriptData?: AffiliateScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
@@ -84,7 +85,7 @@ export function buildAffiliateVideoGenerateParams(options: {
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
-}): GenerateVideoParams {
+}): Promise<GenerateVideoParams> {
   const { scene, scriptData, aspectRatio, isStitch, generatedImage, nextGeneratedImage } = options;
 
   let images: GenerateVideoParams["images"];
@@ -93,11 +94,11 @@ export function buildAffiliateVideoGenerateParams(options: {
       throw new Error("Missing start or end image for stitch video");
     }
     images = [
-      { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType },
-      { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
+      await generatedImageToApiBase64Input(generatedImage),
+      await generatedImageToApiBase64Input(nextGeneratedImage),
     ];
   } else if (generatedImage) {
-    images = [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }];
+    images = [await generatedImageToApiBase64Input(generatedImage)];
   }
 
   return {

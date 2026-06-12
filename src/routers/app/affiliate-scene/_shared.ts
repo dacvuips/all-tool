@@ -384,11 +384,13 @@ function isServiceUnavailableError(err: any): boolean {
 /**
  * Gọi AI API với cơ chế xoay vòng nhiều API key:
  * - Nếu 429 / quota exceeded → nhảy sang API key tiếp theo.
- * - Nếu 503 → chờ 6-10s rồi nhảy sang API key tiếp theo.
+ * - Nếu 503 / timeout / 524 → chờ 2-3s rồi nhảy sang API key tiếp theo.
  * - Các lỗi khác → throw ngay.
- * - Tối đa thử 5 key. Nếu quá 5 key → throw error ngay.
+ * - Tối đa thử 30 lần. Nếu quá 30 lần → throw error ngay.
  */
-const MAX_KEY_RETRIES = 10;
+const MAX_KEY_RETRIES = 30;
+const RETRY_DELAY_MS_MIN = 2000;
+const RETRY_DELAY_MS_MAX = 3000;
 
 export async function callWithKeyRotation<T>(
   entries: GeminiClientEntry[],
@@ -410,7 +412,6 @@ export async function callWithKeyRotation<T>(
       continue;
     }
 
-    // Giới hạn tối đa 5 key thử
     if (attempts >= MAX_KEY_RETRIES) {
       logger.error(`[${label}] Đã thử ${MAX_KEY_RETRIES} key nhưng đều thất bại. Dừng retry.`);
       throw new ForbiddenError(`Google AI hiện đang quá tải. Vui lòng thử lại sau 2-3 phút.`);
@@ -449,9 +450,11 @@ export async function callWithKeyRotation<T>(
 
       if (isServiceUnavailableError(err)) {
         logger.warn(
-          `[${label}] ${keyLabel} bị 503 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 6-10s rồi chuyển sang key tiếp theo.`
+          `[${label}] ${keyLabel} bị 503 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 2-3s rồi chuyển sang key tiếp theo.`
         );
-        const delayMs = Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
+        const delayMs =
+          Math.floor(Math.random() * (RETRY_DELAY_MS_MAX - RETRY_DELAY_MS_MIN + 1)) +
+          RETRY_DELAY_MS_MIN;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         keyIdx = (keyIdx + 1) % entries.length;
         continue;
@@ -459,9 +462,11 @@ export async function callWithKeyRotation<T>(
 
       if (isTimeoutOr524Error(err)) {
         logger.warn(
-          `[${label}] ${keyLabel} bị timeout/524 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 6-10s rồi retry.`
+          `[${label}] ${keyLabel} bị timeout/524 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 2-3s rồi retry.`
         );
-        const delayMs = Math.floor(Math.random() * (10000 - 6000 + 1)) + 6000;
+        const delayMs =
+          Math.floor(Math.random() * (RETRY_DELAY_MS_MAX - RETRY_DELAY_MS_MIN + 1)) +
+          RETRY_DELAY_MS_MIN;
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         keyIdx = (keyIdx + 1) % entries.length;
         continue;
@@ -953,14 +958,14 @@ export function buildObjectPersonifyImageScriptNote(images?: ReferenceImageInput
 
 // ── Flow2 video_mode (frame | component) ─────────────────────────────────────
 
-export type { Flow2VideoMode } from "../../api-media/flow2/video-mode";
 export {
+  assertFlow2VideoImageCount,
   FLOW2_VIDEO_MODE,
+  mapServiceImageTypeToFlow2VideoMode,
   normalizeFlow2VideoMode,
   resolveFlow2VideoMode,
-  mapServiceImageTypeToFlow2VideoMode,
-  assertFlow2VideoImageCount,
 } from "../../api-media/flow2/video-mode";
+export type { Flow2VideoMode } from "../../api-media/flow2/video-mode";
 
 /**
  * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config

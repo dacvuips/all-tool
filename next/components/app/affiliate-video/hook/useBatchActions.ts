@@ -19,6 +19,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
+import { generatedImageToBlob } from "../shared/generatedMediaUtils";
 import { uriToBlob } from "../shared/videoDownloadUtils";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
@@ -371,7 +372,7 @@ export function useBatchActions(
         const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
 
         // Convert base64 → Blob → download, then wait 2s before next
-        const blob = base64ToBlob(img.imageBytes, img.mimeType);
+        const blob = await generatedImageToBlob(img);
         await downloadBlobSequentially(blob, fileName, 2000);
       }
 
@@ -638,7 +639,7 @@ export function useBatchActions(
           try {
             addBatchGeneratingVideoSceneId(scene.id);
             reportSceneError?.(scene.id, "video", null);
-            const videoParams = buildAffiliateVideoGenerateParams({
+            const videoParams = await buildAffiliateVideoGenerateParams({
               scene,
               scriptData,
               aspectRatio: affiliateVideoFormConfig?.aspectRatio,
@@ -712,7 +713,7 @@ export function useBatchActions(
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const videoParams = buildAffiliateVideoGenerateParams({
+          const videoParams = await buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
             aspectRatio: affiliateVideoFormConfig?.aspectRatio,
@@ -843,7 +844,7 @@ export function useBatchActions(
         try {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
           reportSceneError?.(scene.id + "::stitch", "extend", null);
-          const videoParams = buildAffiliateVideoGenerateParams({
+          const videoParams = await buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
             aspectRatio: affiliateVideoFormConfig?.aspectRatio,

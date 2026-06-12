@@ -21,6 +21,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
+import { generatedImageToBlob } from "../../shared/generatedMediaUtils";
 import { uriToBlob } from "../../shared/videoDownloadUtils";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
@@ -383,7 +384,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
 
         // Convert base64 → Blob → download, then wait 2s before next
-        const blob = base64ToBlob(img.imageBytes, img.mimeType);
+        const blob = await generatedImageToBlob(img);
         await downloadBlobSequentially(blob, fileName, 2000);
       }
 
@@ -700,7 +701,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         try {
           addBatchGeneratingVideoSceneId(scene.id);
           reportSceneError?.(scene.id, "video", null);
-          const videoParams = buildCopyVideoVideoGenerateParams({
+          const videoParams = await buildCopyVideoVideoGenerateParams({
             scene,
             scriptData,
             generatedImage: existingImage,
@@ -831,7 +832,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           addBatchGeneratingVideoSceneId(scene.id + "::stitch");
           reportSceneError?.(scene.id + "::stitch", "extend", null);
           const motion_description = scene.motion_description || "smooth transition between scenes";
-          const videoParams = buildCopyVideoVideoGenerateParams({
+          const videoParams = await buildCopyVideoVideoGenerateParams({
             scene,
             scriptData,
             isStitch: true,

@@ -19,6 +19,7 @@ import {
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
+import { getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -151,11 +152,7 @@ export function SceneCardImageTab({
                 showImageOnClick
                 lazyload={false}
                 percent={parseFloat(imagePaddingTop)}
-                src={
-                  generatedImage.imageBytes
-                    ? `data:${generatedImage.mimeType};base64,${generatedImage.imageBytes}`
-                    : generatedImage.imageUrl || generatedImage.fifeUrl || ""
-                }
+                src={getGeneratedImagePreviewSrc(generatedImage)}
                 alt={`Scene ${sceneNumber}`}
                 className="w-full rounded-md border border-green-300 border-dashed shadow-sm overflow-hidden"
               />

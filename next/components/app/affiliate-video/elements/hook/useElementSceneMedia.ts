@@ -24,6 +24,7 @@ import {
   resolveElementAspectRatio,
   resolveElementServiceImageType,
 } from "../utils/elementSceneGenerationParams";
+import { downloadGeneratedImage } from "../../shared/generatedMediaUtils";
 import {
   base64ToBlob,
   triggerBlobDownload,
@@ -414,6 +415,11 @@ export function useElementSceneMedia({
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
         },
+        onMediaUpdate: (data) => {
+          setGeneratedImage(data);
+          setImageError(null);
+          reportSceneError?.(scene.id, "image", null);
+        },
       });
 
       if (result) {
@@ -534,6 +540,17 @@ export function useElementSceneMedia({
             reportSceneError?.(scene.id, "video", msg);
           }
         },
+        onMediaUpdate: (data) => {
+          if (isStitch) {
+            setGeneratedExtendVideo(data);
+            setExtendVideoError(null);
+            reportSceneError?.(scene.id + "::stitch", "extend", null);
+          } else {
+            setGeneratedVideo(data);
+            setVideoError(null);
+            reportSceneError?.(scene.id, "video", null);
+          }
+        },
       });
       if (result) {
         if (isStitch) {
@@ -638,6 +655,11 @@ export function useElementSceneMedia({
           setVideoError(msg);
           reportSceneError?.(scene.id, "video", msg);
         },
+        onMediaUpdate: (data) => {
+          setGeneratedVideo(data);
+          setVideoError(null);
+          reportSceneError?.(scene.id, "video", null);
+        },
         artStyleId: scriptData?.artStyleId,
         artStyle: scriptData?.artStyle,
       });
@@ -660,23 +682,14 @@ export function useElementSceneMedia({
   // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
   // Tên file: scene-{sceneNumber}-image.{ext}
   // ─────────────────────────────────────────────────────────────────────────
-  const handleDownloadImage = () => {
+  const handleDownloadImage = async () => {
     if (!generatedImage) return;
-    const byteChars = atob(generatedImage.imageBytes);
-    const byteNumbers = new Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) {
-      byteNumbers[i] = byteChars.charCodeAt(i);
+    try {
+      const ext = generatedImage.mimeType.split("/")[1] || "png";
+      await downloadGeneratedImage(generatedImage, `scene-${scene.sceneNumber}-image.${ext}`);
+    } catch (err) {
+      console.error("[handleDownloadImage] Error:", err);
     }
-    const blob = new Blob([new Uint8Array(byteNumbers)], { type: generatedImage.mimeType });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const ext = generatedImage.mimeType.split("/")[1] || "png";
-    a.download = `scene-${scene.sceneNumber}-image.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   // ─────────────────────────────────────────────────────────────────────────

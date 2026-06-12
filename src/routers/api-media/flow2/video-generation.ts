@@ -1,9 +1,11 @@
 import logger from "../../../helpers/logger";
 import {
+  collectFlow2VideoUrls,
   createFlow2Request,
   Flow2StatusResponse,
   isHttpUrl,
   looksLikeRawBase64,
+  pickFlow2ResultPayload,
   runFlow2WithRetry,
   safeProgress,
   waitForFlow2Result,
@@ -174,6 +176,14 @@ async function normalizeResultVideo(value: string): Promise<GeneratedVideo> {
 export async function extractFlow2Videos(
   statusData: Flow2StatusResponse
 ): Promise<GeneratedVideo[]> {
+  const resultPayload = pickFlow2ResultPayload(statusData);
+  if (resultPayload) {
+    const structuredUrls = collectFlow2VideoUrls(resultPayload);
+    if (structuredUrls.length > 0) {
+      return structuredUrls.map((url) => ({ videoUri: url, mimeType: "video/mp4" }));
+    }
+  }
+
   const found: string[] = [];
   collectVideoLikeStrings(statusData, found);
   const deduped = Array.from(new Set(found)).slice(0, 3);

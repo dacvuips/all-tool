@@ -3,10 +3,12 @@ import {
   stripDataUrlFromBase64,
 } from "../../helpers/handleUploadGoogleLabImages";
 import {
+  collectFlow2ImageUrls,
   createFlow2Request,
   Flow2StatusResponse,
   isHttpUrl,
   looksLikeRawBase64,
+  pickFlow2ResultPayload,
   runFlow2WithRetry,
   safeProgress,
   waitForFlow2Result,
@@ -27,6 +29,9 @@ export type Flow2CreateImageRequestParams = {
 export type GeneratedImage = {
   imageBytes?: string;
   mimeType?: string;
+  fifeUrl?: string;
+  imageUrl?: string;
+  mediaId?: string;
 };
 
 const DEFAULT_IMAGE_MODEL = "NANO_BANANA_PRO";
@@ -144,16 +149,35 @@ async function normalizeResultImage(value: string): Promise<GeneratedImage> {
     return { imageBytes: stripped.imageBytes, mimeType: stripped.mimeType };
   }
   if (isHttpUrl(value)) {
-    const fetched = await fetchImageAsBase64(value);
-    return { imageBytes: fetched.imageBytes, mimeType: fetched.mimeType };
+    return { fifeUrl: value, imageUrl: value, mimeType: "image/jpeg" };
   }
   const stripped = stripDataUrlFromBase64(value, "image/png");
   return { imageBytes: stripped.imageBytes, mimeType: stripped.mimeType };
 }
 
+function buildGeneratedImagesFromFlow2Urls(
+  urls: string[],
+  mediaIds: string[] = []
+): GeneratedImage[] {
+  return urls.map((url, index) => ({
+    fifeUrl: url,
+    imageUrl: url,
+    mimeType: "image/jpeg",
+    mediaId: mediaIds[index],
+  }));
+}
+
 export async function extractFlow2Images(
   statusData: Flow2StatusResponse
 ): Promise<GeneratedImage[]> {
+  const resultPayload = pickFlow2ResultPayload(statusData);
+  if (resultPayload) {
+    const structuredUrls = collectFlow2ImageUrls(resultPayload);
+    if (structuredUrls.length > 0) {
+      return buildGeneratedImagesFromFlow2Urls(structuredUrls, resultPayload.media_ids || []);
+    }
+  }
+
   const found: string[] = [];
   collectImageLikeStrings(statusData, found);
   const deduped = Array.from(new Set(found)).slice(0, 10);

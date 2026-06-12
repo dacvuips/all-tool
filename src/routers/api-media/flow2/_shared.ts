@@ -3,6 +3,78 @@ import { CAPTCHA_GENERATION_MAX_RETRIES, getApiSetting } from "../../helpers/val
 
 export type Flow2StatusResponse = Record<string, unknown>;
 
+/** Payload `result` Flow2 trả về khi gen_image / gen_text_video / gen_image_video hoàn tất. */
+export type Flow2MediaResult = {
+  image_urls?: string[];
+  video_urls?: string[];
+  Link?: string;
+  Local?: string;
+  local_files?: string[];
+  media_ids?: string[];
+  media_entries?: Array<{ url?: string; media_id?: string; kind?: string }>;
+  poll_mode?: string;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Lấy object `result` từ response poll Flow2 (hỗ trợ nhiều lớp bọc). */
+export function pickFlow2ResultPayload(statusData: Flow2StatusResponse): Flow2MediaResult | null {
+  const candidates: unknown[] = [
+    statusData.result,
+    (statusData.data as Record<string, unknown> | undefined)?.result,
+    (statusData.request as Record<string, unknown> | undefined)?.result,
+  ];
+
+  for (const candidate of candidates) {
+    if (!isRecord(candidate)) continue;
+    const hasMediaHints =
+      Array.isArray(candidate.image_urls) ||
+      Array.isArray(candidate.video_urls) ||
+      typeof candidate.Link === "string" ||
+      typeof candidate.Local === "string" ||
+      Array.isArray(candidate.media_entries);
+    if (hasMediaHints) {
+      return candidate as Flow2MediaResult;
+    }
+  }
+  return null;
+}
+
+function pushHttpUrl(urls: string[], value: unknown): void {
+  if (typeof value !== "string") return;
+  const trimmed = value.trim();
+  if (isHttpUrl(trimmed)) {
+    urls.push(trimmed);
+  }
+}
+
+/** Trích URL ảnh từ `result` Flow2 (image_urls, Link, Local, media_entries). */
+export function collectFlow2ImageUrls(result: Flow2MediaResult): string[] {
+  const urls: string[] = [];
+  for (const item of result.image_urls || []) {
+    pushHttpUrl(urls, item);
+  }
+  pushHttpUrl(urls, result.Link);
+  pushHttpUrl(urls, result.Local);
+  for (const entry of result.media_entries || []) {
+    pushHttpUrl(urls, entry?.url);
+  }
+  return Array.from(new Set(urls));
+}
+
+/** Trích URL video từ `result` Flow2 (video_urls, Link, Local). */
+export function collectFlow2VideoUrls(result: Flow2MediaResult): string[] {
+  const urls: string[] = [];
+  for (const item of result.video_urls || []) {
+    pushHttpUrl(urls, item);
+  }
+  pushHttpUrl(urls, result.Link);
+  pushHttpUrl(urls, result.Local);
+  return Array.from(new Set(urls));
+}
+
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
 /** Số lần tạo request Flow2 mới khi gặp lỗi reCAPTCHA / unusual activity (cùng mức Google Aisandbox). */
 export const FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX = CAPTCHA_GENERATION_MAX_RETRIES;

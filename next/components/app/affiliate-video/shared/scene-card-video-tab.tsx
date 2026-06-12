@@ -14,6 +14,7 @@ import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
+import { getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 
 // ── Types cho video data ─────────────────────────────────────────────────────
@@ -78,15 +79,10 @@ export function SceneCardVideoTab({
     onGenerateVideo();
   };
 
-  /** Lấy video source URL từ data */
+  /** Lấy video source — ưu tiên base64, fallback link */
   const getVideoSrc = (): string | null => {
     if (!generatedVideo) return null;
-    return (
-      generatedVideo.videoUri ||
-      (generatedVideo.videoBytes
-        ? `data:${generatedVideo.mimeType};base64,${generatedVideo.videoBytes}`
-        : null)
-    );
+    return getGeneratedVideoPreviewSrc(generatedVideo);
   };
 
   const videoSrc = getVideoSrc();

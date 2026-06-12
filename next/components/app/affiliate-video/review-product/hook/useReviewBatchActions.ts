@@ -24,6 +24,7 @@ import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
 } from "../utils/reviewSceneGenerationParams";
+import { generatedImageToBlob } from "../../shared/generatedMediaUtils";
 import { uriToBlob } from "../../shared/videoDownloadUtils";
 import { resolveObjectToPersonifyImageForApi } from "../utils/reviewFormImageUtils";
 import { useReviewApi } from "./useReviewApi";
@@ -391,7 +392,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
         const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
 
         // Convert base64 → Blob → download, then wait 2s before next
-        const blob = base64ToBlob(img.imageBytes, img.mimeType);
+        const blob = await generatedImageToBlob(img);
         await downloadBlobSequentially(blob, fileName, 2000);
       }
 

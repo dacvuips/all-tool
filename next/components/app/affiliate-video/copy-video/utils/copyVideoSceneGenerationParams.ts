@@ -4,6 +4,7 @@
 import type { CopyVideoAnalysisData, CopyVideoScene, ElementFormImage } from "../../constants";
 import { productImageUrlsToApiImages } from "../../elements/utils/elementFormImageUtils";
 import { parseThumbnailReferenceImage } from "../../elements/utils/elementSceneGenerationParams";
+import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 import type {
   GenerateImageParams,
   GenerateVideoParams,
@@ -69,13 +70,13 @@ export function buildCopyVideoVideoPrompt(scene: CopyVideoScene, isStitch?: bool
       }`;
 }
 
-export function buildCopyVideoVideoGenerateParams(options: {
+export async function buildCopyVideoVideoGenerateParams(options: {
   scene: CopyVideoScene;
   scriptData?: CopyVideoScriptLike;
   isStitch?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
-}): GenerateVideoParams {
+}): Promise<GenerateVideoParams> {
   const { scene, scriptData, isStitch, generatedImage, nextGeneratedImage } = options;
 
   let images: GenerateVideoParams["images"];
@@ -84,11 +85,11 @@ export function buildCopyVideoVideoGenerateParams(options: {
       throw new Error("Missing start or end image for stitch video");
     }
     images = [
-      { imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType },
-      { imageBytes: nextGeneratedImage.imageBytes, mimeType: nextGeneratedImage.mimeType },
+      await generatedImageToApiBase64Input(generatedImage),
+      await generatedImageToApiBase64Input(nextGeneratedImage),
     ];
   } else if (generatedImage) {
-    images = [{ imageBytes: generatedImage.imageBytes, mimeType: generatedImage.mimeType }];
+    images = [await generatedImageToApiBase64Input(generatedImage)];
   }
 
   return {

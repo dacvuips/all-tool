@@ -26,6 +26,10 @@ import {
   objectToPersonifyImageToApiImages,
 } from "../../elements/utils/elementFormImageUtils";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  persistGeneratedImageWithEnrichment,
+  persistGeneratedVideoWithEnrichment,
+} from "../../shared/generatedMediaUtils";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -68,6 +72,8 @@ export interface GenerateImageParams {
   onProgress?: (pct: number) => void;
   /** Báo lỗi inline thay vì toast (scene batch row) */
   onError?: (message: string) => void;
+  /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
+  onMediaUpdate?: (data: GeneratedImageData) => void;
   noText?: boolean;
 }
 
@@ -95,6 +101,8 @@ export interface GenerateVideoParams {
   onStatusMessage?: (msg: string) => void;
   /** Báo lỗi inline thay vì toast (scene batch row) */
   onError?: (message: string) => void;
+  /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64/bytes */
+  onMediaUpdate?: (data: GeneratedVideoData) => void;
 }
 
 export interface ExtendVideoParams {
@@ -453,6 +461,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onError,
         noText,
+        onMediaUpdate,
       } = params;
 
       // Gom ảnh tham chiếu
@@ -486,15 +495,19 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         });
 
         const resultImages = (data?.images || []) as GeneratedImageData[];
-        if (resultImages.length === 0) {
+        const imageData = await persistGeneratedImageWithEnrichment(
+          sceneId,
+          resultImages[0],
+          imageDB,
+          { onUpdate: onMediaUpdate }
+        );
+        if (!imageData) {
           const message = "Không nhận được ảnh từ API";
           if (onError) onError(message);
           else console.error(message);
           return undefined;
         }
 
-        const imageData = resultImages[0];
-        await imageDB.set(sceneId, imageData);
         onProgress?.(100);
         return imageData;
       } catch (err: any) {
@@ -539,6 +552,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onStatusMessage,
         onError,
+        onMediaUpdate,
       } = params;
 
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
@@ -567,7 +581,12 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           onStatusMessage: (msg) => onStatusMessage?.(msg),
         });
 
-        const videoData = data as GeneratedVideoData | undefined;
+        const videoData = await persistGeneratedVideoWithEnrichment(
+          sceneId,
+          { ...(data as GeneratedVideoData), aspectRatio },
+          videoDB,
+          { onUpdate: onMediaUpdate }
+        );
         if (!videoData) {
           const message = "Không nhận được video từ API";
           if (onError) onError(message);
@@ -575,8 +594,6 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           return undefined;
         }
 
-        videoData.aspectRatio = aspectRatio;
-        await videoDB.set(sceneId, videoData);
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
         return videoData;

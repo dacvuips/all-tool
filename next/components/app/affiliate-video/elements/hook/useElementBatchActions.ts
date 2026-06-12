@@ -23,6 +23,7 @@ import {
   buildElementImageGenerateParams,
   buildElementVideoGenerateParams,
 } from "../utils/elementSceneGenerationParams";
+import { generatedImageToBlob } from "../../shared/generatedMediaUtils";
 import { uriToBlob } from "../../shared/videoDownloadUtils";
 import { useElementApi } from "./useElementApi";
 
@@ -393,7 +394,7 @@ export function useCopyVideoBatchActions(
         const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
 
         // Convert base64 → Blob → download, then wait 2s before next
-        const blob = base64ToBlob(img.imageBytes, img.mimeType);
+        const blob = await generatedImageToBlob(img);
         await downloadBlobSequentially(blob, fileName, 2000);
       }
 
