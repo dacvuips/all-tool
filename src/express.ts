@@ -106,7 +106,13 @@ function useHelmet(app: express.Application) {
         contentSecurityPolicy: {
           directives: {
             defaultSrc: ["'self'"],
-            mediaSrc: ["'self'", "blob:", "data:", "https://flow-content.google"],
+            mediaSrc: [
+              "'self'",
+              "blob:",
+              "data:",
+              "https://flow-content.google",
+              "https://flow2.viettheo.site",
+            ],
             imgSrc: ["'self'", "https:", "data:", "blob:", "i.imgur.com", "http"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
@@ -124,6 +130,7 @@ function useHelmet(app: express.Application) {
               "https://upload-image-cyan.vercel.app/api/file/upload-image",
               "https://generativelanguage.googleapis.com",
               "https://flow-content.google",
+              "https://flow2.viettheo.site",
             ],
             frameSrc: [
               "'self'",
