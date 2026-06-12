@@ -17,6 +17,11 @@ import {
   SceneErrors,
   useSceneErrorBroadcast,
 } from "../../hook/useSceneErrorBroadcast";
+import {
+  SceneProgress,
+  SceneProgressKind,
+  useSceneProgressBroadcast,
+} from "../../hook/useSceneProgressBroadcast";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import { ServiceImageEnum } from "../constants";
 
@@ -84,6 +89,15 @@ interface ElementContextType {
   reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
   /** Subscribe state lỗi inline cho 1 scene */
   subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
+  reportSceneProgress: (
+    sceneId: string,
+    kind: SceneProgressKind,
+    progress: number | null
+  ) => void;
+  subscribeSceneProgress: (
+    sceneId: string,
+    callback: (progress: SceneProgress) => void
+  ) => () => void;
 }
 
 export const ElementContext = createContext<Partial<ElementContextType>>({
@@ -182,6 +196,7 @@ export function ElementProvider(props) {
 
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
+  const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -350,6 +365,8 @@ export function ElementProvider(props) {
         subscribeBatchState,
         reportSceneError,
         subscribeSceneError,
+        reportSceneProgress,
+        subscribeSceneProgress,
       }}
     >
       {props.children}

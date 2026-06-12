@@ -151,13 +151,13 @@ export async function fetchUrlToBase64Payload(
       return { mimeType: dataMatch[1], bytes: dataMatch[2] };
     }
 
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      console.warn("[fetchUrlToBase64Payload] HTTP", resp.status, url);
+    let blob: Blob;
+    try {
+      blob = await uriToBlob(url);
+    } catch (err) {
+      console.warn("[fetchUrlToBase64Payload] Failed:", url, err);
       return null;
     }
-
-    const blob = await resp.blob();
     const mimeType = blob.type || fallbackMimeType;
     const bytes = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -290,5 +290,29 @@ export async function downloadGeneratedImage(
   fileName: string
 ): Promise<void> {
   const blob = await generatedImageToBlob(img);
+  triggerBlobDownload(blob, fileName);
+}
+
+/** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */
+export async function generatedVideoToBlob(video: GeneratedVideoLike): Promise<Blob> {
+  if (video.videoBytes) {
+    return base64ToBlob(
+      stripBase64Payload(video.videoBytes),
+      video.mimeType || "video/mp4"
+    );
+  }
+
+  const uri = (video.videoUri || "").trim();
+  if (!uri) {
+    throw new Error("Thiếu dữ liệu video (URI hoặc base64)");
+  }
+  return uriToBlob(uri);
+}
+
+export async function downloadGeneratedVideo(
+  video: GeneratedVideoLike,
+  fileName: string
+): Promise<void> {
+  const blob = await generatedVideoToBlob(video);
   triggerBlobDownload(blob, fileName);
 }

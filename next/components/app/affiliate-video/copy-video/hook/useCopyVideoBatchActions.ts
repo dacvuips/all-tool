@@ -21,8 +21,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
-import { generatedImageToBlob } from "../../shared/generatedMediaUtils";
-import { uriToBlob } from "../../shared/videoDownloadUtils";
+import { generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -49,6 +48,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     removeBatchGeneratingVideoSceneId,
     scriptData,
     reportSceneError,
+    reportSceneProgress,
   } = useCopyVideoContext();
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: copyVideoFormConfig?.objectToPersonify,
@@ -403,7 +403,6 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     getGeneratedImage,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
 
@@ -442,19 +441,14 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         const fileName = `scene-${scene.sceneNumber}-video.${ext}`;
 
         let blob: Blob | null = null;
-
-        if (vid.videoUri) {
-          try {
-            blob = await uriToBlob(vid.videoUri);
-          } catch (fetchErr) {
-            console.error(
-              `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
-              fetchErr
-            );
-            continue;
-          }
-        } else if (vid.videoBytes) {
-          blob = base64ToBlob(vid.videoBytes, vid.mimeType);
+        try {
+          blob = await generatedVideoToBlob(vid);
+        } catch (fetchErr) {
+          console.error(
+            `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
+            fetchErr
+          );
+          continue;
         }
 
         if (!blob) continue;
@@ -483,7 +477,6 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     getGeneratedVideo,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
 
@@ -554,6 +547,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           });
           await copyVideoGenerateImage({
             ...imageParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -566,6 +560,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           completed++;
           setBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "image", null);
           removeBatchGeneratingSceneId(scene.id);
         }
       }
@@ -673,6 +668,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             });
             existingImage = await copyVideoGenerateImage({
               ...imageParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
               onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
           } catch (imgErr: any) {
@@ -687,6 +683,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             setVideoBatchCompleted(completed);
             continue;
           } finally {
+            reportSceneProgress?.(scene.id, "image", null);
             removeBatchGeneratingSceneId(scene.id);
           }
           if (!existingImage) {
@@ -708,6 +705,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -720,6 +718,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           completed++;
           setVideoBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "video", null);
           removeBatchGeneratingVideoSceneId(scene.id);
         }
       }
@@ -841,6 +840,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
@@ -860,6 +860,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
           completed++;
           setExtendBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id + "::stitch", "extend", null);
           removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
         }
       }

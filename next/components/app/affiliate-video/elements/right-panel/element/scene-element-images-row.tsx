@@ -38,14 +38,33 @@ export function SceneElementImagesRow({
   const [slots, setSlots] = useState<(ElementFormImage | undefined)[]>(() =>
     savedSlots?.length ? [...savedSlots] : [...autoMatched]
   );
-  const [manualMask, setManualMask] = useState<boolean[]>([false, false, false]);
+  const [manualMask, setManualMask] = useState<boolean[]>(() =>
+    Array.from({ length: SLOT_COUNT }, () => false)
+  );
   const lastNotifiedRef = useRef<string>("");
+
+  const savedSlotsKey = useMemo(
+    () =>
+      savedSlots
+        ?.map((s, i) => {
+          if (!s) return `${i}:`;
+          return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
+        })
+        .join("|") ?? "",
+    [savedSlots]
+  );
 
   useEffect(() => {
     setSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched]);
-    setManualMask([false, false, false]);
+    setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
     lastNotifiedRef.current = "";
   }, [sceneId]);
+
+  useEffect(() => {
+    if (!savedSlots?.length) return;
+    setSlots([...savedSlots].slice(0, SLOT_COUNT));
+    setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots[i]));
+  }, [savedSlotsKey]);
 
   useEffect(() => {
     setSlots((prev) => {

@@ -20,6 +20,11 @@ import {
   SceneErrors,
   useSceneErrorBroadcast,
 } from "../../hook/useSceneErrorBroadcast";
+import {
+  SceneProgress,
+  SceneProgressKind,
+  useSceneProgressBroadcast,
+} from "../../hook/useSceneProgressBroadcast";
 
 /** Key used to persist the last generated script in IndexedDB */
 
@@ -100,6 +105,15 @@ export const AffiliateVideoContext = createContext<
     reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
     /** Subscribe state lỗi inline cho 1 scene */
     subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
+    reportSceneProgress: (
+      sceneId: string,
+      kind: SceneProgressKind,
+      progress: number | null
+    ) => void;
+    subscribeSceneProgress: (
+      sceneId: string,
+      callback: (progress: SceneProgress) => void
+    ) => () => void;
 
     // ── Scene history ──
     /** Full history list (newest first) */
@@ -153,6 +167,7 @@ export function AffiliateVideoProvider(props) {
 
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
+  const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
 
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
     StoryModeTypeEnum.image_to_video
@@ -397,6 +412,8 @@ export function AffiliateVideoProvider(props) {
         subscribeBatchState,
         reportSceneError,
         subscribeSceneError,
+        reportSceneProgress,
+        subscribeSceneProgress,
 
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,

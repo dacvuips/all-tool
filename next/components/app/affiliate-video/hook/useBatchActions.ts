@@ -19,8 +19,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { generatedImageToBlob } from "../shared/generatedMediaUtils";
-import { uriToBlob } from "../shared/videoDownloadUtils";
+import { generatedImageToBlob, generatedVideoToBlob } from "../shared/generatedMediaUtils";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -46,6 +45,7 @@ export function useBatchActions(
     removeBatchGeneratingVideoSceneId,
     affiliateVideoFormConfig: contextFormConfig,
     reportSceneError,
+    reportSceneProgress,
   } = { ...singleContext, ...providerContext };
 
   const affiliateVideoFormConfig = providerContext?.affiliateVideoFormConfig ?? contextFormConfig;
@@ -391,10 +391,8 @@ export function useBatchActions(
     getGeneratedImage,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
-
   // ═══════════════════════════════════════════════════════════════════
   // ── handleDownloadAllVideos: download videos sequentially one by one ──
   // ═══════════════════════════════════════════════════════════════════
@@ -430,19 +428,14 @@ export function useBatchActions(
         const fileName = `scene-${scene.sceneNumber}-video.${ext}`;
 
         let blob: Blob | null = null;
-
-        if (vid.videoUri) {
-          try {
-            blob = await uriToBlob(vid.videoUri);
-          } catch (fetchErr) {
-            console.error(
-              `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
-              fetchErr
-            );
-            continue;
-          }
-        } else if (vid.videoBytes) {
-          blob = base64ToBlob(vid.videoBytes, vid.mimeType);
+        try {
+          blob = await generatedVideoToBlob(vid);
+        } catch (fetchErr) {
+          console.error(
+            `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
+            fetchErr
+          );
+          continue;
         }
 
         if (!blob) continue;
@@ -471,7 +464,6 @@ export function useBatchActions(
     getGeneratedVideo,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
 
@@ -540,6 +532,7 @@ export function useBatchActions(
           });
           await generateImage({
             ...imageParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -552,6 +545,7 @@ export function useBatchActions(
           completed++;
           setBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "image", null);
           removeBatchGeneratingSceneId(scene.id);
         }
       }
@@ -646,6 +640,7 @@ export function useBatchActions(
             });
             await generateVideo({
               ...videoParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
               onError: (msg) => reportSceneError?.(scene.id, "video", msg),
             });
             completed++;
@@ -658,6 +653,7 @@ export function useBatchActions(
             completed++;
             setVideoBatchCompleted(completed);
           } finally {
+            reportSceneProgress?.(scene.id, "video", null);
             removeBatchGeneratingVideoSceneId(scene.id);
           }
           continue;
@@ -685,6 +681,7 @@ export function useBatchActions(
             });
             existingImage = await generateImage({
               ...imageParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
               onError: (msg) => reportSceneError?.(scene.id, "image", msg),
             });
           } catch (imgErr: any) {
@@ -699,6 +696,7 @@ export function useBatchActions(
             setVideoBatchCompleted(completed);
             continue;
           } finally {
+            reportSceneProgress?.(scene.id, "image", null);
             removeBatchGeneratingSceneId(scene.id);
           }
           if (!existingImage) {
@@ -721,6 +719,7 @@ export function useBatchActions(
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -733,6 +732,7 @@ export function useBatchActions(
           completed++;
           setVideoBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "video", null);
           removeBatchGeneratingVideoSceneId(scene.id);
         }
       }
@@ -854,6 +854,7 @@ export function useBatchActions(
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
@@ -873,6 +874,7 @@ export function useBatchActions(
           completed++;
           setExtendBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id + "::stitch", "extend", null);
           removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
         }
       }

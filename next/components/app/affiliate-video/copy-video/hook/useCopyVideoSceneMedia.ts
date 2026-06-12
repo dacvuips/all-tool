@@ -7,7 +7,7 @@
  * - Download ảnh đã tạo về máy
  * - Download video đã tạo về máy
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CopyVideoScene } from "../../constants";
 import { resolveObjectToPersonifyImageForApi } from "../../elements/utils/elementFormImageUtils";
@@ -16,12 +16,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
-import { downloadGeneratedImage } from "../../shared/generatedMediaUtils";
-import {
-  base64ToBlob,
-  triggerBlobDownload,
-  uriToBlob,
-} from "../../shared/videoDownloadUtils";
+import { downloadGeneratedImage, downloadGeneratedVideo } from "../../shared/generatedMediaUtils";
 
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
@@ -124,11 +119,6 @@ export function useCopyVideoSceneMedia({
   const [extendVideoError, setExtendVideoError] = useState<string | null>(null);
   const [generatedExtendVideo, setGeneratedExtendVideo] = useState<GeneratedVideoData | null>(null);
 
-  // ── Refs cho simulated progress timers ──
-  const imageProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const {
     copyVideoGenerateImage,
     getGeneratedImage,
@@ -146,6 +136,7 @@ export function useCopyVideoSceneMedia({
     subscribeBatchState,
     subscribeSceneError,
     reportSceneError,
+    subscribeSceneProgress,
     scriptData,
     copyVideoFormConfig,
   } = useCopyVideoContext();
@@ -191,87 +182,51 @@ export function useCopyVideoSceneMedia({
     return unsub;
   }, [scene.id, subscribeSceneError]);
 
-  // // Combined flag: either local generation or batch generation
   const isGeneratingImage = generatingImage || isBatchGenerating;
   const isGeneratingVideo = generatingVideo || isBatchGeneratingVideo;
   const isGeneratingExtendVideo = generatingExtendVideo || isBatchGeneratingExtendVideo;
 
-  // // ── Helper: bắt đầu giả lập progress ──
-  // // Chạy từ random 1-10% → tăng dần đến 99% trong khoảng durationMs
-  const startSimulatedProgress = useCallback(
-    (
-      setProgress: (pct: number) => void,
-      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
-      durationMs: number
-    ) => {
-      // Xóa timer cũ nếu có
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-
-      const startPct = Math.floor(Math.random() * 10) + 1; // random 1-10%
-      setProgress(startPct);
-
-      const intervalMs = 500; // cập nhật mỗi 500ms
-      const totalSteps = durationMs / intervalMs;
-      const incrementPerStep = (99 - startPct) / totalSteps;
-      let current = startPct;
-
-      timerRef.current = setInterval(() => {
-        current += incrementPerStep;
-        if (current >= 99) {
-          current = 99;
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-        setProgress(Math.floor(current));
-      }, intervalMs);
-    },
-    []
-  );
-
-  // // ── Helper: dừng giả lập progress ──
-  const stopSimulatedProgress = useCallback(
-    (
-      setProgress: (pct: number) => void,
-      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
-    ) => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        setProgress(100);
-      }
-      // Don't call setProgress(100) if no timer was running –
-      // doing so would trigger a state update → re-render → effect re-run → infinite loop
-    },
-    []
-  );
-
-  // // ── Cleanup timers khi unmount ──
   useEffect(() => {
-    return () => {
-      if (imageProgressTimerRef.current) clearInterval(imageProgressTimerRef.current);
-      if (videoProgressTimerRef.current) clearInterval(videoProgressTimerRef.current);
-      if (extendVideoProgressTimerRef.current) clearInterval(extendVideoProgressTimerRef.current);
-    };
-  }, []);
+    if (!subscribeSceneProgress) return;
+    const unsub = subscribeSceneProgress(scene.id, (progress) => {
+      if (progress.image != null) {
+        setImageProgress((prev) => Math.max(prev, progress.image!));
+      }
+      if (progress.video != null) {
+        setVideoProgress((prev) => Math.max(prev, progress.video!));
+      }
+      if (progress.extend != null) {
+        setExtendVideoProgress((prev) => Math.max(prev, progress.extend!));
+      }
+    });
+    return unsub;
+  }, [scene.id, subscribeSceneProgress]);
 
-  // // ── Reset all local states when scene.id changes ──
-  // // This ensures stale loading/progress UI is cleared when switching history items
   useEffect(() => {
-    // Stop any running progress timers
-    if (imageProgressTimerRef.current) {
-      clearInterval(imageProgressTimerRef.current);
-      imageProgressTimerRef.current = null;
+    if (isBatchGenerating && !generatingImage) {
+      setImageProgress(0);
+    } else if (!isBatchGenerating && !generatingImage) {
+      setImageProgress(0);
     }
-    if (videoProgressTimerRef.current) {
-      clearInterval(videoProgressTimerRef.current);
-      videoProgressTimerRef.current = null;
+  }, [isBatchGenerating, generatingImage]);
+
+  useEffect(() => {
+    if (isBatchGeneratingVideo && !generatingVideo) {
+      setVideoProgress(0);
+    } else if (!isBatchGeneratingVideo && !generatingVideo) {
+      setVideoProgress(0);
     }
-    if (extendVideoProgressTimerRef.current) {
-      clearInterval(extendVideoProgressTimerRef.current);
-      extendVideoProgressTimerRef.current = null;
+  }, [isBatchGeneratingVideo, generatingVideo]);
+
+  useEffect(() => {
+    if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
+      setExtendVideoProgress(0);
+    } else if (!isBatchGeneratingExtendVideo && !generatingExtendVideo) {
+      setExtendVideoProgress(0);
     }
-    // Reset local generating states
+  }, [isBatchGeneratingExtendVideo, generatingExtendVideo]);
+
+  useEffect(() => {
     setGeneratingImage(false);
     setImageProgress(0);
     setGeneratedImage(null);
@@ -284,43 +239,6 @@ export function useCopyVideoSceneMedia({
     setExtendVideoProgress(0);
     setGeneratedExtendVideo(null);
   }, [scene.id]);
-
-  // // ── Sync batch generation state with simulated progress ──
-  useEffect(() => {
-    if (isBatchGenerating && !generatingImage) {
-      setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
-    } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
-      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
-    }
-  }, [isBatchGenerating, generatingImage, startSimulatedProgress, stopSimulatedProgress]);
-
-  useEffect(() => {
-    if (isBatchGeneratingVideo && !generatingVideo) {
-      setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
-    } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
-      stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
-    }
-  }, [isBatchGeneratingVideo, generatingVideo, startSimulatedProgress, stopSimulatedProgress]);
-
-  useEffect(() => {
-    if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
-      setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
-    } else if (
-      !isBatchGeneratingExtendVideo &&
-      !generatingExtendVideo &&
-      extendVideoProgressTimerRef.current
-    ) {
-      stopSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef);
-    }
-  }, [
-    isBatchGeneratingExtendVideo,
-    generatingExtendVideo,
-    startSimulatedProgress,
-    stopSimulatedProgress,
-  ]);
 
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // // Re-check whenever batch generating state changes (image may have been saved)
@@ -383,9 +301,6 @@ export function useCopyVideoSceneMedia({
     setImageProgress(0);
     addBatchGeneratingSceneId(scene.id);
 
-    // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
-
     try {
       const imageParams = await buildCopyVideoImageGenerateParams({
         scene,
@@ -398,6 +313,7 @@ export function useCopyVideoSceneMedia({
 
       const result = await copyVideoGenerateImage({
         ...imageParams,
+        onProgress: (pct) => setImageProgress((prev) => Math.max(prev, pct)),
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
@@ -419,7 +335,6 @@ export function useCopyVideoSceneMedia({
     } catch (err) {
       console.error("[handleGenerateImage] Error:", err);
     } finally {
-      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
       removeBatchGeneratingSceneId(scene.id);
       setGeneratingImage(false);
     }
@@ -478,7 +393,6 @@ export function useCopyVideoSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -486,7 +400,6 @@ export function useCopyVideoSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 
@@ -513,6 +426,8 @@ export function useCopyVideoSceneMedia({
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));
+          } else {
+            setVideoProgress((prev) => Math.max(prev, pct));
           }
         },
         onStatusMessage: (msg) => {
@@ -554,11 +469,9 @@ export function useCopyVideoSceneMedia({
       // Lỗi đã được set qua onError hoặc validation phía trên
     } finally {
       if (isStitch) {
-        stopSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef);
         setGeneratingExtendVideo(false);
         removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
       } else {
-        stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
         removeBatchGeneratingVideoSceneId(scene.id);
         setGeneratingVideo(false);
       }
@@ -589,20 +502,8 @@ export function useCopyVideoSceneMedia({
   const handleDownloadVideo = async () => {
     if (!generatedVideo) return;
     try {
-      let blob: Blob | null = null;
-      let ext = "mp4";
-
-      if (generatedVideo.videoUri) {
-        blob = await uriToBlob(generatedVideo.videoUri);
-        ext = blob.type.split("/")[1] || "mp4";
-      } else if (generatedVideo.videoBytes) {
-        blob = base64ToBlob(generatedVideo.videoBytes, generatedVideo.mimeType);
-        ext = generatedVideo.mimeType.split("/")[1] || "mp4";
-      }
-
-      if (blob) {
-        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-video.${ext}`);
-      }
+      const ext = generatedVideo.mimeType?.split("/")[1] || "mp4";
+      await downloadGeneratedVideo(generatedVideo, `scene-${scene.sceneNumber}-video.${ext}`);
     } catch (err) {
       console.error("[handleDownloadVideo] Error:", err);
     }
@@ -616,20 +517,11 @@ export function useCopyVideoSceneMedia({
   const handleDownloadExtendVideo = async () => {
     if (!generatedExtendVideo) return;
     try {
-      let blob: Blob | null = null;
-      let ext = "mp4";
-
-      if (generatedExtendVideo.videoUri) {
-        blob = await uriToBlob(generatedExtendVideo.videoUri);
-        ext = blob.type.split("/")[1] || "mp4";
-      } else if (generatedExtendVideo.videoBytes) {
-        blob = base64ToBlob(generatedExtendVideo.videoBytes, generatedExtendVideo.mimeType);
-        ext = generatedExtendVideo.mimeType.split("/")[1] || "mp4";
-      }
-
-      if (blob) {
-        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-stitch-video.${ext}`);
-      }
+      const ext = generatedExtendVideo.mimeType?.split("/")[1] || "mp4";
+      await downloadGeneratedVideo(
+        generatedExtendVideo,
+        `scene-${scene.sceneNumber}-stitch-video.${ext}`
+      );
     } catch (err) {
       console.error("[handleDownloadExtendVideo] Error:", err);
     }

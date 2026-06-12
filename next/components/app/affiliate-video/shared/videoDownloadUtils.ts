@@ -26,16 +26,32 @@ export function dataUrlToBlob(dataUrl: string): Blob {
   return new Blob([decodeURIComponent(payload)], { type: mimeType });
 }
 
+const DOWNLOAD_PROXY_PATH = "/api/file/download-proxy";
+
+/** Fetch HTTP(S) URL as Blob; falls back to server proxy when CORS blocks direct fetch. */
+async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
+  try {
+    const res = await fetch(url);
+    if (res.ok) {
+      return res.blob();
+    }
+  } catch {
+    // Direct fetch failed (often CORS) — try server proxy below.
+  }
+
+  const proxyRes = await fetch(`${DOWNLOAD_PROXY_PATH}?url=${encodeURIComponent(url)}`);
+  if (!proxyRes.ok) {
+    throw new Error(`Failed to fetch: ${proxyRes.status}`);
+  }
+  return proxyRes.blob();
+}
+
 /** Resolve a remote or data URI to a Blob. Data URIs are parsed locally. */
 export async function uriToBlob(uri: string): Promise<Blob> {
   if (uri.startsWith("data:")) {
     return dataUrlToBlob(uri);
   }
-  const res = await fetch(uri);
-  if (!res.ok) {
-    throw new Error(`Failed to fetch: ${res.status}`);
-  }
-  return res.blob();
+  return fetchHttpUriAsBlob(uri);
 }
 
 /** Trigger a browser file download from a Blob. */

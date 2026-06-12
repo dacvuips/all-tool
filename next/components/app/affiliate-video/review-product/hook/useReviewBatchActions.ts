@@ -24,8 +24,7 @@ import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
 } from "../utils/reviewSceneGenerationParams";
-import { generatedImageToBlob } from "../../shared/generatedMediaUtils";
-import { uriToBlob } from "../../shared/videoDownloadUtils";
+import { generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
 import { resolveObjectToPersonifyImageForApi } from "../utils/reviewFormImageUtils";
 import { useReviewApi } from "./useReviewApi";
 
@@ -56,6 +55,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
     reportSceneError,
+    reportSceneProgress,
     scriptData,
     reviewFormConfig,
   } = useReviewContext();
@@ -411,7 +411,6 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     getGeneratedImage,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
 
@@ -450,19 +449,14 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
         const fileName = `scene-${scene.sceneNumber}-video.${ext}`;
 
         let blob: Blob | null = null;
-
-        if (vid.videoUri) {
-          try {
-            blob = await uriToBlob(vid.videoUri);
-          } catch (fetchErr) {
-            console.error(
-              `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
-              fetchErr
-            );
-            continue;
-          }
-        } else if (vid.videoBytes) {
-          blob = base64ToBlob(vid.videoBytes, vid.mimeType);
+        try {
+          blob = await generatedVideoToBlob(vid);
+        } catch (fetchErr) {
+          console.error(
+            `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
+            fetchErr
+          );
+          continue;
         }
 
         if (!blob) continue;
@@ -491,7 +485,6 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     getGeneratedVideo,
     toast,
     t,
-    base64ToBlob,
     downloadBlobSequentially,
   ]);
 
@@ -562,6 +555,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           });
           await reviewGenerateImage({
             ...imageParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
             onError: (msg) => reportSceneError?.(scene.id, "image", msg),
           });
           completed++;
@@ -574,6 +568,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           completed++;
           setBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "image", null);
           removeBatchGeneratingSceneId(scene.id);
         }
       }
@@ -676,6 +671,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
             onError: (msg) => reportSceneError?.(scene.id, "video", msg),
           });
           completed++;
@@ -688,6 +684,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           completed++;
           setVideoBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id, "video", null);
           removeBatchGeneratingVideoSceneId(scene.id);
         }
       }
@@ -808,6 +805,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           });
           await generateVideo({
             ...videoParams,
+            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
             onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
           });
           completed++;
@@ -827,6 +825,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
           completed++;
           setExtendBatchCompleted(completed);
         } finally {
+          reportSceneProgress?.(scene.id + "::stitch", "extend", null);
           removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
         }
       }

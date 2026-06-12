@@ -7,7 +7,7 @@
  * - Download ảnh đã tạo về máy
  * - Download video đã tạo về máy
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AffiliateVideoFormConfig, SceneScript, ScriptData } from "../constants";
 import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
@@ -15,12 +15,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { downloadGeneratedImage, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
-import {
-  base64ToBlob,
-  triggerBlobDownload,
-  uriToBlob,
-} from "../shared/videoDownloadUtils";
+import { downloadGeneratedImage, downloadGeneratedVideo, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -45,6 +40,15 @@ export type AffiliateVideoProviderSlice = Partial<{
   ) => () => void;
   subscribeSceneError: (sceneId: string, callback: (errors: any) => void) => () => void;
   reportSceneError: (sceneId: string, kind: any, message: string | null) => void;
+  reportSceneProgress?: (
+    sceneId: string,
+    kind: "image" | "video" | "extend",
+    progress: number | null
+  ) => void;
+  subscribeSceneProgress?: (
+    sceneId: string,
+    callback: (progress: { image?: number; video?: number; extend?: number }) => void
+  ) => () => void;
 }>;
 
 interface UseSceneMediaParams {
@@ -146,11 +150,6 @@ export function useSceneMedia({
   const [extendVideoError, setExtendVideoError] = useState<string | null>(null);
   const [generatedExtendVideo, setGeneratedExtendVideo] = useState<GeneratedVideoData | null>(null);
 
-  // ── Refs cho simulated progress timers ──
-  const imageProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const videoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const extendVideoProgressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
   const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo, saveGeneratedVideo } =
     useAffiliateVideoApi();
   const singleContext = useAffiliateVideoContext();
@@ -164,6 +163,7 @@ export function useSceneMedia({
     subscribeBatchState,
     subscribeSceneError,
     reportSceneError,
+    subscribeSceneProgress,
     scriptData: contextScriptData,
     affiliateVideoFormConfig: contextFormConfig,
   } = { ...singleContext, ...providerContext };
@@ -218,87 +218,55 @@ export function useSceneMedia({
     return unsub;
   }, [scene.id, subscribeSceneError]);
 
-  // // Combined flag: either local generation or batch generation
+  // Combined flag: either local generation or batch generation
   const isGeneratingImage = generatingImage || isBatchGenerating;
   const isGeneratingVideo = generatingVideo || isBatchGeneratingVideo;
   const isGeneratingExtendVideo = generatingExtendVideo || isBatchGeneratingExtendVideo;
 
-  // // ── Helper: bắt đầu giả lập progress ──
-  // // Chạy từ random 1-10% → tăng dần đến 99% trong khoảng durationMs
-  const startSimulatedProgress = useCallback(
-    (
-      setProgress: (pct: number) => void,
-      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>,
-      durationMs: number
-    ) => {
-      // Xóa timer cũ nếu có
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-
-      const startPct = Math.floor(Math.random() * 10) + 1; // random 1-10%
-      setProgress(startPct);
-
-      const intervalMs = 500; // cập nhật mỗi 500ms
-      const totalSteps = durationMs / intervalMs;
-      const incrementPerStep = (99 - startPct) / totalSteps;
-      let current = startPct;
-
-      timerRef.current = setInterval(() => {
-        current += incrementPerStep;
-        if (current >= 99) {
-          current = 99;
-          if (timerRef.current) clearInterval(timerRef.current);
-        }
-        setProgress(Math.floor(current));
-      }, intervalMs);
-    },
-    []
-  );
-
-  // // ── Helper: dừng giả lập progress ──
-  const stopSimulatedProgress = useCallback(
-    (
-      setProgress: (pct: number) => void,
-      timerRef: React.MutableRefObject<ReturnType<typeof setInterval> | null>
-    ) => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-        setProgress(100);
-      }
-      // Don't call setProgress(100) if no timer was running –
-      // doing so would trigger a state update → re-render → effect re-run → infinite loop
-    },
-    []
-  );
-
-  // // ── Cleanup timers khi unmount ──
+  // ── Subscribe poll progress broadcast (batch generation) ──
   useEffect(() => {
-    return () => {
-      if (imageProgressTimerRef.current) clearInterval(imageProgressTimerRef.current);
-      if (videoProgressTimerRef.current) clearInterval(videoProgressTimerRef.current);
-      if (extendVideoProgressTimerRef.current) clearInterval(extendVideoProgressTimerRef.current);
-    };
-  }, []);
+    if (!subscribeSceneProgress) return;
+    const unsub = subscribeSceneProgress(scene.id, (progress) => {
+      if (progress.image != null) {
+        setImageProgress((prev) => Math.max(prev, progress.image!));
+      }
+      if (progress.video != null) {
+        setVideoProgress((prev) => Math.max(prev, progress.video!));
+      }
+      if (progress.extend != null) {
+        setExtendVideoProgress((prev) => Math.max(prev, progress.extend!));
+      }
+    });
+    return unsub;
+  }, [scene.id, subscribeSceneProgress]);
 
-  // // ── Reset all local states when scene.id changes ──
-  // // This ensures stale loading/progress UI is cleared when switching history items
+  // ── Reset progress when batch starts (background) or when generation ends ──
   useEffect(() => {
-    // Stop any running progress timers
-    if (imageProgressTimerRef.current) {
-      clearInterval(imageProgressTimerRef.current);
-      imageProgressTimerRef.current = null;
+    if (isBatchGenerating && !generatingImage) {
+      setImageProgress(0);
+    } else if (!isBatchGenerating && !generatingImage) {
+      setImageProgress(0);
     }
-    if (videoProgressTimerRef.current) {
-      clearInterval(videoProgressTimerRef.current);
-      videoProgressTimerRef.current = null;
+  }, [isBatchGenerating, generatingImage]);
+
+  useEffect(() => {
+    if (isBatchGeneratingVideo && !generatingVideo) {
+      setVideoProgress(0);
+    } else if (!isBatchGeneratingVideo && !generatingVideo) {
+      setVideoProgress(0);
     }
-    if (extendVideoProgressTimerRef.current) {
-      clearInterval(extendVideoProgressTimerRef.current);
-      extendVideoProgressTimerRef.current = null;
+  }, [isBatchGeneratingVideo, generatingVideo]);
+
+  useEffect(() => {
+    if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
+      setExtendVideoProgress(0);
+    } else if (!isBatchGeneratingExtendVideo && !generatingExtendVideo) {
+      setExtendVideoProgress(0);
     }
-    // Reset local generating states
+  }, [isBatchGeneratingExtendVideo, generatingExtendVideo]);
+
+  // ── Reset all local states when scene.id changes ──
+  useEffect(() => {
     setGeneratingImage(false);
     setImageProgress(0);
     setGeneratedImage(null);
@@ -311,43 +279,6 @@ export function useSceneMedia({
     setExtendVideoProgress(0);
     setGeneratedExtendVideo(null);
   }, [scene.id]);
-
-  // // ── Sync batch generation state with simulated progress ──
-  useEffect(() => {
-    if (isBatchGenerating && !generatingImage) {
-      setImageProgress(0);
-      startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
-    } else if (!isBatchGenerating && !generatingImage && imageProgressTimerRef.current) {
-      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
-    }
-  }, [isBatchGenerating, generatingImage, startSimulatedProgress, stopSimulatedProgress]);
-
-  useEffect(() => {
-    if (isBatchGeneratingVideo && !generatingVideo) {
-      setVideoProgress(0);
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
-    } else if (!isBatchGeneratingVideo && !generatingVideo && videoProgressTimerRef.current) {
-      stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
-    }
-  }, [isBatchGeneratingVideo, generatingVideo, startSimulatedProgress, stopSimulatedProgress]);
-
-  useEffect(() => {
-    if (isBatchGeneratingExtendVideo && !generatingExtendVideo) {
-      setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
-    } else if (
-      !isBatchGeneratingExtendVideo &&
-      !generatingExtendVideo &&
-      extendVideoProgressTimerRef.current
-    ) {
-      stopSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef);
-    }
-  }, [
-    isBatchGeneratingExtendVideo,
-    generatingExtendVideo,
-    startSimulatedProgress,
-    stopSimulatedProgress,
-  ]);
 
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // // Re-check whenever batch generating state changes (image may have been saved)
@@ -400,11 +331,8 @@ export function useSceneMedia({
     });
   }, [scene.id, isBatchGeneratingExtendVideo]);
 
-  // // ─────────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateImage
-  // Gọi API tạo ảnh từ scene.imageGenPrompt.
-  // Giả lập progress chạy trong ~2 phút (120s), từ random 1-10% → 99%.
-  // Khi API trả kết quả, dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateImage = async () => {
     if (generatingImage || !scene.imageGenPrompt) return;
@@ -426,9 +354,6 @@ export function useSceneMedia({
     setImageProgress(0);
     addBatchGeneratingSceneId(scene.id);
 
-    // Bắt đầu giả lập progress (~2 phút)
-    startSimulatedProgress(setImageProgress, imageProgressTimerRef, 600_000);
-
     try {
       const imageParams = await buildAffiliateImageGenerateParams({
         scene,
@@ -441,6 +366,7 @@ export function useSceneMedia({
 
       const result = await generateImage({
         ...imageParams,
+        onProgress: (pct) => setImageProgress((prev) => Math.max(prev, pct)),
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
@@ -462,7 +388,6 @@ export function useSceneMedia({
     } catch (err) {
       console.error("[handleGenerateImage] Error:", err);
     } finally {
-      stopSimulatedProgress(setImageProgress, imageProgressTimerRef);
       removeBatchGeneratingSceneId(scene.id);
       setGeneratingImage(false);
     }
@@ -489,9 +414,6 @@ export function useSceneMedia({
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateVideo
-  // Gọi API tạo video từ scene.motionPrompt + audio + dialogue.
-  // Giả lập progress chạy trong ~5 phút (300s), từ random 1-10% → 99%.
-  // Khi API trả kết quả (hoặc SSE progress thật), dừng giả lập và set 100%.
   // ─────────────────────────────────────────────────────────────────────────
   const handleGenerateVideo = async (isStitch?: boolean) => {
     // Chỉ chặn loại video tương ứng, không chặn chéo
@@ -521,7 +443,6 @@ export function useSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
-      startSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -529,7 +450,6 @@ export function useSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
-      startSimulatedProgress(setVideoProgress, videoProgressTimerRef, 700_000);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 
@@ -557,6 +477,8 @@ export function useSceneMedia({
         onProgress: (pct) => {
           if (isStitch) {
             setExtendVideoProgress((prev) => Math.max(prev, pct));
+          } else {
+            setVideoProgress((prev) => Math.max(prev, pct));
           }
         },
         onStatusMessage: (msg) => {
@@ -598,11 +520,9 @@ export function useSceneMedia({
       // Lỗi đã được set qua onError hoặc validation phía trên
     } finally {
       if (isStitch) {
-        stopSimulatedProgress(setExtendVideoProgress, extendVideoProgressTimerRef);
         setGeneratingExtendVideo(false);
         removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
       } else {
-        stopSimulatedProgress(setVideoProgress, videoProgressTimerRef);
         removeBatchGeneratingVideoSceneId(scene.id);
         setGeneratingVideo(false);
       }
@@ -633,20 +553,8 @@ export function useSceneMedia({
   const handleDownloadVideo = async () => {
     if (!generatedVideo) return;
     try {
-      let blob: Blob | null = null;
-      let ext = "mp4";
-
-      if (generatedVideo.videoBytes) {
-        blob = base64ToBlob(generatedVideo.videoBytes, generatedVideo.mimeType);
-        ext = generatedVideo.mimeType.split("/")[1] || "mp4";
-      } else if (generatedVideo.videoUri) {
-        blob = await uriToBlob(generatedVideo.videoUri);
-        ext = blob.type.split("/")[1] || "mp4";
-      }
-
-      if (blob) {
-        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-video.${ext}`);
-      }
+      const ext = generatedVideo.mimeType?.split("/")[1] || "mp4";
+      await downloadGeneratedVideo(generatedVideo, `scene-${scene.sceneNumber}-video.${ext}`);
     } catch (err) {
       console.error("[handleDownloadVideo] Error:", err);
     }
@@ -660,20 +568,11 @@ export function useSceneMedia({
   const handleDownloadExtendVideo = async () => {
     if (!generatedExtendVideo) return;
     try {
-      let blob: Blob | null = null;
-      let ext = "mp4";
-
-      if (generatedExtendVideo.videoUri) {
-        blob = await uriToBlob(generatedExtendVideo.videoUri);
-        ext = blob.type.split("/")[1] || "mp4";
-      } else if (generatedExtendVideo.videoBytes) {
-        blob = base64ToBlob(generatedExtendVideo.videoBytes, generatedExtendVideo.mimeType);
-        ext = generatedExtendVideo.mimeType.split("/")[1] || "mp4";
-      }
-
-      if (blob) {
-        triggerBlobDownload(blob, `scene-${scene.sceneNumber}-stitch-video.${ext}`);
-      }
+      const ext = generatedExtendVideo.mimeType?.split("/")[1] || "mp4";
+      await downloadGeneratedVideo(
+        generatedExtendVideo,
+        `scene-${scene.sceneNumber}-stitch-video.${ext}`
+      );
     } catch (err) {
       console.error("[handleDownloadExtendVideo] Error:", err);
     }
