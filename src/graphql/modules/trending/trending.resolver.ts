@@ -4,7 +4,11 @@ import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { TrendingTypeEnum } from "../../../libs/dal/trending/trending.interface";
 import { Context } from "../../../libs/graphql";
 import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
-const APP_TRENDING_TYPES = new Set([TrendingTypeEnum.FLOW_APP, TrendingTypeEnum.AI_STUDIO_APP]);
+const APP_TRENDING_TYPES = new Set([
+  TrendingTypeEnum.CHATBOT,
+  TrendingTypeEnum.FLOW_APP,
+  TrendingTypeEnum.AI_STUDIO_APP,
+]);
 
 const PROMPT_SHORT_RATIO = 0.2;
 
@@ -184,7 +188,7 @@ const Mutation = {
     if (!trending) throw new Error("Không tìm thấy app");
     const doc = (trending as any)._doc || trending;
     if (!APP_TRENDING_TYPES.has(doc.type)) {
-      throw new Error("Chỉ áp dụng cho Flow App và AI Studio App");
+      throw new Error("Chỉ áp dụng cho ChatBot, Flow App và AI Studio App");
     }
     const updated = await TrendingModel.findByIdAndUpdate(
       id,

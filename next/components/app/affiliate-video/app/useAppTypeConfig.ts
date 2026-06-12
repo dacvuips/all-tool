@@ -1,7 +1,10 @@
 import { TrendingTypeEnum } from "../../../../lib/repo/list/trending.repo";
 import { useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
 
-export type AppTrendingType = TrendingTypeEnum.FLOW_APP | TrendingTypeEnum.AI_STUDIO_APP;
+export type AppTrendingType =
+  | TrendingTypeEnum.FLOW_APP
+  | TrendingTypeEnum.AI_STUDIO_APP
+  | TrendingTypeEnum.CHATBOT;
 
 export function useAppTypeConfig(type: AppTrendingType) {
   const api = useAffiliateVideoApi();
@@ -27,6 +30,30 @@ export function useAppTypeConfig(type: AppTrendingType) {
       createSuccess: "Đã tạo Flow App mới",
       notifyText:
         "Bạn hoàn toàn có thể kiếm thêm thu nhập từ Flow App bạn đưa lên! Hãy tạo mới và công khai để kiếm thêm thu nhập!",
+    };
+  }
+
+  if (type === TrendingTypeEnum.CHATBOT) {
+    return {
+      type,
+      getByCategoryId: api.getChatbotsByCategoryId,
+      getCustomerList: api.getCustomerChatbotList,
+      create: api.createCustomerChatbot,
+      update: api.updateCustomerChatbot,
+      delete: api.deleteCustomerChatbot,
+      listTabLabel: "ChatBot",
+      itemLabel: "ChatBot",
+      createDialogTitle: "Tạo ChatBot",
+      editDialogTitle: "Sửa ChatBot",
+      nameFieldLabel: "Tên ChatBot",
+      namePlaceholder: "Nhập tên ChatBot...",
+      guideFieldLabel: "Hướng dẫn sử dụng ChatBot",
+      deleteConfirm: "Bạn có chắc muốn xoá ChatBot này?",
+      deleteSuccess: "Đã xoá ChatBot",
+      updateSuccess: "Đã cập nhật ChatBot",
+      createSuccess: "Đã tạo ChatBot mới",
+      notifyText:
+        "Bạn hoàn toàn có thể kiếm thêm thu nhập từ ChatBot bạn đưa lên! Hãy tạo mới và công khai để kiếm thêm thu nhập!",
     };
   }
 

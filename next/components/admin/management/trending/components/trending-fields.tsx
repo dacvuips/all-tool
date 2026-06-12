@@ -27,9 +27,7 @@ export function TrendingFields() {
       <Field
         name="prompt"
         label={
-          type === TrendingTypeEnum.PROMPT || type === TrendingTypeEnum.CHATBOT
-            ? t("Prompt mô tả")
-            : t("Link của App")
+          type === TrendingTypeEnum.PROMPT ? t("Prompt mô tả") : t("Link của App")
         }
         cols={12}
       >
