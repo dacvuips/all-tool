@@ -34,7 +34,9 @@ export function pickFlow2ResultPayload(statusData: Flow2StatusResponse): Flow2Me
       Array.isArray(candidate.video_urls) ||
       typeof candidate.Link === "string" ||
       typeof candidate.Local === "string" ||
-      Array.isArray(candidate.media_entries);
+      Array.isArray(candidate.media_entries) ||
+      (Array.isArray(candidate.media_ids) && candidate.media_ids.length > 0) ||
+      typeof candidate.poll_mode === "string";
     if (hasMediaHints) {
       return candidate as Flow2MediaResult;
     }
@@ -64,7 +66,7 @@ export function collectFlow2ImageUrls(result: Flow2MediaResult): string[] {
   return Array.from(new Set(urls));
 }
 
-/** Trích URL video từ `result` Flow2 (video_urls, Link, Local). */
+/** Trích URL video từ `result` Flow2 (video_urls, Link, Local, media_entries). */
 export function collectFlow2VideoUrls(result: Flow2MediaResult): string[] {
   const urls: string[] = [];
   for (const item of result.video_urls || []) {
@@ -72,7 +74,42 @@ export function collectFlow2VideoUrls(result: Flow2MediaResult): string[] {
   }
   pushHttpUrl(urls, result.Link);
   pushHttpUrl(urls, result.Local);
+  for (const entry of result.media_entries || []) {
+    pushHttpUrl(urls, entry?.url);
+  }
   return Array.from(new Set(urls));
+}
+
+/** Lấy request id từ response poll Flow2. */
+export function pickFlow2RequestId(statusData: Flow2StatusResponse): string | undefined {
+  const candidates = [
+    statusData.id,
+    statusData.request_id,
+    (statusData.data as Record<string, unknown> | undefined)?.id,
+    (statusData.data as Record<string, unknown> | undefined)?.request_id,
+    (statusData.request as Record<string, unknown> | undefined)?.id,
+  ];
+  const found = candidates.find((v) => typeof v === "string" && v.trim().length > 0);
+  return found as string | undefined;
+}
+
+/** Flow2 poll_mode=media: URL video theo quy ước `{baseUrl}/video/{requestId}`. */
+export function buildFlow2DerivedVideoUrl(baseUrl: string, requestId: string): string {
+  return `${baseUrl.replace(/\/+$/, "")}/video/${requestId}`;
+}
+
+function summarizeFlow2ResultForLog(statusData: Flow2StatusResponse): string {
+  const resultPayload = pickFlow2ResultPayload(statusData);
+  const requestId = pickFlow2RequestId(statusData);
+  return JSON.stringify({
+    requestId,
+    status: pickStatus(statusData),
+    poll_mode: resultPayload?.poll_mode ?? null,
+    video_urls: resultPayload?.video_urls ?? [],
+    media_ids: resultPayload?.media_ids ?? [],
+    Link: resultPayload?.Link ?? null,
+    Local: resultPayload?.Local ?? null,
+  });
 }
 
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
@@ -375,8 +412,16 @@ export async function waitForFlow2Result<T>(params: {
       await safeProgress(params.onProgress, 90, params.doneProgressMessage);
       const items = await params.extract(statusData);
       if (items.length === 0) {
+        logger.warn(
+          `[flow2-${params.logTag}] ${params.emptyResultMessage} requestId=${
+            params.requestId
+          } summary=${summarizeFlow2ResultForLog(statusData)}`
+        );
         throw new Error(params.emptyResultMessage);
       }
+      logger.info(
+        `[flow2-${params.logTag}] Trích được ${items.length} item requestId=${params.requestId} status=${status}`
+      );
       return items;
     }
 

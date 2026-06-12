@@ -1,10 +1,13 @@
 import logger from "../../../helpers/logger";
 import {
+  buildFlow2DerivedVideoUrl,
   collectFlow2VideoUrls,
   createFlow2Request,
   Flow2StatusResponse,
+  getFlow2Config,
   isHttpUrl,
   looksLikeRawBase64,
+  pickFlow2RequestId,
   pickFlow2ResultPayload,
   runFlow2WithRetry,
   safeProgress,
@@ -176,11 +179,26 @@ async function normalizeResultVideo(value: string): Promise<GeneratedVideo> {
 export async function extractFlow2Videos(
   statusData: Flow2StatusResponse
 ): Promise<GeneratedVideo[]> {
+  const requestId = pickFlow2RequestId(statusData);
   const resultPayload = pickFlow2ResultPayload(statusData);
   if (resultPayload) {
     const structuredUrls = collectFlow2VideoUrls(resultPayload);
     if (structuredUrls.length > 0) {
+      logger.info(
+        `[flow2-video] Trích video_urls từ result requestId=${requestId ?? "n/a"} urls=${structuredUrls.length}`
+      );
       return structuredUrls.map((url) => ({ videoUri: url, mimeType: "video/mp4" }));
+    }
+
+    if (resultPayload.poll_mode === "media" && requestId) {
+      const { baseUrl } = await getFlow2Config();
+      const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
+      logger.info(
+        `[flow2-video] poll_mode=media, derive video URL requestId=${requestId} media_ids=${JSON.stringify(
+          resultPayload.media_ids ?? []
+        )} url=${derivedUrl}`
+      );
+      return [{ videoUri: derivedUrl, mimeType: "video/mp4" }];
     }
   }
 
@@ -190,7 +208,9 @@ export async function extractFlow2Videos(
   if (deduped.length === 0) {
     const preview = JSON.stringify(statusData);
     logger.warn(
-      `[flow2-video] Không trích được video từ response Flow2: ${preview.slice(0, 2000)}${
+      `[flow2-video] Không trích được video requestId=${requestId ?? "n/a"} poll_mode=${
+        resultPayload?.poll_mode ?? "n/a"
+      } media_ids=${JSON.stringify(resultPayload?.media_ids ?? [])}: ${preview.slice(0, 2000)}${
         preview.length > 2000 ? "…" : ""
       }`
     );
