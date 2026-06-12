@@ -31,6 +31,9 @@ export const AppVideoRightPanel = () => {
             type={TrendingTypeEnum.AI_STUDIO_APP}
           />
         </TabGroup.Tab>
+        <TabGroup.Tab label={t("ChatBot App")}>
+          <AppCategoryList key={TrendingTypeEnum.CHATBOT} type={TrendingTypeEnum.CHATBOT} />
+        </TabGroup.Tab>
         <TabGroup.Tab label={t("Bảng xếp hạng")}>
           <AppPromptRank />
         </TabGroup.Tab>
