@@ -6,6 +6,7 @@ export enum OrderTypeEnum {
   TOOL = "TOOL",
   RECAPTCHA = "RECAPTCHA",
   API_MEDIA = "API_MEDIA",
+  NORMAL = "NORMAL",
 }
 
 export type IOrder = TimestampEntity & {
@@ -24,6 +25,7 @@ export type IOrder = TimestampEntity & {
   // Pricing
   subscriptionPlan?: string;
   type?: OrderTypeEnum;
+  creditAmount?: number;
   totalAmount: number;
 
   // Payment

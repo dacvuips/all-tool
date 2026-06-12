@@ -63,6 +63,18 @@ export class WalletTransactionBuilder {
     this._doc.description = description;
     return this.setAmount(amount, WalletTransactionSideEnum.IN).setDepositUserId(userId);
   }
+
+  depositFromOrder(input: {
+    amount: number;
+    description: string;
+    orderId: string;
+    orderCode: string;
+  }) {
+    const { amount, description, orderId } = input;
+    this._doc.type = WalletTransactionTypeEnum.BUY_PACKAGE;
+    this._doc.description = description;
+    return this.setAmount(amount, WalletTransactionSideEnum.IN).setOrderId(orderId);
+  }
   depositReward(input: { amount: number; description: string }) {
     const { amount, description } = input;
     this._doc.type = WalletTransactionTypeEnum.DEPOSIT;

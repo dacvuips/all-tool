@@ -36,7 +36,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   return (
     <Button
       outline
-      className="h-8 px-2 text-xs rounded-lg"
+      className="px-2 h-8 text-xs rounded-lg"
       text={copied ? t("Đã sao chép") : label || t("Sao chép")}
       icon={copied ? <RiCheckLine className="text-sm" /> : <RiFileCopyLine className="text-sm" />}
       onClick={handleCopy}
@@ -68,7 +68,7 @@ export const AffiliateConfig = () => {
           <RiAppStoreLine className="text-2xl text-emerald-500" />
         </div>
         <p className="m-0 text-sm font-semibold text-gray-700">{t("Chưa chọn App")}</p>
-        <p className="mt-2 m-0 text-xs leading-relaxed text-gray-400">
+        <p className="m-0 mt-2 text-xs leading-relaxed text-gray-400">
           {t('Nhấn "Dùng ngay" trên App bên phải để xem prompt và link')}
         </p>
       </div>
@@ -120,12 +120,12 @@ export const AffiliateConfig = () => {
                   <div className="flex gap-2 mt-2">
                     <Button
                       primary
-                      className="flex-1 h-8 whitespace-nowrap text-xs rounded-lg"
+                      className="flex-1 h-8 text-xs whitespace-nowrap rounded-lg"
                       text={t("Mở link")}
                       icon={<RiExternalLinkLine className="text-sm" />}
                       onClick={() => window.open(link, "_blank", "noopener,noreferrer")}
                     />
-                    <CopyButton text={link} label={t("Sao chép link")} />
+                    <CopyButton text={link} label={t("Sao chép")} />
                   </div>
                 </div>
               ))}

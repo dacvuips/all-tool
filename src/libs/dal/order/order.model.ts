@@ -72,6 +72,7 @@ const orderSchema = new Schema(
 
     subscriptionPlan: { type: String },
     type: { type: String, enum: Object.values(OrderTypeEnum) },
+    creditAmount: { type: Number },
     totalAmount: { type: Number, required: true },
 
     paymentMethod: {

@@ -129,7 +129,8 @@ export interface Order extends BaseModel {
   discount?: number;
   totalAmount?: number;
   subscriptionPlan?: string;
-  type?: "TOOL" | "RECAPTCHA" | "API_MEDIA";
+  type?: "TOOL" | "RECAPTCHA" | "API_MEDIA" | "NORMAL";
+  creditAmount?: number;
   shippingAddress?: ShippingAddress;
   shopAddress?: ShopAddress;
 
@@ -179,6 +180,7 @@ export class OrderRepository extends CrudRepository<Order> {
     totalAmount 
     subscriptionPlan
     type
+    creditAmount
     customerId  
      paymentInfo {
       method 
@@ -319,6 +321,60 @@ export class OrderRepository extends CrudRepository<Order> {
   //     })
   //     .then((res) => res.data.createOrder as { order: Order } | null);
   // }
+
+  /** Tạo đơn nạp mPoint (type NORMAL) qua cổng SePay PG. */
+  async createNormalSePayPGCheckout(
+    amount: number,
+    orderId?: string
+  ): Promise<SePayPGCheckoutData> {
+    return this.apollo
+      .mutate({
+        mutation: gql`
+          mutation CreateNormalSePayPGCheckout($amount: Float!, $orderId: ID) {
+            createNormalSePayPGCheckout(amount: $amount, orderId: $orderId) {
+              checkoutUrl
+              formFieldsJson
+            }
+          }
+        `,
+        variables: { amount, orderId },
+      })
+      .then((res) => res.data.createNormalSePayPGCheckout as SePayPGCheckoutData);
+  }
+
+  /** Lấy đơn NORMAL đang chờ thanh toán (không qua getOneOrderByGuest). */
+  async getPendingNormalOrder(): Promise<Order | null> {
+    return this.query({
+      query: `getPendingNormalOrder {
+        id
+        createdAt
+        updatedAt
+        customerId
+        orderNumber
+        status
+        totalAmount
+        creditAmount
+        type
+        paymentMethod
+        paymentStatus
+        paymentInfo {
+          method
+          bankImage
+          bankCode
+          bankName
+          accountNumber
+          accountName
+          bin
+          metadata
+        }
+      }`,
+      variablesParams: "",
+      options: {
+        variables: {},
+        fetchPolicy: "no-cache",
+      },
+    }).then((res) => res.data.g0 as Order | null);
+  }
 
   /**
    * Tạo form thanh toán qua cổng SePay PG.
@@ -461,6 +517,8 @@ export class OrderRepository extends CrudRepository<Order> {
     tax
     discount
     totalAmount
+    creditAmount
+    type
     subscriptionPlan
     shippingAddress {
       recipientName

@@ -5,6 +5,8 @@
 import { useTranslation } from "react-i18next";
 import { RiWallet3Line } from "react-icons/ri";
 
+import Link from "next/link";
+import { useRouter } from "next/router";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { TrendingPublicItem } from "../../../../lib/repo/list/trendingCategory.repo";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
@@ -28,6 +30,7 @@ export function TrendingPurchaseConfirmDialog({
   onClose,
 }: TrendingPurchaseConfirmDialogProps) {
   const { t } = useTranslation();
+  const router = useRouter();
   const price = item?.price || 0;
   const insufficient = walletBalance < price;
 
@@ -42,7 +45,7 @@ export function TrendingPurchaseConfirmDialog({
           </p>
 
           {item && (
-            <div className="p-3 rounded-xl border bg-gray-50">
+            <div className="p-3 bg-gray-50 rounded-xl border">
               <div className="font-semibold text-primary">{item.name}</div>
               <div className="mt-1 text-sm text-red-500">
                 {t("Giá")}: {parseNumber(price, "VND")} mPoint
@@ -50,7 +53,7 @@ export function TrendingPurchaseConfirmDialog({
             </div>
           )}
 
-          <div className="flex gap-2 items-center p-3 rounded-xl border bg-blue-50">
+          <div className="flex gap-2 items-center p-3 bg-blue-50 rounded-xl border">
             <RiWallet3Line className="text-xl text-blue-500 shrink-0" />
             <div>
               <div className="text-xs text-gray-500">{t("Số dư mPoint hiện tại")}</div>
@@ -62,12 +65,20 @@ export function TrendingPurchaseConfirmDialog({
 
           {insufficient && (
             <p className="m-0 text-sm text-red-500">
-              {t("mPoint không đủ. Vui lòng nạp thêm mPoint.")}
+              {t("Ví mPoint không đủ. Vui lòng nạp thêm mPoint.")}
+              <Link href="/checkout?type=normal" className="text-blue-500">
+                {t("Nạp mPoint")}
+              </Link>
             </p>
           )}
         </div>
         <div className="flex gap-2 justify-end pt-2">
-          <Button className="px-4" text={t("Huỷ")} onClick={onClose} disabled={isLoading} />
+          <Button
+            className="px-4"
+            text={t("Nạp mPoint")}
+            onClick={() => router.push("/checkout?type=normal")}
+            disabled={isLoading}
+          />
           <Button
             primary
             className="px-4"

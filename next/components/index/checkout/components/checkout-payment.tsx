@@ -119,6 +119,17 @@ export function CheckoutPayment() {
         </div>
 
         {/* Order Summary Card */}
+        {order?.type === "NORMAL" && order.creditAmount > 0 && (
+          <div className="px-4 py-2 border-t border-gray-100">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">{t("mPoint nhận được")}</span>
+              <span className="font-semibold text-primary">
+                +{parseNumber(order.creditAmount)} mPoint
+              </span>
+            </div>
+          </div>
+        )}
+
         {order && (
           <div className="p-2 border-t border-blue-100 bg-blue-50 ">
             <div className="flex items-start">

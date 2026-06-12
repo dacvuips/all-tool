@@ -16,6 +16,7 @@ import { orderService, PaymentMethod, PaymentStatus } from "../../../lib/repo/or
 import { VideoDialog } from "../../shared/common/video-dialog";
 import { Button } from "../../shared/utilities/form";
 import { Spinner } from "../../shared/utilities/misc";
+import { CheckoutNormalPaymentForm } from "./components/checkout-normal-payment-form";
 import { CheckoutPayment } from "./components/checkout-payment";
 import { CheckoutPaymentForm } from "./components/checkout-payment-form";
 
@@ -61,8 +62,12 @@ function CheckoutComponent() {
     return <SePayPGCallbackView paymentStatus={paymentStatus} orderNumber={orderNumberFromUrl} />;
   }
 
-  // Chưa có đơn PAYMENT_PENDING → hiển thị form chọn credit + phương thức
-  if (!order) return <CheckoutPaymentForm />;
+  // Chưa có đơn PAYMENT_PENDING → hiển thị form thanh toán
+  if (!order) {
+    const checkoutType = router.query.type as string;
+    if (checkoutType === "normal") return <CheckoutNormalPaymentForm />;
+    return <CheckoutPaymentForm />;
+  }
 
   // Có đơn đang chờ thanh toán → hiển thị màn hình thanh toán
   return (
@@ -131,7 +136,10 @@ function SePayPGWaitingView() {
     if (!order?.id) return;
     setRetrying(true);
     try {
-      const data = await orderService.createSePayPGCheckout(order.subscriptionPlan, order.id);
+      const data =
+        order?.type === "NORMAL"
+          ? await orderService.createNormalSePayPGCheckout(order.totalAmount, order.id)
+          : await orderService.createSePayPGCheckout(order.subscriptionPlan, order.id);
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
       const form = document.createElement("form");
       form.method = "POST";
@@ -237,7 +245,12 @@ function SePayPGWaitingView() {
             className="py-3 w-full rounded-xl"
             text={t("Tạo đơn mới")}
             onClick={() => {
-              const typeParam = order?.type === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool";
+              const typeParam =
+                order?.type === "RECAPTCHA"
+                  ? "?type=recaptcha"
+                  : order?.type === "NORMAL"
+                  ? "?type=normal"
+                  : "?type=tool";
               router.replace(`/checkout${typeParam}`);
             }}
           />
@@ -252,6 +265,13 @@ function SePayPGWaitingView() {
       </div>
     </div>
   );
+}
+
+function checkoutTypeQueryParam(type?: string) {
+  if (type === "RECAPTCHA") return "?type=recaptcha";
+  if (type === "NORMAL") return "?type=normal";
+  if (type === "API_MEDIA") return "?type=api-media";
+  return "?type=tool";
 }
 
 /**
@@ -274,7 +294,7 @@ function SePayPGCallbackView({
 
   const [verifying, setVerifying] = useState(true);
   const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">("success");
-  const [orderType, setOrderType] = useState<"TOOL" | "RECAPTCHA">("TOOL");
+  const [orderType, setOrderType] = useState<"TOOL" | "RECAPTCHA" | "NORMAL">("TOOL");
 
   useEffect(() => {
     let cancelled = false;
@@ -301,7 +321,13 @@ function SePayPGCallbackView({
         if (resolved) {
           clearInterval(poll);
           if (!cancelled) {
-            setOrderType(order.type === "RECAPTCHA" ? "RECAPTCHA" : "TOOL");
+            setOrderType(
+              order.type === "RECAPTCHA"
+                ? "RECAPTCHA"
+                : order.type === "NORMAL"
+                ? "NORMAL"
+                : "TOOL"
+            );
             setFinalStatus(resolved);
             setVerifying(false);
           }
@@ -335,9 +361,13 @@ function SePayPGCallbackView({
       icon: <HiOutlineCheckCircle className="text-6xl text-green-500" />,
       lottie: "/assets/lottie/payment-success.json",
       title: t("Thanh toán thành công!"),
-      message: t("Đơn hàng của bạn đã được thanh toán thành công. Hệ thống đang xử lý đơn hàng."),
-      buttonText: t("Xem đơn hàng"),
-      buttonAction: () => router.push("/profile/orders-buy"),
+      message:
+        orderType === "NORMAL"
+          ? t("Nạp mPoint thành công! Số dư ví của bạn đã được cập nhật.")
+          : t("Đơn hàng của bạn đã được thanh toán thành công. Hệ thống đang xử lý đơn hàng."),
+      buttonText: orderType === "NORMAL" ? t("Về trang chủ") : t("Xem đơn hàng"),
+      buttonAction: () =>
+        orderType === "NORMAL" ? router.push("/") : router.push("/profile/orders-buy"),
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
     },
@@ -349,8 +379,7 @@ function SePayPGCallbackView({
         "Thanh toán không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
       ),
       buttonText: t("Thử lại"),
-      buttonAction: () =>
-        router.replace(`/checkout${orderType === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool"}`),
+      buttonAction: () => router.replace(`/checkout${checkoutTypeQueryParam(orderType)}`),
       bgColor: "bg-red-50",
       borderColor: "border-red-200",
     },
@@ -360,8 +389,7 @@ function SePayPGCallbackView({
       title: t("Đã hủy đơn hàng"),
       message: t("Bạn đã hủy thanh toán. Đơn hàng đã được hủy, bạn có thể tạo đơn hàng mới."),
       buttonText: t("Tạo đơn mới"),
-      buttonAction: () =>
-        router.replace(`/checkout${orderType === "RECAPTCHA" ? "?type=recaptcha" : "?type=tool"}`),
+      buttonAction: () => router.replace(`/checkout${checkoutTypeQueryParam(orderType)}`),
       bgColor: "bg-yellow-50",
       borderColor: "border-yellow-200",
     },
