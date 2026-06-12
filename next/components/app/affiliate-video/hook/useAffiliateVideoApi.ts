@@ -155,23 +155,6 @@ export interface GenerateVideoParams {
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64/bytes */
   onMediaUpdate?: (data: GeneratedVideoData) => void;
 }
-  /** Scene ID – dùng làm key lưu vào IndexedDB */
-  sceneId: string;
-  /** Prompt mô tả cảnh nối tiếp */
-  prompt?: string;
-  /** Video gốc cần nối */
-  video: { uri?: string | null; videoBytes?: string | null; mimeType: string };
-  /** Ảnh tham chiếu của scene kế tiếp (để hướng dẫn nối) */
-  image?: { imageBytes: string; mimeType: string };
-  /** Aspect ratio (tuỳ chọn) */
-  aspectRatio?: string;
-  /** Generate audio (tuỳ chọn, default true) */
-  generateAudio?: boolean;
-  /** Callback nhận progress 0-100 */
-  onProgress?: (pct: number) => void;
-  /** Callback nhận status message */
-  onStatusMessage?: (msg: string) => void;
-}
 
 export interface InsertSceneParams {
   /** Mô tả nội dung scene mới */
@@ -1317,6 +1300,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onError,
         onMediaUpdate,
       } = params;
+      const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
 
       try {
         onProgress?.(1);
