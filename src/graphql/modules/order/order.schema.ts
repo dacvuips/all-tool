@@ -8,11 +8,13 @@ const schema = gql`
     getMyOrders(limit: Int): [Order]
     getMyOrderStats: OrderStats
     getOneOrderByGuest: CheckoutOrder
+    getPendingNormalOrder: CheckoutOrder
     getOrdersByGuest(q: QueryGetListInput): OrderPageData
   }
 
   extend type Mutation {
     createOrder(creditAmount: Float!): CreateOrderResult
+    createNormalSePayPGCheckout(amount: Float!, orderId: ID): SePayPGCheckoutData
     updateOrder(orderId: ID!, data: UpdateOrderInput!): Order
     updateOrderStatus(orderId: ID!, status: OrderStatus!): Order
     cancelOrder(orderId: ID!, reason: String): Order
@@ -108,6 +110,7 @@ const schema = gql`
     tax: Float
     discount: Float
     totalAmount: Float
+    creditAmount: Float
     subscriptionPlan: String
     type: String
 
@@ -200,6 +203,7 @@ const schema = gql`
     tax: Float
     discount: Float
     totalAmount: Float
+    creditAmount: Float
     subscriptionPlan: String
     type: String
 

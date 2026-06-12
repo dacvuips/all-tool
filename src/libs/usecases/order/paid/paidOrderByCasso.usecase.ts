@@ -7,8 +7,9 @@ import { OrderCode } from "../../../../packages/order-code";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
-import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
+import { OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
+import { paidNormalOrderUsecase } from "./paidNormalOrder.usecase";
 
 export class PaidOrderByCassoCommand extends BaseCommand {
   @IsNotEmpty()
@@ -57,6 +58,26 @@ class PaidOrderByCassoUsecase extends BaseUsecase {
     // check order amount and amount from casso
     if (command.amount < order.totalAmount) {
       throw new ForbiddenError(t("Số tiền chuyển khoản không đúng với số tiền đơn hàng"));
+    }
+
+    if (order.type === OrderTypeEnum.NORMAL) {
+      return paidNormalOrderUsecase.execute(order, {
+        amount: command.amount,
+        transactionId: command.cassoId,
+        metaData: {
+          cassoId: command.cassoId,
+          bankId: command.bankId,
+          bankTransId: command.bankTransId,
+          description: command.description,
+          amount: command.amount,
+          corresponsiveName: command.corresponsiveName,
+          corresponsiveAccount: command.corresponsiveAccount,
+          corresponsiveBankId: command.corresponsiveBankId,
+          corresponsiveBankName: command.corresponsiveBankName,
+          bankName: command.bankName,
+          subAccId: command.subAccId,
+        },
+      });
     }
 
     // update order status

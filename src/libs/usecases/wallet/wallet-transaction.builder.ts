@@ -63,6 +63,18 @@ export class WalletTransactionBuilder {
     this._doc.description = description;
     return this.setAmount(amount, WalletTransactionSideEnum.IN).setDepositUserId(userId);
   }
+
+  depositFromOrder(input: {
+    amount: number;
+    description: string;
+    orderId: string;
+    orderCode: string;
+  }) {
+    const { amount, description, orderId } = input;
+    this._doc.type = WalletTransactionTypeEnum.BUY_PACKAGE;
+    this._doc.description = description;
+    return this.setAmount(amount, WalletTransactionSideEnum.IN).setOrderId(orderId);
+  }
   depositReward(input: { amount: number; description: string }) {
     const { amount, description } = input;
     this._doc.type = WalletTransactionTypeEnum.DEPOSIT;
@@ -148,6 +160,36 @@ export class WalletTransactionBuilder {
       .setOrderId(orderId);
   }
 
+  /** Trừ mPoint khi customer mua trending / chatbot / app item */
+  buyTrendingItem(input: {
+    amount: number;
+    description: string;
+    trendingId: string;
+    purchaseOrderId: string;
+  }) {
+    const { amount, description, trendingId, purchaseOrderId } = input;
+    this._doc.type = WalletTransactionTypeEnum.BUY_TRENDING_ITEM;
+    this._doc.description = description;
+    return this.setAmount(amount, WalletTransactionSideEnum.OUT)
+      .setTrendingId(trendingId)
+      .setTrendingPurchaseOrderId(purchaseOrderId);
+  }
+
+  /** Hoàn mPoint khi admin refund đơn mua trending item */
+  refundTrendingItem(input: {
+    amount: number;
+    description: string;
+    trendingId: string;
+    purchaseOrderId: string;
+  }) {
+    const { amount, description, trendingId, purchaseOrderId } = input;
+    this._doc.type = WalletTransactionTypeEnum.REFUND_TRENDING_ITEM;
+    this._doc.description = description;
+    return this.setAmount(amount, WalletTransactionSideEnum.IN)
+      .setTrendingId(trendingId)
+      .setTrendingPurchaseOrderId(purchaseOrderId);
+  }
+
   depositWithPaypal(input: {
     amount: number;
     description: string;
@@ -230,6 +272,19 @@ export class WalletTransactionBuilder {
     this._doc.specificInfo.push({
       key: WalletInfoKeyEnum.PAYPAL_TRANSACTION_ID,
       value: orderId,
+    });
+    return this;
+  }
+
+  private setTrendingId(trendingId: string) {
+    this._doc.specificInfo.push({ key: WalletInfoKeyEnum.TRENDING_ID, value: trendingId });
+    return this;
+  }
+
+  private setTrendingPurchaseOrderId(purchaseOrderId: string) {
+    this._doc.specificInfo.push({
+      key: WalletInfoKeyEnum.TRENDING_PURCHASE_ORDER_ID,
+      value: purchaseOrderId,
     });
     return this;
   }

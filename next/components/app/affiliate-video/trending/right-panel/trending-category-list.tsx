@@ -28,6 +28,10 @@ import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
+import {
+  TrendingPurchaseBadge,
+  useTrendingPurchaseFlow,
+} from "../../shared/use-trending-purchase-flow";
 import { NotifyText } from "../../../../shared/common/notify-text";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import {
@@ -63,13 +67,16 @@ const TrendingCard = ({
   onEdit,
   onDelete,
   onShowInfo,
+  purchaseOrderId,
 }: {
   item: TrendingPublicItem;
   categoryName?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   onEdit?: (item: TrendingPublicItem) => void;
   onDelete?: (item: TrendingPublicItem) => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
+  /** ID đơn PAID – hiển thị badge "Đã mua" */
+  purchaseOrderId?: string;
 }) => {
   const { t } = useTranslation();
   const toast = useToast();
@@ -156,11 +163,15 @@ const TrendingCard = ({
             </div>
           )}
           <div className="flex gap-1 items-center">
+            <TrendingPurchaseBadge orderId={purchaseOrderId} />
             <Button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (!customer) toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
-                else onUseTrending(item.id);
+                if (!customer) {
+                  toast.error(t("Vui lòng đăng nhập để sử dụng tính năng này"));
+                  return;
+                }
+                await onUseTrending(item);
               }}
               outline
               info
@@ -221,15 +232,20 @@ const CategorySection = ({
   loadCategories,
   onShowInfo,
   onOpenCreate,
+  loadPurchasesForItems,
+  purchaseMap,
 }: {
   category?: TrendingCategoryPublicItem;
   categoryId?: string;
   defaultExpanded?: boolean;
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   loadCategories: () => void;
   onShowInfo?: (item: TrendingPublicItem) => void;
   onOpenCreate?: () => void;
+  /** Batch load trạng thái mua sau khi load items */
+  loadPurchasesForItems?: (items: TrendingPublicItem[]) => Promise<void>;
+  purchaseMap?: Record<string, { orderId?: string }>;
 }) => {
   const { t } = useTranslation();
   const { getTrendingsByCategoryId } = useAffiliateVideoApi();
@@ -256,6 +272,7 @@ const CategorySection = ({
         );
         setItems(result.data);
         setTotal(result.total);
+        loadPurchasesForItems?.(result.data);
       } catch {
         setItems([]);
         setTotal(0);
@@ -264,7 +281,7 @@ const CategorySection = ({
         setHasLoaded(true);
       }
     },
-    [getTrendingsByCategoryId, effectiveCategoryId, searchText]
+    [getTrendingsByCategoryId, effectiveCategoryId, searchText, loadPurchasesForItems]
   );
 
   // Auto-load on mount and when search changes
@@ -336,6 +353,7 @@ const CategorySection = ({
                 categoryName={category?.name}
                 onUseTrending={onUseTrending}
                 onShowInfo={onShowInfo}
+                purchaseOrderId={purchaseMap?.[item.id]?.orderId}
               />
             ))}
           </div>
@@ -662,7 +680,8 @@ const CustomerTrendingSection = ({
   categories,
 }: {
   searchText?: string;
-  onUseTrending: (trendingId: string) => void;
+  /** Tab "Của tôi" – item owner, miễn phí khi dùng */
+  onUseTrending: (item: TrendingPublicItem) => void | Promise<void>;
   categories: TrendingCategoryPublicItem[];
 }) => {
   const { t } = useTranslation();
@@ -881,9 +900,10 @@ const CustomerTrendingSection = ({
 export const TrendingCategoryList = () => {
   const { t } = useTranslation();
   const toast = useToast();
-  const { getActiveTrendingCategoryList, getTrendingPromptById, createCustomerTrending } =
-    useAffiliateVideoApi();
+  const { getActiveTrendingCategoryList, createCustomerTrending } = useAffiliateVideoApi();
   const { patchConfig, setPendingPrompt, openSidebar } = useAffiliateVideoContext();
+  const { requestUse, loadPurchasesForItems, purchaseMap, PurchaseConfirmDialog } =
+    useTrendingPurchaseFlow();
 
   const [categories, setCategories] = useState<TrendingCategoryPublicItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -936,22 +956,47 @@ export const TrendingCategoryList = () => {
     return categories.filter((c) => c.id === activeCategoryId);
   }, [categories, activeCategoryId]);
 
-  // Khi user click "Dùng ngay" → gọi backend lấy prompt theo trending ID → gắn vào config
+  /**
+   * Khi user bấm "Dùng ngay":
+   * 1. useTrendingItem – thanh toán mPoint (nếu cần) + lấy prompt
+   * 2. Gắn prompt vào config sidebar
+   */
   const handleUseTrending = useCallback(
-    async (trendingId: string) => {
-      const prompt = await getTrendingPromptById(trendingId);
-      if (!prompt) return;
-      if (patchConfig) {
-        patchConfig({ tipContent: prompt, promptId: trendingId } as any);
-      }
-      if (setPendingPrompt) {
-        setPendingPrompt(prompt);
-      }
-      if (openSidebar) {
-        openSidebar();
+    async (item: TrendingPublicItem, isOwnItem = false) => {
+      try {
+        const result = await requestUse(item, isOwnItem);
+        if (!result) return;
+
+        if (result.charged) {
+          toast.success(t("Thanh toán thành công"));
+        }
+
+        const prompt = result.prompt;
+        if (!prompt) {
+          toast.error(t("Không lấy được prompt"));
+          return;
+        }
+
+        if (patchConfig) {
+          patchConfig({ tipContent: prompt, promptId: item.id, promptName: item.name } as any);
+        }
+        if (setPendingPrompt) {
+          setPendingPrompt(prompt);
+        }
+        if (openSidebar) {
+          openSidebar();
+        }
+      } catch (err: any) {
+        toast.error(err?.message || t("Không thể sử dụng item này"));
       }
     },
-    [getTrendingPromptById, patchConfig, setPendingPrompt, openSidebar]
+    [requestUse, patchConfig, setPendingPrompt, openSidebar, toast, t]
+  );
+
+  /** Wrapper cho tab "Của tôi" – owner miễn phí */
+  const handleUseOwnTrending = useCallback(
+    (item: TrendingPublicItem) => handleUseTrending(item, true),
+    [handleUseTrending]
   );
 
   // Handle info button click for non-customer cards
@@ -1042,7 +1087,7 @@ export const TrendingCategoryList = () => {
         {activeCategoryId === MY_TRENDING_ID ? (
           <CustomerTrendingSection
             searchText={debouncedSearch}
-            onUseTrending={handleUseTrending}
+            onUseTrending={handleUseOwnTrending}
             categories={categories}
           />
         ) : activeCategoryId === ALL_CATEGORY_ID ? (
@@ -1053,6 +1098,8 @@ export const TrendingCategoryList = () => {
             loadCategories={loadCategories}
             onShowInfo={handleShowInfo}
             onOpenCreate={() => setCreateDialogOpen(true)}
+            loadPurchasesForItems={loadPurchasesForItems}
+            purchaseMap={purchaseMap}
           />
         ) : (
           visibleCategories.map((cat, index) => (
@@ -1065,10 +1112,14 @@ export const TrendingCategoryList = () => {
               loadCategories={loadCategories}
               onShowInfo={handleShowInfo}
               onOpenCreate={() => setCreateDialogOpen(true)}
+              loadPurchasesForItems={loadPurchasesForItems}
+              purchaseMap={purchaseMap}
             />
           ))
         )}
       </div>
+
+      {PurchaseConfirmDialog}
 
       {/* Create Dialog (from header button) */}
       <CreateEditTrendingDialog

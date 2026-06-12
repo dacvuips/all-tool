@@ -1,7 +1,13 @@
 import { Types } from "mongoose";
 import { CrudService } from "../../../base/crudService";
 import { ObjectId } from "../../../packages/object-id";
-import { IOrder, ORDER_STATUS_OPTIONS, OrderStatusEnum, PaymentStatus } from "./order.interface";
+import {
+  IOrder,
+  ORDER_STATUS_OPTIONS,
+  OrderStatusEnum,
+  OrderTypeEnum,
+  PaymentStatus,
+} from "./order.interface";
 import { OrderModel } from "./order.model";
 
 class OrderService extends CrudService<IOrder> {
@@ -15,8 +21,19 @@ class OrderService extends CrudService<IOrder> {
     const existing = await OrderModel.findOne({
       customerId: new Types.ObjectId(customerId),
       paymentStatus: PaymentStatus.PAYMENT_PENDING,
+      type: { $ne: OrderTypeEnum.NORMAL },
     });
     return { order: existing || null };
+  }
+
+  /** Tìm đơn NORMAL đang PAYMENT_PENDING của customer (dùng riêng cho checkout nạp tiền). */
+  async findPendingNormalOrder(customerId: string): Promise<IOrder | null> {
+    if (!customerId) return null;
+    return await OrderModel.findOne({
+      customerId: new Types.ObjectId(customerId),
+      type: OrderTypeEnum.NORMAL,
+      paymentStatus: PaymentStatus.PAYMENT_PENDING,
+    });
   }
 
   async getOrderByNumber(orderNumber: string): Promise<IOrder | null> {

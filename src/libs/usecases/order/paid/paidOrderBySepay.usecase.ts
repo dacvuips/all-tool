@@ -10,9 +10,10 @@ import { OrderCode } from "../../../../packages/order-code";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
-import { OrderStatusEnum, PaymentStatus } from "../../../dal/order/order.interface";
+import { OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "../../../dal/order/order.interface";
 import { OrderModel } from "../../../dal/order/order.model";
 import { pubsub } from "../../../graphql/pub-sub";
+import { paidNormalOrderUsecase } from "./paidNormalOrder.usecase";
 
 export class PaidOrderBySepayCommand extends BaseCommand {
   @IsNotEmpty()
@@ -64,6 +65,27 @@ class PaidOrderBySepayUsecase extends BaseUsecase {
     // check order amount and amount from Sepay
     if (command.transferAmount < order.totalAmount) {
       throw new ForbiddenError(t("Số tiền chuyển khoản không đúng với số tiền đơn hàng"));
+    }
+
+    if (order.type === OrderTypeEnum.NORMAL) {
+      return paidNormalOrderUsecase.execute(order, {
+        amount: command.transferAmount,
+        transactionId: command.id.toString(),
+        metaData: {
+          id: command.id,
+          gateway: command.gateway,
+          transactionDate: command.transactionDate,
+          accountNumber: command.accountNumber,
+          code: command.code,
+          content: command.content,
+          transferType: command.transferType,
+          transferAmount: command.transferAmount,
+          accumulated: command.accumulated,
+          subAccount: command.subAccount,
+          referenceCode: command.referenceCode,
+          description: command.description,
+        },
+      });
     }
 
     // update order status

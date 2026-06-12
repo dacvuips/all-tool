@@ -265,6 +265,16 @@ export const useOptionsTranslation = () => {
       label: t("Nạp bằng Paypal"),
       color: "info",
     },
+    {
+      value: WalletTransactionTypeEnum.BUY_TRENDING_ITEM,
+      label: t("Mua trending item"),
+      color: "teal",
+    },
+    {
+      value: WalletTransactionTypeEnum.REFUND_TRENDING_ITEM,
+      label: t("Hoàn tiền trending item"),
+      color: "orange",
+    },
   ];
 
   const WALLET_TRANSACTION_SIDE_OPTIONS = [

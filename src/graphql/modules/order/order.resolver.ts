@@ -5,7 +5,11 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { BankModel, PaymentMethodEnum } from "../../../libs/dal/bank";
 import { SubscriptionPlanEnum } from "../../../libs/dal/customer";
-import { OrderStatusEnum, PaymentStatus } from "../../../libs/dal/order/order.interface";
+import {
+  OrderStatusEnum,
+  OrderTypeEnum,
+  PaymentStatus,
+} from "../../../libs/dal/order/order.interface";
 import orderService from "../../../libs/dal/order/order.service";
 import { settingService } from "../../../libs/dal/setting";
 import { Context } from "../../../libs/graphql";
@@ -65,6 +69,10 @@ const Query = {
   getOneOrderByGuest: async (root: any, args: any, context: Context) => {
     const result = await orderService.findPendingOrder(context.customerId);
     return result?.order ?? null;
+  },
+  getPendingNormalOrder: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    return orderService.findPendingNormalOrder(context.customerId);
   },
   // Lấy danh sách đơn hàng của khách vãng lai với param lọc theo shippingAddress phone, email.
   getOrdersByGuest: async (root: any, args: any, context: Context) => {
@@ -138,6 +146,96 @@ const Mutation = {
     const timeoutAt = moment().add(30, "minutes").toDate();
     await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
     return { order };
+  },
+
+  createNormalSePayPGCheckout: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const customerId = context.customerId;
+    const { amount, orderId } = args;
+
+    const MIN_AMOUNT = 100_000;
+    const MAX_AMOUNT = 50_000_000;
+
+    if (!amount || amount < MIN_AMOUNT || amount > MAX_AMOUNT) {
+      throw new Error(
+        `Số tiền phải từ ${MIN_AMOUNT.toLocaleString("vi-VN")} đến ${MAX_AMOUNT.toLocaleString("vi-VN")} VNĐ`
+      );
+    }
+
+    const creditRateSetting = await settingService.findOne({
+      key: "wa-mpoint-change-credit-balance",
+    });
+    const rate = Number(creditRateSetting?.value) || 1;
+    const creditAmount = Math.floor(amount / rate);
+
+    if (creditAmount <= 0) {
+      throw new Error("Số tiền không đủ để quy đổi mPoint");
+    }
+
+    let order: any;
+
+    if (orderId) {
+      const existing = await orderService.findOne({
+        _id: ObjectId(orderId),
+        customerId: ObjectId(customerId),
+        type: OrderTypeEnum.NORMAL,
+        paymentStatus: PaymentStatus.PAYMENT_PENDING,
+        paymentMethod: PaymentMethodEnum.SEPAY_PG,
+      });
+      if (!existing) throw new Error("Đơn hàng không khả dụng để retry");
+      order = existing;
+    } else {
+      const pendingNormal = await orderService.findPendingNormalOrder(customerId);
+      if (pendingNormal) {
+        throw new Error(
+          "Bạn có đơn nạp tiền đang chờ thanh toán. Vui lòng hoàn tất hoặc hủy đơn trước khi tạo đơn mới."
+        );
+      }
+
+      order = await orderService.create({
+        customerId: ObjectId(customerId),
+        type: OrderTypeEnum.NORMAL,
+        paymentMethod: PaymentMethodEnum.SEPAY_PG,
+        paymentInfo: { method: PaymentMethodEnum.SEPAY_PG },
+        paymentStatus: PaymentStatus.PAYMENT_PENDING,
+        status: OrderStatusEnum.CREATED,
+        totalAmount: amount,
+        creditAmount,
+        orderLogs: [
+          {
+            status: OrderStatusEnum.CREATED,
+            des: "Đơn nạp mPoint qua cổng SePay PG đã được tạo",
+            createdAt: new Date(),
+            creatorId: customerId,
+          },
+        ],
+        paymentLogs: [
+          {
+            status: PaymentStatus.PAYMENT_PENDING,
+            des: "Chờ thanh toán qua cổng SePay PG",
+            createdAt: new Date(),
+            creatorId: customerId,
+          },
+        ],
+      } as any);
+
+      const timeoutAt = moment().add(30, "minutes").toDate();
+      await ProcessExpiredOrderJob.create({ orderId: order._id }).schedule(timeoutAt).save();
+    }
+
+    const domain = config.get<string>("domain");
+    const orderNumber = order.orderNumber;
+    const finalAmount: number = order.totalAmount ?? amount;
+
+    return sePayPGService.createCheckoutFormData({
+      orderInvoiceNumber: orderNumber,
+      orderAmount: finalAmount,
+      orderDescription: `${orderNumber}`,
+      customerId: customerId,
+      successUrl: `${domain}/api/payment/sepay-pg/success/${orderNumber}`,
+      errorUrl: `${domain}/api/payment/sepay-pg/error/${orderNumber}`,
+      cancelUrl: `${domain}/api/payment/sepay-pg/cancel/${orderNumber}`,
+    });
   },
 
   updateOrder: async (root: any, args: any, context: Context) => {

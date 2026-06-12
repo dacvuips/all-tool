@@ -31,6 +31,7 @@ import { walletService } from "../../../dal/wallet";
 import { pubsub } from "../../../graphql/pub-sub";
 import { GetWalletInfo } from "../../wallet";
 import { WalletTransactionBuilder } from "../../wallet/wallet-transaction.builder";
+import { paidNormalOrderUsecase } from "./paidNormalOrder.usecase";
 
 /**
  * Command chứa payload IPN từ SePay PG
@@ -121,6 +122,8 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       );
     }
 
+    const orderType = (order as any).type;
+
     // ── Cập nhật đơn hàng: thanh toán thành công ─────────────────────────
     const orderUpdated = await OrderModel.findOneAndUpdate(
       { _id: order._id },
@@ -162,6 +165,26 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       { new: true }
     );
 
+    // ── Đơn NORMAL: nạp mPoint, không kích hoạt gói ─────────────────────
+    if (orderType === OrderTypeEnum.NORMAL) {
+      await OrderModel.findOneAndUpdate(
+        { _id: order._id },
+        {
+          $set: { status: OrderStatusEnum.CONFIRMED },
+          $push: {
+            orderLogs: {
+              status: OrderStatusEnum.PAYMENT_CONFIRMED,
+              des: "Nạp mPoint thành công",
+              createdAt: new Date(),
+            } as any,
+          },
+        },
+        { new: true }
+      );
+      await paidNormalOrderUsecase.fulfillMpointCredit(order);
+      return { success: true };
+    }
+
     // Chuyển trạng thái đơn sang PROCESSING
     await OrderModel.findOneAndUpdate(
       { _id: order._id },
@@ -180,7 +203,6 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
 
     // ── Kích hoạt gói subscription cho khách hàng ──────────────────────────
     const subscriptionPlan = (order as any).subscriptionPlan;
-    const orderType = (order as any).type;
 
     if (order.customerId && subscriptionPlan) {
       if (orderType === OrderTypeEnum.RECAPTCHA) {

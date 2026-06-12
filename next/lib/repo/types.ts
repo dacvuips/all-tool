@@ -228,6 +228,8 @@ export enum WalletTransactionTypeEnum {
   INTRODUCE = "INTRODUCE", // Giới thiệu khách hàng
   AFFILIATE_ORDER = "AFFILIATE_ORDER", // Đơn hàng Affiliate
   DEPOSIT_WITH_PAYPAL = "DEPOSIT_WITH_PAYPA", // Nạp tiền vào ví với paypal
+  BUY_TRENDING_ITEM = "BUY_TRENDING_ITEM", // Mua trending / chatbot / app item
+  REFUND_TRENDING_ITEM = "REFUND_TRENDING_ITEM", // Hoàn tiền mua trending item
 }
 
 export enum WalletTransactionSideEnum {
