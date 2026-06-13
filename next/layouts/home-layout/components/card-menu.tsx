@@ -21,16 +21,20 @@ import {
   RiVideoLine,
 } from "react-icons/ri";
 
+import {
+  getPackageStyle,
+  GooglePackagePopoverContent,
+} from "../../../components/admin/management/customer/components/customer-google-package-cell";
 import { SettingsModal } from "../../../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { Slideout, SlideoutProps } from "../../../components/shared/utilities/dialog/slideout";
 import { Button } from "../../../components/shared/utilities/form";
 import { Img } from "../../../components/shared/utilities/misc";
-import { formatDate } from "../../../lib/helpers/parser";
 import { useAlert } from "../../../lib/providers/alert-provider";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../lib/providers/global-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { credentialCustomerService } from "../../../lib/repo";
+import { SubscriptionPlanEnum } from "../../../lib/repo/customer/customer.repo";
 import { AiProviderKeyEnum } from "../../../lib/repo/product/productApp.repo";
 import { SelectLanguage } from "../../default-header";
 import { Category } from "./category";
@@ -333,7 +337,7 @@ export function CardMenu({ ...props }: SlideoutProps) {
 
           <Category onClose={props.onClose} />
           <CategorySelectLanguage />
-          <CategoryGroup />
+          {/* <CategoryGroup /> */}
         </Scrollbars>
       </Slideout>
 
@@ -368,19 +372,8 @@ function AIToolsSection({
   const router = useRouter();
 
   const pkg = customer?.googlePackage;
-  const videoCount = pkg?.videoCount ?? 0;
-  const videoLimit = pkg?.videoLimit ?? 0;
-  const imageCount = pkg?.imageCount ?? 0;
-  const imageLimit = pkg?.imageLimit ?? 0;
-  const requestCount = pkg?.requestCount ?? 0;
-  const requestLimit = pkg?.requestLimit ?? 0;
-  const videoPct = videoLimit > 0 ? Math.min((videoCount / videoLimit) * 100, 100) : 0;
-  const imagePct = imageLimit > 0 ? Math.min((imageCount / imageLimit) * 100, 100) : 0;
-  const requestPct = requestLimit > 0 ? Math.min((requestCount / requestLimit) * 100, 100) : 0;
-
-  const expiryDate = pkg?.expiryPackageDate;
-  const isExpired = expiryDate ? new Date(expiryDate) < new Date() : false;
-  const expiryText = expiryDate ? formatDate(expiryDate, "datetime") : null;
+  const subscription = pkg?.subscription || SubscriptionPlanEnum.FREE;
+  const packageStyle = getPackageStyle(subscription);
 
   const QUICK_ACTIONS = [
     {
@@ -419,211 +412,15 @@ function AIToolsSection({
     <div className="px-3 mt-4">
       {/* ── Section Header ── */}
       <div
-        className="flex items-center gap-2 px-1 mb-3"
-        style={{ borderLeft: "3px solid #8B5CF6", paddingLeft: "8px" }}
+        className={`flex gap-2 items-center px-1 mb-3 border-l-[3px] pl-2 ${packageStyle.border}`}
       >
-        <span className="text-sm font-bold" style={{ color: "#5B21B6" }}>
+        <span className={`text-sm font-bold ${packageStyle.text}`}>
           {t("AI Tools & Gói dịch vụ")}
         </span>
       </div>
 
-      {/* ── Package Usage Card ── */}
-      <div
-        className="relative overflow-hidden rounded-xl p-3.5"
-        style={{
-          background: "linear-gradient(135deg, #1E1B4B 0%, #312E81 50%, #4338CA 100%)",
-          boxShadow: "0 4px 20px -4px rgba(67, 56, 202, 0.4)",
-        }}
-      >
-        {/* Decorative circles */}
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: "80px",
-            height: "80px",
-            top: "-20px",
-            right: "-10px",
-            background: "rgba(255,255,255,0.06)",
-          }}
-        />
-        <div
-          className="absolute rounded-full"
-          style={{
-            width: "40px",
-            height: "40px",
-            bottom: "10px",
-            right: "30px",
-            background: "rgba(255,255,255,0.04)",
-          }}
-        />
-
-        {/* Package name */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div
-              className="flex items-center justify-center rounded-lg"
-              style={{
-                width: "28px",
-                height: "28px",
-                background: "rgba(255,255,255,0.15)",
-                backdropFilter: "blur(4px)",
-              }}
-            >
-              <span style={{ fontSize: "14px" }}>✨</span>
-            </div>
-            <div>
-              <div className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.6)" }}>
-                {t("Gói hiện tại")}
-              </div>
-              <div className="text-sm font-bold text-white leading-tight">
-                {pkg?.subscription || t("Dùng thử")}
-              </div>
-            </div>
-          </div>
-          {/* Status dot */}
-          <div
-            className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-            style={{
-              background: isExpired ? "rgba(239, 68, 68, 0.2)" : "rgba(52, 211, 153, 0.2)",
-            }}
-          >
-            <div
-              className="rounded-full"
-              style={{
-                width: "6px",
-                height: "6px",
-                background: isExpired ? "#EF4444" : "#34D399",
-              }}
-            />
-            <span
-              className="text-xs font-medium"
-              style={{ color: isExpired ? "#FCA5A5" : "#6EE7B7" }}
-            >
-              {isExpired ? t("Hết hạn") : t("Hoạt động")}
-            </span>
-          </div>
-        </div>
-
-        {/* Usage bars */}
-        <div className="space-y-2.5">
-          {/* Video usage */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-                🎬 Video
-              </span>
-              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
-                {videoCount}
-                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {videoLimit}</span>
-              </span>
-            </div>
-            <div
-              className="w-full rounded-full overflow-hidden"
-              style={{
-                height: "6px",
-                background: "rgba(255,255,255,0.1)",
-              }}
-            >
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${videoPct}%`,
-                  background:
-                    videoPct >= 90
-                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
-                      : "linear-gradient(90deg, #818CF8, #A78BFA)",
-                  transition: "width 0.6s ease",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Image usage */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-                🖼️ {t("Ảnh")}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
-                {imageCount}
-                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {imageLimit}</span>
-              </span>
-            </div>
-            <div
-              className="w-full rounded-full overflow-hidden"
-              style={{
-                height: "6px",
-                background: "rgba(255,255,255,0.1)",
-              }}
-            >
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${imagePct}%`,
-                  background:
-                    imagePct >= 90
-                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
-                      : "linear-gradient(90deg, #34D399, #6EE7B7)",
-                  transition: "width 0.6s ease",
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Request (Generation Text) usage */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.7)" }}>
-                📝 {t("Text")}
-              </span>
-              <span className="text-xs font-semibold" style={{ color: "rgba(255,255,255,0.9)" }}>
-                {requestCount}
-                <span style={{ color: "rgba(255,255,255,0.4)" }}> / {requestLimit}</span>
-              </span>
-            </div>
-            <div
-              className="w-full rounded-full overflow-hidden"
-              style={{
-                height: "6px",
-                background: "rgba(255,255,255,0.1)",
-              }}
-            >
-              <div
-                className="h-full rounded-full"
-                style={{
-                  width: `${requestPct}%`,
-                  background:
-                    requestPct >= 90
-                      ? "linear-gradient(90deg, #F59E0B, #EF4444)"
-                      : "linear-gradient(90deg, #F472B6, #EC4899)",
-                  transition: "width 0.6s ease",
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Expiry info */}
-        {expiryText && (
-          <div
-            className="flex items-center gap-1 mt-2.5 pt-2"
-            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <span className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
-              ⏱️
-            </span>
-            <span
-              className="text-xs"
-              style={{
-                color: isExpired ? "#FCA5A5" : "rgba(255,255,255,0.5)",
-                fontWeight: isExpired ? 600 : 400,
-              }}
-            >
-              {t("Hết hạn")}: {expiryText}
-            </span>
-          </div>
-        )}
-      </div>
+      {/* ── Package Details Card ── */}
+      <GooglePackagePopoverContent googlePackage={pkg} />
 
       {/* ── Quick Action Buttons ── */}
       <div className="grid grid-cols-3 gap-2 mt-3">
@@ -646,7 +443,7 @@ function AIToolsSection({
             }}
           >
             <div
-              className="flex items-center justify-center rounded-lg text-white"
+              className="flex justify-center items-center text-white rounded-lg"
               style={{
                 width: "32px",
                 height: "32px",
@@ -657,7 +454,7 @@ function AIToolsSection({
             >
               {action.icon}
             </div>
-            <span className="text-xs font-semibold text-gray-700 whitespace-nowrap leading-tight">
+            <span className="text-xs font-semibold leading-tight text-gray-700 whitespace-nowrap">
               {action.label}
             </span>
             {action.badge && (

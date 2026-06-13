@@ -10,6 +10,7 @@ import { DefaultHead } from "../default-head";
 import { DefaultHeader } from "../default-header";
 import { BackToTop } from "./components/back-to-top";
 import { Footer } from "./components/footer";
+import { GroupsWidget } from "./components/groups-widget";
 import { PopupNotifyDialog } from "./components/popup-notify-dialog";
 import { SelectCategoryGlobalDialog } from "./components/select-category-global-dialog";
 import { UpdatePhoneNumberDialog } from "./components/update-phone-number-dialog";
@@ -51,6 +52,7 @@ export function HomeLayout({ ...props }: LayoutProps) {
                 <ChatWidget senderRole="CUSTOMER" senderId={customer?._id} />
               </ChatProvider>
             )} */}
+            <GroupsWidget />
             <div className={`flex flex-col flex-1 grow`}>
               <ErrorCatcher>
                 <HomeLayoutContent {...props} />
