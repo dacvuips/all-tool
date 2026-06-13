@@ -24,7 +24,7 @@ import {
   buildReviewVideoGenerateParams,
   buildReviewVideoPrompt,
 } from "../utils/reviewSceneGenerationParams";
-import { downloadGeneratedImage, downloadGeneratedVideo } from "../../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage } from "../../shared/generatedMediaUtils";
 import { GeneratedImageData, GeneratedVideoData, useReviewApi } from "./useReviewApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
@@ -597,13 +597,12 @@ export function useReviewSceneMedia({
   // ─────────────────────────────────────────────────────────────────────────
   // handleDownloadImage
   // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
-  // Tên file: scene-{sceneNumber}-image.{ext}
+  // Tên file: {sceneNumber} (vd. 1, 2, 3)
   // ─────────────────────────────────────────────────────────────────────────
   const handleDownloadImage = async () => {
     if (!generatedImage) return;
     try {
-      const ext = generatedImage.mimeType.split("/")[1] || "png";
-      await downloadGeneratedImage(generatedImage, `scene-${scene.sceneNumber}-image.${ext}`);
+      await downloadSceneImage(generatedImage, scene.sceneNumber);
     } catch (err) {
       console.error("[handleDownloadImage] Error:", err);
     }

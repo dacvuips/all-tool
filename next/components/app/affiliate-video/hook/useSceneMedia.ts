@@ -15,7 +15,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { downloadGeneratedImage, downloadGeneratedVideo, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -532,13 +532,12 @@ export function useSceneMedia({
   // ─────────────────────────────────────────────────────────────────────────
   // handleDownloadImage
   // Chuyển base64 imageBytes → Blob → tạo URL tạm → trigger download file.
-  // Tên file: scene-{sceneNumber}-image.{ext}
+  // Tên file: {sceneNumber} (vd. 1, 2, 3)
   // ─────────────────────────────────────────────────────────────────────────
   const handleDownloadImage = async () => {
     if (!generatedImage) return;
     try {
-      const ext = generatedImage.mimeType.split("/")[1] || "png";
-      await downloadGeneratedImage(generatedImage, `scene-${scene.sceneNumber}-image.${ext}`);
+      await downloadSceneImage(generatedImage, scene.sceneNumber);
     } catch (err) {
       console.error("[handleDownloadImage] Error:", err);
     }

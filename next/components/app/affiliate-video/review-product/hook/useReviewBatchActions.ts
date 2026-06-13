@@ -24,7 +24,7 @@ import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
 } from "../utils/reviewSceneGenerationParams";
-import { generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
+import { buildSceneImageFileName, generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
 import { resolveObjectToPersonifyImageForApi } from "../utils/reviewFormImageUtils";
 import { useReviewApi } from "./useReviewApi";
 
@@ -340,6 +340,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
   }, []);
 
   /** Helper: download a blob and wait for browser to process it */
+  /** Helper: download a blob and wait for browser to process it */
   const downloadBlobSequentially = useCallback(
     async (blob: Blob, fileName: string, waitMs: number) => {
       const blobUrl = URL.createObjectURL(blob);
@@ -388,8 +389,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
         const { scene, img } = scenesWithImages[i];
         setDownloadLabel(`${i + 1}/${total}`);
 
-        const ext = img.mimeType.split("/")[1] || "png";
-        const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
+        const fileName = buildSceneImageFileName(scene.sceneNumber);
 
         // Convert base64 → Blob → download, then wait 2s before next
         const blob = await generatedImageToBlob(img);

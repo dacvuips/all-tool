@@ -21,7 +21,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
-import { generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
+import { buildSceneImageFileName, generatedImageToBlob, generatedVideoToBlob } from "../../shared/generatedMediaUtils";
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
@@ -332,6 +332,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
   }, []);
 
   /** Helper: download a blob and wait for browser to process it */
+  /** Helper: download a blob and wait for browser to process it */
   const downloadBlobSequentially = useCallback(
     async (blob: Blob, fileName: string, waitMs: number) => {
       const blobUrl = URL.createObjectURL(blob);
@@ -380,8 +381,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
         const { scene, img } = scenesWithImages[i];
         setDownloadLabel(`${i + 1}/${total}`);
 
-        const ext = img.mimeType.split("/")[1] || "png";
-        const fileName = `scene-${scene.sceneNumber}-image.${ext}`;
+        const fileName = buildSceneImageFileName(scene.sceneNumber);
 
         // Convert base64 → Blob → download, then wait 2s before next
         const blob = await generatedImageToBlob(img);

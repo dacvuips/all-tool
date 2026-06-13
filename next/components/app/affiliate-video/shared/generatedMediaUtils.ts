@@ -285,6 +285,11 @@ export async function generatedImageToBlob(img: GeneratedImageLike): Promise<Blo
   return uriToBlob(url);
 }
 
+/** Tên file ảnh theo số phân cảnh, vd. `1`, `2`, `3`. */
+export function buildSceneImageFileName(sceneNumber: number): string {
+  return `${sceneNumber}`;
+}
+
 export async function downloadGeneratedImage(
   img: GeneratedImageLike,
   fileName: string
@@ -293,13 +298,18 @@ export async function downloadGeneratedImage(
   triggerBlobDownload(blob, fileName);
 }
 
+/** Tải ảnh đã generate về máy — tên file = số phân cảnh (vd. `3`). */
+export async function downloadSceneImage(
+  img: GeneratedImageLike,
+  sceneNumber: number
+): Promise<void> {
+  await downloadGeneratedImage(img, buildSceneImageFileName(sceneNumber));
+}
+
 /** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */
 export async function generatedVideoToBlob(video: GeneratedVideoLike): Promise<Blob> {
   if (video.videoBytes) {
-    return base64ToBlob(
-      stripBase64Payload(video.videoBytes),
-      video.mimeType || "video/mp4"
-    );
+    return base64ToBlob(stripBase64Payload(video.videoBytes), video.mimeType || "video/mp4");
   }
 
   const uri = (video.videoUri || "").trim();
