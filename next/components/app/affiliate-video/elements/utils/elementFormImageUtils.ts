@@ -17,9 +17,23 @@ export function getImageDisplayName(img: ElementFormImage): string {
   return raw.replace(/\.[^./\\]+$/, "").trim();
 }
 
+/**
+ * Chuẩn hóa tên ảnh để match: nếu có dạng `{số}.{png|jpg|...}` thì chỉ lấy số trước dấu chấm.
+ */
+export function normalizeImageMatchToken(name: string): string {
+  const raw = (name || "").trim().toLowerCase();
+  if (!raw) return "";
+  const dotIdx = raw.indexOf(".");
+  if (dotIdx > 0) {
+    const prefix = raw.slice(0, dotIdx);
+    if (/^\d+$/.test(prefix)) return prefix;
+  }
+  return raw.replace(/\.[^./\\]+$/, "").trim();
+}
+
 /** Tên dùng để match trong prompt (bỏ phần mở rộng file). */
 export function getImageMatchToken(img: ElementFormImage): string {
-  return getImageDisplayName(img).toLowerCase();
+  return normalizeImageMatchToken(img.name || "");
 }
 
 /** Tab Thành phần: luôn 3 ô reference → Flow2 video_mode `component`. */

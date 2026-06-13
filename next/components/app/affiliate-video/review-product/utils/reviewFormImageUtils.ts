@@ -18,9 +18,23 @@ export function getImageDisplayName(img: ReviewFormImage): string {
   return raw.replace(/\.[^./\\]+$/, "").trim();
 }
 
+/**
+ * Chuẩn hóa tên ảnh để match: nếu có dạng `{số}.{png|jpg|...}` thì chỉ lấy số trước dấu chấm.
+ */
+export function normalizeImageMatchToken(name: string): string {
+  const raw = (name || "").trim().toLowerCase();
+  if (!raw) return "";
+  const dotIdx = raw.indexOf(".");
+  if (dotIdx > 0) {
+    const prefix = raw.slice(0, dotIdx);
+    if (/^\d+$/.test(prefix)) return prefix;
+  }
+  return raw.replace(/\.[^./\\]+$/, "").trim();
+}
+
 /** Tên dùng để match trong prompt (bỏ phần mở rộng file). */
 export function getImageMatchToken(img: ReviewFormImage): string {
-  return getImageDisplayName(img).toLowerCase();
+  return normalizeImageMatchToken(img.name || "");
 }
 
 /** Số ô ảnh trên mỗi scene theo chế độ nạp ảnh (Images to Video). */

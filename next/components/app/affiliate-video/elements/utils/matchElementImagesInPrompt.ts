@@ -3,10 +3,10 @@ import { ServiceImageEnum } from "../constants";
 import {
   elementFormImageToDataUrl,
   getArtStyleImages,
-  getImageDisplayName,
   getImageMatchToken,
   getOrderedElementImages,
   getSceneImageSlotCount,
+  normalizeImageMatchToken,
 } from "./elementFormImageUtils";
 
 /** 3 vị trí ảnh tham chiếu trên scene row */
@@ -17,11 +17,13 @@ const SCENE_SLOT_COUNT = 3;
 
 /** Vị trí đầu tiên của tên ảnh trong prompt (từ trên xuống), -1 nếu không có. */
 export function getTokenFirstIndexInPrompt(prompt: string, token: string): number {
-  if (!token) return -1;
+  const t = normalizeImageMatchToken(token);
+  if (!t) return -1;
   const lower = prompt.toLowerCase();
-  const t = token.toLowerCase();
   if (/^\d+$/.test(t)) {
-    const re = new RegExp(`(^|[^\\d])${t}([^\\d]|$)`);
+    const escaped = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    // Khớp số thuần hoặc số kèm đuôi file: 1, 1.png, 1.jpg, ...
+    const re = new RegExp(`(^|[^\\d])${escaped}(?:\\.[a-z0-9*]+)?([^\\d]|$)`, "i");
     const m = lower.match(re);
     if (!m || m.index === undefined) return -1;
     return m.index + (m[1]?.length ?? 0);
@@ -38,11 +40,8 @@ function findArtStyleImageByDisplayName(
   images: ElementFormImage[],
   name: string
 ): ElementFormImage | undefined {
-  const target = name.toLowerCase();
-  return images.find((img) => {
-    const token = getImageMatchToken(img);
-    return token === target || getImageDisplayName(img).toLowerCase() === target;
-  });
+  const target = normalizeImageMatchToken(name);
+  return images.find((img) => getImageMatchToken(img) === target);
 }
 
 /**
