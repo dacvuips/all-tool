@@ -2,20 +2,25 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { AffiliateVideoResponseSchema, StoryModeTypeEnum } from "../constanst";
+import { StoryModeTypeEnum } from "../constanst";
+import { AffiliateVideoOpenAIJsonSchema } from "./_chatgpt.constants";
+import { AffiliateVideoResponseSchema } from "./_gemini.constants";
 import {
   AffiliateVideoFormConfig,
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
-  callGeminiWithRetry,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
   checkRequestLimit,
   filterReferenceImages,
-  getAvailableGeminiClients,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   incrementRequestCount,
   interpolateTemplate,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
+  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
   resolveReferenceImagesForGemini,
@@ -83,7 +88,6 @@ export default [
           ? buildObjectPersonifyImageScriptNote(body.objectToPersonifyImages || [])
           : "";
 
-        const clients = await getAvailableGeminiClients();
         const storyModeTypes = req?.body?.config?.storyModeType;
 
         const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
@@ -105,22 +109,31 @@ It must make the scene feel visually rich, magical, and cinematic in a Pixar-lik
 Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
 Keep it concise, vivid, and scene-specific.
 
-- Return valid JSON only. Each scene
+- Return valid JSON only.
 CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
+Root JSON structure:
 {
   "topicTitle": "in {{language}}",
   "artStyle": "{{artStyle}}",
-  "camera": one exact value from CAMERA_TYPE,
   "characterName": "same as main name in {{language}}",
   "characterBaseDescription": "CHARACTER_ANCHOR",
   "environment": "ENVIRONMENT_ANCHOR",
   "voiceGender": "male or female",
+  "voiceTone": "",
+  "voiceStyle": "",
   "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "motionPrompt": "camera movement, character action, scene progression",   
-  "audio": "voice metada  ta in {{language}}",
-  "dialogue": " dialogue/narration in {{language}}"
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "camera": "one exact value from CAMERA_TYPE",
+      "motionPrompt": "camera movement, character action, scene progression",
+      "audio": "voice metadata in {{language}}",
+      "dialogue": "dialogue/narration in {{language}}",
+      "visualEffects": "one polished English sentence"
+    }
+  ]
 }
-CRITICAL RULE: Always keep character and environment identical.   
+CRITICAL RULE: Always keep character and environment identical across all scenes.
 `;
 
         // Thay thế placeholder trong text
@@ -133,34 +146,26 @@ CRITICAL RULE: Always keep character and environment identical.
           ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
           : [];
 
-        const response = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-3.5-flash",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    ...personifyImageBase64List.map((image) => ({
-                      inlineData: {
-                        data: image.imageBytes,
-                        mimeType: image.mimeType,
-                      },
-                    })),
-                    { text: interpolatedText },
-                  ],
-                },
-              ],
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: AffiliateVideoResponseSchema,
-              },
-            }),
-          "generation-scene",
-          clients
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = assertGeminiTextResponse(response);
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: await getGeminiSceneModel("SCENE"),
+            text: interpolatedText,
+            media: personifyImageBase64List,
+            label: "generation-scene",
+            responseSchema: AffiliateVideoResponseSchema,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text: interpolatedText,
+            images: personifyImageBase64List,
+            label: "generation-scene",
+            model: await getChatGPTSceneModel("SCENE"),
+            jsonSchema: AffiliateVideoOpenAIJsonSchema,
+          });
+        }
         const rawParsed = parseGeminiJsonResponse(responseText) as any;
         assertNonEmptyScenesArray(rawParsed.scenes);
 
@@ -198,7 +203,9 @@ CRITICAL RULE: Always keep character and environment identical.
                 ? `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
                   ""
                 : "",
-            audio: `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+            audio:
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+              "",
             dialogue: scene.dialogue || "",
           })),
         };

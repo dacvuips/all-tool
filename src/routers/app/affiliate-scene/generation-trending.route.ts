@@ -5,15 +5,19 @@ import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
 import { AffiliateVideoResponseSchema } from "../constanst";
+import { AffiliateVideoOpenAIJsonSchema } from "./_chatgpt.constants";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
-  callWithKeyRotation,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
   checkRequestLimit,
-  getAvailableGeminiClients,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   incrementRequestCount,
   interpolateTrendingTemplate,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
+  resolveAiSceneProvider,
   resolveArtStylePrompt,
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
@@ -64,7 +68,6 @@ export default [
               )}`
             : "";
 
-        const clients = await getAvailableGeminiClients();
         const trendingModeTypes = req?.body?.config?.trendingModeType;
         const IsTrendingSingle = trendingModeTypes === TrendingModeTypeEnum.single_variant;
         const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
@@ -86,41 +89,53 @@ It must make the scene feel visually rich, magical, and cinematic in a Pixar-lik
 Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
 Keep it concise, vivid, and scene-specific.
 
-- Return valid JSON only. Each scene
+- Return valid JSON only.
 CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
+Root JSON structure:
 {
   "topicTitle": "in {{language}}",
   "artStyle": "{{artStyle}}",
-  "camera": one exact value from CAMERA_TYPE,
   "characterName": "same as main name in {{language}}",
   "characterBaseDescription": "CHARACTER_ANCHOR",
   "environment": "ENVIRONMENT_ANCHOR",
   "voiceGender": "male or female",
+  "voiceTone": "",
+  "voiceStyle": "",
   "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "motionPrompt": "camera movement, character action, scene progression",   
-  "audio": "voice metada  ta in {{language}}",
-  "dialogue": " dialogue/narration in {{language}}"
+  "scenes": [
+    {
+      "sceneNumber": 1,
+      "camera": "one exact value from CAMERA_TYPE",
+      "motionPrompt": "camera movement, character action, scene progression",
+      "audio": "voice metadata in {{language}}",
+      "dialogue": "dialogue/narration in {{language}}",
+      "visualEffects": "one polished English sentence"
+    }
+  ]
 }
-CRITICAL RULE: Always keep character and environment identical.   
+CRITICAL RULE: Always keep character and environment identical across all scenes.
 `;
-        // Thay thế placeholder trong text
         const interpolatedText =
           interpolateTrendingTemplate(prompt, body.config) + productImageNote;
-        const response = await callWithKeyRotation(
-          clients,
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-3-flash-preview",
-              contents: interpolatedText,
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: AffiliateVideoResponseSchema,
-              },
-            }),
-          "generation-scene"
-        );
 
-        const responseText = assertGeminiTextResponse(response);
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
+
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: await getGeminiSceneModel("TRENDING"),
+            text: interpolatedText,
+            label: "generation-trending",
+            responseSchema: AffiliateVideoResponseSchema,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text: interpolatedText,
+            label: "generation-trending",
+            model: await getChatGPTSceneModel("TRENDING"),
+            jsonSchema: AffiliateVideoOpenAIJsonSchema,
+          });
+        }
         const rawParsed = parseGeminiJsonResponse(responseText) as any;
         assertNonEmptyScenesArray(rawParsed.scenes);
 
@@ -154,7 +169,8 @@ CRITICAL RULE: Always keep character and environment identical.
               : `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
                 "",
             audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+              "",
             dialogue: scene.dialogue || "",
           })),
         };

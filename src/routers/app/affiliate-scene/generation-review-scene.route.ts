@@ -2,23 +2,27 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { ReviewResponseSchema } from "../constanst";
+import { ReviewOpenAIJsonSchema } from "./_chatgpt.constants";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
   buildImageReferenceNotes,
-  callGeminiWithRetry,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
   checkRequestLimit,
   collectOrderedReviewReferenceImages,
-  getAvailableGeminiClients,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   getImageDisplayName,
   incrementRequestCount,
   interpolateTemplate,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
+  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveReferenceImagesForGemini,
   ReviewFormConfig,
 } from "./_shared";
+import { ReviewResponseSchema } from "../constanst";
 
 interface ReviewPromptScene {
   id: string;
@@ -101,38 +105,27 @@ Return valid JSON only with this structure:
 
         const interpolatedText = interpolateTemplate(prompt, body.config) + imageReferenceNote;
 
-        const clients = await getAvailableGeminiClients();
-        const response = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents:
-                imageBase64List.length > 0
-                  ? [
-                      {
-                        role: "user",
-                        parts: [
-                          ...imageBase64List.map((image) => ({
-                            inlineData: {
-                              data: image.imageBytes,
-                              mimeType: image.mimeType,
-                            },
-                          })),
-                          { text: interpolatedText },
-                        ],
-                      },
-                    ]
-                  : interpolatedText,
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: ReviewResponseSchema,
-              },
-            }),
-          "generation-review",
-          clients
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = assertGeminiTextResponse(response);
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: await getGeminiSceneModel("REVIEW_SCENE"),
+            text: interpolatedText,
+            media: imageBase64List.length > 0 ? imageBase64List : undefined,
+            label: "generation-review",
+            responseSchema: ReviewResponseSchema,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text: interpolatedText,
+            images: imageBase64List,
+            label: "generation-review",
+            model: await getChatGPTSceneModel("REVIEW_SCENE"),
+            jsonSchema: ReviewOpenAIJsonSchema,
+            jsonSchemaName: "review_scene_response",
+          });
+        }
         const rawParsed = parseGeminiJsonResponse(responseText) as any;
         assertNonEmptyScenesArray(rawParsed.scenes);
 
@@ -161,7 +154,8 @@ Return valid JSON only with this structure:
             }`,
             imageGenPrompt: `[${scene.camera}] POV shot: ${scene.visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
             audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+              "",
             dialogue: scene.dialogue || "",
           })),
         };

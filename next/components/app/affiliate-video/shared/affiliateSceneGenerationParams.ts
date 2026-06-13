@@ -6,6 +6,7 @@ import type { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { productImageUrlsToApiImages } from "../elements/utils/elementFormImageUtils";
 import type { GenerateImageParams, GenerateVideoParams } from "../hook/useAffiliateVideoApi";
 import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
+import { normalizeSceneAudioField } from "./sceneAudioUtils";
 
 export type AffiliateScriptLike =
   | {
@@ -30,17 +31,18 @@ export function buildAffiliateVideoPrompt(
   isStitch?: boolean
 ): string {
   const audioDesc = buildAffiliateAudioDesc(scriptData);
+  const audioText = normalizeSceneAudioField(scene.audio);
   if (isStitch) {
     return scene.voiceDisable
       ? `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}`
       : `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}, ${
-          scene.audio ? `[AUDIO]${scene.audio}` : ""
+          audioText ? `[AUDIO]${audioText}` : ""
         }, ${scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""}`;
   }
   return scene.voiceDisable
     ? `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}`
     : `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}, ${
-        scene.audio ? `[AUDIO]${scene.audio}` : ""
+        audioText ? `[AUDIO]${audioText}` : ""
       }, ${scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""}`;
 }
 

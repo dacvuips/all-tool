@@ -5,17 +5,16 @@ import logger from "../../../helpers/logger";
 
 import { Context } from "../../../libs/graphql";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
-  callGeminiWithRetry,
+  buildObjectPersonifyImageScriptNote,
+  buildProductImageScriptNote,
+  callGeminiJsonGenerate,
   checkRequestLimit,
-  getAvailableGeminiClients,
+  filterReferenceImages,
+  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
   resolveArtStylePrompt,
-  buildObjectPersonifyImageScriptNote,
-  buildProductImageScriptNote,
-  filterReferenceImages,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
 
@@ -257,7 +256,6 @@ export default [
 
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
-        const clients = await getAvailableGeminiClients();
 
         const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages || []);
         const usePersonifyImage = personifyImageRefs.length > 0;
@@ -303,37 +301,14 @@ export default [
           personifyImageNote +
           productImageNote;
 
-        const response = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        data: body.videoBase64,
-                        mimeType,
-                      },
-                    },
-                    {
-                      text,
-                    },
-                  ],
-                },
-              ],
-              config: {
-                temperature: 0.4,
-                responseMimeType: "application/json",
-                responseSchema: CopyVideoAnalysisResponseSchema,
-              },
-            }),
-          "copy-video-analysis",
-          clients
-        );
-
-        const responseText = assertGeminiTextResponse(response);
+        const responseText = await callGeminiJsonGenerate({
+          model: await getGeminiSceneModel("COPY_VIDEO"),
+          text,
+          media: [{ imageBytes: body.videoBase64, mimeType }],
+          label: "copy-video-analysis",
+          responseSchema: CopyVideoAnalysisResponseSchema,
+          temperature: 0.4,
+        });
         const parsed = parseGeminiJsonResponse(responseText);
         assertNonEmptyScenesArray(parsed.scenes);
 
