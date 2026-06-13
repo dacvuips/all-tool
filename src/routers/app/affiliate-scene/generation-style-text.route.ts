@@ -6,14 +6,16 @@ import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyTextField,
-  callWithKeyRotation,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
   checkRequestLimit,
-  getAvailableGeminiClients,
   incrementRequestCount,
   parseGeminiJsonResponse,
+  resolveAiSceneProvider,
 } from "./_shared";
+import { GenerationStyleTextOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
+import { GEMINI_MODELS } from "./_gemini.constants";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
 const GenerationStyleTextResponseSchema = {
@@ -54,45 +56,34 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
 
-        const clients = await getAvailableGeminiClients();
-
-        // Fetch image URLs → base64
         const productImageUrls = body.images?.filter(Boolean) || [];
         const imageBase64List = await Promise.all(
           productImageUrls.map((url) => fetchImageAsBase64(url))
         );
 
-        const response = await callWithKeyRotation(
-          clients,
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-3-flash-preview",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    ...imageBase64List.map((image) => ({
-                      inlineData: {
-                        data: image.imageBytes,
-                        mimeType: image.mimeType,
-                      },
-                    })),
-                    {
-                      text: prompt,
-                    },
-                  ],
-                },
-              ],
-              config: {
-                temperature: 0.4,
-                responseMimeType: "application/json",
-                responseSchema: GenerationStyleTextResponseSchema,
-              },
-            }),
-          "generation-style-text"
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = assertGeminiTextResponse(response);
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: GEMINI_MODELS.STYLE_TEXT,
+            text: prompt,
+            media: imageBase64List,
+            label: "generation-style-text",
+            responseSchema: GenerationStyleTextResponseSchema,
+            temperature: 0.4,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text: prompt,
+            images: imageBase64List,
+            label: "generation-style-text",
+            model: CHATGPT_MODELS.STYLE_TEXT,
+            jsonSchema: GenerationStyleTextOpenAIJsonSchema,
+            jsonSchemaName: "generation_style_text_response",
+            temperature: 0.4,
+          });
+        }
         const parsed = parseGeminiJsonResponse(responseText);
         assertNonEmptyTextField(parsed.text);
 

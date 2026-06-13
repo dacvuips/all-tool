@@ -5,19 +5,21 @@ import logger from "../../../helpers/logger";
 
 import { Context } from "../../../libs/graphql";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
-  callGeminiWithRetry,
-  checkRequestLimit,
-  getAvailableGeminiClients,
-  incrementRequestCount,
-  parseGeminiJsonResponse,
-  resolveArtStylePrompt,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
+  checkRequestLimit,
   filterReferenceImages,
+  incrementRequestCount,
+  parseGeminiJsonResponse,
+  resolveAiSceneProvider,
+  resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
+import { CopyVideoAnalysisOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
+import { GEMINI_MODELS } from "./_gemini.constants";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
 const CopyVideoAnalysisResponseSchema = {
@@ -257,7 +259,6 @@ export default [
 
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
-        const clients = await getAvailableGeminiClients();
 
         const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages || []);
         const usePersonifyImage = personifyImageRefs.length > 0;
@@ -303,37 +304,29 @@ export default [
           personifyImageNote +
           productImageNote;
 
-        const response = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-2.5-flash",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        data: body.videoBase64,
-                        mimeType,
-                      },
-                    },
-                    {
-                      text,
-                    },
-                  ],
-                },
-              ],
-              config: {
-                temperature: 0.4,
-                responseMimeType: "application/json",
-                responseSchema: CopyVideoAnalysisResponseSchema,
-              },
-            }),
-          "copy-video-analysis",
-          clients
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = assertGeminiTextResponse(response);
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: GEMINI_MODELS.COPY_VIDEO,
+            text,
+            media: [{ imageBytes: body.videoBase64, mimeType }],
+            label: "copy-video-analysis",
+            responseSchema: CopyVideoAnalysisResponseSchema,
+            temperature: 0.4,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text,
+            videos: [{ imageBytes: body.videoBase64, mimeType }],
+            label: "copy-video-analysis",
+            model: CHATGPT_MODELS.COPY_VIDEO,
+            jsonSchema: CopyVideoAnalysisOpenAIJsonSchema,
+            jsonSchemaName: "copy_video_analysis_response",
+            temperature: 0.4,
+          });
+        }
         const parsed = parseGeminiJsonResponse(responseText);
         assertNonEmptyScenesArray(parsed.scenes);
 

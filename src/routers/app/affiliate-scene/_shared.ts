@@ -1,26 +1,20 @@
-import { GoogleGenAI } from "@google/genai";
 import logger from "../../../helpers/logger";
-import redis from "../../../helpers/redis";
-import { ForbiddenError } from "../../../libs/core";
 import { ArtStyleModel } from "../../../libs/dal/art-style/art-style.model";
 import { credentialService } from "../../../libs/dal/credential";
 import { CustomerModel } from "../../../libs/dal/customer";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
-import {
-  decryptProviderSecret,
-  encryptProviderSecret,
-} from "../../../packages/encryption/encrypt-provider";
+import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
 import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { CaptchaResponseData } from "../../helpers/validateApiKey";
+import { parseGeminiCredentialKeys } from "./_gemini";
 
-const AI_MAX_RETRIES = 5;
-const REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED = "gemini:daily_quota_exhausted";
-
-export interface GeminiClientEntry {
-  client: InstanceType<typeof GoogleGenAI>;
-  apiKey: string;
-}
+export * from "./_ai-retry";
+export * from "./_ai-scene";
+export * from "./_chatgpt";
+export * from "./_chatgpt.constants";
+export * from "./_gemini";
+export * from "./_gemini.constants";
 
 /** Generate a simple UUID v4 string */
 export function generateUUID(): string {
@@ -30,495 +24,81 @@ export function generateUUID(): string {
     return v.toString(16);
   });
 }
+
 export enum TrendingModeTypeEnum {
   single_variant = "single_variant",
   story_script = "story_script",
 }
-/**
- * Helper: Gọi lại AI API tối đa AI_MAX_RETRIES lần nếu có lỗi.
- * Chỉ throw error nếu tất cả các lần gọi đều thất bại.
- */
-export async function retryAICall<T>(fn: () => Promise<T>, label: string): Promise<T> {
-  let lastError: any;
-  for (let attempt = 1; attempt <= AI_MAX_RETRIES; attempt++) {
+
+/** Gỡ markdown fence và cắt JSON object/array từ text AI. */
+export function extractJsonTextFromAIResponse(text: string): string {
+  let s = text.trim();
+  const fenceMatch = s.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (fenceMatch?.[1]) {
+    s = fenceMatch[1].trim();
+  }
+  if (s.startsWith("{") || s.startsWith("[")) return s;
+  const firstBrace = s.indexOf("{");
+  const lastBrace = s.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    return s.slice(firstBrace, lastBrace + 1);
+  }
+  const firstBracket = s.indexOf("[");
+  const lastBracket = s.lastIndexOf("]");
+  if (firstBracket !== -1 && lastBracket > firstBracket) {
+    return s.slice(firstBracket, lastBracket + 1);
+  }
+  return s;
+}
+
+/** Parse JSON từ AI text (Gemini/ChatGPT); hỗ trợ markdown fence và JSON nhúng trong text. */
+export function parseGeminiJsonResponse(responseText: string): Record<string, unknown> {
+  const candidates = [responseText.trim(), extractJsonTextFromAIResponse(responseText)];
+  const seen = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
     try {
-      return await fn();
-    } catch (err: any) {
-      lastError = err;
-      logger.warn(
-        `[${label}] AI call failed (attempt ${attempt}/${AI_MAX_RETRIES}): ${err?.message}`
-      );
-
-      // Không retry nếu lỗi 403 (permission/reCAPTCHA), 401 (auth), hoặc 429 (hết quota) vì retry cũng không giải quyết được
-      const errStatus = err?.statusCode || err?.status;
-      if (errStatus === 403 || errStatus === 401 || errStatus === 429) {
-        logger.warn(`[${label}] Lỗi không thể retry (${errStatus}), dừng ngay.`);
-        break;
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) {
+        return { scenes: parsed };
       }
-
-      if (attempt === AI_MAX_RETRIES) {
-        break;
-      }
-      // Wait before retrying (exponential backoff: 1s, 2s, 4s, 8s)
-      await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt - 1)));
-    }
-  }
-  throw lastError;
-}
-
-/** Helper: Tạo GoogleGenAI client dùng Gemini API Key */
-function createGeminiClient(apiKey: string) {
-  return new GoogleGenAI({ apiKey });
-}
-
-/**
- * Helper: Parse danh sách API keys từ credential value.
- * Hỗ trợ nhiều key phân tách bằng dấu phẩy hoặc xuống dòng.
- */
-function parseMultipleKeys(encryptedValue: string): string[] {
-  const decrypted = decryptProviderSecret(encryptedValue);
-  if (!decrypted) return [];
-  return decrypted
-    .split(/[,\n]+/)
-    .map((k) => k.trim())
-    .filter((k) => k.length > 0);
-}
-
-/**
- * Helper chung: Lấy danh sách credential Gemini API keys của customer.
- * Trả về array GoogleGenAI clients (1 per key).
- * Throw error nếu chưa cấu hình key.
- */
-export async function getAdminGeminiClients(): Promise<InstanceType<typeof GoogleGenAI>[]> {
-  const credentialDoc = (await credentialService.findOne({
-    key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-    isAdminCredential: true,
-  })) as any;
-  const credential = credentialDoc?._doc;
-  if (!credential?.value) {
-    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
-    err.statusCode = 403;
-    throw err;
-  }
-  const apiKeys = parseMultipleKeys(credential.value);
-  if (apiKeys.length === 0) {
-    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
-    err.statusCode = 403;
-    throw err;
-  }
-  // Xáo trộn ngẫu nhiên thứ tự API keys để phân tải đều
-  for (let i = apiKeys.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [apiKeys[i], apiKeys[j]] = [apiKeys[j], apiKeys[i]];
-  }
-  return apiKeys.map((k) => createGeminiClient(k));
-}
-
-// ──────────────── Redis daily quota helpers ────────────────
-
-/**
- * Tính số giây còn lại cho đến 00:00 Pacific Time (PST/PDT).
- */
-function getSecondsUntilMidnightPacific(): number {
-  const now = new Date();
-  const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
-  const pacificNow = new Date(pacificStr);
-  const h = pacificNow.getHours();
-  const m = pacificNow.getMinutes();
-  const s = pacificNow.getSeconds();
-  const secondsSinceMidnight = h * 3600 + m * 60 + s;
-  const secondsInDay = 24 * 3600;
-  return secondsSinceMidnight === 0 ? secondsInDay : secondsInDay - secondsSinceMidnight;
-}
-
-/**
- * Kiểm tra xem error có phải lỗi 403 CONSUMER_SUSPENDED (key bị Google suspend vĩnh viễn).
- */
-function isConsumerSuspendedError(err: any): boolean {
-  const numericCode = err?.code || err?.statusCode || err?.httpCode;
-  const msg = (err?.message || "").toString();
-  return (
-    (numericCode === 403 || Number(err?.status) === 403 || msg.includes("403")) &&
-    (msg.includes("CONSUMER_SUSPENDED") || msg.includes("has been suspended"))
-  );
-}
-
-/**
- * Xóa API key bị CONSUMER_SUSPENDED khỏi danh sách credential trong DB.
- * Đọc credential hiện tại, giải mã, loại bỏ key bị suspended, mã hóa lại và lưu vào DB.
- */
-async function removeSuspendedKeyFromDB(suspendedApiKey: string): Promise<void> {
-  try {
-    const credentialDoc = (await credentialService.findOne({
-      key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-      isAdminCredential: true,
-    })) as any;
-    const credential = credentialDoc?._doc;
-    if (!credential?.value) return;
-
-    const decryptedValue = decryptProviderSecret(credential.value);
-    if (!decryptedValue) return;
-
-    // Tách danh sách key, loại bỏ key bị suspended
-    const allKeys = decryptedValue
-      .split(/[,\n]+/)
-      .map((k: string) => k.trim())
-      .filter((k: string) => k.length > 0);
-
-    const remainingKeys = allKeys.filter((k: string) => k !== suspendedApiKey);
-
-    if (remainingKeys.length === allKeys.length) {
-      // Key không tìm thấy trong danh sách (có thể đã bị xóa trước đó)
-      return;
-    }
-
-    if (remainingKeys.length === 0) {
-      logger.error(
-        `[removeSuspendedKeyFromDB] Không thể xóa key ***${suspendedApiKey.slice(
-          -6
-        )} vì đây là key cuối cùng.`
-      );
-      return;
-    }
-
-    // Mã hóa lại danh sách key mới (không có key bị suspended) và cập nhật DB
-    const newValue = remainingKeys.join(",");
-    const encryptedNewValue = encryptProviderSecret(newValue);
-
-    await credentialService.model.updateOne(
-      { _id: credential._id },
-      { $set: { value: encryptedNewValue } }
-    );
-
-    logger.warn(
-      `[removeSuspendedKeyFromDB] Đã xóa API key ***${suspendedApiKey.slice(
-        -6
-      )} khỏi DB (CONSUMER_SUSPENDED). Còn lại ${remainingKeys.length}/${allKeys.length} keys.`
-    );
-  } catch (dbErr: any) {
-    logger.error(`[removeSuspendedKeyFromDB] Lỗi khi cập nhật DB: ${dbErr?.message}`);
-  }
-}
-
-/**
- * Kiểm tra xem error có phải lỗi daily quota free-tier (limit: 20) hay không.
- */
-function isDailyQuotaExhaustedError(err: any): boolean {
-  const msg = (err?.message || "").toString();
-  return (
-    msg.includes("limit: 20") ||
-    msg.includes('"quotaValue":"20"') ||
-    msg.includes('\\"quotaValue\\":\\"20\\"')
-  );
-}
-
-/**
- * Thêm API key vào danh sách blacklist trên Redis (hết daily quota).
- * Key sẽ tự động hết hạn vào 00:00 Pacific Time.
- */
-async function blacklistGeminiKeyForDay(apiKey: string): Promise<void> {
-  try {
-    const ttl = getSecondsUntilMidnightPacific();
-    await redis.sadd(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED, apiKey);
-    await redis.expire(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED, ttl);
-    logger.info(
-      `[blacklistGeminiKey] API key ***${apiKey.slice(
-        -6
-      )} đã bị blacklist ${ttl}s (đến 00:00 Pacific).`
-    );
-  } catch (redisErr: any) {
-    logger.error(`[blacklistGeminiKey] Lỗi Redis: ${redisErr?.message}`);
-  }
-}
-
-/**
- * Lấy danh sách API keys đang bị blacklist (hết daily quota) từ Redis.
- */
-export async function getBlacklistedGeminiKeys(): Promise<Set<string>> {
-  try {
-    const members = await redis.smembers(REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED);
-    return new Set(members);
-  } catch (redisErr: any) {
-    logger.error(`[getBlacklistedGeminiKeys] Lỗi Redis: ${redisErr?.message}`);
-    return new Set();
-  }
-}
-
-/**
- * Lấy danh sách Gemini clients còn available (loại bỏ key đã bị blacklist daily quota).
- * Throw error nếu không còn key nào khả dụng.
- */
-export async function getAvailableGeminiClients(): Promise<GeminiClientEntry[]> {
-  const credentialDoc = (await credentialService.findOne({
-    key: AiProviderKeyEnum.GOOGLE_GEMINI_KEY,
-    isAdminCredential: true,
-  })) as any;
-  const credential = credentialDoc?._doc;
-  if (!credential?.value) {
-    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
-    err.statusCode = 403;
-    throw err;
-  }
-  const apiKeys = parseMultipleKeys(credential.value);
-  if (apiKeys.length === 0) {
-    const err: any = new Error("Chưa cấu hình Google Gemini API Key");
-    err.statusCode = 403;
-    throw err;
-  }
-
-  // Lấy danh sách key bị blacklist từ Redis (daily quota)
-  const blacklistedKeys = await getBlacklistedGeminiKeys();
-  const availableKeys = apiKeys.filter((k) => !blacklistedKeys.has(k));
-
-  if (availableKeys.length === 0) {
-    const err: any = new Error(
-      `Tất cả ${apiKeys.length} API keys đều đã hết daily quota (free tier). Vui lòng đợi đến 00:00 Pacific Time.`
-    );
-    err.statusCode = 429;
-    throw err;
-  }
-
-  logger.info(
-    `[getAvailableGeminiClients] ${availableKeys.length}/${apiKeys.length} keys khả dụng (${blacklistedKeys.size} hết quota).`
-  );
-
-  // Xáo trộn ngẫu nhiên
-  for (let i = availableKeys.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [availableKeys[i], availableKeys[j]] = [availableKeys[j], availableKeys[i]];
-  }
-
-  return availableKeys.map((k) => ({ client: createGeminiClient(k), apiKey: k }));
-}
-
-/**
- * (Backward compat) Lấy 1 GoogleGenAI client duy nhất (key đầu tiên).
- */
-export async function getGeminiClient(): Promise<InstanceType<typeof GoogleGenAI>> {
-  const clients = await getAdminGeminiClients();
-  return clients[0];
-}
-
-/**
- * Lấy GoogleGenAI client cho customer (hiện tại dùng admin key chung).
- * customerId được nhận nhưng chưa dùng vì chưa có customer-specific Gemini key.
- */
-export async function getCustomerGeminiClient(
-  _customerId: string
-): Promise<InstanceType<typeof GoogleGenAI>> {
-  return getGeminiClient();
-}
-
-/**
- * Kiểm tra xem error có phải lỗi 429 / quota exceeded không.
- * Gemini SDK trả về: { code: 429, status: "RESOURCE_EXHAUSTED", message: "You exceeded your current quota..." }
- */
-function isRateLimitOrQuotaError(err: any): boolean {
-  const numericCode = err?.code || err?.statusCode || err?.httpCode;
-  if (numericCode === 429) return true;
-
-  const statusStr = (err?.status || "").toString().toUpperCase();
-  if (statusStr === "RESOURCE_EXHAUSTED") return true;
-  if (Number(err?.status) === 429) return true;
-
-  const msg = (err?.message || "").toLowerCase();
-  if (
-    msg.includes("quota") ||
-    msg.includes("rate limit") ||
-    msg.includes("resource_exhausted") ||
-    msg.includes("429")
-  )
-    return true;
-
-  return false;
-}
-
-/** Nhận diện trang lỗi Cloudflare 524 (HTML hoặc status code). */
-export function isCloudflare524Html(text: string): boolean {
-  if (!text) return false;
-  return (
-    text.includes("524: A timeout occurred") ||
-    text.includes("Error code 524") ||
-    (text.includes("cf-error-details") && text.includes("524"))
-  );
-}
-
-/**
- * Kiểm tra timeout / Cloudflare 524 / gateway timeout — có thể retry.
- */
-export function isTimeoutOr524Error(err: any): boolean {
-  const numericCode = err?.code || err?.statusCode || err?.httpCode;
-  if (numericCode === 524 || numericCode === 504 || numericCode === 408) return true;
-  if (Number(err?.status) === 524 || Number(err?.status) === 504) return true;
-
-  const msg = (err?.message || "").toString();
-  if (
-    msg.includes("524") ||
-    msg.includes("504") ||
-    msg.includes("ETIMEDOUT") ||
-    msg.includes("ECONNRESET") ||
-    msg.includes("A timeout occurred") ||
-    msg.includes("timeout") ||
-    isCloudflare524Html(msg)
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * Kiểm tra xem error có phải lỗi 503 (Service Unavailable) không.
- */
-function isServiceUnavailableError(err: any): boolean {
-  const numericCode = err?.code || err?.statusCode || err?.httpCode;
-  if (numericCode === 503) return true;
-  if (Number(err?.status) === 503) return true;
-
-  const msg = (err?.message || "").toLowerCase();
-  if (msg.includes("503") || msg.includes("service unavailable")) return true;
-
-  return false;
-}
-
-/**
- * Gọi AI API với cơ chế xoay vòng nhiều API key:
- * - Nếu 429 / quota exceeded → nhảy sang API key tiếp theo.
- * - Nếu 503 / timeout / 524 → chờ 2-3s rồi nhảy sang API key tiếp theo.
- * - Các lỗi khác → throw ngay.
- * - Tối đa thử 30 lần. Nếu quá 30 lần → throw error ngay.
- */
-const MAX_KEY_RETRIES = 30;
-const RETRY_DELAY_MS_MIN = 2000;
-const RETRY_DELAY_MS_MAX = 3000;
-
-export async function callWithKeyRotation<T>(
-  entries: GeminiClientEntry[],
-  fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
-  label: string
-): Promise<T> {
-  let lastError: any;
-  const exhaustedKeys = new Set<string>();
-  let keyIdx = 0;
-  let attempts = 0;
-
-  while (exhaustedKeys.size < entries.length) {
-    const { client, apiKey } = entries[keyIdx];
-    const keyLabel = `key ${keyIdx + 1}/${entries.length}`;
-
-    // Bỏ qua nếu key này đã bị giới hạn daily quota
-    if (exhaustedKeys.has(apiKey)) {
-      keyIdx = (keyIdx + 1) % entries.length;
-      continue;
-    }
-
-    if (attempts >= MAX_KEY_RETRIES) {
-      logger.error(`[${label}] Đã thử ${MAX_KEY_RETRIES} key nhưng đều thất bại. Dừng retry.`);
-      throw new ForbiddenError(`Google AI hiện đang quá tải. Vui lòng thử lại sau 2-3 phút.`);
-    }
-
-    attempts++;
-
-    try {
-      const result = await fn(client);
-      return result;
-    } catch (err: any) {
-      lastError = err;
-
-      if (isRateLimitOrQuotaError(err)) {
-        logger.warn(
-          `[${label}] ${keyLabel} bị 429/quota (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chuyển sang key tiếp theo.`
-        );
-        // Nếu là daily quota exhausted (free tier limit: 20) → blacklist key trên Redis
-        if (isDailyQuotaExhaustedError(err)) {
-          await blacklistGeminiKeyForDay(apiKey);
-          exhaustedKeys.add(apiKey);
-        }
-        keyIdx = (keyIdx + 1) % entries.length;
+      if (!parsed || typeof parsed !== "object") {
         continue;
       }
-
-      if (isConsumerSuspendedError(err)) {
-        logger.warn(
-          `[${label}] ${keyLabel} bị CONSUMER_SUSPENDED (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Xóa khỏi DB và chuyển sang key tiếp theo.`
-        );
-        await removeSuspendedKeyFromDB(apiKey);
-        exhaustedKeys.add(apiKey);
-        keyIdx = (keyIdx + 1) % entries.length;
-        continue;
-      }
-
-      if (isServiceUnavailableError(err)) {
-        logger.warn(
-          `[${label}] ${keyLabel} bị 503 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 2-3s rồi chuyển sang key tiếp theo.`
-        );
-        const delayMs =
-          Math.floor(Math.random() * (RETRY_DELAY_MS_MAX - RETRY_DELAY_MS_MIN + 1)) +
-          RETRY_DELAY_MS_MIN;
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        keyIdx = (keyIdx + 1) % entries.length;
-        continue;
-      }
-
-      if (isTimeoutOr524Error(err)) {
-        logger.warn(
-          `[${label}] ${keyLabel} bị timeout/524 (attempt ${attempts}/${MAX_KEY_RETRIES}): ${err?.message}. Chờ 2-3s rồi retry.`
-        );
-        const delayMs =
-          Math.floor(Math.random() * (RETRY_DELAY_MS_MAX - RETRY_DELAY_MS_MIN + 1)) +
-          RETRY_DELAY_MS_MIN;
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
-        keyIdx = (keyIdx + 1) % entries.length;
-        continue;
-      }
-
-      // Lỗi khác (400, 401, 403, 500...) → throw ngay
-      logger.error(`[${label}] ${keyLabel} lỗi không thể retry: ${err?.message}`);
-      throw err;
+      return parsed as Record<string, unknown>;
+    } catch {
+      // thử candidate tiếp theo
     }
   }
 
-  // Tất cả key đều thất bại
-  logger.error(`[${label}] Tất cả ${entries.length} API key đều thất bại (hết quota daily).`);
-  throw lastError;
+  logger.warn(
+    `[parseGeminiJsonResponse] Không parse được JSON, preview: ${responseText.slice(0, 300)}`
+  );
+  const err: any = new Error("AI trả kết quả không đúng định dạng JSON");
+  err.statusCode = 502;
+  throw err;
 }
 
-/**
- * Gọi Gemini với đầy đủ retry: xoay API key (429/503/524) + retry toàn bộ (exponential backoff).
- * Dùng thay cho `retryAICall(() => callWithKeyRotation(...))` ở các route affiliate-scene.
- */
-export async function callGeminiWithRetry<T>(
-  fn: (client: InstanceType<typeof GoogleGenAI>) => Promise<T>,
-  label: string,
-  clients?: GeminiClientEntry[]
-): Promise<T> {
-  const entries = clients ?? (await getAvailableGeminiClients());
-  return retryAICall(() => callWithKeyRotation(entries, fn, label), label);
-}
-
-/**
- * Helper: Lấy OpenAI API Key của customer, giải mã và trả về.
- * Throw error nếu chưa cấu hình key.
- */
-export async function getCustomerOpenAIKey(customerId: string): Promise<string> {
-  const credentialDoc = (await credentialService.findOne({
-    customerId,
-    key: AiProviderKeyEnum.OPENAI_KEY,
-    isCustomerCredential: true,
-  })) as any;
-  const credential = credentialDoc?._doc;
-  if (!credential?.value) {
-    const err: any = new Error("Chưa cấu hình OpenAI API Key");
-    err.statusCode = 403;
+/** Scene generation phải có ít nhất 1 scene — không thì không tính quota. */
+export function assertNonEmptyScenesArray(scenes: unknown): void {
+  if (!Array.isArray(scenes) || scenes.length === 0) {
+    const err: any = new Error("AI không trả danh sách scene hợp lệ");
+    err.statusCode = 502;
     throw err;
   }
-  return decryptProviderSecret(credential.value);
 }
 
-/**
- * Helper: Lấy Google Labs Access Token và Project ID của customer.
- * Throw error nếu chưa cấu hình.
- */
+/** Style-text generation phải có field text không rỗng. */
+export function assertNonEmptyTextField(text: unknown): void {
+  if (typeof text !== "string" || !text.trim()) {
+    const err: any = new Error("AI không trả nội dung text hợp lệ");
+    err.statusCode = 502;
+    throw err;
+  }
+}
+
 export async function getCustomerGoogleLabsCredentials(): Promise<{
   googleLabsApiKey: string;
   geminiAPIKeys: string[];
@@ -543,16 +123,13 @@ export async function getCustomerGoogleLabsCredentials(): Promise<{
   }
 
   const geminiCred = (geminiAPIKeyDoc as any)?._doc;
-  const geminiAPIKeys = geminiCred?.value ? parseMultipleKeys(geminiCred.value) : [];
+  const geminiAPIKeys = geminiCred?.value ? parseGeminiCredentialKeys(geminiCred.value) : [];
   return {
     googleLabsApiKey: decryptProviderSecret(apiKeyCred.value),
     geminiAPIKeys,
   };
 }
 
-/**
- * Kiểm tra giới hạn ảnh của customer. Throw error 403 nếu vượt quá.
- */
 export async function checkImageLimit(customerId: string): Promise<void> {
   const customer = await CustomerModel.findById(customerId)
     .select("googlePackage.imageCount googlePackage.imageLimit")
@@ -573,9 +150,6 @@ export async function checkImageLimit(customerId: string): Promise<void> {
   }
 }
 
-/**
- * Kiểm tra giới hạn video của customer. Throw error 403 nếu vượt quá.
- */
 export async function checkVideoLimit(customerId: string): Promise<void> {
   const customer = await CustomerModel.findById(customerId)
     .select("googlePackage.videoCount googlePackage.videoLimit")
@@ -596,19 +170,14 @@ export async function checkVideoLimit(customerId: string): Promise<void> {
   }
 }
 
-/** Tăng imageCount lên 1 sau khi tạo ảnh thành công */
 export async function incrementImageCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.imageCount": 1 } });
 }
 
-/** Tăng videoCount lên 1 sau khi tạo video thành công */
 export async function incrementVideoCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": 1 } });
 }
 
-/**
- * Kiểm tra giới hạn generation text của customer. Throw error 403 nếu vượt quá.
- */
 export async function checkRequestLimit(customerId: string): Promise<void> {
   const customer = await CustomerModel.findById(customerId)
     .select("googlePackage.requestCount googlePackage.requestLimit")
@@ -629,64 +198,10 @@ export async function checkRequestLimit(customerId: string): Promise<void> {
   }
 }
 
-/** Tăng requestCount lên 1 sau khi generation text thành công */
 export async function incrementRequestCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.requestCount": 1 } });
 }
 
-/** Gemini trả text rỗng → coi là thất bại, không tính quota. */
-export function assertGeminiTextResponse(response: { text?: string | null }): string {
-  const text = (response.text || "").trim();
-  if (!text) {
-    const err: any = new Error("AI không trả kết quả");
-    err.statusCode = 502;
-    throw err;
-  }
-  return text;
-}
-
-/** Parse JSON từ Gemini; không fallback — lỗi parse/format → 502. */
-export function parseGeminiJsonResponse(responseText: string): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(responseText);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      const err: any = new Error("AI trả kết quả không đúng định dạng");
-      err.statusCode = 502;
-      throw err;
-    }
-    return parsed as Record<string, unknown>;
-  } catch (e: any) {
-    if (e?.statusCode) throw e;
-    const err: any = new Error("AI trả kết quả không đúng định dạng JSON");
-    err.statusCode = 502;
-    throw err;
-  }
-}
-
-/** Scene generation phải có ít nhất 1 scene — không thì không tính quota. */
-export function assertNonEmptyScenesArray(scenes: unknown): void {
-  if (!Array.isArray(scenes) || scenes.length === 0) {
-    const err: any = new Error("AI không trả danh sách scene hợp lệ");
-    err.statusCode = 502;
-    throw err;
-  }
-}
-
-/** Style-text generation phải có field text không rỗng. */
-export function assertNonEmptyTextField(text: unknown): void {
-  if (typeof text !== "string" || !text.trim()) {
-    const err: any = new Error("AI không trả nội dung text hợp lệ");
-    err.statusCode = 502;
-    throw err;
-  }
-}
-
-/**
- * Resolve objectToPersonify prompt from DB.
- * - Nếu FE chưa gửi objectToPersonify → dùng objectDoc.prompt
- * - Nếu FE gửi objectToPersonify khác objectDoc.name → dùng objectDoc.name
- * - Nếu FE gửi objectToPersonify trùng objectDoc.name → dùng objectDoc.prompt (hiện tại)
- */
 export async function resolveObjectToPersonifyPrompt(opts: {
   objectToPersonifyCode?: string;
   objectToPersonify?: string;
@@ -703,20 +218,13 @@ export async function resolveObjectToPersonifyPrompt(opts: {
     return { prompt: opts.objectToPersonify };
   }
 
-  // Nếu FE gửi objectToPersonify và khác objectDoc.name → dùng objectDoc.name
   if (opts.objectToPersonify && opts.objectToPersonify !== objectDoc.name) {
     return { prompt: opts.objectToPersonify };
   }
 
-  // FE chưa gửi hoặc trùng objectDoc.name → dùng objectDoc.prompt (current behavior)
   return { prompt: objectDoc.prompt || opts.objectToPersonify };
 }
 
-/**
- * Resolve artStyle prompt from DB.
- * - Nếu FE gửi artStyleId (art style ID) → lookup prompt từ DB
- * - Nếu không tìm thấy → giữ nguyên artStyle name từ FE
- */
 export async function resolveArtStylePrompt(opts: {
   artStyleId?: string;
   artStyle?: string;
@@ -731,7 +239,6 @@ export async function resolveArtStylePrompt(opts: {
       return { prompt: opts.artStyle };
     }
 
-    // Nếu có prompt trong DB → dùng prompt đó, ngược lại giữ artStyle name
     return { prompt: artStyleDoc.prompt || opts.artStyle, name: artStyleDoc.name };
   } catch {
     return { prompt: opts.artStyle };
@@ -785,7 +292,7 @@ export interface TrendingVideoFormConfig {
   promptId: string;
   artStyleId?: string;
 }
-/** Quy tắc thứ tự ảnh tham chiếu — chỉ ghi một lần khi có cả nhân hoá và sản phẩm. */
+
 const IMAGE_REFERENCE_ORDER_RULE =
   "IMPORTANT: The first reference image is always the character; from the second reference image onward, the images are product images.";
 
@@ -811,7 +318,6 @@ function buildCombinedImageReferenceNote(productCustomPrompt?: string): string {
   );
 }
 
-/** Gộp note nhân hoá + sản phẩm; tránh lặp quy tắc thứ tự ảnh khi cả hai đều có. */
 export function buildImageReferenceNotes(opts: {
   productUrls?: string[];
   productImages?: ReferenceImageInput[];
@@ -834,7 +340,6 @@ export function buildImageReferenceNotes(opts: {
   return DEFAULT_PRODUCT_IMAGE_REFERENCE_NOTE;
 }
 
-/** Thứ tự ảnh tham chiếu review: artStyle → nhân hoá → object → item. */
 export function collectOrderedReviewReferenceImages(
   config: ReviewFormConfig
 ): ReferenceImageInput[] {
@@ -848,7 +353,6 @@ export function collectOrderedReviewReferenceImages(
   return out;
 }
 
-/** Chuẩn hoá ảnh tham chiếu (URL hoặc base64) để gửi Gemini inlineData. */
 export async function resolveReferenceImagesForGemini(
   images?: ReferenceImageInput[]
 ): Promise<{ imageBytes: string; mimeType: string }[]> {
@@ -956,8 +460,6 @@ export function buildObjectPersonifyImageScriptNote(images?: ReferenceImageInput
   return `\n\n*** ẢNH THAM CHIẾU NHÂN HOÁ ĐỒ VẬT ***\nCó ảnh tham chiếu nhân hoá đồ vật (base64 hoặc URL). Hãy dùng để mô tả chính xác hơn nhân vật nhân hoá trong visual_prompt.${urlPart}`;
 }
 
-// ── Flow2 video_mode (frame | component) ─────────────────────────────────────
-
 export {
   assertFlow2VideoImageCount,
   FLOW2_VIDEO_MODE,
@@ -967,15 +469,13 @@ export {
 } from "../../api-media/flow2/video-mode";
 export type { Flow2VideoMode } from "../../api-media/flow2/video-mode";
 
-/**
- * Thay thế tất cả placeholder {{fieldName}} trong text bằng giá trị từ config
- */
 export function interpolateTemplate(text: string, config: AffiliateVideoFormConfig): string {
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = (config as any)[key];
     return value !== undefined && value !== null ? `"${String(value)}"` : "";
   });
 }
+
 export function interpolateTrendingTemplate(text: string, config: TrendingVideoFormConfig): string {
   return text.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     const value = (config as any)[key];
@@ -988,11 +488,6 @@ export enum ActionEnum {
   IMAGE_GENERATION = "IMAGE_GENERATION",
 }
 
-/**
- * Lấy captcha từ Cliproxy API + credentials từ Google Labs.
- * Hỗ trợ 2 loại action: VIDEO_GENERATION và IMAGE_GENERATION.
- * Throw error nếu không lấy được captcha hoặc accessToken.
- */
 export async function getReCaptchaCredentials(
   action: ActionEnum
 ): Promise<CaptchaResponseData & { projectId: string; accessToken: string }> {

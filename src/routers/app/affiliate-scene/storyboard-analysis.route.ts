@@ -3,16 +3,18 @@ import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
 import {
-  assertGeminiTextResponse,
   assertNonEmptyScenesArray,
   buildProductImageScriptNote,
-  callGeminiWithRetry,
+  callChatGPTGateway,
+  callGeminiJsonGenerate,
   checkRequestLimit,
-  getAvailableGeminiClients,
   incrementRequestCount,
   parseGeminiJsonResponse,
+  resolveAiSceneProvider,
   resolveArtStylePrompt,
 } from "./_shared";
+import { StoryboardAnalysisOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
+import { GEMINI_MODELS } from "./_gemini.constants";
 import { StoryboardAnalysisResponseSchema } from "./storyboard-analysis.schema";
 
 function buildStoryboardAnalysisPrompt(opts: {
@@ -97,7 +99,6 @@ export default [
         }
 
         await checkRequestLimit(context.id);
-        const clients = await getAvailableGeminiClients();
 
         const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
           artStyleId: body.artStyleId,
@@ -117,35 +118,29 @@ export default [
 
         const mimeType = body.mimeType || "image/png";
 
-        const response = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-3.5-flash",
-              contents: [
-                {
-                  role: "user",
-                  parts: [
-                    {
-                      inlineData: {
-                        data: body.storyboardImageBase64,
-                        mimeType,
-                      },
-                    },
-                    { text },
-                  ],
-                },
-              ],
-              config: {
-                temperature: 0.3,
-                responseMimeType: "application/json",
-                responseSchema: StoryboardAnalysisResponseSchema,
-              },
-            }),
-          "storyboard-analysis",
-          clients
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = assertGeminiTextResponse(response);
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: GEMINI_MODELS.STORYBOARD,
+            text,
+            media: [{ imageBytes: body.storyboardImageBase64, mimeType }],
+            label: "storyboard-analysis",
+            responseSchema: StoryboardAnalysisResponseSchema,
+            temperature: 0.3,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text,
+            images: [{ imageBytes: body.storyboardImageBase64, mimeType }],
+            label: "storyboard-analysis",
+            model: CHATGPT_MODELS.STORYBOARD,
+            jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
+            jsonSchemaName: "storyboard_analysis_response",
+            temperature: 0.3,
+          });
+        }
         const parsed = parseGeminiJsonResponse(responseText) as any;
         assertNonEmptyScenesArray(parsed.scenes);
 

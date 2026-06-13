@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callGeminiWithRetry, checkRequestLimit, getAvailableGeminiClients } from "./_shared";
+import { callChatGPTGateway, callGeminiJsonGenerate, checkRequestLimit, parseGeminiJsonResponse, resolveAiSceneProvider } from "./_shared";
+import { SuggestConfigOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
+import { GEMINI_MODELS } from "./_gemini.constants";
 
 export default [
   {
@@ -21,7 +23,6 @@ export default [
         };
         // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
-        const clients = await getAvailableGeminiClients();
 
         const categoryHint = body.category ? `Danh mục: ${body.category}` : "Danh mục: tự chọn";
         const moodHint = body.mood ? `Mood/Tính cách: ${body.mood}` : "";
@@ -57,24 +58,29 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           required: ["objectToPersonify", "tipContent"],
         };
 
-        const result = await callGeminiWithRetry(
-          (ai) =>
-            ai.models.generateContent({
-              model: "gemini-3-flash-preview",
-              contents: [{ role: "user", parts: [{ text: prompt }] }],
-              config: {
-                responseMimeType: "application/json",
-                responseSchema: suggestSchema as any,
-              },
-            }),
-          "suggest-config",
-          clients
-        );
+        const aiProvider = await resolveAiSceneProvider();
+        let responseText: string;
 
-        const responseText = result.text;
+        if (aiProvider === "gemini") {
+          responseText = await callGeminiJsonGenerate({
+            model: GEMINI_MODELS.SUGGEST_CONFIG,
+            text: prompt,
+            label: "suggest-config",
+            responseSchema: suggestSchema,
+          });
+        } else {
+          responseText = await callChatGPTGateway({
+            text: prompt,
+            label: "suggest-config",
+            model: CHATGPT_MODELS.SUGGEST_CONFIG,
+            jsonSchema: SuggestConfigOpenAIJsonSchema,
+            jsonSchemaName: "suggest_config_response",
+          });
+        }
+
         let parsed: any;
         try {
-          parsed = JSON.parse(responseText || "{}");
+          parsed = parseGeminiJsonResponse(responseText);
         } catch {
           parsed = { raw: responseText };
         }
