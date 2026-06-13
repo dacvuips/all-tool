@@ -35,18 +35,11 @@ export async function getChatGPTGatewayBaseUrl(): Promise<string> {
   return normalizeGatewayBaseUrl(DEFAULT_CHATGPT_GATEWAY_BASE_URL);
 }
 
-function extractMessageContentFromChoice(choice: unknown): string {
-  if (!choice || typeof choice !== "object") return "";
-  const c = choice as {
-    message?: { content?: string | Array<{ type?: string; text?: string }> | null };
-    text?: string;
-    delta?: { content?: string | null };
-  };
-  if (typeof c.text === "string" && c.text.trim()) return c.text.trim();
-  const delta = c.delta?.content;
-  if (typeof delta === "string" && delta.trim()) return delta.trim();
-  const content = c.message?.content;
-  if (typeof content === "string" && content.trim()) return content.trim();
+function serializeMessageContent(content: unknown): string {
+  if (typeof content === "string") return content.trim();
+  if (content && typeof content === "object" && !Array.isArray(content)) {
+    return JSON.stringify(content);
+  }
   if (Array.isArray(content)) {
     return content
       .filter((part) => part?.type === "text" && typeof part.text === "string")
@@ -55,6 +48,19 @@ function extractMessageContentFromChoice(choice: unknown): string {
       .trim();
   }
   return "";
+}
+
+function extractMessageContentFromChoice(choice: unknown): string {
+  if (!choice || typeof choice !== "object") return "";
+  const c = choice as {
+    message?: { content?: unknown };
+    text?: string;
+    delta?: { content?: string | null };
+  };
+  if (typeof c.text === "string" && c.text.trim()) return c.text.trim();
+  const delta = c.delta?.content;
+  if (typeof delta === "string" && delta.trim()) return delta.trim();
+  return serializeMessageContent(c.message?.content);
 }
 
 function parseChatGPTGatewayBody(raw: string): string {
@@ -97,8 +103,9 @@ function parseChatGPTGatewayBody(raw: string): string {
       choices?: Array<unknown>;
       scenes?: unknown;
       topicTitle?: unknown;
+      characters?: unknown;
     };
-    if (data.scenes || data.topicTitle) return trimmed;
+    if (data.scenes || data.topicTitle || data.characters) return trimmed;
     const text = extractMessageContentFromChoice(data.choices?.[0]);
     if (text) return text;
   } catch {

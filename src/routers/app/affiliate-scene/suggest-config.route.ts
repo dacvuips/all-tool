@@ -2,9 +2,8 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { callChatGPTGateway, callGeminiJsonGenerate, checkRequestLimit, parseGeminiJsonResponse, resolveAiSceneProvider } from "./_shared";
-import { SuggestConfigOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
+import { callChatGPTGateway, callGeminiJsonGenerate, checkRequestLimit, getChatGPTSceneModel, getGeminiSceneModel, parseGeminiJsonResponse, resolveAiSceneProvider } from "./_shared";
+import { SuggestConfigOpenAIJsonSchema } from "./_chatgpt.constants";
 
 export default [
   {
@@ -63,7 +62,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.SUGGEST_CONFIG,
+            model: await getGeminiSceneModel("SUGGEST_CONFIG"),
             text: prompt,
             label: "suggest-config",
             responseSchema: suggestSchema,
@@ -72,7 +71,7 @@ Trả về JSON object duy nhất với 2 field trên. Viết bằng ${
           responseText = await callChatGPTGateway({
             text: prompt,
             label: "suggest-config",
-            model: CHATGPT_MODELS.SUGGEST_CONFIG,
+            model: await getChatGPTSceneModel("SUGGEST_CONFIG"),
             jsonSchema: SuggestConfigOpenAIJsonSchema,
             jsonSchemaName: "suggest_config_response",
           });

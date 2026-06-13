@@ -8,18 +8,15 @@ import {
   assertNonEmptyScenesArray,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
-  callChatGPTGateway,
   callGeminiJsonGenerate,
   checkRequestLimit,
   filterReferenceImages,
+  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
-  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
 } from "./_shared";
-import { CopyVideoAnalysisOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
 const CopyVideoAnalysisResponseSchema = {
@@ -304,29 +301,14 @@ export default [
           personifyImageNote +
           productImageNote;
 
-        const aiProvider = await resolveAiSceneProvider();
-        let responseText: string;
-
-        if (aiProvider === "gemini") {
-          responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.COPY_VIDEO,
-            text,
-            media: [{ imageBytes: body.videoBase64, mimeType }],
-            label: "copy-video-analysis",
-            responseSchema: CopyVideoAnalysisResponseSchema,
-            temperature: 0.4,
-          });
-        } else {
-          responseText = await callChatGPTGateway({
-            text,
-            videos: [{ imageBytes: body.videoBase64, mimeType }],
-            label: "copy-video-analysis",
-            model: CHATGPT_MODELS.COPY_VIDEO,
-            jsonSchema: CopyVideoAnalysisOpenAIJsonSchema,
-            jsonSchemaName: "copy_video_analysis_response",
-            temperature: 0.4,
-          });
-        }
+        const responseText = await callGeminiJsonGenerate({
+          model: await getGeminiSceneModel("COPY_VIDEO"),
+          text,
+          media: [{ imageBytes: body.videoBase64, mimeType }],
+          label: "copy-video-analysis",
+          responseSchema: CopyVideoAnalysisResponseSchema,
+          temperature: 0.4,
+        });
         const parsed = parseGeminiJsonResponse(responseText);
         assertNonEmptyScenesArray(parsed.scenes);
 

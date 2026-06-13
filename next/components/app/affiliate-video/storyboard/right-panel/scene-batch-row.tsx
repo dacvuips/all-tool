@@ -34,6 +34,7 @@ import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-ta
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
+import { normalizeSceneAudioField } from "../../shared/sceneAudioUtils";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -186,12 +187,18 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const aspectRatio = (scriptData?.aspectRatio ??
     affiliateVideoFormConfig?.aspectRatio ??
     "9:16") as "16:9" | "9:16";
+  const sceneAudioText = useMemo(
+    () => normalizeSceneAudioField(scene.audio),
+    [scene.audio]
+  );
   const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openEdit = (field: EditField) => {
     setEditingField(field);
-    setEditValue(scene[field] ?? "");
+    setEditValue(
+      field === "audio" ? sceneAudioText : ((scene[field] as string | undefined) ?? "")
+    );
     // focus textarea on next tick
     setTimeout(() => textareaRef.current?.focus(), 50);
   };
@@ -552,7 +559,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             )}
             {renderEditablePrompt(
               "audio",
-              scene.audio ?? "",
+              sceneAudioText,
               "text-purple-700",
               <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
                 [AUDIO]:

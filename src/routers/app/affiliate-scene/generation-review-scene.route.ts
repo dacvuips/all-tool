@@ -2,9 +2,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { ReviewResponseSchema } from "../constanst";
-import { ReviewOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
+import { ReviewOpenAIJsonSchema } from "./_chatgpt.constants";
 import {
   assertNonEmptyScenesArray,
   buildImageReferenceNotes,
@@ -12,15 +10,19 @@ import {
   callGeminiJsonGenerate,
   checkRequestLimit,
   collectOrderedReviewReferenceImages,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   getImageDisplayName,
   incrementRequestCount,
   interpolateTemplate,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveReferenceImagesForGemini,
   ReviewFormConfig,
 } from "./_shared";
+import { ReviewResponseSchema } from "../constanst";
 
 interface ReviewPromptScene {
   id: string;
@@ -108,7 +110,7 @@ Return valid JSON only with this structure:
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.REVIEW_SCENE,
+            model: await getGeminiSceneModel("REVIEW_SCENE"),
             text: interpolatedText,
             media: imageBase64List.length > 0 ? imageBase64List : undefined,
             label: "generation-review",
@@ -119,7 +121,7 @@ Return valid JSON only with this structure:
             text: interpolatedText,
             images: imageBase64List,
             label: "generation-review",
-            model: CHATGPT_MODELS.REVIEW_SCENE,
+            model: await getChatGPTSceneModel("REVIEW_SCENE"),
             jsonSchema: ReviewOpenAIJsonSchema,
             jsonSchemaName: "review_scene_response",
           });
@@ -152,7 +154,8 @@ Return valid JSON only with this structure:
             }`,
             imageGenPrompt: `[${scene.camera}] POV shot: ${scene.visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
             audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+              "",
             dialogue: scene.dialogue || "",
           })),
         };

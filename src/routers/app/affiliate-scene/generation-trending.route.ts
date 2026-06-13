@@ -5,15 +5,17 @@ import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
 import { AffiliateVideoResponseSchema } from "../constanst";
-import { AffiliateVideoOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
+import { AffiliateVideoOpenAIJsonSchema } from "./_chatgpt.constants";
 import {
   assertNonEmptyScenesArray,
   callChatGPTGateway,
   callGeminiJsonGenerate,
   checkRequestLimit,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   incrementRequestCount,
   interpolateTrendingTemplate,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
   resolveArtStylePrompt,
@@ -121,7 +123,7 @@ CRITICAL RULE: Always keep character and environment identical across all scenes
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.TRENDING,
+            model: await getGeminiSceneModel("TRENDING"),
             text: interpolatedText,
             label: "generation-trending",
             responseSchema: AffiliateVideoResponseSchema,
@@ -130,7 +132,7 @@ CRITICAL RULE: Always keep character and environment identical across all scenes
           responseText = await callChatGPTGateway({
             text: interpolatedText,
             label: "generation-trending",
-            model: CHATGPT_MODELS.TRENDING,
+            model: await getChatGPTSceneModel("TRENDING"),
             jsonSchema: AffiliateVideoOpenAIJsonSchema,
           });
         }
@@ -167,7 +169,8 @@ CRITICAL RULE: Always keep character and environment identical across all scenes
               : `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
                 "",
             audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${scene.audio}` || "",
+              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+              "",
             dialogue: scene.dialogue || "",
           })),
         };

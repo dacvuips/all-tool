@@ -7,6 +7,7 @@ import {
   StoryModeTypeEnum,
 } from "../../constants";
 import { cropStoryboardRegion } from "./storyboardCropUtils";
+import { normalizeSceneAudioField } from "../../shared/sceneAudioUtils";
 
 /** Map kết quả AI + ảnh storyboard gốc → ScriptData cho right panel. */
 export async function mapStoryboardAnalysisToScriptData(
@@ -40,7 +41,7 @@ export async function mapStoryboardAnalysisToScriptData(
         motionPrompt: scene.motionPrompt || "",
         visualPrompt: scene.visualDescription || "",
         imageGenPrompt: scene.visualDescription || "",
-        audio: scene.audio || globalAudio,
+        audio: normalizeSceneAudioField(scene.audio) || globalAudio,
         cropRegion: scene.cropRegion,
         storyboardCropImage: cropImage,
       };

@@ -10,6 +10,7 @@ import { CaptchaResponseData } from "../../helpers/validateApiKey";
 import { parseGeminiCredentialKeys } from "./_gemini";
 
 export * from "./_ai-retry";
+export * from "./_ai-scene.constants";
 export * from "./_ai-scene";
 export * from "./_chatgpt";
 export * from "./_chatgpt.constants";
@@ -51,6 +52,41 @@ export function extractJsonTextFromAIResponse(text: string): string {
   return s;
 }
 
+/** Bóc envelope OpenAI/Gateway (choices[].message.content) hoặc { data: {...} }. */
+export function unwrapAiJsonPayload(parsed: Record<string, unknown>): Record<string, unknown> {
+  if (Array.isArray(parsed.scenes) || parsed.topicTitle != null || parsed.characters != null) {
+    return parsed;
+  }
+
+  const nestedData = parsed.data;
+  if (nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)) {
+    return unwrapAiJsonPayload(nestedData as Record<string, unknown>);
+  }
+
+  const choices = parsed.choices;
+  if (Array.isArray(choices) && choices[0] && typeof choices[0] === "object") {
+    const content = (choices[0] as { message?: { content?: unknown } }).message?.content;
+    if (content && typeof content === "object" && !Array.isArray(content)) {
+      return content as Record<string, unknown>;
+    }
+    if (typeof content === "string" && content.trim()) {
+      try {
+        const inner = JSON.parse(content);
+        if (inner && typeof inner === "object" && !Array.isArray(inner)) {
+          return unwrapAiJsonPayload(inner as Record<string, unknown>);
+        }
+        if (Array.isArray(inner)) {
+          return { scenes: inner };
+        }
+      } catch {
+        // giữ parsed gốc
+      }
+    }
+  }
+
+  return parsed;
+}
+
 /** Parse JSON từ AI text (Gemini/ChatGPT); hỗ trợ markdown fence và JSON nhúng trong text. */
 export function parseGeminiJsonResponse(responseText: string): Record<string, unknown> {
   const candidates = [responseText.trim(), extractJsonTextFromAIResponse(responseText)];
@@ -67,7 +103,7 @@ export function parseGeminiJsonResponse(responseText: string): Record<string, un
       if (!parsed || typeof parsed !== "object") {
         continue;
       }
-      return parsed as Record<string, unknown>;
+      return unwrapAiJsonPayload(parsed as Record<string, unknown>);
     } catch {
       // thử candidate tiếp theo
     }
@@ -81,9 +117,54 @@ export function parseGeminiJsonResponse(responseText: string): Record<string, un
   throw err;
 }
 
+/** AI đôi khi trả audio dạng object { gender, personality, pace, sfx } thay vì string. */
+export function normalizeSceneAudioField(value: unknown): string {
+  if (value == null || value === "") return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "object" && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>;
+    const orderedKeys = [
+      "gender",
+      "personality",
+      "tone",
+      "mood",
+      "style",
+      "pace",
+      "pacing",
+      "sfx",
+      "sound",
+    ];
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    for (const key of orderedKeys) {
+      const v = obj[key];
+      if (typeof v === "string" && v.trim()) {
+        parts.push(v.trim());
+        seen.add(key);
+      }
+    }
+    for (const [key, v] of Object.entries(obj)) {
+      if (!seen.has(key) && typeof v === "string" && v.trim()) {
+        parts.push(v.trim());
+      }
+    }
+    return parts.join(", ");
+  }
+  return String(value);
+}
+
 /** Scene generation phải có ít nhất 1 scene — không thì không tính quota. */
-export function assertNonEmptyScenesArray(scenes: unknown): void {
+export function assertNonEmptyScenesArray(
+  scenes: unknown,
+  opts?: { label?: string; parsed?: Record<string, unknown> }
+): void {
   if (!Array.isArray(scenes) || scenes.length === 0) {
+    if (opts?.label) {
+      const keys = opts.parsed ? Object.keys(opts.parsed).join(", ") : "n/a";
+      logger.warn(
+        `[${opts.label}] AI trả scenes rỗng/không hợp lệ. parsed keys: ${keys}`
+      );
+    }
     const err: any = new Error("AI không trả danh sách scene hợp lệ");
     err.statusCode = 502;
     throw err;

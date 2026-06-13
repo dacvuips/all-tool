@@ -1,24 +1,15 @@
 import { Type } from "@google/genai";
 
+export { DEFAULT_GEMINI_MODELS } from "./_ai-scene.constants";
+
 export const REDIS_KEY_GEMINI_DAILY_QUOTA_EXHAUSTED = "gemini:daily_quota_exhausted";
 
 export const GEMINI_MAX_KEY_RETRIES = 30;
 export const GEMINI_RETRY_DELAY_MS_MIN = 2000;
 export const GEMINI_RETRY_DELAY_MS_MAX = 3000;
 
-/** Model mặc định theo từng route affiliate-scene. */
-export const GEMINI_MODELS = {
-  SCENE: "gemini-3.5-flash",
-  TRENDING: "gemini-3-flash-preview",
-  STORYBOARD: "gemini-3.5-flash",
-  REVIEW_SCENE: "gemini-2.5-flash",
-  COPY_VIDEO: "gemini-2.5-flash",
-  STYLE_TEXT: "gemini-3-flash-preview",
-  SUGGEST_CONFIG: "gemini-3-flash-preview",
-  CHAT_BOT: "gemini-3.5-flash",
-  INSERT_SCENE: "gemini-3-flash-preview",
-  AUDIO_TTS: "gemini-3.1-flash-tts-preview",
-} as const;
+/** @deprecated Dùng `getGeminiSceneModel()` — fallback mặc định tại `_ai-scene.constants`. */
+export { DEFAULT_GEMINI_MODELS as GEMINI_MODELS } from "./_ai-scene.constants";
 
 /** JSON Schema response cho Gemini generateContent. */
 export const AffiliateVideoResponseSchema = {

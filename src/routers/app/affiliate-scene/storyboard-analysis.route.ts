@@ -8,13 +8,15 @@ import {
   callChatGPTGateway,
   callGeminiJsonGenerate,
   checkRequestLimit,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
+  normalizeSceneAudioField,
   resolveArtStylePrompt,
 } from "./_shared";
-import { StoryboardAnalysisOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
+import { StoryboardAnalysisOpenAIJsonSchema } from "./_chatgpt.constants";
 import { StoryboardAnalysisResponseSchema } from "./storyboard-analysis.schema";
 
 function buildStoryboardAnalysisPrompt(opts: {
@@ -123,7 +125,7 @@ export default [
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.STORYBOARD,
+            model: await getGeminiSceneModel("STORYBOARD"),
             text,
             media: [{ imageBytes: body.storyboardImageBase64, mimeType }],
             label: "storyboard-analysis",
@@ -135,7 +137,7 @@ export default [
             text,
             images: [{ imageBytes: body.storyboardImageBase64, mimeType }],
             label: "storyboard-analysis",
-            model: CHATGPT_MODELS.STORYBOARD,
+            model: await getChatGPTSceneModel("STORYBOARD"),
             jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
             jsonSchemaName: "storyboard_analysis_response",
             temperature: 0.3,
@@ -155,7 +157,7 @@ export default [
           camera: scene.camera || "WIDE SHOT",
           dialogue: scene.dialogue || "",
           motionPrompt: scene.motionPrompt || "",
-          audio: scene.audio || "",
+          audio: normalizeSceneAudioField(scene.audio),
           visualDescription: scene.visualDescription || "",
         }));
 

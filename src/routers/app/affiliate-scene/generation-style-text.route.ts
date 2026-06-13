@@ -10,12 +10,13 @@ import {
   callChatGPTGateway,
   callGeminiJsonGenerate,
   checkRequestLimit,
+  getChatGPTSceneModel,
+  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
 } from "./_shared";
-import { GenerationStyleTextOpenAIJsonSchema, CHATGPT_MODELS } from "./_chatgpt.constants";
-import { GEMINI_MODELS } from "./_gemini.constants";
+import { GenerationStyleTextOpenAIJsonSchema } from "./_chatgpt.constants";
 
 // ── Video Analysis Response Schema ─────────────────────────────────────────
 const GenerationStyleTextResponseSchema = {
@@ -66,7 +67,7 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
-            model: GEMINI_MODELS.STYLE_TEXT,
+            model: await getGeminiSceneModel("STYLE_TEXT"),
             text: prompt,
             media: imageBase64List,
             label: "generation-style-text",
@@ -78,7 +79,7 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
             text: prompt,
             images: imageBase64List,
             label: "generation-style-text",
-            model: CHATGPT_MODELS.STYLE_TEXT,
+            model: await getChatGPTSceneModel("STYLE_TEXT"),
             jsonSchema: GenerationStyleTextOpenAIJsonSchema,
             jsonSchemaName: "generation_style_text_response",
             temperature: 0.4,

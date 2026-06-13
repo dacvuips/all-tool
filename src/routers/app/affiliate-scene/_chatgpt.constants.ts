@@ -1,27 +1,15 @@
-/** Setting key trong admin — xem `graphql/modules/setting/configs/ai-scene.ts`. */
-export const AI_SCENE_SETTING_KEY = "ai-scene-more";
+import {
+  AI_SCENE_SETTING_KEY,
+  DEFAULT_CHATGPT_GATEWAY_BASE_URL,
+  DEFAULT_CHATGPT_MODELS,
+  type AiSceneMoreSetting,
+} from "./_ai-scene.constants";
 
-export const DEFAULT_CHATGPT_GATEWAY_BASE_URL = "https://api.agent-gateway.site/v1";
-
-export interface AiSceneMoreSetting {
-  geminiActive?: boolean;
-  chatgptActive?: boolean;
-  chatgptEndpoint?: string;
-}
+export { AI_SCENE_SETTING_KEY, DEFAULT_CHATGPT_GATEWAY_BASE_URL, DEFAULT_CHATGPT_MODELS, type AiSceneMoreSetting };
+export { DEFAULT_CHATGPT_MODELS as CHATGPT_MODELS } from "./_ai-scene.constants";
 
 /** Model AI OpenAI mặc định khi route không truyền `model`. */
-export const DEFAULT_CHATGPT_MODEL = "gpt-4o";
-
-/** Model AI OpenAI theo từng route — chỉnh trực tiếp tại đây (ví dụ `"gpt-4o"`, `"gpt-4o-mini"`). */
-export const CHATGPT_MODELS = {
-  SCENE: "gpt-4o",
-  TRENDING: "gpt-4o",
-  REVIEW_SCENE: "gpt-4o",
-  COPY_VIDEO: "gpt-4o",
-  STYLE_TEXT: "gpt-4o",
-  SUGGEST_CONFIG: "gpt-4o-mini",
-  STORYBOARD: "gpt-4o",
-} as const;
+export const DEFAULT_CHATGPT_MODEL = DEFAULT_CHATGPT_MODELS.SCENE;
 
 export const CHATGPT_GATEWAY_SYSTEM_MESSAGE =
   "You must respond with valid JSON only. No markdown, no explanation.";
@@ -86,7 +74,14 @@ export const ReviewOpenAIJsonSchema = {
           visualEffects: { type: "string" },
           visualPrompt: { type: "string" },
         },
-        required: ["sceneNumber", "motionPrompt", "dialogue", "visualEffects", "topicTitle", "visualPrompt"],
+        required: [
+          "sceneNumber",
+          "motionPrompt",
+          "dialogue",
+          "visualEffects",
+          "topicTitle",
+          "visualPrompt",
+        ],
       },
     },
   },
@@ -193,9 +188,24 @@ export const StoryboardAnalysisOpenAIJsonSchema = {
           audio: { type: "string" },
           visualDescription: { type: "string" },
         },
-        required: ["sceneNumber", "cropRegion", "dialogue", "motionPrompt", "audio", "visualDescription"],
+        required: [
+          "sceneNumber",
+          "cropRegion",
+          "dialogue",
+          "motionPrompt",
+          "audio",
+          "visualDescription",
+        ],
       },
     },
   },
-  required: ["topicTitle", "voiceGender", "voiceTone", "voiceStyle", "voicePacing", "audioPrompt", "scenes"],
+  required: [
+    "topicTitle",
+    "voiceGender",
+    "voiceTone",
+    "voiceStyle",
+    "voicePacing",
+    "audioPrompt",
+    "scenes",
+  ],
 };

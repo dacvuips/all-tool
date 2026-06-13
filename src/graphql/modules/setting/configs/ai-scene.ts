@@ -1,4 +1,5 @@
 import { t } from "../../../../helpers/functions/string";
+import { DEFAULT_AI_SCENE_MORE_SETTING } from "../../../../routers/app/affiliate-scene/_ai-scene.constants";
 import { SettingResource } from "../../../../libs/shared/interfaces/settingResource";
 
 const Type = SettingResource.Type;
@@ -11,12 +12,10 @@ export default {
       name: t("Model AI Scene More"),
       type: Type.json,
       isPrivate: true,
-      desc: t("Cấu hình chọn AI nào được call ở trên tool (chỉ 1 AI được phép 'true')"),
-      value: {
-        geminiActive: false,
-        chatgptActive: true,
-        chatgptEndpoint: "https://api.agent-gateway.site/v1",
-      },
+      desc: t(
+        "Cấu hình provider (geminiActive/chatgptActive), endpoint ChatGPT và model AI theo từng route (chỉ 1 provider được phép 'true')"
+      ),
+      value: DEFAULT_AI_SCENE_MORE_SETTING,
     },
   ],
 } as SettingResource.ConfigSchema;
