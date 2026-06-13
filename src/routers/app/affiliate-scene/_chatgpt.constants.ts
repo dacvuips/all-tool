@@ -8,7 +8,7 @@ import {
 export { AI_SCENE_SETTING_KEY, DEFAULT_CHATGPT_GATEWAY_BASE_URL, DEFAULT_CHATGPT_MODELS, type AiSceneMoreSetting };
 export { DEFAULT_CHATGPT_MODELS as CHATGPT_MODELS } from "./_ai-scene.constants";
 
-/** Model AI OpenAI mặc định khi route không truyền `model`. */
+/** Model Claude VietAPI mặc định khi route không truyền `model`. */
 export const DEFAULT_CHATGPT_MODEL = DEFAULT_CHATGPT_MODELS.SCENE;
 
 export const CHATGPT_GATEWAY_SYSTEM_MESSAGE =
@@ -19,7 +19,7 @@ export const CHATGPT_JSON_SCHEMA_NAME = "affiliate_video_response";
 export type ChatGPTGatewayImage = { imageBytes: string; mimeType: string };
 export type ChatGPTGatewayVideo = { imageBytes: string; mimeType: string };
 
-/** JSON Schema chuẩn OpenAI cho ChatGPT gateway. */
+/** JSON Schema chuẩn OpenAI cho VietAPI gateway (Claude qua /v1/chat/completions). */
 export const AffiliateVideoOpenAIJsonSchema = {
   type: "object",
   properties: {

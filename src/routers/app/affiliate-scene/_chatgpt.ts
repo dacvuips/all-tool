@@ -20,7 +20,7 @@ function normalizeGatewayBaseUrl(url: string): string {
   return url.trim().replace(/\/$/, "");
 }
 
-/** Lấy ChatGPT gateway endpoint từ setting `ai-scene-more`. */
+/** Lấy VietAPI base URL (OpenAI-compatible /v1) từ setting `ai-scene-more`. */
 export async function getChatGPTGatewayBaseUrl(): Promise<string> {
   try {
     const endpoint = (await getAiSceneMoreSetting())?.chatgptEndpoint?.trim();
@@ -121,7 +121,7 @@ function parseChatGPTGatewayBody(raw: string): string {
   throw err;
 }
 
-/** Gọi ChatGPT qua OpenAI-compatible agent-gateway (hỗ trợ vision/video + JSON). */
+/** Gọi Claude qua VietAPI OpenAI-compatible endpoint (hỗ trợ vision/video + JSON). */
 export async function callChatGPTGateway(params: {
   text: string;
   images?: ChatGPTGatewayImage[];
@@ -130,7 +130,7 @@ export async function callChatGPTGateway(params: {
   jsonSchema?: Record<string, unknown>;
   jsonSchemaName?: string;
   temperature?: number;
-  /** Tên model AI OpenAI (ví dụ `"gpt-4o"`). */
+  /** Tên model VietAPI (ví dụ `"claude-opus-4-6"`). */
   model?: string;
 }): Promise<string> {
   const content: Array<Record<string, unknown>> = [];
@@ -188,7 +188,7 @@ export async function callChatGPTGateway(params: {
 
     const rawBody = await resp.text();
     if (!resp.ok) {
-      const err: any = new Error(`ChatGPT API error (${resp.status}): ${rawBody}`);
+      const err: any = new Error(`VietTheo API error (${resp.status}): ${rawBody}`);
       err.statusCode = resp.status;
       throw err;
     }
@@ -205,7 +205,7 @@ export async function getAdminOpenAIKey(): Promise<string> {
   })) as any;
   const credential = credentialDoc?._doc;
   if (!credential?.value) {
-    const err: any = new Error("Chưa cấu hình OpenAI API Key");
+    const err: any = new Error("Chưa cấu hình  VietTheo API credential)");
     err.statusCode = 403;
     throw err;
   }
