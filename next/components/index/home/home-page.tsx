@@ -1,5 +1,4 @@
-import { HomeActionCards } from "./components/home-action-cards";
-import { HomeBestSeller } from "./components/home-best-seller";
+import { HomeBanners } from "./components/home-banners";
 import { HomeHero } from "./components/home-hero";
 import { HomeProvider } from "./provider/home-provider";
 
@@ -15,8 +14,10 @@ function HomeComponent() {
   return (
     <div className="bg-gray-100">
       <HomeHero />
-      <HomeActionCards />
-      <HomeBestSeller />
+      <HomeBanners />
+
+      {/* <HomeActionCards /> */}
+      {/* <HomeBestSeller /> */}
     </div>
   );
 }

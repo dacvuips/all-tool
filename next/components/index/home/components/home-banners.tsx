@@ -37,11 +37,11 @@ export function HomeBanners({ ...props }) {
     <section>
       <div
         style={{ maxWidth: "1800px" }}
-        className={`grid grid-cols-3 gap-2  grid-row-3 mx-auto  ${!xs ? "-mx-1" : ""}`}
+        className={`grid grid-cols-2 gap-2  grid-row-3  w-full  ${!xs ? "-mx-1" : ""}`}
       >
-        <div className="col-span-3 row-span-2 lg:col-span-2 ">
+        <div className="col-span-2 row-span-2 lg:col-span-2">
           <Swiper
-            className={`relative  w-full`}
+            className={`relative w-full`}
             slidesPerView={1}
             spaceBetween={28}
             // grabCursor
@@ -70,7 +70,7 @@ export function HomeBanners({ ...props }) {
               <>
                 <div
                   ref={navigationPrevRef}
-                  className="absolute w-8 pl-0 text-white transform -translate-y-1/2 cursor-pointer left-2 h-9 top-1/2 flex-center z-100"
+                  className="absolute left-2 top-1/2 pl-0 w-8 h-9 text-white transform -translate-y-1/2 cursor-pointer flex-center z-100"
                 >
                   <i className="text-lg">
                     <FaChevronLeft />
@@ -78,7 +78,7 @@ export function HomeBanners({ ...props }) {
                 </div>
                 <div
                   ref={navigationNextRef}
-                  className="absolute w-8 pr-0 text-white transform -translate-y-1/2 cursor-pointer right-2 h-9 top-1/2 flex-center z-100"
+                  className="absolute right-2 top-1/2 pr-0 w-8 h-9 text-white transform -translate-y-1/2 cursor-pointer flex-center z-100"
                 >
                   <i className="text-lg">
                     <FaChevronRight />
@@ -93,68 +93,18 @@ export function HomeBanners({ ...props }) {
               ref={paginationRef}
             />
             {topBanners.map((item: Banner, index) => (
-              <SwiperSlide className={`w-full max-h-96 ${xs ? "rounded-md" : ""}`} key={index}>
+              <SwiperSlide className={`w-full   ${xs ? "rounded-md" : ""}`} key={index}>
                 <Link
                   href={getBannerHref(item)}
                   {...(item.actionType == "WEBSITE" ? { target: "_blank" } : {})}
                 >
-                  <img
-                    src={item.image}
-                    className={`w-full  h-44 lg:h-72 ${xs ? "rounded-md" : ""}`}
-                  ></img>
+                  <img src={item.image} className={`w-full    ${xs ? "rounded-md" : ""}`}></img>
                 </Link>
               </SwiperSlide>
             ))}
           </Swiper>
         </div>
-        {lg && (
-          <>
-            {topRighBanners.map((item: Banner, index) => {
-              return (
-                <Link
-                  href={getBannerHref(item)}
-                  key={item.id}
-                  className="hidden rounded-md shadow-sm cursor-pointer max-h-36 sm:block"
-                  style={{
-                    maxHeight: "100%",
-                    maxWidth: "100%",
-                    backgroundImage: `url("${item.image}")`,
-                    backgroundSize: "100% 100%",
-                    backgroundPosition: "center",
-                    backgroundRepeat: "no-repeat",
-                  }}
-                  {...(item.actionType == "WEBSITE" ? { target: "_blank" } : {})}
-                >
-                  {/* <div
-                      className="hidden rounded-md shadow-sm cursor-pointer max-h-36 sm:block"
-                      style={{
-                        maxHeight: "100%",
-                        width: "536px",
-                        backgroundImage: `url("${item.image}")`,
-                        backgroundSize: "100% 100%",
-                        backgroundRepeat: "no-repeat",
-                      }}
-                    >
-                      <img
-                        src={`${item.image}`}
-                        className="flex-auto hidden w-full rounded-md shadow-sm cursor-pointer max-h-32 sm:block"
-                      />
-                    </div> */}
-                </Link>
-              );
-            })}
 
-            {/* <div
-              className="hidden rounded-md shadow-sm sm:block"
-              style={{
-                maxHeight: "140px",
-                width: "100%",
-                backgroundImage: `url("https://inanaz.com.vn/wp-content/uploads/2020/02/mau-banner-quang-cao-dep-3.jpg")`,
-                backgroundSize: "cover",
-              }}
-            ></div> */}
-          </>
-        )}
         {/* <div
           className="hidden rounded-md shadow-sm sm:block"
           style={{
