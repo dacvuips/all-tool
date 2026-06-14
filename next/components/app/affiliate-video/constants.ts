@@ -268,6 +268,7 @@ export const DB_NAME = {
   generateElement: "generate-element",
   generateReview: "generate-review",
   affiliateChat: "affiliate-chat",
+  wolf: "wolfDB",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
@@ -276,6 +277,8 @@ export const STORE_NAME = {
   generateElement: "generate-element",
   generateReview: "generate-review",
   affiliateChat: "affiliate-chat",
+  wolf: "wolf-projects",
+  wolfAssets: "wolf-assets",
 };
 
 /** Phân loại từng loại chat AI (mỗi loại = 1 key IndexedDB riêng) */
