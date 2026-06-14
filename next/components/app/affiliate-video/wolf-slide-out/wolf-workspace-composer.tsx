@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { MutableRefObject, ReactNode, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   RiAddLine,
@@ -6,6 +6,7 @@ import {
   RiArrowLeftRightLine,
   RiArrowRightLine,
   RiAspectRatioLine,
+  RiCloseLine,
   RiImageLine,
   RiMagicLine,
   RiPlayCircleLine,
@@ -13,7 +14,7 @@ import {
 } from "react-icons/ri";
 
 import { Popover } from "../../../shared/utilities/popover/popover";
-import { WolfMediaAsset, WolfMediaLibrary } from "./wolf-media-library";
+import { WolfMediaAsset, WolfMediaAssetThumb, WolfMediaLibrary } from "./wolf-media-library";
 
 type MediaType = "image" | "video";
 type VideoMode = "frame" | "component";
@@ -21,6 +22,7 @@ type ImageAspectRatio = "16:9" | "9:16";
 type VideoAspectRatio = "9:16" | "16:9";
 type Multiplier = "1x" | "x2" | "x3" | "x4";
 type Duration = "4s" | "6s" | "8s" | "10s";
+type FrameSlot = "start" | "end";
 
 const IMAGE_MODELS = ["Nano Banana Pro", "Nano Banana 2", "Imagen 4 (Leaving 6/16)"];
 const VIDEO_MODELS = [
@@ -98,6 +100,59 @@ function RatioIcon({ landscape }: { landscape: boolean }) {
   );
 }
 
+function FrameSlotButton({
+  label,
+  asset,
+  active,
+  buttonRef,
+  onClick,
+  onRemove,
+  removeLabel,
+}: {
+  label?: string;
+  asset: WolfMediaAsset | null;
+  active?: boolean;
+  buttonRef?: MutableRefObject<HTMLButtonElement | null>;
+  onClick: () => void;
+  onRemove?: () => void;
+  removeLabel?: string;
+}) {
+  const slot = (
+    <button
+      ref={buttonRef}
+      type="button"
+      onClick={onClick}
+      aria-label={label ?? asset?.name}
+      className={`overflow-hidden rounded-xl transition-all duration-200 ${
+        asset
+          ? "h-14 w-20 border border-slate-200 bg-slate-50 p-0 shadow-sm"
+          : `px-3 py-1.5 text-xs font-medium ${active ? BTN_ACTIVE : BTN_INACTIVE}`
+      }`}
+    >
+      {asset ? <WolfMediaAssetThumb asset={asset} /> : label}
+    </button>
+  );
+
+  if (!asset || !onRemove) return slot;
+
+  return (
+    <div className="relative flex-shrink-0">
+      {slot}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
+        className="flex absolute -top-1 -right-1 z-10 justify-center items-center w-5 h-5 text-white rounded-full transition-colors bg-slate-800 hover:bg-red-600"
+        aria-label={removeLabel}
+      >
+        <RiCloseLine className="text-sm" />
+      </button>
+    </div>
+  );
+}
+
 function AspectRatioButton({
   active,
   ratio,
@@ -138,8 +193,15 @@ export function WolfWorkspaceComposer({
   const { t } = useTranslation();
   const settingsRef = useRef<HTMLDivElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
+  const startFrameRef = useRef<HTMLButtonElement>(null);
+  const endFrameRef = useRef<HTMLButtonElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [showFrameLibrary, setShowFrameLibrary] = useState(false);
+  const [frameLibraryTarget, setFrameLibraryTarget] = useState<FrameSlot | null>(null);
+  const [startFrameAsset, setStartFrameAsset] = useState<WolfMediaAsset | null>(null);
+  const [endFrameAsset, setEndFrameAsset] = useState<WolfMediaAsset | null>(null);
+  const [attachedAssets, setAttachedAssets] = useState<WolfMediaAsset[]>([]);
   const [prompt, setPrompt] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("video");
   const [videoMode, setVideoMode] = useState<VideoMode>("component");
@@ -162,6 +224,7 @@ export function WolfWorkspaceComposer({
 
   const credits = mediaType === "video" ? 24 : 12;
   const showFrameControls = mediaType === "video" && videoMode === "frame";
+  const showAddButton = mediaType !== "video" || videoMode !== "frame";
 
   const durationOptions = useMemo((): Duration[] => {
     if (mediaType !== "video") return [];
@@ -181,31 +244,70 @@ export function WolfWorkspaceComposer({
         ];
 
   const handleAddToCommand = (asset: WolfMediaAsset) => {
-    const tag = asset.type === "image" ? t("Hình ảnh") : t("Video");
-    setPrompt((prev) => (prev ? `${prev} [${tag}: ${asset.name}]` : `[${tag}: ${asset.name}]`));
+    setAttachedAssets((prev) => {
+      if (prev.some((item) => item.id === asset.id)) return prev;
+      return [...prev, asset];
+    });
   };
+
+  const handleRemoveAttachedAsset = (assetId: string) => {
+    setAttachedAssets((prev) => prev.filter((item) => item.id !== assetId));
+  };
+
+  const openFrameLibrary = (target: FrameSlot) => {
+    setFrameLibraryTarget(target);
+    setShowFrameLibrary(true);
+    setShowSettings(false);
+    setShowAssetLibrary(false);
+  };
+
+  const handleFrameAssetSelect = (asset: WolfMediaAsset) => {
+    if (frameLibraryTarget === "start") {
+      setStartFrameAsset(asset);
+    } else if (frameLibraryTarget === "end") {
+      setEndFrameAsset(asset);
+    }
+  };
+
+  const frameLibraryRef = frameLibraryTarget === "end" ? endFrameRef : startFrameRef;
 
   return (
     <div className="relative px-4 pb-5">
       <div className="p-4 bg-white rounded-2xl border shadow-lg border-slate-200 shadow-slate-200/50">
-        {showFrameControls && (
+        {showFrameControls ? (
           <div className="flex gap-2 items-center mb-3">
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-1.5 text-xs font-medium ${BTN_INACTIVE}`}
-            >
-              {t("Bắt đầu")}
-            </button>
+            <FrameSlotButton
+              label={t("Bắt đầu")}
+              asset={startFrameAsset}
+              buttonRef={startFrameRef}
+              active={showFrameLibrary && frameLibraryTarget === "start"}
+              onClick={() => openFrameLibrary("start")}
+            />
             <RiArrowLeftRightLine className="text-slate-400" />
-            <button
-              type="button"
-              className={`rounded-xl px-3 py-1.5 text-xs font-medium ${BTN_INACTIVE}`}
-            >
-              {t("Kết thúc")}
-            </button>
+            <FrameSlotButton
+              label={t("Kết thúc")}
+              asset={endFrameAsset}
+              buttonRef={endFrameRef}
+              active={showFrameLibrary && frameLibraryTarget === "end"}
+              onClick={() => openFrameLibrary("end")}
+            />
+          </div>
+        ) : (
+          <div className="flex gap-2 items-center">
+            {attachedAssets.map((asset) => (
+              <FrameSlotButton
+                key={asset.id}
+                asset={asset}
+                removeLabel={t("Xóa ảnh")}
+                onClick={() => {
+                  setShowAssetLibrary(true);
+                  setShowSettings(false);
+                }}
+                onRemove={() => handleRemoveAttachedAsset(asset.id)}
+              />
+            ))}
           </div>
         )}
-
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -218,26 +320,28 @@ export function WolfWorkspaceComposer({
           ref={settingsRef}
           className="flex gap-3 justify-between items-center pt-3 mt-3 border-t border-slate-100"
         >
-          <div className="flex gap-2 items-center">
-            <button
-              ref={addButtonRef}
-              type="button"
-              onClick={() => {
-                setShowAssetLibrary((prev) => !prev);
-                setShowSettings(false);
-              }}
-              aria-expanded={showAssetLibrary}
-              className={`flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
-                showAssetLibrary ? BTN_ACTIVE : BTN_INACTIVE
-              }`}
-            >
-              <RiAddLine
-                className={`text-lg transition-transform ${showAssetLibrary ? "rotate-45" : ""}`}
-              />
-            </button>
-          </div>
+          {showAddButton && (
+            <div className="flex gap-2 items-center">
+              <button
+                ref={addButtonRef}
+                type="button"
+                onClick={() => {
+                  setShowAssetLibrary((prev) => !prev);
+                  setShowSettings(false);
+                }}
+                aria-expanded={showAssetLibrary}
+                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
+                  showAssetLibrary ? BTN_ACTIVE : BTN_INACTIVE
+                }`}
+              >
+                <RiAddLine
+                  className={`text-lg transition-transform ${showAssetLibrary ? "rotate-45" : ""}`}
+                />
+              </button>
+            </div>
+          )}
 
-          <div className="flex gap-2 items-center">
+          <div className={`flex gap-2 items-center ${showAddButton ? "":"ml-auto"}`}>
             <button
               type="button"
               onClick={() => {
@@ -265,11 +369,23 @@ export function WolfWorkspaceComposer({
 
       <WolfMediaLibrary
         reference={addButtonRef}
-        visible={showAssetLibrary}
+        visible={showAddButton && showAssetLibrary}
         projectId={projectId}
         projectName={projectName}
         onClose={() => setShowAssetLibrary(false)}
         onAddToCommand={handleAddToCommand}
+      />
+
+      <WolfMediaLibrary
+        reference={frameLibraryRef}
+        visible={showFrameLibrary}
+        projectId={projectId}
+        projectName={projectName}
+        onClose={() => {
+          setShowFrameLibrary(false);
+          setFrameLibraryTarget(null);
+        }}
+        onAddToCommand={handleFrameAssetSelect}
       />
 
       <Popover
@@ -321,7 +437,10 @@ export function WolfWorkspaceComposer({
                 </SegmentButton>
                 <SegmentButton
                   active={videoMode === "component"}
-                  onClick={() => setVideoMode("component")}
+                  onClick={() => {
+                    setVideoMode("component");
+                    setShowAssetLibrary(false);
+                  }}
                 >
                   <RiTShirtLine className="text-sm" />
                   {t("Thành phần")}
@@ -350,8 +469,8 @@ export function WolfWorkspaceComposer({
               ))}
             </div>
 
-            <div className="flex gap-1">
-              {(["1x", "x2", "x3", "x4"] as Multiplier[]).map((value) => (
+            <div className="grid grid-cols-4 gap-1">
+              {(["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"] as Multiplier[]).map((value) => (
                 <ChipButton
                   key={value}
                   active={multiplier === value}

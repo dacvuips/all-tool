@@ -14,9 +14,9 @@ import {
   RiUserLine,
 } from "react-icons/ri";
 
-import { VideoDialog } from "../../../shared/common/video-dialog";
 import { useDevice } from "../../../../lib/hooks/useDevice";
 import { useToast } from "../../../../lib/providers/toast-provider";
+import { VideoDialog } from "../../../shared/common/video-dialog";
 import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
 import { Popover } from "../../../shared/utilities/popover/popover";
 import { DB_NAME, STORE_NAME, uid } from "../constants";
@@ -70,11 +70,17 @@ function base64ToBlobUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(new Blob([byteNumbers], { type: mimeType }));
 }
 
+const videoBlobUrlCache = new Map<string, string>();
+
 function getAssetPreviewSrc(asset: WolfMediaAsset): string {
   if (asset.type === "image") {
     return `data:${asset.mimeType};base64,${asset.dataBase64}`;
   }
-  return base64ToBlobUrl(asset.dataBase64, asset.mimeType);
+  const cached = videoBlobUrlCache.get(asset.id);
+  if (cached) return cached;
+  const url = base64ToBlobUrl(asset.dataBase64, asset.mimeType);
+  videoBlobUrlCache.set(asset.id, url);
+  return url;
 }
 
 function detectMediaType(file: File): WolfMediaAssetType | null {
@@ -87,7 +93,7 @@ function detectMediaType(file: File): WolfMediaAssetType | null {
   return null;
 }
 
-function AssetListThumb({
+export function WolfMediaAssetThumb({
   asset,
   className = "w-full h-full",
 }: {
@@ -95,14 +101,6 @@ function AssetListThumb({
   className?: string;
 }) {
   const src = useMemo(() => getAssetPreviewSrc(asset), [asset.id, asset.dataBase64, asset.type]);
-
-  useEffect(() => {
-    return () => {
-      if (asset.type === "video" && src.startsWith("blob:")) {
-        URL.revokeObjectURL(src);
-      }
-    };
-  }, [asset.type, src]);
 
   if (asset.type === "image") {
     return <img src={src} alt={asset.name} className={`object-cover ${className}`} />;
@@ -143,7 +141,6 @@ export function WolfMediaLibrary({
   const toast = useToast();
   const { isMobile } = useDevice();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const previewBlobRef = useRef<string | null>(null);
   const previewSurvivesCloseRef = useRef(false);
 
   const [assets, setAssets] = useState<WolfMediaAsset[]>([]);
@@ -221,25 +218,9 @@ export function WolfMediaLibrary({
   );
 
   const previewSrc = useMemo(() => {
-    if (previewBlobRef.current) {
-      URL.revokeObjectURL(previewBlobRef.current);
-      previewBlobRef.current = null;
-    }
     if (!selectedAsset) return null;
-    const src = getAssetPreviewSrc(selectedAsset);
-    if (selectedAsset.type === "video" && src.startsWith("blob:")) {
-      previewBlobRef.current = src;
-    }
-    return src;
+    return getAssetPreviewSrc(selectedAsset);
   }, [selectedAsset]);
-
-  useEffect(() => {
-    return () => {
-      if (previewBlobRef.current) {
-        URL.revokeObjectURL(previewBlobRef.current);
-      }
-    };
-  }, []);
 
   useEffect(() => {
     if (!visible) {
@@ -364,7 +345,7 @@ export function WolfMediaLibrary({
                 )}
                 <div className="flex relative gap-3 items-center px-3 py-3 bg-black/50">
                   <div className="overflow-hidden flex-shrink-0 w-16 h-16 rounded-xl bg-neutral-800">
-                    <AssetListThumb asset={asset} />
+                    <WolfMediaAssetThumb asset={asset} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate text-neutral-100">{asset.name}</p>
@@ -391,7 +372,7 @@ export function WolfMediaLibrary({
                 }`}
               >
                 <div className="overflow-hidden flex-shrink-0 w-14 h-14 rounded-lg bg-neutral-800">
-                  <AssetListThumb asset={asset} />
+                  <WolfMediaAssetThumb asset={asset} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs truncate text-neutral-200">{asset.name}</p>
@@ -647,7 +628,6 @@ export function WolfMediaLibrary({
               </div>
             </>
           )}
-
         </div>
       </Popover>
 

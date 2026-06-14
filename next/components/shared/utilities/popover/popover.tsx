@@ -37,9 +37,9 @@ export function Popover({
   ...props
 }: PopoverProps) {
   const root = typeof window !== "undefined" ? document.getElementById("popover-root") : null;
+  const isControlled = visible !== undefined;
 
   const getTrigger = () => {
-    if (visible !== undefined) return "manual";
     return trigger == "hover" ? "mouseenter focus" : "click";
   };
 
@@ -55,9 +55,11 @@ export function Popover({
       appendTo={root}
       arrow={arrow}
       maxWidth={maxWidth}
-      trigger={getTrigger()}
+      {...(!isControlled && {
+        trigger: getTrigger(),
+        hideOnClick: hideOnClickOutside || "toggle",
+      })}
       className={className}
-      hideOnClick={hideOnClickOutside || "toggle"}
       zIndex={zIndex}
       visible={visible}
       popperOptions={{
