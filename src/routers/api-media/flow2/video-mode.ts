@@ -4,12 +4,12 @@ import { ServiceImageEnum } from "../../app/constanst";
  * Chế độ tạo video có ảnh trên Flow2 (`gen_image_video.params.video_mode`).
  *
  * - `frame`    — Khung hình: 1 ảnh = startImage; 2 ảnh = startImage + endImage
- * - `component` — Thành phần (Reference): 1, 2 hoặc 3 ảnh tham chiếu
+ * - `component` — Thành phần (Reference): chỉ prompt, hoặc kèm 1–3 ảnh tham chiếu
  */
 export type Flow2VideoMode = "component" | "frame";
 
 export const FLOW2_VIDEO_MODE = {
-  /** Reference — upload 1–3 ảnh tham chiếu */
+  /** Reference — prompt-only hoặc upload 1–3 ảnh tham chiếu */
   COMPONENT: "component",
   /** Khung hình — startImage (1 ảnh) hoặc startImage + endImage (2 ảnh) */
   FRAME: "frame",
@@ -17,7 +17,7 @@ export const FLOW2_VIDEO_MODE = {
 
 /** Số ảnh tối đa theo từng chế độ Flow2 */
 export const FLOW2_VIDEO_IMAGE_LIMITS = {
-  component: { min: 1, max: 3 },
+  component: { min: 0, max: 3 },
   frame: { min: 1, max: 2 },
 } as const;
 
@@ -51,7 +51,7 @@ export function assertFlow2VideoImageCount(mode: Flow2VideoMode, imageCount: num
       throw err;
     }
     const err: any = new Error(
-      "Chế độ component (Reference) hỗ trợ từ 1 đến 3 ảnh tham chiếu"
+      "Chế độ component (Reference) hỗ trợ tối đa 3 ảnh tham chiếu"
     );
     err.statusCode = 400;
     throw err;
@@ -92,11 +92,10 @@ export type ResolveFlow2VideoModeInput = {
  * 2. `explicitMode` (video_mode client gửi lên — fallback khi không có serviceImageType)
  * 3. Suy luận theo số ảnh: 3 ảnh → component; 1–2 ảnh → frame (start/end)
  *
- * Trả `undefined` khi không có ảnh (text-to-video).
+ * Trả `undefined` khi không có ảnh và client không chỉ định video_mode / serviceImageType.
  */
 export function resolveFlow2VideoMode(input: ResolveFlow2VideoModeInput): Flow2VideoMode | undefined {
   const { imageCount } = input;
-  if (imageCount <= 0) return undefined;
 
   const fromServiceType = mapServiceImageTypeToFlow2VideoMode(input.serviceImageType);
   if (fromServiceType) {
@@ -109,6 +108,8 @@ export function resolveFlow2VideoMode(input: ResolveFlow2VideoModeInput): Flow2V
     assertFlow2VideoImageCount(fromExplicit, imageCount);
     return fromExplicit;
   }
+
+  if (imageCount <= 0) return undefined;
 
   const inferred: Flow2VideoMode =
     imageCount >= 3 ? FLOW2_VIDEO_MODE.COMPONENT : FLOW2_VIDEO_MODE.FRAME;

@@ -51,6 +51,8 @@ export type MediaGenerationRunOptions<TBody = any> = {
   onProgress?: (progress: number, message?: string) => void;
   /** Callback text message riêng (nếu UI muốn tách progress vs message) */
   onStatusMessage?: (message: string) => void;
+  /** Gọi ngay sau khi enqueue thành công — dùng để gắn jobId lên item UI */
+  onJobEnqueued?: (jobId: string) => void;
   /**
    * Khoảng poll fallback (ms). Mặc định 8000ms.
    * Đặt 0 để tắt fallback (chỉ dựa subscription).
@@ -159,6 +161,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         }
         jobId = String(data.jobId);
         handle.jobId = jobId;
+        opts.onJobEnqueued?.(jobId);
       } catch (err: any) {
         const idx = activeHandlesRef.current.indexOf(handle);
         if (idx >= 0) activeHandlesRef.current.splice(idx, 1);

@@ -1,8 +1,8 @@
 /**
- * Route POST tạo ảnh trong affiliate scene (có productImages / objectToPersonifyImages).
+ * Route POST tạo video cho Wolf Workspace.
  *
- * Kiểm tra giới hạn luồng ảnh → lưu payload Redis → tạo job → trả `{ jobId }`.
- * Client subscribe `mediaGenerationJobChanged(jobId)` để nhận kết quả.
+ * - component (Thành phần): chỉ prompt, hoặc kèm 1–3 ảnh tham chiếu
+ * - frame (Khung hình): 1 ảnh startImage hoặc 2 ảnh startImage + endImage
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
@@ -10,12 +10,13 @@ import logger from "../../../helpers/logger";
 import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
-import { checkImageLimit, ReferenceImageInput } from "./_shared";
+import { checkVideoLimit } from "./_shared";
+import { assertWolfVideoRequest } from "./_wolf-generation.shared";
 
 export default [
   {
     method: "post",
-    path: "/api/app/generation-image/",
+    path: "/api/app/generate-video-wolf/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -23,37 +24,42 @@ export default [
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
 
         const body = req.body as {
-          prompt: string;
+          prompt?: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
-          productImages?: string[];
-          objectToPersonifyImages?: ReferenceImageInput[];
-          productImagePrompt?: string;
+          video_mode?: string;
           config?: {
-            numberOfImages?: number;
+            prompt?: string;
             aspectRatio?: "16:9" | "9:16";
-            noText?: boolean;
-            imageModel?: string;
+            videoMode?: string;
           };
           _metadata?: Record<string, unknown>;
         };
 
-        if (!body?.prompt) {
-          return res.status(400).json({ message: "Thiếu prompt" });
-        }
-
-        await checkImageLimit(context.id);
+        const resolvedVideoMode = assertWolfVideoRequest(body);
+        await checkVideoLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
+        const normalizedPayload = resolvedVideoMode
+          ? {
+              ...requestPayload,
+              video_mode: resolvedVideoMode,
+              config: {
+                ...requestPayload.config,
+                videoMode: resolvedVideoMode,
+              },
+            }
+          : requestPayload;
+
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,
-          type: MediaGenerationJobType.GENERATION_IMAGE,
-          requestPayload,
-          metadata: _metadata,
+          type: MediaGenerationJobType.GENERATION_WOLF_VIDEO,
+          requestPayload: normalizedPayload,
+          metadata: { source: "wolf-workspace", ..._metadata },
         });
 
         res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
-        logger.error(`[generation-image] Lỗi enqueue: ${err?.message}`);
+        logger.error(`[generate-video-wolf] Lỗi enqueue: ${err?.message}`);
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }

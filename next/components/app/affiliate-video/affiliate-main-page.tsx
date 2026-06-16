@@ -27,6 +27,7 @@ import { ReviewPage } from "./review-product/review-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
 import { StoryboardPage } from "./storyboard/storyboard-page";
 import { TrendingPage } from "./trending/trending-page";
+import { WolfSlideOutWidget } from "./wolf-slide-out/wolf-slide-out";
 
 export default function AffiliateMainPage() {
   const { t } = useTranslation();
@@ -154,6 +155,7 @@ export default function AffiliateMainPage() {
           </TabGroup.Tab>
         ))}
       </TabGroup>
+      <WolfSlideOutWidget />
     </div>
   );
 }

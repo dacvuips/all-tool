@@ -13,6 +13,8 @@ export interface PopoverProps extends ReactProps {
   maxWidth?: string | number;
   animation?: "shift-away-subtle" | "fade";
   onShown?: (val: boolean) => any;
+  onHidden?: () => any;
+  onClickOutside?: () => any;
   className?: string;
   zIndex?: number;
   strategy?: "fixed" | "absolute";
@@ -35,6 +37,7 @@ export function Popover({
   ...props
 }: PopoverProps) {
   const root = typeof window !== "undefined" ? document.getElementById("popover-root") : null;
+  const isControlled = visible !== undefined;
 
   const getTrigger = () => {
     return trigger == "hover" ? "mouseenter focus" : "click";
@@ -52,9 +55,11 @@ export function Popover({
       appendTo={root}
       arrow={arrow}
       maxWidth={maxWidth}
-      trigger={getTrigger()}
+      {...(!isControlled && {
+        trigger: getTrigger(),
+        hideOnClick: hideOnClickOutside || "toggle",
+      })}
       className={className}
-      hideOnClick={hideOnClickOutside || "toggle"}
       zIndex={zIndex}
       visible={visible}
       popperOptions={{
@@ -63,6 +68,12 @@ export function Popover({
       onShown={() => {
         props.onShown ? props.onShown(true) : false;
         setTimeout(() => forceCheck(), 100);
+      }}
+      onHidden={() => {
+        props.onHidden?.();
+      }}
+      onClickOutside={() => {
+        props.onClickOutside?.();
       }}
     ></Tippy>
   );
