@@ -46,12 +46,7 @@ export default function AffiliateMainPage() {
       value: TrendingTypeEnum.PROMPT,
       component: <TrendingPage />,
     },
-    // {
-    //   icon: "🔥",
-    //   label: t("ChatBot AI"),
-    //   value: TrendingTypeEnum.CHATBOT,
-    //   component: <ChatbotPage />,
-    // },
+
     {
       icon: "🔥",
       label: t("App"),

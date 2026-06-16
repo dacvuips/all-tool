@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { RiLock2Line } from "react-icons/ri";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { SubscriptionPlanEnum } from "../../../../../lib/repo";
 import { TrendingTypeEnum } from "../../../../../lib/repo/list/trending.repo";
+import { NotFound } from "../../../../shared/utilities/misc";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { AppCategoryList } from "./app-category-list";
 import { AppPromptRank } from "./app-prompt-rank";
@@ -9,6 +13,11 @@ import { AppPromptRank } from "./app-prompt-rank";
 export const AppVideoRightPanel = () => {
   const { t } = useTranslation();
   const [tabIndex, setTabIndex] = useState(0);
+  const { customer } = useAuth();
+  const permissionView =
+    customer?.googlePackage?.subscription !== SubscriptionPlanEnum.FREE &&
+    customer?.googlePackage?.subscription !== SubscriptionPlanEnum.TRIAL &&
+    customer?.googlePackage;
 
   return (
     <div className="flex overflow-hidden flex-col flex-1">
@@ -32,7 +41,16 @@ export const AppVideoRightPanel = () => {
           />
         </TabGroup.Tab>
         <TabGroup.Tab label={t("ChatBot App")}>
-          <AppCategoryList key={TrendingTypeEnum.CHATBOT} type={TrendingTypeEnum.CHATBOT} />
+          {permissionView ? (
+            <AppCategoryList key={TrendingTypeEnum.CHATBOT} type={TrendingTypeEnum.CHATBOT} />
+          ) : (
+            <NotFound
+              icon={<RiLock2Line size={30} className="text-gray-500" />}
+              text={t(
+                "Bạn không có quyền xem danh sách ChatBot, Chức năng này chỉ dành cho tài khoản có gói đăng ký cao cấp hơn."
+              )}
+            />
+          )}
         </TabGroup.Tab>
         <TabGroup.Tab label={t("Bảng xếp hạng")}>
           <AppPromptRank />

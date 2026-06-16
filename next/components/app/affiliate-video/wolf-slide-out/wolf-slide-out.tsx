@@ -3,6 +3,8 @@ import { ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiLoader4Line } from "react-icons/ri";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
+import { SubscriptionPlanEnum } from "../../../../lib/repo";
 import { Slideout, SlideoutProps } from "../../../shared/utilities/dialog/slideout";
 import { Img } from "../../../shared/utilities/misc";
 
@@ -25,6 +27,13 @@ interface WolfSlideOutProps extends SlideoutProps {
 }
 
 export function WolfSlideOut({ children, className = "", ...props }: WolfSlideOutProps) {
+  const { customer } = useAuth();
+  if (
+    customer?.googlePackage?.subscription === SubscriptionPlanEnum.FREE ||
+    !customer?.googlePackage
+  ) {
+    return null;
+  }
   return (
     <Slideout
       {...props}
@@ -46,12 +55,17 @@ export function WolfSlideOutWidget() {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
-
+  const { customer } = useAuth();
   const handleOpen = () => {
     setHasOpened(true);
     setIsOpen(true);
   };
-
+  if (
+    customer?.googlePackage?.subscription === SubscriptionPlanEnum.FREE ||
+    !customer?.googlePackage
+  ) {
+    return null;
+  }
   return (
     <>
       <button
