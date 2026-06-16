@@ -279,6 +279,10 @@ export const STORE_NAME = {
   affiliateChat: "affiliate-chat",
   wolf: "wolf-projects",
   wolfAssets: "wolf-assets",
+  wolfItems: "wolf-items",
+  wolfSceneImages: "wolf-scene-images",
+  wolfSceneVideos: "wolf-scene-videos",
+  wolfComposerSettings: "wolf-composer-settings",
 };
 
 /** Phân loại từng loại chat AI (mỗi loại = 1 key IndexedDB riêng) */

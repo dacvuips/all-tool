@@ -1,4 +1,12 @@
-import { MutableRefObject, ReactNode, useMemo, useRef, useState } from "react";
+import {
+  MutableRefObject,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import {
   RiAddLine,
@@ -8,35 +16,59 @@ import {
   RiAspectRatioLine,
   RiCloseLine,
   RiImageLine,
+  RiLoader4Line,
   RiMagicLine,
   RiPlayCircleLine,
   RiTShirtLine,
 } from "react-icons/ri";
 
+import { useToast } from "../../../../lib/providers/toast-provider";
 import { Popover } from "../../../shared/utilities/popover/popover";
+import { DB_NAME, STORE_NAME } from "../constants";
+import { useIndexedDB } from "../hook/useIndexedDB";
 import { WolfMediaAsset, WolfMediaAssetThumb, WolfMediaLibrary } from "./wolf-media-library";
+import { WolfProjectItem } from "./wolf-project-item";
+import {
+  buildWolfComposerSettingsSnapshot,
+  getWolfComposerSettingsKey,
+  normalizeWolfComposerSettings,
+  WolfComposerSettings,
+} from "./wolf-workspace-composer-settings";
+import {
+  useWolfWorkspaceGeneration,
+  WOLF_IMAGE_MODELS,
+  WOLF_MAX_COMPONENT_REFERENCES,
+  WOLF_MAX_IMAGE_REFERENCES,
+  WolfGenerationSubmitInput,
+  WolfImageModelKey,
+  WolfMultiplier,
+} from "./wolf-workspace-generation";
 
 type MediaType = "image" | "video";
 type VideoMode = "frame" | "component";
 type ImageAspectRatio = "16:9" | "9:16";
 type VideoAspectRatio = "9:16" | "16:9";
-type Multiplier = "1x" | "x2" | "x3" | "x4";
 type Duration = "4s" | "6s" | "8s" | "10s";
 type FrameSlot = "start" | "end";
-
-const IMAGE_MODELS = ["Nano Banana Pro", "Nano Banana 2", "Imagen 4 (Leaving 6/16)"];
 const VIDEO_MODELS = [
-  "Omni Flash",
+  "Veo 3.1 Lite (Lower Priority )",
   "Veo 3.1 Quality",
   "Veo 3.1 Fast",
-  "Veo 3.1 Lite (Lower Priority )",
-];
+  "Omni Flash",
+] as const;
+
+const MPOINT_VIDEO_MODELS = new Set<string>(["Veo 3.1 Quality", "Veo 3.1 Fast", "Omni Flash"]);
 
 const ALL_DURATIONS: Duration[] = ["4s", "6s", "8s", "10s"];
 const DURATIONS_WITHOUT_10S: Duration[] = ["4s", "6s", "8s"];
 const OMNI_FLASH_MODEL = "Omni Flash";
 
+function isMPointVideoModel(model: string): boolean {
+  return MPOINT_VIDEO_MODELS.has(model);
+}
+
 const SETTINGS_PANEL_WIDTH = "w-[280px]";
+const MAX_PROMPT_TEXTAREA_ROWS = 6;
 
 const BTN_INACTIVE =
   "border border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50";
@@ -125,11 +157,15 @@ function FrameSlotButton({
       aria-label={label ?? asset?.name}
       className={`overflow-hidden rounded-xl transition-all duration-200 ${
         asset
-          ? "h-14 w-20 border border-slate-200 bg-slate-50 p-0 shadow-sm"
+          ? "relative block h-14 w-20 flex-shrink-0 border border-slate-200 bg-slate-50 p-0 shadow-sm"
           : `px-3 py-1.5 text-xs font-medium ${active ? BTN_ACTIVE : BTN_INACTIVE}`
       }`}
     >
-      {asset ? <WolfMediaAssetThumb asset={asset} /> : label}
+      {asset ? (
+        <WolfMediaAssetThumb asset={asset} className="absolute inset-0 w-full h-full" />
+      ) : (
+        label
+      )}
     </button>
   );
 
@@ -144,7 +180,7 @@ function FrameSlotButton({
           e.stopPropagation();
           onRemove();
         }}
-        className="flex absolute -top-1 -right-1 z-10 justify-center items-center w-5 h-5 text-white rounded-full transition-colors bg-slate-800 hover:bg-red-600"
+        className="flex absolute -top-1 -right-1 z-10 justify-center items-center w-5 h-5 text-white bg-red-600 rounded-full transition-colors hover:bg-red-300"
         aria-label={removeLabel}
       >
         <RiCloseLine className="text-sm" />
@@ -186,15 +222,32 @@ function AspectRatioButton({
 export function WolfWorkspaceComposer({
   projectId,
   projectName,
+  generating,
+  progress,
+  submit,
+  onGenerationItemsCreated,
+  onGenerationItemProgress,
+  onGenerationItemUpdated,
+  onGenerationSceneMediaUpdated,
 }: {
   projectId?: string | null;
   projectName?: string;
+  generating: boolean;
+  progress: number;
+  submit: ReturnType<typeof useWolfWorkspaceGeneration>["submit"];
+  onGenerationItemsCreated?: (items: WolfProjectItem[]) => void;
+  onGenerationItemProgress?: (itemIds: string[], progress: number) => void;
+  onGenerationItemUpdated?: (item: WolfProjectItem) => void;
+  onGenerationSceneMediaUpdated?: WolfGenerationSubmitInput["onSceneMediaUpdated"];
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const settingsRef = useRef<HTMLDivElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const startFrameRef = useRef<HTMLButtonElement>(null);
   const endFrameRef = useRef<HTMLButtonElement>(null);
+  const frameLibraryTargetRef = useRef<FrameSlot | null>(null);
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showAssetLibrary, setShowAssetLibrary] = useState(false);
   const [showFrameLibrary, setShowFrameLibrary] = useState(false);
@@ -207,13 +260,95 @@ export function WolfWorkspaceComposer({
   const [videoMode, setVideoMode] = useState<VideoMode>("component");
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>("16:9");
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>("16:9");
-  const [multiplier, setMultiplier] = useState<Multiplier>("x2");
   const [duration, setDuration] = useState<Duration>("10s");
-  const [modelIndex, setModelIndex] = useState(0);
+  const [imageModelKey, setImageModelKey] = useState<WolfImageModelKey>("bananaPro");
+  const [videoModelIndex, setVideoModelIndex] = useState(0);
+  const [multiplier, setMultiplier] = useState<WolfMultiplier>("x2");
   const [showModelMenu, setShowModelMenu] = useState(false);
+  const [isSettingsHydrated, setIsSettingsHydrated] = useState(false);
 
-  const models = mediaType === "image" ? IMAGE_MODELS : VIDEO_MODELS;
-  const selectedModel = models[modelIndex] ?? models[0];
+  const settingsDB = useIndexedDB<WolfComposerSettings>(
+    STORE_NAME.wolfComposerSettings,
+    DB_NAME.wolf
+  );
+  const composerSettingsKey = getWolfComposerSettingsKey(projectId);
+
+  const applyComposerSettings = useCallback((settings: WolfComposerSettings) => {
+    setMediaType(settings.mediaType);
+    setVideoMode(settings.videoMode);
+    setImageAspectRatio(settings.imageAspectRatio);
+    setVideoAspectRatio(settings.videoAspectRatio);
+    setDuration(settings.duration);
+    setImageModelKey(settings.imageModelKey);
+    setVideoModelIndex(settings.videoModelIndex);
+    setMultiplier(settings.multiplier);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setIsSettingsHydrated(false);
+
+    void (async () => {
+      const saved = await settingsDB.get(composerSettingsKey);
+      if (cancelled) return;
+
+      const normalized = normalizeWolfComposerSettings(
+        saved,
+        composerSettingsKey,
+        VIDEO_MODELS.length
+      );
+      if (normalized) {
+        const savedModel = VIDEO_MODELS[normalized.videoModelIndex];
+        if (savedModel && isMPointVideoModel(savedModel)) {
+          normalized.videoModelIndex = 0;
+        }
+        applyComposerSettings(normalized);
+      }
+      setIsSettingsHydrated(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [applyComposerSettings, composerSettingsKey, settingsDB]);
+
+  useEffect(() => {
+    if (!isSettingsHydrated) return;
+
+    const snapshot = buildWolfComposerSettingsSnapshot(
+      {
+        projectId: composerSettingsKey,
+        mediaType,
+        videoMode,
+        imageAspectRatio,
+        videoAspectRatio,
+        duration,
+        imageModelKey,
+        videoModelIndex,
+        multiplier,
+      },
+      VIDEO_MODELS.length
+    );
+
+    void settingsDB.set(composerSettingsKey, snapshot);
+  }, [
+    composerSettingsKey,
+    duration,
+    imageAspectRatio,
+    imageModelKey,
+    isSettingsHydrated,
+    mediaType,
+    multiplier,
+    settingsDB,
+    videoAspectRatio,
+    videoMode,
+    videoModelIndex,
+  ]);
+
+  const selectedImageModel =
+    WOLF_IMAGE_MODELS.find((item) => item.key === imageModelKey) ?? WOLF_IMAGE_MODELS[0];
+  const selectedVideoModel = VIDEO_MODELS[videoModelIndex] ?? VIDEO_MODELS[0];
+  const selectedModel = mediaType === "image" ? selectedImageModel.label : selectedVideoModel;
 
   const statusLabel = useMemo(() => {
     if (mediaType === "image") {
@@ -224,13 +359,33 @@ export function WolfWorkspaceComposer({
 
   const credits = mediaType === "video" ? 24 : 12;
   const showFrameControls = mediaType === "video" && videoMode === "frame";
-  const showAddButton = mediaType !== "video" || videoMode !== "frame";
+  const showAddButton = !showFrameControls;
+  const showAttachedAssets = showAddButton;
+
+  const adjustPromptTextareaHeight = useCallback(() => {
+    const el = promptTextareaRef.current;
+    if (!el) return;
+
+    el.style.height = "auto";
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 22;
+    const maxHeight = lineHeight * MAX_PROMPT_TEXTAREA_ROWS;
+    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? "auto" : "hidden";
+  }, []);
+
+  useEffect(() => {
+    adjustPromptTextareaHeight();
+  }, [adjustPromptTextareaHeight, prompt, showFrameControls]);
 
   const durationOptions = useMemo((): Duration[] => {
     if (mediaType !== "video") return [];
-    if (selectedModel === OMNI_FLASH_MODEL) return ALL_DURATIONS;
+    if (selectedVideoModel === OMNI_FLASH_MODEL) return ALL_DURATIONS;
     return DURATIONS_WITHOUT_10S;
-  }, [mediaType, selectedModel]);
+  }, [mediaType, selectedVideoModel]);
+
+  const maxAttachedAssets =
+    mediaType === "image" ? WOLF_MAX_IMAGE_REFERENCES : WOLF_MAX_COMPONENT_REFERENCES;
+  const canAddMoreAssets = showAddButton && attachedAssets.length < maxAttachedAssets;
 
   const aspectOptions =
     mediaType === "image"
@@ -246,15 +401,73 @@ export function WolfWorkspaceComposer({
   const handleAddToCommand = (asset: WolfMediaAsset) => {
     setAttachedAssets((prev) => {
       if (prev.some((item) => item.id === asset.id)) return prev;
+      if (prev.length >= maxAttachedAssets) return prev;
       return [...prev, asset];
     });
   };
+
+  const handleSubmit = useCallback(() => {
+    if (generating || !prompt.trim()) return;
+
+    const currentPrompt = prompt.trim();
+    setPrompt("");
+
+    void submit({
+      mediaType,
+      projectId,
+      onItemsCreated: onGenerationItemsCreated,
+      onItemProgress: onGenerationItemProgress,
+      onItemUpdated: onGenerationItemUpdated,
+      onSceneMediaUpdated: onGenerationSceneMediaUpdated,
+      image:
+        mediaType === "image"
+          ? {
+              prompt: currentPrompt,
+              aspectRatio: imageAspectRatio,
+              imageModel: imageModelKey,
+              multiplier,
+              referenceAssets: attachedAssets,
+            }
+          : undefined,
+      video:
+        mediaType === "video"
+          ? {
+              prompt: currentPrompt,
+              aspectRatio: videoAspectRatio,
+              videoMode,
+              multiplier,
+              referenceAssets: attachedAssets,
+              startFrameAsset,
+              endFrameAsset,
+            }
+          : undefined,
+    });
+  }, [
+    attachedAssets,
+    endFrameAsset,
+    generating,
+    imageAspectRatio,
+    imageModelKey,
+    mediaType,
+    multiplier,
+    onGenerationItemProgress,
+    onGenerationItemsCreated,
+    onGenerationItemUpdated,
+    onGenerationSceneMediaUpdated,
+    projectId,
+    prompt,
+    startFrameAsset,
+    submit,
+    videoAspectRatio,
+    videoMode,
+  ]);
 
   const handleRemoveAttachedAsset = (assetId: string) => {
     setAttachedAssets((prev) => prev.filter((item) => item.id !== assetId));
   };
 
   const openFrameLibrary = (target: FrameSlot) => {
+    frameLibraryTargetRef.current = target;
     setFrameLibraryTarget(target);
     setShowFrameLibrary(true);
     setShowSettings(false);
@@ -262,9 +475,14 @@ export function WolfWorkspaceComposer({
   };
 
   const handleFrameAssetSelect = (asset: WolfMediaAsset) => {
-    if (frameLibraryTarget === "start") {
+    if (asset.type !== "image") {
+      toast.error(t("Khung hình chỉ hỗ trợ ảnh"));
+      return;
+    }
+    const target = frameLibraryTargetRef.current ?? frameLibraryTarget;
+    if (target === "start") {
       setStartFrameAsset(asset);
-    } else if (frameLibraryTarget === "end") {
+    } else if (target === "end") {
       setEndFrameAsset(asset);
     }
   };
@@ -274,7 +492,7 @@ export function WolfWorkspaceComposer({
   return (
     <div className="relative px-4 pb-5">
       <div className="p-4 bg-white rounded-2xl border shadow-lg border-slate-200 shadow-slate-200/50">
-        {showFrameControls ? (
+        {showFrameControls && (
           <div className="flex gap-2 items-center mb-3">
             <FrameSlotButton
               label={t("Bắt đầu")}
@@ -292,8 +510,9 @@ export function WolfWorkspaceComposer({
               onClick={() => openFrameLibrary("end")}
             />
           </div>
-        ) : (
-          <div className="flex gap-2 items-center">
+        )}
+        {showAttachedAssets && attachedAssets.length > 0 && (
+          <div className="flex gap-2 items-center mb-3">
             {attachedAssets.map((asset) => (
               <FrameSlotButton
                 key={asset.id}
@@ -309,9 +528,10 @@ export function WolfWorkspaceComposer({
           </div>
         )}
         <textarea
+          ref={promptTextareaRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          rows={showFrameControls ? 2 : 1}
+          rows={1}
           placeholder={t("Bạn muốn tạo gì?")}
           className="w-full text-sm leading-relaxed bg-transparent outline-none resize-none text-slate-700 placeholder:text-slate-400"
         />
@@ -322,22 +542,25 @@ export function WolfWorkspaceComposer({
         >
           {showAddButton && (
             <div className="flex gap-2 items-center">
-              <button
-                ref={addButtonRef}
-                type="button"
-                onClick={() => {
-                  setShowAssetLibrary((prev) => !prev);
-                  setShowSettings(false);
-                }}
-                aria-expanded={showAssetLibrary}
-                className={`flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
-                  showAssetLibrary ? BTN_ACTIVE : BTN_INACTIVE
-                }`}
-              >
-                <RiAddLine
-                  className={`text-lg transition-transform ${showAssetLibrary ? "rotate-45" : ""}`}
-                />
-              </button>
+              {canAddMoreAssets && (
+                <button
+                  ref={addButtonRef}
+                  type="button"
+                  onClick={() => {
+                    setShowAssetLibrary((prev) => !prev);
+                    setShowSettings(false);
+                  }}
+                  aria-expanded={showAssetLibrary}
+                  className={`flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 ${
+                    showAssetLibrary ? BTN_ACTIVE : BTN_INACTIVE
+                  }`}
+                >
+                  <RiAddLine
+                    className={`text-lg transition-transform ${
+                      showAssetLibrary ? "rotate-45" : ""}`}
+                  />
+                </button>
+              )}
             </div>
           )}
 
@@ -359,17 +582,35 @@ export function WolfWorkspaceComposer({
             </button>
             <button
               type="button"
-              className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-white bg-blue-600 rounded-full border border-blue-500 shadow-sm transition-all hover:bg-blue-700"
+              onClick={handleSubmit}
+              disabled={generating || !prompt.trim()}
+              className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-white bg-blue-600 rounded-full border border-blue-500 shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label={generating ? t("Đang tạo...") : t("Tạo")}
             >
-              <RiArrowRightLine className="text-lg" />
+              {generating ? (
+                <RiLoader4Line className="text-lg animate-spin" />
+              ) : (
+                <RiArrowRightLine className="text-lg" />
+              )}
             </button>
           </div>
         </div>
       </div>
 
+      {generating && progress > 0 && (
+        <div className="px-1 mt-2">
+          <div className="overflow-hidden h-1 rounded-full bg-slate-100">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
       <WolfMediaLibrary
         reference={addButtonRef}
-        visible={showAddButton && showAssetLibrary}
+        visible={showAddButton && canAddMoreAssets && showAssetLibrary}
         projectId={projectId}
         projectName={projectName}
         onClose={() => setShowAssetLibrary(false)}
@@ -384,6 +625,7 @@ export function WolfWorkspaceComposer({
         onClose={() => {
           setShowFrameLibrary(false);
           setFrameLibraryTarget(null);
+          frameLibraryTargetRef.current = null;
         }}
         onAddToCommand={handleFrameAssetSelect}
       />
@@ -409,7 +651,7 @@ export function WolfWorkspaceComposer({
                 active={mediaType === "image"}
                 onClick={() => {
                   setMediaType("image");
-                  setModelIndex(0);
+                  setImageModelKey("bananaPro");
                   setShowModelMenu(false);
                 }}
               >
@@ -420,7 +662,7 @@ export function WolfWorkspaceComposer({
                 active={mediaType === "video"}
                 onClick={() => {
                   setMediaType("video");
-                  setModelIndex(0);
+                  setVideoModelIndex(0);
                   setShowModelMenu(false);
                 }}
               >
@@ -469,18 +711,22 @@ export function WolfWorkspaceComposer({
               ))}
             </div>
 
-            <div className="grid grid-cols-4 gap-1">
-              {(["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"] as Multiplier[]).map((value) => (
-                <ChipButton
-                  key={value}
-                  active={multiplier === value}
-                  onClick={() => setMultiplier(value)}
-                  className="flex-1"
-                >
-                  {value}
-                </ChipButton>
-              ))}
-            </div>
+            {(mediaType === "image" || mediaType === "video") && (
+              <div className="grid grid-cols-4 gap-1">
+                {(["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"] as WolfMultiplier[]).map(
+                  (value) => (
+                    <ChipButton
+                      key={value}
+                      active={multiplier === value}
+                      onClick={() => setMultiplier(value)}
+                      className="flex-1"
+                    >
+                      {value}
+                    </ChipButton>
+                  )
+                )}
+              </div>
+            )}
 
             <div className={`relative ${showModelMenu ? "z-30" : ""}`}>
               <button
@@ -504,28 +750,55 @@ export function WolfWorkspaceComposer({
               </button>
               {showModelMenu && (
                 <div className="overflow-hidden absolute right-0 left-0 bottom-full z-40 mb-1 bg-white rounded-lg border shadow-lg border-slate-200">
-                  {models.map((model, index) => (
-                    <button
-                      key={model}
-                      type="button"
-                      onClick={() => {
-                        const nextModel = models[index];
-                        setModelIndex(index);
-                        setShowModelMenu(false);
-                        if (nextModel !== OMNI_FLASH_MODEL && duration === "10s") {
-                          setDuration("8s");
-                        }
-                      }}
-                      className={`flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-slate-50 ${
-                        modelIndex === index
-                          ? "bg-blue-50 font-medium text-blue-600"
-                          : "text-slate-600"
-                      }`}
-                    >
-                      <span className="text-[10px]">{mediaType === "image" ? "🍌" : "🎥"}</span>
-                      <span className="truncate">{model}</span>
-                    </button>
-                  ))}
+                  {mediaType === "image"
+                    ? WOLF_IMAGE_MODELS.map((model) => (
+                        <button
+                          key={model.key}
+                          type="button"
+                          onClick={() => {
+                            setImageModelKey(model.key);
+                            setShowModelMenu(false);
+                          }}
+                          className={`flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-[11px] transition-colors hover:bg-slate-50 ${
+                            imageModelKey === model.key
+                              ? "bg-blue-50 font-medium text-blue-600"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          <span className="text-[10px]">🍌</span>
+                          <span className="truncate">{model.label}</span>
+                        </button>
+                      ))
+                    : VIDEO_MODELS.map((model, index) => {
+                        const requiresMPoint = isMPointVideoModel(model);
+                        return (
+                          <button
+                            key={model}
+                            type="button"
+                            onClick={() => {
+                              if (requiresMPoint) {
+                                toast.info(t("Chức năng này đang phát triển"));
+                                return;
+                              }
+                              setVideoModelIndex(index);
+                              setShowModelMenu(false);
+                              if (model !== OMNI_FLASH_MODEL && duration === "10s") {
+                                setDuration("8s");
+                              }
+                            }}
+                            className={`flex w-full items-center gap-1.5 px-2.5 py-2 text-left text-[11px] transition-colors ${
+                              requiresMPoint ? "cursor-not-allowed opacity-50" : "hover:bg-slate-50"
+                            } ${
+                              !requiresMPoint && videoModelIndex === index
+                                ? "bg-blue-50 font-medium text-blue-600"
+                                : "text-slate-600"
+                            }`}
+                          >
+                            <span className="text-[10px]">🎥</span>
+                            <span className="truncate">{model}</span>
+                          </button>
+                        );
+                      })}
                 </div>
               )}
             </div>

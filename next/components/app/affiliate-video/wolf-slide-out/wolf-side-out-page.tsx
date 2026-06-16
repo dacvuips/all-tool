@@ -8,6 +8,7 @@ type View = "projects" | "workspace";
 export function WolfSlideOutPage() {
   const [view, setView] = useState<View>("projects");
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [gridRefreshKey, setGridRefreshKey] = useState(0);
 
   const openWorkspace = (projectId: string) => {
     setActiveProjectId(projectId);
@@ -21,12 +22,17 @@ export function WolfSlideOutPage() {
         onBack={() => {
           setView("projects");
           setActiveProjectId(null);
+          setGridRefreshKey((key) => key + 1);
         }}
       />
     );
   }
 
   return (
-    <WolfProjectGrid onNewProject={openWorkspace} onOpenProject={openWorkspace} />
+    <WolfProjectGrid
+      key={gridRefreshKey}
+      onNewProject={openWorkspace}
+      onOpenProject={openWorkspace}
+    />
   );
 }

@@ -1,8 +1,7 @@
 /**
- * Route POST tạo ảnh trong affiliate scene (có productImages / objectToPersonifyImages).
+ * Route POST tạo ảnh cho Wolf Workspace.
  *
- * Kiểm tra giới hạn luồng ảnh → lưu payload Redis → tạo job → trả `{ jobId }`.
- * Client subscribe `mediaGenerationJobChanged(jobId)` để nhận kết quả.
+ * Giới hạn Wolf: prompt + tối đa 10 ảnh tham chiếu, model bananaPro/banana2, tỷ lệ 16:9|9:16.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
@@ -10,12 +9,13 @@ import logger from "../../../helpers/logger";
 import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
-import { checkImageLimit, ReferenceImageInput } from "./_shared";
+import { checkImageLimit } from "./_shared";
+import { assertWolfImageRequest } from "./_wolf-generation.shared";
 
 export default [
   {
     method: "post",
-    path: "/api/app/generation-image/",
+    path: "/api/app/generate-image-wolf/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
@@ -25,35 +25,28 @@ export default [
         const body = req.body as {
           prompt: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
-          productImages?: string[];
-          objectToPersonifyImages?: ReferenceImageInput[];
-          productImagePrompt?: string;
           config?: {
             numberOfImages?: number;
             aspectRatio?: "16:9" | "9:16";
-            noText?: boolean;
             imageModel?: string;
           };
           _metadata?: Record<string, unknown>;
         };
 
-        if (!body?.prompt) {
-          return res.status(400).json({ message: "Thiếu prompt" });
-        }
-
+        assertWolfImageRequest(body);
         await checkImageLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,
-          type: MediaGenerationJobType.GENERATION_IMAGE,
+          type: MediaGenerationJobType.GENERATION_WOLF_IMAGE,
           requestPayload,
-          metadata: _metadata,
+          metadata: { source: "wolf-workspace", ..._metadata },
         });
 
         res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
-        logger.error(`[generation-image] Lỗi enqueue: ${err?.message}`);
+        logger.error(`[generate-image-wolf] Lỗi enqueue: ${err?.message}`);
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }

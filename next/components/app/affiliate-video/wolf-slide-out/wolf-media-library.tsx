@@ -18,9 +18,11 @@ import { useDevice } from "../../../../lib/hooks/useDevice";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
+import { Button } from "../../../shared/utilities/form";
 import { Popover } from "../../../shared/utilities/popover/popover";
 import { DB_NAME, STORE_NAME, uid } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
+import { useLazyInView } from "./use-lazy-in-view";
 import { WolfPixelFlower } from "./wolf-pixel-flower";
 
 export type WolfMediaAssetType = "image" | "video";
@@ -46,6 +48,8 @@ const ACCEPTED_EXTENSIONS =
 
 const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 50;
+const ASSET_PAGE_SIZE = 24;
+const ASSET_LOAD_MORE = 24;
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -100,23 +104,89 @@ export function WolfMediaAssetThumb({
   asset: WolfMediaAsset;
   className?: string;
 }) {
-  const src = useMemo(() => getAssetPreviewSrc(asset), [asset.id, asset.dataBase64, asset.type]);
+  const src = useMemo(
+    () => getAssetPreviewSrc(asset),
+    [asset.id, asset.dataBase64, asset.type, asset.mimeType]
+  );
 
   if (asset.type === "image") {
-    return <img src={src} alt={asset.name} className={`object-cover ${className}`} />;
+    return (
+      <img src={src} alt={asset.name} loading="lazy" className={`object-cover ${className}`} />
+    );
   }
 
   return (
     <div className={`relative ${className}`}>
-      <video
-        src={src}
-        className="object-cover w-full h-full"
-        muted
-        playsInline
-        preload="metadata"
-      />
+      <video src={src} className="object-cover w-full h-full" muted playsInline preload="none" />
       <RiPlayCircleLine className="absolute inset-0 m-auto text-xl drop-shadow text-white/80" />
     </div>
+  );
+}
+
+function LazyWolfMediaAssetThumb({
+  asset,
+  className = "w-full h-full",
+}: {
+  asset: WolfMediaAsset;
+  className?: string;
+}) {
+  const { ref, inView } = useLazyInView<HTMLDivElement>("120px");
+
+  return (
+    <div ref={ref} className={`overflow-hidden relative bg-neutral-800 ${className}`}>
+      {inView ? (
+        <WolfMediaAssetThumb asset={asset} className="w-full h-full" />
+      ) : (
+        <div className="absolute inset-0 bg-neutral-700/80" />
+      )}
+    </div>
+  );
+}
+
+function MobileAssetListItem({
+  asset,
+  onSelect,
+  imageLabel,
+  videoLabel,
+}: {
+  asset: WolfMediaAsset;
+  onSelect: (asset: WolfMediaAsset) => void;
+  imageLabel: string;
+  videoLabel: string;
+}) {
+  const { ref, inView } = useLazyInView<HTMLButtonElement>("120px");
+  const bgSrc =
+    inView && asset.type === "image"
+      ? `data:${asset.mimeType};base64,${asset.dataBase64}`
+      : undefined;
+
+  return (
+    <button
+      ref={ref}
+      type="button"
+      onClick={() => onSelect(asset)}
+      className="overflow-hidden relative w-full text-left rounded-2xl"
+    >
+      {bgSrc ? (
+        <div
+          className="absolute inset-0 bg-center bg-cover opacity-30 blur-2xl scale-110"
+          style={{ backgroundImage: `url(${bgSrc})` }}
+        />
+      ) : (
+        <div className="absolute inset-0 bg-neutral-800" />
+      )}
+      <div className="flex relative gap-3 items-center px-3 py-3 bg-black/50">
+        <div className="overflow-hidden flex-shrink-0 w-16 h-16 rounded-xl bg-neutral-800">
+          <LazyWolfMediaAssetThumb asset={asset} className="w-16 h-16" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate text-neutral-100">{asset.name}</p>
+          <p className="text-xs text-neutral-400">
+            {asset.type === "image" ? imageLabel : videoLabel}
+          </p>
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -152,6 +222,7 @@ export function WolfMediaLibrary({
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
   const [showFilterMenu, setShowFilterMenu] = useState(false);
+  const [visibleAssetCount, setVisibleAssetCount] = useState(ASSET_PAGE_SIZE);
 
   const assetDB = useIndexedDB<WolfMediaAsset>(STORE_NAME.wolfAssets, DB_NAME.wolf);
   const scopedProjectId = projectId || "default";
@@ -188,7 +259,7 @@ export function WolfMediaLibrary({
   useEffect(() => {
     if (!visible) return;
     void loadAssets();
-  }, [visible, loadAssets]);
+  }, [visible, scopedProjectId]);
 
   const filteredAssets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -203,14 +274,24 @@ export function WolfMediaLibrary({
   }, [assets, filter, searchQuery]);
 
   useEffect(() => {
-    if (filteredAssets.length === 0) {
-      setSelectedId(null);
-      return;
-    }
-    if (!isMobile && (!selectedId || !filteredAssets.some((item) => item.id === selectedId))) {
-      setSelectedId(filteredAssets[0].id);
-    }
-  }, [filteredAssets, selectedId, isMobile]);
+    setVisibleAssetCount(ASSET_PAGE_SIZE);
+  }, [filter, searchQuery, scopedProjectId]);
+
+  const pagedAssets = useMemo(
+    () => filteredAssets.slice(0, visibleAssetCount),
+    [filteredAssets, visibleAssetCount]
+  );
+
+  const hasMoreAssets = pagedAssets.length < filteredAssets.length;
+
+  useEffect(() => {
+    if (isMobile) return;
+    setSelectedId((prev) => {
+      if (filteredAssets.length === 0) return null;
+      if (prev && filteredAssets.some((item) => item.id === prev)) return prev;
+      return filteredAssets[0].id;
+    });
+  }, [filteredAssets, isMobile]);
 
   const selectedAsset = useMemo(
     () => filteredAssets.find((item) => item.id === selectedId) ?? null,
@@ -252,6 +333,11 @@ export function WolfMediaLibrary({
       return;
     }
     setSelectedId(asset.id);
+  };
+
+  const handleAddAssetToCommand = (asset: WolfMediaAsset) => {
+    onAddToCommand?.(asset);
+    onClose();
   };
 
   const processFile = async (file: File) => {
@@ -306,12 +392,22 @@ export function WolfMediaLibrary({
 
   const handleAddToCommand = () => {
     if (!selectedAsset) return;
-    onAddToCommand?.(selectedAsset);
-    onClose();
+    handleAddAssetToCommand(selectedAsset);
+  };
+
+  const handleAssetListScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    if (!hasMoreAssets) return;
+    const el = event.currentTarget;
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 96) {
+      setVisibleAssetCount((prev) => Math.min(prev + ASSET_LOAD_MORE, filteredAssets.length));
+    }
   };
 
   const renderAssetList = (variant: "desktop" | "mobile") => (
-    <div className={`overflow-y-auto flex-1 v-scrollbar ${variant === "mobile" ? "p-2" : "p-2"}`}>
+    <div
+      className="overflow-y-auto flex-1 p-2 min-h-0 max-h-96 v-scrollbar"
+      onScroll={handleAssetListScroll}
+    >
       {isLoading ? (
         <div className="flex justify-center items-center h-full text-neutral-500">
           <RiLoader4Line className="text-lg animate-spin" />
@@ -323,56 +419,37 @@ export function WolfMediaLibrary({
         </div>
       ) : variant === "mobile" ? (
         <div className="space-y-2">
-          {filteredAssets.map((asset) => {
-            const bgSrc =
-              asset.type === "image"
-                ? `data:${asset.mimeType};base64,${asset.dataBase64}`
-                : undefined;
-            return (
-              <button
-                key={asset.id}
-                type="button"
-                onClick={() => handleSelectAsset(asset)}
-                className="overflow-hidden relative w-full text-left rounded-2xl"
-              >
-                {bgSrc ? (
-                  <div
-                    className="absolute inset-0 bg-center bg-cover opacity-30 blur-2xl scale-110"
-                    style={{ backgroundImage: `url(${bgSrc})` }}
-                  />
-                ) : (
-                  <div className="absolute inset-0 bg-neutral-800" />
-                )}
-                <div className="flex relative gap-3 items-center px-3 py-3 bg-black/50">
-                  <div className="overflow-hidden flex-shrink-0 w-16 h-16 rounded-xl bg-neutral-800">
-                    <WolfMediaAssetThumb asset={asset} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate text-neutral-100">{asset.name}</p>
-                    <p className="text-xs text-neutral-400">
-                      {asset.type === "image" ? t("Hình ảnh") : t("Video")}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+          {pagedAssets.map((asset) => (
+            <MobileAssetListItem
+              key={asset.id}
+              asset={asset}
+              onSelect={handleSelectAsset}
+              imageLabel={t("Hình ảnh")}
+              videoLabel={t("Video")}
+            />
+          ))}
+          {hasMoreAssets && (
+            <div className="flex justify-center py-2 text-neutral-500">
+              <RiLoader4Line className="text-sm animate-spin" />
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-1">
-          {filteredAssets.map((asset) => {
+          {pagedAssets.map((asset) => {
             const isSelected = asset.id === selectedId;
             return (
               <button
                 key={asset.id}
                 type="button"
                 onClick={() => handleSelectAsset(asset)}
+                onDoubleClick={() => handleAddAssetToCommand(asset)}
                 className={`flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left transition-colors ${
                   isSelected ? "bg-neutral-700" : "hover:bg-neutral-800/70"
                 }`}
               >
                 <div className="overflow-hidden flex-shrink-0 w-14 h-14 rounded-lg bg-neutral-800">
-                  <WolfMediaAssetThumb asset={asset} />
+                  <LazyWolfMediaAssetThumb asset={asset} className="w-14 h-14" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs truncate text-neutral-200">{asset.name}</p>
@@ -383,6 +460,11 @@ export function WolfMediaLibrary({
               </button>
             );
           })}
+          {hasMoreAssets && (
+            <div className="flex justify-center py-2 text-neutral-500">
+              <RiLoader4Line className="text-sm animate-spin" />
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -567,7 +649,7 @@ export function WolfMediaLibrary({
                   </div>
                 </aside>
 
-                <div className="flex w-[196px] flex-shrink-0 flex-col border-r border-neutral-800 bg-[#1a1a1a]">
+                <div className="flex flex-col flex-shrink-0 w-48 min-h-0 bg-white border-r border-neutral-800">
                   {renderAssetList("desktop")}
                 </div>
 
@@ -584,6 +666,7 @@ export function WolfMediaLibrary({
                               <img
                                 src={previewSrc}
                                 alt={selectedAsset.name}
+                                loading="lazy"
                                 className="object-cover absolute inset-0 w-full h-full cursor-pointer"
                                 onClick={openImagePreview}
                               />
@@ -613,14 +696,10 @@ export function WolfMediaLibrary({
                         </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={handleAddToCommand}
-                        className="mt-3 w-full flex-shrink-0 rounded-xl bg-white py-2.5 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-100"
-                      >
+                      <Button primary onClick={handleAddToCommand}>
                         {t("Thêm vào câu lệnh")}
-                      </button>
-                    </>
+                      </Button>
+                    </> 
                   ) : (
                     <div className="flex flex-1 justify-center items-center" />
                   )}
