@@ -1,15 +1,12 @@
 /**
- * Handler cho job loại `GENERATION_REVIEW_IMAGE`
- * (route POST /api/app/generation-review-image/).
+ * Handler cho job loại `GENERATION_WOLF_IMAGE`
+ * (route POST /api/app/generate-image-wolf/).
  */
 import {
   IMediaGenerationJob,
   MediaGenerationImageResult,
 } from "../../../libs/dal/mediaGenerationJob";
-import {
-  incrementImageCount,
-  ReferenceImageInput,
-} from "../../../routers/app/affiliate-scene/_shared";
+import { incrementImageCount } from "../../../routers/app/affiliate-scene/_shared";
 import { MediaJobEmitter } from "../job-emitter";
 import { loadMediaJobPayload } from "../media-job-data";
 import { runImagePipeline } from "./_image-pipeline";
@@ -17,17 +14,10 @@ import { runImagePipeline } from "./_image-pipeline";
 export type GenerationWolfImagePayload = {
   prompt: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
-  productImages?: string[];
-  objectToPersonifyImages?: ReferenceImageInput[];
-  productImagePrompt?: string;
-  aspectRatio?: "16:9" | "9:16";
-  noText?: boolean;
-  artStyleId?: string;
-  artStyle?: string;
   config?: {
     numberOfImages?: number;
     aspectRatio?: "16:9" | "9:16";
-    noText?: boolean;
+    imageModel?: string;
   };
 };
 
@@ -41,16 +31,14 @@ export async function handleGenerationWolfImage(
 
   await emitter.progress(10, "Đang chuẩn bị tạo ảnh...");
 
-  const productImageUrls = payload.productImages?.filter(Boolean) || [];
-
-  const aspectRatio = payload.aspectRatio ?? payload.config?.aspectRatio;
-
   const images = await runImagePipeline({
     customerId: job.customerId,
     prompt: payload.prompt,
-    aspectRatio,
+    aspectRatio: payload.config?.aspectRatio,
+    variantCount: payload.config?.numberOfImages,
+    imageModel: payload.config?.imageModel,
     imageGroups: {
-      userImages: productImageUrls,
+      userImages: payload.images,
     },
     emitter,
     logPrefix: LOG_PREFIX,
