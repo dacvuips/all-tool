@@ -66,7 +66,7 @@ export const MEDIA_JOB_MAX_STALE_RECOVERIES = 5;
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
 
 /** Số worker bee-queue — giới hạn tải toàn cục, tránh OOM khi nhiều job video chạy song song. */
-const MEDIA_GENERATION_QUEUE_WORKERS = 100;
+const MEDIA_GENERATION_QUEUE_WORKERS = 15;
 
 /** Job QUEUED chờ slot PROCESSING — re-enqueue sau khoảng này (ms). */
 const MEDIA_JOB_STREAM_DEFER_MS = 5_000;
