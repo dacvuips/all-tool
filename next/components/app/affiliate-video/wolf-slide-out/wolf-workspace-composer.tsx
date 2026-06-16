@@ -22,6 +22,9 @@ import {
   RiTShirtLine,
 } from "react-icons/ri";
 
+import { useAlert } from "../../../../lib/providers/alert-provider";
+import { useAuth } from "../../../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../../../lib/providers/global-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { Popover } from "../../../shared/utilities/popover/popover";
 import { DB_NAME, STORE_NAME } from "../constants";
@@ -241,11 +244,15 @@ export function WolfWorkspaceComposer({
   onGenerationSceneMediaUpdated?: WolfGenerationSubmitInput["onSceneMediaUpdated"];
 }) {
   const { t } = useTranslation();
+  const alert = useAlert();
   const toast = useToast();
   const settingsRef = useRef<HTMLDivElement>(null);
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const startFrameRef = useRef<HTMLButtonElement>(null);
   const endFrameRef = useRef<HTMLButtonElement>(null);
+
+  const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
   const frameLibraryTargetRef = useRef<FrameSlot | null>(null);
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -409,6 +416,19 @@ export function WolfWorkspaceComposer({
   const handleSubmit = useCallback(() => {
     if (generating || !prompt.trim()) return;
 
+    if (!customer) {
+      void alert.warn(
+        t("Yêu cầu đăng nhập"),
+        t("Vui lòng đăng nhập để sử dụng tính năng này"),
+        t("Đăng nhập"),
+        () => {
+          setOpenCustomerLoginDialog(true);
+          return true;
+        }
+      );
+      return;
+    }
+
     const currentPrompt = prompt.trim();
     setPrompt("");
 
@@ -443,7 +463,9 @@ export function WolfWorkspaceComposer({
           : undefined,
     });
   }, [
+    alert,
     attachedAssets,
+    customer,
     endFrameAsset,
     generating,
     imageAspectRatio,
@@ -456,6 +478,7 @@ export function WolfWorkspaceComposer({
     onGenerationSceneMediaUpdated,
     projectId,
     prompt,
+    setOpenCustomerLoginDialog,
     startFrameAsset,
     submit,
     videoAspectRatio,
@@ -571,7 +594,7 @@ export function WolfWorkspaceComposer({
                 setShowSettings(true);
                 setShowAssetLibrary(false);
               }}
-              className={`flex max-w-[180px] items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${BTN_INACTIVE}`}
+              className={`flex max-w-3xs items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${BTN_INACTIVE}`}
             >
               {mediaType === "image" ? (
                 <RiMagicLine className="flex-shrink-0 text-amber-500" />

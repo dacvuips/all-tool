@@ -62,7 +62,7 @@ export function WolfSlideOutWidget() {
           isOpen ? "hidden" : ""
         }`}
       >
-        <Img src={WOLF_TRIGGER_IMAGE} alt="wolf" className="object-contain w-10 h-10" />
+        <Img src={WOLF_TRIGGER_IMAGE} alt="wolf" className="object-contain w-10 h-6" />
       </button>
 
       {hasOpened && <WolfSlideOut isOpen={isOpen} onClose={() => setIsOpen(false)} />}

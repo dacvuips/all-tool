@@ -20,6 +20,7 @@ export const IMAGE_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
   MediaGenerationJobType.GENERATION_ELEMENT_IMAGE,
   MediaGenerationJobType.COPY_VIDEO_GENERATE_IMAGE,
   MediaGenerationJobType.GENERATION_REVIEW_IMAGE,
+  MediaGenerationJobType.GENERATION_WOLF_IMAGE,
 ];
 
 /** Các loại job thuộc luồng video */
@@ -28,6 +29,7 @@ export const VIDEO_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
   MediaGenerationJobType.GENERATION_ELEMENT_VIDEO,
   MediaGenerationJobType.GENERATION_ELEMENT_VIDEO_TO_VIDEO,
   MediaGenerationJobType.GENERATION_REVIEW_VIDEO,
+  MediaGenerationJobType.GENERATION_WOLF_VIDEO,
 ];
 
 export type MediaStreamCategory = "image" | "video";

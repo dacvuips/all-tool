@@ -47,7 +47,7 @@ export default [
         await checkVideoLimit(context.id);
 
         const { _metadata, ...requestPayload } = body;
-        console.log("requestPayload", requestPayload);
+
         const { jobId, status } = await createAndEnqueueMediaJob({
           customerId: context.id,
           type: MediaGenerationJobType.GENERATION_ELEMENT_VIDEO,

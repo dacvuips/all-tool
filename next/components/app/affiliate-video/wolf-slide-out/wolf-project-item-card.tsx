@@ -276,7 +276,7 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
               }}
               disabled={isActionPending}
               title={t("Tạo lại")}
-              className="flex justify-center items-center w-7 h-7 text-orange-600 bg-white rounded-full border shadow-sm transition-colors border-slate-200 hover:bg-orange-100 disabled:opacity-50"
+              className="flex justify-center items-center w-7 h-7 text-orange-600 bg-white rounded-full   border shadow-sm transition-colors border-slate-200 hover:bg-orange-100 disabled:opacity-50"
             >
               {isActionPending ? (
                 <RiLoader4Line className="text-sm animate-spin" />

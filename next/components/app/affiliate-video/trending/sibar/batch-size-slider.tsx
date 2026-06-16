@@ -49,13 +49,13 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
     `${t("AI sẽ tự nghĩ ra")} ${value} ${t("ý tưởng khác nhau dựa trên chủ đề bạn chọn.")}`;
 
   return (
-    <div className="bg-purple-50 rounded-xl p-4 border border-purple-100">
+    <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
       {/* Tiêu đề + icon */}
       <div className="flex justify-between items-center mb-4 text-purple-900">
-        <h3 className="font-semibold text-sm uppercase tracking-wide">
+        <h3 className="text-sm font-semibold tracking-wide uppercase">
           {t(displayLabel)}: {localValue}
         </h3>
-        <BsLayers className="text-purple-700 text-lg" />
+        <BsLayers className="text-lg text-purple-700" />
       </div>
 
       {/* Thanh slider */}
@@ -63,15 +63,15 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
         <input
           type="range"
           min={1}
-          max={50}
+          max={8}
           step={1}
           value={localValue}
           onChange={handleInputChange}
-          className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-purple-200 accent-purple-600 focus:outline-none"
+          className="w-full h-2 bg-purple-200 rounded-lg appearance-none cursor-pointer accent-purple-600 focus:outline-none"
           style={{
             background: `linear-gradient(to right, #9333ea 0%, #9333ea ${
-              ((localValue - 1) / 49) * 100
-            }%, #e9d5ff ${((localValue - 1) / 49) * 100}%, #e9d5ff 100%)`,
+              ((localValue - 1) / 7) * 100
+            }%, #e9d5ff ${((localValue - 1) / 7) * 100}%, #e9d5ff 100%)`,
           }}
         />
         {/* Custom thumb styles – đảm bảo hiển thị đúng trên mọi trình duyệt */}
@@ -104,17 +104,19 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
       </div>
 
       {/* Các mốc giá trị */}
-      <div className="flex justify-between text-purple-400 text-xs mt-2 font-medium">
+      <div className="flex justify-between mt-2 text-xs font-medium text-purple-400">
         <span>1</span>
-        <span>10</span>
-        <span>20</span>
-        <span>30</span>
-        <span>40</span>
-        <span>50</span>
+        <span>2</span>
+        <span>3</span>
+        <span>4</span>
+        <span>5</span>
+        <span>6</span>
+        <span>7</span>
+        <span>8</span>
       </div>
 
       {/* Mô tả phụ */}
-      <p className="text-purple-600 text-xs italic mt-3 leading-relaxed">*{displayDescription}</p>
+      <p className="mt-3 text-xs italic leading-relaxed text-purple-600">*{displayDescription}</p>
     </div>
   );
 };
