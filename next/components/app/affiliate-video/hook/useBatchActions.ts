@@ -19,7 +19,18 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { buildSceneImageFileName, generatedImageToBlob, generatedVideoToBlob } from "../shared/generatedMediaUtils";
+import {
+  collectSceneImageFiles,
+  collectSceneVideoFiles,
+  downloadSceneImagesAsZip,
+  downloadSceneImagesSequentially,
+  downloadSceneVideosAsZip,
+  downloadSceneVideosSequentially,
+} from "../shared/batchDownloadMedia";
+import {
+  collectFailedRetryTasks,
+  runBatchRetryWorkerPool,
+} from "../shared/batchRetryFailed";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -46,6 +57,7 @@ export function useBatchActions(
     affiliateVideoFormConfig: contextFormConfig,
     reportSceneError,
     reportSceneProgress,
+    getSceneErrors,
   } = { ...singleContext, ...providerContext };
 
   const affiliateVideoFormConfig = providerContext?.affiliateVideoFormConfig ?? contextFormConfig;
@@ -197,6 +209,17 @@ export function useBatchActions(
   const extendStopRef = useRef(false);
 
   // ═══════════════════════════════════════════════════════════════════
+  // ── Batch retry failed scenes state ──
+  // ═══════════════════════════════════════════════════════════════════
+  const [retryRunning, setRetryRunning] = useState(false);
+  const [retryDone, setRetryDone] = useState(false);
+  const [retryCurrentLabel, setRetryCurrentLabel] = useState("");
+  const [retryTotal, setRetryTotal] = useState(0);
+  const [retryCompleted, setRetryCompleted] = useState(0);
+  const [retryErrors, setRetryErrors] = useState(0);
+  const retryStopRef = useRef(false);
+
+  // ═══════════════════════════════════════════════════════════════════
   // ── Count scenes without generated image & scenes with generated image ──
   // ═══════════════════════════════════════════════════════════════════
   const [pendingImageCount, setPendingImageCount] = useState<number | null>(null);
@@ -309,72 +332,23 @@ export function useBatchActions(
   const [downloadLabel, setDownloadLabel] = useState("");
   const [downloadVideoLabel, setDownloadVideoLabel] = useState("");
 
-  /** Helper: base64 string → Blob */
-  const base64ToBlob = useCallback((base64: string, mimeType: string): Blob => {
-    const byteChars = atob(base64);
-    const byteNumbers = new Uint8Array(byteChars.length);
-    for (let i = 0; i < byteChars.length; i++) {
-      byteNumbers[i] = byteChars.charCodeAt(i);
-    }
-    return new Blob([byteNumbers], { type: mimeType });
-  }, []);
-
-  /** Helper: download a blob and wait for browser to process it */
-  const downloadBlobSequentially = useCallback(
-    async (blob: Blob, fileName: string, waitMs: number) => {
-      const blobUrl = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = blobUrl;
-      link.download = fileName;
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-
-      // Wait for browser to fully process this download before continuing
-      await new Promise((r) => setTimeout(r, waitMs));
-
-      document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
-    },
-    []
-  );
-
   // ═══════════════════════════════════════════════════════════════════
-  // ── handleDownloadAllImages: download images sequentially one by one ──
+  // ── handleDownloadAllImages / Zip ──
   // ═══════════════════════════════════════════════════════════════════
   const handleDownloadAllImages = useCallback(async () => {
     if (downloading || batchRunning) return;
     setDownloading(true);
 
     try {
-      const eligibleScenes = scenes.filter((s) => !s.disabled);
-
-      // Pre-collect scenes that have images
-      const scenesWithImages: { scene: typeof eligibleScenes[0]; img: any }[] = [];
-      for (const scene of eligibleScenes) {
-        const img = await getGeneratedImage(scene.id);
-        if (img) scenesWithImages.push({ scene, img });
-      }
-
+      const scenesWithImages = await collectSceneImageFiles(scenes, getGeneratedImage);
       if (scenesWithImages.length === 0) {
         toast.warn(t("Chưa có ảnh nào được tạo để tải"));
-        setDownloading(false);
-        setDownloadLabel("");
         return;
       }
 
-      const total = scenesWithImages.length;
-      for (let i = 0; i < total; i++) {
-        const { scene, img } = scenesWithImages[i];
-        setDownloadLabel(`${i + 1}/${total}`);
-
-        const fileName = buildSceneImageFileName(scene.sceneNumber);
-
-        // Convert base64 → Blob → download, then wait 2s before next
-        const blob = await generatedImageToBlob(img);
-        await downloadBlobSequentially(blob, fileName, 2000);
-      }
-
+      const total = await downloadSceneImagesSequentially(scenesWithImages, (cur, tot) =>
+        setDownloadLabel(`${cur}/${tot}`)
+      );
       toast.success(`${t("Đã tải")} ${total} ${t("ảnh thành công!")}`);
     } catch (err) {
       console.error("[handleDownloadAllImages] Error:", err);
@@ -383,66 +357,50 @@ export function useBatchActions(
       setDownloading(false);
       setDownloadLabel("");
     }
-  }, [
-    downloading,
-    batchRunning,
-    scenes,
-    getGeneratedImage,
-    toast,
-    t,
-    downloadBlobSequentially,
-  ]);
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
+  const handleDownloadAllImagesZip = useCallback(async () => {
+    if (downloading || batchRunning) return;
+    setDownloading(true);
+
+    try {
+      const scenesWithImages = await collectSceneImageFiles(scenes, getGeneratedImage);
+      if (scenesWithImages.length === 0) {
+        toast.warn(t("Chưa có ảnh nào được tạo để tải"));
+        return;
+      }
+
+      setDownloadLabel(t("Đang nén"));
+      await downloadSceneImagesAsZip(scenesWithImages, (cur, tot) =>
+        setDownloadLabel(`${cur}/${tot}`)
+      );
+      toast.success(`${t("Đã tải")} ${scenesWithImages.length} ${t("ảnh trong file ZIP!")}`);
+    } catch (err) {
+      console.error("[handleDownloadAllImagesZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP ảnh"));
+    } finally {
+      setDownloading(false);
+      setDownloadLabel("");
+    }
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
   // ═══════════════════════════════════════════════════════════════════
-  // ── handleDownloadAllVideos: download videos sequentially one by one ──
+  // ── handleDownloadAllVideos / Zip ──
   // ═══════════════════════════════════════════════════════════════════
   const handleDownloadAllVideos = useCallback(async () => {
     if (downloadingVideo || videoBatchRunning) return;
     setDownloadingVideo(true);
 
     try {
-      const eligibleScenes = scenes.filter((s) => !s.disabled);
-
-      // Pre-collect scenes that have videos
-      const scenesWithVideos: { scene: typeof eligibleScenes[0]; vid: any }[] = [];
-      for (const scene of eligibleScenes) {
-        const vid = await getGeneratedVideo(scene.id);
-        if (vid && (vid.videoUri || vid.videoBytes)) scenesWithVideos.push({ scene, vid });
-      }
-
+      const scenesWithVideos = await collectSceneVideoFiles(scenes, getGeneratedVideo);
       if (scenesWithVideos.length === 0) {
         toast.warn(t("Chưa có video nào được tạo để tải"));
-        setDownloadingVideo(false);
-        setDownloadVideoLabel("");
         return;
       }
 
-      const total = scenesWithVideos.length;
-      let downloaded = 0;
-
-      for (let i = 0; i < total; i++) {
-        const { scene, vid } = scenesWithVideos[i];
-        setDownloadVideoLabel(`${i + 1}/${total}`);
-
-        const ext = vid.mimeType?.split("/")[1] || "mp4";
-        const fileName = `scene-${scene.sceneNumber}-video.${ext}`;
-
-        let blob: Blob | null = null;
-        try {
-          blob = await generatedVideoToBlob(vid);
-        } catch (fetchErr) {
-          console.error(
-            `[handleDownloadAllVideos] Fetch error scene #${scene.sceneNumber}:`,
-            fetchErr
-          );
-          continue;
-        }
-
-        if (!blob) continue;
-
-        // Download blob and wait 3s before next (videos are larger)
-        await downloadBlobSequentially(blob, fileName, 3000);
-        downloaded++;
-      }
+      const downloaded = await downloadSceneVideosSequentially(scenesWithVideos, (cur, tot) =>
+        setDownloadVideoLabel(`${cur}/${tot}`)
+      );
 
       if (downloaded === 0) {
         toast.warn(t("Không thể tải video nào"));
@@ -456,15 +414,37 @@ export function useBatchActions(
       setDownloadingVideo(false);
       setDownloadVideoLabel("");
     }
-  }, [
-    downloadingVideo,
-    videoBatchRunning,
-    scenes,
-    getGeneratedVideo,
-    toast,
-    t,
-    downloadBlobSequentially,
-  ]);
+  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t]);
+
+  const handleDownloadAllVideosZip = useCallback(async () => {
+    if (downloadingVideo || videoBatchRunning) return;
+    setDownloadingVideo(true);
+
+    try {
+      const scenesWithVideos = await collectSceneVideoFiles(scenes, getGeneratedVideo);
+      if (scenesWithVideos.length === 0) {
+        toast.warn(t("Chưa có video nào được tạo để tải"));
+        return;
+      }
+
+      setDownloadVideoLabel(t("Đang nén"));
+      const downloaded = await downloadSceneVideosAsZip(scenesWithVideos, (cur, tot) =>
+        setDownloadVideoLabel(`${cur}/${tot}`)
+      );
+
+      if (downloaded === 0) {
+        toast.warn(t("Không thể tải video nào"));
+      } else {
+        toast.success(`${t("Đã tải")} ${downloaded} video ${t("trong file ZIP!")}`);
+      }
+    } catch (err) {
+      console.error("[handleDownloadAllVideosZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP video"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllImage: worker pool ──
@@ -913,6 +893,199 @@ export function useBatchActions(
     extendStopRef.current = true;
   };
 
+  // ═══════════════════════════════════════════════════════════════════
+  // ── handleRetryAllFailed: chạy lại các phân cảnh đang hiển thị lỗi ──
+  // ═══════════════════════════════════════════════════════════════════
+  const handleRetryAllFailed = async () => {
+    if (retryRunning || batchRunning || videoBatchRunning || extendBatchRunning) return;
+    if (!getSceneErrors) {
+      toast.warn(t("Không thể đọc trạng thái lỗi"));
+      return;
+    }
+
+    const tasks = collectFailedRetryTasks(scenes, getSceneErrors);
+    if (tasks.length === 0) {
+      toast.warn(t("Không có phân cảnh lỗi nào"));
+      return;
+    }
+
+    setRetryRunning(true);
+    setRetryDone(false);
+    retryStopRef.current = false;
+
+    const result = await runBatchRetryWorkerPool({
+      tasks,
+      concurrency: Math.max(IMAGE_CONCURRENCY, VIDEO_CONCURRENCY),
+      stopRef: retryStopRef,
+      progress: {
+        setTotal: setRetryTotal,
+        setCompleted: setRetryCompleted,
+        setErrors: setRetryErrors,
+        setCurrentLabel: setRetryCurrentLabel,
+      },
+      getTaskLabel: (task) => {
+        const scene = task.scene;
+        if (task.kind === "extend" && task.nextScene) {
+          return `#${scene.sceneNumber} → #${task.nextScene.sceneNumber} (${task.kind})`;
+        }
+        return `#${scene.sceneNumber} (${task.kind})`;
+      },
+      executeTask: async (task) => {
+        const scene = task.scene;
+        if (task.kind === "image") {
+          if (!scene.imageGenPrompt) return false;
+          try {
+            addBatchGeneratingSceneId(scene.id);
+            reportSceneError?.(scene.id, "image", null);
+            const imageParams = await buildAffiliateImageGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              selectedProductImages: scene.selectedProductImages,
+              noText: scene.noText,
+              objectToPersonifyImage,
+            });
+            await generateImage({
+              ...imageParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+            });
+            return true;
+          } catch (err: any) {
+            reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
+            return false;
+          } finally {
+            reportSceneProgress?.(scene.id, "image", null);
+            removeBatchGeneratingSceneId(scene.id);
+          }
+        }
+
+        if (task.kind === "video") {
+          if (!scene.motionPrompt) return false;
+          try {
+            if (isPromptToVideo) {
+              addBatchGeneratingVideoSceneId(scene.id);
+              reportSceneError?.(scene.id, "video", null);
+              const videoParams = await buildAffiliateVideoGenerateParams({
+                scene,
+                scriptData,
+                aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              });
+              await generateVideo({
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+              });
+              return true;
+            }
+
+            let existingImage = await getGeneratedImage(scene.id);
+            if (!existingImage && scene.imageGenPrompt) {
+              addBatchGeneratingSceneId(scene.id);
+              reportSceneError?.(scene.id, "image", null);
+              const imageParams = await buildAffiliateImageGenerateParams({
+                scene,
+                scriptData,
+                aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+                selectedProductImages: scene.selectedProductImages,
+                noText: scene.noText,
+                objectToPersonifyImage,
+              });
+              existingImage = await generateImage({
+                ...imageParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+              });
+              reportSceneProgress?.(scene.id, "image", null);
+              removeBatchGeneratingSceneId(scene.id);
+            }
+            if (!existingImage) return false;
+
+            addBatchGeneratingVideoSceneId(scene.id);
+            reportSceneError?.(scene.id, "video", null);
+            const videoParams = await buildAffiliateVideoGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              generatedImage: existingImage,
+            });
+            await generateVideo({
+              ...videoParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+            });
+            return true;
+          } catch (err: any) {
+            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
+            return false;
+          } finally {
+            reportSceneProgress?.(scene.id, "video", null);
+            removeBatchGeneratingVideoSceneId(scene.id);
+          }
+        }
+
+        if (task.kind === "extend" && task.nextScene) {
+          const nextScene = task.nextScene;
+          const startImage = await getGeneratedImage(scene.id);
+          const endImage = await getGeneratedImage(nextScene.id);
+          if (!startImage || !endImage) return false;
+
+          try {
+            addBatchGeneratingVideoSceneId(scene.id + "::stitch");
+            reportSceneError?.(scene.id + "::stitch", "extend", null);
+            const videoParams = await buildAffiliateVideoGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              isStitch: true,
+              generatedImage: startImage,
+              nextGeneratedImage: endImage,
+            });
+            await generateVideo({
+              ...videoParams,
+              onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+              onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+            });
+            return true;
+          } catch (err: any) {
+            reportSceneError?.(
+              scene.id + "::stitch",
+              "extend",
+              err?.message || t("Lỗi tạo video nối")
+            );
+            return false;
+          } finally {
+            reportSceneProgress?.(scene.id + "::stitch", "extend", null);
+            removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
+          }
+        }
+
+        return false;
+      },
+    });
+
+    setRetryRunning(false);
+    setRetryDone(true);
+    setRetryCurrentLabel("");
+
+    const succeeded = result.completed - result.errors;
+    if (result.stopped) {
+      toast.info(
+        `${t("Đã dừng. Chạy lại thành công")} ${succeeded}/${result.completed}, ${result.errors} ${t("lỗi")}.`
+      );
+    } else if (result.errors > 0) {
+      toast.warn(
+        `${t("Hoàn thành! Chạy lại thành công")} ${succeeded}/${result.completed}, ${result.errors} ${t("lỗi")}.`
+      );
+    } else {
+      toast.success(`${t("Đã chạy lại thành công")} ${succeeded} ${t("phân cảnh lỗi")}.`);
+    }
+  };
+
+  const handleStopRetryBatch = () => {
+    retryStopRef.current = true;
+  };
+
   // ── handleExportPromptCSV: xuất danh sách prompt ra file CSV ──
   // ═══════════════════════════════════════════════════════════════════
   const handleExportPromptCSV = useCallback(() => {
@@ -1017,6 +1190,16 @@ export function useBatchActions(
     handleCreateAllExtendVideo,
     handleStopExtendBatch,
 
+    // Batch retry failed scenes
+    retryRunning,
+    retryDone,
+    retryCurrentLabel,
+    retryTotal,
+    retryCompleted,
+    retryErrors,
+    handleRetryAllFailed,
+    handleStopRetryBatch,
+
     // Counts
     pendingImageCount,
     availableImageCount,
@@ -1032,7 +1215,9 @@ export function useBatchActions(
     downloadVideoLabel,
     downloadingExtended,
     handleDownloadAllImages,
+    handleDownloadAllImagesZip,
     handleDownloadAllVideos,
+    handleDownloadAllVideosZip,
     // Export
     handleExportPromptCSV,
   };

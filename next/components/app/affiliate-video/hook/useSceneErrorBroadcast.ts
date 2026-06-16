@@ -39,6 +39,8 @@ export interface SceneErrorBroadcast {
    * Trả về hàm unsubscribe.
    */
   subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
+  /** Đọc state lỗi hiện tại của scene (dùng cho batch retry). */
+  getSceneErrors: (sceneId: string) => SceneErrors;
 }
 
 export function useSceneErrorBroadcast(): SceneErrorBroadcast {
@@ -76,5 +78,10 @@ export function useSceneErrorBroadcast(): SceneErrorBroadcast {
     []
   );
 
-  return { reportSceneError, subscribeSceneError };
+  const getSceneErrors = useCallback((sceneId: string): SceneErrors => {
+    const baseId = sceneId.replace(/::stitch$/, "");
+    return { ...(sceneErrorsRef.current.get(baseId) || {}) };
+  }, []);
+
+  return { reportSceneError, subscribeSceneError, getSceneErrors };
 }

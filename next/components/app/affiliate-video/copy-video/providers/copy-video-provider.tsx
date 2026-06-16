@@ -68,6 +68,7 @@ interface CopyVideoContextType {
   reportSceneError: (sceneId: string, kind: SceneErrorKind, message: string | null) => void;
   /** Subscribe state lỗi inline cho 1 scene */
   subscribeSceneError: (sceneId: string, callback: (errors: SceneErrors) => void) => () => void;
+  getSceneErrors: (sceneId: string) => SceneErrors;
   reportSceneProgress: (
     sceneId: string,
     kind: SceneProgressKind,
@@ -176,7 +177,7 @@ export function CopyVideoProvider(props) {
   >(new Map());
 
   // ── Per-scene inline error broadcast (batch generation failures) ──
-  const { reportSceneError, subscribeSceneError } = useSceneErrorBroadcast();
+  const { reportSceneError, subscribeSceneError, getSceneErrors } = useSceneErrorBroadcast();
   const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
@@ -347,6 +348,7 @@ export function CopyVideoProvider(props) {
         subscribeBatchState,
         reportSceneError,
         subscribeSceneError,
+        getSceneErrors,
         reportSceneProgress,
         subscribeSceneProgress,
 

@@ -39,6 +39,7 @@ export type AffiliateVideoProviderSlice = Partial<{
     callback: (generating: boolean, generatingVideo: boolean, generatingExtendVideo: boolean) => void
   ) => () => void;
   subscribeSceneError: (sceneId: string, callback: (errors: any) => void) => () => void;
+  getSceneErrors: (sceneId: string) => { image?: string | null; video?: string | null; extend?: string | null };
   reportSceneError: (sceneId: string, kind: any, message: string | null) => void;
   reportSceneProgress?: (
     sceneId: string,

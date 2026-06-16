@@ -276,7 +276,10 @@ export async function persistGeneratedVideoWithEnrichment<T extends GeneratedVid
 
 export async function generatedImageToBlob(img: GeneratedImageLike): Promise<Blob> {
   if (img.imageBytes) {
-    return base64ToBlob(img.imageBytes, img.mimeType || "image/png");
+    return base64ToBlob(
+      stripBase64Payload(img.imageBytes),
+      img.mimeType || "image/png"
+    );
   }
   const url = getGeneratedImageUrl(img);
   if (!url) {
@@ -285,9 +288,26 @@ export async function generatedImageToBlob(img: GeneratedImageLike): Promise<Blo
   return uriToBlob(url);
 }
 
-/** Tên file ảnh theo số phân cảnh, vd. `1`, `2`, `3`. */
-export function buildSceneImageFileName(sceneNumber: number): string {
-  return `${sceneNumber}`;
+/** Chuyển mimeType → extension file (vd. image/jpeg → jpg). */
+export function mimeTypeToFileExtension(mimeType?: string, fallback = "png"): string {
+  if (!mimeType) return fallback;
+  const sub = mimeType.split("/")[1]?.split(";")[0]?.split("+")[0]?.toLowerCase();
+  if (!sub) return fallback;
+  if (sub === "jpeg") return "jpg";
+  if (sub === "quicktime") return "mov";
+  return sub;
+}
+
+/** Tên file ảnh theo số phân cảnh kèm extension, vd. `1.png`, `2.jpg`. */
+export function buildSceneImageFileName(sceneNumber: number, mimeType?: string): string {
+  const ext = mimeTypeToFileExtension(mimeType);
+  return `${sceneNumber}.${ext}`;
+}
+
+/** Tên file video theo số phân cảnh, vd. `scene-1-video.mp4`. */
+export function buildSceneVideoFileName(sceneNumber: number, mimeType?: string): string {
+  const ext = mimeTypeToFileExtension(mimeType, "mp4");
+  return `scene-${sceneNumber}-video.${ext}`;
 }
 
 export async function downloadGeneratedImage(
@@ -298,12 +318,14 @@ export async function downloadGeneratedImage(
   triggerBlobDownload(blob, fileName);
 }
 
-/** Tải ảnh đã generate về máy — tên file = số phân cảnh (vd. `3`). */
+/** Tải ảnh đã generate về máy — tên file = số phân cảnh (vd. `3.png`). */
 export async function downloadSceneImage(
   img: GeneratedImageLike,
   sceneNumber: number
 ): Promise<void> {
-  await downloadGeneratedImage(img, buildSceneImageFileName(sceneNumber));
+  const blob = await generatedImageToBlob(img);
+  const mime = img.mimeType || blob.type || "image/png";
+  triggerBlobDownload(blob, buildSceneImageFileName(sceneNumber, mime));
 }
 
 /** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */

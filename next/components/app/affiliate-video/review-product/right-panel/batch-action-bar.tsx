@@ -14,6 +14,7 @@ import {
   RiRefreshLine,
   RiVideoFill,
 } from "react-icons/ri";
+import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
 import { VoiceExportDialog } from "../../shared/voice-export-dialog";
 import { ReviewScene } from "../constants";
 import { useReviewBatchActions } from "../hook/useReviewBatchActions";
@@ -92,7 +93,17 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     downloadLabel,
     downloadVideoLabel,
     handleDownloadAllImages,
+    handleDownloadAllImagesZip,
     handleDownloadAllVideos,
+    handleDownloadAllVideosZip,
+
+    // Retry failed scenes
+    retryRunning,
+    retryCompleted,
+    retryTotal,
+    retryErrors,
+    handleRetryAllFailed,
+    handleStopRetryBatch,
 
     // Export
     handleExportPromptCSV,
@@ -123,16 +134,6 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
           },
         ]
       : []),
-    {
-      id: "batch-download-img",
-      icon: downloading ? <RiLoader4Line className="animate-spin" /> : <RiDownloadLine />,
-      label: downloading
-        ? `${t("Đang tải")} ${downloadLabel}...`
-        : `${t("Tải Ảnh")}${availableImageCount > 0 ? ` (x${availableImageCount})` : ""}`,
-      color: downloading ? "bg-blue-400 cursor-wait" : "bg-blue-500 hover:bg-blue-600",
-      method: handleDownloadAllImages,
-      disabled: downloading || availableImageCount === 0,
-    },
     {
       id: "batch-create-video",
       icon: videoBatchRunning ? <RiLoader4Line className="animate-spin" /> : <RiVideoFill />,
@@ -182,21 +183,32 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         ]
       : []),
     {
-      id: "batch-download-video",
-      icon: downloadingVideo ? <RiLoader4Line className="animate-spin" /> : <RiDownloadLine />,
-      label: downloadingVideo
-        ? `${t("Đang tải")} ${downloadVideoLabel}...`
-        : `${t("Tải Video")}${availableVideoCount > 0 ? ` (x${availableVideoCount})` : ""}`,
-      color: downloadingVideo ? "bg-indigo-400 cursor-wait" : "bg-indigo-500 hover:bg-indigo-600",
-      method: handleDownloadAllVideos,
-      disabled: downloadingVideo || availableVideoCount === 0,
+      id: "batch-download-media",
+      mediaDownloadDropdown: true as const,
     },
     {
       id: "batch-retry-video",
-      icon: <RiRefreshLine />,
-      label: t("Tạo Lại Video Lỗi"),
-      color: "bg-red-500 hover:bg-red-600",
+      icon: retryRunning ? <RiLoader4Line className="animate-spin" /> : <RiRefreshLine />,
+      label: retryRunning
+        ? `${t("Đang chạy lại")} (${retryCompleted}/${retryTotal})`
+        : t("Tạo Lại Lỗi"),
+      color: retryRunning ? "bg-red-400 cursor-wait" : "bg-red-500 hover:bg-red-600",
+      method: handleRetryAllFailed,
+      disabled:
+        retryRunning || batchRunning || videoBatchRunning || extendBatchRunning || downloading || downloadingVideo,
     },
+    ...(retryRunning
+      ? [
+          {
+            id: "batch-stop-retry",
+            icon: <RiCloseLine />,
+            label: t("Dừng"),
+            color: "bg-gray-600 hover:bg-gray-700",
+            method: handleStopRetryBatch,
+            disabled: false,
+          },
+        ]
+      : []),
 
     {
       id: "batch-export-prompt",
@@ -218,18 +230,39 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     <>
       <div className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100">
         <div className="flex overflow-x-auto flex-nowrap gap-2 items-center p-3">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              id={action.id}
-              onClick={action.method}
-              disabled={action.disabled}
-              className={`flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${action.color}`}
-            >
-              {action.icon}
-              {action.label}
-            </button>
-          ))}
+          {actions.map((action) => {
+            if ("mediaDownloadDropdown" in action && action.mediaDownloadDropdown) {
+              return (
+                <BatchMediaDownloadDropdown
+                  key={action.id}
+                  id={action.id}
+                  downloading={downloading}
+                  downloadingVideo={downloadingVideo}
+                  downloadLabel={downloadLabel}
+                  downloadVideoLabel={downloadVideoLabel}
+                  availableImageCount={availableImageCount}
+                  availableVideoCount={availableVideoCount}
+                  onDownloadAllImages={handleDownloadAllImages}
+                  onDownloadAllVideos={handleDownloadAllVideos}
+                  onDownloadAllImagesZip={handleDownloadAllImagesZip}
+                  onDownloadAllVideosZip={handleDownloadAllVideosZip}
+                />
+              );
+            }
+
+            return (
+              <button
+                key={action.id}
+                id={action.id}
+                onClick={action.method}
+                disabled={action.disabled}
+                className={`flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${action.color}`}
+              >
+                {action.icon}
+                {action.label}
+              </button>
+            );
+          })}
         </div>
 
         {/* Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
