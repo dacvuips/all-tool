@@ -15,9 +15,13 @@ import {
 
 export type SceneWithNumber = {
   id: string;
-  sceneNumber: number;
+  sceneNumber?: number;
   disabled?: boolean;
 };
+
+function resolveSceneNumber(scene: SceneWithNumber, index: number): number {
+  return scene.sceneNumber ?? index + 1;
+}
 
 /** Download a blob and wait for browser to process before next file. */
 export async function downloadBlobSequentially(
@@ -98,7 +102,7 @@ export async function downloadSceneImagesSequentially<T extends SceneWithNumber>
     onProgress?.(i + 1, total);
     const blob = await generatedImageToBlob(img);
     const mime = img.mimeType || blob.type || "image/png";
-    const fileName = buildSceneImageFileName(scene.sceneNumber, mime);
+    const fileName = buildSceneImageFileName(resolveSceneNumber(scene, i), mime);
     await downloadBlobSequentially(blob, fileName, waitMs);
   }
   return total;
@@ -115,7 +119,7 @@ export async function downloadSceneImagesAsZip<T extends SceneWithNumber>(
     onProgress?.(i + 1, total);
     const blob = await generatedImageToBlob(img);
     const mime = img.mimeType || blob.type || "image/png";
-    files.push({ fileName: buildSceneImageFileName(scene.sceneNumber, mime), blob });
+    files.push({ fileName: buildSceneImageFileName(resolveSceneNumber(scene, i), mime), blob });
   }
   await zipAndDownload(files, buildBatchZipFileName("images"));
 }
@@ -133,11 +137,11 @@ export async function downloadSceneVideosSequentially<T extends SceneWithNumber>
     try {
       const blob = await generatedVideoToBlob(vid);
       const mime = vid.mimeType || blob.type || "video/mp4";
-      const fileName = buildSceneVideoFileName(scene.sceneNumber, mime);
+      const fileName = buildSceneVideoFileName(resolveSceneNumber(scene, i), mime);
       await downloadBlobSequentially(blob, fileName, waitMs);
       downloaded++;
     } catch (err) {
-      console.error(`[downloadSceneVideosSequentially] Scene #${scene.sceneNumber}:`, err);
+      console.error(`[downloadSceneVideosSequentially] Scene #${resolveSceneNumber(scene, i)}:`, err);
     }
   }
   return downloaded;
@@ -155,10 +159,10 @@ export async function downloadSceneVideosAsZip<T extends SceneWithNumber>(
     try {
       const blob = await generatedVideoToBlob(vid);
       const mime = vid.mimeType || blob.type || "video/mp4";
-      const fileName = buildSceneVideoFileName(scene.sceneNumber, mime);
+      const fileName = buildSceneVideoFileName(resolveSceneNumber(scene, i), mime);
       files.push({ fileName, blob });
     } catch (err) {
-      console.error(`[downloadSceneVideosAsZip] Scene #${scene.sceneNumber}:`, err);
+      console.error(`[downloadSceneVideosAsZip] Scene #${resolveSceneNumber(scene, i)}:`, err);
     }
   }
   if (files.length === 0) return 0;
