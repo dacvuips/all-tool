@@ -12,7 +12,6 @@ import {
   getOrderedElementImages,
   getSceneImageSlotCount,
   normalizeImageMatchToken,
-  resolveElementSceneSlotCount,
 } from "./elementFormImageUtils";
 
 /** 3 vị trí ảnh tham chiếu trên scene row */
@@ -130,13 +129,16 @@ export function matchSequentialElementImagesForScene(
   });
 }
 
-/** Auto-match slot ảnh theo chế độ nạp (auto / tuần tự) — hai nguồn ảnh tách biệt. */
+/**
+ * Auto-match slot ảnh tab Thành phần (auto / tuần tự).
+ * Images to Video dùng matchArtStyleImagesForScene trực tiếp — không qua hàm này.
+ */
 export function matchElementImagesForScene(
   sceneNumber: number,
   prompt: string,
   config?: ElementFormConfig
 ): (ElementFormImage | undefined)[] {
-  const slotCount = resolveElementSceneSlotCount(config);
+  const slotCount = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
   if (resolveActionImageType(config) === ActionImageEnum.sequential) {
     return matchSequentialElementImagesForScene(
       sceneNumber,
@@ -144,13 +146,7 @@ export function matchElementImagesForScene(
       slotCount
     );
   }
-  // Images to Video (auto): gán artStyleImg theo tên file số — không match prompt
-  if (config?.serviceImageType) {
-    return matchArtStyleImagesForScene(sceneNumber, config.serviceImageType, config);
-  }
-  // Tab Thành phần (auto): match tên ảnh trong prompt
-  const matched = matchElementImagesInPrompt(prompt, pickAutoModeElementImageConfig(config));
-  return matched.slice(0, slotCount);
+  return matchElementImagesInPrompt(prompt, pickAutoModeElementImageConfig(config));
 }
 
 /** Gộp ảnh đã lưu theo scene với kết quả auto-match (ưu tiên override thủ công). */

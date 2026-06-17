@@ -6,10 +6,11 @@
  */
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
+import { RiListOrdered, RiMagicFill } from "react-icons/ri";
 
 import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Field, Radio, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, Label, Radio, Textarea } from "../../../../shared/utilities/form";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
@@ -40,8 +41,7 @@ export const AffiliateConfig = () => {
 
   const actionImageType = elementFormConfig?.actionImageType ?? ActionImageEnum.auto;
   const isSequentialImageMode =
-    actionImageType === ActionImageEnum.sequential &&
-    (isElementBatchMode || isImagesToVideo);
+    actionImageType === ActionImageEnum.sequential && (isElementBatchMode || isImagesToVideo);
 
   const sequentialTabCount = getSequentialArtStyleImgTabCount({
     isElementBatchMode,
@@ -82,6 +82,43 @@ export const AffiliateConfig = () => {
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
+        <Field className="mt-3" noError>
+          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl">
+            {(
+              [
+                {
+                  value: ActionImageEnum.auto,
+                  label: t("Nạp ảnh tự động"),
+                  Icon: RiMagicFill,
+                },
+                {
+                  value: ActionImageEnum.sequential,
+                  label: t("Nạp ảnh tuần tự"),
+                  Icon: RiListOrdered,
+                },
+              ] as const
+            ).map(({ value, label, Icon }) => {
+              const isActive = actionImageType === value;
+              return (
+                <div
+                  key={value}
+                  onClick={() => handleActionImageTypeChange(value)}
+                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+                    isActive
+                      ? "text-gray-800 bg-white shadow-sm"
+                      : "text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  <Icon
+                    className={isActive ? "text-pink-500 shrink-0" : "text-gray-400 shrink-0"}
+                  />
+                  {label}
+                </div>
+              );
+            })}
+          </div>
+        </Field>
+
         <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
           <div className="grid grid-cols-2 gap-2">
             {ASPECT_RATIOS.map((ar) => {
@@ -153,45 +190,32 @@ export const AffiliateConfig = () => {
           />
         )}
 
-        <Field label={t("Chế độ nạp ảnh")}>
-          <Radio
-            defaultValue={ActionImageEnum.auto}
-            selectFirst
-            cols={12}
-            value={actionImageType}
-            onChange={handleActionImageTypeChange}
-            options={[
-              { label: t("Nạp tự động ảnh tham chiếu"), value: ActionImageEnum.auto },
-              {
-                label: t("Nạp ảnh tham chiếu tuần tự"),
-                value: ActionImageEnum.sequential,
-              },
-            ]}
-          />
-        </Field>
-
         {/* Ảnh sản phẩm */}
         {isSequentialImageMode ? (
-          <TabGroup
-            name="element-sequential-art-images"
-            flex
-            tabClassName="px-2 py-2"
-            titleClassName="text-xs font-semibold whitespace-nowrap"
-            bodyClassName="pt-3"
-            className="-mx-4"
-          >
-            {Array.from({ length: sequentialTabCount }, (_, i) => (
-              <TabGroup.Tab key={i} label={t("Nhóm {{n}}", { n: i + 1 })}>
-                <ElementImagesUpload
-                  artStyleImg={sequentialImages[i]}
-                  readOnly={!customer}
-                  onArtStyleImgChange={(v) => patchSequentialTabImages(i, v)}
-                />
-              </TabGroup.Tab>
-            ))}
-          </TabGroup>
+          <div>
+            <Label text={t("Ảnh Tham chiêu (Tùy chọn)")} />
+            <TabGroup
+              name="element-sequential-art-images"
+              flex
+              tabClassName="px-2 py-2"
+              titleClassName="text-xs font-semibold whitespace-nowrap"
+              bodyClassName="pt-3"
+              className="-mx-4"
+            >
+              {Array.from({ length: sequentialTabCount }, (_, i) => (
+                <TabGroup.Tab key={i} label={t("Vị trí {{n}}", { n: i + 1 })}>
+                  <ElementImagesUpload
+                    artStyleImg={sequentialImages[i]}
+                    readOnly={!customer}
+                    onArtStyleImgChange={(v) => patchSequentialTabImages(i, v)}
+                  />
+                </TabGroup.Tab>
+              ))}
+            </TabGroup>
+          </div>
         ) : (
           <ElementImagesUpload
+            label={t("Ảnh Tham chiêu (Tùy chọn)")}
             artStyleImg={elementFormConfig?.artStyleImg}
             readOnly={!customer}
             onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}

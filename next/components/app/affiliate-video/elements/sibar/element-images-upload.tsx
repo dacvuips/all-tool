@@ -5,12 +5,17 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiCloseLine, RiDeleteBinLine, RiLoader4Line, RiUploadCloud2Line, RiVideoLine } from "react-icons/ri";
-import { ElementFormVideo } from "../../constants";
+import {
+  RiCloseLine,
+  RiDeleteBinLine,
+  RiLoader4Line,
+  RiUploadCloud2Line,
+  RiVideoLine,
+} from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { Button, Field } from "../../../../shared/utilities/form";
-import { ElementFormImage } from "../../constants";
+import { ElementFormImage, ElementFormVideo } from "../../constants";
 import { getElementFormImagePreviewSrc, getImageDisplayName } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -495,7 +500,7 @@ function MultiImageUploadSlot({
                 <Button
                   onClick={() => onChange(undefined)}
                   icon={<RiDeleteBinLine />}
-                  className="h-7 px-2 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100 gap-1"
+                  className="gap-1 px-2 h-7 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100"
                   iconClassName="text-sm"
                   tooltip={t("Xóa tất cả ảnh")}
                 >
@@ -526,6 +531,7 @@ export interface ElementImagesUploadProps {
   onArtStyleImgChange: (value: ElementFormImage[] | undefined) => void;
   readOnly?: boolean;
   maxSizeMB?: number;
+  label?: string;
 }
 
 // ── Video upload constants ────────────────────────────────────────────────
@@ -590,17 +596,13 @@ function MultiVideoListItem({
 
   if (!previewSrc) return null;
 
-  const displayName = (video.name || `video-${index + 1}`).replace(/\.[^./\\]+$/, "").trim() || `video-${index + 1}`;
+  const displayName =
+    (video.name || `video-${index + 1}`).replace(/\.[^./\\]+$/, "").trim() || `video-${index + 1}`;
 
   return (
     <li className="flex flex-col min-w-0">
       <div className="overflow-hidden relative w-full bg-black rounded-lg group aspect-video">
-        <video
-          src={previewSrc}
-          className="object-cover w-full h-full"
-          muted
-          preload="metadata"
-        />
+        <video src={previewSrc} className="object-cover w-full h-full" muted preload="metadata" />
         {!readOnly && (
           <Button
             onClick={(e) => {
@@ -614,10 +616,7 @@ function MultiVideoListItem({
           />
         )}
       </div>
-      <span
-        className="mt-1 w-full text-xs text-center text-gray-600 truncate"
-        title={displayName}
-      >
+      <span className="mt-1 w-full text-xs text-center text-gray-600 truncate" title={displayName}>
         {displayName}
       </span>
     </li>
@@ -651,7 +650,9 @@ function MultiVideoUploadSlot({
       const sizeMB = file.size / (1024 * 1024);
       if (sizeMB > maxSizeMB) {
         toast.error(
-          `${t("File quá lớn")}. ${t("Tối đa")}: ${maxSizeMB}MB, ${t("file")}: ${sizeMB.toFixed(1)}MB`
+          `${t("File quá lớn")}. ${t("Tối đa")}: ${maxSizeMB}MB, ${t("file")}: ${sizeMB.toFixed(
+            1
+          )}MB`
         );
         return null;
       }
@@ -785,7 +786,7 @@ function MultiVideoUploadSlot({
                 <Button
                   onClick={() => onChange(undefined)}
                   icon={<RiDeleteBinLine />}
-                  className="h-7 px-2 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100 gap-1"
+                  className="gap-1 px-2 h-7 text-xs text-red-500 bg-red-50 rounded-lg hover:bg-red-100"
                   iconClassName="text-sm"
                   tooltip={t("Xóa tất cả video")}
                 >
@@ -839,19 +840,19 @@ export function ElementVideoUpload({
   );
 }
 
-
 export function ElementImagesUpload({
   artStyleImg,
   onArtStyleImgChange,
   readOnly = false,
   maxSizeMB = 10,
+  label,
 }: ElementImagesUploadProps) {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-3">
       <MultiImageUploadSlot
-        label={t("Ảnh Tham chiêu (Tùy chọn)")}
+        label={label}
         value={artStyleImg}
         onChange={onArtStyleImgChange}
         readOnly={readOnly}

@@ -35,11 +35,8 @@ export function HomeBanners({ ...props }) {
   if (!topBanners) return <></>;
   return (
     <section>
-      <div
-        style={{ maxWidth: "1800px" }}
-        className={`grid grid-cols-2 gap-2  grid-row-3  w-full  ${!xs ? "-mx-1" : ""}`}
-      >
-        <div className="col-span-2 row-span-2 lg:col-span-2">
+      <div className={`grid grid-cols-1 gap-2  grid-row-1  w-full mx-auto  ${!xs ? "-mx-1" : ""}`}>
+        <div className="col-span-1 row-span-1 lg:col-span-1">
           <Swiper
             className={`relative w-full`}
             slidesPerView={1}
