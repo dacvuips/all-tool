@@ -5,7 +5,7 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
@@ -13,22 +13,29 @@ import { RiLoader4Fill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS, ElementFormImage, StoryModeTypeEnum } from "../../constants";
+import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
+import { ElementImagesUpload } from "../../elements/sibar/element-images-upload";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyFieldTab } from "../../shared/object-personify-picker-dialog";
 import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
-import { StoryboardImagesUpload } from "./storyboard-images-upload";
-
 // ── Main Component ────────────────────────────────────────────────────────
 
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const router = useRouter();
-  const { videoConfig, patchConfig, storyModeType, setStoryModeType } = useAffiliateVideoContext();
+  const {
+    videoConfig,
+    patchConfig,
+    storyModeType,
+    setStoryModeType,
+    storyboardImageStatuses,
+    retryStoryboardImage,
+    batchRunning,
+  } = useAffiliateVideoContext();
   const formContext = useFormContext();
   const { ART_STYLE_TRANSLATED_OPTIONS, CATEGORY_OPTIONS, LANGUAGE_OPTIONS, MOOD_OPTIONS } =
     useOptionsTranslation();
@@ -78,25 +85,22 @@ export const AffiliateConfig = () => {
       />
     </span>
   );
-  const handleImageChange = useCallback(
-    (image: ElementFormImage | undefined) => {
-      patchConfig?.({ storyboardImage: image ? [image] : undefined });
-    },
-    [patchConfig]
-  );
   return (
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
 
-      <div className="px-4 pb-4 space-y-3">
+      <div className="px-4 pb-4 space-y-3 ">
         {/* Ảnh storyboard */}
-        <Field noError label={t("Ảnh storyboard")}>
-          <StoryboardImagesUpload
-            imageValue={videoConfig?.storyboardImage?.[0]}
-            onImageChange={handleImageChange}
-            readOnly={!customer}
+        <div className="mt-3">
+          <ElementImagesUpload
+            label={t("Ảnh storyboard")}
+            artStyleImg={videoConfig?.storyboardImage}
+            readOnly={!customer || batchRunning}
+            onArtStyleImgChange={(v) => patchConfig && patchConfig({ storyboardImage: v })}
+            getImageStatus={(index) => storyboardImageStatuses?.[index]}
+            onRetryImage={(index) => retryStoryboardImage?.(index)}
           />
-        </Field>
+        </div>
         {/* TỈ LỆ KHUNG HÌNH */}
         <div>
           <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>

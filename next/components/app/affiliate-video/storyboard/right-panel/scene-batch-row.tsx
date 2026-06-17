@@ -349,6 +349,25 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     </div>
   );
 
+  if (scene.storyboardPending) {
+    const imageSlot = (scene.storyboardSourceIndex ?? 0) + 1;
+    return (
+      <div className="overflow-hidden bg-white rounded-xl border border-dashed border-indigo-200 shadow-sm">
+        <div className="flex gap-3 items-center px-4 py-6 bg-indigo-50/50">
+          <RiLoader4Line className="text-2xl text-indigo-500 animate-spin shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="text-sm font-semibold text-gray-700">
+              {t("Đang phân tích ảnh storyboard")} #{imageSlot}
+            </span>
+            <span className="text-xs text-gray-500">
+              {t("Phân cảnh sẽ xuất hiện đúng vị trí ảnh đã upload")}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={`rounded-xl border bg-white shadow-sm transition-all duration-200 overflow-hidden ${

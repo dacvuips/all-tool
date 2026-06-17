@@ -395,6 +395,7 @@ export async function callGeminiJsonGenerate(params: {
   label: string;
   responseSchema: unknown;
   temperature?: number;
+  maxOutputTokens?: number;
   clients?: GeminiClientEntry[];
 }): Promise<string> {
   const response = await callGeminiWithRetry(
@@ -404,6 +405,7 @@ export async function callGeminiJsonGenerate(params: {
         contents: buildGeminiContents(params.text, params.media),
         config: {
           ...(params.temperature != null ? { temperature: params.temperature } : {}),
+          ...(params.maxOutputTokens != null ? { maxOutputTokens: params.maxOutputTokens } : {}),
           responseMimeType: "application/json",
           responseSchema: params.responseSchema,
         },
@@ -411,5 +413,21 @@ export async function callGeminiJsonGenerate(params: {
     params.label,
     params.clients
   );
-  return assertGeminiTextResponse(response);
+
+  const finishReason = (response as { candidates?: Array<{ finishReason?: string }> })
+    ?.candidates?.[0]?.finishReason;
+  const text = assertGeminiTextResponse(response);
+
+  if (finishReason === "MAX_TOKENS") {
+    logger.warn(
+      `[${params.label}] Gemini finishReason=MAX_TOKENS, outputLength=${text.length}`
+    );
+    const err: any = new Error(
+      "AI trả kết quả bị cắt ngắn. Vui lòng thử lại hoặc dùng ảnh có ít panel hơn."
+    );
+    err.statusCode = 502;
+    throw err;
+  }
+
+  return text;
 }

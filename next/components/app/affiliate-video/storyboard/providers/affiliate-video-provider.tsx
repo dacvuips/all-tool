@@ -11,10 +11,14 @@ import {
   ScriptData,
   STORE_NAME,
   StoryModeTypeEnum,
+  StoryboardImageStatus,
 } from "../../constants";
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import {
+  replaceStoryboardImageScenes,
+} from "../utils/storyboardScriptUtils";
 import {
   SceneErrorKind,
   SceneErrors,
@@ -130,12 +134,20 @@ export const AffiliateVideoContext = createContext<
 
     storyModeType: StoryModeTypeEnum;
     setStoryModeType: (storyModeType: StoryModeTypeEnum) => void;
+
+    /** Trạng thái phân tích từng ảnh storyboard (theo index upload) */
+    storyboardImageStatuses: Record<number, StoryboardImageStatus>;
+    /** Tiến độ phân tích storyboard: ảnh hiện tại / tổng */
+    storyboardProgress: { current: number; total: number } | null;
+    /** Tạo lại phân cảnh cho một ảnh storyboard bị lỗi */
+    retryStoryboardImage: (imageIndex: number) => Promise<void>;
   }>
 >({});
 
 export function AffiliateVideoProvider(props) {
   const {
     analyzeStoryboard,
+    analyzeStoryboardImage,
     generateSceneFromText,
     getStoryboardHistory,
     clearStoryboardHistory: clearStoryboardHistoryApi,
@@ -173,6 +185,14 @@ export function AffiliateVideoProvider(props) {
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
     StoryModeTypeEnum.image_to_video
   );
+
+  const [storyboardImageStatuses, setStoryboardImageStatuses] = useState<
+    Record<number, StoryboardImageStatus>
+  >({});
+  const [storyboardProgress, setStoryboardProgress] = useState<{
+    current: number;
+    total: number;
+  } | null>(null);
 
   // ── Scene history state ──
   const [sceneHistory, setSceneHistory] = useState<SceneHistoryItem[]>([]);
@@ -330,7 +350,11 @@ export function AffiliateVideoProvider(props) {
       return;
     }
 
-    if (!data.storyboardImage?.[0]?.imageBytes) {
+    const uploadedIndices = (data.storyboardImage ?? [])
+      .map((img, index) => (img?.imageBytes ? index : -1))
+      .filter((index) => index >= 0);
+
+    if (!uploadedIndices.length) {
       toast.error("Vui lòng upload ảnh storyboard trước khi tạo cảnh");
       return;
     }
@@ -338,22 +362,126 @@ export function AffiliateVideoProvider(props) {
     try {
       setScriptTab("script");
       setBatchRunning(true);
+      setStoryboardImageStatuses({});
+      setStoryboardProgress({ current: 0, total: uploadedIndices.length });
+      setScriptData(null);
+      setSelectedHistoryId(null);
+
+      let completedCount = 0;
+
       const scriptResult = promptText
         ? await generateSceneFromText({ text: promptText, config: data })
-        : await analyzeStoryboard(data);
+        : await analyzeStoryboard(data, {
+            onImageStatus: (index, status) => {
+              setStoryboardImageStatuses((prev) => ({ ...prev, [index]: status }));
+              if (status === "done" || status === "error") {
+                completedCount += 1;
+                setStoryboardProgress({
+                  current: completedCount,
+                  total: uploadedIndices.length,
+                });
+              }
+            },
+            onProgress: (partial) => {
+              setScriptData(partial);
+            },
+          });
 
       if (scriptResult) {
         setScriptData(scriptResult);
         refreshSceneHistory();
       }
       setBatchRunning(false);
+      setStoryboardProgress(null);
       return scriptResult;
     } catch (err: any) {
       console.error("[storyboard] submit error", err?.message);
       setBatchRunning(false);
+      setStoryboardProgress(null);
       throw err;
     }
   };
+
+  const retryStoryboardImage = useCallback(
+    async (imageIndex: number) => {
+      if (!customer) {
+        setOpenCustomerLoginDialog(true);
+        return;
+      }
+
+      const data = affiliateVideoFormConfig;
+      const storyboardImage = data.storyboardImage?.[imageIndex];
+      if (!storyboardImage?.imageBytes) {
+        toast.error("Ảnh storyboard không hợp lệ");
+        return;
+      }
+
+      const currentScript = scriptData;
+
+      setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "loading" }));
+
+      try {
+        if (!currentScript) {
+          const partial = await analyzeStoryboardImage(data, storyboardImage, {
+            sourceIndex: imageIndex,
+            sceneNumberOffset: 0,
+          });
+
+          if (!partial) {
+            setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "error" }));
+            return;
+          }
+
+          setScriptData(partial);
+          setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "done" }));
+          scriptDB
+            .set(CACHE_KEY.lastStoryboardScript, partial)
+            .catch((e) => console.warn("[storyboard] Failed to persist script", e));
+          return;
+        }
+
+        const scenesBefore = currentScript.scenes.filter(
+          (scene) => (scene.storyboardSourceIndex ?? 0) < imageIndex
+        );
+        const sceneNumberOffset = scenesBefore.length;
+
+        const partial = await analyzeStoryboardImage(data, storyboardImage, {
+          sourceIndex: imageIndex,
+          sceneNumberOffset,
+        });
+
+        if (!partial) {
+          setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "error" }));
+          return;
+        }
+
+        const nextScript = replaceStoryboardImageScenes(
+          currentScript,
+          imageIndex,
+          partial.scenes
+        );
+
+        setScriptData(nextScript);
+        setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "done" }));
+
+        scriptDB
+          .set(CACHE_KEY.lastStoryboardScript, nextScript)
+          .catch((e) => console.warn("[storyboard] Failed to persist script", e));
+      } catch (err: any) {
+        console.error("[storyboard] retry error", err?.message);
+        setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "error" }));
+      }
+    },
+    [
+      affiliateVideoFormConfig,
+      analyzeStoryboardImage,
+      customer,
+      scriptData,
+      scriptDB,
+      setOpenCustomerLoginDialog,
+      toast,
+    ]
+  );
 
   /** Persist config to IndexedDB */
   const persistConfig = (config: AffiliateVideoFormConfig) => {
@@ -441,6 +569,10 @@ export function AffiliateVideoProvider(props) {
             }
           });
         },
+
+        storyboardImageStatuses,
+        storyboardProgress,
+        retryStoryboardImage,
       }}
     >
       {props.children}

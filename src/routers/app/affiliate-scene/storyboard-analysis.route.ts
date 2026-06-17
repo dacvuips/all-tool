@@ -2,6 +2,8 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
+import { StoryboardAnalysisOpenAIJsonSchema, CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS } from "./_chatgpt.constants";
+import { GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS } from "./_gemini.constants";
 import {
   assertNonEmptyScenesArray,
   buildProductImageScriptNote,
@@ -11,12 +13,12 @@ import {
   getChatGPTSceneModel,
   getGeminiSceneModel,
   incrementRequestCount,
+  normalizeSceneAudioField,
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
-  normalizeSceneAudioField,
   resolveArtStylePrompt,
 } from "./_shared";
-import { StoryboardAnalysisOpenAIJsonSchema } from "./_chatgpt.constants";
+import { retryAICall } from "./_ai-retry";
 import { StoryboardAnalysisResponseSchema } from "./storyboard-analysis.schema";
 
 function buildStoryboardAnalysisPrompt(opts: {
@@ -54,25 +56,57 @@ THÔNG TIN BỔ SUNG:
 - Tỉ lệ khung hình mục tiêu: ${aspectRatio}
 - Ngôn ngữ lời thoại: ${language}${tipContent}
 
-CHO MỖI PHÂN CẢNH, trả về:
+CHO MỖI PHÂN CẢNH (trong mảng scenes – BẮT BUỘC, ưu tiên hoàn thành trước), trả về:
 - sceneNumber: số thứ tự (1, 2, 3, ...)
 - cropRegion: vùng cắt chuẩn hoá
 - camera: góc máy gợi ý
 - dialogue: lời thoại/narration bằng ${language} – suy ra từ nội dung panel hoặc sáng tạo phù hợp
-- motionPrompt: mô tả chuyển động bằng tiếng Anh
-- audio: metadata giọng đọc cho phân cảnh (giới tính, tính cách, nhịp điệu) bằng ${language}
-- visualDescription: mô tả khung hình tĩnh bằng tiếng Anh, phong cách ${artStyle}
+- motionPrompt: mô tả chuyển động bằng tiếng Anh (ngắn gọn)
+- audio: metadata giọng đọc cho phân cảnh bằng ${language} (ngắn gọn)
+- visualDescription: mô tả khung hình tĩnh bằng tiếng Anh, phong cách ${artStyle} (ngắn gọn)
 
-CHO TOÀN VIDEO:
+SAU KHI hoàn thành toàn bộ scenes, mới trả metadata giọng đọc toàn video (ngắn gọn):
+- topicTitle: tiêu đề video bằng ${language} (tối đa ~60 ký tự)
 - voiceGender: male hoặc female
-- voiceTone: tính cách giọng đọc
-- voiceStyle: phong cách đọc
-- voicePacing: nhịp điệu đọc (fast / moderate / slow)
-- audioPrompt: prompt casting giọng đọc đầy đủ bằng tiếng Anh
-- topicTitle: tiêu đề video bằng ${language}
+- voiceTone, voiceStyle, voicePacing: mỗi field tối đa ~40 ký tự
+- audioPrompt: tùy chọn, tiếng Anh tối đa ~60 ký tự (có thể bỏ trống)
+
+QUAN TRỌNG: Mảng scenes phải đầy đủ và hợp lệ. Nếu thiếu token, rút ngắn dialogue/mô tả nhưng KHÔNG được bỏ scene.
 
 Trả về JSON hợp lệ theo schema đã định nghĩa.
 `;
+}
+
+async function callStoryboardAnalysisAi(params: {
+  aiProvider: string;
+  text: string;
+  storyboardImageBase64: string;
+  mimeType: string;
+}): Promise<string> {
+  const { aiProvider, text, storyboardImageBase64, mimeType } = params;
+
+  if (aiProvider === "gemini") {
+    return callGeminiJsonGenerate({
+      model: await getGeminiSceneModel("STORYBOARD"),
+      text,
+      media: [{ imageBytes: storyboardImageBase64, mimeType }],
+      label: "storyboard-analysis",
+      responseSchema: StoryboardAnalysisResponseSchema,
+      temperature: 0.3,
+      maxOutputTokens: GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS,
+    });
+  }
+
+  return callChatGPTGateway({
+    text,
+    images: [{ imageBytes: storyboardImageBase64, mimeType }],
+    label: "storyboard-analysis",
+    model: await getChatGPTSceneModel("STORYBOARD"),
+    jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
+    jsonSchemaName: "storyboard_analysis_response",
+    temperature: 0.3,
+    maxTokens: CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS,
+  });
 }
 
 export default [
@@ -121,29 +155,16 @@ export default [
         const mimeType = body.mimeType || "image/png";
 
         const aiProvider = await resolveAiSceneProvider();
-        let responseText: string;
 
-        if (aiProvider === "gemini") {
-          responseText = await callGeminiJsonGenerate({
-            model: await getGeminiSceneModel("STORYBOARD"),
+        const parsed = (await retryAICall(async () => {
+          const responseText = await callStoryboardAnalysisAi({
+            aiProvider,
             text,
-            media: [{ imageBytes: body.storyboardImageBase64, mimeType }],
-            label: "storyboard-analysis",
-            responseSchema: StoryboardAnalysisResponseSchema,
-            temperature: 0.3,
+            storyboardImageBase64: body.storyboardImageBase64,
+            mimeType,
           });
-        } else {
-          responseText = await callChatGPTGateway({
-            text,
-            images: [{ imageBytes: body.storyboardImageBase64, mimeType }],
-            label: "storyboard-analysis",
-            model: await getChatGPTSceneModel("STORYBOARD"),
-            jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
-            jsonSchemaName: "storyboard_analysis_response",
-            temperature: 0.3,
-          });
-        }
-        const parsed = parseGeminiJsonResponse(responseText) as any;
+          return parseGeminiJsonResponse(responseText);
+        }, "storyboard-analysis")) as any;
         assertNonEmptyScenesArray(parsed.scenes);
 
         const normalizedScenes = parsed.scenes.map((scene: any, index: number) => ({

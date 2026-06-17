@@ -9,13 +9,14 @@ import {
   RiCloseLine,
   RiDeleteBinLine,
   RiLoader4Line,
+  RiRefreshLine,
   RiUploadCloud2Line,
   RiVideoLine,
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { Button, Field } from "../../../../shared/utilities/form";
-import { ElementFormImage, ElementFormVideo } from "../../constants";
+import { ElementFormImage, ElementFormVideo, StoryboardImageStatus } from "../../constants";
 import { getElementFormImagePreviewSrc, getImageDisplayName } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -262,6 +263,8 @@ interface MultiImageUploadSlotProps {
   onChange: (value: ElementFormImage[] | undefined) => void;
   maxSizeMB?: number;
   readOnly?: boolean;
+  getImageStatus?: (index: number) => StoryboardImageStatus | undefined;
+  onRetryImage?: (index: number) => void;
 }
 
 function MultiImageListItem({
@@ -269,11 +272,15 @@ function MultiImageListItem({
   index,
   readOnly,
   onRemove,
+  status,
+  onRetry,
 }: {
   img: ElementFormImage;
   index: number;
   readOnly: boolean;
   onRemove: (index: number) => void;
+  status?: StoryboardImageStatus;
+  onRetry?: (index: number) => void;
 }) {
   const { t } = useTranslation();
   const [zoomImage, setZoomImage] = useState("");
@@ -292,11 +299,13 @@ function MultiImageListItem({
   const displayName = getImageDisplayName(img) || `image-${index + 1}`;
 
   return (
-    <li className="flex flex-col min-w-0">
+    <li className="flex flex-col w-full min-w-0">
       <div
         role="button"
         tabIndex={0}
-        className="overflow-hidden relative w-full bg-gray-100 rounded-lg cursor-pointer group aspect-square"
+        className={`relative flex justify-center items-center w-full aspect-square overflow-hidden bg-gray-100 rounded-lg cursor-pointer group ${
+          status === "error" ? "ring-2 ring-red-500" : ""
+        }`}
         onClick={() => setZoomImage(previewSrc)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -305,8 +314,29 @@ function MultiImageListItem({
           }
         }}
       >
-        <img src={previewSrc} alt={displayName} className="object-cover w-full h-full" />
-        {!readOnly && (
+        <img
+          src={previewSrc}
+          alt={displayName}
+          className="object-contain w-full h-full max-w-full max-h-full pointer-events-none"
+        />
+        {status === "loading" && (
+          <div className="flex absolute inset-0 z-10 justify-center items-center bg-black/40">
+            <RiLoader4Line className="text-2xl text-white animate-spin" />
+          </div>
+        )}
+        {status === "error" && onRetry && (
+          <Button
+            onClick={(e) => {
+              e?.stopPropagation?.();
+              onRetry(index);
+            }}
+            icon={<RiRefreshLine />}
+            className="absolute inset-0 z-10 flex justify-center items-center bg-red-500/60 rounded-lg border-0 hover:bg-red-500/75"
+            iconClassName="text-2xl text-white"
+            tooltip={t("Tạo lại phân cảnh")}
+          />
+        )}
+        {!readOnly && status !== "loading" && (
           <Button
             onClick={(e) => {
               e?.stopPropagation?.();
@@ -338,6 +368,8 @@ function MultiImageUploadSlot({
   onChange,
   maxSizeMB = 10,
   readOnly = false,
+  getImageStatus,
+  onRetryImage,
 }: MultiImageUploadSlotProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -508,7 +540,7 @@ function MultiImageUploadSlot({
                 </Button>
               </div>
             )}
-            <ul className="grid grid-cols-5 gap-2 max-h-[400px] overflow-y-auto pr-1">
+            <ul className="grid grid-cols-5 gap-2 auto-rows-fr max-h-[400px] overflow-y-auto pr-1">
               {value.map((img, index) => (
                 <MultiImageListItem
                   key={`${img.name}-${index}`}
@@ -516,6 +548,8 @@ function MultiImageUploadSlot({
                   index={index}
                   readOnly={readOnly}
                   onRemove={handleRemove}
+                  status={getImageStatus?.(index)}
+                  onRetry={onRetryImage}
                 />
               ))}
             </ul>
@@ -532,6 +566,8 @@ export interface ElementImagesUploadProps {
   readOnly?: boolean;
   maxSizeMB?: number;
   label?: string;
+  getImageStatus?: (index: number) => StoryboardImageStatus | undefined;
+  onRetryImage?: (index: number) => void;
 }
 
 // ── Video upload constants ────────────────────────────────────────────────
@@ -846,6 +882,8 @@ export function ElementImagesUpload({
   readOnly = false,
   maxSizeMB = 10,
   label,
+  getImageStatus,
+  onRetryImage,
 }: ElementImagesUploadProps) {
   const { t } = useTranslation();
 
@@ -857,6 +895,8 @@ export function ElementImagesUpload({
         onChange={onArtStyleImgChange}
         readOnly={readOnly}
         maxSizeMB={maxSizeMB}
+        getImageStatus={getImageStatus}
+        onRetryImage={onRetryImage}
       />
     </div>
   );

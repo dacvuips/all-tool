@@ -8,6 +8,9 @@ export const GEMINI_MAX_KEY_RETRIES = 30;
 export const GEMINI_RETRY_DELAY_MS_MIN = 2000;
 export const GEMINI_RETRY_DELAY_MS_MAX = 3000;
 
+/** Storyboard có nhiều panel + mô tả dài — cần output token cao hơn mặc định. */
+export const GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS = 16384;
+
 /** @deprecated Dùng `getGeminiSceneModel()` — fallback mặc định tại `_ai-scene.constants`. */
 export { DEFAULT_GEMINI_MODELS as GEMINI_MODELS } from "./_ai-scene.constants";
 

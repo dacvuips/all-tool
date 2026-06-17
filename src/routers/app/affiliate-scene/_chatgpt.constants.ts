@@ -16,6 +16,9 @@ export const CHATGPT_GATEWAY_SYSTEM_MESSAGE =
 
 export const CHATGPT_JSON_SCHEMA_NAME = "affiliate_video_response";
 
+/** Storyboard có nhiều panel + mô tả dài — cần max_tokens cao hơn mặc định VietAPI/Claude. */
+export const CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS = 16384;
+
 export type ChatGPTGatewayImage = { imageBytes: string; mimeType: string };
 export type ChatGPTGatewayVideo = { imageBytes: string; mimeType: string };
 
@@ -160,12 +163,6 @@ export const SuggestConfigOpenAIJsonSchema = {
 export const StoryboardAnalysisOpenAIJsonSchema = {
   type: "object",
   properties: {
-    topicTitle: { type: "string" },
-    voiceGender: { type: "string", enum: ["male", "female"] },
-    voiceTone: { type: "string" },
-    voiceStyle: { type: "string" },
-    voicePacing: { type: "string" },
-    audioPrompt: { type: "string" },
     scenes: {
       type: "array",
       items: {
@@ -198,14 +195,12 @@ export const StoryboardAnalysisOpenAIJsonSchema = {
         ],
       },
     },
+    topicTitle: { type: "string" },
+    voiceGender: { type: "string", enum: ["male", "female"] },
+    voiceTone: { type: "string" },
+    voiceStyle: { type: "string" },
+    voicePacing: { type: "string" },
+    audioPrompt: { type: "string" },
   },
-  required: [
-    "topicTitle",
-    "voiceGender",
-    "voiceTone",
-    "voiceStyle",
-    "voicePacing",
-    "audioPrompt",
-    "scenes",
-  ],
+  required: ["scenes", "topicTitle", "voiceGender", "voiceTone", "voiceStyle", "voicePacing"],
 };

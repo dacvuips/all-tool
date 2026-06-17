@@ -18,7 +18,12 @@ export async function retryAICall<T>(fn: () => Promise<T>, label: string): Promi
       );
 
       const errStatus = err?.statusCode || err?.status;
-      if (errStatus === 403 || errStatus === 401 || errStatus === 429) {
+      const isNonRetryable =
+        errStatus === 403 ||
+        errStatus === 401 ||
+        (errStatus === 429 && !err?.retryable);
+
+      if (isNonRetryable) {
         logger.warn(`[${label}] Lỗi không thể retry (${errStatus}), dừng ngay.`);
         break;
       }

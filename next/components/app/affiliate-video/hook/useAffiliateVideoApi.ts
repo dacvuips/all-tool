@@ -33,11 +33,17 @@ import {
   ScriptData,
   STORE_NAME,
   StoryboardAnalysisData,
+  StoryboardImageStatus,
   TrendingHistoryItem,
   TrendingScriptData,
   TrendingVideoFormConfig,
 } from "../constants";
 import { mapStoryboardAnalysisToScriptData } from "../storyboard/utils/mapStoryboardAnalysisToScriptData";
+import {
+  buildStoryboardScriptInImageOrder,
+  getStoryboardImagesWithBytes,
+  mergeStoryboardScriptResults,
+} from "../storyboard/utils/storyboardScriptUtils";
 import {
   buildObjectToPersonifyApiFields,
   getObjectToPersonifyMode,
@@ -270,6 +276,21 @@ export interface GeneratedVideoData {
   aspectRatio?: string;
 }
 
+export interface AnalyzeStoryboardImageOptions {
+  sourceIndex?: number;
+  sceneNumberOffset?: number;
+  suppressToast?: boolean;
+}
+
+export interface AnalyzeStoryboardOptions {
+  /** Chỉ số ảnh cần phân tích (mặc định: tất cả ảnh đã upload) */
+  imageIndices?: number[];
+  onImageStatus?: (index: number, status: StoryboardImageStatus) => void;
+  onProgress?: (scriptData: ScriptData) => void;
+  /** Không push history khi đang retry từng ảnh */
+  skipHistory?: boolean;
+}
+
 export interface UseAffiliateVideoApiReturn {
   /**
    * Gọi API tạo scene từ config form (flow cũ).
@@ -354,10 +375,21 @@ export interface UseAffiliateVideoApiReturn {
   analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
 
   /**
-   * Phân tích ảnh storyboard → AI trả về số phân cảnh, vùng cắt, lời thoại, motion, giọng đọc.
-   * Tự động cắt panel bằng canvas và map sang ScriptData.
+   * Phân tích ảnh storyboard → gọi song song tất cả ảnh đã upload.
    */
-  analyzeStoryboard: (data: AffiliateVideoFormConfig) => Promise<ScriptData | undefined>;
+  analyzeStoryboard: (
+    data: AffiliateVideoFormConfig,
+    options?: AnalyzeStoryboardOptions
+  ) => Promise<ScriptData | undefined>;
+
+  /**
+   * Phân tích một ảnh storyboard đơn lẻ (dùng cho retry).
+   */
+  analyzeStoryboardImage: (
+    data: AffiliateVideoFormConfig,
+    storyboardImage: ElementFormImage,
+    options?: AnalyzeStoryboardImageOptions
+  ) => Promise<ScriptData | undefined>;
 
   /** Lấy lịch sử phân tích storyboard (IndexedDB riêng, không dùng chung single/batch). */
   getStoryboardHistory: () => Promise<SceneHistoryItem[]>;
@@ -1051,16 +1083,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
   // ── Shared: gọi API /api/app/storyboard-analysis/ ──
   const callStoryboardAnalysisApi = useCallback(
-    async (body: {
-      storyboardImageBase64: string;
-      mimeType?: string;
-      artStyle?: string;
-      artStyleId?: string;
-      language?: string;
-      aspectRatio?: string;
-      tipContent?: string;
-      productImages?: string[];
-    }) => {
+    async (
+      body: {
+        storyboardImageBase64: string;
+        mimeType?: string;
+        artStyle?: string;
+        artStyleId?: string;
+        language?: string;
+        aspectRatio?: string;
+        tipContent?: string;
+        productImages?: string[];
+      },
+      options?: { suppressToast?: boolean }
+    ) => {
       const res = await fetch("/api/app/storyboard-analysis/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1070,7 +1105,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
+        if (!options?.suppressToast) {
+          toast.error(message);
+        }
         return undefined;
       }
 
@@ -1079,48 +1116,137 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     [toast]
   );
 
-  // ── analyzeStoryboard (storyboard flow – phân tích ảnh storyboard) ──
-  const analyzeStoryboard = useCallback(
-    async (data: AffiliateVideoFormConfig): Promise<ScriptData | undefined> => {
-      const storyboardImage = data.storyboardImage?.[0];
+  const analyzeStoryboardImage = useCallback(
+    async (
+      data: AffiliateVideoFormConfig,
+      storyboardImage: ElementFormImage,
+      options?: AnalyzeStoryboardImageOptions
+    ): Promise<ScriptData | undefined> => {
       if (!storyboardImage?.imageBytes) {
-        toast.error("Chưa upload ảnh storyboard");
+        if (!options?.suppressToast) {
+          toast.error("Chưa upload ảnh storyboard");
+        }
         return undefined;
       }
 
-      const result = await callStoryboardAnalysisApi({
-        storyboardImageBase64: storyboardImage.imageBytes,
-        mimeType: storyboardImage.mimeType,
-        artStyle: data.artStyle,
-        artStyleId: data.artStyleId || undefined,
-        language: data.language,
-        aspectRatio: data.aspectRatio,
-        tipContent: data.tipContent,
-        productImages: data.productImages,
-      });
+      const result = await callStoryboardAnalysisApi(
+        {
+          storyboardImageBase64: storyboardImage.imageBytes,
+          mimeType: storyboardImage.mimeType,
+          artStyle: data.artStyle,
+          artStyleId: data.artStyleId || undefined,
+          language: data.language,
+          aspectRatio: data.aspectRatio,
+          tipContent: data.tipContent,
+          productImages: data.productImages,
+        },
+        { suppressToast: options?.suppressToast }
+      );
 
       if (!result?.data) return undefined;
 
       const analysis: StoryboardAnalysisData = result.data;
-      const scriptData = await mapStoryboardAnalysisToScriptData(
-        analysis,
-        data,
-        storyboardImage
+      return mapStoryboardAnalysisToScriptData(analysis, data, storyboardImage, {
+        sourceIndex: options?.sourceIndex,
+        sceneNumberOffset: options?.sceneNumberOffset ?? 0,
+      });
+    },
+    [callStoryboardAnalysisApi, toast]
+  );
+
+  // ── analyzeStoryboard (storyboard flow – gọi song song tất cả ảnh) ──
+  const analyzeStoryboard = useCallback(
+    async (
+      data: AffiliateVideoFormConfig,
+      options?: AnalyzeStoryboardOptions
+    ): Promise<ScriptData | undefined> => {
+      const images = getStoryboardImagesWithBytes(data.storyboardImage);
+      if (!images.length) {
+        toast.error("Chưa upload ảnh storyboard");
+        return undefined;
+      }
+
+      const allIndices = (data.storyboardImage ?? [])
+        .map((img, index) => (img?.imageBytes ? index : -1))
+        .filter((index) => index >= 0);
+      const indices = options?.imageIndices ?? allIndices;
+
+      const resultsByIndex = new Map<number, ScriptData>();
+      const errorIndices = new Set<number>();
+
+      const publishProgress = (includePendingPlaceholders: boolean) => {
+        const built = buildStoryboardScriptInImageOrder({
+          indices,
+          resultsByIndex,
+          errorIndices,
+          config: data,
+          includePendingPlaceholders,
+        });
+        if (built) {
+          options?.onProgress?.(built);
+          if (!includePendingPlaceholders) {
+            scriptDB
+              .set(CACHE_KEY.lastStoryboardScript, built)
+              .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+          }
+        }
+      };
+
+      await Promise.all(
+        indices.map(async (imageIndex) => {
+          const storyboardImage = data.storyboardImage?.[imageIndex];
+          if (!storyboardImage?.imageBytes) return;
+
+          options?.onImageStatus?.(imageIndex, "loading");
+
+          const partial = await analyzeStoryboardImage(data, storyboardImage, {
+            sourceIndex: imageIndex,
+            sceneNumberOffset: 0,
+            suppressToast: true,
+          });
+
+          if (!partial) {
+            errorIndices.add(imageIndex);
+            options?.onImageStatus?.(imageIndex, "error");
+          } else {
+            resultsByIndex.set(imageIndex, partial);
+            options?.onImageStatus?.(imageIndex, "done");
+          }
+
+          publishProgress(true);
+        })
       );
+
+      const accumulated = buildStoryboardScriptInImageOrder({
+        indices,
+        resultsByIndex,
+        errorIndices,
+        config: data,
+        includePendingPlaceholders: false,
+      });
+
+      if (!accumulated) {
+        toast.error("Không thể phân tích ảnh storyboard. Vui lòng thử lại.");
+        return undefined;
+      }
+
+      options?.onProgress?.(accumulated);
+
+      scriptDB
+        .set(CACHE_KEY.lastStoryboardScript, accumulated)
+        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
       scriptDB
         .set(CACHE_KEY.storyboardInput, data)
         .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
 
-      scriptDB
-        .set(CACHE_KEY.lastStoryboardScript, scriptData)
-        .catch((e) => console.warn("[affiliate-video-api] IndexedDB write error", e));
+      if (!options?.skipHistory) {
+        await pushToStoryboardHistory(accumulated);
+      }
 
-      await pushToStoryboardHistory(scriptData);
-
-      return scriptData;
+      return accumulated;
     },
-    [callStoryboardAnalysisApi, scriptDB, pushToStoryboardHistory, toast]
+    [analyzeStoryboardImage, pushToStoryboardHistory, scriptDB, toast]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──
@@ -2424,6 +2550,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     clearSceneHistory,
     analyzeVideoForCopy,
     analyzeStoryboard,
+    analyzeStoryboardImage,
     getStoryboardHistory,
     clearStoryboardHistory,
     generateStyleText,

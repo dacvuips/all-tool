@@ -201,7 +201,14 @@ export interface SceneScript {
   cropRegion?: StoryboardCropRegion;
   /** Ảnh panel đã cắt từ storyboard */
   storyboardCropImage?: ElementFormImage;
+  /** Chỉ số ảnh storyboard gốc tạo ra phân cảnh này (0-based) */
+  storyboardSourceIndex?: number;
+  /** Placeholder khi đang chờ phân tích ảnh storyboard (giữ đúng vị trí trong danh sách) */
+  storyboardPending?: boolean;
 }
+
+/** Trạng thái phân tích từng ảnh storyboard */
+export type StoryboardImageStatus = "idle" | "loading" | "done" | "error";
 
 export interface ScriptData {
   storyModeType: StoryModeTypeEnum;

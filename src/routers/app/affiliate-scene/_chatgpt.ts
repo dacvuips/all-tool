@@ -1,6 +1,7 @@
 import { credentialService } from "../../../libs/dal/credential";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
+import logger from "../../../helpers/logger";
 import { retryAICall } from "./_ai-retry";
 import { getAiSceneMoreSetting } from "./_ai-scene";
 import {
@@ -61,6 +62,25 @@ function extractMessageContentFromChoice(choice: unknown): string {
   const delta = c.delta?.content;
   if (typeof delta === "string" && delta.trim()) return delta.trim();
   return serializeMessageContent(c.message?.content);
+}
+
+function extractFinishReasonFromGatewayBody(raw: string): string | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed.startsWith("data:")) return undefined;
+  try {
+    const data = JSON.parse(trimmed) as {
+      choices?: Array<{ finish_reason?: string }>;
+    };
+    return data.choices?.[0]?.finish_reason;
+  } catch {
+    return undefined;
+  }
+}
+
+function isVietTheoPoolLimitError(body: string): boolean {
+  if (!body) return false;
+  const upper = body.toUpperCase();
+  return upper.includes("POOL LIMIT") || upper.includes("POOL_LIMIT");
 }
 
 function parseChatGPTGatewayBody(raw: string): string {
@@ -130,6 +150,8 @@ export async function callChatGPTGateway(params: {
   jsonSchema?: Record<string, unknown>;
   jsonSchemaName?: string;
   temperature?: number;
+  /** Giới hạn token output (OpenAI-compatible `max_tokens`). */
+  maxTokens?: number;
   /** Tên model VietAPI (ví dụ `"claude-opus-4-6"`). */
   model?: string;
 }): Promise<string> {
@@ -172,6 +194,7 @@ export async function callChatGPTGateway(params: {
           { role: "user", content },
         ],
         ...(params.temperature != null ? { temperature: params.temperature } : {}),
+        ...(params.maxTokens != null ? { max_tokens: params.maxTokens, max_completion_tokens: params.maxTokens } : {}),
         response_format: params.jsonSchema
           ? {
               type: "json_schema",
@@ -190,10 +213,27 @@ export async function callChatGPTGateway(params: {
     if (!resp.ok) {
       const err: any = new Error(`VietTheo API error (${resp.status}): ${rawBody}`);
       err.statusCode = resp.status;
+      if (resp.status === 429 && isVietTheoPoolLimitError(rawBody)) {
+        err.retryable = true;
+      }
       throw err;
     }
 
-    return parseChatGPTGatewayBody(rawBody);
+    const finishReason = extractFinishReasonFromGatewayBody(rawBody);
+    const text = parseChatGPTGatewayBody(rawBody);
+
+    if (finishReason === "length") {
+      logger.warn(
+        `[${params.label}] VietAPI finish_reason=length, outputLength=${text.length}`
+      );
+      const err: any = new Error(
+        "AI trả kết quả bị cắt ngắn. Vui lòng thử lại hoặc dùng ảnh có ít panel hơn."
+      );
+      err.statusCode = 502;
+      throw err;
+    }
+
+    return text;
   }, params.label);
 }
 

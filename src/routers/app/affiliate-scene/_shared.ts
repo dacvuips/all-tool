@@ -52,6 +52,18 @@ export function extractJsonTextFromAIResponse(text: string): string {
   return s;
 }
 
+/** JSON storyboard bị cắt trước khi có mảng scenes (thường do hết token ở metadata giọng đọc). */
+export function isIncompleteStoryboardJson(text: string): boolean {
+  const s = extractJsonTextFromAIResponse(text);
+  if (!s.includes('"scenes"') && (s.includes('"topicTitle"') || s.includes('"voiceGender"'))) {
+    return true;
+  }
+  if ((s.startsWith("{") || s.startsWith("[")) && !s.trimEnd().endsWith("}") && !s.trimEnd().endsWith("]")) {
+    return true;
+  }
+  return false;
+}
+
 /** Bóc envelope OpenAI/Gateway (choices[].message.content) hoặc { data: {...} }. */
 export function unwrapAiJsonPayload(parsed: Record<string, unknown>): Record<string, unknown> {
   if (Array.isArray(parsed.scenes) || parsed.topicTitle != null || parsed.characters != null) {
@@ -109,10 +121,19 @@ export function parseGeminiJsonResponse(responseText: string): Record<string, un
     }
   }
 
+  const extracted = extractJsonTextFromAIResponse(responseText);
+  const incomplete = isIncompleteStoryboardJson(responseText);
+
   logger.warn(
-    `[parseGeminiJsonResponse] Không parse được JSON, preview: ${responseText.slice(0, 300)}`
+    `[parseGeminiJsonResponse] Không parse được JSON, length=${responseText.length}, preview: ${responseText.slice(0, 300)}${
+      incomplete ? " (thiếu scenes / bị cắt ngắn)" : ""
+    }`
   );
-  const err: any = new Error("AI trả kết quả không đúng định dạng JSON");
+  const err: any = new Error(
+    incomplete
+      ? "AI trả kết quả bị cắt ngắn (thiếu phân cảnh). Vui lòng thử lại hoặc dùng ảnh có ít panel hơn."
+      : "AI trả kết quả không đúng định dạng JSON"
+  );
   err.statusCode = 502;
   throw err;
 }

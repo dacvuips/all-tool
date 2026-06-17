@@ -9,14 +9,23 @@ import {
 import { cropStoryboardRegion } from "./storyboardCropUtils";
 import { normalizeSceneAudioField } from "../../shared/sceneAudioUtils";
 
+export interface MapStoryboardAnalysisOptions {
+  sourceIndex?: number;
+  sceneNumberOffset?: number;
+}
+
 /** Map kết quả AI + ảnh storyboard gốc → ScriptData cho right panel. */
 export async function mapStoryboardAnalysisToScriptData(
   analysis: StoryboardAnalysisData,
   config: AffiliateVideoFormConfig,
-  storyboardImage: ElementFormImage
+  storyboardImage: ElementFormImage,
+  options?: MapStoryboardAnalysisOptions
 ): Promise<ScriptData> {
+  const sceneNumberOffset = options?.sceneNumberOffset ?? 0;
+  const sourceIndex = options?.sourceIndex;
+
   const scenes: SceneScript[] = await Promise.all(
-    analysis.scenes.map(async (scene) => {
+    analysis.scenes.map(async (scene, index) => {
       const id = crypto.randomUUID();
       const cropImage = await cropStoryboardRegion(
         storyboardImage,
@@ -35,7 +44,7 @@ export async function mapStoryboardAnalysisToScriptData(
 
       return {
         id,
-        sceneNumber: scene.sceneNumber,
+        sceneNumber: sceneNumberOffset + (scene.sceneNumber ?? index + 1),
         camera: scene.camera || "WIDE SHOT",
         dialogue: scene.dialogue || "",
         motionPrompt: scene.motionPrompt || "",
@@ -44,6 +53,7 @@ export async function mapStoryboardAnalysisToScriptData(
         audio: normalizeSceneAudioField(scene.audio) || globalAudio,
         cropRegion: scene.cropRegion,
         storyboardCropImage: cropImage,
+        storyboardSourceIndex: sourceIndex,
       };
     })
   );
@@ -61,7 +71,9 @@ export async function mapStoryboardAnalysisToScriptData(
     aspectRatio: config.aspectRatio,
     scenes,
     productImages: config.productImages,
-    storyboardImage: [storyboardImage],
+    storyboardImage: config.storyboardImage?.filter((img) => img?.imageBytes) ?? [
+      storyboardImage,
+    ],
     voicePacing: analysis.voicePacing,
     audioPrompt: analysis.audioPrompt,
   };
