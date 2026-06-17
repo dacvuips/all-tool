@@ -10,6 +10,7 @@ import { RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { reorderScenesWithNumbers, SortableCardGrid } from "../../../shared/utilities/sortable";
 import { CharacterItem } from "../constants";
+import { ActionImageEnum } from "../elements/constants";
 import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
 import { SceneTabKey } from "./scene-card-tabs";
 
@@ -211,10 +212,18 @@ export function SharedBatchListPanel({
   const handleUpdateElementImageSlots = async (
     sceneId: string,
     slots: any[],
-    imageUrls: string[]
+    imageUrls: string[],
+    actionMode?: ActionImageEnum
   ) => {
     const updated = sceneList.map((s) =>
-      s.id === sceneId ? { ...s, elementImageSlots: slots, selectedProductImages: imageUrls } : s
+      s.id === sceneId
+        ? {
+            ...s,
+            elementImageSlots: slots,
+            selectedProductImages: imageUrls,
+            elementImageSlotsActionMode: actionMode ?? s.elementImageSlotsActionMode,
+          }
+        : s
     );
     setSceneList(updated);
     try {

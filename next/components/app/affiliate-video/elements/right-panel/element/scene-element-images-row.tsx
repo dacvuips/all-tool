@@ -5,14 +5,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElementFormConfig, ElementFormImage } from "../../../constants";
+import { ActionImageEnum } from "../../constants";
+import {
+  autoModeImagesFingerprint,
+  resolveActionImageType,
+  sequentialImagesFingerprint,
+} from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
-import { matchElementImagesInPrompt } from "../../utils/matchElementImagesInPrompt";
+import { matchElementImagesForScene } from "../../utils/matchElementImagesInPrompt";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
 
 const SLOT_COUNT = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
 
+function slotsFingerprint(slots: (ElementFormImage | undefined)[]): string {
+  return slots
+    .map((s, i) => {
+      if (!s) return `${i}:`;
+      return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
+    })
+    .join("|");
+}
+
 export interface SceneElementImagesRowProps {
   sceneId: string;
+  sceneNumber: number;
   prompt: string;
   elementFormConfig?: ElementFormConfig;
   savedSlots?: (ElementFormImage | undefined)[];
@@ -22,6 +38,7 @@ export interface SceneElementImagesRowProps {
 
 export function SceneElementImagesRow({
   sceneId,
+  sceneNumber,
   prompt,
   elementFormConfig,
   savedSlots,
@@ -30,10 +47,24 @@ export function SceneElementImagesRow({
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
 
-  const autoMatched = useMemo(
-    () => matchElementImagesInPrompt(prompt, elementFormConfig),
-    [prompt, elementFormConfig]
+  const actionImageType = resolveActionImageType(elementFormConfig);
+  const isSequentialImageMode = actionImageType === ActionImageEnum.sequential;
+
+  const sequentialImagesKey = useMemo(
+    () => sequentialImagesFingerprint(elementFormConfig?.artStyleImgSequential),
+    [elementFormConfig?.artStyleImgSequential]
   );
+  const autoImagesKey = useMemo(
+    () => autoModeImagesFingerprint(elementFormConfig),
+    [elementFormConfig?.artStyleImg, elementFormConfig?.objectImg, elementFormConfig?.itemImg]
+  );
+
+  const autoMatched = useMemo(
+    () => matchElementImagesForScene(sceneNumber, prompt, elementFormConfig),
+    [sceneNumber, prompt, actionImageType, isSequentialImageMode ? sequentialImagesKey : autoImagesKey]
+  );
+
+  const autoMatchedKey = useMemo(() => slotsFingerprint(autoMatched), [autoMatched]);
 
   const [slots, setSlots] = useState<(ElementFormImage | undefined)[]>(() =>
     savedSlots?.length ? [...savedSlots] : [...autoMatched]
@@ -42,47 +73,49 @@ export function SceneElementImagesRow({
     Array.from({ length: SLOT_COUNT }, () => false)
   );
   const lastNotifiedRef = useRef<string>("");
+  const prevActionImageTypeRef = useRef(actionImageType);
 
   const savedSlotsKey = useMemo(
-    () =>
-      savedSlots
-        ?.map((s, i) => {
-          if (!s) return `${i}:`;
-          return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
-        })
-        .join("|") ?? "",
+    () => (savedSlots?.length ? slotsFingerprint(savedSlots) : ""),
     [savedSlots]
   );
 
   useEffect(() => {
-    setSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched]);
+    const initial = savedSlots?.length ? [...savedSlots] : [...autoMatched];
+    setSlots(initial);
     setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
-    lastNotifiedRef.current = "";
+    lastNotifiedRef.current = slotsFingerprint(initial);
+    prevActionImageTypeRef.current = actionImageType;
   }, [sceneId]);
 
   useEffect(() => {
-    if (!savedSlots?.length) return;
-    setSlots([...savedSlots].slice(0, SLOT_COUNT));
-    setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots[i]));
-  }, [savedSlotsKey]);
+    if (prevActionImageTypeRef.current === actionImageType) return;
+    prevActionImageTypeRef.current = actionImageType;
+    const next = [...autoMatched];
+    setSlots(next);
+    setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
+    lastNotifiedRef.current = slotsFingerprint(next);
+  }, [actionImageType, autoMatchedKey]);
+
+  useEffect(() => {
+    if (isSequentialImageMode || !savedSlotsKey) return;
+    const next = [...savedSlots!].slice(0, SLOT_COUNT);
+    setSlots((prev) => (slotsFingerprint(prev) === savedSlotsKey ? prev : next));
+    setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots![i]));
+  }, [savedSlotsKey, isSequentialImageMode, savedSlots]);
+
+  const manualMaskKey = manualMask.map(String).join(",");
 
   useEffect(() => {
     setSlots((prev) => {
       const next = autoMatched.map((img, i) => (manualMask[i] ? prev[i] : img));
-      return next;
+      return slotsFingerprint(prev) === slotsFingerprint(next) ? prev : next;
     });
-  }, [autoMatched, manualMask]);
+  }, [autoMatchedKey, manualMaskKey, autoMatched]);
 
   const notifyParent = useCallback(
     (next: (ElementFormImage | undefined)[]) => {
-      const key = next
-        .map((s, i) => {
-          if (!s) return `${i}:`;
-          const bytesLen = s.imageBytes?.length ?? 0;
-          const url = s.fifeUrl || "";
-          return `${i}:${s.name ?? ""}:${bytesLen}:${url.slice(0, 32)}`;
-        })
-        .join("|");
+      const key = slotsFingerprint(next);
       if (key === lastNotifiedRef.current) return;
       lastNotifiedRef.current = key;
       onSlotsChange(next);

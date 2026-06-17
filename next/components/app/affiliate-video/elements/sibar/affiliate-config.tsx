@@ -10,9 +10,14 @@ import { BsFile } from "react-icons/bs";
 import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Radio, Textarea } from "../../../../shared/utilities/form";
+import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { ServiceImageEnum } from "../constants";
+import {
+  ActionImageEnum,
+  SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT,
+  ServiceImageEnum,
+} from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { ElementImagesUpload, ElementVideoUpload } from "./element-images-upload";
 
@@ -22,13 +27,34 @@ export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, elementFormConfig } = useElementContext();
-  const [queryParams, setQueryParams] = useQueryParams({
+  const [queryParams] = useQueryParams({
     [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
   });
   const elementParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
 
   const isImagesToVideo = elementParam === ElementScriptTabEnum.imagesToVideo;
   const isVideoToVideo = elementParam === ElementScriptTabEnum.videoToVideo;
+  const isElementBatchMode = !isImagesToVideo && !isVideoToVideo;
+
+  const actionImageType = elementFormConfig?.actionImageType ?? ActionImageEnum.auto;
+  const isSequentialImageMode =
+    isElementBatchMode && actionImageType === ActionImageEnum.sequential;
+
+  const sequentialImages = elementFormConfig?.artStyleImgSequential ?? [];
+
+  const patchSequentialTabImages = (tabIndex: number, images: (typeof sequentialImages)[number]) => {
+    const next = Array.from({ length: SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT }, (_, i) =>
+      i === tabIndex ? images : sequentialImages[i]
+    );
+    patchConfig?.({ artStyleImgSequential: next });
+  };
+
+  const handleActionImageTypeChange = (val: ActionImageEnum) => {
+    if (val === actionImageType) return;
+    // Chỉ đổi chế độ — giữ nguyên artStyleImg (auto) và artStyleImgSequential (tuần tự).
+    patchConfig?.({ actionImageType: val });
+  };
+
   return (
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
@@ -104,12 +130,51 @@ export const AffiliateConfig = () => {
             onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
           />
         )}
+        {isElementBatchMode && (
+          <Field label={t("Chế độ nạp ảnh")}>
+            <Radio
+              defaultValue={ActionImageEnum.auto}
+              selectFirst
+              cols={12}
+              value={actionImageType}
+              onChange={handleActionImageTypeChange}
+              options={[
+                { label: t("Nạp tự động ảnh tham chiếu"), value: ActionImageEnum.auto },
+                {
+                  label: t("Nạp ảnh tham chiếu tuần tự"),
+                  value: ActionImageEnum.sequential,
+                },
+              ]}
+            />
+          </Field>
+        )}
         {/* Ảnh sản phẩm */}
-        <ElementImagesUpload
-          artStyleImg={elementFormConfig?.artStyleImg}
-          readOnly={!customer}
-          onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
-        />
+        {isSequentialImageMode ? (
+          <TabGroup
+            name="element-sequential-art-images"
+            flex
+            tabClassName="px-2 py-2"
+            titleClassName="text-xs font-semibold whitespace-nowrap"
+            bodyClassName="pt-3"
+            className="-mx-4"
+          >
+            {Array.from({ length: SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT }, (_, i) => (
+              <TabGroup.Tab key={i} label={t("Nhóm {{n}}", { n: i + 1 })}>
+                <ElementImagesUpload
+                  artStyleImg={sequentialImages[i]}
+                  readOnly={!customer}
+                  onArtStyleImgChange={(v) => patchSequentialTabImages(i, v)}
+                />
+              </TabGroup.Tab>
+            ))}
+          </TabGroup>
+        ) : (
+          <ElementImagesUpload
+            artStyleImg={elementFormConfig?.artStyleImg}
+            readOnly={!customer}
+            onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
+          />
+        )}
       </div>
     </div>
   );

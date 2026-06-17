@@ -3,7 +3,7 @@
  * Shared design tokens, types, and constants for the AI Video Generator (Veo 3).
  */
 
-import { ServiceImageEnum } from "./elements/constants";
+import { ActionImageEnum, ServiceImageEnum } from "./elements/constants";
 
 // ── CSS Design Tokens ──────────────────────────────────────────────────────
 export const CSS = {
@@ -116,6 +116,10 @@ export interface ElementFormConfig {
   artStyle: string;
   artStyleId?: string;
   serviceImageType?: ServiceImageEnum;
+  /** Chế độ nạp ảnh tham chiếu (tab Thành phần) */
+  actionImageType?: ActionImageEnum;
+  /** Ảnh tham chiếu tuần tự — 3 nhóm */
+  artStyleImgSequential?: (ElementFormImage[] | undefined)[];
 }
 
 export type OpStatus = "idle" | "loading" | "done" | "error";
@@ -342,6 +346,8 @@ export interface CopyVideoScene {
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
+  /** Chế độ nạp ảnh đã dùng khi gán elementImageSlots (auto / sequential) */
+  elementImageSlotsActionMode?: ActionImageEnum;
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   elementVideoSlots?: (ElementFormVideo | undefined)[];
   product_image_prompt?: string;
@@ -407,6 +413,8 @@ export interface ElementScene {
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
+  /** Chế độ nạp ảnh đã dùng khi gán elementImageSlots (auto / sequential) */
+  elementImageSlotsActionMode?: ActionImageEnum;
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   elementVideoSlots?: (ElementFormVideo | undefined)[];
   product_image_prompt?: string;

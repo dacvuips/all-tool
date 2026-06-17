@@ -36,6 +36,11 @@ import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
+import { ActionImageEnum } from "../../constants";
+import {
+  pickSceneSavedImageSlots,
+  resolveActionImageType,
+} from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
@@ -104,7 +109,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateElementImageSlots?: (
     sceneId: string,
     slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
+    imageUrls: string[],
+    actionMode?: ActionImageEnum
   ) => void;
 }) {
   const { t } = useTranslation();
@@ -126,6 +132,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     scene.id
   );
   const { scriptData, elementFormConfig } = useElementContext();
+  const actionImageType = resolveActionImageType(elementFormConfig);
+  const sceneSavedImageSlots = useMemo(
+    () => pickSceneSavedImageSlots(scene, actionImageType),
+    [scene, actionImageType]
+  );
   const aspectRatio = resolveElementAspectRatio(
     scriptData,
     elementFormConfig?.aspectRatio
@@ -141,7 +152,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   );
   const [selectedElementImageSlots, setSelectedElementImageSlots] = useState<
     (ElementFormImage | undefined)[]
-  >(scene.elementImageSlots || []);
+  >(sceneSavedImageSlots || []);
 
   useEffect(() => {
     if (scene.selectedProductImages?.length) {
@@ -155,8 +166,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.selectedProductImages]);
 
   useEffect(() => {
-    setSelectedElementImageSlots(scene.elementImageSlots || []);
-  }, [scene.id, scene.elementImageSlots]);
+    setSelectedElementImageSlots(sceneSavedImageSlots || []);
+  }, [scene.id, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
     (slots: (ElementFormImage | undefined)[]) => {
@@ -165,9 +176,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       setSelectedProductImages(urls);
       selectedProductImagesDB.set(scene.id, urls);
       onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(scene.id, slots, urls);
+      onUpdateElementImageSlots?.(scene.id, slots, urls, actionImageType);
     },
-    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages, onUpdateElementImageSlots]
+    [
+      scene.id,
+      actionImageType,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+    ]
   );
 
   // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
@@ -470,9 +487,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         <SceneElementImagesRow
           sceneId={scene.id}
+          sceneNumber={scene.sceneNumber ?? 1}
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
-          savedSlots={selectedElementImageSlots}
+          savedSlots={sceneSavedImageSlots}
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
         />
@@ -652,7 +670,8 @@ interface SceneRowGroupProps {
   onUpdateElementImageSlots?: (
     sceneId: string,
     slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
+    imageUrls: string[],
+    actionMode?: ActionImageEnum
   ) => void;
 }
 

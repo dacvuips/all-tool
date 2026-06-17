@@ -1,7 +1,12 @@
 import { ElementFormConfig, ElementFormImage } from "../../constants";
-import { ServiceImageEnum } from "../constants";
+import { ActionImageEnum, ServiceImageEnum } from "../constants";
+import {
+  pickAutoModeElementImageConfig,
+  resolveActionImageType,
+} from "./elementActionImageUtils";
 import {
   elementFormImageToDataUrl,
+  ELEMENT_COMPONENT_IMAGE_SLOT_COUNT,
   getArtStyleImages,
   getImageMatchToken,
   getOrderedElementImages,
@@ -105,13 +110,44 @@ export function matchElementImagesInPrompt(
   return slots;
 }
 
+/**
+ * Chế độ nạp tuần tự: mỗi nhóm ảnh gán vào 1 slot (1→slot1, 2→slot2, 3→slot3).
+ * Cảnh N lấy ảnh thứ ((N-1) mod số ảnh nhóm) trong từng nhóm — lặp vòng khi hết ảnh.
+ */
+export function matchSequentialElementImagesForScene(
+  sceneNumber: number,
+  sequentialGroups?: (ElementFormImage[] | undefined)[]
+): (ElementFormImage | undefined)[] {
+  const sceneIndex = Math.max(0, sceneNumber - 1);
+  return Array.from({ length: ELEMENT_COMPONENT_IMAGE_SLOT_COUNT }, (_, slotIndex) => {
+    const groupImages = (sequentialGroups?.[slotIndex] ?? []).filter(
+      (img) => img.imageBytes || img.fifeUrl
+    );
+    if (!groupImages.length) return undefined;
+    return groupImages[sceneIndex % groupImages.length];
+  });
+}
+
+/** Auto-match slot ảnh theo chế độ nạp (auto / tuần tự) — hai nguồn ảnh tách biệt. */
+export function matchElementImagesForScene(
+  sceneNumber: number,
+  prompt: string,
+  config?: ElementFormConfig
+): (ElementFormImage | undefined)[] {
+  if (resolveActionImageType(config) === ActionImageEnum.sequential) {
+    return matchSequentialElementImagesForScene(sceneNumber, config?.artStyleImgSequential);
+  }
+  return matchElementImagesInPrompt(prompt, pickAutoModeElementImageConfig(config));
+}
+
 /** Gộp ảnh đã lưu theo scene với kết quả auto-match (ưu tiên override thủ công). */
 export function resolveSceneElementImageSlots(
   prompt: string,
-  config: Pick<ElementFormConfig, ElementImageSlotKey> | undefined,
-  savedSlots?: (ElementFormImage | undefined)[]
+  config: Pick<ElementFormConfig, ElementImageSlotKey | "actionImageType" | "artStyleImgSequential"> | undefined,
+  savedSlots?: (ElementFormImage | undefined)[],
+  sceneNumber = 1
 ): (ElementFormImage | undefined)[] {
-  const auto = matchElementImagesInPrompt(prompt, config);
+  const auto = matchElementImagesForScene(sceneNumber, prompt, config as ElementFormConfig | undefined);
   if (!savedSlots?.length) return auto;
   return auto.map((matched, i) => savedSlots[i] ?? matched);
 }

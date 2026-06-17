@@ -23,7 +23,7 @@ import {
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
-import { ServiceImageEnum } from "../constants";
+import { ActionImageEnum, ServiceImageEnum } from "../constants";
 
 /** Key used to persist the last generated script in IndexedDB */
 const ELEMENT_STORE_NAME = STORE_NAME.generateElement;
@@ -119,6 +119,7 @@ export function ElementProvider(props) {
     artStyle: "",
     artStyleId: "",
     serviceImageType: ServiceImageEnum.imageOnly,
+    actionImageType: ActionImageEnum.auto,
   };
 
   // ── IndexedDB – shared cache for AI results ──

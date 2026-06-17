@@ -436,6 +436,7 @@ export function useElementSceneMedia({
         nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
         selectedProductImages,
         selectedElementImageSlots,
+        elementFormConfig,
         componentTab,
       });
 

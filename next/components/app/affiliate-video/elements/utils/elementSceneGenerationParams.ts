@@ -2,7 +2,7 @@
  * Shared payloads for element image/video generation (single scene + batch).
  * Batch handlers must call these so each item uses the same API params as the per-scene UI.
  */
-import { CopyVideoScene, ElementAnalysisData, ElementFormImage } from "../../constants";
+import { CopyVideoScene, ElementAnalysisData, ElementFormConfig, ElementFormImage } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import type {
   GeneratedImageData,
@@ -15,6 +15,11 @@ import {
   productImageUrlsToApiImages,
   resolveElementReferenceImagesForApi,
 } from "./elementFormImageUtils";
+import { matchElementImagesForScene } from "./matchElementImagesInPrompt";
+import {
+  pickSceneSavedImageSlots,
+  resolveActionImageType,
+} from "./elementActionImageUtils";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 
 export type ElementScriptLike =
@@ -55,13 +60,29 @@ function countFilledImageSlots(arr?: (ElementFormImage | undefined)[]) {
 /** Pick element image slots (same logic as useElementSceneMedia). */
 export function pickElementImageSlotsForScene(
   scene: CopyVideoScene,
-  selectedElementImageSlots?: (ElementFormImage | undefined)[]
+  selectedElementImageSlots?: (ElementFormImage | undefined)[],
+  elementFormConfig?: ElementFormConfig
 ): (ElementFormImage | undefined)[] | undefined {
-  const sceneSlots = scene.elementImageSlots;
-  if (!selectedElementImageSlots?.length && !sceneSlots?.length) return sceneSlots;
-  return countFilledImageSlots(selectedElementImageSlots) >= countFilledImageSlots(sceneSlots)
-    ? selectedElementImageSlots
-    : sceneSlots ?? selectedElementImageSlots;
+  const actionImageType = resolveActionImageType(elementFormConfig);
+  const sceneSlots = pickSceneSavedImageSlots(scene, actionImageType);
+  if (!selectedElementImageSlots?.length && !sceneSlots?.length) {
+    if (!elementFormConfig) return sceneSlots;
+    return matchElementImagesForScene(
+      scene.sceneNumber ?? 1,
+      scene.visual_prompt || "",
+      elementFormConfig
+    );
+  }
+  const picked =
+    countFilledImageSlots(selectedElementImageSlots) >= countFilledImageSlots(sceneSlots)
+      ? selectedElementImageSlots
+      : sceneSlots ?? selectedElementImageSlots;
+  if (countFilledImageSlots(picked) > 0 || !elementFormConfig) return picked;
+  return matchElementImagesForScene(
+    scene.sceneNumber ?? 1,
+    scene.visual_prompt || "",
+    elementFormConfig
+  );
 }
 
 /** Video prompt – identical to handleGenerateVideo in useElementSceneMedia. */
@@ -141,6 +162,8 @@ export async function buildElementVideoGenerateParams(options: {
   nextGeneratedImage?: GeneratedImageData | null;
   selectedProductImages?: string[];
   selectedElementImageSlots?: (ElementFormImage | undefined)[];
+  /** Fallback slot auto-match khi scene chưa lưu elementImageSlots */
+  elementFormConfig?: ElementFormConfig;
   /** Tab Thành phần: luôn component mode (start_add_end) + 3 slot ảnh tham chiếu */
   componentTab?: boolean;
 }): Promise<GenerateVideoParams> {
@@ -154,6 +177,7 @@ export async function buildElementVideoGenerateParams(options: {
     nextGeneratedImage,
     selectedProductImages,
     selectedElementImageSlots,
+    elementFormConfig,
     componentTab,
   } = options;
 
@@ -174,7 +198,11 @@ export async function buildElementVideoGenerateParams(options: {
     const slotCount = componentTab
       ? ELEMENT_COMPONENT_IMAGE_SLOT_COUNT
       : getSceneImageSlotCount(resolvedServiceImageType);
-    const slotsForVideo = pickElementImageSlotsForScene(scene, selectedElementImageSlots);
+    const slotsForVideo = pickElementImageSlotsForScene(
+      scene,
+      selectedElementImageSlots,
+      elementFormConfig
+    );
     images = await resolveElementReferenceImagesForApi({
       urls: selectedProductImages,
       slots: slotsForVideo,
