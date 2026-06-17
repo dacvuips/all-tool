@@ -532,6 +532,9 @@ export function useCopyVideoBatchActions(
             serviceImageType: elementFormConfig?.serviceImageType,
             thumbnailOriginImage: thumbnailUrl,
             selectedProductImages: selectedUrls,
+            selectedElementImageSlots: scene.elementImageSlots,
+            elementFormConfig,
+            componentTab,
             noText: scene.noText,
           });
           await elementGenerateImage({
@@ -898,6 +901,9 @@ export function useCopyVideoBatchActions(
               serviceImageType: elementFormConfig?.serviceImageType,
               thumbnailOriginImage: thumbnailUrl,
               selectedProductImages: selectedUrls,
+              selectedElementImageSlots: scene.elementImageSlots,
+              elementFormConfig,
+              componentTab,
               noText: scene.noText,
             });
             await elementGenerateImage({

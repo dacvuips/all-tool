@@ -67,14 +67,15 @@ function elementScenesForTab(
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const ElementRightPanel = () => {
   const { t } = useTranslation();
-  const { scriptData, setScriptTab, batchRunning } = useElementContext();
+  const { scriptData, setScriptTab, batchRunning, scriptTab } = useElementContext();
   const { customer } = useAuth();
   const [queryParams, setQueryParams] = useQueryParams({
     [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
   });
-  const tabIndex = scriptTabToIndex(
-    parseScriptTabParam(queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined)
-  );
+  const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
+  const activeScriptTab =
+    parseScriptTabParam(tabParam) ?? scriptTab ?? ElementScriptTabEnum.batch;
+  const tabIndex = scriptTabToIndex(activeScriptTab);
 
   const batchSceneCount = getScenesForTab(scriptData, ElementScriptTabEnum.batch, ELEMENT_SCRIPT_TAB_ENUM)
     .length;

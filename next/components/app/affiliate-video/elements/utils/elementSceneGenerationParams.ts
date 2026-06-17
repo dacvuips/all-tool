@@ -12,7 +12,6 @@ import type {
 import {
   ELEMENT_COMPONENT_IMAGE_SLOT_COUNT,
   getSceneImageSlotCount,
-  productImageUrlsToApiImages,
   resolveElementReferenceImagesForApi,
 } from "./elementFormImageUtils";
 import { matchElementImagesForScene } from "./matchElementImagesInPrompt";
@@ -121,6 +120,11 @@ export async function buildElementImageGenerateParams(options: {
   serviceImageType?: ServiceImageEnum;
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
+  /** 3 ô ảnh tham chiếu trên scene row */
+  selectedElementImageSlots?: (ElementFormImage | undefined)[];
+  elementFormConfig?: ElementFormConfig;
+  /** Tab Thành phần: luôn 3 slot ảnh tham chiếu */
+  componentTab?: boolean;
   noText?: boolean;
 }): Promise<GenerateImageParams> {
   const {
@@ -130,9 +134,25 @@ export async function buildElementImageGenerateParams(options: {
     serviceImageType,
     thumbnailOriginImage,
     selectedProductImages,
+    selectedElementImageSlots,
+    elementFormConfig,
+    componentTab,
     noText,
   } = options;
-  const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
+  const resolvedServiceImageType = resolveElementServiceImageType(scriptData, serviceImageType);
+  const slotCount = componentTab
+    ? ELEMENT_COMPONENT_IMAGE_SLOT_COUNT
+    : getSceneImageSlotCount(resolvedServiceImageType);
+  const slotsForImage = pickElementImageSlotsForScene(
+    scene,
+    selectedElementImageSlots,
+    elementFormConfig
+  );
+  const additionalImages = await resolveElementReferenceImagesForApi({
+    urls: selectedProductImages,
+    slots: slotsForImage,
+    slotCount,
+  });
 
   return {
     sceneId: scene.id,
@@ -145,7 +165,7 @@ export async function buildElementImageGenerateParams(options: {
     additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     productImagePrompt: scene.product_image_prompt || undefined,
-    serviceImageType: resolveElementServiceImageType(scriptData, serviceImageType),
+    serviceImageType: resolvedServiceImageType,
   };
 }
 

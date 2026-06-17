@@ -321,6 +321,9 @@ export function useElementSceneMedia({
         serviceImageType: elementFormConfig?.serviceImageType,
         thumbnailOriginImage,
         selectedProductImages,
+        selectedElementImageSlots,
+        elementFormConfig,
+        componentTab,
         noText,
       });
 

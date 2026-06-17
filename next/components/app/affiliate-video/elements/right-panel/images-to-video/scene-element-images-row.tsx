@@ -1,16 +1,20 @@
 /**
- * Hàng ô ảnh tham chiếu theo scene.
- * - slotSource=prompt: auto-match tên ảnh trong prompt (tab Thành phần).
- * - slotSource=artStyleImg: gán theo tên file số (Images to Video), không dùng prompt.
- *   imageOnly: cảnh N → ảnh N; startEnd: cảnh N → ảnh (2N-1), (2N).
+ * Hàng ô ảnh tham chiếu theo scene (Images to Video).
+ *
+ * - ActionImageEnum.auto: match artStyleImg theo tên file số (luồng gốc).
+ *   imageOnly: cảnh N → ảnh N; startEnd/startAddEnd: cảnh N → ảnh (2N-1), (2N).
+ * - ActionImageEnum.sequential: mỗi nhóm ảnh sidebar → 1 slot, trải đều theo danh sách cảnh.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElementFormConfig, ElementFormImage } from "../../../constants";
+import { ActionImageEnum } from "../../constants";
+import { resolveActionImageType, sequentialImagesFingerprint } from "../../utils/elementActionImageUtils";
 import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
 import {
   matchArtStyleImagesForScene,
   matchElementImagesInPrompt,
+  matchSequentialElementImagesForScene,
 } from "../../utils/matchElementImagesInPrompt";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
 
@@ -21,6 +25,15 @@ function trimSlots(
   const next = [...slots];
   while (next.length < slotCount) next.push(undefined);
   return next.slice(0, slotCount);
+}
+
+function slotsFingerprint(slots: (ElementFormImage | undefined)[]): string {
+  return slots
+    .map((s, i) => {
+      if (!s) return `${i}:`;
+      return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
+    })
+    .join("|");
 }
 
 export type SceneElementImageSlotSource = "prompt" | "artStyleImg";
@@ -48,8 +61,17 @@ export function SceneElementImagesRow({
   onSlotsChange,
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
+  const actionImageType = resolveActionImageType(elementFormConfig);
+  const isSequentialImageMode = actionImageType === ActionImageEnum.sequential;
   const slotCount = getSceneImageSlotCount(elementFormConfig?.serviceImageType);
-  const autoMatched = useMemo(() => {
+
+  const sequentialImagesKey = useMemo(
+    () => sequentialImagesFingerprint(elementFormConfig?.artStyleImgSequential),
+    [elementFormConfig?.artStyleImgSequential]
+  );
+
+  /** Luồng gốc — auto: artStyleImg theo tên file số (Images to Video). */
+  const autoModeMatched = useMemo(() => {
     const matched =
       slotSource === "artStyleImg"
         ? matchArtStyleImagesForScene(
@@ -61,13 +83,34 @@ export function SceneElementImagesRow({
     return trimSlots(matched, slotCount);
   }, [slotSource, sceneNumber, prompt, elementFormConfig, slotCount]);
 
+  /** Luồng mới — sequential: trải đều ảnh theo nhóm sidebar. */
+  const sequentialMatched = useMemo(
+    () =>
+      trimSlots(
+        matchSequentialElementImagesForScene(
+          sceneNumber,
+          elementFormConfig?.artStyleImgSequential,
+          slotCount
+        ),
+        slotCount
+      ),
+    [sceneNumber, elementFormConfig?.artStyleImgSequential, slotCount, sequentialImagesKey]
+  );
+
+  const resolvedMatched = isSequentialImageMode ? sequentialMatched : autoModeMatched;
+  const resolvedMatchedKey = useMemo(
+    () => slotsFingerprint(resolvedMatched),
+    [resolvedMatched]
+  );
+
   const [slots, setSlots] = useState<(ElementFormImage | undefined)[]>(() =>
-    trimSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched], slotCount)
+    trimSlots(savedSlots?.length ? [...savedSlots] : [...resolvedMatched], slotCount)
   );
   const [manualMask, setManualMask] = useState<boolean[]>(() =>
     Array.from({ length: slotCount }, () => false)
   );
   const lastNotifiedRef = useRef<string>("");
+  const prevActionImageTypeRef = useRef(actionImageType);
 
   const savedSlotsKey = useMemo(
     () =>
@@ -81,10 +124,19 @@ export function SceneElementImagesRow({
   );
 
   useEffect(() => {
-    setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched], slotCount));
+    setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...resolvedMatched], slotCount));
     setManualMask(Array.from({ length: slotCount }, () => false));
     lastNotifiedRef.current = "";
   }, [sceneId, slotCount]);
+
+  useEffect(() => {
+    if (prevActionImageTypeRef.current === actionImageType) return;
+    prevActionImageTypeRef.current = actionImageType;
+    const next = trimSlots([...resolvedMatched], slotCount);
+    setSlots(next);
+    setManualMask(Array.from({ length: slotCount }, () => false));
+    lastNotifiedRef.current = slotsFingerprint(next);
+  }, [actionImageType, resolvedMatched, resolvedMatchedKey, slotCount]);
 
   useEffect(() => {
     if (!savedSlots?.length) return;
@@ -104,22 +156,17 @@ export function SceneElementImagesRow({
 
   useEffect(() => {
     setSlots((prev) => {
-      const next = autoMatched.map((img, i) => (manualMask[i] ? prev[i] : img));
-      return trimSlots(next, slotCount);
+      const next = trimSlots(
+        resolvedMatched.map((img, i) => (manualMask[i] ? prev[i] : img)),
+        slotCount
+      );
+      return slotsFingerprint(prev) === slotsFingerprint(next) ? prev : next;
     });
-  }, [autoMatched, manualMask, slotCount, slotSource, sceneNumber]);
+  }, [resolvedMatchedKey, manualMask, resolvedMatched, slotCount]);
 
   const notifyParent = useCallback(
     (next: (ElementFormImage | undefined)[]) => {
-      // Key theo từng slot (không chỉ URL) — tránh bỏ qua sync khi đổi ảnh cùng URL / thứ tự slot
-      const key = next
-        .map((s, i) => {
-          if (!s) return `${i}:`;
-          const bytesLen = s.imageBytes?.length ?? 0;
-          const url = s.fifeUrl || "";
-          return `${i}:${s.name ?? ""}:${bytesLen}:${url.slice(0, 32)}`;
-        })
-        .join("|");
+      const key = slotsFingerprint(next);
       if (key === lastNotifiedRef.current) return;
       lastNotifiedRef.current = key;
       onSlotsChange(next);

@@ -34,9 +34,13 @@ import { GeneratedImageData } from "../../hook/useElementApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
-import { ServiceImageEnum } from "../../constants";
+import { ActionImageEnum, ServiceImageEnum } from "../../constants";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
+import {
+  pickSceneSavedImageSlots,
+  resolveActionImageType,
+} from "../../utils/elementActionImageUtils";
 import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
@@ -105,7 +109,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onUpdateElementImageSlots?: (
     sceneId: string,
     slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
+    imageUrls: string[],
+    actionMode?: ActionImageEnum
   ) => void;
 }) {
   const { t } = useTranslation();
@@ -126,6 +131,14 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     scene.id
   );
   const { scriptData, elementFormConfig } = useElementContext();
+  const actionImageType = resolveActionImageType(elementFormConfig);
+  /** Auto: dùng elementImageSlots trực tiếp (luồng gốc). Sequential: lọc theo action mode. */
+  const sceneSavedImageSlots = useMemo(() => {
+    if (actionImageType === ActionImageEnum.sequential) {
+      return pickSceneSavedImageSlots(scene, actionImageType) ?? [];
+    }
+    return scene.elementImageSlots ?? [];
+  }, [scene, actionImageType]);
   const aspectRatio = resolveElementAspectRatio(scriptData, elementFormConfig?.aspectRatio) as
     | "16:9"
     | "9:16";
@@ -140,7 +153,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   );
   const [selectedElementImageSlots, setSelectedElementImageSlots] = useState<
     (ElementFormImage | undefined)[]
-  >(scene.elementImageSlots || []);
+  >(sceneSavedImageSlots || []);
 
   useEffect(() => {
     if (scene.selectedProductImages?.length) {
@@ -154,8 +167,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.selectedProductImages]);
 
   useEffect(() => {
-    setSelectedElementImageSlots(scene.elementImageSlots || []);
-  }, [scene.id, scene.elementImageSlots]);
+    if (actionImageType === ActionImageEnum.sequential) {
+      setSelectedElementImageSlots(sceneSavedImageSlots);
+    } else {
+      setSelectedElementImageSlots(scene.elementImageSlots ?? []);
+    }
+  }, [scene.id, scene.elementImageSlots, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
     (slots: (ElementFormImage | undefined)[]) => {
@@ -164,9 +181,20 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       setSelectedProductImages(urls);
       selectedProductImagesDB.set(scene.id, urls);
       onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(scene.id, slots, urls);
+      onUpdateElementImageSlots?.(
+        scene.id,
+        slots,
+        urls,
+        actionImageType === ActionImageEnum.sequential ? actionImageType : undefined
+      );
     },
-    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages, onUpdateElementImageSlots]
+    [
+      scene.id,
+      actionImageType,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+    ]
   );
 
   // ── Local state for product_image_prompt (avoids losing text on context re-render) ──
@@ -472,7 +500,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
           slotSource="artStyleImg"
-          savedSlots={selectedElementImageSlots}
+          savedSlots={
+            actionImageType === ActionImageEnum.sequential
+              ? sceneSavedImageSlots
+              : scene.elementImageSlots
+          }
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
         />
@@ -651,7 +683,8 @@ interface SceneRowGroupProps {
   onUpdateElementImageSlots?: (
     sceneId: string,
     slots: (ElementFormImage | undefined)[],
-    imageUrls: string[]
+    imageUrls: string[],
+    actionMode?: ActionImageEnum
   ) => void;
 }
 

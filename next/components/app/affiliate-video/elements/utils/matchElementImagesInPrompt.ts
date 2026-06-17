@@ -12,6 +12,7 @@ import {
   getOrderedElementImages,
   getSceneImageSlotCount,
   normalizeImageMatchToken,
+  resolveElementSceneSlotCount,
 } from "./elementFormImageUtils";
 
 /** 3 vị trí ảnh tham chiếu trên scene row */
@@ -116,10 +117,11 @@ export function matchElementImagesInPrompt(
  */
 export function matchSequentialElementImagesForScene(
   sceneNumber: number,
-  sequentialGroups?: (ElementFormImage[] | undefined)[]
+  sequentialGroups?: (ElementFormImage[] | undefined)[],
+  slotCount = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT
 ): (ElementFormImage | undefined)[] {
   const sceneIndex = Math.max(0, sceneNumber - 1);
-  return Array.from({ length: ELEMENT_COMPONENT_IMAGE_SLOT_COUNT }, (_, slotIndex) => {
+  return Array.from({ length: slotCount }, (_, slotIndex) => {
     const groupImages = (sequentialGroups?.[slotIndex] ?? []).filter(
       (img) => img.imageBytes || img.fifeUrl
     );
@@ -134,10 +136,21 @@ export function matchElementImagesForScene(
   prompt: string,
   config?: ElementFormConfig
 ): (ElementFormImage | undefined)[] {
+  const slotCount = resolveElementSceneSlotCount(config);
   if (resolveActionImageType(config) === ActionImageEnum.sequential) {
-    return matchSequentialElementImagesForScene(sceneNumber, config?.artStyleImgSequential);
+    return matchSequentialElementImagesForScene(
+      sceneNumber,
+      config?.artStyleImgSequential,
+      slotCount
+    );
   }
-  return matchElementImagesInPrompt(prompt, pickAutoModeElementImageConfig(config));
+  // Images to Video (auto): gán artStyleImg theo tên file số — không match prompt
+  if (config?.serviceImageType) {
+    return matchArtStyleImagesForScene(sceneNumber, config.serviceImageType, config);
+  }
+  // Tab Thành phần (auto): match tên ảnh trong prompt
+  const matched = matchElementImagesInPrompt(prompt, pickAutoModeElementImageConfig(config));
+  return matched.slice(0, slotCount);
 }
 
 /** Gộp ảnh đã lưu theo scene với kết quả auto-match (ưu tiên override thủ công). */

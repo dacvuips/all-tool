@@ -13,12 +13,9 @@ import { Button, Field, Radio, Textarea } from "../../../../shared/utilities/for
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import {
-  ActionImageEnum,
-  SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT,
-  ServiceImageEnum,
-} from "../constants";
+import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
+import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
 import { ElementImagesUpload, ElementVideoUpload } from "./element-images-upload";
 
 // ── Main Component ────────────────────────────────────────────────────────
@@ -26,27 +23,52 @@ import { ElementImagesUpload, ElementVideoUpload } from "./element-images-upload
 export const AffiliateConfig = () => {
   const { t } = useTranslation();
   const { customer } = useAuth();
-  const { patchConfig, elementFormConfig } = useElementContext();
+  const { patchConfig, elementFormConfig, scriptTab } = useElementContext();
   const [queryParams] = useQueryParams({
     [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
   });
-  const elementParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
+  const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
+  /** Đồng bộ với elementForm / right-panel — URL có thể thiếu elementScriptTab sau shallow route */
+  const activeScriptTab: ElementScriptTabEnum =
+    tabParam && Object.values(ElementScriptTabEnum).includes(tabParam as ElementScriptTabEnum)
+      ? (tabParam as ElementScriptTabEnum)
+      : scriptTab ?? ElementScriptTabEnum.batch;
 
-  const isImagesToVideo = elementParam === ElementScriptTabEnum.imagesToVideo;
-  const isVideoToVideo = elementParam === ElementScriptTabEnum.videoToVideo;
-  const isElementBatchMode = !isImagesToVideo && !isVideoToVideo;
+  const isImagesToVideo = activeScriptTab === ElementScriptTabEnum.imagesToVideo;
+  const isVideoToVideo = activeScriptTab === ElementScriptTabEnum.videoToVideo;
+  const isElementBatchMode = activeScriptTab === ElementScriptTabEnum.batch;
 
   const actionImageType = elementFormConfig?.actionImageType ?? ActionImageEnum.auto;
   const isSequentialImageMode =
-    isElementBatchMode && actionImageType === ActionImageEnum.sequential;
+    actionImageType === ActionImageEnum.sequential &&
+    (isElementBatchMode || isImagesToVideo);
+
+  const sequentialTabCount = getSequentialArtStyleImgTabCount({
+    isElementBatchMode,
+    serviceImageType: elementFormConfig?.serviceImageType,
+  });
 
   const sequentialImages = elementFormConfig?.artStyleImgSequential ?? [];
 
-  const patchSequentialTabImages = (tabIndex: number, images: (typeof sequentialImages)[number]) => {
-    const next = Array.from({ length: SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT }, (_, i) =>
+  const patchSequentialTabImages = (tabIndex: number, images: typeof sequentialImages[number]) => {
+    const next = Array.from({ length: sequentialTabCount }, (_, i) =>
       i === tabIndex ? images : sequentialImages[i]
     );
     patchConfig?.({ artStyleImgSequential: next });
+  };
+
+  const handleServiceImageTypeChange = (val: ServiceImageEnum) => {
+    if (!patchConfig) return;
+    const patch: Record<string, unknown> = { serviceImageType: val };
+    if (actionImageType === ActionImageEnum.sequential) {
+      const newTabCount = getSequentialArtStyleImgTabCount({
+        isElementBatchMode: false,
+        serviceImageType: val,
+      });
+      const current = elementFormConfig?.artStyleImgSequential ?? [];
+      patch.artStyleImgSequential = Array.from({ length: newTabCount }, (_, i) => current[i]);
+    }
+    patchConfig(patch as Parameters<NonNullable<typeof patchConfig>>[0]);
   };
 
   const handleActionImageTypeChange = (val: ActionImageEnum) => {
@@ -114,7 +136,7 @@ export const AffiliateConfig = () => {
               selectFirst
               cols={12}
               value={elementFormConfig.serviceImageType}
-              onChange={(val) => patchConfig && patchConfig({ serviceImageType: val })}
+              onChange={(val) => handleServiceImageTypeChange(val)}
               options={[
                 { label: t("Chỉ có ảnh bắt đầu -> Video"), value: ServiceImageEnum.imageOnly },
                 { label: t("Ảnh bắt đầu và kết thúc -> Video"), value: ServiceImageEnum.startEnd },
@@ -130,24 +152,24 @@ export const AffiliateConfig = () => {
             onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
           />
         )}
-        {isElementBatchMode && (
-          <Field label={t("Chế độ nạp ảnh")}>
-            <Radio
-              defaultValue={ActionImageEnum.auto}
-              selectFirst
-              cols={12}
-              value={actionImageType}
-              onChange={handleActionImageTypeChange}
-              options={[
-                { label: t("Nạp tự động ảnh tham chiếu"), value: ActionImageEnum.auto },
-                {
-                  label: t("Nạp ảnh tham chiếu tuần tự"),
-                  value: ActionImageEnum.sequential,
-                },
-              ]}
-            />
-          </Field>
-        )}
+
+        <Field label={t("Chế độ nạp ảnh")}>
+          <Radio
+            defaultValue={ActionImageEnum.auto}
+            selectFirst
+            cols={12}
+            value={actionImageType}
+            onChange={handleActionImageTypeChange}
+            options={[
+              { label: t("Nạp tự động ảnh tham chiếu"), value: ActionImageEnum.auto },
+              {
+                label: t("Nạp ảnh tham chiếu tuần tự"),
+                value: ActionImageEnum.sequential,
+              },
+            ]}
+          />
+        </Field>
+
         {/* Ảnh sản phẩm */}
         {isSequentialImageMode ? (
           <TabGroup
@@ -158,7 +180,7 @@ export const AffiliateConfig = () => {
             bodyClassName="pt-3"
             className="-mx-4"
           >
-            {Array.from({ length: SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT }, (_, i) => (
+            {Array.from({ length: sequentialTabCount }, (_, i) => (
               <TabGroup.Tab key={i} label={t("Nhóm {{n}}", { n: i + 1 })}>
                 <ElementImagesUpload
                   artStyleImg={sequentialImages[i]}

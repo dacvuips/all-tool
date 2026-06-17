@@ -1,5 +1,16 @@
 import { ElementFormConfig, ElementFormImage, ElementFormVideo } from "../../constants";
-import { ServiceImageEnum } from "../constants";
+import { SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT, ServiceImageEnum } from "../constants";
+
+/** Số tab upload nhóm ảnh tuần tự theo tab/mode. */
+export function getSequentialArtStyleImgTabCount(options: {
+  isElementBatchMode: boolean;
+  serviceImageType?: ServiceImageEnum | string;
+}): number {
+  if (options.isElementBatchMode) {
+    return SEQUENTIAL_ART_STYLE_IMG_TAB_COUNT;
+  }
+  return getSceneImageSlotCount(options.serviceImageType);
+}
 
 /** Chuẩn hóa artStyleImg (hỗ trợ dữ liệu cũ lưu 1 ảnh đơn). */
 export function getArtStyleImages(
@@ -42,6 +53,13 @@ export const ELEMENT_COMPONENT_IMAGE_SLOT_COUNT = 3;
 /** Số ô ảnh trên mỗi scene theo chế độ nạp ảnh (Images to Video). */
 export function getSceneImageSlotCount(serviceImageType?: string): number {
   return serviceImageType === ServiceImageEnum.imageOnly ? 1 : 2;
+}
+
+/** Số slot ảnh trên scene row: Images to Video theo serviceImageType, tab Thành phần cố định 3. */
+export function resolveElementSceneSlotCount(config?: Pick<ElementFormConfig, "serviceImageType">): number {
+  return config?.serviceImageType
+    ? getSceneImageSlotCount(config.serviceImageType)
+    : ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
 }
 
 /** Danh sách ảnh tham chiếu theo thứ tự upload (artStyle → object → item). */
