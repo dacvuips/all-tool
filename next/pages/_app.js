@@ -16,7 +16,7 @@ function App({ Component, pageProps }) {
   const layoutProps = Component.LayoutProps ? Component.LayoutProps : {};
   const {
     publicRuntimeConfig: {
-      seo: { title, siteName },
+      seo: { title, siteName, logo },
     },
   } = config();
   return (
@@ -28,6 +28,7 @@ function App({ Component, pageProps }) {
           type: "website",
           locale: "vi_VN",
           site_name: siteName,
+          images: logo ? [{ url: logo }] : undefined,
         }}
       />
       {pageProps.seo && <NextSeo {...pageProps.seo} />}

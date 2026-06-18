@@ -42,6 +42,12 @@ const nextConfig = {
     seo: {
       title: "Viet Theo Veo 3 - Free Tool Generate Video AI - Image AI ",
       siteName: "Viet Theo Veo 3 - Free Tool Generate Video AI - Image AI ",
+      description:
+        "Affiliate Video Generator - Free Tool Generate Video AI - Image AI - Film Maker AI",
+      logo: "/assets/img/logo-full-1.png",
+      keywords: "Affiliate Video Generator, Free Tool Generate Video AI, Image AI, Film Maker AI",
+      url: "https://viettheo.site",
+      image: "/assets/img/logo-full-1.png",
     },
     upload: {
       uploadImageApiLink: config.get("upload.uploadImageApiLink"),
