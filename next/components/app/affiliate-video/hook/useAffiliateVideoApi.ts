@@ -280,6 +280,8 @@ export interface AnalyzeStoryboardImageOptions {
   sourceIndex?: number;
   sceneNumberOffset?: number;
   suppressToast?: boolean;
+  /** Batch đã reserve quota – không reserve thêm ở từng ảnh */
+  skipRequestReservation?: boolean;
 }
 
 export interface AnalyzeStoryboardOptions {
@@ -1082,6 +1084,28 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   );
 
   // ── Shared: gọi API /api/app/storyboard-analysis/ ──
+  const callReserveStoryboardRequestSlots = useCallback(
+    async (count: number, options?: { suppressToast?: boolean }) => {
+      const res = await fetch("/api/app/storyboard-analysis/reserve-requests", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ count }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        const message = err?.message || `Lỗi ${res.status}`;
+        if (!options?.suppressToast) {
+          toast.error(message);
+        }
+        return false;
+      }
+
+      return true;
+    },
+    [toast]
+  );
+
   const callStoryboardAnalysisApi = useCallback(
     async (
       body: {
@@ -1093,6 +1117,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         aspectRatio?: string;
         tipContent?: string;
         productImages?: string[];
+        skipRequestReservation?: boolean;
       },
       options?: { suppressToast?: boolean }
     ) => {
@@ -1139,6 +1164,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           aspectRatio: data.aspectRatio,
           tipContent: data.tipContent,
           productImages: data.productImages,
+          skipRequestReservation: options?.skipRequestReservation,
         },
         { suppressToast: options?.suppressToast }
       );
@@ -1170,6 +1196,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         .map((img, index) => (img?.imageBytes ? index : -1))
         .filter((index) => index >= 0);
       const indices = options?.imageIndices ?? allIndices;
+
+      const reserved = await callReserveStoryboardRequestSlots(indices.length);
+      if (!reserved) {
+        return undefined;
+      }
 
       const resultsByIndex = new Map<number, ScriptData>();
       const errorIndices = new Set<number>();
@@ -1203,6 +1234,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             sourceIndex: imageIndex,
             sceneNumberOffset: 0,
             suppressToast: true,
+            skipRequestReservation: true,
           });
 
           if (!partial) {
@@ -1246,7 +1278,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
       return accumulated;
     },
-    [analyzeStoryboardImage, pushToStoryboardHistory, scriptDB, toast]
+    [analyzeStoryboardImage, callReserveStoryboardRequestSlots, pushToStoryboardHistory, scriptDB, toast]
   );
 
   // ── generateSceneFromText (flow mới – gửi text trực tiếp) ──

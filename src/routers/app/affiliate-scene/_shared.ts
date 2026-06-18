@@ -280,7 +280,16 @@ export async function incrementVideoCount(customerId: string): Promise<void> {
   await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": 1 } });
 }
 
-export async function checkRequestLimit(customerId: string): Promise<void> {
+function buildRequestLimitExceededError(currentCount: number, limit: number): Error {
+  const err: any = new Error(
+    `Bạn đã vượt quá giới hạn generation text (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
+  );
+  err.statusCode = 403;
+  return err;
+}
+
+export async function checkRequestLimit(customerId: string, count = 1): Promise<void> {
+  const slotCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
   const customer = await CustomerModel.findById(customerId)
     .select("googlePackage.requestCount googlePackage.requestLimit")
     .lean();
@@ -291,13 +300,48 @@ export async function checkRequestLimit(customerId: string): Promise<void> {
   }
   const currentCount = customer.googlePackage?.requestCount || 0;
   const limit = customer.googlePackage?.requestLimit || 0;
-  if (currentCount + 1 > limit) {
-    const err: any = new Error(
-      `Bạn đã vượt quá giới hạn generation text (${currentCount}/${limit}). Vui lòng nâng cấp gói để tiếp tục.`
-    );
-    err.statusCode = 403;
-    throw err;
+  if (currentCount + slotCount > limit) {
+    throw buildRequestLimitExceededError(currentCount, limit);
   }
+}
+
+/** Giữ chỗ request quota nguyên tử – dùng trước khi gọi AI (thay cho check + increment tách rời). */
+export async function reserveRequestSlots(customerId: string, count = 1): Promise<void> {
+  const slotCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+  const result = await CustomerModel.findOneAndUpdate(
+    {
+      _id: customerId,
+      $expr: {
+        $lte: [
+          { $add: [{ $ifNull: ["$googlePackage.requestCount", 0] }, slotCount] },
+          { $ifNull: ["$googlePackage.requestLimit", 0] },
+        ],
+      },
+    },
+    { $inc: { "googlePackage.requestCount": slotCount } }
+  );
+
+  if (!result) {
+    const customer = await CustomerModel.findById(customerId)
+      .select("googlePackage.requestCount googlePackage.requestLimit")
+      .lean();
+    if (!customer) {
+      const err: any = new Error("Không tìm thấy thông tin khách hàng");
+      err.statusCode = 404;
+      throw err;
+    }
+    const currentCount = customer.googlePackage?.requestCount || 0;
+    const limit = customer.googlePackage?.requestLimit || 0;
+    throw buildRequestLimitExceededError(currentCount, limit);
+  }
+}
+
+/** Hoàn trả quota khi request thất bại sau khi đã reserve. */
+export async function releaseRequestSlots(customerId: string, count = 1): Promise<void> {
+  const slotCount = Number.isFinite(count) && count > 0 ? Math.floor(count) : 1;
+  await CustomerModel.findByIdAndUpdate(customerId, {
+    $inc: { "googlePackage.requestCount": -slotCount },
+  });
 }
 
 export async function incrementRequestCount(customerId: string): Promise<void> {

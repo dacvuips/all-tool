@@ -2,23 +2,26 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
-import { StoryboardAnalysisOpenAIJsonSchema, CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS } from "./_chatgpt.constants";
+import { retryAICall } from "./_ai-retry";
+import {
+  CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS,
+  StoryboardAnalysisOpenAIJsonSchema,
+} from "./_chatgpt.constants";
 import { GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS } from "./_gemini.constants";
 import {
   assertNonEmptyScenesArray,
   buildProductImageScriptNote,
   callChatGPTGateway,
   callGeminiJsonGenerate,
-  checkRequestLimit,
   getChatGPTSceneModel,
   getGeminiSceneModel,
-  incrementRequestCount,
   normalizeSceneAudioField,
   parseGeminiJsonResponse,
+  releaseRequestSlots,
+  reserveRequestSlots,
   resolveAiSceneProvider,
   resolveArtStylePrompt,
 } from "./_shared";
-import { retryAICall } from "./_ai-retry";
 import { StoryboardAnalysisResponseSchema } from "./storyboard-analysis.schema";
 
 function buildStoryboardAnalysisPrompt(opts: {
@@ -112,12 +115,40 @@ async function callStoryboardAnalysisAi(params: {
 export default [
   {
     method: "post",
-    path: "/api/app/storyboard-analysis/",
+    path: "/api/app/storyboard-analysis/reserve-requests",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
         const context = new Context({ req });
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+
+        const count = Number((req.body as { count?: number })?.count);
+        if (!Number.isFinite(count) || count < 1 || count > 20) {
+          return res.status(400).json({ message: "Số lượng request không hợp lệ (1–20)" });
+        }
+
+        await reserveRequestSlots(context.id, count);
+        res.json({ success: true, count });
+      } catch (err: any) {
+        logger.error(`[storyboard-analysis/reserve-requests] Lỗi: ${err?.message}`);
+        const status = err?.statusCode || 500;
+        res.status(status).json({ message: err?.message || "Lỗi server" });
+      }
+    },
+  },
+  {
+    method: "post",
+    path: "/api/app/storyboard-analysis/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      let customerId = "";
+      let reservedSingleSlot = false;
+      let skipRequestReservation = false;
+
+      try {
+        const context = new Context({ req });
+        context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+        customerId = context.id;
 
         const body = req.body as {
           storyboardImageBase64: string;
@@ -128,13 +159,20 @@ export default [
           aspectRatio?: string;
           tipContent?: string;
           productImages?: string[];
+          /** true khi batch đã reserve N slot qua /reserve-requests – mỗi ảnh không reserve thêm */
+          skipRequestReservation?: boolean;
         };
 
         if (!body?.storyboardImageBase64) {
           return res.status(400).json({ message: "Thiếu ảnh storyboard (storyboardImageBase64)" });
         }
 
-        await checkRequestLimit(context.id);
+        skipRequestReservation = body.skipRequestReservation === true;
+
+        if (!skipRequestReservation) {
+          await reserveRequestSlots(customerId, 1);
+          reservedSingleSlot = true;
+        }
 
         const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
           artStyleId: body.artStyleId,
@@ -182,7 +220,6 @@ export default [
           visualDescription: scene.visualDescription || "",
         }));
 
-        await incrementRequestCount(context.id);
         res.json({
           success: true,
           data: {
@@ -196,6 +233,13 @@ export default [
           },
         });
       } catch (err: any) {
+        if (customerId && (reservedSingleSlot || skipRequestReservation)) {
+          try {
+            await releaseRequestSlots(customerId, 1);
+          } catch (releaseErr: any) {
+            logger.error(`[storyboard-analysis] Hoàn trả quota thất bại: ${releaseErr?.message}`);
+          }
+        }
         logger.error(`[storyboard-analysis] Lỗi: ${err?.message}`);
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
