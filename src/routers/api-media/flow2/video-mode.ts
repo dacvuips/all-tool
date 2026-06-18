@@ -3,7 +3,7 @@ import { ServiceImageEnum } from "../../app/constanst";
 /**
  * Chế độ tạo video có ảnh trên Flow2 (`gen_image_video.params.video_mode`).
  *
- * - `frame`    — Khung hình: 1 ảnh = startImage; 2 ảnh = startImage + endImage
+ * - `frame`    — Khung hình: chỉ prompt, hoặc 1 ảnh startImage, hoặc 2 ảnh startImage + endImage
  * - `component` — Thành phần (Reference): chỉ prompt, hoặc kèm 1–3 ảnh tham chiếu
  */
 export type Flow2VideoMode = "component" | "frame";
@@ -11,14 +11,14 @@ export type Flow2VideoMode = "component" | "frame";
 export const FLOW2_VIDEO_MODE = {
   /** Reference — prompt-only hoặc upload 1–3 ảnh tham chiếu */
   COMPONENT: "component",
-  /** Khung hình — startImage (1 ảnh) hoặc startImage + endImage (2 ảnh) */
+  /** Khung hình — prompt-only, startImage (1 ảnh) hoặc startImage + endImage (2 ảnh) */
   FRAME: "frame",
 } as const;
 
 /** Số ảnh tối đa theo từng chế độ Flow2 */
 export const FLOW2_VIDEO_IMAGE_LIMITS = {
   component: { min: 0, max: 3 },
-  frame: { min: 1, max: 2 },
+  frame: { min: 0, max: 2 },
 } as const;
 
 /** Chuẩn hoá giá trị `video_mode` từ client (hỗ trợ alias cũ nếu có). */
@@ -45,7 +45,7 @@ export function assertFlow2VideoImageCount(mode: Flow2VideoMode, imageCount: num
   if (imageCount < limits.min || imageCount > limits.max) {
     if (mode === FLOW2_VIDEO_MODE.FRAME) {
       const err: any = new Error(
-        "Chế độ frame (startImage/endImage) chỉ hỗ trợ 1 hoặc 2 ảnh"
+        "Chế độ frame (startImage/endImage) hỗ trợ tối đa 2 ảnh"
       );
       err.statusCode = 400;
       throw err;

@@ -41,7 +41,7 @@ export type Flow2CreateVideoRequestParams = {
   videoQuality?: Flow2VideoQuality;
   /**
    * Chế độ ảnh trên Flow2 (`video_mode`):
-   * - `frame` — startImage (1 ảnh) hoặc startImage + endImage (2 ảnh)
+   * - `frame` — prompt-only, startImage (1 ảnh) hoặc startImage + endImage (2 ảnh)
    * - `component` — Reference (1–3 ảnh)
    */
   videoMode?: Flow2VideoMode;

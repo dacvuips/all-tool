@@ -44,7 +44,8 @@ export async function handleGenerationWolfVideo(
     customerId: job.customerId,
     prompt: payload.prompt,
     aspectRatio: payload.config?.aspectRatio,
-    videoMode: payload.config?.videoMode,
+    images: payload.images,
+    videoMode: payload.config?.videoMode ?? payload.video_mode,
     emitter,
     logPrefix: "generation-wolf-video",
   });
