@@ -228,6 +228,11 @@ export interface GeneratedImageData {
   fifeUrl: string;
   /** URL trực tiếp — fallback khi server không fetch được binary từ fifeUrl */
   imageUrl?: string;
+  /** Flow2 request id sau gen_image — dùng upscale 4K */
+  flow2RequestId?: string;
+  mediaId?: string;
+  projectId?: string;
+  profileId?: string;
 }
 
 export interface GeneratedVideoData {

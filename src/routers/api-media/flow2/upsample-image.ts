@@ -1,0 +1,67 @@
+import logger from "../../../helpers/logger";
+import { fetchFlow2WithRetry, getFlow2Config } from "./_shared";
+
+export type UpsampleImageWithFlow2Params = {
+  mediaId: string;
+  projectId: string;
+  profileId: string;
+};
+
+export type UpsampledImageResult = {
+  imageBytes: string;
+  mimeType: string;
+};
+
+const UPSAMPLE_TARGET_RESOLUTION = "UPSAMPLE_IMAGE_RESOLUTION_4K";
+
+export async function upsampleImageWithFlow2(
+  params: UpsampleImageWithFlow2Params
+): Promise<UpsampledImageResult> {
+  const { baseUrl, token } = await getFlow2Config();
+
+  const resp = await fetchFlow2WithRetry(`${baseUrl}/api/requests/upsample-image?download=true`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      media_id: params.mediaId,
+      project_id: params.projectId,
+      profile_id: params.profileId,
+      target_resolution: UPSAMPLE_TARGET_RESOLUTION,
+    }),
+  });
+
+  if (!resp.ok) {
+    const errText = await resp.text();
+    const err: any = new Error(`Flow2 upsample error ${resp.status}: ${errText}`);
+    err.statusCode = resp.status;
+    throw err;
+  }
+
+  const contentType = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();
+  const buffer = Buffer.from(await resp.arrayBuffer());
+
+  if (contentType.includes("application/json")) {
+    const json = JSON.parse(buffer.toString("utf8")) as Record<string, unknown>;
+    const message =
+      (typeof json.message === "string" && json.message) ||
+      (typeof json.error === "string" && json.error) ||
+      "Flow2 upsample không trả ảnh";
+    throw new Error(message);
+  }
+
+  if (!buffer.length) {
+    throw new Error("Flow2 upsample trả về file rỗng");
+  }
+
+  logger.info(
+    `[flow2-upsample] Hoàn tất media_id=${params.mediaId} (${buffer.length} bytes, ${contentType})`
+  );
+
+  return {
+    imageBytes: buffer.toString("base64"),
+    mimeType: contentType || "image/jpeg",
+  };
+}

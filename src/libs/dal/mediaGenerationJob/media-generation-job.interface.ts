@@ -63,6 +63,10 @@ export type MediaGenerationImageResult = {
     mimeType?: string;
     fifeUrl?: string;
     imageUrl?: string;
+    mediaId?: string;
+    flow2RequestId?: string;
+    projectId?: string;
+    profileId?: string;
   }>;
 };
 

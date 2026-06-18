@@ -1,12 +1,20 @@
 import { base64ToBlob, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
 
+/** Metadata Flow2 lưu sau gen_image — dùng upscale 4K. */
+export type Flow2ImageMeta = {
+  flow2RequestId?: string;
+  mediaId?: string;
+  projectId?: string;
+  profileId?: string;
+};
+
 /** Shape tối thiểu của ảnh generate — hỗ trợ base64 hoặc URL Flow2. */
 export type GeneratedImageLike = {
   imageBytes?: string;
   mimeType?: string;
   fifeUrl?: string;
   imageUrl?: string;
-};
+} & Flow2ImageMeta;
 
 /** Shape tối thiểu của video generate — hỗ trợ URI hoặc base64. */
 export type GeneratedVideoLike = {
@@ -26,6 +34,11 @@ export function getGeneratedImageUrl(img: GeneratedImageLike): string {
 
 export function hasGeneratedImageData(img: GeneratedImageLike | null | undefined): boolean {
   return !!(img && (img.imageBytes || getGeneratedImageUrl(img)));
+}
+
+/** Đủ metadata Flow2 để gọi upscale 4K. */
+export function hasFlow2UpscaleMeta(img: GeneratedImageLike | null | undefined): boolean {
+  return !!(img?.mediaId?.trim() && img?.projectId?.trim() && img?.profileId?.trim());
 }
 
 /** Ưu tiên base64; fallback link (chỉ dùng hiển thị / preview). */
@@ -326,6 +339,37 @@ export async function downloadSceneImage(
   const blob = await generatedImageToBlob(img);
   const mime = img.mimeType || blob.type || "image/png";
   triggerBlobDownload(blob, buildSceneImageFileName(sceneNumber, mime));
+}
+
+/** Upscale ảnh đã generate lên 4K qua Flow2 và tải về. */
+export async function downloadUpsampled4kImage(
+  img: GeneratedImageLike,
+  fileName: string
+): Promise<void> {
+  if (!hasFlow2UpscaleMeta(img)) {
+    throw new Error("Thiếu metadata Flow2 (mediaId, projectId, profileId) để upscale 4K");
+  }
+
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  const res = await fetch("/api/app/upsample-image/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mediaId: img.mediaId,
+      projectId: img.projectId,
+      profileId: img.profileId,
+      fileName: `${baseName}-4k.jpg`,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string })?.message || `Lỗi upscale 4K (${res.status})`);
+  }
+
+  const blob = await res.blob();
+  const ext = mimeTypeToFileExtension(blob.type || img.mimeType, "jpg");
+  triggerBlobDownload(blob, `${baseName}-4k.${ext}`);
 }
 
 /** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */

@@ -19,8 +19,12 @@ import {
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
-import { getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
+import {
+  buildSceneImageFileName,
+  getGeneratedImagePreviewSrc,
+} from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
+import { Upsample4kButton } from "./upsample-4k-button";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -193,6 +197,11 @@ export function SceneCardImageTab({
                 tooltip={t("Tải")}
                 icon={<HiOutlineArrowDownTray />}
                 placement="bottom"
+              />
+              <Upsample4kButton
+                image={generatedImage}
+                fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
+                disabled={isDisabled}
               />
               {/* Tạo lại / progress */}
               {generatingImage ? (

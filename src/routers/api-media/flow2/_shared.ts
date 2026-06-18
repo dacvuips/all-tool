@@ -80,6 +80,49 @@ export function collectFlow2VideoUrls(result: Flow2MediaResult): string[] {
   return Array.from(new Set(urls));
 }
 
+/** Metadata cần cho upsample ảnh lên 4K qua Flow2. */
+export type Flow2UpscaleFields = {
+  mediaId?: string;
+  projectId?: string;
+  profileId?: string;
+};
+
+function pickFlow2StringField(
+  statusData: Flow2StatusResponse,
+  key: string,
+  resultPayload?: Flow2MediaResult | null
+): string | undefined {
+  const candidates: unknown[] = [
+    resultPayload ? (resultPayload as Record<string, unknown>)[key] : undefined,
+    statusData[key],
+    (statusData.data as Record<string, unknown> | undefined)?.[key],
+    (statusData.request as Record<string, unknown> | undefined)?.[key],
+    (statusData.result as Record<string, unknown> | undefined)?.[key],
+  ];
+  const found = candidates.find((v) => typeof v === "string" && v.trim().length > 0);
+  return found ? String(found).trim() : undefined;
+}
+
+/** Trích media_id / project_id / profile_id từ response poll Flow2 sau gen_image. */
+export function pickFlow2UpscaleFields(
+  statusData: Flow2StatusResponse,
+  imageIndex = 0
+): Flow2UpscaleFields {
+  const resultPayload = pickFlow2ResultPayload(statusData);
+  const mediaIds = resultPayload?.media_ids || [];
+  const mediaEntries = resultPayload?.media_entries || [];
+  const mediaId =
+    mediaIds[imageIndex] ||
+    mediaEntries[imageIndex]?.media_id ||
+    pickFlow2StringField(statusData, "media_id", resultPayload);
+
+  return {
+    mediaId: typeof mediaId === "string" && mediaId.trim() ? mediaId.trim() : undefined,
+    projectId: pickFlow2StringField(statusData, "project_id", resultPayload),
+    profileId: pickFlow2StringField(statusData, "profile_id", resultPayload),
+  };
+}
+
 /** Lấy request id từ response poll Flow2. */
 export function pickFlow2RequestId(statusData: Flow2StatusResponse): string | undefined {
   const candidates = [
@@ -154,7 +197,7 @@ async function delayMs(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function fetchFlow2WithRetry(url: string, init: RequestInit): Promise<Response> {
+export async function fetchFlow2WithRetry(url: string, init: RequestInit): Promise<Response> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= FLOW2_NETWORK_RETRY_MAX; attempt++) {
     try {

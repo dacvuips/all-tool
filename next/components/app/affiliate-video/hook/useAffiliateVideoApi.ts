@@ -266,6 +266,10 @@ export interface GeneratedImageData {
   fifeUrl: string;
   /** URL trực tiếp — fallback khi server không fetch được binary từ fifeUrl */
   imageUrl?: string;
+  flow2RequestId?: string;
+  mediaId?: string;
+  projectId?: string;
+  profileId?: string;
 }
 
 export interface GeneratedVideoData {

@@ -6,9 +6,11 @@ import {
   collectFlow2ImageUrls,
   createFlow2Request,
   Flow2StatusResponse,
+  getFlow2RequestStatus,
   isHttpUrl,
   looksLikeRawBase64,
   pickFlow2ResultPayload,
+  pickFlow2UpscaleFields,
   runFlow2WithRetry,
   safeProgress,
   waitForFlow2Result,
@@ -32,6 +34,10 @@ export type GeneratedImage = {
   fifeUrl?: string;
   imageUrl?: string;
   mediaId?: string;
+  /** Flow2 request id của lần gen_image — dùng cho upscale 4K */
+  flow2RequestId?: string;
+  projectId?: string;
+  profileId?: string;
 };
 
 const DEFAULT_IMAGE_MODEL = "NANO_BANANA_PRO";
@@ -224,7 +230,18 @@ export async function generateImageWithFlow2(
         requestId: created.requestId,
         onProgress: params.onProgress,
       });
-      return { requestId: created.requestId, images };
+      const statusData = await getFlow2RequestStatus(created.requestId);
+      const imagesWithMeta = images.map((image, index) => {
+        const upscale = pickFlow2UpscaleFields(statusData, index);
+        return {
+          ...image,
+          mediaId: image.mediaId || upscale.mediaId,
+          flow2RequestId: created.requestId,
+          projectId: upscale.projectId,
+          profileId: upscale.profileId,
+        };
+      });
+      return { requestId: created.requestId, images: imagesWithMeta };
     },
   });
 }
