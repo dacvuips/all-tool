@@ -1,4 +1,4 @@
-import DOMPurify from "dompurify";
+import { sanitizeCkEditorContent } from "../../../lib/helpers/ck-editor-content";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "../../../components/shared/utilities/dialog/dialog";
 export function HomePageDeactiveDialog({ ...props }) {
@@ -17,7 +17,7 @@ export function HomePageDeactiveDialog({ ...props }) {
           className="-mt-3 ck-content"
           dangerouslySetInnerHTML={{
             // __html: post.content,
-            __html: DOMPurify.sanitize(props.pageDeactiveDialogValue),
+            __html: sanitizeCkEditorContent(props.pageDeactiveDialogValue),
           }}
         ></div>
       </Dialog.Body>

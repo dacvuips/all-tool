@@ -9,6 +9,10 @@ import { RiCloseLine, RiFilmFill, RiGridLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
 import { TAB_TYPE } from "../../constants";
 
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
@@ -57,9 +61,15 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
 
           <div className="flex flex-col">
             {type === TAB_TYPE.single ? (
-              <span className="text-base font-bold text-gray-800">{t("Đơn Lẻ")}</span>
+              <div className="flex gap-1.5 items-center">
+                <span className="text-base font-bold text-gray-800">{t("Đơn Lẻ")}</span>
+                <TrainingGuidePopover topicSlug={TrainingTopicSlug.SINGLE_PROMPT} />
+              </div>
             ) : (
-              <span className="text-base font-bold text-gray-800">{t("Kịch Bản")}</span>
+              <div className="flex gap-1.5 items-center">
+                <span className="text-base font-bold text-gray-800">{t("Kịch Bản")}</span>
+                <TrainingGuidePopover topicSlug={TrainingTopicSlug.BATCH_PROMPT} />
+              </div>
             )}
             {type === TAB_TYPE.single ? (
               <span className="text-xs text-gray-500">

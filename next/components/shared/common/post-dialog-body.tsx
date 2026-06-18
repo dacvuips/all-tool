@@ -1,7 +1,7 @@
 import { RiTimeLine } from "react-icons/ri";
 
-import DOMPurify from "dompurify";
 import { useTranslation } from "react-i18next";
+import { sanitizeCkEditorContent } from "../../../lib/helpers/ck-editor-content";
 import { formatDate } from "../../../lib/helpers/parser";
 import { Post } from "../../../lib/repo/post/post.repo";
 import { Dialog } from "../utilities/dialog/dialog";
@@ -46,7 +46,7 @@ export const PostDialogBody = ({ post, ...props }: PostDialogBodyProps) => {
                   className="ck-content"
                   dangerouslySetInnerHTML={{
                     // __html: post.content,
-                    __html: DOMPurify.sanitize(post.content),
+                    __html: sanitizeCkEditorContent(post.content),
                   }}
                 ></div>
                 {/* <div className="my-8 font-semibold text-accent text-28">Tin tức liên quan</div>

@@ -1,4 +1,4 @@
-import DOMPurify from "dompurify";
+import { sanitizeCkEditorContent } from "../../../lib/helpers/ck-editor-content";
 import { PopupNotifyActionType, PopupNotifyTypeEnum } from "../../../lib/repo/types";
 
 import Link from "next/link";
@@ -112,7 +112,7 @@ function PopupNotifyHTML({ item }) {
         className="rounded-xl ck-content v-scrollbar"
         dangerouslySetInnerHTML={{
           // __html: post.content,
-          __html: DOMPurify.sanitize(item.data),
+          __html: sanitizeCkEditorContent(item.data),
         }}
       ></div>
     </>

@@ -1,3 +1,4 @@
+import { getYoutubePlayerConfig } from "../../../lib/helpers/ck-editor-content";
 import cheerio from "cheerio";
 import DOMPurify from "dompurify";
 import { useRouter } from "next/router";
@@ -87,16 +88,7 @@ export function MessageItem({
         width="100%"
         height="150px"
         controls
-        config={{
-          youtube: {
-            playerVars: { showinfo: 1, origin: "/" },
-          },
-          file: {
-            attributes: {
-              controlsList: "nodownload",
-            },
-          },
-        }}
+        config={getYoutubePlayerConfig()}
       />
     );
     replacementElementsVideos.push(reactPlayer);

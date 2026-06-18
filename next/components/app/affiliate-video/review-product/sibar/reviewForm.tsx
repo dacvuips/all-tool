@@ -11,6 +11,10 @@ import { RiBookOpenLine, RiCloseLine } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
 
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { getImageDisplayName } from "../../elements/utils/elementFormImageUtils";
 import { ReviewScriptTabEnum } from "../constants";
 import { useReviewApi } from "../hook/useReviewApi";
@@ -92,9 +96,12 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
             <RiBookOpenLine className="text-base text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold text-gray-800">
-              {t("Review Sản Phẩm/ Thời Trang")}
-            </span>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">
+                {t("Review Sản Phẩm/ Thời Trang")}
+              </span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.REVIEW_PRODUCT} />
+            </div>
             <span className="text-xs text-gray-500">
               {t("Tạo phân cảnh theo review sản phẩm/ thời trang tùy chỉnh")}
             </span>

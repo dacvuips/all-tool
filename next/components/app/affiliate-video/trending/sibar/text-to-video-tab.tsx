@@ -7,6 +7,10 @@
 import { useTranslation } from "react-i18next";
 import { RiCameraLensFill, RiCloseLine } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { Form } from "../../../../shared/utilities/form";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
@@ -52,7 +56,12 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
           <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
             <RiCameraLensFill className="text-white text-base" />
           </div>
-          <span className="text-base font-bold text-gray-800">{t("Trending Prompt")}</span>
+          <div className="flex flex-col">
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">{t("Trending Prompt")}</span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.TRENDING_PROMPT} />
+            </div>
+          </div>
         </div>
         <div className="flex items-center gap-1">
           {onClose && (

@@ -9,6 +9,10 @@ import { RiCloseLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
 
 import { IoAppsSharp } from "react-icons/io5";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
@@ -49,9 +53,12 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
             <IoAppsSharp className="text-white text-base" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold text-gray-800">
-              {t("Tạo cảnh theo Storyboard")}
-            </span>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">
+                {t("Tạo cảnh theo Storyboard")}
+              </span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.STORYBOARD} />
+            </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh từ ảnh storyboard")}</span>
           </div>
         </div>

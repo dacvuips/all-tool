@@ -5,6 +5,10 @@
 import { useTranslation } from "react-i18next";
 import { RiApps2Line, RiCloseLine } from "react-icons/ri";
 
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { AffiliateConfig } from "./affiliate-config";
 
 export const AppSidebarTab = ({ onClose }: { onClose?: () => void }) => {
@@ -18,7 +22,10 @@ export const AppSidebarTab = ({ onClose }: { onClose?: () => void }) => {
             <RiApps2Line className="text-base text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold text-gray-800">{t("App Prompt & Link")}</span>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">{t("App Prompt & Link")}</span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.APP_PROMPT} />
+            </div>
             <span className="text-xs text-gray-500">
               {t("Cung cấp prompt tạo app hoặc link app trực tiếp ")}
             </span>

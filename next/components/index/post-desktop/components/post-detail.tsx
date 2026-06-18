@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { RiFileForbidLine, RiTimeLine } from "react-icons/ri";
 
-import DOMPurify from "dompurify";
+import { sanitizeCkEditorContent } from "../../../../lib/helpers/ck-editor-content";
 
 import { useRouter } from "next/router";
 import { useTranslation } from "react-i18next";
@@ -97,7 +97,7 @@ export function PostDetail({ ...props }: ReactProps) {
                 className="ck-content"
                 dangerouslySetInnerHTML={{
                   // __html: post.content,
-                  __html: DOMPurify.sanitize(post.content),
+                  __html: sanitizeCkEditorContent(post.content),
                 }}
               ></div>
               {/* <div className="my-8 font-semibold text-accent text-28">Tin tức liên quan</div>

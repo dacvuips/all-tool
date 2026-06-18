@@ -28,7 +28,7 @@ export function ProfilePostDetailDialog({ postId, ...props }) {
 
   return (
     <>
-      <Dialog slideFromBottom="none" title={t("Bài viết")} {...props}>
+      <Dialog width={1000} slideFromBottom="none" title={t("Bài viết")} {...props}>
         <PostDialogBody post={post} />
       </Dialog>
     </>

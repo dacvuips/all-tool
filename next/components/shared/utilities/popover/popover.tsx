@@ -18,6 +18,7 @@ export interface PopoverProps extends ReactProps {
   className?: string;
   zIndex?: number;
   strategy?: "fixed" | "absolute";
+  delay?: number | [number, number];
   visible?: boolean;
 }
 
@@ -34,6 +35,7 @@ export function Popover({
   zIndex = 9999,
   strategy = "fixed",
   visible,
+  delay = 0,
   ...props
 }: PopoverProps) {
   const root = typeof window !== "undefined" ? document.getElementById("popover-root") : null;
@@ -61,6 +63,7 @@ export function Popover({
       })}
       className={className}
       zIndex={zIndex}
+      delay={delay}
       visible={visible}
       popperOptions={{
         strategy: strategy,

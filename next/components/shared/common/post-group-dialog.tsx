@@ -1,4 +1,4 @@
-import DOMPurify from "dompurify";
+import { sanitizeCkEditorContent } from "../../../lib/helpers/ck-editor-content";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiTimeLine } from "react-icons/ri";
@@ -66,7 +66,7 @@ export function PostGroupDialog({ ...props }) {
                     className="ck-content"
                     dangerouslySetInnerHTML={{
                       // __html: post.content,
-                      __html: DOMPurify.sanitize(post.content),
+                      __html: sanitizeCkEditorContent(post.content),
                     }}
                   ></div>
                 </div>

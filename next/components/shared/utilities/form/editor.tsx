@@ -1,6 +1,7 @@
 import getConfig from "next/config";
 import { MutableRefObject, useEffect, useRef, useState } from "react";
 import { CgSpinner } from "react-icons/cg";
+import { patchYoutubeIframesInElement } from "../../../../lib/helpers/ck-editor-content";
 import { compressUploadImage } from "../../../../lib/helpers/image";
 import { CompressOptions } from "./image-input";
 
@@ -124,6 +125,12 @@ export function Editor({
 
             onReady={(editor) => {
               setEditor(editor);
+              const editable = editor.editing.view.getDomRoot?.() as HTMLElement | null;
+              if (!editable) return;
+
+              patchYoutubeIframesInElement(editable);
+              const observer = new MutationObserver(() => patchYoutubeIframesInElement(editable));
+              observer.observe(editable, { childList: true, subtree: true });
             }}
             onFocus={props.onFocus}
           />

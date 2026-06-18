@@ -1,3 +1,4 @@
+import { getYoutubePlayerConfig } from "../../../lib/helpers/ck-editor-content";
 import { useMemo } from "react";
 import { HiOutlineX } from "react-icons/hi";
 import ReactPlayer from "react-player";
@@ -65,16 +66,7 @@ export function VideoDialog({
           width={playerWidth}
           height={playerHeight}
           controls
-          config={{
-            youtube: {
-              playerVars: { showinfo: 1, origin: "/" },
-            },
-            file: {
-              attributes: {
-                controlsList: "nodownload",
-              },
-            },
-          }}
+          config={getYoutubePlayerConfig()}
         />
       </div>
     </Dialog>

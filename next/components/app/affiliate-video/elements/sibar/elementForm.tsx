@@ -8,8 +8,12 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiListOrdered } from "react-icons/ri";
 
-import { useToast } from "../../../../../lib/providers/toast-provider";
 import { useQueryParams } from "../../../../../lib/hooks/useQueryParams";
+import { useToast } from "../../../../../lib/providers/toast-provider";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { Form } from "../../../../shared/utilities/form";
 import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ServiceImageEnum } from "../constants";
@@ -89,7 +93,16 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(false);
       }
     },
-    [activeTab, elementFormConfig, persistElementInput, setBatchRunning, setScriptData, setScriptTab, t, toast]
+    [
+      activeTab,
+      elementFormConfig,
+      persistElementInput,
+      setBatchRunning,
+      setScriptData,
+      setScriptTab,
+      t,
+      toast,
+    ]
   );
 
   return (
@@ -105,7 +118,10 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
             <RiListOrdered className="text-base text-white" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.ELEMENT} />
+            </div>
             <span className="text-xs text-gray-500">
               {t("Tạo phân cảnh theo hàng loạt từ prompt tùy chỉnh")}
             </span>

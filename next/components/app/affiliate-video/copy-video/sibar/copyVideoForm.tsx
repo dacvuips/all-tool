@@ -13,6 +13,10 @@ import { CopyVideoFormConfig } from "../../constants";
 import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../../../../shared/common/training-guide-popover";
 import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
@@ -102,7 +106,10 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
             <RiFileCopy2Line className="text-white text-base" />
           </div>
           <div className="flex flex-col">
-            <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
+            <div className="flex gap-1.5 items-center">
+              <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
+              <TrainingGuidePopover topicSlug={TrainingTopicSlug.COPY_PROMPT} />
+            </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh theo video gốc ")}</span>
           </div>
         </div>
