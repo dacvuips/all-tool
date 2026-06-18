@@ -1,7 +1,8 @@
 import { TOKEN_ROLES } from "../../../constants/role.const";
+import { Scope } from "../../../libs/dal/authority/scope.enum";
 import { trendingService } from "../../../libs/dal/trending";
-import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { TrendingTypeEnum } from "../../../libs/dal/trending/trending.interface";
+import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import { Context } from "../../../libs/graphql";
 import { CheckTrendingAccess } from "../../../libs/usecases/trending-purchase-order/check-trending-access.usecase";
 const APP_TRENDING_TYPES = new Set([
@@ -94,11 +95,11 @@ const deleteCustomerItem = async (
 
 const Query = {
   getAllTrending: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-1"]]);
     return trendingService.fetch(args.q);
   },
   getOneTrending: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-1"]]);
     const { id } = args;
     return await trendingService.findOne({ _id: id });
   },
@@ -113,7 +114,8 @@ const Query = {
     const trending = await trendingService.findOne({ _id: id });
     if (!trending) return null;
     return { id: trending._id, prompt: trending.prompt };
-  },  getCustomerTrendingList: async (root: any, args: any, context: Context) => {
+  },
+  getCustomerTrendingList: async (root: any, args: any, context: Context) => {
     return fetchCustomerListByType(args, context, TrendingTypeEnum.PROMPT);
   },
   getCustomerChatbotList: async (root: any, args: any, context: Context) => {
@@ -129,19 +131,19 @@ const Query = {
 
 const Mutation = {
   createTrending: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-2"]]);
     const { data } = args;
     preparePromptShort(data);
     return await trendingService.create(data);
   },
   updateTrending: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-3"]]);
     const { id, data } = args;
     preparePromptShort(data);
     return await trendingService.updateOne(id, data);
   },
   deleteOneTrending: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-4"]]);
     const { id } = args;
     return await trendingService.deleteOne(id);
   },

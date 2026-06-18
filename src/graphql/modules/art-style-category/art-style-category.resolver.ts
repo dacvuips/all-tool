@@ -1,6 +1,7 @@
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { artStyleService } from "../../../libs/dal/art-style";
 import { artStyleCategoryService } from "../../../libs/dal/art-style-category";
+import { Scope } from "../../../libs/dal/authority/scope.enum";
 import { Context } from "../../../libs/graphql";
 
 const Query = {
@@ -38,17 +39,17 @@ const Query = {
 
 const Mutation = {
   createArtStyleCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-2"]]);
     const { data } = args;
     return await artStyleCategoryService.create(data);
   },
   updateArtStyleCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-3"]]);
     const { id, data } = args;
     return await artStyleCategoryService.updateOne(id, data);
   },
   deleteOneArtStyleCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-4"]]);
     const { id } = args;
     return await artStyleCategoryService.deleteOne(id);
   },

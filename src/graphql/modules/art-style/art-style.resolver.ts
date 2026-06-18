@@ -1,14 +1,15 @@
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { artStyleService } from "../../../libs/dal/art-style";
+import { Scope } from "../../../libs/dal/authority/scope.enum";
 import { Context } from "../../../libs/graphql";
 
 const Query = {
   getAllArtStyle: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-1"]]);
     return artStyleService.fetch(args.q);
   },
   getOneArtStyle: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-1"]]);
     const { id } = args;
     return await artStyleService.findOne({ _id: id });
   },
@@ -31,7 +32,7 @@ const Query = {
 
 const Mutation = {
   createArtStyle: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-2"]]);
     const { data } = args;
     if (data.prompt) {
       data.promptShort = data.prompt.substring(0, 150);
@@ -39,7 +40,7 @@ const Mutation = {
     return await artStyleService.create(data);
   },
   updateArtStyle: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-3"]]);
     const { id, data } = args;
     if (data.prompt !== undefined) {
       data.promptShort = data.prompt ? data.prompt.substring(0, 150) : "";
@@ -47,7 +48,7 @@ const Mutation = {
     return await artStyleService.updateOne(id, data);
   },
   deleteOneArtStyle: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AR-1-4"]]);
     const { id } = args;
     return await artStyleService.deleteOne(id);
   },

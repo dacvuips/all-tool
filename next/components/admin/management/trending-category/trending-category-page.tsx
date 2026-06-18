@@ -5,6 +5,7 @@ import {
   TrendingCategoryService,
 } from "../../../../lib/repo/list/trendingCategory.repo";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -14,7 +15,7 @@ import { TrendingCategoryFields } from "./components/trending-category-fields";
 export function TrendingCategoryPage() {
   const { t } = useTranslation();
   const toast = useToast();
-
+  const { userPermission } = useAuth();
   return (
     <Card>
       <DataTable<TrendingCategory>
@@ -25,7 +26,7 @@ export function TrendingCategoryPage() {
           <DataTable.Title />
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
-            <DataTable.Button primary isAddButton />
+            <DataTable.Button primary isAddButton disabled={!userPermission("CREATE_TRENDING")} />
           </DataTable.Buttons>
         </DataTable.Header>
 
@@ -50,10 +51,7 @@ export function TrendingCategoryPage() {
                 <DataTable.Column
                   label={t("Tên danh mục")}
                   render={(item: TrendingCategory) => (
-                    <DataTable.CellText
-                      value={item.name}
-                      className="font-semibold"
-                    />
+                    <DataTable.CellText value={item.name} className="font-semibold" />
                   )}
                 />
                 <DataTable.Column
@@ -72,6 +70,7 @@ export function TrendingCategoryPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_TRENDING")}
                           value={item.isHot}
                           onChange={async () => {
                             try {
@@ -100,6 +99,7 @@ export function TrendingCategoryPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_TRENDING")}
                           value={item.isActive}
                           onChange={async () => {
                             try {
@@ -129,10 +129,7 @@ export function TrendingCategoryPage() {
                 <DataTable.Column
                   label={t("Ngày tạo")}
                   render={(item: TrendingCategory) => (
-                    <DataTable.CellDate
-                      value={item.createdAt}
-                      format="dd/MM/yyyy"
-                    />
+                    <DataTable.CellDate value={item.createdAt} format="dd/MM/yyyy" />
                   )}
                 />
                 <DataTable.Column
@@ -140,11 +137,16 @@ export function TrendingCategoryPage() {
                   className="whitespace-nowrap"
                   render={(item: TrendingCategory) => (
                     <>
-                      <DataTable.CellButton value={item} isEditButton />
+                      <DataTable.CellButton
+                        value={item}
+                        isEditButton
+                        disabled={!userPermission("EDIT_TRENDING")}
+                      />
                       <DataTable.CellButton
                         hoverDanger
                         value={item}
                         isDeleteButton
+                        disabled={!userPermission("DELETE_TRENDING")}
                       />
                     </>
                   )}
@@ -153,11 +155,7 @@ export function TrendingCategoryPage() {
             </>
           )}
         </DataTable.Consumer>
-        <DataTable.Form
-          grid
-          width={650}
-          slideFromBottom="none"
-        >
+        <DataTable.Form grid width={650} slideFromBottom="none">
           <TrendingCategoryFields />
         </DataTable.Form>
         <DataTable.Pagination />

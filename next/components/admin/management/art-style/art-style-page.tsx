@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { ArtStyle, ArtStyleService } from "../../../../lib/repo/list/artStyle.repo";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -11,6 +12,7 @@ import { ArtStyleFields } from "./components/art-style-fields";
 export function ArtStylePage() {
   const { t } = useTranslation();
   const toast = useToast();
+  const { userPermission } = useAuth();
 
   return (
     <Card>
@@ -19,7 +21,7 @@ export function ArtStylePage() {
           <DataTable.Title />
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
-            <DataTable.Button primary isAddButton />
+            <DataTable.Button primary isAddButton disabled={!userPermission("CREATE_ART_STYLE")} />
           </DataTable.Buttons>
         </DataTable.Header>
 
@@ -108,6 +110,7 @@ export function ArtStylePage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_ART_STYLE")}
                           value={item.isActive}
                           onChange={async () => {
                             try {
@@ -138,8 +141,17 @@ export function ArtStylePage() {
                   className="whitespace-nowrap"
                   render={(item: ArtStyle) => (
                     <>
-                      <DataTable.CellButton value={item} isEditButton />
-                      <DataTable.CellButton hoverDanger value={item} isDeleteButton />
+                      <DataTable.CellButton
+                        value={item}
+                        isEditButton
+                        disabled={!userPermission("EDIT_ART_STYLE")}
+                      />
+                      <DataTable.CellButton
+                        hoverDanger
+                        value={item}
+                        isDeleteButton
+                        disabled={!userPermission("DELETE_ART_STYLE")}
+                      />
                     </>
                   )}
                 />

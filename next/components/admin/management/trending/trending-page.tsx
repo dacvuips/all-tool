@@ -6,6 +6,7 @@ import {
   TrendingService,
 } from "../../../../lib/repo/list/trending.repo";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -15,7 +16,7 @@ import { TrendingFields } from "./components/trending-fields";
 export function TrendingPage() {
   const { t } = useTranslation();
   const toast = useToast();
-
+  const { userPermission } = useAuth();
   return (
     <Card>
       <DataTable<Trending> crudService={TrendingService} order={{ createdAt: -1 }}>
@@ -23,7 +24,7 @@ export function TrendingPage() {
           <DataTable.Title />
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
-            <DataTable.Button primary isAddButton />
+            <DataTable.Button primary isAddButton disabled={!userPermission("CREATE_TRENDING")} />
           </DataTable.Buttons>
         </DataTable.Header>
 
@@ -90,6 +91,7 @@ export function TrendingPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_TRENDING")}
                           value={item.isPublish}
                           onChange={async () => {
                             try {
@@ -118,6 +120,7 @@ export function TrendingPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_TRENDING")}
                           value={item.isActive}
                           onChange={async () => {
                             try {
@@ -148,8 +151,17 @@ export function TrendingPage() {
                   className="whitespace-nowrap"
                   render={(item: Trending) => (
                     <>
-                      <DataTable.CellButton value={item} isEditButton />
-                      <DataTable.CellButton hoverDanger value={item} isDeleteButton />
+                      <DataTable.CellButton
+                        value={item}
+                        isEditButton
+                        disabled={!userPermission("EDIT_TRENDING")}
+                      />
+                      <DataTable.CellButton
+                        hoverDanger
+                        value={item}
+                        isDeleteButton
+                        disabled={!userPermission("DELETE_TRENDING")}
+                      />
                     </>
                   )}
                 />

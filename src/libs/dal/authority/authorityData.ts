@@ -44,6 +44,26 @@ export const AuthorityData = [
         ],
       },
       {
+        code: "TD-1",
+        name: t("Trending"),
+        scopes: [
+          { code: "TD-1-1", name: t("Truy cập") },
+          { code: "TD-1-2", name: t("Tạo mới") },
+          { code: "TD-1-3", name: t("Cập nhật") },
+          { code: "TD-1-4", name: t("Xóa") },
+        ],
+      },
+      {
+        code: "AR-1",
+        name: t("Art Style"),
+        scopes: [
+          { code: "AR-1-1", name: t("Truy cập") },
+          { code: "AR-1-2", name: t("Tạo mới") },
+          { code: "AR-1-3", name: t("Cập nhật") },
+          { code: "AR-1-4", name: t("Xóa") },
+        ],
+      },
+      {
         code: "QT-4",
         name: t("Sản phẩm"),
         scopes: [

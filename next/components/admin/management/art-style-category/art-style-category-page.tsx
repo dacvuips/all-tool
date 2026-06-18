@@ -5,6 +5,7 @@ import {
   ArtStyleCategoryService,
 } from "../../../../lib/repo/list/artStyleCategory.repo";
 
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { Field } from "../../../shared/utilities/form";
 import { Switch } from "../../../shared/utilities/form/switch";
 import { Card } from "../../../shared/utilities/misc";
@@ -14,7 +15,7 @@ import { ArtStyleCategoryFields } from "./components/art-style-category-fields";
 export function ArtStyleCategoryPage() {
   const { t } = useTranslation();
   const toast = useToast();
-
+  const { userPermission } = useAuth();
   return (
     <Card>
       <DataTable<ArtStyleCategory>
@@ -25,7 +26,7 @@ export function ArtStyleCategoryPage() {
           <DataTable.Title />
           <DataTable.Buttons>
             <DataTable.Button outline isRefreshButton refreshAfterTask />
-            <DataTable.Button primary isAddButton />
+            <DataTable.Button primary isAddButton disabled={!userPermission("CREATE_ART_STYLE")} />
           </DataTable.Buttons>
         </DataTable.Header>
 
@@ -50,10 +51,7 @@ export function ArtStyleCategoryPage() {
                 <DataTable.Column
                   label={t("Tên danh mục")}
                   render={(item: ArtStyleCategory) => (
-                    <DataTable.CellText
-                      value={item.name}
-                      className="font-semibold"
-                    />
+                    <DataTable.CellText value={item.name} className="font-semibold" />
                   )}
                 />
                 <DataTable.Column
@@ -72,6 +70,7 @@ export function ArtStyleCategoryPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_ART_STYLE")}
                           value={item.isHot}
                           onChange={async () => {
                             try {
@@ -100,6 +99,7 @@ export function ArtStyleCategoryPage() {
                       value={
                         <Switch
                           dependent
+                          readOnly={!userPermission("EDIT_ART_STYLE")}
                           value={item.isActive}
                           onChange={async () => {
                             try {
@@ -129,10 +129,7 @@ export function ArtStyleCategoryPage() {
                 <DataTable.Column
                   label={t("Ngày tạo")}
                   render={(item: ArtStyleCategory) => (
-                    <DataTable.CellDate
-                      value={item.createdAt}
-                      format="dd/MM/yyyy"
-                    />
+                    <DataTable.CellDate value={item.createdAt} format="dd/MM/yyyy" />
                   )}
                 />
                 <DataTable.Column
@@ -140,11 +137,16 @@ export function ArtStyleCategoryPage() {
                   className="whitespace-nowrap"
                   render={(item: ArtStyleCategory) => (
                     <>
-                      <DataTable.CellButton value={item} isEditButton />
+                      <DataTable.CellButton
+                        value={item}
+                        isEditButton
+                        disabled={!userPermission("EDIT_ART_STYLE")}
+                      />
                       <DataTable.CellButton
                         hoverDanger
                         value={item}
                         isDeleteButton
+                        disabled={!userPermission("DELETE_ART_STYLE")}
                       />
                     </>
                   )}
@@ -153,11 +155,7 @@ export function ArtStyleCategoryPage() {
             </>
           )}
         </DataTable.Consumer>
-        <DataTable.Form
-          grid
-          width={650}
-          slideFromBottom="none"
-        >
+        <DataTable.Form grid width={650} slideFromBottom="none">
           <ArtStyleCategoryFields />
         </DataTable.Form>
         <DataTable.Pagination />

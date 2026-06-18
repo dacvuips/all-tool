@@ -1,4 +1,5 @@
 import { TOKEN_ROLES } from "../../../constants/role.const";
+import { Scope } from "../../../libs/dal/authority/scope.enum";
 import { trendingService } from "../../../libs/dal/trending";
 import { trendingCategoryService } from "../../../libs/dal/trending-category";
 import { Context } from "../../../libs/graphql";
@@ -38,17 +39,17 @@ const Query = {
 
 const Mutation = {
   createTrendingCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-2"]]);
     const { data } = args;
     return await trendingCategoryService.create(data);
   },
   updateTrendingCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-3"]]);
     const { id, data } = args;
     return await trendingCategoryService.updateOne(id, data);
   },
   deleteOneTrendingCategory: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["TD-1-4"]]);
     const { id } = args;
     return await trendingCategoryService.deleteOne(id);
   },
