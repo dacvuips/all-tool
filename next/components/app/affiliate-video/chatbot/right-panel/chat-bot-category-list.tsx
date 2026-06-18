@@ -55,7 +55,7 @@ import {
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 42;
 const ALL_CATEGORY_ID = "__all__";
 const MY_TRENDING_ID = "__my__";
 

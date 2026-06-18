@@ -28,10 +28,6 @@ import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { TrendingCategoryService } from "../../../../../lib/repo/list/trendingCategory.repo";
-import {
-  TrendingPurchaseBadge,
-  useTrendingPurchaseFlow,
-} from "../../shared/use-trending-purchase-flow";
 import { NotifyText } from "../../../../shared/common/notify-text";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import {
@@ -52,10 +48,14 @@ import {
   TrendingPublicItem,
   useAffiliateVideoApi,
 } from "../../hook/useAffiliateVideoApi";
+import {
+  TrendingPurchaseBadge,
+  useTrendingPurchaseFlow,
+} from "../../shared/use-trending-purchase-flow";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 42;
 const ALL_CATEGORY_ID = "__all__";
 const MY_TRENDING_ID = "__my__";
 

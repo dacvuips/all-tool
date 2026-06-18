@@ -45,7 +45,7 @@ import {
   useAffiliateVideoApi,
 } from "../hook/useAffiliateVideoApi";
 
-const ITEMS_PER_PAGE = 8;
+const ITEMS_PER_PAGE = 42;
 const ALL_CATEGORY_ID = "__all__";
 const MY_ART_STYLE_ID = "__my__";
 

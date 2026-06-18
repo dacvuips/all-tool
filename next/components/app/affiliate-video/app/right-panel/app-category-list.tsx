@@ -50,14 +50,14 @@ import {
   TrendingPublicItem,
   useAffiliateVideoApi,
 } from "../../hook/useAffiliateVideoApi";
-import { AppTrendingType, AppTypeConfig, useAppTypeConfig } from "../useAppTypeConfig";
 import {
   TrendingPurchaseBadge,
   useTrendingPurchaseFlow,
 } from "../../shared/use-trending-purchase-flow";
+import { AppTrendingType, AppTypeConfig, useAppTypeConfig } from "../useAppTypeConfig";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 42;
 
 const filterItemsByType = (items: TrendingPublicItem[], type: TrendingTypeEnum) =>
   items.filter((item) => !item.type || item.type === type);
