@@ -18,7 +18,6 @@ import {
   RiNotification2Line,
   RiQuestionLine,
   RiSettings3Line,
-  RiShirtLine,
   RiShoppingCartLine,
   RiTruckLine,
   RiUserLine,
@@ -290,13 +289,13 @@ const useSidebarMenuConstants = () => {
           scope: SCOPES.VIEW_USER,
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
-        {
-          title: t("Sản phẩm"),
-          path: "/admin/management/products",
-          icon: <RiShirtLine />,
-          scope: SCOPES.VIEW_PRODUCT,
-          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
-        },
+        // {
+        //   title: t("Sản phẩm"),
+        //   path: "/admin/management/products",
+        //   icon: <RiShirtLine />,
+        //   scope: SCOPES.VIEW_PRODUCT,
+        //   role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        // },
         {
           title: t("Ứng dụng"),
           path: "/admin/management/products-app",
@@ -495,12 +494,12 @@ const useSidebarMenuConstants = () => {
           scope: SCOPES.VIEW_SHIPPING_PROVIDER,
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
-        {
-          title: t("Nhà cung cấp AI"),
-          path: "/admin/management/ai-provider",
-          icon: <RiCpuLine />,
-          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
-        },
+        // {
+        //   title: t("Nhà cung cấp AI"),
+        //   path: "/admin/management/ai-provider",
+        //   icon: <RiCpuLine />,
+        //   role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        // },
         {
           title: t("Địa chỉ cửa hàng  "),
           path: "/admin/management/shop-address",
