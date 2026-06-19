@@ -512,7 +512,17 @@ export function WolfWorkspaceComposer({
   const frameLibraryRef = frameLibraryTarget === "end" ? endFrameRef : startFrameRef;
 
   return (
-    <div className="relative px-4 pb-5">
+    <div className="relative px-4 pb-5 bg-white bg-opacity-80">
+      {generating && progress > 0 && (
+        <div className="px-1 mt-2">
+          <div className="overflow-hidden h-1 rounded-full bg-slate-100">
+            <div
+              className="h-full bg-blue-500 transition-all duration-300"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
       <div className="p-4 bg-white rounded-2xl border shadow-lg border-slate-200 shadow-slate-200/50">
         {showFrameControls && (
           <div className="flex gap-2 items-center mb-3">
@@ -619,17 +629,6 @@ export function WolfWorkspaceComposer({
           </div>
         </div>
       </div>
-
-      {generating && progress > 0 && (
-        <div className="px-1 mt-2">
-          <div className="overflow-hidden h-1 rounded-full bg-slate-100">
-            <div
-              className="h-full bg-blue-500 transition-all duration-300"
-              style={{ width: `${Math.min(progress, 100)}%` }}
-            />
-          </div>
-        </div>
-      )}
 
       <WolfMediaLibrary
         reference={addButtonRef}

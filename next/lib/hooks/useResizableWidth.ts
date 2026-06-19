@@ -6,6 +6,8 @@ type UseResizableWidthOptions = {
   minWidth?: number;
   maxWidth?: number;
   enabled?: boolean;
+  /** Cạnh neo panel: left = rộng theo clientX; right = panel dính mép phải */
+  edge?: "left" | "right";
 };
 
 export function useResizableWidth({
@@ -14,6 +16,7 @@ export function useResizableWidth({
   minWidth = 260,
   maxWidth = 560,
   enabled = true,
+  edge = "left",
 }: UseResizableWidthOptions = {}) {
   const [width, setWidth] = useState(defaultWidth);
   const [isWidthReady, setIsWidthReady] = useState(false);
@@ -49,7 +52,9 @@ export function useResizableWidth({
     if (!isResizing) return;
 
     const onMove = (e: MouseEvent) => {
-      setWidth(Math.min(maxWidth, Math.max(minWidth, e.clientX)));
+      const next =
+        edge === "right" ? window.innerWidth - e.clientX : e.clientX;
+      setWidth(Math.min(maxWidth, Math.max(minWidth, next)));
     };
     const onUp = () => {
       setIsResizing(false);
@@ -69,7 +74,7 @@ export function useResizableWidth({
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
-  }, [isResizing, minWidth, maxWidth, storageKey]);
+  }, [isResizing, minWidth, maxWidth, storageKey, edge]);
 
   return { width, isResizing, isWidthReady, onResizeStart };
 }

@@ -1,10 +1,11 @@
 import dynamic from "next/dynamic";
 import { ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiLoader4Line } from "react-icons/ri";
+import { RiDragMove2Fill, RiLoader4Line } from "react-icons/ri";
 
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { SubscriptionPlanEnum } from "../../../../lib/repo";
+import { useResizableWidth } from "../../../../lib/hooks/useResizableWidth";
 import { Slideout, SlideoutProps } from "../../../shared/utilities/dialog/slideout";
 import { Img } from "../../../shared/utilities/misc";
 
@@ -22,12 +23,48 @@ const WolfSlideOutPage = dynamic(
 
 const WOLF_TRIGGER_IMAGE = "/assets/img/logo-small-1.png";
 
+export const WOLF_SLIDEOUT_WIDTH_KEY = "wolf-slideout-width";
+const WOLF_SLIDEOUT_DEFAULT_WIDTH = 800;
+const WOLF_SLIDEOUT_MIN_WIDTH = 360;
+const WOLF_SLIDEOUT_MAX_WIDTH = 1200;
+
 interface WolfSlideOutProps extends SlideoutProps {
   children?: ReactNode;
+  /** Chiều rộng mặc định khi mở (px) */
+  defaultWidth?: number;
+  /** Chiều rộng tối thiểu (px) */
+  minPanelWidth?: number;
+  /** Chiều rộng tối đa (px) */
+  maxPanelWidth?: number;
+  /** localStorage key để nhớ kích thước panel */
+  widthStorageKey?: string;
 }
 
-export function WolfSlideOut({ children, className = "", ...props }: WolfSlideOutProps) {
+export function WolfSlideOut({
+  children,
+  className = "",
+  defaultWidth = WOLF_SLIDEOUT_DEFAULT_WIDTH,
+  minPanelWidth = WOLF_SLIDEOUT_MIN_WIDTH,
+  maxPanelWidth = WOLF_SLIDEOUT_MAX_WIDTH,
+  widthStorageKey = WOLF_SLIDEOUT_WIDTH_KEY,
+  isOpen,
+  ...props
+}: WolfSlideOutProps) {
   const { customer } = useAuth();
+  const { t } = useTranslation();
+  const {
+    width: panelWidth,
+    isResizing,
+    onResizeStart,
+  } = useResizableWidth({
+    storageKey: widthStorageKey,
+    defaultWidth,
+    minWidth: minPanelWidth,
+    maxWidth: maxPanelWidth,
+    edge: "right",
+    enabled: isOpen,
+  });
+
   if (
     customer?.googlePackage?.subscription === SubscriptionPlanEnum.FREE ||
     !customer?.googlePackage
@@ -37,14 +74,34 @@ export function WolfSlideOut({ children, className = "", ...props }: WolfSlideOu
   return (
     <Slideout
       {...props}
-      width="86vw"
-      maxWidth="800px"
+      isOpen={isOpen}
+      width={panelWidth}
+      minWidth={minPanelWidth}
+      maxWidth={maxPanelWidth}
       placement="right"
-      className={`!bg-white border-l border-slate-200  mt-14   ${className}`}
+      className={`!bg-white border-l border-slate-200 mt-14 ${isResizing ? "" : "transition-[width] duration-150"} ${className}`}
       hasCloseButton
       onOverlayClick={() => {}}
     >
-      <div className="flex overflow-hidden flex-col h-full bg-white text-slate-700">
+      <div className="relative flex overflow-hidden flex-col h-full bg-white text-slate-700">
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={t("Đổi kích thước panel Wolf")}
+          title={t("Kéo để thay đổi chiều rộng")}
+          onMouseDown={onResizeStart}
+          className={`group absolute top-0 left-0 z-20 flex h-full w-3 -translate-x-1/2 cursor-col-resize touch-none items-center justify-center ${
+            isResizing ? "bg-primary/10" : ""
+          }`}
+        >
+          <div
+            className={`pointer-events-none flex items-center justify-center px-1 py-2 transition-opacity duration-150 ${
+              isResizing ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <RiDragMove2Fill className="text-gray-500 text-28" />
+          </div>
+        </div>
         {children ?? <WolfSlideOutPage />}
       </div>
     </Slideout>
