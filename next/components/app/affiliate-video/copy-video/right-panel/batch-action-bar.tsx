@@ -21,8 +21,8 @@ import {
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input, Select } from "../../../../shared/utilities/form";
-import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
 import { CopyVideoScene } from "../../constants";
+import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
 import { useCopyVideoBatchActions } from "../hook/useCopyVideoBatchActions";
 
 interface BatchActionBarProps {
@@ -100,7 +100,11 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     downloadLabel,
     downloadVideoLabel,
     handleDownloadAllImages,
+    handleDownloadAllImages2k,
+    handleDownloadAllImages4k,
     handleDownloadAllImagesZip,
+    handleDownloadAllImages2kZip,
+    handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
 
@@ -202,7 +206,12 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       color: retryRunning ? "bg-red-400 cursor-wait" : "bg-red-500 hover:bg-red-600",
       method: handleRetryAllFailed,
       disabled:
-        retryRunning || batchRunning || videoBatchRunning || extendBatchRunning || downloading || downloadingVideo,
+        retryRunning ||
+        batchRunning ||
+        videoBatchRunning ||
+        extendBatchRunning ||
+        downloading ||
+        downloadingVideo,
     },
     ...(retryRunning
       ? [
@@ -235,8 +244,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
   return (
     <>
-      <div className="flex flex-col border-b border-gray-100 bg-white flex-shrink-0">
-        <div className="flex items-center gap-2 p-3 flex-nowrap overflow-x-auto ">
+      <div className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100">
+        <div className="flex overflow-x-auto flex-nowrap gap-2 items-center p-3">
           {actions.map((action) => {
             if ("mediaDownloadDropdown" in action && action.mediaDownloadDropdown) {
               return (
@@ -250,8 +259,12 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   availableImageCount={availableImageCount}
                   availableVideoCount={availableVideoCount}
                   onDownloadAllImages={handleDownloadAllImages}
+                  onDownloadAllImages2k={handleDownloadAllImages2k}
+                  onDownloadAllImages4k={handleDownloadAllImages4k}
                   onDownloadAllVideos={handleDownloadAllVideos}
                   onDownloadAllImagesZip={handleDownloadAllImagesZip}
+                  onDownloadAllImages2kZip={handleDownloadAllImages2kZip}
+                  onDownloadAllImages4kZip={handleDownloadAllImages4kZip}
                   onDownloadAllVideosZip={handleDownloadAllVideosZip}
                 />
               );
@@ -275,8 +288,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         {/* Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
         {(batchRunning || batchDone) && (
           <div className="px-3 pb-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span className="flex items-center gap-1 min-w-0">
+            <div className="flex justify-between items-center mb-1 text-xs text-gray-500">
+              <span className="flex gap-1 items-center min-w-0">
                 {batchRunning ? (
                   <>
                     <span className="whitespace-nowrap">
@@ -285,7 +298,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                       {batchCompleted}/{batchTotal}
                     </span>
                     {batchCurrentSceneLabel && (
-                      <span className="text-gray-400 truncate ml-1" title={batchCurrentSceneLabel}>
+                      <span className="ml-1 text-gray-400 truncate" title={batchCurrentSceneLabel}>
                         · {batchCurrentSceneLabel}
                       </span>
                     )}
@@ -296,7 +309,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   </>
                 )}
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex gap-2 items-center">
                 {batchSkipped > 0 && (
                   <span className="text-blue-500">
                     {batchSkipped} {t("bỏ qua")}
@@ -325,8 +338,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         {/* Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
         {(videoBatchRunning || videoBatchDone) && (
           <div className="px-3 pb-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span className="flex items-center gap-1 min-w-0">
+            <div className="flex justify-between items-center mb-1 text-xs text-gray-500">
+              <span className="flex gap-1 items-center min-w-0">
                 {videoBatchRunning ? (
                   <>
                     <span className="whitespace-nowrap">
@@ -338,7 +351,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                     </span>
                     {videoBatchCurrentSceneLabel && (
                       <span
-                        className="text-gray-400 truncate ml-1"
+                        className="ml-1 text-gray-400 truncate"
                         title={videoBatchCurrentSceneLabel}
                       >
                         · {videoBatchCurrentSceneLabel}
@@ -351,7 +364,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   </>
                 )}
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex gap-2 items-center">
                 {videoBatchSkipped > 0 && (
                   <span className="text-blue-500">
                     {videoBatchSkipped} {t("bỏ qua")}
@@ -384,8 +397,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         {/* Extend Video Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}
         {(extendBatchRunning || extendBatchDone) && (
           <div className="px-3 pb-2">
-            <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-              <span className="flex items-center gap-1 min-w-0">
+            <div className="flex justify-between items-center mb-1 text-xs text-gray-500">
+              <span className="flex gap-1 items-center min-w-0">
                 {extendBatchRunning ? (
                   <>
                     <span className="whitespace-nowrap">
@@ -399,7 +412,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   </>
                 )}
               </span>
-              <span className="flex items-center gap-2">
+              <span className="flex gap-2 items-center">
                 {extendBatchSkipped > 0 && (
                   <span className="text-blue-500">
                     {extendBatchSkipped} {t("bỏ qua")}
@@ -444,9 +457,9 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       >
         <Dialog.Header>
           <div className="px-5 pt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex justify-between items-center">
               <div>
-                <div className="font-bold text-base flex items-center gap-2">
+                <div className="flex gap-2 items-center text-base font-bold">
                   <MdRecordVoiceOver className="text-blue-500" />
                   {t("Xuất Voice")}
                 </div>
@@ -456,7 +469,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
               </div>
               <button
                 onClick={() => setShowVoiceExportDialog(false)}
-                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 cursor-pointer border-0 transition-colors"
+                className="flex justify-center items-center w-7 h-7 text-gray-500 bg-gray-100 rounded-full border-0 transition-colors cursor-pointer hover:bg-gray-200"
               >
                 <RiCloseLine className="text-sm" />
               </button>
@@ -476,7 +489,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
             />
             {/* ── Dialogue Section ── */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-semibold text-gray-700">Dialogue</span>
                 <Button
                   onClick={handleCopyDialogue}
@@ -489,25 +502,25 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                 </Button>
               </div>
               {dialogueExportText ? (
-                <pre className="w-full max-h-48 overflow-y-auto v-scrollbar rounded-xl border border-gray-200 bg-gray-50 text-xs text-gray-700 px-4 py-3 whitespace-pre-wrap leading-relaxed font-mono">
+                <pre className="overflow-y-auto px-4 py-3 w-full max-h-48 font-mono text-xs leading-relaxed text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-xl border border-gray-200 v-scrollbar">
                   {dialogueExportText}
                 </pre>
               ) : (
-                <div className="text-center text-gray-400 text-xs py-4 border border-dashed border-gray-200 rounded-xl">
+                <div className="py-4 text-xs text-center text-gray-400 rounded-xl border border-gray-200 border-dashed">
                   {t("Không có Dialogue")}
                 </div>
               )}
             </div>
 
             {/* ── AI Text-to-Speech Section ── */}
-            <div className="border-t border-gray-100 pt-4">
-              <div className="flex items-center gap-2 mb-3">
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex gap-2 items-center mb-3">
                 <RiVolumeUpLine className="text-purple-500" />
                 <span className="text-sm font-semibold text-gray-700">{t("Tạo Giọng AI")}</span>
               </div>
 
               {/* Voice selector + Generate button */}
-              <div className="flex items-center gap-2 mb-3">
+              <div className="flex gap-2 items-center mb-3">
                 <div className="flex-1">
                   <Select
                     value={ttsVoiceName}
@@ -534,7 +547,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
 
               {/* Audio player */}
               {ttsAudioUrl && (
-                <div className="rounded-xl border border-purple-200 bg-gradient-to-r from-purple-50 to-indigo-50 p-3">
+                <div className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
                   <audio
                     ref={ttsAudioRef}
                     controls
@@ -542,7 +555,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                     className="w-full h-8"
                     style={{ borderRadius: "8px" }}
                   />
-                  <div className="flex items-center justify-end gap-2 mt-2">
+                  <div className="flex gap-2 justify-end items-center mt-2">
                     <Button
                       onClick={handleDownloadTTSAudio}
                       className="!h-7 !px-2.5 text-xs"
@@ -556,14 +569,14 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
               )}
 
               {!ttsAudioUrl && !ttsGenerating && (
-                <div className="text-center text-gray-400 text-xs py-3 border border-dashed border-gray-200 rounded-xl">
+                <div className="py-3 text-xs text-center text-gray-400 rounded-xl border border-gray-200 border-dashed">
                   {t("Chọn giọng đọc và nhấn Generate AI để tạo audio từ Dialogue")}
                 </div>
               )}
 
               {ttsGenerating && (
-                <div className="flex items-center justify-center gap-2 py-4">
-                  <RiLoader4Line className="animate-spin text-purple-500 text-lg" />
+                <div className="flex gap-2 justify-center items-center py-4">
+                  <RiLoader4Line className="text-lg text-purple-500 animate-spin" />
                   <span className="text-xs text-gray-500">
                     {t("Đang tạo giọng nói bằng AI... Vui lòng chờ")}
                   </span>
@@ -574,7 +587,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         </Dialog.Body>
 
         <Dialog.Footer>
-          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+          <div className="flex gap-2 justify-end items-center px-5 py-4 bg-white rounded-b-2xl border-t border-gray-100">
             <Button onClick={() => setShowVoiceExportDialog(false)} outline>
               {t("Đóng")}
             </Button>

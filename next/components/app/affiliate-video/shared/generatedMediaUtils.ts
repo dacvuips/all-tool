@@ -36,9 +36,29 @@ export function hasGeneratedImageData(img: GeneratedImageLike | null | undefined
   return !!(img && (img.imageBytes || getGeneratedImageUrl(img)));
 }
 
-/** Đủ metadata Flow2 để gọi upscale 4K. */
-export function hasFlow2UpscaleMeta(img: GeneratedImageLike | null | undefined): boolean {
+/** Độ phân giải upscale qua Flow2. */
+export type UpsampleResolution = "2K" | "4K";
+
+/** Đủ metadata Flow2 để gọi upscale 2K (request_id). */
+export function hasFlow2Upsample2kMeta(img: GeneratedImageLike | null | undefined): boolean {
+  return !!img?.flow2RequestId?.trim();
+}
+
+/** Đủ metadata Flow2 để gọi upscale 4K (media_id + project_id + profile_id). */
+export function hasFlow2Upsample4kMeta(img: GeneratedImageLike | null | undefined): boolean {
   return !!(img?.mediaId?.trim() && img?.projectId?.trim() && img?.profileId?.trim());
+}
+
+/** @deprecated Dùng hasFlow2Upsample4kMeta */
+export function hasFlow2UpscaleMeta(img: GeneratedImageLike | null | undefined): boolean {
+  return hasFlow2Upsample4kMeta(img);
+}
+
+export function hasFlow2UpsampleMeta(
+  img: GeneratedImageLike | null | undefined,
+  resolution: UpsampleResolution
+): boolean {
+  return resolution === "2K" ? hasFlow2Upsample2kMeta(img) : hasFlow2Upsample4kMeta(img);
 }
 
 /** Ưu tiên base64; fallback link (chỉ dùng hiển thị / preview). */
@@ -341,35 +361,63 @@ export async function downloadSceneImage(
   triggerBlobDownload(blob, buildSceneImageFileName(sceneNumber, mime));
 }
 
-/** Upscale ảnh đã generate lên 4K qua Flow2 và tải về. */
-export async function downloadUpsampled4kImage(
+/** Upscale ảnh đã generate qua Flow2 và trả Blob. */
+export async function fetchUpsampledImageBlob(
   img: GeneratedImageLike,
-  fileName: string
-): Promise<void> {
-  if (!hasFlow2UpscaleMeta(img)) {
-    throw new Error("Thiếu metadata Flow2 (mediaId, projectId, profileId) để upscale 4K");
+  resolution: UpsampleResolution
+): Promise<Blob> {
+  if (!hasFlow2UpsampleMeta(img, resolution)) {
+    const missing =
+      resolution === "2K"
+        ? "flow2RequestId"
+        : "mediaId, projectId, profileId";
+    throw new Error(`Thiếu metadata Flow2 (${missing}) để upscale ${resolution}`);
   }
 
-  const baseName = fileName.replace(/\.[^.]+$/, "");
+  const body: Record<string, string> = { resolution };
+  if (resolution === "2K") {
+    body.flow2RequestId = img.flow2RequestId!.trim();
+  } else {
+    body.mediaId = img.mediaId!.trim();
+    body.projectId = img.projectId!.trim();
+    body.profileId = img.profileId!.trim();
+  }
+
   const res = await fetch("/api/app/upsample-image/", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      mediaId: img.mediaId,
-      projectId: img.projectId,
-      profileId: img.profileId,
-      fileName: `${baseName}-4k.jpg`,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string })?.message || `Lỗi upscale 4K (${res.status})`);
+    throw new Error(
+      (err as { message?: string })?.message || `Lỗi upscale ${resolution} (${res.status})`
+    );
   }
 
-  const blob = await res.blob();
+  return res.blob();
+}
+
+/** Upscale ảnh đã generate qua Flow2 và tải về. */
+export async function downloadUpsampledImage(
+  img: GeneratedImageLike,
+  fileName: string,
+  resolution: UpsampleResolution
+): Promise<void> {
+  const baseName = fileName.replace(/\.[^.]+$/, "");
+  const suffix = resolution.toLowerCase();
+  const blob = await fetchUpsampledImageBlob(img, resolution);
   const ext = mimeTypeToFileExtension(blob.type || img.mimeType, "jpg");
-  triggerBlobDownload(blob, `${baseName}-4k.${ext}`);
+  triggerBlobDownload(blob, `${baseName}-${suffix}.${ext}`);
+}
+
+/** @deprecated Dùng downloadUpsampledImage(..., "4K") */
+export async function downloadUpsampled4kImage(
+  img: GeneratedImageLike,
+  fileName: string
+): Promise<void> {
+  return downloadUpsampledImage(img, fileName, "4K");
 }
 
 /** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */

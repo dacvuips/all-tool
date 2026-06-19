@@ -5,8 +5,10 @@ import { RiArrowLeftLine, RiLoader4Line } from "react-icons/ri";
 import { DB_NAME, STORE_NAME } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { useLazyInView } from "./use-lazy-in-view";
+import { useWolfProjectBatchActions } from "./use-wolf-project-batch-actions";
 import { WolfProject } from "./wolf-project-grid";
 import { useWolfItemActions, useWolfProjectItems, WolfProjectItem } from "./wolf-project-item";
+import { WolfProjectBatchToolbar } from "./wolf-project-batch-toolbar";
 import { WolfProjectItemCard } from "./wolf-project-item-card";
 import { WolfWorkspaceComposer } from "./wolf-workspace-composer";
 import { useWolfWorkspaceGeneration } from "./wolf-workspace-generation";
@@ -128,9 +130,55 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     patchSceneMedia,
     loadItemSceneMedia,
     removeItemFromState,
+    sceneImageDB,
+    sceneVideoDB,
   } = useWolfProjectItems(projectId);
   const { stopItem, deleteItem } = useWolfItemActions();
   const { generating, progress, submit, retryItem } = useWolfWorkspaceGeneration();
+
+  const getSceneImage = useCallback(
+    async (sceneId: string) => {
+      if (sceneImages[sceneId]) return sceneImages[sceneId];
+      return sceneImageDB.get(sceneId);
+    },
+    [sceneImages, sceneImageDB]
+  );
+
+  const getSceneVideo = useCallback(
+    async (sceneId: string) => {
+      if (sceneVideos[sceneId]) return sceneVideos[sceneId];
+      return sceneVideoDB.get(sceneId);
+    },
+    [sceneVideos, sceneVideoDB]
+  );
+
+  const {
+    downloading,
+    downloadingVideo,
+    deletingAll,
+    downloadLabel,
+    downloadVideoLabel,
+    availableImageCount,
+    availableVideoCount,
+    handleDownloadAllImages,
+    handleDownloadAllImages2k,
+    handleDownloadAllImages4k,
+    handleDownloadAllImagesZip,
+    handleDownloadAllImages2kZip,
+    handleDownloadAllImages4kZip,
+    handleDownloadAllVideos,
+    handleDownloadAllVideosZip,
+    handleDeleteAllProjectMedia,
+  } = useWolfProjectBatchActions({
+    items,
+    sceneImages,
+    sceneVideos,
+    getSceneImage,
+    getSceneVideo,
+    deleteItem,
+    removeItemFromState,
+    isBusy: generating,
+  });
 
   useEffect(() => {
     if (!projectId) {
@@ -254,6 +302,30 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
         <RiArrowLeftLine />
         {t("Dự án")}
       </button>
+
+      {hasItems && (
+        <div className="absolute right-4 top-4 z-10 max-w-[calc(100%-8rem)]">
+          <WolfProjectBatchToolbar
+            downloading={downloading}
+            downloadingVideo={downloadingVideo}
+            deletingAll={deletingAll}
+            downloadLabel={downloadLabel}
+            downloadVideoLabel={downloadVideoLabel}
+            availableImageCount={availableImageCount}
+            availableVideoCount={availableVideoCount}
+            disabled={generating}
+            onDownloadAllImages={() => void handleDownloadAllImages()}
+            onDownloadAllImages2k={() => void handleDownloadAllImages2k()}
+            onDownloadAllImages4k={() => void handleDownloadAllImages4k()}
+            onDownloadAllImagesZip={() => void handleDownloadAllImagesZip()}
+            onDownloadAllImages2kZip={() => void handleDownloadAllImages2kZip()}
+            onDownloadAllImages4kZip={() => void handleDownloadAllImages4kZip()}
+            onDownloadAllVideos={() => void handleDownloadAllVideos()}
+            onDownloadAllVideosZip={() => void handleDownloadAllVideosZip()}
+            onDeleteAllProjectMedia={() => void handleDeleteAllProjectMedia()}
+          />
+        </div>
+      )}
 
       <div
         ref={setListScrollRoot}

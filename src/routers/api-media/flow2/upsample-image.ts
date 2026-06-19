@@ -1,18 +1,41 @@
 import logger from "../../../helpers/logger";
 import { fetchFlow2WithRetry, getFlow2Config } from "./_shared";
 
-export type UpsampleImageWithFlow2Params = {
-  mediaId: string;
-  projectId: string;
-  profileId: string;
-};
+export type UpsampleResolution = "2K" | "4K";
+
+export type UpsampleImageWithFlow2Params =
+  | { resolution: "2K"; flow2RequestId: string }
+  | {
+      resolution: "4K";
+      mediaId: string;
+      projectId: string;
+      profileId: string;
+    };
 
 export type UpsampledImageResult = {
   imageBytes: string;
   mimeType: string;
 };
 
-const UPSAMPLE_TARGET_RESOLUTION = "UPSAMPLE_IMAGE_RESOLUTION_4K";
+const UPSAMPLE_TARGET_RESOLUTION: Record<UpsampleResolution, string> = {
+  "2K": "UPSAMPLE_IMAGE_RESOLUTION_2K",
+  "4K": "UPSAMPLE_IMAGE_RESOLUTION_4K",
+};
+
+function buildUpsampleBody(params: UpsampleImageWithFlow2Params): Record<string, string> {
+  if (params.resolution === "2K") {
+    return {
+      request_id: params.flow2RequestId,
+      target_resolution: UPSAMPLE_TARGET_RESOLUTION["2K"],
+    };
+  }
+  return {
+    media_id: params.mediaId,
+    project_id: params.projectId,
+    profile_id: params.profileId,
+    target_resolution: UPSAMPLE_TARGET_RESOLUTION["4K"],
+  };
+}
 
 export async function upsampleImageWithFlow2(
   params: UpsampleImageWithFlow2Params
@@ -25,12 +48,7 @@ export async function upsampleImageWithFlow2(
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      media_id: params.mediaId,
-      project_id: params.projectId,
-      profile_id: params.profileId,
-      target_resolution: UPSAMPLE_TARGET_RESOLUTION,
-    }),
+    body: JSON.stringify(buildUpsampleBody(params)),
   });
 
   if (!resp.ok) {
@@ -56,8 +74,13 @@ export async function upsampleImageWithFlow2(
     throw new Error("Flow2 upsample trả về file rỗng");
   }
 
+  const logRef =
+    params.resolution === "2K"
+      ? `request_id=${params.flow2RequestId}`
+      : `media_id=${params.mediaId}`;
+
   logger.info(
-    `[flow2-upsample] Hoàn tất media_id=${params.mediaId} (${buffer.length} bytes, ${contentType})`
+    `[flow2-upsample] Hoàn tất ${params.resolution} ${logRef} (${buffer.length} bytes, ${contentType})`
   );
 
   return {

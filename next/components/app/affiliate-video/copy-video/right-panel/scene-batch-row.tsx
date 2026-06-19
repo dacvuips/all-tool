@@ -165,7 +165,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     extendVideoError,
     handleSetImage,
     handleGenerateVideo,
-    handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
@@ -481,7 +480,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             aspectRatio={scriptData?.aspectRatio as "16:9" | "9:16"}
             isDisabled={isDisabled}
             onGenerateImage={handleCopyVideoGenerateImage}
-            onDownloadImage={handleDownloadImage}
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
             originThumbnailUrl={thumbnailOriginImage}

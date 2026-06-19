@@ -1,12 +1,16 @@
 /**
- * Route POST upscale ảnh đã generate lên 4K qua Flow2.
- * Client gửi mediaId / projectId / profileId đã lưu khi gen_image thành công.
+ * Route POST upscale ảnh đã generate lên 2K/4K qua Flow2.
+ * - 2K: flow2RequestId (request_id từ gen_image)
+ * - 4K: mediaId + projectId + profileId
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import {
+  upsampleImageWithFlow2,
+  UpsampleResolution,
+} from "../../api-media/flow2/upsample-image";
 import { Context } from "../../../libs/graphql";
-import { upsampleImageWithFlow2 } from "../../api-media/flow2/upsample-image";
 
 function mimeTypeToFileExtension(mimeType?: string, fallback = "jpg"): string {
   if (!mimeType) return fallback;
@@ -14,6 +18,11 @@ function mimeTypeToFileExtension(mimeType?: string, fallback = "jpg"): string {
   if (!sub) return fallback;
   if (sub === "jpeg") return "jpg";
   return sub;
+}
+
+function parseResolution(value: unknown): UpsampleResolution {
+  const normalized = String(value || "4K").toUpperCase();
+  return normalized === "2K" ? "2K" : "4K";
 }
 
 export default [
@@ -27,25 +36,45 @@ export default [
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
 
         const body = req.body as {
+          resolution?: UpsampleResolution | string;
+          flow2RequestId?: string;
           mediaId?: string;
           projectId?: string;
           profileId?: string;
           fileName?: string;
         };
 
+        const resolution = parseResolution(body?.resolution);
+        const flow2RequestId = body?.flow2RequestId?.trim();
         const mediaId = body?.mediaId?.trim();
         const projectId = body?.projectId?.trim();
         const profileId = body?.profileId?.trim();
 
-        if (!mediaId || !projectId || !profileId) {
+        if (resolution === "2K") {
+          if (!flow2RequestId) {
+            return res.status(400).json({
+              message: "Thiếu flow2RequestId để upscale 2K",
+            });
+          }
+        } else if (!mediaId || !projectId || !profileId) {
           return res.status(400).json({
             message: "Thiếu mediaId, projectId hoặc profileId để upscale 4K",
           });
         }
 
-        const result = await upsampleImageWithFlow2({ mediaId, projectId, profileId });
+        const result =
+          resolution === "2K"
+            ? await upsampleImageWithFlow2({ resolution: "2K", flow2RequestId: flow2RequestId! })
+            : await upsampleImageWithFlow2({
+                resolution: "4K",
+                mediaId: mediaId!,
+                projectId: projectId!,
+                profileId: profileId!,
+              });
+
         const ext = mimeTypeToFileExtension(result.mimeType, "jpg");
-        const downloadName = (body.fileName || `image-4k.${ext}`).replace(/[^\w.\-]+/g, "_");
+        const defaultName = `image-${resolution.toLowerCase()}.${ext}`;
+        const downloadName = (body.fileName || defaultName).replace(/[^\w.\-]+/g, "_");
 
         const buffer = Buffer.from(result.imageBytes, "base64");
         res.setHeader("Content-Type", result.mimeType);
@@ -55,7 +84,7 @@ export default [
       } catch (err: any) {
         logger.error(`[upsample-image] Lỗi: ${err?.message}`);
         const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi upscale ảnh 4K" });
+        res.status(status).json({ message: err?.message || "Lỗi upscale ảnh" });
       }
     },
   },

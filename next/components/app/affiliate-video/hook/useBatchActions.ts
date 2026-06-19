@@ -26,6 +26,7 @@ import {
   downloadSceneImagesSequentially,
   downloadSceneVideosAsZip,
   downloadSceneVideosSequentially,
+  handleBatchUpsampleDownloadAction,
 } from "../shared/batchDownloadMedia";
 import {
   collectFailedRetryTasks,
@@ -378,6 +379,96 @@ export function useBatchActions(
     } catch (err) {
       console.error("[handleDownloadAllImagesZip] Error:", err);
       toast.error(t("Lỗi khi tải ZIP ảnh"));
+    } finally {
+      setDownloading(false);
+      setDownloadLabel("");
+    }
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
+  const handleDownloadAllImages2k = useCallback(async () => {
+    if (downloading || batchRunning) return;
+    setDownloading(true);
+    try {
+      await handleBatchUpsampleDownloadAction({
+        scenes,
+        getGeneratedImage,
+        resolution: "2K",
+        asZip: false,
+        setDownloadLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllImages2k] Error:", err);
+      toast.error(t("Lỗi khi tải ảnh 2K hàng loạt"));
+    } finally {
+      setDownloading(false);
+      setDownloadLabel("");
+    }
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
+  const handleDownloadAllImages4k = useCallback(async () => {
+    if (downloading || batchRunning) return;
+    setDownloading(true);
+    try {
+      await handleBatchUpsampleDownloadAction({
+        scenes,
+        getGeneratedImage,
+        resolution: "4K",
+        asZip: false,
+        setDownloadLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllImages4k] Error:", err);
+      toast.error(t("Lỗi khi tải ảnh 4K hàng loạt"));
+    } finally {
+      setDownloading(false);
+      setDownloadLabel("");
+    }
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
+  const handleDownloadAllImages2kZip = useCallback(async () => {
+    if (downloading || batchRunning) return;
+    setDownloading(true);
+    try {
+      setDownloadLabel(t("Đang nén"));
+      await handleBatchUpsampleDownloadAction({
+        scenes,
+        getGeneratedImage,
+        resolution: "2K",
+        asZip: true,
+        setDownloadLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllImages2kZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP ảnh 2K"));
+    } finally {
+      setDownloading(false);
+      setDownloadLabel("");
+    }
+  }, [downloading, batchRunning, scenes, getGeneratedImage, toast, t]);
+
+  const handleDownloadAllImages4kZip = useCallback(async () => {
+    if (downloading || batchRunning) return;
+    setDownloading(true);
+    try {
+      setDownloadLabel(t("Đang nén"));
+      await handleBatchUpsampleDownloadAction({
+        scenes,
+        getGeneratedImage,
+        resolution: "4K",
+        asZip: true,
+        setDownloadLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllImages4kZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP ảnh 4K"));
     } finally {
       setDownloading(false);
       setDownloadLabel("");
@@ -1215,7 +1306,11 @@ export function useBatchActions(
     downloadVideoLabel,
     downloadingExtended,
     handleDownloadAllImages,
+    handleDownloadAllImages2k,
+    handleDownloadAllImages4k,
     handleDownloadAllImagesZip,
+    handleDownloadAllImages2kZip,
+    handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
     // Export

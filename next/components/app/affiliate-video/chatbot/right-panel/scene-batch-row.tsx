@@ -161,7 +161,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleGenerateImage,
     handleSetImage,
     handleGenerateVideo,
-    handleDownloadImage,
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
@@ -472,7 +471,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             sceneNumber={scene.sceneNumber}
             isDisabled={isDisabled}
             onGenerateImage={handleGenerateImage}
-            onDownloadImage={handleDownloadImage}
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
             errorMessage={imageError}

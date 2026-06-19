@@ -8,7 +8,6 @@
 import React, { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload } from "react-icons/ai";
-import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import {
   RiCheckLine,
   RiGalleryLine,
@@ -19,12 +18,9 @@ import {
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
-import {
-  buildSceneImageFileName,
-  getGeneratedImagePreviewSrc,
-} from "./generatedMediaUtils";
+import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
+import { buildSceneImageFileName, getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
-import { Upsample4kButton } from "./upsample-4k-button";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -44,8 +40,6 @@ export interface SceneCardImageTabProps {
   // ── Callbacks ──
   /** Generate/tạo lại ảnh */
   onGenerateImage: () => void;
-  /** Tải ảnh xuống */
-  onDownloadImage: () => void;
   /** Set ảnh từ file upload hoặc gallery */
   onSetImage: (imageData: GeneratedImageData) => void;
   /** Mở Gallery dialog */
@@ -79,7 +73,6 @@ export function SceneCardImageTab({
   sceneNumber,
   isDisabled = false,
   onGenerateImage,
-  onDownloadImage,
   onSetImage,
   onOpenGallery,
   originThumbnailUrl,
@@ -158,7 +151,7 @@ export function SceneCardImageTab({
                 percent={parseFloat(imagePaddingTop)}
                 src={getGeneratedImagePreviewSrc(generatedImage)}
                 alt={`Scene ${sceneNumber}`}
-                className="w-full rounded-md border border-green-300 border-dashed shadow-sm overflow-hidden"
+                className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm"
               />
               {slotAssignCount > 0 && onAssignToSlot && (
                 <div className="absolute top-0 left-0 z-10 flex gap-1.5 p-1">
@@ -180,7 +173,9 @@ export function SceneCardImageTab({
                         }`}
                       >
                         {isAssigned && <RiCheckLine className="text-base text-green-600" />}
-                        <span className={isAssigned ? "text-green-600" : "text-white"}>{i + 1}</span>
+                        <span className={isAssigned ? "text-green-600" : "text-white"}>
+                          {i + 1}
+                        </span>
                       </button>
                     );
                   })}
@@ -189,16 +184,7 @@ export function SceneCardImageTab({
             </div>
             {/* Action buttons bên dưới ảnh */}
             <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
-              {/* Tải ảnh */}
-              <Button
-                onClick={onDownloadImage}
-                className="w-8 h-8 rounded-lg bg-success-light text-success"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Tải")}
-                icon={<HiOutlineArrowDownTray />}
-                placement="bottom"
-              />
-              <Upsample4kButton
+              <GeneratedImageDownloadButtons
                 image={generatedImage}
                 fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
                 disabled={isDisabled}

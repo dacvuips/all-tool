@@ -1,6 +1,6 @@
 /**
  * batch-download-dropdown.tsx
- * Nút "Tải Ảnh/Video" kèm Popover: tuần tự hoặc ZIP cho ảnh và video.
+ * Nút "Tải Ảnh/Video" kèm Popover: tuần tự hoặc ZIP cho ảnh và video (1K/2K/4K).
  */
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,8 +16,12 @@ interface BatchMediaDownloadDropdownProps {
   availableImageCount: number;
   availableVideoCount: number;
   onDownloadAllImages: () => void;
+  onDownloadAllImages2k: () => void;
+  onDownloadAllImages4k: () => void;
   onDownloadAllVideos: () => void;
   onDownloadAllImagesZip: () => void;
+  onDownloadAllImages2kZip: () => void;
+  onDownloadAllImages4kZip: () => void;
   onDownloadAllVideosZip: () => void;
 }
 
@@ -30,8 +34,12 @@ export function BatchMediaDownloadDropdown({
   availableImageCount,
   availableVideoCount,
   onDownloadAllImages,
+  onDownloadAllImages2k,
+  onDownloadAllImages4k,
   onDownloadAllVideos,
   onDownloadAllImagesZip,
+  onDownloadAllImages2kZip,
+  onDownloadAllImages4kZip,
   onDownloadAllVideosZip,
 }: BatchMediaDownloadDropdownProps) {
   const { t } = useTranslation();
@@ -43,9 +51,19 @@ export function BatchMediaDownloadDropdown({
 
   const menuItems = [
     {
-      label: t("Tải tất cả ảnh"),
+      label: t("Tải tất cả ảnh (1K)"),
       disabled: availableImageCount === 0 || isBusy,
       action: onDownloadAllImages,
+    },
+    {
+      label: t("Tải tất cả ảnh (2K)"),
+      disabled: availableImageCount === 0 || isBusy,
+      action: onDownloadAllImages2k,
+    },
+    {
+      label: t("Tải tất cả ảnh (4K)"),
+      disabled: availableImageCount === 0 || isBusy,
+      action: onDownloadAllImages4k,
     },
     {
       label: t("Tải tất cả video"),
@@ -53,9 +71,19 @@ export function BatchMediaDownloadDropdown({
       action: onDownloadAllVideos,
     },
     {
-      label: t("Tải tất cả ảnh (Zip)"),
+      label: t("Tải tất cả ảnh 1K (Zip)"),
       disabled: availableImageCount === 0 || isBusy,
       action: onDownloadAllImagesZip,
+    },
+    {
+      label: t("Tải tất cả ảnh 2K (Zip)"),
+      disabled: availableImageCount === 0 || isBusy,
+      action: onDownloadAllImages2kZip,
+    },
+    {
+      label: t("Tải tất cả ảnh 4K (Zip)"),
+      disabled: availableImageCount === 0 || isBusy,
+      action: onDownloadAllImages4kZip,
     },
     {
       label: t("Tải tất cả video (Zip)"),
@@ -98,14 +126,14 @@ export function BatchMediaDownloadDropdown({
         trigger="click"
         placement="bottom-start"
         arrow={false}
-        maxWidth={240}
+        maxWidth={260}
         visible={open}
         hideOnClickOutside
         zIndex={10050}
         onHidden={() => setOpen(false)}
         onClickOutside={() => setOpen(false)}
       >
-        <div className="py-1 min-w-[220px]">
+        <div className="py-1 min-w-[240px]">
           {menuItems.map((item) => (
             <button
               key={item.label}

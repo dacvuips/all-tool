@@ -93,7 +93,11 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     downloadLabel,
     downloadVideoLabel,
     handleDownloadAllImages,
+    handleDownloadAllImages2k,
+    handleDownloadAllImages4k,
     handleDownloadAllImagesZip,
+    handleDownloadAllImages2kZip,
+    handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
 
@@ -243,8 +247,12 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   availableImageCount={availableImageCount}
                   availableVideoCount={availableVideoCount}
                   onDownloadAllImages={handleDownloadAllImages}
+                  onDownloadAllImages2k={handleDownloadAllImages2k}
+                  onDownloadAllImages4k={handleDownloadAllImages4k}
                   onDownloadAllVideos={handleDownloadAllVideos}
                   onDownloadAllImagesZip={handleDownloadAllImagesZip}
+                  onDownloadAllImages2kZip={handleDownloadAllImages2kZip}
+                  onDownloadAllImages4kZip={handleDownloadAllImages4kZip}
                   onDownloadAllVideosZip={handleDownloadAllVideosZip}
                 />
               );

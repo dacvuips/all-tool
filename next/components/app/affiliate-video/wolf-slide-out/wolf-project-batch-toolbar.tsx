@@ -1,0 +1,77 @@
+import { useTranslation } from "react-i18next";
+import { RiDeleteBinLine, RiLoader4Line } from "react-icons/ri";
+
+import { BatchMediaDownloadDropdown } from "../shared/batch-download-dropdown";
+
+export function WolfProjectBatchToolbar({
+  downloading,
+  downloadingVideo,
+  deletingAll,
+  downloadLabel,
+  downloadVideoLabel,
+  availableImageCount,
+  availableVideoCount,
+  disabled,
+  onDownloadAllImages,
+  onDownloadAllImages2k,
+  onDownloadAllImages4k,
+  onDownloadAllImagesZip,
+  onDownloadAllImages2kZip,
+  onDownloadAllImages4kZip,
+  onDownloadAllVideos,
+  onDownloadAllVideosZip,
+  onDeleteAllProjectMedia,
+}: {
+  downloading: boolean;
+  downloadingVideo: boolean;
+  deletingAll: boolean;
+  downloadLabel: string;
+  downloadVideoLabel: string;
+  availableImageCount: number;
+  availableVideoCount: number;
+  disabled?: boolean;
+  onDownloadAllImages: () => void;
+  onDownloadAllImages2k: () => void;
+  onDownloadAllImages4k: () => void;
+  onDownloadAllImagesZip: () => void;
+  onDownloadAllImages2kZip: () => void;
+  onDownloadAllImages4kZip: () => void;
+  onDownloadAllVideos: () => void;
+  onDownloadAllVideosZip: () => void;
+  onDeleteAllProjectMedia: () => void;
+}) {
+  const { t } = useTranslation();
+  const isBusy = disabled || downloading || downloadingVideo || deletingAll;
+  const hasMedia = availableImageCount > 0 || availableVideoCount > 0;
+
+  return (
+    <div className="flex flex-wrap gap-2 items-center">
+      <BatchMediaDownloadDropdown
+        id="wolf-batch-download-media"
+        downloading={downloading}
+        downloadingVideo={downloadingVideo}
+        downloadLabel={downloadLabel}
+        downloadVideoLabel={downloadVideoLabel}
+        availableImageCount={availableImageCount}
+        availableVideoCount={availableVideoCount}
+        onDownloadAllImages={onDownloadAllImages}
+        onDownloadAllImages2k={onDownloadAllImages2k}
+        onDownloadAllImages4k={onDownloadAllImages4k}
+        onDownloadAllVideos={onDownloadAllVideos}
+        onDownloadAllImagesZip={onDownloadAllImagesZip}
+        onDownloadAllImages2kZip={onDownloadAllImages2kZip}
+        onDownloadAllImages4kZip={onDownloadAllImages4kZip}
+        onDownloadAllVideosZip={onDownloadAllVideosZip}
+      />
+      <button
+        type="button"
+        disabled={isBusy || !hasMedia}
+        onClick={onDeleteAllProjectMedia}
+        className="flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed bg-red-500 hover:bg-red-600"
+      >
+        {deletingAll ? <RiLoader4Line className="animate-spin" /> : <RiDeleteBinLine />}
+        {deletingAll ? t("Đang xóa...") : t("Xóa tất cả media")}
+      </button>
+    </div>
+  );
+}

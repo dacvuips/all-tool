@@ -13,9 +13,11 @@ import {
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
+import { GeneratedImageDownloadButtons } from "../shared/generated-image-download-buttons";
 import {
   getGeneratedImagePreviewSrc,
   getGeneratedVideoPreviewSrc,
+  mimeTypeToFileExtension,
 } from "../shared/generatedMediaUtils";
 import { WolfProjectItem } from "./wolf-project-item";
 
@@ -154,23 +156,35 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
     </div>
   );
 
-  const renderImagePreview = () => (
-    <div className="relative w-full">
-      <Img
-        showImageOnClick
-        lazyload={false}
-        percent={parseFloat(paddingTop)}
-        src={imageSrc}
-        alt={item.prompt}
-        className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm"
-      />
-      {isGenerating && (
-        <div className="flex absolute inset-0 justify-center items-center rounded-md bg-white/50">
-          <RiLoader4Line className="text-xl text-pink-500 animate-spin" />
-        </div>
-      )}
-    </div>
-  );
+  const renderImagePreview = () => {
+    const imageFileName = `wolf-${item.id.slice(0, 8)}.${mimeTypeToFileExtension(sceneImage?.mimeType, "jpg")}`;
+
+    return (
+      <div className="relative w-full">
+        <Img
+          showImageOnClick
+          lazyload={false}
+          percent={parseFloat(paddingTop)}
+          src={imageSrc}
+          alt={item.prompt}
+          className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm"
+        />
+        {isGenerating && (
+          <div className="flex absolute inset-0 justify-center items-center rounded-md bg-white/50">
+            <RiLoader4Line className="text-xl text-pink-500 animate-spin" />
+          </div>
+        )}
+        {sceneImage && !isGenerating && (
+          <GeneratedImageDownloadButtons
+            variant="overlay"
+            image={sceneImage}
+            fileName={imageFileName}
+            disabled={isActionPending}
+          />
+        )}
+      </div>
+    );
+  };
 
   const renderVideoPreview = () => (
     <>

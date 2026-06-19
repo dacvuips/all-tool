@@ -7,10 +7,14 @@ import JSZip from "jszip";
 import {
   buildSceneImageFileName,
   buildSceneVideoFileName,
+  fetchUpsampledImageBlob,
   generatedImageToBlob,
   generatedVideoToBlob,
+  hasFlow2UpsampleMeta,
+  mimeTypeToFileExtension,
   type GeneratedImageLike,
   type GeneratedVideoLike,
+  type UpsampleResolution,
 } from "./generatedMediaUtils";
 
 export type SceneWithNumber = {
@@ -58,9 +62,30 @@ export async function zipAndDownload(
   saveAs(content, zipFileName);
 }
 
-export function buildBatchZipFileName(kind: "images" | "videos"): string {
+export function buildBatchZipFileName(
+  kind: "images" | "videos",
+  resolution?: UpsampleResolution
+): string {
   const date = new Date().toISOString().slice(0, 10);
-  return kind === "images" ? `images-${date}.zip` : `videos-${date}.zip`;
+  if (kind === "videos") return `videos-${date}.zip`;
+  if (resolution) return `images-${resolution.toLowerCase()}-${date}.zip`;
+  return `images-${date}.zip`;
+}
+
+export function filterScenesForUpsample<T extends SceneWithNumber>(
+  items: { scene: T; img: GeneratedImageLike }[],
+  resolution: UpsampleResolution
+): { scene: T; img: GeneratedImageLike }[] {
+  return items.filter(({ img }) => hasFlow2UpsampleMeta(img, resolution));
+}
+
+function buildUpsampledSceneImageFileName(
+  sceneNumber: number,
+  resolution: UpsampleResolution,
+  mimeType?: string
+): string {
+  const ext = mimeTypeToFileExtension(mimeType, "jpg");
+  return `${sceneNumber}-${resolution.toLowerCase()}.${ext}`;
 }
 
 export async function collectSceneImageFiles<T extends SceneWithNumber>(
@@ -122,6 +147,132 @@ export async function downloadSceneImagesAsZip<T extends SceneWithNumber>(
     files.push({ fileName: buildSceneImageFileName(resolveSceneNumber(scene, i), mime), blob });
   }
   await zipAndDownload(files, buildBatchZipFileName("images"));
+}
+
+export async function downloadSceneImagesUpsampledSequentially<T extends SceneWithNumber>(
+  items: { scene: T; img: GeneratedImageLike }[],
+  resolution: UpsampleResolution,
+  onProgress?: (current: number, total: number) => void,
+  waitMs = 2500
+): Promise<number> {
+  const eligible = filterScenesForUpsample(items, resolution);
+  const total = eligible.length;
+  for (let i = 0; i < total; i++) {
+    const { scene, img } = eligible[i];
+    onProgress?.(i + 1, total);
+    const blob = await fetchUpsampledImageBlob(img, resolution);
+    const mime = blob.type || img.mimeType || "image/jpeg";
+    const fileName = buildUpsampledSceneImageFileName(resolveSceneNumber(scene, i), resolution, mime);
+    await downloadBlobSequentially(blob, fileName, waitMs);
+  }
+  return total;
+}
+
+export async function downloadSceneImagesUpsampledAsZip<T extends SceneWithNumber>(
+  items: { scene: T; img: GeneratedImageLike }[],
+  resolution: UpsampleResolution,
+  onProgress?: (current: number, total: number) => void
+): Promise<number> {
+  const eligible = filterScenesForUpsample(items, resolution);
+  const files: { fileName: string; blob: Blob }[] = [];
+  const total = eligible.length;
+  for (let i = 0; i < total; i++) {
+    const { scene, img } = eligible[i];
+    onProgress?.(i + 1, total);
+    const blob = await fetchUpsampledImageBlob(img, resolution);
+    const mime = blob.type || img.mimeType || "image/jpeg";
+    files.push({
+      fileName: buildUpsampledSceneImageFileName(resolveSceneNumber(scene, i), resolution, mime),
+      blob,
+    });
+  }
+  if (files.length === 0) return 0;
+  await zipAndDownload(files, buildBatchZipFileName("images", resolution));
+  return files.length;
+}
+
+export type BatchUpsampleImageDownloadResult = {
+  downloaded: number;
+  skippedMissingMeta: number;
+};
+
+type BatchUpsampleToast = {
+  warn: (message: string) => void;
+  success: (message: string) => void;
+  error: (message: string) => void;
+};
+
+/** Logic dùng chung cho handler tải hàng loạt ảnh 2K/4K trong batch action hooks. */
+export async function handleBatchUpsampleDownloadAction<T extends SceneWithNumber>(options: {
+  scenes: T[];
+  getGeneratedImage: (sceneId: string) => Promise<GeneratedImageLike | null | undefined>;
+  resolution: UpsampleResolution;
+  asZip: boolean;
+  setDownloadLabel: (label: string) => void;
+  toast: BatchUpsampleToast;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): Promise<void> {
+  const { scenes, getGeneratedImage, resolution, asZip, setDownloadLabel, toast, t } = options;
+
+  const { downloaded, skippedMissingMeta } = await runBatchUpsampleImageDownload(
+    scenes,
+    getGeneratedImage,
+    resolution,
+    asZip,
+    (cur, tot) => setDownloadLabel(`${cur}/${tot}`)
+  );
+
+  if (downloaded === 0) {
+    toast.warn(
+      skippedMissingMeta > 0
+        ? t("Không có ảnh nào hỗ trợ upscale {{res}} (cần tạo lại ảnh)", { res: resolution })
+        : t("Chưa có ảnh nào được tạo để tải")
+    );
+    return;
+  }
+
+  if (asZip) {
+    toast.success(`${t("Đã tải")} ${downloaded} ${t("ảnh {{res}} trong file ZIP!", { res: resolution })}`);
+  } else {
+    toast.success(`${t("Đã tải")} ${downloaded} ${t("ảnh {{res}} thành công!", { res: resolution })}`);
+  }
+
+  if (skippedMissingMeta > 0) {
+    toast.warn(t("{{n}} ảnh bỏ qua (thiếu metadata {{res}})", { n: skippedMissingMeta, res: resolution }));
+  }
+}
+
+/** Tải hàng loạt ảnh upscale 2K/4K — bỏ qua scene thiếu metadata Flow2. */
+export async function runBatchUpsampleImageDownload<T extends SceneWithNumber>(
+  scenes: T[],
+  getGeneratedImage: (sceneId: string) => Promise<GeneratedImageLike | null | undefined>,
+  resolution: UpsampleResolution,
+  asZip: boolean,
+  onProgress?: (current: number, total: number) => void
+): Promise<BatchUpsampleImageDownloadResult> {
+  const allItems = await collectSceneImageFiles(scenes, getGeneratedImage);
+  if (allItems.length === 0) {
+    return { downloaded: 0, skippedMissingMeta: 0 };
+  }
+
+  const eligible = filterScenesForUpsample(allItems, resolution);
+  const skippedMissingMeta = allItems.length - eligible.length;
+
+  if (eligible.length === 0) {
+    return { downloaded: 0, skippedMissingMeta };
+  }
+
+  if (asZip) {
+    const downloaded = await downloadSceneImagesUpsampledAsZip(eligible, resolution, onProgress);
+    return { downloaded, skippedMissingMeta };
+  }
+
+  const downloaded = await downloadSceneImagesUpsampledSequentially(
+    eligible,
+    resolution,
+    onProgress
+  );
+  return { downloaded, skippedMissingMeta };
 }
 
 export async function downloadSceneVideosSequentially<T extends SceneWithNumber>(

@@ -17,7 +17,6 @@ import {
   RiCloseLine,
   RiImageLine,
   RiLoader4Line,
-  RiMagicLine,
   RiPlayCircleLine,
   RiTShirtLine,
 } from "react-icons/ri";
@@ -267,7 +266,7 @@ export function WolfWorkspaceComposer({
   const [videoMode, setVideoMode] = useState<VideoMode>("component");
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>("16:9");
   const [videoAspectRatio, setVideoAspectRatio] = useState<VideoAspectRatio>("16:9");
-  const [duration, setDuration] = useState<Duration>("10s");
+  const [duration, setDuration] = useState<Duration>("8s");
   const [imageModelKey, setImageModelKey] = useState<WolfImageModelKey>("bananaPro");
   const [videoModelIndex, setVideoModelIndex] = useState(0);
   const [multiplier, setMultiplier] = useState<WolfMultiplier>("x2");
@@ -580,14 +579,15 @@ export function WolfWorkspaceComposer({
                 >
                   <RiAddLine
                     className={`text-lg transition-transform ${
-                      showAssetLibrary ? "rotate-45" : ""}`}
+                      showAssetLibrary ? "rotate-45" : ""
+                    }`}
                   />
                 </button>
               )}
             </div>
           )}
 
-          <div className={`flex gap-2 items-center ${showAddButton ? "":"ml-auto"}`}>
+          <div className={`flex gap-2 items-center ${showAddButton ? "" : "ml-auto"}`}>
             <button
               type="button"
               onClick={() => {
@@ -597,7 +597,7 @@ export function WolfWorkspaceComposer({
               className={`flex max-w-3xs items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${BTN_INACTIVE}`}
             >
               {mediaType === "image" ? (
-                <RiMagicLine className="flex-shrink-0 text-amber-500" />
+                <RiImageLine className="flex-shrink-0 text-amber-500" />
               ) : (
                 <RiPlayCircleLine className="flex-shrink-0 text-slate-500" />
               )}
