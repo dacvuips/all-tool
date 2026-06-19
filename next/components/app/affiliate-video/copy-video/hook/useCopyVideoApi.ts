@@ -241,6 +241,8 @@ export interface GeneratedVideoData {
   mimeType: string;
   /** Aspect ratio used when this video was generated (e.g. "9:16", "16:9") */
   aspectRatio?: string;
+  /** request_id Flow2 — dùng upscale video 1080p */
+  flow2RequestId?: string;
 }
 
 export interface UseAffiliateVideoApiReturn {

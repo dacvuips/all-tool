@@ -20,6 +20,8 @@ export function WolfProjectBatchToolbar({
   onDownloadAllImages4kZip,
   onDownloadAllVideos,
   onDownloadAllVideosZip,
+  onDownloadAllVideos1080p,
+  onDownloadAllVideos1080pZip,
   onDeleteAllProjectMedia,
 }: {
   downloading: boolean;
@@ -38,6 +40,8 @@ export function WolfProjectBatchToolbar({
   onDownloadAllImages4kZip: () => void;
   onDownloadAllVideos: () => void;
   onDownloadAllVideosZip: () => void;
+  onDownloadAllVideos1080p: () => void;
+  onDownloadAllVideos1080pZip: () => void;
   onDeleteAllProjectMedia: () => void;
 }) {
   const { t } = useTranslation();
@@ -58,10 +62,12 @@ export function WolfProjectBatchToolbar({
         onDownloadAllImages2k={onDownloadAllImages2k}
         onDownloadAllImages4k={onDownloadAllImages4k}
         onDownloadAllVideos={onDownloadAllVideos}
+        onDownloadAllVideos1080p={onDownloadAllVideos1080p}
         onDownloadAllImagesZip={onDownloadAllImagesZip}
         onDownloadAllImages2kZip={onDownloadAllImages2kZip}
         onDownloadAllImages4kZip={onDownloadAllImages4kZip}
         onDownloadAllVideosZip={onDownloadAllVideosZip}
+        onDownloadAllVideos1080pZip={onDownloadAllVideos1080pZip}
       />
       <button
         type="button"

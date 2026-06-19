@@ -102,6 +102,8 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
+    handleDownloadAllVideos1080p,
+    handleDownloadAllVideos1080pZip,
 
     // Retry failed scenes
     retryRunning,
@@ -252,10 +254,12 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
                   onDownloadAllImages2k={handleDownloadAllImages2k}
                   onDownloadAllImages4k={handleDownloadAllImages4k}
                   onDownloadAllVideos={handleDownloadAllVideos}
+                  onDownloadAllVideos1080p={handleDownloadAllVideos1080p}
                   onDownloadAllImagesZip={handleDownloadAllImagesZip}
                   onDownloadAllImages2kZip={handleDownloadAllImages2kZip}
                   onDownloadAllImages4kZip={handleDownloadAllImages4kZip}
                   onDownloadAllVideosZip={handleDownloadAllVideosZip}
+                  onDownloadAllVideos1080pZip={handleDownloadAllVideos1080pZip}
                 />
               );
             }

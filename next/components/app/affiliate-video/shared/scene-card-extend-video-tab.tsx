@@ -10,19 +10,15 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
-import { getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
+import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
+import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 
 // ── Types ────────────────────────────────────────────────────────────────────
-export interface GeneratedExtendVideoData {
-  videoUri?: string;
-  videoBytes?: string;
-  mimeType?: string;
-}
+export type GeneratedExtendVideoData = GeneratedVideoLike;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardExtendVideoTabProps {
@@ -38,14 +34,14 @@ export interface SceneCardExtendVideoTabProps {
   nextSceneId?: string;
   /** Aspect ratio của video (preview + dialog) */
   aspectRatio?: "16:9" | "9:16";
+  /** Số phân cảnh — dùng đặt tên file tải */
+  sceneNumber?: number;
   /** Lỗi tạo video nối (hiển thị inline) */
   errorMessage?: string | null;
 
   // ── Callbacks ──
   /** Generate/tạo lại extend video. Truyền true để phân biệt với video đơn */
   onGenerateExtendVideo: () => void;
-  /** Tải extend video xuống */
-  onDownloadExtendVideo: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -57,9 +53,9 @@ export function SceneCardExtendVideoTab({
   isDisabled = false,
   nextSceneId,
   aspectRatio,
+  sceneNumber = 0,
   errorMessage,
   onGenerateExtendVideo,
-  onDownloadExtendVideo,
 }: SceneCardExtendVideoTabProps) {
   const { t } = useTranslation();
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
@@ -72,6 +68,7 @@ export function SceneCardExtendVideoTab({
 
   const extVideoSrc = getExtendVideoSrc();
   const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
+  const videoFileName = `scene-${sceneNumber || "video"}-extend-video.mp4`;
 
   /* Không có scene kế tiếp → hiển thị thông báo */
   if (!nextSceneId) {
@@ -146,16 +143,11 @@ export function SceneCardExtendVideoTab({
             </div>
             {/* Action buttons bên dưới video */}
             <div className="flex flex-row gap-1.5 items-center justify-center">
-              {/* Tải extend video */}
-              <Button
-                onClick={onDownloadExtendVideo}
-                className="w-8 rounded-lg h-8 bg-success-light text-success"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Tải")}
-                icon={<HiOutlineArrowDownTray />}
-                placement="bottom"
+              <GeneratedVideoDownloadButtons
+                video={generatedExtendVideo}
+                fileName={videoFileName}
+                disabled={isDisabled}
               />
-              {/* Tạo lại / progress */}
               {generatingExtendVideo ? (
                 <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
                   <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
@@ -172,34 +164,6 @@ export function SceneCardExtendVideoTab({
                   className="w-8 rounded-lg h-8 bg-orange-light text-orange"
                   iconClassName="text-xl font-bold"
                 />
-              )}
-
-              {/* Tạo lại / progress */}
-              {generatingExtendVideo ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                  <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                  <span className="text-purple-600 text-[10px] font-bold">
-                    {extendVideoProgress}%
-                  </span>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-1 items-center   bg-purple-200 rounded-lg h-8 divide-x-0.5 overflow-hidden  ">
-                  <Button
-                    text={"2k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 2k (1080p)")}
-                  />
-                  <Button
-                    text={"4k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 4k (2160p)")}
-                  />
-                  <Button
-                    text={"8k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 8k (4320p)")}
-                  />
-                </div>
               )}
             </div>
           </div>
@@ -218,8 +182,8 @@ export function SceneCardExtendVideoTab({
             className="relative w-full max-w-xs h-20 shrink-0 rounded-xl border-2 border-dashed transition-all group border-gray-200 hover:border-primary-dark bg-gray-50 hover:bg-primary-light cursor-pointer"
           >
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <AiOutlineVideoCameraAdd className="text-xl mb-0.5 text-primary group-hover:text-teal-400" />
-              <span className="text-xs font-medium text-primary group-hover:text-teal-500">
+              <AiOutlineVideoCameraAdd className="text-xl mb-0.5 text-gray-300 group-hover:text-primary" />
+              <span className="text-xs font-medium text-gray-400 group-hover:text-primary-dark">
                 {t("Tạo video nối")}
               </span>
             </div>

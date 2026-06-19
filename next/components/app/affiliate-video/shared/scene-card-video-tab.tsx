@@ -10,19 +10,15 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { HiOutlineArrowDownTray } from "react-icons/hi2";
 import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
-import { getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
+import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
+import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 
 // ── Types cho video data ─────────────────────────────────────────────────────
-export interface GeneratedVideoData {
-  videoUri?: string;
-  videoBytes?: string;
-  mimeType?: string;
-}
+export type GeneratedVideoData = GeneratedVideoLike;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardVideoTabProps {
@@ -40,6 +36,8 @@ export interface SceneCardVideoTabProps {
   isPromptToVideo?: boolean;
   /** Aspect ratio của video (preview + dialog) */
   aspectRatio?: "16:9" | "9:16";
+  /** Số phân cảnh — dùng đặt tên file tải */
+  sceneNumber?: number;
   /** Thông báo lỗi khi chưa có ảnh */
   onImageRequired?: () => void;
   /** Lỗi tạo video (hiển thị inline) */
@@ -48,8 +46,6 @@ export interface SceneCardVideoTabProps {
   // ── Callbacks ──
   /** Generate/tạo lại video */
   onGenerateVideo: () => void;
-  /** Tải video xuống */
-  onDownloadVideo: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -62,10 +58,10 @@ export function SceneCardVideoTab({
   hasImage,
   isPromptToVideo = false,
   aspectRatio,
+  sceneNumber = 0,
   onImageRequired,
   errorMessage,
   onGenerateVideo,
-  onDownloadVideo,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
   const [showVideoModal, setShowVideoModal] = useState(false);
@@ -87,6 +83,7 @@ export function SceneCardVideoTab({
 
   const videoSrc = getVideoSrc();
   const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
+  const videoFileName = `scene-${sceneNumber || "video"}-video.mp4`;
 
   return (
     <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -147,16 +144,11 @@ export function SceneCardVideoTab({
             </div>
             {/* Action buttons bên dưới video */}
             <div className="flex flex-row gap-1.5 items-center justify-center">
-              {/* Tải video */}
-              <Button
-                onClick={onDownloadVideo}
-                className="w-8 rounded-lg h-8 bg-success-light text-success"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Tải")}
-                icon={<HiOutlineArrowDownTray />}
-                placement="bottom"
+              <GeneratedVideoDownloadButtons
+                video={generatedVideo}
+                fileName={videoFileName}
+                disabled={isDisabled}
               />
-              {/* Tạo lại / progress */}
               {generatingVideo ? (
                 <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
                   <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
@@ -171,31 +163,6 @@ export function SceneCardVideoTab({
                   iconClassName="text-xl font-bold"
                   tooltip={t("Tạo lại")}
                 />
-              )}
-              {/* Tạo lại / progress */}
-              {generatingVideo ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                  <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                  <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
-                </div>
-              ) : (
-                <div className="flex flex-row gap-1 items-center   bg-purple-200 rounded-lg h-8 divide-x-0.5 overflow-hidden  ">
-                  <Button
-                    text={"2k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 2k (1080p)")}
-                  />
-                  <Button
-                    text={"4k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 4k (2160p)")}
-                  />
-                  <Button
-                    text={"8k"}
-                    className="px-2 font-medium rounded-none text-purple-500"
-                    tooltip={t("Tạo video 8k (4320p)")}
-                  />
-                </div>
               )}
             </div>
           </div>

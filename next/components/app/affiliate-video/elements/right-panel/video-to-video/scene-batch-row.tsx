@@ -504,8 +504,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             aspectRatio={aspectRatio}
             errorMessage={videoError}
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
+            sceneNumber={scene.sceneNumber}
             onGenerateVideo={() => handleGenerateVideoToVideo()}
-            onDownloadVideo={handleDownloadVideo}
           />
         )}
         renderExtendTab={() => (
@@ -517,8 +517,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             nextSceneId={nextSceneId}
             aspectRatio={aspectRatio}
             errorMessage={extendVideoError}
+            sceneNumber={scene.sceneNumber}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
-            onDownloadExtendVideo={handleDownloadExtendVideo}
           />
         )}
         renderImagePrompt={() => (

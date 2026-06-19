@@ -15,6 +15,7 @@ import {
   downloadSceneVideosAsZip,
   downloadSceneVideosSequentially,
   handleBatchUpsampleDownloadAction,
+  handleBatchUpsampleVideoDownloadAction,
   type SceneWithNumber,
 } from "../shared/batchDownloadMedia";
 import { WolfProjectItem } from "./wolf-project-item";
@@ -269,6 +270,49 @@ export function useWolfProjectBatchActions(options: {
     }
   }, [downloadingVideo, getSceneVideo, isBusy, toast, t, wolfScenes]);
 
+  const handleDownloadAllVideos1080p = useCallback(async () => {
+    if (downloadingVideo || isBusy) return;
+    setDownloadingVideo(true);
+    try {
+      await handleBatchUpsampleVideoDownloadAction({
+        scenes: wolfScenes,
+        getGeneratedVideo: getSceneVideo,
+        asZip: false,
+        setDownloadVideoLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[wolf handleDownloadAllVideos1080p] Error:", err);
+      toast.error(t("Lỗi khi tải video 1080p hàng loạt"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, getSceneVideo, isBusy, toast, t, wolfScenes]);
+
+  const handleDownloadAllVideos1080pZip = useCallback(async () => {
+    if (downloadingVideo || isBusy) return;
+    setDownloadingVideo(true);
+    try {
+      setDownloadVideoLabel(t("Đang nén"));
+      await handleBatchUpsampleVideoDownloadAction({
+        scenes: wolfScenes,
+        getGeneratedVideo: getSceneVideo,
+        asZip: true,
+        setDownloadVideoLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[wolf handleDownloadAllVideos1080pZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP video 1080p"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, getSceneVideo, isBusy, toast, t, wolfScenes]);
+
   const handleDeleteAllProjectMedia = useCallback(async () => {
     if (deletingAll || isBusy || items.length === 0) return;
     if (!confirm(t("Xóa tất cả ảnh và video trong dự án này?"))) return;
@@ -305,6 +349,8 @@ export function useWolfProjectBatchActions(options: {
     handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
+    handleDownloadAllVideos1080p,
+    handleDownloadAllVideos1080pZip,
     handleDeleteAllProjectMedia,
   };
 }

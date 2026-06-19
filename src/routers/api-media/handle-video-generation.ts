@@ -526,6 +526,8 @@ export type PollVideoResult = {
   videoUri: string;
   videoBytes: string | null;
   mimeType: string;
+  /** request_id Flow2 — dùng upscale video 1080p */
+  flow2RequestId?: string;
 };
 
 /**

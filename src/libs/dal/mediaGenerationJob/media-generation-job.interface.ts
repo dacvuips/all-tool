@@ -76,6 +76,8 @@ export type MediaGenerationVideoResult = {
   videoBytes?: string | null;
   mimeType: string;
   aspectRatio?: string;
+  /** request_id Flow2 — dùng upscale video 1080p */
+  flow2RequestId?: string;
 };
 
 /** Output chung — union, cho phép resultData mềm dẻo */

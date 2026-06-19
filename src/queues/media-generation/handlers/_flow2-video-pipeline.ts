@@ -74,5 +74,6 @@ export async function runFlow2VideoPipeline(
     videoUri: video.videoUri,
     videoBytes: null,
     mimeType: video.mimeType,
+    flow2RequestId: requestId,
   };
 }

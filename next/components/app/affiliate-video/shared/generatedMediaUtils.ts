@@ -16,13 +16,21 @@ export type GeneratedImageLike = {
   imageUrl?: string;
 } & Flow2ImageMeta;
 
+/** Metadata Flow2 lưu sau gen_video — dùng upscale 1080p. */
+export type Flow2VideoMeta = {
+  flow2RequestId?: string;
+};
+
 /** Shape tối thiểu của video generate — hỗ trợ URI hoặc base64. */
 export type GeneratedVideoLike = {
   videoUri?: string | null;
   videoBytes?: string | null;
   mimeType?: string;
   aspectRatio?: string;
-};
+} & Flow2VideoMeta;
+
+/** Độ phân giải tải video: 720p (gốc) hoặc 1080p (upsample Flow2). */
+export type VideoDownloadResolution = "720p" | "1080p";
 
 export type MediaPersistStorage<T> = {
   set: (key: string, value: T) => Promise<void>;
@@ -59,6 +67,17 @@ export function hasFlow2UpsampleMeta(
   resolution: UpsampleResolution
 ): boolean {
   return resolution === "2K" ? hasFlow2Upsample2kMeta(img) : hasFlow2Upsample4kMeta(img);
+}
+
+/** Đủ metadata Flow2 để upscale video 1080p (request_id từ gen_video). */
+export function hasFlow2Upsample1080pVideoMeta(
+  video: GeneratedVideoLike | null | undefined
+): boolean {
+  return !!video?.flow2RequestId?.trim();
+}
+
+export function hasGeneratedVideoData(video: GeneratedVideoLike | null | undefined): boolean {
+  return !!(video && (video.videoUri || video.videoBytes));
 }
 
 /** Ưu tiên base64; fallback link (chỉ dùng hiển thị / preview). */
@@ -441,4 +460,54 @@ export async function downloadGeneratedVideo(
 ): Promise<void> {
   const blob = await generatedVideoToBlob(video);
   triggerBlobDownload(blob, fileName);
+}
+
+/** Upscale video đã generate lên 1080p qua Flow2 và trả Blob. */
+export async function fetchUpsampled1080pVideoBlob(video: GeneratedVideoLike): Promise<Blob> {
+  if (!hasFlow2Upsample1080pVideoMeta(video)) {
+    throw new Error("Thiếu metadata Flow2 (flow2RequestId) để upscale video 1080p");
+  }
+
+  const res = await fetch("/api/app/upsample-video/", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ flow2RequestId: video.flow2RequestId!.trim() }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { message?: string })?.message || `Lỗi upscale video 1080p (${res.status})`
+    );
+  }
+
+  return res.blob();
+}
+
+function buildUpsampledVideoFileName(baseName: string, resolution: VideoDownloadResolution): string {
+  const stem = baseName.replace(/\.[^.]+$/, "");
+  return `${stem}-${resolution}.mp4`;
+}
+
+/**
+ * Tải video đã generate — 720p (gốc) hoặc 1080p (upsample Flow2).
+ * Hàm dùng chung cho nút tải từng scene và batch download.
+ */
+export async function downloadVideoAtResolution(
+  video: GeneratedVideoLike,
+  fileName: string,
+  resolution: VideoDownloadResolution
+): Promise<void> {
+  if (resolution === "1080p") {
+    const blob = await fetchUpsampled1080pVideoBlob(video);
+    const ext = mimeTypeToFileExtension(blob.type || video.mimeType, "mp4");
+    const downloadName = buildUpsampledVideoFileName(fileName, resolution).replace(
+      /\.[^.]+$/,
+      `.${ext}`
+    );
+    triggerBlobDownload(blob, downloadName);
+    return;
+  }
+
+  await downloadGeneratedVideo(video, fileName);
 }

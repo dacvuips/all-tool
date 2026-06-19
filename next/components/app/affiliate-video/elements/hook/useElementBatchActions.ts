@@ -31,6 +31,7 @@ import {
   downloadSceneVideosAsZip,
   downloadSceneVideosSequentially,
   handleBatchUpsampleDownloadAction,
+  handleBatchUpsampleVideoDownloadAction,
 } from "../../shared/batchDownloadMedia";
 import {
   collectFailedRetryTasks,
@@ -553,6 +554,49 @@ export function useCopyVideoBatchActions(
     } catch (err) {
       console.error("[handleDownloadAllVideosZip] Error:", err);
       toast.error(t("Lỗi khi tải ZIP video"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t]);
+
+  const handleDownloadAllVideos1080p = useCallback(async () => {
+    if (downloadingVideo || videoBatchRunning) return;
+    setDownloadingVideo(true);
+    try {
+      await handleBatchUpsampleVideoDownloadAction({
+        scenes,
+        getGeneratedVideo,
+        asZip: false,
+        setDownloadVideoLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllVideos1080p] Error:", err);
+      toast.error(t("Lỗi khi tải video 1080p hàng loạt"));
+    } finally {
+      setDownloadingVideo(false);
+      setDownloadVideoLabel("");
+    }
+  }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t]);
+
+  const handleDownloadAllVideos1080pZip = useCallback(async () => {
+    if (downloadingVideo || videoBatchRunning) return;
+    setDownloadingVideo(true);
+    try {
+      setDownloadVideoLabel(t("Đang nén"));
+      await handleBatchUpsampleVideoDownloadAction({
+        scenes,
+        getGeneratedVideo,
+        asZip: true,
+        setDownloadVideoLabel,
+        toast,
+        t,
+      });
+    } catch (err) {
+      console.error("[handleDownloadAllVideos1080pZip] Error:", err);
+      toast.error(t("Lỗi khi tải ZIP video 1080p"));
     } finally {
       setDownloadingVideo(false);
       setDownloadVideoLabel("");
@@ -1241,6 +1285,8 @@ export function useCopyVideoBatchActions(
     handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
+    handleDownloadAllVideos1080p,
+    handleDownloadAllVideos1080pZip,
 
     // Export
     handleExportPromptCSV,

@@ -7,14 +7,17 @@ import JSZip from "jszip";
 import {
   buildSceneImageFileName,
   buildSceneVideoFileName,
+  fetchUpsampled1080pVideoBlob,
   fetchUpsampledImageBlob,
   generatedImageToBlob,
   generatedVideoToBlob,
+  hasFlow2Upsample1080pVideoMeta,
   hasFlow2UpsampleMeta,
   mimeTypeToFileExtension,
   type GeneratedImageLike,
   type GeneratedVideoLike,
   type UpsampleResolution,
+  type VideoDownloadResolution,
 } from "./generatedMediaUtils";
 
 export type SceneWithNumber = {
@@ -64,10 +67,13 @@ export async function zipAndDownload(
 
 export function buildBatchZipFileName(
   kind: "images" | "videos",
-  resolution?: UpsampleResolution
+  resolution?: UpsampleResolution | VideoDownloadResolution
 ): string {
   const date = new Date().toISOString().slice(0, 10);
-  if (kind === "videos") return `videos-${date}.zip`;
+  if (kind === "videos") {
+    if (resolution) return `videos-${resolution}-${date}.zip`;
+    return `videos-${date}.zip`;
+  }
   if (resolution) return `images-${resolution.toLowerCase()}-${date}.zip`;
   return `images-${date}.zip`;
 }
@@ -77,6 +83,17 @@ export function filterScenesForUpsample<T extends SceneWithNumber>(
   resolution: UpsampleResolution
 ): { scene: T; img: GeneratedImageLike }[] {
   return items.filter(({ img }) => hasFlow2UpsampleMeta(img, resolution));
+}
+
+export function filterScenesForVideoUpsample1080p<T extends SceneWithNumber>(
+  items: { scene: T; vid: GeneratedVideoLike }[]
+): { scene: T; vid: GeneratedVideoLike }[] {
+  return items.filter(({ vid }) => hasFlow2Upsample1080pVideoMeta(vid));
+}
+
+function buildUpsampledSceneVideoFileName(sceneNumber: number, mimeType?: string): string {
+  const ext = mimeTypeToFileExtension(mimeType, "mp4");
+  return `scene-${sceneNumber}-video-1080p.${ext}`;
 }
 
 function buildUpsampledSceneImageFileName(
@@ -319,4 +336,125 @@ export async function downloadSceneVideosAsZip<T extends SceneWithNumber>(
   if (files.length === 0) return 0;
   await zipAndDownload(files, buildBatchZipFileName("videos"));
   return files.length;
+}
+
+export async function downloadSceneVideos1080pSequentially<T extends SceneWithNumber>(
+  items: { scene: T; vid: GeneratedVideoLike }[],
+  onProgress?: (current: number, total: number) => void,
+  waitMs = 3500
+): Promise<number> {
+  const eligible = filterScenesForVideoUpsample1080p(items);
+  const total = eligible.length;
+  let downloaded = 0;
+  for (let i = 0; i < total; i++) {
+    const { scene, vid } = eligible[i];
+    onProgress?.(i + 1, total);
+    try {
+      const blob = await fetchUpsampled1080pVideoBlob(vid);
+      const mime = blob.type || vid.mimeType || "video/mp4";
+      const fileName = buildUpsampledSceneVideoFileName(resolveSceneNumber(scene, i), mime);
+      await downloadBlobSequentially(blob, fileName, waitMs);
+      downloaded++;
+    } catch (err) {
+      console.error(
+        `[downloadSceneVideos1080pSequentially] Scene #${resolveSceneNumber(scene, i)}:`,
+        err
+      );
+    }
+  }
+  return downloaded;
+}
+
+export async function downloadSceneVideos1080pAsZip<T extends SceneWithNumber>(
+  items: { scene: T; vid: GeneratedVideoLike }[],
+  onProgress?: (current: number, total: number) => void
+): Promise<number> {
+  const eligible = filterScenesForVideoUpsample1080p(items);
+  const files: { fileName: string; blob: Blob }[] = [];
+  const total = eligible.length;
+  for (let i = 0; i < total; i++) {
+    const { scene, vid } = eligible[i];
+    onProgress?.(i + 1, total);
+    try {
+      const blob = await fetchUpsampled1080pVideoBlob(vid);
+      const mime = blob.type || vid.mimeType || "video/mp4";
+      const fileName = buildUpsampledSceneVideoFileName(resolveSceneNumber(scene, i), mime);
+      files.push({ fileName, blob });
+    } catch (err) {
+      console.error(`[downloadSceneVideos1080pAsZip] Scene #${resolveSceneNumber(scene, i)}:`, err);
+    }
+  }
+  if (files.length === 0) return 0;
+  await zipAndDownload(files, buildBatchZipFileName("videos", "1080p"));
+  return files.length;
+}
+
+export type BatchUpsampleVideoDownloadResult = {
+  downloaded: number;
+  skippedMissingMeta: number;
+};
+
+/** Logic dùng chung cho handler tải hàng loạt video 1080p trong batch action hooks. */
+export async function handleBatchUpsampleVideoDownloadAction<T extends SceneWithNumber>(options: {
+  scenes: T[];
+  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>;
+  asZip: boolean;
+  setDownloadVideoLabel: (label: string) => void;
+  toast: BatchUpsampleToast;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}): Promise<void> {
+  const { scenes, getGeneratedVideo, asZip, setDownloadVideoLabel, toast, t } = options;
+
+  const { downloaded, skippedMissingMeta } = await runBatchUpsampleVideoDownload(
+    scenes,
+    getGeneratedVideo,
+    asZip,
+    (cur, tot) => setDownloadVideoLabel(`${cur}/${tot}`)
+  );
+
+  if (downloaded === 0) {
+    toast.warn(
+      skippedMissingMeta > 0
+        ? t("Không có video nào hỗ trợ upscale 1080p (cần tạo lại video)")
+        : t("Chưa có video nào được tạo để tải")
+    );
+    return;
+  }
+
+  if (asZip) {
+    toast.success(`${t("Đã tải")} ${downloaded} ${t("video 1080p trong file ZIP!")}`);
+  } else {
+    toast.success(`${t("Đã tải")} ${downloaded} ${t("video 1080p thành công!")}`);
+  }
+
+  if (skippedMissingMeta > 0) {
+    toast.warn(t("{{n}} video bỏ qua (thiếu metadata 1080p)", { n: skippedMissingMeta }));
+  }
+}
+
+export async function runBatchUpsampleVideoDownload<T extends SceneWithNumber>(
+  scenes: T[],
+  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>,
+  asZip: boolean,
+  onProgress?: (current: number, total: number) => void
+): Promise<BatchUpsampleVideoDownloadResult> {
+  const allItems = await collectSceneVideoFiles(scenes, getGeneratedVideo);
+  if (allItems.length === 0) {
+    return { downloaded: 0, skippedMissingMeta: 0 };
+  }
+
+  const eligible = filterScenesForVideoUpsample1080p(allItems);
+  const skippedMissingMeta = allItems.length - eligible.length;
+
+  if (eligible.length === 0) {
+    return { downloaded: 0, skippedMissingMeta };
+  }
+
+  if (asZip) {
+    const downloaded = await downloadSceneVideos1080pAsZip(eligible, onProgress);
+    return { downloaded, skippedMissingMeta };
+  }
+
+  const downloaded = await downloadSceneVideos1080pSequentially(eligible, onProgress);
+  return { downloaded, skippedMissingMeta };
 }

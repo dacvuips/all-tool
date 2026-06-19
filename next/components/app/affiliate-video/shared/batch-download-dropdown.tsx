@@ -19,10 +19,12 @@ interface BatchMediaDownloadDropdownProps {
   onDownloadAllImages2k: () => void;
   onDownloadAllImages4k: () => void;
   onDownloadAllVideos: () => void;
+  onDownloadAllVideos1080p: () => void;
   onDownloadAllImagesZip: () => void;
   onDownloadAllImages2kZip: () => void;
   onDownloadAllImages4kZip: () => void;
   onDownloadAllVideosZip: () => void;
+  onDownloadAllVideos1080pZip: () => void;
 }
 
 export function BatchMediaDownloadDropdown({
@@ -37,10 +39,12 @@ export function BatchMediaDownloadDropdown({
   onDownloadAllImages2k,
   onDownloadAllImages4k,
   onDownloadAllVideos,
+  onDownloadAllVideos1080p,
   onDownloadAllImagesZip,
   onDownloadAllImages2kZip,
   onDownloadAllImages4kZip,
   onDownloadAllVideosZip,
+  onDownloadAllVideos1080pZip,
 }: BatchMediaDownloadDropdownProps) {
   const { t } = useTranslation();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -71,6 +75,11 @@ export function BatchMediaDownloadDropdown({
       action: onDownloadAllVideos,
     },
     {
+      label: t("Tải tất cả video (1080p)"),
+      disabled: availableVideoCount === 0 || isBusy,
+      action: onDownloadAllVideos1080p,
+    },
+    {
       label: t("Tải tất cả ảnh 1K (Zip)"),
       disabled: availableImageCount === 0 || isBusy,
       action: onDownloadAllImagesZip,
@@ -89,6 +98,11 @@ export function BatchMediaDownloadDropdown({
       label: t("Tải tất cả video (Zip)"),
       disabled: availableVideoCount === 0 || isBusy,
       action: onDownloadAllVideosZip,
+    },
+    {
+      label: t("Tải tất cả video 1080p (Zip)"),
+      disabled: availableVideoCount === 0 || isBusy,
+      action: onDownloadAllVideos1080pZip,
     },
   ];
 

@@ -168,6 +168,8 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     handleDownloadAllImages4kZip,
     handleDownloadAllVideos,
     handleDownloadAllVideosZip,
+    handleDownloadAllVideos1080p,
+    handleDownloadAllVideos1080pZip,
     handleDeleteAllProjectMedia,
   } = useWolfProjectBatchActions({
     items,
@@ -321,7 +323,9 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
             onDownloadAllImages2kZip={() => void handleDownloadAllImages2kZip()}
             onDownloadAllImages4kZip={() => void handleDownloadAllImages4kZip()}
             onDownloadAllVideos={() => void handleDownloadAllVideos()}
+            onDownloadAllVideos1080p={() => void handleDownloadAllVideos1080p()}
             onDownloadAllVideosZip={() => void handleDownloadAllVideosZip()}
+            onDownloadAllVideos1080pZip={() => void handleDownloadAllVideos1080pZip()}
             onDeleteAllProjectMedia={() => void handleDeleteAllProjectMedia()}
           />
         </div>

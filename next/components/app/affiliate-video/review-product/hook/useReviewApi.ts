@@ -293,6 +293,8 @@ export interface GeneratedVideoData {
   aspectRatio?: string;
   artStyleId?: string;
   artStyle?: string;
+  /** request_id Flow2 — dùng upscale video 1080p */
+  flow2RequestId?: string;
 }
 
 export interface UseAffiliateVideoApiReturn {
