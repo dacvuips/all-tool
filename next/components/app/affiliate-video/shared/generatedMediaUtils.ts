@@ -1,4 +1,4 @@
-import { base64ToBlob, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
+import { base64ToBlob, toDownloadProxyUrl, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
 
 /** Metadata Flow2 lưu sau gen_image — dùng upscale 4K. */
 export type Flow2ImageMeta = {
@@ -69,12 +69,14 @@ export function getGeneratedImagePreviewSrc(img: GeneratedImageLike): string {
   return getGeneratedImageUrl(img);
 }
 
-/** Ưu tiên base64; fallback videoUri (chỉ dùng hiển thị / preview). */
+/** Ưu tiên base64; fallback videoUri qua download-proxy (tránh CORS flow2.viettheo.site). */
 export function getGeneratedVideoPreviewSrc(video: GeneratedVideoLike): string | null {
   if (video.videoBytes) {
     return `data:${video.mimeType || "video/mp4"};base64,${video.videoBytes}`;
   }
-  return video.videoUri || null;
+  const uri = (video.videoUri || "").trim();
+  if (!uri) return null;
+  return toDownloadProxyUrl(uri, true);
 }
 
 function stripBase64Payload(value: string): string {

@@ -136,9 +136,44 @@ export function pickFlow2RequestId(statusData: Flow2StatusResponse): string | un
   return found as string | undefined;
 }
 
-/** Flow2 poll_mode=media: URL video theo quy ước `{baseUrl}/video/{requestId}`. */
-export function buildFlow2DerivedVideoUrl(baseUrl: string, requestId: string): string {
-  return `${baseUrl.replace(/\/+$/, "")}/video/${requestId}`;
+/** Host phục vụ file /video/, /image/ — khác API base khi setting dùng viettheo.site. */
+const FLOW2_MEDIA_HOST = "flow2.viettheo.site";
+
+/** API base (viettheo.site) → media base (flow2.viettheo.site) cho URL tải ảnh/video. */
+export function resolveFlow2MediaBaseUrl(apiBaseUrl: string): string {
+  try {
+    const url = new URL(apiBaseUrl);
+    if (url.hostname === "viettheo.site") {
+      url.hostname = FLOW2_MEDIA_HOST;
+      return url.origin;
+    }
+    return url.origin;
+  } catch {
+    return apiBaseUrl.replace(/\/+$/, "");
+  }
+}
+
+/** Chuẩn hóa URL media Flow2 trả về (viettheo.site/video|image → flow2.viettheo.site). */
+export function normalizeFlow2MediaUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (
+      parsed.hostname === "viettheo.site" &&
+      (parsed.pathname.startsWith("/video/") || parsed.pathname.startsWith("/image/"))
+    ) {
+      parsed.hostname = FLOW2_MEDIA_HOST;
+      return parsed.toString();
+    }
+    return url;
+  } catch {
+    return url;
+  }
+}
+
+/** Flow2 poll_mode=media: URL video theo quy ước `{mediaBaseUrl}/video/{requestId}`. */
+export function buildFlow2DerivedVideoUrl(apiBaseUrl: string, requestId: string): string {
+  const mediaBase = resolveFlow2MediaBaseUrl(apiBaseUrl);
+  return `${mediaBase.replace(/\/+$/, "")}/video/${requestId}`;
 }
 
 function summarizeFlow2ResultForLog(statusData: Flow2StatusResponse): string {
@@ -153,6 +188,32 @@ function summarizeFlow2ResultForLog(statusData: Flow2StatusResponse): string {
     Link: resultPayload?.Link ?? null,
     Local: resultPayload?.Local ?? null,
   });
+}
+
+const FLOW2_LOG_STRING_MAX = 500;
+const FLOW2_LOG_RESPONSE_MAX = 12_000;
+
+/** Chuỗi hóa response poll Flow2 để log — cắt base64/chuỗi dài tránh tràn log. */
+export function formatFlow2StatusResponseForLog(
+  statusData: Flow2StatusResponse,
+  maxLen = FLOW2_LOG_RESPONSE_MAX
+): string {
+  const seen = new WeakSet<object>();
+  const json = JSON.stringify(statusData, (_key, value) => {
+    if (typeof value === "string") {
+      if (value.length > FLOW2_LOG_STRING_MAX) {
+        return `${value.slice(0, FLOW2_LOG_STRING_MAX)}…[truncated ${value.length} chars]`;
+      }
+      return value;
+    }
+    if (value && typeof value === "object") {
+      if (seen.has(value)) return "[Circular]";
+      seen.add(value);
+    }
+    return value;
+  });
+  if (json.length <= maxLen) return json;
+  return `${json.slice(0, maxLen)}…[truncated ${json.length} chars]`;
 }
 
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
@@ -458,7 +519,9 @@ export async function waitForFlow2Result<T>(params: {
         logger.warn(
           `[flow2-${params.logTag}] ${params.emptyResultMessage} requestId=${
             params.requestId
-          } summary=${summarizeFlow2ResultForLog(statusData)}`
+          } summary=${summarizeFlow2ResultForLog(statusData)} fullResponse=${formatFlow2StatusResponseForLog(
+            statusData
+          )}`
         );
         throw new Error(params.emptyResultMessage);
       }

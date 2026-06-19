@@ -193,7 +193,7 @@ export function SceneCardImageTab({
               {generatingImage ? (
                 <div className="flex gap-1 items-center px-2 py-1 bg-pink-50 rounded-lg border border-pink-200">
                   <RiLoader4Line className="text-sm text-pink-500 animate-spin" />
-                  <span className="text-pink-600 text-[10px] font-bold">{imageProgress}%</span>
+                  <span className="font-bold text-pink-600 text-10">{imageProgress}%</span>
                 </div>
               ) : (
                 <Button

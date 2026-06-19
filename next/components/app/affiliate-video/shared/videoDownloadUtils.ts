@@ -28,8 +28,51 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 
 const DOWNLOAD_PROXY_PATH = "/api/file/download-proxy";
 
+function isHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** HTTP(S) URL ngoài origin → download-proxy (tránh CORS khi preview / fetch). */
+export function toDownloadProxyUrl(url: string, inline = false): string {
+  const trimmed = url.trim();
+  if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith(DOWNLOAD_PROXY_PATH)) {
+    return trimmed;
+  }
+  if (!isHttpUrl(trimmed)) {
+    return trimmed;
+  }
+  if (typeof window !== "undefined") {
+    try {
+      if (new URL(trimmed).origin === window.location.origin) {
+        return trimmed;
+      }
+    } catch {
+      return trimmed;
+    }
+  }
+  const params = new URLSearchParams({ url: trimmed });
+  if (inline) {
+    params.set("inline", "1");
+  }
+  return `${DOWNLOAD_PROXY_PATH}?${params.toString()}`;
+}
+
 /** Fetch HTTP(S) URL as Blob; falls back to server proxy when CORS blocks direct fetch. */
 async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
+  const proxyUrl = toDownloadProxyUrl(url);
+  if (proxyUrl !== url) {
+    const proxyRes = await fetch(proxyUrl);
+    if (proxyRes.ok) {
+      return proxyRes.blob();
+    }
+    throw new Error(`Failed to fetch via proxy: ${proxyRes.status}`);
+  }
+
   try {
     const res = await fetch(url);
     if (res.ok) {

@@ -4,9 +4,11 @@ import {
   collectFlow2VideoUrls,
   createFlow2Request,
   Flow2StatusResponse,
+  formatFlow2StatusResponseForLog,
   getFlow2Config,
   isHttpUrl,
   looksLikeRawBase64,
+  normalizeFlow2MediaUrl,
   pickFlow2RequestId,
   pickFlow2ResultPayload,
   runFlow2WithRetry,
@@ -184,17 +186,22 @@ export async function extractFlow2Videos(
   if (resultPayload) {
     const structuredUrls = collectFlow2VideoUrls(resultPayload);
     if (structuredUrls.length > 0) {
+      const normalizedUrls = structuredUrls.map(normalizeFlow2MediaUrl);
       logger.info(
-        `[flow2-video] Trích video_urls từ result requestId=${requestId ?? "n/a"} urls=${structuredUrls.length}`
+        `[flow2-video] Trích video_urls từ result requestId=${requestId ?? "n/a"} urls=${normalizedUrls.length}`
       );
-      return structuredUrls.map((url) => ({ videoUri: url, mimeType: "video/mp4" }));
+      return normalizedUrls.map((url) => ({ videoUri: url, mimeType: "video/mp4" }));
     }
 
-    if (resultPayload.poll_mode === "media" && requestId) {
+    const canDeriveVideoUrl =
+      requestId &&
+      (resultPayload.poll_mode === "media" || resultPayload.poll_mode === "get_media_fallback");
+
+    if (canDeriveVideoUrl) {
       const { baseUrl } = await getFlow2Config();
       const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
       logger.info(
-        `[flow2-video] poll_mode=media, derive video URL requestId=${requestId} media_ids=${JSON.stringify(
+        `[flow2-video] poll_mode=${resultPayload.poll_mode}, derive video URL requestId=${requestId} media_ids=${JSON.stringify(
           resultPayload.media_ids ?? []
         )} url=${derivedUrl}`
       );
@@ -206,13 +213,12 @@ export async function extractFlow2Videos(
   collectVideoLikeStrings(statusData, found);
   const deduped = Array.from(new Set(found)).slice(0, 3);
   if (deduped.length === 0) {
-    const preview = JSON.stringify(statusData);
     logger.warn(
       `[flow2-video] Không trích được video requestId=${requestId ?? "n/a"} poll_mode=${
         resultPayload?.poll_mode ?? "n/a"
-      } media_ids=${JSON.stringify(resultPayload?.media_ids ?? [])}: ${preview.slice(0, 2000)}${
-        preview.length > 2000 ? "…" : ""
-      }`
+      } media_ids=${JSON.stringify(resultPayload?.media_ids ?? [])} fullResponse=${formatFlow2StatusResponseForLog(
+        statusData
+      )}`
     );
     return [];
   }
