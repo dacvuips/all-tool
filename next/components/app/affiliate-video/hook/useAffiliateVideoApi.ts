@@ -56,6 +56,10 @@ import {
   persistGeneratedImageWithEnrichment,
   persistGeneratedVideoWithEnrichment,
 } from "../shared/generatedMediaUtils";
+import {
+  triggerAutoDownloadAfterImageGen,
+  triggerAutoDownloadAfterVideoGen,
+} from "../shared/autoDownloadUtils";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -126,6 +130,9 @@ export interface GenerateImageParams {
   productImagePrompt?: string;
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
   noText?: boolean;
+  /** Tự động tải ảnh sau khi gen xong */
+  autoDownload?: boolean;
+  sceneNumber?: number;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
   /** Báo lỗi inline thay vì toast (scene batch row) */
@@ -152,6 +159,10 @@ export interface GenerateVideoParams {
   voiceDisable?: boolean;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
+  /** Tự động tải video sau khi gen xong */
+  autoDownload?: boolean;
+  sceneNumber?: number;
+  isStitch?: boolean;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
@@ -1383,6 +1394,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onError,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
       } = params;
       const images: { imageBytes: string; mimeType: string }[] = [];
       if (referenceImage) {
@@ -1427,6 +1440,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         onProgress?.(100);
+        triggerAutoDownloadAfterImageGen(imageData, { autoDownload, sceneNumber });
         return imageData;
       } catch (err: any) {
         onProgress?.(0);
@@ -1479,6 +1493,9 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onStatusMessage,
         onError,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
+        isStitch,
       } = params;
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
 
@@ -1521,6 +1538,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
+        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);

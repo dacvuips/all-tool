@@ -5,10 +5,16 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
-import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
+import {
+  MdFileDownload,
+  MdFileDownloadOff,
+  MdRecordVoiceOver,
+  MdVoiceOverOff,
+} from "react-icons/md";
 import { RiImageFill, RiText, RiVideoFill } from "react-icons/ri";
 import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
+import { getAutoDownloadDefault } from "./autoDownloadUtils";
 import { SceneTabKey } from "./scene-card-tabs";
 import { BaseHistoryItem, SceneHistoryDropdown } from "./scene-history-dropdown";
 
@@ -27,6 +33,7 @@ export interface BatchListHeaderProps {
   onGlobalTabChange: (tab: SceneTabKey | null) => void;
   onToggleAllNoText: () => void;
   onToggleAllVoiceDisable: () => void;
+  onToggleAllNoDownload: () => void;
   ActionBarComponent: React.ComponentType<{ scenes: any[] }>;
 }
 
@@ -37,10 +44,13 @@ export function BatchListHeader({
   onGlobalTabChange,
   onToggleAllNoText,
   onToggleAllVoiceDisable,
+  onToggleAllNoDownload,
   ActionBarComponent,
 }: BatchListHeaderProps) {
   const { t } = useTranslation();
+  const defaultAutoDownload = getAutoDownloadDefault();
   const allNoText = scenes.every((s) => s.noText);
+  const allNoDownload = scenes.every((s) => s.noDownload ?? defaultAutoDownload);
   const allVoiceDisabled = scenes.every((s) => s.voiceDisable);
 
   return (
@@ -90,6 +100,22 @@ export function BatchListHeader({
             </span>
           </div>
         </div>
+        <Button
+          onClick={() => onToggleAllNoDownload()}
+          className={`w-6 h-6 px-2 rounded-md shadow-sm ${
+            allNoDownload
+              ? "text-green-500 bg-green-50 hover:bg-green-100"
+              : "text-gray-400 bg-white hover:text-green-500 hover:bg-green-50"
+          }`}
+          iconClassName="text-sm"
+          icon={allNoDownload ? <MdFileDownload /> : <MdFileDownloadOff />}
+          tooltip={
+            allNoDownload
+              ? t("Cho phép tải sau khi tạo ảnh/video xong")
+              : t("Không cho phép tải sau khi tạo ảnh/video xong")
+          }
+          placement="bottom"
+        />
 
         <Button
           onClick={onToggleAllNoText}

@@ -30,6 +30,10 @@ import {
   persistGeneratedImageWithEnrichment,
   persistGeneratedVideoWithEnrichment,
 } from "../../shared/generatedMediaUtils";
+import {
+  triggerAutoDownloadAfterImageGen,
+  triggerAutoDownloadAfterVideoGen,
+} from "../../shared/autoDownloadUtils";
 
 // ── Image generation store name ────────────────────────────────────────────
 const IMAGE_STORE_NAME = "generated-images";
@@ -75,6 +79,8 @@ export interface GenerateImageParams {
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
   onMediaUpdate?: (data: GeneratedImageData) => void;
   noText?: boolean;
+  autoDownload?: boolean;
+  sceneNumber?: number;
 }
 
 export interface GenerateVideoParams {
@@ -95,6 +101,9 @@ export interface GenerateVideoParams {
   voiceDisable?: boolean;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
+  autoDownload?: boolean;
+  sceneNumber?: number;
+  isStitch?: boolean;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
@@ -469,6 +478,8 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         onError,
         noText,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
       } = params;
 
       // Gom ảnh tham chiếu
@@ -516,6 +527,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         onProgress?.(100);
+        triggerAutoDownloadAfterImageGen(imageData, { autoDownload, sceneNumber });
         return imageData;
       } catch (err: any) {
         onProgress?.(0);
@@ -560,6 +572,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         onStatusMessage,
         onError,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
+        isStitch,
       } = params;
 
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
@@ -603,6 +618,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
+        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);

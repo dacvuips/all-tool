@@ -30,6 +30,7 @@ import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../co
 import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
+import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button";
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
@@ -65,6 +66,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleDisable,
   onToggleVoiceDisable,
   onToggleNoText,
+  onToggleNoDownload,
   onUpdateSelectedProductImages,
 }: {
   scene: SceneScript;
@@ -82,6 +84,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
+  onToggleNoDownload: (sceneId: string) => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }) {
   const { t } = useTranslation();
@@ -355,6 +358,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
             placement="bottom"
           />
+          <SceneAutoDownloadButton
+            disabled={isDisabled}
+            noDownload={scene.noDownload}
+            onToggle={() => onToggleNoDownload(scene.id)}
+          />
           <Button
             disabled={isDisabled}
             onClick={() => onToggleNoText(scene.id)}
@@ -601,6 +609,7 @@ interface SceneRowGroupProps {
   onToggleDisable: (sceneId: string) => void;
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
+  onToggleNoDownload: (sceneId: string) => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
 }
 
@@ -616,6 +625,7 @@ export function SceneRowGroup({
   onToggleDisable,
   onToggleVoiceDisable,
   onToggleNoText,
+  onToggleNoDownload,
   onUpdateSelectedProductImages,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
@@ -656,6 +666,7 @@ export function SceneRowGroup({
           onToggleDisable={onToggleDisable}
           onToggleVoiceDisable={onToggleVoiceDisable}
           onToggleNoText={onToggleNoText}
+          onToggleNoDownload={onToggleNoDownload}
           onUpdateSelectedProductImages={onUpdateSelectedProductImages}
         />
       </div>

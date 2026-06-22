@@ -175,6 +175,7 @@ export interface SceneScript {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  noDownload?: boolean;
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
   selectedProductImages?: string[];
@@ -255,6 +256,7 @@ export interface CopyVideoLegacyScene {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  noDownload?: boolean;
   selectedProductImages?: string[];
   reviewImageSlots?: (ReviewFormImage | undefined)[];
   reviewVideoSlots?: (ReviewFormVideo | undefined)[];
@@ -320,6 +322,7 @@ export interface ReviewScene {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  noDownload?: boolean;
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   reviewImageSlots?: (ReviewFormImage | undefined)[];

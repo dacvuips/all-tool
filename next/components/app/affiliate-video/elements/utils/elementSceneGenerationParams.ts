@@ -20,6 +20,7 @@ import {
   resolveActionImageType,
 } from "./elementActionImageUtils";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
+import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
 
 export type ElementScriptLike =
   | Pick<ElementAnalysisData, "aspectRatio" | "artStyle" | "artStyleId" | "serviceImageType">
@@ -166,6 +167,7 @@ export async function buildElementImageGenerateParams(options: {
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     productImagePrompt: scene.product_image_prompt || undefined,
     serviceImageType: resolvedServiceImageType,
+    ...buildAutoDownloadOptions(scene),
   };
 }
 
@@ -244,5 +246,6 @@ export async function buildElementVideoGenerateParams(options: {
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

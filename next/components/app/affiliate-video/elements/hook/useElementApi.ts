@@ -21,6 +21,10 @@ import {
   persistGeneratedImageWithEnrichment,
   persistGeneratedVideoWithEnrichment,
 } from "../../shared/generatedMediaUtils";
+import {
+  triggerAutoDownloadAfterImageGen,
+  triggerAutoDownloadAfterVideoGen,
+} from "../../shared/autoDownloadUtils";
 import { ServiceImageEnum } from "../constants";
 
 // ── Image generation store name ────────────────────────────────────────────
@@ -65,6 +69,8 @@ export interface GenerateImageParams {
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
   onMediaUpdate?: (data: GeneratedImageData) => void;
   noText?: boolean;
+  autoDownload?: boolean;
+  sceneNumber?: number;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
@@ -88,6 +94,9 @@ export interface GenerateVideoParams {
   voiceDisable?: boolean;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
+  autoDownload?: boolean;
+  sceneNumber?: number;
+  isStitch?: boolean;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
@@ -383,6 +392,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         artStyleId,
         artStyle,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
       } = params;
 
       // Gom ảnh tham chiếu (reference + additional)
@@ -427,6 +438,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         }
 
         onProgress?.(100);
+        triggerAutoDownloadAfterImageGen(imageData, { autoDownload, sceneNumber });
         return imageData;
       } catch (err: any) {
         onProgress?.(0);
@@ -474,6 +486,9 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         artStyle,
         serviceImageType,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
+        isStitch,
       } = params;
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
       try {
@@ -524,6 +539,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
+        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);
@@ -564,6 +580,9 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         serviceImageType,
         video,
         onMediaUpdate,
+        autoDownload,
+        sceneNumber,
+        isStitch,
       } = params;
 
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
@@ -610,6 +629,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
+        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);

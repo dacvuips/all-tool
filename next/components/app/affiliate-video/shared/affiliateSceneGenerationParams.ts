@@ -5,6 +5,7 @@ import type { ElementFormImage, SceneScript } from "../constants";
 import type { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { productImageUrlsToApiImages } from "../elements/utils/elementFormImageUtils";
 import type { GenerateImageParams, GenerateVideoParams } from "../hook/useAffiliateVideoApi";
+import { buildAutoDownloadOptions } from "./autoDownloadUtils";
 import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
 import { normalizeSceneAudioField } from "./sceneAudioUtils";
 
@@ -76,6 +77,7 @@ export async function buildAffiliateImageGenerateParams(options: {
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
     noText: noText ?? scene.noText,
+    ...buildAutoDownloadOptions(scene),
   };
 }
 
@@ -111,5 +113,6 @@ export async function buildAffiliateVideoGenerateParams(options: {
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

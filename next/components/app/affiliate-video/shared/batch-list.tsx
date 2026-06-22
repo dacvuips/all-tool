@@ -12,6 +12,7 @@ import { reorderScenesWithNumbers, SortableCardGrid } from "../../../shared/util
 import { CharacterItem } from "../constants";
 import { ActionImageEnum } from "../elements/constants";
 import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
+import { getAutoDownloadDefault, setAutoDownloadDefault } from "./autoDownloadUtils";
 import { SceneTabKey } from "./scene-card-tabs";
 
 export type { BatchListHistoryConfig };
@@ -148,6 +149,37 @@ export function SharedBatchListPanel({
       await onPersistScenes(updated);
     } catch (err) {
       console.error("[handleToggleAllNoText] Failed to persist:", err);
+    }
+  };
+
+  /** Toggle auto-download on a single scene and persist */
+  const handleToggleNoDownload = async (sceneId: string) => {
+    const defaultEnabled = getAutoDownloadDefault();
+    const updated = sceneList.map((s) => {
+      if (s.id !== sceneId) return s;
+      const current = s.noDownload ?? defaultEnabled;
+      return { ...s, noDownload: !current };
+    });
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleToggleNoDownload] Failed to persist:", err);
+    }
+  };
+
+  /** Toggle auto-download for ALL scenes + lưu mặc định localStorage */
+  const handleToggleAllNoDownload = async () => {
+    const defaultEnabled = getAutoDownloadDefault();
+    const allEnabled = sceneList.every((s) => s.noDownload ?? defaultEnabled);
+    const newValue = !allEnabled;
+    setAutoDownloadDefault(newValue);
+    const updated = sceneList.map((s) => ({ ...s, noDownload: newValue }));
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleToggleAllNoDownload] Failed to persist:", err);
     }
   };
 
@@ -291,6 +323,7 @@ export function SharedBatchListPanel({
         onToggleDisable={handleToggleDisable}
         onToggleVoiceDisable={handleToggleVoiceDisable}
         onToggleNoText={handleToggleNoText}
+        onToggleNoDownload={handleToggleNoDownload}
         onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
         onUpdateElementImageSlots={handleUpdateElementImageSlots}
         onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
@@ -310,6 +343,7 @@ export function SharedBatchListPanel({
       handleToggleDisable,
       handleToggleVoiceDisable,
       handleToggleNoText,
+      handleToggleNoDownload,
       handleUpdateSelectedProductImages,
       handleUpdateElementImageSlots,
       handleUpdateReviewImageSlots,
@@ -360,6 +394,7 @@ export function SharedBatchListPanel({
         onToggleAllNoText={handleToggleAllNoText}
         onToggleAllVoiceDisable={handleToggleAllVoiceDisable}
         ActionBarComponent={ActionBarComponent}
+        onToggleAllNoDownload={handleToggleAllNoDownload}
       />
 
       {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}

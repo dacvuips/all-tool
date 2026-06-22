@@ -5,6 +5,7 @@ import type { CopyVideoAnalysisData, CopyVideoScene, ElementFormImage } from "..
 import { productImageUrlsToApiImages } from "../../elements/utils/elementFormImageUtils";
 import { parseThumbnailReferenceImage } from "../../elements/utils/elementSceneGenerationParams";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
+import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
 import type {
   GenerateImageParams,
   GenerateVideoParams,
@@ -43,6 +44,7 @@ export async function buildCopyVideoImageGenerateParams(options: {
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
+    ...buildAutoDownloadOptions(scene),
   };
 }
 
@@ -100,5 +102,6 @@ export async function buildCopyVideoVideoGenerateParams(options: {
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

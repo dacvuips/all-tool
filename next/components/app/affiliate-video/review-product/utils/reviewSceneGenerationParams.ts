@@ -11,6 +11,7 @@ import type {
 } from "../hook/useReviewApi";
 import { productImageUrlsToApiImages } from "./reviewFormImageUtils";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
+import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
 
 export type ElementScriptLike =
   | Pick<ElementAnalysisData, "aspectRatio" | "artStyle" | "artStyleId" | "serviceImageType">
@@ -100,6 +101,7 @@ export async function buildReviewImageGenerateParams(options: {
     productImagePrompt: scene.product_image_prompt || undefined,
     serviceImageType: scriptData?.serviceImageType,
     objectToPersonifyImage,
+    ...buildAutoDownloadOptions(scene),
   };
 }
 
@@ -140,5 +142,6 @@ export async function buildReviewVideoGenerateParams(options: {
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

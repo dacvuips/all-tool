@@ -193,6 +193,8 @@ export interface SceneScript {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  /** Bật tự động tải ảnh/video sau khi gen xong */
+  noDownload?: boolean;
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
   selectedProductImages?: string[];
@@ -324,6 +326,8 @@ export const CACHE_KEY = {
   lastStoryboardScript: "lastStoryboardScript",
   storyboardInput: "storyboardInput",
   storyboardHistory: "storyboardHistory",
+  /** Mặc định tự động tải ảnh/video sau khi gen (localStorage) */
+  autoDownloadAfterGen: "affiliate-video:autoDownloadAfterGen",
 };
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
@@ -350,6 +354,7 @@ export interface CopyVideoScene {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  noDownload?: boolean;
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
@@ -417,6 +422,8 @@ export interface ElementScene {
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
+  /** Bật tự động tải ảnh/video sau khi gen xong */
+  noDownload?: boolean;
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
