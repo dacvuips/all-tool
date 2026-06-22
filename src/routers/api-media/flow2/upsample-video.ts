@@ -27,12 +27,19 @@ function pickUpsampleJobId(data: Record<string, unknown>): string | undefined {
 
 async function waitForUpsampleVideoDone(
   upsampleJobId: string,
-  timeoutMs = 900_000,
-  pollIntervalMs = 2_500
+  options?: {
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+    onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  }
 ): Promise<void> {
+  const timeoutMs = options?.timeoutMs ?? 900_000;
+  const pollIntervalMs = options?.pollIntervalMs ?? 2_500;
   const startedAt = Date.now();
+  let pollCount = 0;
 
   while (Date.now() - startedAt < timeoutMs) {
+    pollCount += 1;
     const statusData = await getFlow2RequestStatus(upsampleJobId);
     const status = pickStatus(statusData);
 
@@ -45,6 +52,15 @@ async function waitForUpsampleVideoDone(
 
     if (isFlow2SuccessStatus(status)) {
       return;
+    }
+
+    if (options?.onProgress) {
+      const elapsed = Date.now() - startedAt;
+      const ratio = Math.min(1, elapsed / timeoutMs);
+      const progress = 15 + Math.round(ratio * 70);
+      Promise.resolve(
+        options.onProgress(progress, `Đang upscale video 1080p... (${pollCount})`)
+      ).catch((): undefined => undefined);
     }
 
     await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -63,9 +79,15 @@ async function waitForUpsampleVideoDone(
  */
 export async function upsampleVideoWithFlow2(params: {
   flow2RequestId: string;
+  onProgress?: (progress: number, message?: string) => void | Promise<void>;
 }): Promise<UpsampledVideoResult> {
   const { baseUrl, token } = await getFlow2Config();
   const sourceRequestId = params.flow2RequestId.trim();
+  const { onProgress } = params;
+
+  if (onProgress) {
+    await onProgress(8, "Đang gửi yêu cầu upscale 1080p...");
+  }
 
   const enqueueResp = await fetchFlow2WithRetry(`${baseUrl}/api/requests/upsample-video`, {
     method: "POST",
@@ -93,7 +115,15 @@ export async function upsampleVideoWithFlow2(params: {
     `[flow2-upsample-video] Enqueued source=${sourceRequestId} job=${upsampleJobId}`
   );
 
-  await waitForUpsampleVideoDone(upsampleJobId);
+  if (onProgress) {
+    await onProgress(12, "Đã enqueue, đang chờ Flow2 upscale...");
+  }
+
+  await waitForUpsampleVideoDone(upsampleJobId, { onProgress });
+
+  if (onProgress) {
+    await onProgress(90, "Đang tải video 1080p từ Flow2...");
+  }
 
   const downloadResp = await fetchFlow2WithRetry(
     `${baseUrl}/api/requests/${upsampleJobId}?download=true`,

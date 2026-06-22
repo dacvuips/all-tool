@@ -28,7 +28,9 @@ export default function startExpressApp() {
     compression({
       filter: (req, res) => {
         if (
-          /generation-(element-)?(video|image)|copy-video-generate-image/.test(req.path)
+          /generation-(element-)?(video|image)|copy-video-generate-image|upsample-video/.test(
+            req.path
+          )
         ) {
           return false;
         }

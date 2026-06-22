@@ -463,7 +463,82 @@ export async function downloadGeneratedVideo(
 }
 
 /** Upscale video đã generate lên 1080p qua Flow2 và trả Blob. */
-export async function fetchUpsampled1080pVideoBlob(video: GeneratedVideoLike): Promise<Blob> {
+type UpsampleVideoSSEEvent = {
+  type?: string;
+  progress?: number;
+  message?: string;
+  downloadToken?: string;
+  mimeType?: string;
+};
+
+function parseUpsampleVideoSSELine(line: string): UpsampleVideoSSEEvent | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return null;
+  const jsonStr = trimmed.slice(5).trim();
+  if (!jsonStr) return null;
+  try {
+    return JSON.parse(jsonStr) as UpsampleVideoSSEEvent;
+  } catch {
+    return null;
+  }
+}
+
+async function consumeUpsampleVideoSSE(
+  res: Response,
+  onProgress?: (progress: number, message?: string) => void
+): Promise<{ downloadToken: string }> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error("Không đọc được stream upscale video 1080p");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let downloadToken: string | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const evt = parseUpsampleVideoSSELine(line);
+      if (!evt?.type) continue;
+
+      if (evt.type === "progress" && typeof evt.progress === "number") {
+        onProgress?.(evt.progress, evt.message);
+      }
+      if (evt.type === "done" && evt.downloadToken) {
+        downloadToken = evt.downloadToken;
+      }
+      if (evt.type === "error") {
+        throw new Error(evt.message || "Lỗi upscale video 1080p");
+      }
+    }
+  }
+
+  const tail = parseUpsampleVideoSSELine(buffer);
+  if (tail?.type === "error") {
+    throw new Error(tail.message || "Lỗi upscale video 1080p");
+  }
+  if (tail?.type === "done" && tail.downloadToken) {
+    downloadToken = tail.downloadToken;
+  }
+
+  if (!downloadToken) {
+    throw new Error("Không nhận được token tải video 1080p");
+  }
+
+  return { downloadToken };
+}
+
+export async function fetchUpsampled1080pVideoBlob(
+  video: GeneratedVideoLike,
+  options?: { onProgress?: (progress: number, message?: string) => void }
+): Promise<Blob> {
   if (!hasFlow2Upsample1080pVideoMeta(video)) {
     throw new Error("Thiếu metadata Flow2 (flow2RequestId) để upscale video 1080p");
   }
@@ -481,7 +556,24 @@ export async function fetchUpsampled1080pVideoBlob(video: GeneratedVideoLike): P
     );
   }
 
-  return res.blob();
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("event-stream")) {
+    throw new Error("Phản hồi upscale video 1080p không hợp lệ");
+  }
+
+  const { downloadToken } = await consumeUpsampleVideoSSE(res, options?.onProgress);
+
+  const dlRes = await fetch(
+    `/api/app/upsample-video/download/?token=${encodeURIComponent(downloadToken)}`
+  );
+  if (!dlRes.ok) {
+    const err = await dlRes.json().catch(() => ({}));
+    throw new Error(
+      (err as { message?: string })?.message || `Lỗi tải video 1080p (${dlRes.status})`
+    );
+  }
+
+  return dlRes.blob();
 }
 
 function buildUpsampledVideoFileName(baseName: string, resolution: VideoDownloadResolution): string {
