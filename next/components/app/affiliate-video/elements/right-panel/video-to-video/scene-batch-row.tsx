@@ -44,7 +44,7 @@ import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
-import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
+import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 import { SceneElementVideosRow } from "./scene-element-videos-row";
@@ -157,15 +157,22 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.elementImageSlots]);
 
   const handleElementImageSlotsChange = useCallback(
-    (slots: (ElementFormImage | undefined)[]) => {
-      const urls = elementImageSlotsToUrls(slots);
-      setSelectedElementImageSlots(slots);
-      setSelectedProductImages(urls);
-      selectedProductImagesDB.set(scene.id, urls);
-      onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(scene.id, slots, urls);
-    },
-    [scene.id, selectedProductImagesDB, onUpdateSelectedProductImages, onUpdateElementImageSlots]
+    createElementImageSlotsChangeHandler({
+      sceneId: scene.id,
+      elementFormConfig,
+      setSelectedElementImageSlots,
+      setSelectedProductImages,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+    }),
+    [
+      scene.id,
+      elementFormConfig,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+    ]
   );
 
   // ── Video tham chiếu 1 ô (per-scene) ──

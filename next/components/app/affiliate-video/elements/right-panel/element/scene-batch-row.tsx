@@ -43,8 +43,8 @@ import {
   resolveActionImageType,
 } from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
+import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
-import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 
@@ -173,16 +173,19 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
-    (slots: (ElementFormImage | undefined)[]) => {
-      const urls = elementImageSlotsToUrls(slots);
-      setSelectedElementImageSlots(slots);
-      setSelectedProductImages(urls);
-      selectedProductImagesDB.set(scene.id, urls);
-      onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(scene.id, slots, urls, actionImageType);
-    },
+    createElementImageSlotsChangeHandler({
+      sceneId: scene.id,
+      elementFormConfig,
+      actionImageType,
+      setSelectedElementImageSlots,
+      setSelectedProductImages,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+    }),
     [
       scene.id,
+      elementFormConfig,
       actionImageType,
       selectedProductImagesDB,
       onUpdateSelectedProductImages,

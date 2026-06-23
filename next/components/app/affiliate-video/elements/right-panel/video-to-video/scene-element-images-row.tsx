@@ -1,10 +1,16 @@
 /**
  * Hàng 3 ô ảnh tham chiếu theo scene – auto-match tên ảnh trong prompt (tối đa 3, theo thứ tự xuất hiện).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ElementFormConfig, ElementFormImage } from "../../../constants";
+import {
+  elementImageSlotsFingerprint,
+  ElementImageSlotsChangeHandler,
+  resolveSlotsFromCatalog,
+} from "../../utils/elementImageSlotPersist";
 import { matchElementImagesInPrompt } from "../../utils/matchElementImagesInPrompt";
+import { useSceneElementImagesRowNotify } from "../useSceneElementImagesRowNotify";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
 
 const SLOT_COUNT = 4;
@@ -15,7 +21,7 @@ export interface SceneElementImagesRowProps {
   elementFormConfig?: ElementFormConfig;
   savedSlots?: (ElementFormImage | undefined)[];
   readOnly?: boolean;
-  onSlotsChange: (slots: (ElementFormImage | undefined)[]) => void;
+  onSlotsChange: ElementImageSlotsChangeHandler;
 }
 
 export function SceneElementImagesRow({
@@ -36,43 +42,32 @@ export function SceneElementImagesRow({
   const [slots, setSlots] = useState<(ElementFormImage | undefined)[]>(() =>
     savedSlots?.length ? [...savedSlots] : [...autoMatched]
   );
-  const [manualMask, setManualMask] = useState<boolean[]>([false, false, false]);
-  const lastNotifiedRef = useRef<string>("");
+  const [manualMask, setManualMask] = useState<boolean[]>(() =>
+    Array.from({ length: SLOT_COUNT }, () => false)
+  );
 
   useEffect(() => {
     setSlots(savedSlots?.length ? [...savedSlots] : [...autoMatched]);
-    setManualMask([false, false, false]);
-    lastNotifiedRef.current = "";
+    setManualMask(
+      savedSlots?.length
+        ? Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots[i])
+        : Array.from({ length: SLOT_COUNT }, () => false)
+    );
   }, [sceneId]);
 
   useEffect(() => {
     setSlots((prev) => {
       const next = autoMatched.map((img, i) => (manualMask[i] ? prev[i] : img));
-      return next;
+      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next) ? prev : next;
     });
   }, [autoMatched, manualMask]);
 
-  const notifyParent = useCallback(
-    (next: (ElementFormImage | undefined)[]) => {
-      // Key theo từng slot (không chỉ URL) — tránh bỏ qua sync khi đổi ảnh cùng URL / thứ tự slot
-      const key = next
-        .map((s, i) => {
-          if (!s) return `${i}:`;
-          const bytesLen = s.imageBytes?.length ?? 0;
-          const url = s.fifeUrl || "";
-          return `${i}:${s.name ?? ""}:${bytesLen}:${url.slice(0, 32)}`;
-        })
-        .join("|");
-      if (key === lastNotifiedRef.current) return;
-      lastNotifiedRef.current = key;
-      onSlotsChange(next);
-    },
-    [onSlotsChange]
-  );
+  useSceneElementImagesRowNotify(sceneId, slots, manualMask, onSlotsChange);
 
-  useEffect(() => {
-    notifyParent(slots);
-  }, [slots, notifyParent]);
+  const displaySlots = useMemo(
+    () => resolveSlotsFromCatalog(slots, elementFormConfig),
+    [slots, elementFormConfig, autoMatched]
+  );
 
   const handleSlotChange = useCallback((index: number, value: ElementFormImage | undefined) => {
     setManualMask((mask) => {
@@ -108,7 +103,7 @@ export function SceneElementImagesRow({
           <SceneElementImageSlot
             key={i}
             slotIndex={i + 1}
-            value={slots[i]}
+            value={displaySlots[i]}
             readOnly={readOnly}
             onChange={(v) => handleSlotChange(i, v)}
             imageClass="w-11 h-11"

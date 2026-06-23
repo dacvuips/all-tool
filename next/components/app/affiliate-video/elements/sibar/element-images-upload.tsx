@@ -14,6 +14,7 @@ import {
   RiVideoLine,
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { compressUploadImage } from "../../../../../lib/helpers/image";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { Button, Field } from "../../../../shared/utilities/form";
 import { ElementFormImage, ElementFormVideo, StoryboardImageStatus } from "../../constants";
@@ -21,6 +22,23 @@ import { getElementFormImagePreviewSrc, getImageDisplayName } from "../utils/ele
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
+const IMAGE_COMPRESS_THRESHOLD_BYTES = 512 * 1024;
+
+async function prepareImageFileForUpload(file: File): Promise<File> {
+  if (file.size <= IMAGE_COMPRESS_THRESHOLD_BYTES) return file;
+  try {
+    const compressed = await compressUploadImage(file, {
+      width: 1920,
+      height: 1920,
+      quality: 72,
+      type: "JPEG",
+    });
+    return compressed as File;
+  } catch (err) {
+    console.warn("[element-images-upload] Compress failed, using original:", err);
+    return file;
+  }
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -69,10 +87,9 @@ function ImageUploadSlot({
   const [zoomImage, setZoomImage] = useState("");
 
   const previewSrc = useMemo(() => {
-    if (!value?.imageBytes) return null;
-    if (value.fifeUrl) return value.fifeUrl;
-    return base64ToBlobUrl(value.imageBytes, value.mimeType || "image/png");
-  }, [value?.imageBytes, value?.fifeUrl, value?.mimeType]);
+    if (!value) return null;
+    return getElementFormImagePreviewSrc(value);
+  }, [value]);
 
   useEffect(() => {
     return () => {
@@ -105,8 +122,9 @@ function ImageUploadSlot({
 
       try {
         setUploading(true);
-        const imageBytes = await fileToBase64(file);
-        const mimeType = file.type || "image/png";
+        const prepared = await prepareImageFileForUpload(file);
+        const imageBytes = await fileToBase64(prepared);
+        const mimeType = prepared.type || file.type || "image/png";
         onChange({
           fifeUrl: "",
           imageBytes,
@@ -399,8 +417,9 @@ function MultiImageUploadSlot({
       }
 
       try {
-        const imageBytes = await fileToBase64(file);
-        const mimeType = file.type || "image/png";
+        const prepared = await prepareImageFileForUpload(file);
+        const imageBytes = await fileToBase64(prepared);
+        const mimeType = prepared.type || file.type || "image/png";
         return {
           fifeUrl: "",
           imageBytes,

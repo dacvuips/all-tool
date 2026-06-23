@@ -4,7 +4,7 @@
  * Dùng chung cho single, copy-video, trending
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
@@ -13,6 +13,7 @@ import { CharacterItem } from "../constants";
 import { ActionImageEnum } from "../elements/constants";
 import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
 import { getAutoDownloadDefault, setAutoDownloadDefault } from "./autoDownloadUtils";
+import { LazySceneCard } from "./lazy-scene-card";
 import { SceneTabKey } from "./scene-card-tabs";
 
 export type { BatchListHistoryConfig };
@@ -73,6 +74,9 @@ export interface SharedBatchListPanelProps {
 
   /** ID nút kéo thả (intro tour) */
   getDragHandleId?: (item: any, index: number) => string | undefined;
+
+  /** Chỉ mount scene row khi gần viewport — giảm RAM với danh sách dài */
+  lazyMountSceneRows?: boolean;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -91,11 +95,26 @@ export function SharedBatchListPanel({
   sceneRowExtraProps,
   onOpenIntro,
   getDragHandleId,
+  lazyMountSceneRows = false,
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
   const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(null);
   const { customer } = useAuth();
+
+  const pendingSlotUpdatesRef = useRef(
+    new Map<
+      string,
+      { slots: any[]; imageUrls: string[]; actionMode?: ActionImageEnum }
+    >()
+  );
+  const slotFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (slotFlushTimerRef.current) clearTimeout(slotFlushTimerRef.current);
+    };
+  }, []);
   // Sync local sceneList when parent scenes prop changes (e.g. switching history items)
   useEffect(() => {
     setSceneList(scenes);
@@ -248,30 +267,48 @@ export function SharedBatchListPanel({
     }
   };
 
-  /** Update element image slots (3 ô ảnh tham chiếu) + derived product image URLs */
-  const handleUpdateElementImageSlots = async (
-    sceneId: string,
-    slots: any[],
-    imageUrls: string[],
-    actionMode?: ActionImageEnum
-  ) => {
-    const updated = sceneList.map((s) =>
-      s.id === sceneId
-        ? {
-            ...s,
-            elementImageSlots: slots,
-            selectedProductImages: imageUrls,
-            elementImageSlotsActionMode: actionMode ?? s.elementImageSlotsActionMode,
-          }
-        : s
-    );
-    setSceneList(updated);
-    try {
-      await onPersistScenes(updated);
-    } catch (err) {
-      console.error("[handleUpdateElementImageSlots] Failed to persist:", err);
-    }
-  };
+  /** Update element image slots — gộp nhiều scene, ghi IndexedDB một lần (debounce) */
+  const flushPendingElementImageSlots = useCallback(() => {
+    const pending = pendingSlotUpdatesRef.current;
+    if (pending.size === 0) return;
+
+    const updates = new Map(pending);
+    pending.clear();
+
+    setSceneList((prev) => {
+      let updated = prev;
+      updates.forEach((data, sceneId) => {
+        updated = updated.map((s) =>
+          s.id === sceneId
+            ? {
+                ...s,
+                elementImageSlots: data.slots,
+                selectedProductImages: data.imageUrls,
+                elementImageSlotsActionMode: data.actionMode ?? s.elementImageSlotsActionMode,
+              }
+            : s
+        );
+      });
+      void Promise.resolve(onPersistScenes(updated)).catch((err) =>
+        console.error("[handleUpdateElementImageSlots] Failed to persist:", err)
+      );
+      return updated;
+    });
+  }, [onPersistScenes]);
+
+  const handleUpdateElementImageSlots = useCallback(
+    (
+      sceneId: string,
+      slots: any[],
+      imageUrls: string[],
+      actionMode?: ActionImageEnum
+    ) => {
+      pendingSlotUpdatesRef.current.set(sceneId, { slots, imageUrls, actionMode });
+      if (slotFlushTimerRef.current) clearTimeout(slotFlushTimerRef.current);
+      slotFlushTimerRef.current = setTimeout(flushPendingElementImageSlots, 400);
+    },
+    [flushPendingElementImageSlots]
+  );
 
   /** Update review image slots (3 ô ảnh tham chiếu) + derived product image URLs */
   const handleUpdateReviewImageSlots = async (
@@ -318,28 +355,38 @@ export function SharedBatchListPanel({
   const getSceneId = useCallback((scene: { id: string }) => scene.id, []);
 
   const renderSceneRow = useCallback(
-    (scene: any, index: number) => (
-      <SceneRowComponent
-        scene={scene}
-        index={index}
-        nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
-        isDisabled={!!scene.disabled}
-        characters={characters}
-        hideImageColumn={hideImageColumn}
-        onInsert={handleInsert}
-        onUpdateScene={handleUpdateScene}
-        onToggleDisable={handleToggleDisable}
-        onToggleVoiceDisable={handleToggleVoiceDisable}
-        onToggleNoText={handleToggleNoText}
-        onToggleNoDownload={handleToggleNoDownload}
-        onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
-        onUpdateElementImageSlots={handleUpdateElementImageSlots}
-        onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
-        onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
-        forcedTab={globalTab}
-        {...sceneRowExtraProps}
-      />
-    ),
+    (scene: any, index: number) => {
+      const row = (
+        <SceneRowComponent
+          scene={scene}
+          index={index}
+          nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
+          isDisabled={!!scene.disabled}
+          characters={characters}
+          hideImageColumn={hideImageColumn}
+          onInsert={handleInsert}
+          onUpdateScene={handleUpdateScene}
+          onToggleDisable={handleToggleDisable}
+          onToggleVoiceDisable={handleToggleVoiceDisable}
+          onToggleNoText={handleToggleNoText}
+          onToggleNoDownload={handleToggleNoDownload}
+          onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
+          onUpdateElementImageSlots={handleUpdateElementImageSlots}
+          onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
+          onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
+          forcedTab={globalTab}
+          {...sceneRowExtraProps}
+        />
+      );
+
+      if (!lazyMountSceneRows) return row;
+
+      return (
+        <LazySceneCard sceneNumber={scene.sceneNumber}>
+          {row}
+        </LazySceneCard>
+      );
+    },
     [
       sceneList.length,
       characters,
@@ -356,6 +403,7 @@ export function SharedBatchListPanel({
       handleUpdateElementImageSlots,
       handleUpdateReviewImageSlots,
       handleUpdateElementVideoSlots,
+      lazyMountSceneRows,
     ]
   );
 

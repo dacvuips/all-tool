@@ -43,8 +43,8 @@ import {
   resolveActionImageType,
 } from "../../utils/elementActionImageUtils";
 import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
+import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
-import { elementImageSlotsToUrls } from "../../utils/matchElementImagesInPrompt";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
 
@@ -178,21 +178,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.elementImageSlots, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
-    (slots: (ElementFormImage | undefined)[]) => {
-      const urls = elementImageSlotsToUrls(slots);
-      setSelectedElementImageSlots(slots);
-      setSelectedProductImages(urls);
-      selectedProductImagesDB.set(scene.id, urls);
-      onUpdateSelectedProductImages?.(scene.id, urls);
-      onUpdateElementImageSlots?.(
-        scene.id,
-        slots,
-        urls,
-        actionImageType === ActionImageEnum.sequential ? actionImageType : undefined
-      );
-    },
+    createElementImageSlotsChangeHandler({
+      sceneId: scene.id,
+      elementFormConfig,
+      actionImageType,
+      setSelectedElementImageSlots,
+      setSelectedProductImages,
+      selectedProductImagesDB,
+      onUpdateSelectedProductImages,
+      onUpdateElementImageSlots,
+      resolvePersistActionMode: (type) =>
+        type === ActionImageEnum.sequential ? type : undefined,
+    }),
     [
       scene.id,
+      elementFormConfig,
       actionImageType,
       selectedProductImagesDB,
       onUpdateSelectedProductImages,

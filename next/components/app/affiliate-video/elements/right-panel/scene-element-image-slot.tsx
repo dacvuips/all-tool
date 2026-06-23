@@ -5,12 +5,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
+import { compressUploadImage } from "../../../../../lib/helpers/image";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
 import { ElementFormImage } from "../../constants";
 import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
 const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
+const IMAGE_COMPRESS_THRESHOLD_BYTES = 512 * 1024;
+
+async function prepareImageFileForUpload(file: File): Promise<File> {
+  if (file.size <= IMAGE_COMPRESS_THRESHOLD_BYTES) return file;
+  try {
+    const compressed = await compressUploadImage(file, {
+      width: 1920,
+      height: 1920,
+      quality: 72,
+      type: "JPEG",
+    });
+    return compressed as File;
+  } catch {
+    return file;
+  }
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -86,11 +103,12 @@ export function SceneElementImageSlot({
 
       try {
         setUploading(true);
-        const imageBytes = await fileToBase64(file);
+        const prepared = await prepareImageFileForUpload(file);
+        const imageBytes = await fileToBase64(prepared);
         onChange({
           fifeUrl: "",
           imageBytes,
-          mimeType: file.type || "image/png",
+          mimeType: prepared.type || file.type || "image/png",
           name: file.name,
         });
       } catch (err) {

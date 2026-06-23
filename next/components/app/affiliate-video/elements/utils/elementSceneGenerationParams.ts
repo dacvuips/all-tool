@@ -19,6 +19,7 @@ import {
   pickSceneSavedImageSlots,
   resolveActionImageType,
 } from "./elementActionImageUtils";
+import { resolveSlotsFromCatalog } from "./elementImageSlotPersist";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
 
@@ -64,7 +65,10 @@ export function pickElementImageSlotsForScene(
   elementFormConfig?: ElementFormConfig
 ): (ElementFormImage | undefined)[] | undefined {
   const actionImageType = resolveActionImageType(elementFormConfig);
-  const sceneSlots = pickSceneSavedImageSlots(scene, actionImageType);
+  const sceneSlotsRaw = pickSceneSavedImageSlots(scene, actionImageType);
+  const sceneSlots = sceneSlotsRaw?.length
+    ? resolveSlotsFromCatalog(sceneSlotsRaw, elementFormConfig)
+    : sceneSlotsRaw;
   if (!selectedElementImageSlots?.length && !sceneSlots?.length) {
     if (!elementFormConfig) return sceneSlots;
     return matchElementImagesForScene(

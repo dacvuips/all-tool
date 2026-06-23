@@ -12,19 +12,12 @@ import {
   sequentialImagesFingerprint,
 } from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
+import { elementImageSlotsFingerprint, ElementImageSlotsChangeHandler, resolveSlotsFromCatalog } from "../../utils/elementImageSlotPersist";
 import { matchElementImagesForScene } from "../../utils/matchElementImagesInPrompt";
+import { useSceneElementImagesRowNotify } from "../useSceneElementImagesRowNotify";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
 
 const SLOT_COUNT = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
-
-function slotsFingerprint(slots: (ElementFormImage | undefined)[]): string {
-  return slots
-    .map((s, i) => {
-      if (!s) return `${i}:`;
-      return `${i}:${s.name ?? ""}:${s.imageBytes?.length ?? 0}:${(s.fifeUrl || "").slice(0, 32)}`;
-    })
-    .join("|");
-}
 
 export interface SceneElementImagesRowProps {
   sceneId: string;
@@ -33,7 +26,7 @@ export interface SceneElementImagesRowProps {
   elementFormConfig?: ElementFormConfig;
   savedSlots?: (ElementFormImage | undefined)[];
   readOnly?: boolean;
-  onSlotsChange: (slots: (ElementFormImage | undefined)[]) => void;
+  onSlotsChange: ElementImageSlotsChangeHandler;
 }
 
 export function SceneElementImagesRow({
@@ -64,7 +57,7 @@ export function SceneElementImagesRow({
     [sceneNumber, prompt, actionImageType, isSequentialImageMode ? sequentialImagesKey : autoImagesKey]
   );
 
-  const autoMatchedKey = useMemo(() => slotsFingerprint(autoMatched), [autoMatched]);
+  const autoMatchedKey = useMemo(() => elementImageSlotsFingerprint(autoMatched), [autoMatched]);
 
   const [slots, setSlots] = useState<(ElementFormImage | undefined)[]>(() =>
     savedSlots?.length ? [...savedSlots] : [...autoMatched]
@@ -72,19 +65,21 @@ export function SceneElementImagesRow({
   const [manualMask, setManualMask] = useState<boolean[]>(() =>
     Array.from({ length: SLOT_COUNT }, () => false)
   );
-  const lastNotifiedRef = useRef<string>("");
   const prevActionImageTypeRef = useRef(actionImageType);
 
   const savedSlotsKey = useMemo(
-    () => (savedSlots?.length ? slotsFingerprint(savedSlots) : ""),
+    () => (savedSlots?.length ? elementImageSlotsFingerprint(savedSlots) : ""),
     [savedSlots]
   );
 
   useEffect(() => {
     const initial = savedSlots?.length ? [...savedSlots] : [...autoMatched];
     setSlots(initial);
-    setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
-    lastNotifiedRef.current = slotsFingerprint(initial);
+    setManualMask(
+      savedSlots?.length
+        ? Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots[i])
+        : Array.from({ length: SLOT_COUNT }, () => false)
+    );
     prevActionImageTypeRef.current = actionImageType;
   }, [sceneId]);
 
@@ -94,13 +89,12 @@ export function SceneElementImagesRow({
     const next = [...autoMatched];
     setSlots(next);
     setManualMask(Array.from({ length: SLOT_COUNT }, () => false));
-    lastNotifiedRef.current = slotsFingerprint(next);
   }, [actionImageType, autoMatchedKey]);
 
   useEffect(() => {
     if (isSequentialImageMode || !savedSlotsKey) return;
     const next = [...savedSlots!].slice(0, SLOT_COUNT);
-    setSlots((prev) => (slotsFingerprint(prev) === savedSlotsKey ? prev : next));
+    setSlots((prev) => (elementImageSlotsFingerprint(prev) === savedSlotsKey ? prev : next));
     setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots![i]));
   }, [savedSlotsKey, isSequentialImageMode, savedSlots]);
 
@@ -109,23 +103,16 @@ export function SceneElementImagesRow({
   useEffect(() => {
     setSlots((prev) => {
       const next = autoMatched.map((img, i) => (manualMask[i] ? prev[i] : img));
-      return slotsFingerprint(prev) === slotsFingerprint(next) ? prev : next;
+      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next) ? prev : next;
     });
   }, [autoMatchedKey, manualMaskKey, autoMatched]);
 
-  const notifyParent = useCallback(
-    (next: (ElementFormImage | undefined)[]) => {
-      const key = slotsFingerprint(next);
-      if (key === lastNotifiedRef.current) return;
-      lastNotifiedRef.current = key;
-      onSlotsChange(next);
-    },
-    [onSlotsChange]
-  );
+  useSceneElementImagesRowNotify(sceneId, slots, manualMask, onSlotsChange);
 
-  useEffect(() => {
-    notifyParent(slots);
-  }, [slots, notifyParent]);
+  const displaySlots = useMemo(
+    () => resolveSlotsFromCatalog(slots, elementFormConfig),
+    [slots, elementFormConfig, autoMatchedKey]
+  );
 
   const handleSlotChange = useCallback((index: number, value: ElementFormImage | undefined) => {
     setManualMask((mask) => {
@@ -161,7 +148,7 @@ export function SceneElementImagesRow({
           <SceneElementImageSlot
             key={i}
             slotIndex={i + 1}
-            value={slots[i]}
+            value={displaySlots[i]}
             readOnly={readOnly}
             onChange={(v) => handleSlotChange(i, v)}
           />

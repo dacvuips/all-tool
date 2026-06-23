@@ -147,6 +147,7 @@ export function BatchListPanel({
       onBuildInsertedScene={handleBuildInsertedScene}
       ActionBarComponent={(props) => <BatchActionBar {...props} componentTab />}
       SceneRowComponent={SceneRowGroup}
+      lazyMountSceneRows
       onOpenIntro={openIntro}
     />
     </>

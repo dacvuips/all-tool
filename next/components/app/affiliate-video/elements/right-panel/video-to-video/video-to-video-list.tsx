@@ -146,6 +146,7 @@ export function VideoToVideoListPanel({
       onBuildInsertedScene={handleBuildInsertedScene}
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
+      lazyMountSceneRows
       onOpenIntro={openIntro}
     />
     </>
