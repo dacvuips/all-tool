@@ -61,6 +61,8 @@ export interface SceneCardImageTabProps {
   assignedSlotIndices?: number[];
   /** Gắn ảnh đã generate vào ô tham chiếu theo index (0-based) */
   onAssignToSlot?: (slotIndex: number) => void;
+  /** ID cho nút tạo ảnh (intro tour) */
+  generateButtonId?: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -82,6 +84,7 @@ export function SceneCardImageTab({
   slotAssignCount = 0,
   assignedSlotIndices = [],
   onAssignToSlot,
+  generateButtonId,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -234,6 +237,7 @@ export function SceneCardImageTab({
         ) : (
           /* ── Default: nút tạo ảnh ── */
           <button
+            id={generateButtonId}
             onClick={onGenerateImage}
             className="flex flex-col justify-center items-center w-full max-w-xs h-20 bg-gray-50 rounded-xl border-2 border-gray-200 border-dashed transition-all cursor-pointer hover:border-pink-300 hover:bg-pink-50 group"
           >

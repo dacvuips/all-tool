@@ -60,6 +60,7 @@ export function SceneHistoryDropdown<TData = unknown>({
       {!confirmClear ? (
         <button
           type="button"
+          id="batch-history-clear"
           onClick={() => setConfirmClear(true)}
           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
           title={t("Xóa lịch sử")}
@@ -103,6 +104,7 @@ export function SceneHistoryDropdown<TData = unknown>({
       </div>
 
       <select
+        id="batch-history-select"
         value={selectedId || items[0]?.id || ""}
         onChange={(e) => onSelect(e.target.value)}
         className="w-full sm:flex-1 text-xs bg-white border border-gray-200 rounded-lg px-2.5 py-2 sm:py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all cursor-pointer hover:border-gray-300 appearance-none shadow-sm sm:shadow-none"

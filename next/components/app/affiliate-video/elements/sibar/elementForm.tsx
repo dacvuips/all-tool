@@ -15,6 +15,9 @@ import {
   TrainingTopicSlug,
 } from "../../../../shared/common/training-guide-popover";
 import { Form } from "../../../../shared/utilities/form";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
+import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
 import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
@@ -48,6 +51,9 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
     setScriptTab,
     persistElementInput,
   } = useElementContext();
+  const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(
+    IntroGuideKey.ELEMENT_SIDEBAR
+  );
   const [queryParams] = useQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "" });
   const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
   const activeTab: ElementScriptTabEnum =
@@ -120,6 +126,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
+              <AffiliateIntroGuideButton id="element-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.ELEMENT} />
             </div>
             <span className="text-xs text-gray-500">
@@ -142,7 +149,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="overflow-y-auto flex-1 min-h-0 bg-white v-scrollbar">
-        <AffiliateConfig />
+        <AffiliateConfig introOpen={introOpen} onIntroDismiss={handleIntroDismiss} />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

@@ -7,16 +7,19 @@ export function SceneAutoDownloadButton({
   disabled,
   noDownload,
   onToggle,
+  id,
 }: {
   disabled?: boolean;
   noDownload?: boolean;
   onToggle: () => void;
+  id?: string;
 }) {
   const { t } = useTranslation();
   const enabled = noDownload ?? getAutoDownloadDefault();
 
   return (
     <Button
+      id={id}
       disabled={disabled}
       onClick={onToggle}
       className={`w-6 h-6 px-2 rounded-md shadow-sm ${

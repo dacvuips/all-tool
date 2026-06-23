@@ -75,6 +75,8 @@ export interface SceneCardTabsProps {
   tabStatus?: Partial<Record<SceneTabKey, TabStatus>>;
   /** Ép chọn tab từ bên ngoài (dùng cho "chuyển tab đồng loạt") */
   forcedTab?: SceneTabKey | null;
+  /** ID cho các nút tab (intro tour) */
+  guideTabIds?: Partial<Record<SceneTabKey, string>>;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -89,6 +91,7 @@ export function SceneCardTabs({
   renderVideoPrompts,
   tabStatus,
   forcedTab,
+  guideTabIds,
 }: SceneCardTabsProps) {
   const { t } = useTranslation();
 
@@ -128,6 +131,7 @@ export function SceneCardTabs({
           return (
             <button
               key={tab.key}
+              id={guideTabIds?.[tab.key]}
               onClick={() => setActiveTab(tab.key)}
               className={`relative flex items-center gap-1 px-1 py-1 w-full justify-center rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
                 isActive ? tab.activeClass : tab.inactiveClass

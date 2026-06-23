@@ -27,6 +27,7 @@ interface IntroStepsProps {
   prevLabel?: string;
   doneLabel?: string;
   onClose?: () => any;
+  onComplete?: () => any;
   isOpen?: boolean;
   option?: any;
 }
@@ -40,6 +41,8 @@ export const IntroStep = ({
   doneLabel = "Hoàn thành",
   isOpen,
   option,
+  onClose,
+  onComplete,
   ...props
 }: IntroStepsProps) => {
   const [stepsEnabled, setStepsEnabled] = useState(false);
@@ -60,7 +63,11 @@ export const IntroStep = ({
       initialStep={initialStep}
       onExit={() => {
         setStepsEnabled(false);
-        props.onClose();
+        onClose?.();
+      }}
+      onComplete={() => {
+        setStepsEnabled(false);
+        onComplete?.();
       }}
       {...props}
     />

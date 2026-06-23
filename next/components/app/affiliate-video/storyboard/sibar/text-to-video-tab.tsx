@@ -7,6 +7,9 @@
 import { useTranslation } from "react-i18next";
 import { RiCloseLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
+import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
 
 import { IoAppsSharp } from "react-icons/io5";
 import {
@@ -22,6 +25,9 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
   const { t } = useTranslation();
   const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } =
     useAffiliateVideoContext();
+  const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(
+    IntroGuideKey.STORYBOARD_SIDEBAR
+  );
 
   /** Merge các field storyboard từ provider – react-hook-form không track hết */
   const wrappedSubmit = (data: any, promptText?: string) => {
@@ -57,6 +63,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
               <span className="text-base font-bold text-gray-800">
                 {t("Tạo cảnh theo Storyboard")}
               </span>
+              <AffiliateIntroGuideButton id="storyboard-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.STORYBOARD} />
             </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh từ ảnh storyboard")}</span>
@@ -77,7 +84,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="flex-1 min-h-0 overflow-y-auto v-scrollbar bg-white">
-        <AffiliateConfig />
+        <AffiliateConfig introOpen={introOpen} onIntroDismiss={handleIntroDismiss} />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

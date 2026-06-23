@@ -236,7 +236,7 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
 
   return (
     <>
-      <div className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100">
+      <div id="batch-action-bar" className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100">
         <div className="flex overflow-x-auto flex-nowrap gap-2 items-center p-3">
           {actions.map((action) => {
             if ("mediaDownloadDropdown" in action && action.mediaDownloadDropdown) {

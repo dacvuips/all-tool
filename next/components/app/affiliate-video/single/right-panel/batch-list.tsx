@@ -15,6 +15,8 @@ import {
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../shared/batch-list";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateBatchListIntro } from "../../shared/use-affiliate-batch-list-intro";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
@@ -23,9 +25,15 @@ interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
   storyModeType: StoryModeTypeEnum;
+  introGuideKey?: IntroGuideKey;
 }
 
-export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
+export function BatchListPanel({
+  scenes,
+  characters,
+  storyModeType,
+  introGuideKey = IntroGuideKey.SINGLE_BATCH_LIST,
+}: BatchListPanelProps) {
   const {
     scriptData,
     setScriptData,
@@ -36,6 +44,13 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
   } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
+
+  const { introElement, openIntro } = useAffiliateBatchListIntro({
+    storageKey: introGuideKey,
+    sceneCount: scenes.length,
+    hasHistory: !!sceneHistory?.length,
+    hasProductImages: !!scriptData?.productImages?.length,
+  });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync) */
   const handlePersistScenes = async (updatedScenes: any[]) => {
@@ -118,7 +133,9 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
   };
 
   return (
-    <SharedBatchListPanel
+    <>
+      {introElement}
+      <SharedBatchListPanel
       scenes={scenes}
       characters={characters}
       hideImageColumn={storyModeType === StoryModeTypeEnum.prompt_to_video}
@@ -139,6 +156,8 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
       sceneRowExtraProps={{ storyModeType: scriptData?.storyModeType }}
+      onOpenIntro={openIntro}
     />
+    </>
   );
 }

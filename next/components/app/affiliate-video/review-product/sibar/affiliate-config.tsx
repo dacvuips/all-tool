@@ -6,11 +6,14 @@
  */
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
+import { useMemo } from "react";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getReviewSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -20,17 +23,31 @@ import { ReviewImagesUpload } from "./review-images-upload";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, reviewFormConfig } = useReviewContext();
   const { LANGUAGE_OPTIONS } = useOptionsTranslation();
+  const introSteps = useMemo(() => getReviewSidebarIntroSteps(t), [t]);
 
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
+        <div id="aspect-ratio-section">
         <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
           <div className="grid grid-cols-2 gap-2">
             {ASPECT_RATIOS.map((ar) => {
@@ -56,6 +73,7 @@ export const AffiliateConfig = () => {
             })}
           </div>
         </Field>
+        </div>
         <div>
           <ArtStylePickerDialog
             name="artStyle"
@@ -65,9 +83,10 @@ export const AffiliateConfig = () => {
           />
         </div>
         {/* NGÔN NGỮ LỜI THOẠI */}
-        <div>
+        <div id="language-section">
           <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
             <Select
+              native
               id="language-select"
               className="border-gray-200"
               options={LANGUAGE_OPTIONS}
@@ -97,11 +116,14 @@ export const AffiliateConfig = () => {
           readOnly={!customer}
         />
         {/* Ảnh sản phẩm */}
+        <div id="review-images-upload">
         <ReviewImagesUpload
           artStyleImg={reviewFormConfig?.artStyleImg}
           readOnly={!customer}
           onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
         />
+        </div>
+        <div id="scene-prompt-section">
         <Field noError label={t("Đặt điểm nổi bật của sản phẩm")}>
           <Textarea
             id="scene-prompt-list"
@@ -112,6 +134,7 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />
         </Field>
+        </div>
         {/* SỐ LƯỢNG PHÂN CẢNH CẦN TẠO (batchSize) */}
         <BatchSizeSlider
           value={reviewFormConfig?.batchSize ?? 8}
@@ -121,5 +144,6 @@ export const AffiliateConfig = () => {
         />
       </div>
     </div>
+    </>
   );
 };

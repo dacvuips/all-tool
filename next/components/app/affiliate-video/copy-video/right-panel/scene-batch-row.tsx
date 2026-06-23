@@ -53,12 +53,16 @@ export type EditField =
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
 
+export { getSceneCardIntroSteps } from "../../shared/scene-card-intro-steps";
+export type { SceneCardIntroStep } from "../../shared/scene-card-intro-steps";
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SceneBatchRow – mỗi hàng scene trong bảng
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const SceneBatchRow = React.memo(function SceneBatchRow({
   scene,
+  index,
   isDisabled,
   isGroupHovered,
   hideImageColumn,
@@ -92,6 +96,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const isGuideTarget = index === 0;
 
   const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
@@ -359,6 +364,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         </span>
         <div className="flex gap-1 items-center">
           <Button
+            id={isGuideTarget ? "scene-toggle-disable" : undefined}
             onClick={() => onToggleDisable(scene.id)}
             className={`w-6 h-6 px-2 rounded-md shadow-sm ${
               isDisabled
@@ -371,11 +377,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             placement="bottom"
           />
           <SceneAutoDownloadButton
+            id={isGuideTarget ? "scene-toggle-download" : undefined}
             disabled={isDisabled}
             noDownload={scene.noDownload}
             onToggle={() => onToggleNoDownload(scene.id)}
           />
           <Button
+            id={isGuideTarget ? "scene-toggle-notext" : undefined}
             disabled={isDisabled}
             onClick={() => onToggleNoText(scene.id)}
             className={`w-6 h-6 px-2 rounded-md shadow-sm ${
@@ -393,6 +401,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             placement="bottom"
           />
           <Button
+            id={isGuideTarget ? "scene-toggle-voice" : undefined}
             disabled={isDisabled}
             onClick={() => onToggleVoiceDisable(scene.id)}
             className={`w-6 h-6 px-2 rounded-md shadow-sm ${
@@ -410,7 +419,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {/* ── Prompt section (product images only) ── */}
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         {productImages.length > 0 && (
-          <div className="relative mt-1.5">
+          <div id={isGuideTarget ? "scene-product-images" : undefined} className="relative mt-1.5">
             <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">{`  ${t(
               "Chọn ảnh SP để gắn vào ảnh và video"
             )}:`}</span>
@@ -473,6 +482,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         hideImageTab={!!hideImageColumn}
         hideExtendTab={!nextSceneId}
         forcedTab={forcedTab}
+        guideTabIds={
+          isGuideTarget
+            ? {
+                image: "scene-tab-image",
+                video: "scene-tab-video",
+                extend: "scene-tab-extend",
+              }
+            : undefined
+        }
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
           video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },
@@ -497,6 +515,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             originThumbnailLoading={thumbnailLoading}
             sceneTimestamp={scene.timestamp}
             errorMessage={imageError}
+            generateButtonId={isGuideTarget ? "scene-generate-image" : undefined}
           />
         )}
         renderVideoTab={() => (
@@ -511,6 +530,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
             sceneNumber={scene.sceneNumber}
             onGenerateVideo={() => handleGenerateVideo()}
+            generateButtonId={isGuideTarget ? "scene-generate-video" : undefined}
           />
         )}
         renderExtendTab={() => (
@@ -527,7 +547,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           />
         )}
         renderImagePrompt={() => (
-          <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          <div
+            id={isGuideTarget ? "scene-visual-prompt" : undefined}
+            className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}
+          >
             {renderEditablePrompt(
               "visual_prompt",
               scene.visual_prompt,
@@ -650,7 +673,12 @@ export function SceneRowGroup({
   const leave = () => setHovered(false);
 
   return (
-    <div className="flex relative flex-col group" onMouseEnter={enter} onMouseLeave={leave}>
+    <div
+      id={index === 0 ? "batch-scene-card-first" : undefined}
+      className="flex relative flex-col group"
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+    >
       {/* Add ABOVE button – centered on top border, only visible on hover
       {index === 0 && (
         <div

@@ -33,6 +33,8 @@ export interface SortableCardGridProps<T> {
   keyPrefix?: string;
   /** true (mặc định): kéo bằng nút ⋮⋮ – phản hồi nhanh, không đụng scroll */
   useDragHandle?: boolean;
+  /** ID cho nút kéo (intro tour) – theo từng item */
+  getDragHandleId?: (item: T, index: number) => string | undefined;
 }
 
 interface SortableCardItemProps {
@@ -40,6 +42,7 @@ interface SortableCardItemProps {
   disabled?: boolean;
   useDragHandle: boolean;
   itemClassName?: string;
+  dragHandleId?: string;
   children: React.ReactNode;
 }
 
@@ -48,6 +51,7 @@ const SortableCardItem = memo(function SortableCardItem({
   disabled,
   useDragHandle,
   itemClassName,
+  dragHandleId,
   children,
 }: SortableCardItemProps) {
   const {
@@ -79,6 +83,7 @@ const SortableCardItem = memo(function SortableCardItem({
       {useDragHandle && (
         <button
           type="button"
+          id={dragHandleId}
           ref={setActivatorNodeRef}
           className="flex absolute -top-3 left-1/2 z-30 justify-center items-center w-7 h-7 text-gray-400 bg-white rounded-lg border border-gray-200 shadow-sm opacity-70 transition-opacity -translate-x-1/2 bg-white/90 cursor-grab touch-none sm:opacity-0 sm:group-hover:opacity-100 hover:text-primary hover:border-primary/40 active:cursor-grabbing"
           aria-label="Kéo để đổi thứ tự"
@@ -113,6 +118,7 @@ export function SortableCardGrid<T>({
   disabled = false,
   keyPrefix = "sortable",
   useDragHandle = true,
+  getDragHandleId,
 }: SortableCardGridProps<T>) {
   const itemIds = useMemo(() => items.map(getItemId), [items, getItemId]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -183,6 +189,7 @@ export function SortableCardGrid<T>({
                 id={id}
                 disabled={disabled}
                 useDragHandle={useDragHandle}
+                dragHandleId={getDragHandleId?.(item, index)}
                 itemClassName={`group ${itemClassName ?? ""}`}
               >
                 {renderItem(item, index)}

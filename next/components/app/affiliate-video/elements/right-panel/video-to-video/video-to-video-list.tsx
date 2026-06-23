@@ -6,6 +6,8 @@
 import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../../constants";
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../../shared/batch-list";
+import { IntroGuideKey } from "../../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateBatchListIntro } from "../../../shared/use-affiliate-batch-list-intro";
 import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { useElementApi } from "../../hook/useElementApi";
 import { useElementContext } from "../../providers/element-provider";
@@ -33,6 +35,12 @@ export function VideoToVideoListPanel({
   } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
+
+  const { introElement, openIntro } = useAffiliateBatchListIntro({
+    storageKey: IntroGuideKey.ELEMENT_VIDEO_TO_VIDEO_BATCH_LIST,
+    sceneCount: scenes.length,
+    hasHistory: !!sceneHistory?.length,
+  });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync).
    *  Also updates history item if a history entry is selected. */
@@ -116,7 +124,9 @@ export function VideoToVideoListPanel({
   };
 
   return (
-    <SharedBatchListPanel
+    <>
+      {introElement}
+      <SharedBatchListPanel
       scenes={scenes}
       characters={characters}
       selectedHistoryId={selectedHistoryId}
@@ -137,6 +147,8 @@ export function VideoToVideoListPanel({
       onBuildInsertedScene={handleBuildInsertedScene}
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
+      onOpenIntro={openIntro}
     />
+    </>
   );
 }

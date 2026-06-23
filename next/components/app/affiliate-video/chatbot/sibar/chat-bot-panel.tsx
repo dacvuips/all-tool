@@ -24,6 +24,8 @@ import {
 } from "../hook/affiliateChatTypes";
 import { useAffiliateChatStorage } from "../hook/useAffiliateChatStorage";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getChatbotSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 
 const CHAT_KIND = AFFILIATE_CHAT_KIND.trendingGymPt;
 
@@ -239,7 +241,11 @@ function PendingAttachmentThumb({
   );
 }
 
-export function ChatBotSidebar() {
+export function ChatBotSidebar({
+  introProps,
+}: {
+  introProps?: { introOpen: boolean; onIntroDismiss: () => void };
+}) {
   const { t } = useTranslation();
   const toast = useToast();
   const { affiliateVideoFormConfig, trendingScriptData } = useAffiliateVideoContext();
@@ -251,6 +257,7 @@ export function ChatBotSidebar() {
 
   const welcomeText = t(WELCOME_I18N_KEY);
   const welcomeMessage = useMemo(() => createWelcomeMessage(welcomeText), [welcomeText]);
+  const introSteps = useMemo(() => getChatbotSidebarIntroSteps(t), [t]);
 
   const [messages, setMessages] = useState<AffiliateChatMessage[]>(() => [welcomeMessage]);
   const [hydrated, setHydrated] = useState(false);
@@ -529,6 +536,14 @@ export function ChatBotSidebar() {
   );
 
   return (
+    <>
+      {introProps ? (
+        <AffiliateIntroStep
+          isOpen={introProps.introOpen}
+          steps={introSteps}
+          onDismiss={introProps.onIntroDismiss}
+        />
+      ) : null}
     <div className="flex flex-col flex-1 min-h-0 bg-white">
       <div className="flex gap-2 justify-between items-center px-3 py-2 bg-gray-50 border-b border-gray-200">
         <div className="flex flex-col flex-1 min-w-0">
@@ -540,6 +555,7 @@ export function ChatBotSidebar() {
           ) : null}
         </div>
         <button
+          id="chatbot-clear-btn"
           type="button"
           onClick={clearChat}
           disabled={loading}
@@ -551,7 +567,7 @@ export function ChatBotSidebar() {
         </button>
       </div>
 
-      <div ref={listRef} className="overflow-y-auto flex-1 px-3 py-3 space-y-3 min-h-0">
+      <div id="chatbot-message-list" ref={listRef} className="overflow-y-auto flex-1 px-3 py-3 space-y-3 min-h-0">
         {messages.map((m) => (
           <ChatMessageBubble key={m.id} message={m} />
         ))}
@@ -593,6 +609,7 @@ export function ChatBotSidebar() {
             }`}
           >
             <textarea
+              id="chatbot-input"
               ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -606,6 +623,7 @@ export function ChatBotSidebar() {
             />
             <div className="flex absolute right-2 bottom-2 gap-1 items-center">
               <button
+                id="chatbot-attach-btn"
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={
@@ -617,6 +635,7 @@ export function ChatBotSidebar() {
                 <RiAttachment2 />
               </button>
               <button
+                id="chatbot-send-btn"
                 type="button"
                 onClick={sendMessage}
                 disabled={
@@ -632,5 +651,6 @@ export function ChatBotSidebar() {
         </div>
       </div>
     </div>
+    </>
   );
 }

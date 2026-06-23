@@ -24,7 +24,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
   };
 
   return (
-    <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+    <div id="batch-size-slider" className="p-4 bg-purple-50 rounded-xl border border-purple-100">
       <div className="flex justify-between items-center mb-4 text-purple-900">
         <h3 className="text-sm font-semibold tracking-wide uppercase">
           {t("Số lượng mẹo cần tạo")}: {localValue}

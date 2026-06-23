@@ -9,6 +9,9 @@ import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
 
 import { Form } from "../../../../shared/utilities/form";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
 import { CopyVideoFormConfig } from "../../constants";
 import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
 
@@ -37,6 +40,9 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
   } = useCopyVideoContext();
   const { analyzeVideoForCopy } = useCopyVideoApi();
   const thumbnailDB = useThumbnailDB();
+  const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(
+    IntroGuideKey.COPY_VIDEO_SIDEBAR
+  );
 
   // ── Submit handler: phân tích video gốc ──
   const handleSubmit = useCallback(
@@ -100,25 +106,26 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       className="flex flex-col h-full"
     >
       {/* ── Header: Tạo Nhân Vật (cố định) ── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 pt-4 pb-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-            <RiFileCopy2Line className="text-white text-base" />
+      <div className="flex flex-shrink-0 justify-between items-center px-4 pt-4 pb-3 border-b border-gray-100">
+        <div className="flex gap-2 items-center">
+          <div className="flex justify-center items-center w-8 h-8 bg-red-500 rounded-full">
+            <RiFileCopy2Line className="text-base text-white" />
           </div>
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
+              <AffiliateIntroGuideButton id="copy-video-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.COPY_PROMPT} />
             </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh theo video gốc ")}</span>
           </div>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex gap-1 items-center">
           {onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="md:hidden w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center cursor-pointer border-0 transition-colors"
+              className="flex justify-center items-center w-8 h-8 bg-gray-100 rounded-full border-0 transition-colors cursor-pointer md:hidden hover:bg-gray-200"
             >
               <RiCloseLine className="text-lg text-gray-600" />
             </button>
@@ -127,8 +134,11 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
       </div>
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto v-scrollbar bg-white">
-        <AffiliateConfig />
+      <div className="overflow-y-auto flex-1 min-h-0 bg-white v-scrollbar">
+        <AffiliateConfig
+          introOpen={introOpen}
+          onIntroDismiss={handleIntroDismiss}
+        />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

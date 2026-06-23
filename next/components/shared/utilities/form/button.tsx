@@ -206,6 +206,7 @@ export function Button({
       )}
       {props.href ? (
         <Link
+          id={props.id}
           href={props.href}
           ref={props.innerRef as MutableRefObject<HTMLAnchorElement>}
           target={props.targetBlank ? "_blank" : ""}
@@ -224,6 +225,7 @@ export function Button({
         </Link>
       ) : (
         <button
+          id={props.id}
           ref={props.innerRef as MutableRefObject<HTMLButtonElement>}
           type={buttonType}
           className={finalClassName}

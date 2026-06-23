@@ -14,6 +14,8 @@ import {
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Button } from "../../../../shared/utilities/form";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getAppSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 import { useAffiliateVideoContext } from "../../chatbot/providers/affiliate-video-provider";
 import { parseAppPromptContent } from "../parse_app_prompt";
 
@@ -44,7 +46,13 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
   );
 }
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { videoConfig, pendingPrompt, setPendingPrompt } = useAffiliateVideoContext();
 
@@ -60,6 +68,7 @@ export const AffiliateConfig = () => {
 
   const { prompts, links } = useMemo(() => parseAppPromptContent(promptContent), [promptContent]);
   const fullPromptText = prompts.join("\n");
+  const introSteps = useMemo(() => getAppSidebarIntroSteps(t), [t]);
 
   if (!selectedId) {
     return (
@@ -76,6 +85,12 @@ export const AffiliateConfig = () => {
   }
 
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex flex-col flex-1 min-h-0 bg-white">
       <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4 v-scrollbar">
         <div className="p-3 bg-green-50 rounded-xl border border-green-100">
@@ -86,7 +101,7 @@ export const AffiliateConfig = () => {
         </div>
 
         {fullPromptText && (
-          <div>
+          <div id="app-prompt-section">
             <div className="flex justify-between items-center mb-2">
               <div className="flex gap-1.5 items-center text-xs font-semibold text-gray-700">
                 <RiAppStoreLine className="text-green-500" />
@@ -101,7 +116,7 @@ export const AffiliateConfig = () => {
         )}
 
         {links.length > 0 && (
-          <div>
+          <div id="app-links-section">
             <div className="flex gap-1.5 items-center mb-2 text-xs font-semibold text-gray-700">
               <RiLinkM className="text-blue-500" />
               {t("Link App")}
@@ -140,5 +155,6 @@ export const AffiliateConfig = () => {
         )}
       </div>
     </div>
+    </>
   );
 };

@@ -8,6 +8,9 @@ import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiFilmFill, RiGridLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
 import { TAB_TYPE } from "../../constants";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
+import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
 
 import {
   TrainingGuidePopover,
@@ -22,6 +25,9 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
   const { t } = useTranslation();
   const { handleSubmit, defaultVideoConfig, videoConfig, storyModeType } =
     useAffiliateVideoContext();
+  const introKey =
+    type === TAB_TYPE.single ? IntroGuideKey.SINGLE_SIDEBAR : IntroGuideKey.BATCH_SIDEBAR;
+  const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(introKey);
 
   /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
   const wrappedSubmit = (data: any, promptText?: string) => {
@@ -63,11 +69,13 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
             {type === TAB_TYPE.single ? (
               <div className="flex gap-1.5 items-center">
                 <span className="text-base font-bold text-gray-800">{t("Đơn Lẻ")}</span>
+                <AffiliateIntroGuideButton id="single-guide-btn" onClick={openIntro} />
                 <TrainingGuidePopover topicSlug={TrainingTopicSlug.SINGLE_PROMPT} />
               </div>
             ) : (
               <div className="flex gap-1.5 items-center">
                 <span className="text-base font-bold text-gray-800">{t("Kịch Bản")}</span>
+                <AffiliateIntroGuideButton id="batch-guide-btn" onClick={openIntro} />
                 <TrainingGuidePopover topicSlug={TrainingTopicSlug.BATCH_PROMPT} />
               </div>
             )}
@@ -97,7 +105,11 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="flex-1 min-h-0 overflow-y-auto v-scrollbar bg-white">
-        <AffiliateConfig type={type} />
+        <AffiliateConfig
+          type={type}
+          introOpen={introOpen}
+          onIntroDismiss={handleIntroDismiss}
+        />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

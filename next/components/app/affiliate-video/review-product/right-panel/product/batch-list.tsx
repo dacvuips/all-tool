@@ -9,6 +9,8 @@ import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/sc
 import { ReviewScene } from "../../constants";
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../../shared/batch-list";
+import { IntroGuideKey } from "../../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateBatchListIntro } from "../../../shared/use-affiliate-batch-list-intro";
 import { useReviewApi } from "../../hook/useReviewApi";
 import { useReviewContext } from "../../providers/review-provider";
 import { BatchActionBar } from "../batch-action-bar";
@@ -35,6 +37,12 @@ export function BatchListPanel({
   } = useReviewContext();
   const db = useIndexedDB<any>(STORE_NAME.generateReview, DB_NAME.generateReview);
   const { insertScene } = useReviewApi();
+
+  const { introElement, openIntro } = useAffiliateBatchListIntro({
+    storageKey: IntroGuideKey.REVIEW_BATCH_LIST,
+    sceneCount: scenes.length,
+    hasHistory: !!sceneHistory?.length,
+  });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync).
    *  Also updates history item if a history entry is selected. */
@@ -122,7 +130,9 @@ export function BatchListPanel({
   };
 
   return (
-    <SharedBatchListPanel
+    <>
+      {introElement}
+      <SharedBatchListPanel
       scenes={scenes}
       characters={characters}
       selectedHistoryId={selectedHistoryId}
@@ -143,6 +153,8 @@ export function BatchListPanel({
       onBuildInsertedScene={handleBuildInsertedScene}
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
+      onOpenIntro={openIntro}
     />
+    </>
   );
 }

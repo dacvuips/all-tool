@@ -760,6 +760,7 @@ export function ArtStylePickerDialog({
 
   return (
     <>
+      <div id="art-style-section">
       <Field
         noError={noError}
         name={name}
@@ -767,6 +768,7 @@ export function ArtStylePickerDialog({
           <span className="flex items-center gap-1.5 justify-between w-full">
             {label || t("Phong cách hình ảnh")}
             <Button
+              id="art-style-template-btn"
               outline
               info
               onClick={openDialog}
@@ -790,6 +792,7 @@ export function ArtStylePickerDialog({
           }}
         />
       </Field>
+      </div>
 
       <Dialog
         isOpen={isDialogOpen}

@@ -5,7 +5,7 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
@@ -16,6 +16,8 @@ import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/
 import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
 import { ElementImagesUpload } from "../../elements/sibar/element-images-upload";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getStoryboardSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyFieldTab } from "../../shared/object-personify-picker-dialog";
@@ -23,7 +25,13 @@ import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const router = useRouter();
@@ -85,13 +93,21 @@ export const AffiliateConfig = () => {
       />
     </span>
   );
+  const introSteps = useMemo(() => getStoryboardSidebarIntroSteps(t), [t]);
+
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3 ">
         {/* Ảnh storyboard */}
-        <div className="mt-3">
+        <div id="storyboard-upload-section" className="mt-3">
           <ElementImagesUpload
             label={t("Ảnh storyboard")}
             artStyleImg={videoConfig?.storyboardImage}
@@ -102,7 +118,7 @@ export const AffiliateConfig = () => {
           />
         </div>
         {/* TỈ LỆ KHUNG HÌNH */}
-        <div>
+        <div id="aspect-ratio-section">
           <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
             <div className="grid grid-cols-2 gap-2">
               {ASPECT_RATIOS.map((ar) => {
@@ -140,7 +156,7 @@ export const AffiliateConfig = () => {
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}
-        <div>
+        <div id="language-section">
           <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
             <Select
               native
@@ -153,7 +169,7 @@ export const AffiliateConfig = () => {
         </div>
 
         {/* NỘI DUNG MẸO (tipContent) */}
-        <div>
+        <div id="tip-content-section">
           <Field noError name="tipContent" label={tipContentLabel}>
             <div
               className={`relative ${
@@ -181,6 +197,7 @@ export const AffiliateConfig = () => {
         {/* Ảnh sản phẩm */}
 
         <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+          <div id="product-images-section">
           <ImageInput
             multi
             value={videoConfig?.productImages}
@@ -188,8 +205,10 @@ export const AffiliateConfig = () => {
             readOnly={!customer}
             limit={5}
           />
+          </div>
         </Field>
       </div>
     </div>
+    </>
   );
 };

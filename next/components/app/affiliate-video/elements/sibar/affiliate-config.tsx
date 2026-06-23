@@ -5,6 +5,7 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
 import { BsFile } from "react-icons/bs";
 import { RiListOrdered, RiMagicFill } from "react-icons/ri";
 
@@ -14,6 +15,8 @@ import { Button, Field, Label, Radio, Textarea } from "../../../../shared/utilit
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getElementSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -21,7 +24,13 @@ import { ElementImagesUpload, ElementVideoUpload } from "./element-images-upload
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const { patchConfig, elementFormConfig, scriptTab } = useElementContext();
@@ -77,13 +86,21 @@ export const AffiliateConfig = () => {
     patchConfig?.({ actionImageType: val });
   };
 
+  const introSteps = useMemo(() => getElementSidebarIntroSteps(t), [t]);
+
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
 
       <div className="px-4 pb-4 space-y-3">
         <Field className="mt-3" noError>
-          <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl">
+          <div id="element-image-mode-section" className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl">
             {(
               [
                 {
@@ -119,6 +136,7 @@ export const AffiliateConfig = () => {
           </div>
         </Field>
 
+        <div id="aspect-ratio-section">
         <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
           <div className="grid grid-cols-2 gap-2">
             {ASPECT_RATIOS.map((ar) => {
@@ -144,6 +162,7 @@ export const AffiliateConfig = () => {
             })}
           </div>
         </Field>
+        </div>
         <div>
           <ArtStylePickerDialog
             name="artStyle"
@@ -153,6 +172,7 @@ export const AffiliateConfig = () => {
           />
         </div>
 
+        <div id="scene-prompt-section">
         <Field noError label={t("Prompt phân cảnh")}>
           <Textarea
             id="scene-prompt-list"
@@ -165,6 +185,7 @@ export const AffiliateConfig = () => {
             onChange={(v) => patchConfig && patchConfig({ prompt: v })}
           />
         </Field>
+        </div>
         {/* Option cho Images to Video*/}
         {isImagesToVideo && (
           <Field label={t("Chế độ nạp ảnh")}>
@@ -190,7 +211,8 @@ export const AffiliateConfig = () => {
           />
         )}
 
-        {/* Ảnh sản phẩm */}
+        {/* Ảnh thành phần / ảnh tham chiếu */}
+        <div id="element-images-upload">
         {isSequentialImageMode ? (
           <div>
             <Label text={t("Ảnh Tham chiêu (Tùy chọn)")} />
@@ -221,7 +243,9 @@ export const AffiliateConfig = () => {
             onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
           />
         )}
+        </div>
       </div>
     </div>
+    </>
   );
 };

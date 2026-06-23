@@ -5,7 +5,7 @@
  * Field names khớp với AffiliateVideoFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
@@ -19,6 +19,8 @@ import {
   TrendingModeTypeEnum,
 } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getTrendingSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -27,7 +29,13 @@ import { BatchSizeSlider } from "./batch-size-slider";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = () => {
+export const AffiliateConfig = ({
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const router = useRouter();
@@ -95,10 +103,18 @@ export const AffiliateConfig = () => {
     [setTrendingModeType, patchConfig, formContext, router]
   );
 
+  const introSteps = useMemo(() => getTrendingSidebarIntroSteps(t), [t]);
+
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex-1 bg-white">
       {/* ── Chuyển đổi Mode: Đơn Lẻ / Cốt truyện ── */}
-      <div className="px-4 pt-3 pb-2">
+      <div id="trending-mode-section" className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
           {/* Tab "Đơn Lẻ" */}
           <div
@@ -143,7 +159,7 @@ export const AffiliateConfig = () => {
 
       <div className="px-4 pb-4 space-y-3">
         {/* TỈ LỆ KHUNG HÌNH */}
-        <div>
+        <div id="aspect-ratio-section">
           <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
             <div className="grid grid-cols-2 gap-2">
               {ASPECT_RATIOS.map((ar) => {
@@ -184,7 +200,7 @@ export const AffiliateConfig = () => {
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}
-        <div>
+        <div id="language-section">
           <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
             <Select
               native
@@ -197,7 +213,7 @@ export const AffiliateConfig = () => {
         </div>
 
         {/* NỘI DUNG PROMPT */}
-        <div>
+        <div id="tip-content-section">
           <Field noError name="tipContent" label={t("Prompt")}>
             <Textarea
               maxRows={4}
@@ -213,6 +229,7 @@ export const AffiliateConfig = () => {
         {/* ẢNH THAM CHIẾU (tuỳ chọn) */}
 
         <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+          <div id="product-images-section">
           <ImageInput
             multi
             value={videoConfig?.productImages}
@@ -220,6 +237,7 @@ export const AffiliateConfig = () => {
             readOnly={!customer}
             limit={5}
           />
+          </div>
         </Field>
 
         {/* SLIDER SỐ LƯỢNG – label & mô tả thay đổi theo mode */}
@@ -234,5 +252,6 @@ export const AffiliateConfig = () => {
         />
       </div>
     </div>
+    </>
   );
 };

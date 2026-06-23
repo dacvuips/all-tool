@@ -67,6 +67,12 @@ export interface SharedBatchListPanelProps {
 
   /** Extra props to pass to each SceneRowComponent (e.g. storyModeType) */
   sceneRowExtraProps?: Record<string, any>;
+
+  /** Mở tour hướng dẫn sử dụng panel */
+  onOpenIntro?: () => void;
+
+  /** ID nút kéo thả (intro tour) */
+  getDragHandleId?: (item: any, index: number) => string | undefined;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -83,6 +89,8 @@ export function SharedBatchListPanel({
   ActionBarComponent,
   SceneRowComponent,
   sceneRowExtraProps,
+  onOpenIntro,
+  getDragHandleId,
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
@@ -395,10 +403,11 @@ export function SharedBatchListPanel({
         onToggleAllVoiceDisable={handleToggleAllVoiceDisable}
         ActionBarComponent={ActionBarComponent}
         onToggleAllNoDownload={handleToggleAllNoDownload}
+        onOpenIntro={onOpenIntro}
       />
 
       {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}
-      <div className="flex-1 p-2 sm:p-3">
+      <div id="batch-scene-grid" className="flex-1 p-2 sm:p-3">
         <SortableCardGrid
           items={sceneList}
           getItemId={getSceneId}
@@ -408,6 +417,7 @@ export function SharedBatchListPanel({
           keyPrefix={selectedHistoryId || "default"}
           gridClassName="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
           useDragHandle
+          getDragHandleId={getDragHandleId}
         />
       </div>
     </div>

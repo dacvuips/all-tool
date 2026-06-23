@@ -5,7 +5,7 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
@@ -15,6 +15,8 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
+import { getSingleSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyFieldTab, ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -24,7 +26,15 @@ import { BatchSizeSlider } from "./batch-size-slider";
 
 // ── Main Component ────────────────────────────────────────────────────────
 
-export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
+export const AffiliateConfig = ({
+  type,
+  introOpen = false,
+  onIntroDismiss,
+}: {
+  type: TAB_TYPE;
+  introOpen?: boolean;
+  onIntroDismiss?: () => void;
+}) => {
   const { t } = useTranslation();
   const { customer } = useAuth();
   const router = useRouter();
@@ -78,11 +88,21 @@ export const AffiliateConfig = ({ type }: { type: TAB_TYPE }) => {
       />
     </span>
   );
-console.log(videoConfig);
+  const introSteps = useMemo(
+    () => getSingleSidebarIntroSteps(t, { isBatch: type === TAB_TYPE.batch }),
+    [t, type]
+  );
+
   return (
+    <>
+      <AffiliateIntroStep
+        isOpen={introOpen}
+        steps={introSteps}
+        onDismiss={onIntroDismiss ?? (() => {})}
+      />
     <div className="flex-1 bg-white">
       {/* ── Mode Toggle: Prompt to Video / Image to Video ── */}
-      <div className="px-4 pt-3 pb-2">
+      <div id="story-mode-section" className="px-4 pt-3 pb-2">
         <div className="grid grid-cols-2 gap-1 bg-gray-100 rounded-xl p-1">
           <div
             onClick={() => {
@@ -153,7 +173,7 @@ console.log(videoConfig);
 
       <div className="px-4 pb-4 space-y-3">
         {/* TỈ LỆ KHUNG HÌNH */}
-        <div>
+        <div id="aspect-ratio-section">
           <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
             <div className="grid grid-cols-2 gap-2">
               {ASPECT_RATIOS.map((ar) => {
@@ -191,7 +211,7 @@ console.log(videoConfig);
         </div>
 
         {/* NGÔN NGỮ LỜI THOẠI */}
-        <div>
+        <div id="language-section">
           <Field noError name="language" label={t("Ngôn ngữ lời thoại")}>
             <Select
               native
@@ -204,7 +224,7 @@ console.log(videoConfig);
         </div>
 
         {/* CHỦ ĐỀ / DANH MỤC */}
-        <div>
+        <div id="category-section">
           <Field noError name="category" label={t("Chủ đề / Danh mục")}>
             <Select
               native
@@ -217,7 +237,7 @@ console.log(videoConfig);
         </div>
 
         {/* MOOD / TÍNH CÁCH */}
-        <div>
+        <div id="mood-section">
           <Field noError name="mood" label={t("Tính cách / Mood")}>
             <Select
               native
@@ -259,7 +279,7 @@ console.log(videoConfig);
         </div>
 
         {/* NỘI DUNG MẸO (tipContent) */}
-        <div>
+        <div id="tip-content-section">
           <Field noError name="tipContent" label={tipContentLabel}>
             <div
               className={`relative ${
@@ -287,6 +307,7 @@ console.log(videoConfig);
         {/* Ảnh sản phẩm */}
 
         <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
+          <div id="product-images-section">
           <ImageInput
             multi
             value={videoConfig?.productImages}
@@ -294,6 +315,7 @@ console.log(videoConfig);
             readOnly={!customer}
             limit={5}
           />
+          </div>
         </Field>
 
         {/* SỐ LƯỢNG MẸO CẦN TẠO (batchSize) */}
@@ -308,5 +330,6 @@ console.log(videoConfig);
         )}
       </div>
     </div>
+    </>
   );
 };

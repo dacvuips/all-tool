@@ -704,7 +704,7 @@ export function ObjectPersonifyPickerDialog({
   return (
     <>
       {/* ── Field with pen icon + Input ── */}
-      <div className="p-2 rounded-xl border border-gray-200">
+      <div id="object-personify-section" className="p-2 rounded-xl border border-gray-200">
         <Field
           noError={noError}
           label={

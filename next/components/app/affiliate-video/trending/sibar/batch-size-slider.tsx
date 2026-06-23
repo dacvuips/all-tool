@@ -49,7 +49,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({
     `${t("AI sẽ tự nghĩ ra")} ${value} ${t("ý tưởng khác nhau dựa trên chủ đề bạn chọn.")}`;
 
   return (
-    <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+    <div id="batch-size-slider" className="p-4 bg-purple-50 rounded-xl border border-purple-100">
       {/* Tiêu đề + icon */}
       <div className="flex justify-between items-center mb-4 text-purple-900">
         <h3 className="text-sm font-semibold tracking-wide uppercase">

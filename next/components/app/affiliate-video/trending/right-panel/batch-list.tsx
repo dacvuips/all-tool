@@ -14,6 +14,8 @@ import {
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../shared/batch-list";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateBatchListIntro } from "../../shared/use-affiliate-batch-list-intro";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
@@ -34,6 +36,13 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   } = useAffiliateVideoContext();
   const db = useIndexedDB<TrendingScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
+
+  const { introElement, openIntro } = useAffiliateBatchListIntro({
+    storageKey: IntroGuideKey.TRENDING_BATCH_LIST,
+    sceneCount: scenes.length,
+    hasHistory: !!sceneHistory?.length,
+    hasProductImages: !!trendingScriptData?.productImages?.length,
+  });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync) */
   const handlePersistScenes = async (updatedScenes: any[]) => {
@@ -122,25 +131,29 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   };
 
   return (
-    <SharedBatchListPanel
-      scenes={scenes}
-      characters={characters}
-      selectedHistoryId={selectedHistoryId}
-      history={
-        sceneHistory?.length
-          ? {
-              items: sceneHistory,
-              selectedId: selectedHistoryId ?? null,
-              onSelect: (id) => selectHistoryItem?.(id),
-              onClear: () => clearSceneHistory?.(),
-            }
-          : undefined
-      }
-      onPersistScenes={handlePersistScenes}
-      onSyncScenes={handleSyncScenes}
-      onBuildInsertedScene={handleBuildInsertedScene}
-      ActionBarComponent={BatchActionBar}
-      SceneRowComponent={SceneRowGroup}
-    />
+    <>
+      {introElement}
+      <SharedBatchListPanel
+        scenes={scenes}
+        characters={characters}
+        selectedHistoryId={selectedHistoryId}
+        history={
+          sceneHistory?.length
+            ? {
+                items: sceneHistory,
+                selectedId: selectedHistoryId ?? null,
+                onSelect: (id) => selectHistoryItem?.(id),
+                onClear: () => clearSceneHistory?.(),
+              }
+            : undefined
+        }
+        onPersistScenes={handlePersistScenes}
+        onSyncScenes={handleSyncScenes}
+        onBuildInsertedScene={handleBuildInsertedScene}
+        ActionBarComponent={BatchActionBar}
+        SceneRowComponent={SceneRowGroup}
+        onOpenIntro={openIntro}
+      />
+    </>
   );
 }

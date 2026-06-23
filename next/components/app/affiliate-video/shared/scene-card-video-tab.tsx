@@ -46,6 +46,8 @@ export interface SceneCardVideoTabProps {
   // ── Callbacks ──
   /** Generate/tạo lại video */
   onGenerateVideo: () => void;
+  /** ID cho nút tạo video (intro tour) */
+  generateButtonId?: string;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -62,6 +64,7 @@ export function SceneCardVideoTab({
   onImageRequired,
   errorMessage,
   onGenerateVideo,
+  generateButtonId,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
   const [showVideoModal, setShowVideoModal] = useState(false);
@@ -175,6 +178,7 @@ export function SceneCardVideoTab({
         ) : (
           /* ── Default: nút tạo video ── */
           <button
+            id={generateButtonId}
             onClick={handleClickGenerate}
             className="relative w-full max-w-xs h-20 rounded-xl border-2 border-dashed transition-all group border-gray-200 hover:bg-purple-50 bg-gray-50 hover:border-purple-200 cursor-pointer text-purple-500"
           >

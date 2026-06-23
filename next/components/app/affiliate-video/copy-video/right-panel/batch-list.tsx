@@ -6,6 +6,8 @@
 import { CACHE_KEY, CharacterItem, CopyVideoScene, DB_NAME, STORE_NAME } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../shared/batch-list";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateBatchListIntro } from "../../shared/use-affiliate-batch-list-intro";
 import { useCopyVideoApi } from "../hook/useCopyVideoApi";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { BatchActionBar } from "./batch-action-bar";
@@ -28,6 +30,14 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
   const { insertScene } = useCopyVideoApi();
 
+  const { introElement, openIntro } = useAffiliateBatchListIntro({
+    storageKey: IntroGuideKey.COPY_VIDEO_BATCH_LIST,
+    sceneCount: scenes.length,
+    hasHistory: !!sceneHistory?.length,
+    hasProductImages: !!scriptData?.productImages?.length,
+    includeSceneCardSteps: true,
+  });
+
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync).
    *  Also updates history item if a history entry is selected. */
   const handlePersistScenes = async (updatedScenes: any[]) => {
@@ -38,7 +48,6 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
         scenes: updatedScenes as any,
       });
 
-      // Also update the selected history item in copyVideoHistory
       if (selectedHistoryId) {
         const history: any[] = (await db.get(CACHE_KEY.copyVideoHistory)) || [];
         const updatedHistory = history.map((item: any) =>
@@ -123,27 +132,32 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   };
 
   return (
-    <SharedBatchListPanel
-      scenes={scenes}
-      characters={characters}
-      selectedHistoryId={selectedHistoryId}
-      history={
-        sceneHistory?.length
-          ? {
-              items: sceneHistory,
-              selectedId: selectedHistoryId ?? null,
-              onSelect: (id) => selectHistoryItem?.(id),
-              onClear: () => clearSceneHistory?.(),
-              formatOptionLabel: (item) =>
-                `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
-            }
-          : undefined
-      }
-      onPersistScenes={handlePersistScenes}
-      onSyncScenes={handleSyncScenes}
-      onBuildInsertedScene={handleBuildInsertedScene}
-      ActionBarComponent={BatchActionBar}
-      SceneRowComponent={SceneRowGroup}
-    />
+    <>
+      {introElement}
+      <SharedBatchListPanel
+        scenes={scenes}
+        characters={characters}
+        selectedHistoryId={selectedHistoryId}
+        history={
+          sceneHistory?.length
+            ? {
+                items: sceneHistory,
+                selectedId: selectedHistoryId ?? null,
+                onSelect: (id) => selectHistoryItem?.(id),
+                onClear: () => clearSceneHistory?.(),
+                formatOptionLabel: (item) =>
+                  `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
+              }
+            : undefined
+        }
+        onPersistScenes={handlePersistScenes}
+        onSyncScenes={handleSyncScenes}
+        onBuildInsertedScene={handleBuildInsertedScene}
+        ActionBarComponent={BatchActionBar}
+        SceneRowComponent={SceneRowGroup}
+        onOpenIntro={openIntro}
+        getDragHandleId={(_, index) => (index === 0 ? "scene-drag-handle" : undefined)}
+      />
+    </>
   );
 }

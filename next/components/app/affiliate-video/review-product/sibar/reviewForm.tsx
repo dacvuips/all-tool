@@ -10,6 +10,9 @@ import { RiBookOpenLine, RiCloseLine } from "react-icons/ri";
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
+import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
+import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
 
 import {
   TrainingGuidePopover,
@@ -30,6 +33,9 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
   const { generateReview } = useReviewApi();
   const { reviewFormConfig, setBatchRunning, setScriptData, setScriptTab, persistReviewInput } =
     useReviewContext();
+  const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(
+    IntroGuideKey.REVIEW_SIDEBAR
+  );
   // ── Submit: tách prompt đánh số (1., 2., …) → từng cảnh ──
   const handleReviewSubmit = useCallback(
     async (_formData: any) => {
@@ -100,6 +106,7 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
               <span className="text-base font-bold text-gray-800">
                 {t("Review Sản Phẩm/ Thời Trang")}
               </span>
+              <AffiliateIntroGuideButton id="review-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.REVIEW_PRODUCT} />
             </div>
             <span className="text-xs text-gray-500">
@@ -122,7 +129,7 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
 
       {/* ── Vùng cấu hình (cuộn được) ── */}
       <div className="overflow-y-auto flex-1 min-h-0 bg-white v-scrollbar">
-        <AffiliateConfig />
+        <AffiliateConfig introOpen={introOpen} onIntroDismiss={handleIntroDismiss} />
       </div>
 
       {/* ── Footer: Submit + Tip (cố định) ── */}

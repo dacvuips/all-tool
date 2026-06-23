@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { RiFileCopyLine, RiMusicFill, RiScissorsLine } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "./ai-generating-spinner";
 import { BatchListPanel } from "./batch-list";
@@ -117,7 +118,11 @@ function EnvironmentPanel({
 const TAB_NAMES = ["script", "batch"] as const;
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
-export const AffiliateVideoRightPanel = () => {
+export const AffiliateVideoRightPanel = ({
+  batchIntroGuideKey = IntroGuideKey.SINGLE_BATCH_LIST,
+}: {
+  batchIntroGuideKey?: IntroGuideKey;
+}) => {
   const { t } = useTranslation();
   const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
     useAffiliateVideoContext();
@@ -164,6 +169,7 @@ export const AffiliateVideoRightPanel = () => {
               }))}
               storyModeType={scriptData?.storyModeType}
               characters={[]}
+              introGuideKey={batchIntroGuideKey}
             />
           )}
         </TabGroup.Tab>
