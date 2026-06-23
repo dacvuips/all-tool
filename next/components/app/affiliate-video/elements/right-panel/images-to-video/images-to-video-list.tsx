@@ -37,9 +37,8 @@ export function ImagesToVideoListPanel({
   const { insertScene } = useElementApi();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
-    storageKey: IntroGuideKey.ELEMENT_IMAGES_TO_VIDEO_BATCH_LIST,
+    sidebarIntroKey: IntroGuideKey.ELEMENT_SIDEBAR,
     sceneCount: scenes.length,
-    hasHistory: !!sceneHistory?.length,
   });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync).

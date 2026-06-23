@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { RiApps2Line, RiCloseLine } from "react-icons/ri";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 
 import {
   TrainingGuidePopover,
@@ -30,7 +30,7 @@ export const AppSidebarTab = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("App Prompt & Link")}</span>
-              <AffiliateIntroGuideButton id="app-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="app-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.APP_PROMPT} />
             </div>
             <span className="text-xs text-gray-500">

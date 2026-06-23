@@ -17,7 +17,7 @@ import {
 import { Form } from "../../../../shared/utilities/form";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
@@ -126,7 +126,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("Thành phần video")}</span>
-              <AffiliateIntroGuideButton id="element-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="element-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.ELEMENT} />
             </div>
             <span className="text-xs text-gray-500">

@@ -38,9 +38,8 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { insertScene } = useAffiliateVideoApi();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
-    storageKey: IntroGuideKey.TRENDING_BATCH_LIST,
+    sidebarIntroKey: IntroGuideKey.TRENDING_SIDEBAR,
     sceneCount: scenes.length,
-    hasHistory: !!sceneHistory?.length,
     hasProductImages: !!trendingScriptData?.productImages?.length,
   });
 

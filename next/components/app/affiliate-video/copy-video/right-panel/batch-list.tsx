@@ -31,9 +31,8 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
   const { insertScene } = useCopyVideoApi();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
-    storageKey: IntroGuideKey.COPY_VIDEO_BATCH_LIST,
+    sidebarIntroKey: IntroGuideKey.COPY_VIDEO_SIDEBAR,
     sceneCount: scenes.length,
-    hasHistory: !!sceneHistory?.length,
     hasProductImages: !!scriptData?.productImages?.length,
     includeSceneCardSteps: true,
   });

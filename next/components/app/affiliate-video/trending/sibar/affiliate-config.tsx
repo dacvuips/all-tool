@@ -19,8 +19,8 @@ import {
   TrendingModeTypeEnum,
 } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getTrendingSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getTrendingSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -107,7 +107,7 @@ export const AffiliateConfig = ({
 
   return (
     <>
-      <AffiliateIntroStep
+      <AffiliateSidebarIntro
         isOpen={introOpen}
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}

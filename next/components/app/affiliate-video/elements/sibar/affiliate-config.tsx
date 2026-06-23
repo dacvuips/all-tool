@@ -15,8 +15,8 @@ import { Button, Field, Label, Radio, Textarea } from "../../../../shared/utilit
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getElementSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -90,7 +90,7 @@ export const AffiliateConfig = ({
 
   return (
     <>
-      <AffiliateIntroStep
+      <AffiliateSidebarIntro
         isOpen={introOpen}
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}

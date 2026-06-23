@@ -14,7 +14,7 @@ import {
 import { Form } from "../../../../shared/utilities/form";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
@@ -65,7 +65,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("Trending Prompt")}</span>
-              <AffiliateIntroGuideButton id="trending-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="trending-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.TRENDING_PROMPT} />
             </div>
           </div>

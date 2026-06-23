@@ -119,9 +119,9 @@ const TAB_NAMES = ["script", "batch"] as const;
 
 // ── Main Right Panel ─────────────────────────────────────────────────────
 export const AffiliateVideoRightPanel = ({
-  batchIntroGuideKey = IntroGuideKey.SINGLE_BATCH_LIST,
+  batchSidebarIntroKey = IntroGuideKey.SINGLE_SIDEBAR,
 }: {
-  batchIntroGuideKey?: IntroGuideKey;
+  batchSidebarIntroKey?: IntroGuideKey;
 }) => {
   const { t } = useTranslation();
   const { scriptData, scriptTab, setScriptTab, batchList, batchRunning } =
@@ -169,7 +169,7 @@ export const AffiliateVideoRightPanel = ({
               }))}
               storyModeType={scriptData?.storyModeType}
               characters={[]}
-              introGuideKey={batchIntroGuideKey}
+              sidebarIntroKey={batchSidebarIntroKey}
             />
           )}
         </TabGroup.Tab>

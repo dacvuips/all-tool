@@ -14,8 +14,8 @@ import {
 
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Button } from "../../../../shared/utilities/form";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getAppSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getAppSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { useAffiliateVideoContext } from "../../chatbot/providers/affiliate-video-provider";
 import { parseAppPromptContent } from "../parse_app_prompt";
 
@@ -86,7 +86,7 @@ export const AffiliateConfig = ({
 
   return (
     <>
-      <AffiliateIntroStep
+      <AffiliateSidebarIntro
         isOpen={introOpen}
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}

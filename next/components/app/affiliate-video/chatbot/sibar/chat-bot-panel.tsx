@@ -24,8 +24,8 @@ import {
 } from "../hook/affiliateChatTypes";
 import { useAffiliateChatStorage } from "../hook/useAffiliateChatStorage";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getChatbotSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getChatbotSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
 const CHAT_KIND = AFFILIATE_CHAT_KIND.trendingGymPt;
 
@@ -538,7 +538,7 @@ export function ChatBotSidebar({
   return (
     <>
       {introProps ? (
-        <AffiliateIntroStep
+        <AffiliateSidebarIntro
           isOpen={introProps.introOpen}
           steps={introSteps}
           onDismiss={introProps.onIntroDismiss}

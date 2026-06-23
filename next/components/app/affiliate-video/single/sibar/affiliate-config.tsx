@@ -15,8 +15,8 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getSingleSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getSingleSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyFieldTab, ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -95,7 +95,7 @@ export const AffiliateConfig = ({
 
   return (
     <>
-      <AffiliateIntroStep
+      <AffiliateSidebarIntro
         isOpen={introOpen}
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}

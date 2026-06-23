@@ -37,9 +37,8 @@ export function BatchListPanel({
   const { insertScene } = useElementApi();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
-    storageKey: IntroGuideKey.ELEMENT_BATCH_LIST,
+    sidebarIntroKey: IntroGuideKey.ELEMENT_SIDEBAR,
     sceneCount: scenes.length,
-    hasHistory: !!sceneHistory?.length,
   });
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync).

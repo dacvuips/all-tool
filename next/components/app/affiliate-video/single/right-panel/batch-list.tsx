@@ -25,14 +25,14 @@ interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
   storyModeType: StoryModeTypeEnum;
-  introGuideKey?: IntroGuideKey;
+  sidebarIntroKey?: IntroGuideKey;
 }
 
 export function BatchListPanel({
   scenes,
   characters,
   storyModeType,
-  introGuideKey = IntroGuideKey.SINGLE_BATCH_LIST,
+  sidebarIntroKey = IntroGuideKey.SINGLE_SIDEBAR,
 }: BatchListPanelProps) {
   const {
     scriptData,
@@ -46,9 +46,8 @@ export function BatchListPanel({
   const { insertScene } = useAffiliateVideoApi();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
-    storageKey: introGuideKey,
+    sidebarIntroKey,
     sceneCount: scenes.length,
-    hasHistory: !!sceneHistory?.length,
     hasProductImages: !!scriptData?.productImages?.length,
   });
 

@@ -10,7 +10,7 @@ import { RiCloseLine, RiFileCopy2Line } from "react-icons/ri";
 
 import { Form } from "../../../../shared/utilities/form";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
 import { CopyVideoFormConfig } from "../../constants";
 import { extractAndSaveThumbnails, useThumbnailDB } from "../../hook/useVideoThumbnail";
@@ -114,7 +114,7 @@ export const CopyVideoForm = ({ onClose }: { onClose?: () => void }) => {
           <div className="flex flex-col">
             <div className="flex gap-1.5 items-center">
               <span className="text-base font-bold text-gray-800">{t("Sao chép video")}</span>
-              <AffiliateIntroGuideButton id="copy-video-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="copy-video-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.COPY_PROMPT} />
             </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh theo video gốc ")}</span>

@@ -12,7 +12,7 @@ import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Form } from "../../../../shared/utilities/form";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 
 import {
   TrainingGuidePopover,
@@ -106,7 +106,7 @@ export const ReviewForm = ({ onClose }: { onClose?: () => void }) => {
               <span className="text-base font-bold text-gray-800">
                 {t("Review Sản Phẩm/ Thời Trang")}
               </span>
-              <AffiliateIntroGuideButton id="review-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="review-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.REVIEW_PRODUCT} />
             </div>
             <span className="text-xs text-gray-500">

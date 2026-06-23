@@ -12,8 +12,8 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { AffiliateIntroStep } from "../../shared/affiliate-intro-step";
-import { getReviewSidebarIntroSteps } from "../../shared/affiliate-intro-steps";
+import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { getReviewSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
@@ -38,7 +38,7 @@ export const AffiliateConfig = ({
 
   return (
     <>
-      <AffiliateIntroStep
+      <AffiliateSidebarIntro
         isOpen={introOpen}
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}

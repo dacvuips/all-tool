@@ -1,16 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { IntroStep } from "../../../shared/utilities/intro/components/IntroSteps";
-import { AffiliateIntroStep as IntroStepDef } from "./affiliate-intro-steps";
 import { useAffiliateIntroEnabled } from "./use-affiliate-intro-enabled";
+import { AffiliateSidebarIntroStep } from "./affiliate-sidebar-intro-steps";
 
-interface AffiliateIntroStepProps {
+interface AffiliateSidebarIntroProps {
   isOpen: boolean;
-  steps: IntroStepDef[];
+  steps: AffiliateSidebarIntroStep[];
   onDismiss: () => void;
 }
 
-/** Wrapper IntroStep với nhãn i18n chuẩn cho affiliate-video */
-export function AffiliateIntroStep({ isOpen, steps, onDismiss }: AffiliateIntroStepProps) {
+/** Tour intro.js — chỉ sidebar trái (form cấu hình) */
+export function AffiliateSidebarIntro({ isOpen, steps, onDismiss }: AffiliateSidebarIntroProps) {
   const { t } = useTranslation();
   const introEnabled = useAffiliateIntroEnabled();
 

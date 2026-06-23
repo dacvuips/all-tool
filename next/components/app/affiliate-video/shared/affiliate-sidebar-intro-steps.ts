@@ -1,11 +1,13 @@
-export type AffiliateIntroStep = {
+/** Các bước intro.js chỉ cho sidebar trái (form cấu hình) */
+
+export type AffiliateSidebarIntroStep = {
   element: string;
   title: string;
   intro: string;
   position: "top" | "right" | "bottom" | "left" | "auto";
 };
 
-function aspectRatioStep(t: (key: string) => string): AffiliateIntroStep {
+function aspectRatioStep(t: (key: string) => string): AffiliateSidebarIntroStep {
   return {
     element: "#aspect-ratio-section",
     title: t("Tỉ lệ khung hình"),
@@ -16,7 +18,7 @@ function aspectRatioStep(t: (key: string) => string): AffiliateIntroStep {
   };
 }
 
-function artStyleStep(t: (key: string) => string): AffiliateIntroStep {
+function artStyleStep(t: (key: string) => string): AffiliateSidebarIntroStep {
   return {
     element: "#art-style-section",
     title: t("Phong cách hình ảnh"),
@@ -27,7 +29,7 @@ function artStyleStep(t: (key: string) => string): AffiliateIntroStep {
   };
 }
 
-function languageStep(t: (key: string) => string): AffiliateIntroStep {
+function languageStep(t: (key: string) => string): AffiliateSidebarIntroStep {
   return {
     element: "#language-section",
     title: t("Ngôn ngữ lời thoại"),
@@ -36,7 +38,7 @@ function languageStep(t: (key: string) => string): AffiliateIntroStep {
   };
 }
 
-function createVideoStep(t: (key: string) => string, title?: string): AffiliateIntroStep {
+function createVideoStep(t: (key: string) => string, title?: string): AffiliateSidebarIntroStep {
   return {
     element: "#create-video-btn",
     title: title ?? t("Tạo phân cảnh"),
@@ -47,8 +49,57 @@ function createVideoStep(t: (key: string) => string, title?: string): AffiliateI
   };
 }
 
+/** Copy video sidebar */
+export function getCopyVideoSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
+  return [
+    {
+      element: "#copy-video-upload",
+      title: t("Upload Video gốc"),
+      intro: t(
+        "Tải lên video mẫu bạn muốn sao chép (tối đa 50MB). AI sẽ phân tích cấu trúc cảnh, nhịp điệu và nội dung để tạo kịch bản tương tự."
+      ),
+      position: "right",
+    },
+    aspectRatioStep(t),
+    artStyleStep(t),
+    languageStep(t),
+    {
+      element: "#mood-section",
+      title: t("Tính cách / Mood"),
+      intro: t(
+        "Chọn tone cảm xúc của nội dung (vui vẻ, drama, hài hước...) để AI điều chỉnh phong cách kể chuyện."
+      ),
+      position: "right",
+    },
+    {
+      element: "#object-personify-section",
+      title: t("Nhân hoá đồ vật"),
+      intro: t(
+        "Tùy chọn — biến đồ vật thành nhân vật có tính cách (VD: quả chuối biết nói). Có thể nhập prompt hoặc upload ảnh tham chiếu."
+      ),
+      position: "right",
+    },
+    {
+      element: "#product-images-section",
+      title: t("Ảnh sản phẩm tham chiếu"),
+      intro: t(
+        "Tùy chọn — upload tối đa 5 ảnh sản phẩm để AI tham chiếu khi tạo các phân cảnh."
+      ),
+      position: "right",
+    },
+    {
+      element: "#create-video-btn",
+      title: t("Phân tích video"),
+      intro: t(
+        "Sau khi cấu hình xong, nhấn nút này để AI phân tích video gốc và tạo danh sách phân cảnh bên phải."
+      ),
+      position: "top",
+    },
+  ];
+}
+
 /** Trending Prompt sidebar */
-export function getTrendingSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getTrendingSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     {
       element: "#trending-mode-section",
@@ -64,9 +115,7 @@ export function getTrendingSidebarIntroSteps(t: (key: string) => string): Affili
     {
       element: "#tip-content-section",
       title: t("Prompt"),
-      intro: t(
-        "Nội dung prompt trending — chọn từ danh sách bên phải hoặc chỉnh sửa tại đây."
-      ),
+      intro: t("Nội dung prompt trending — chọn từ danh sách prompt hoặc chỉnh sửa trực tiếp tại đây."),
       position: "right",
     },
     {
@@ -89,8 +138,8 @@ export function getTrendingSidebarIntroSteps(t: (key: string) => string): Affili
 export function getSingleSidebarIntroSteps(
   t: (key: string) => string,
   options: { isBatch: boolean }
-): AffiliateIntroStep[] {
-  const steps: AffiliateIntroStep[] = [];
+): AffiliateSidebarIntroStep[] {
+  const steps: AffiliateSidebarIntroStep[] = [];
 
   if (options.isBatch) {
     steps.push({
@@ -159,7 +208,7 @@ export function getSingleSidebarIntroSteps(
 }
 
 /** Storyboard sidebar */
-export function getStoryboardSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getStoryboardSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     {
       element: "#storyboard-upload-section",
@@ -189,7 +238,7 @@ export function getStoryboardSidebarIntroSteps(t: (key: string) => string): Affi
 }
 
 /** Elements sidebar */
-export function getElementSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getElementSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     {
       element: "#element-image-mode-section",
@@ -220,7 +269,7 @@ export function getElementSidebarIntroSteps(t: (key: string) => string): Affilia
 }
 
 /** Review product sidebar */
-export function getReviewSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getReviewSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     aspectRatioStep(t),
     artStyleStep(t),
@@ -254,7 +303,7 @@ export function getReviewSidebarIntroSteps(t: (key: string) => string): Affiliat
 }
 
 /** App Prompt sidebar */
-export function getAppSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getAppSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     {
       element: "#app-prompt-section",
@@ -272,7 +321,7 @@ export function getAppSidebarIntroSteps(t: (key: string) => string): AffiliateIn
 }
 
 /** ChatBot sidebar */
-export function getChatbotSidebarIntroSteps(t: (key: string) => string): AffiliateIntroStep[] {
+export function getChatbotSidebarIntroSteps(t: (key: string) => string): AffiliateSidebarIntroStep[] {
   return [
     {
       element: "#chatbot-message-list",

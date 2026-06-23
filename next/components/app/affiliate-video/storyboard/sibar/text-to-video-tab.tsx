@@ -9,7 +9,7 @@ import { RiCloseLine } from "react-icons/ri";
 import { Form } from "../../../../shared/utilities/form";
 import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
-import { AffiliateIntroGuideButton } from "../../shared/affiliate-intro-guide-button";
+import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 
 import { IoAppsSharp } from "react-icons/io5";
 import {
@@ -63,7 +63,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
               <span className="text-base font-bold text-gray-800">
                 {t("Tạo cảnh theo Storyboard")}
               </span>
-              <AffiliateIntroGuideButton id="storyboard-guide-btn" onClick={openIntro} />
+              <AffiliateSidebarGuideButton id="storyboard-guide-btn" onClick={openIntro} />
               <TrainingGuidePopover topicSlug={TrainingTopicSlug.STORYBOARD} />
             </div>
             <span className="text-xs text-gray-500">{t("Tạo phân cảnh từ ảnh storyboard")}</span>

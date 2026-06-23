@@ -25,10 +25,10 @@ export const AffiliateSingleVideoPage = ({ type }: AffiliateSingleVideoPageProps
       sidebar={<TextToVideoTab onClose={() => setIsSidebarOpen(false)} type={type} />}
     >
       <AffiliateVideoRightPanel
-        batchIntroGuideKey={
+        batchSidebarIntroKey={
           type === TAB_TYPE.single
-            ? IntroGuideKey.SINGLE_BATCH_LIST
-            : IntroGuideKey.BATCH_BATCH_LIST
+            ? IntroGuideKey.SINGLE_SIDEBAR
+            : IntroGuideKey.BATCH_SIDEBAR
         }
       />
     </AffiliateVideoSidebarLayout>
