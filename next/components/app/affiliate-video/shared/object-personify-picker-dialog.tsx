@@ -42,6 +42,7 @@ import {
   getImageDisplayName,
 } from "../elements/utils/elementFormImageUtils";
 import { ObjectToPersonifyPublic, useAffiliateVideoApi } from "../hook/useAffiliateVideoApi";
+import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -120,20 +121,6 @@ function ObjectPersonifyFieldTabBar({
   );
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      if (base64) resolve(base64);
-      else reject(new Error("Failed to read file as base64"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
-
 interface ObjectPersonifyImageUploadProps {
   imageValue?: ElementFormImage;
   onImageChange?: (image: ElementFormImage | undefined) => void;
@@ -190,11 +177,11 @@ function ObjectPersonifyImageUpload({
 
       try {
         setUploading(true);
-        const imageBytes = await fileToBase64(file);
+        const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
         onImageChange?.({
           fifeUrl: "",
           imageBytes,
-          mimeType: file.type || "image/png",
+          mimeType,
           name: file.name,
         });
         toast.success(t("Đã chọn ảnh thành công"));

@@ -6,26 +6,16 @@ import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
-
+import {
+  fileToGenerationImageBase64,
+  GENERATION_IMAGE_ACCEPTED_EXTENSIONS,
+  GENERATION_IMAGE_ACCEPTED_TYPES,
+} from "../../shared/compressGenerationImage";
 import { ReviewFormImage } from "../constants";
 import { getReviewFormImagePreviewSrc } from "../utils/reviewFormImageUtils";
 
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      if (base64) resolve(base64);
-      else reject(new Error("Failed to read file as base64"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
+const ACCEPTED_IMAGE_TYPES = GENERATION_IMAGE_ACCEPTED_TYPES;
+const ACCEPTED_EXTENSIONS = GENERATION_IMAGE_ACCEPTED_EXTENSIONS;
 
 export interface SceneReviewImageSlotProps {
   slotIndex: number;
@@ -87,11 +77,11 @@ export function SceneReviewImageSlot({
 
       try {
         setUploading(true);
-        const imageBytes = await fileToBase64(file);
+        const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
         onChange({
           fifeUrl: "",
           imageBytes,
-          mimeType: file.type || "image/png",
+          mimeType,
           name: file.name,
         });
       } catch (err) {

@@ -35,6 +35,7 @@ import {
 import { SceneAutoDownloadButton } from "../../../shared/scene-auto-download-button";
 import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
+import { fileToGenerationImageBase64 } from "../../../shared/compressGenerationImage";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
 import { GeneratedImageData } from "../../hook/useElementApi";
@@ -590,23 +591,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         type="file"
         accept="image/*"
         className="hidden"
-        onChange={(e) => {
+        onChange={async (e) => {
           const file = e.target.files?.[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(",")[1];
-            if (base64) {
-              handleSetImage({
-                imageBytes: base64,
-                mimeType: file.type || "image/png",
-                fifeUrl: "",
-              });
-              toast.success(t("Đã upload ảnh thành công"));
-            }
-          };
-          reader.readAsDataURL(file);
           e.target.value = "";
+          if (!file) return;
+          try {
+            const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
+            handleSetImage({
+              imageBytes,
+              mimeType,
+              fifeUrl: "",
+            });
+            toast.success(t("Đã upload ảnh thành công"));
+          } catch {
+            toast.error(t("Lỗi khi xử lý ảnh. Vui lòng thử lại."));
+          }
         }}
       />
       <ImageGalleryDialog

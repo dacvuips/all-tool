@@ -22,6 +22,10 @@ import { Button } from "../../../shared/utilities/form";
 import { Popover } from "../../../shared/utilities/popover/popover";
 import { DB_NAME, STORE_NAME, uid } from "../constants";
 import { useIndexedDB } from "../hook/useIndexedDB";
+import {
+  fileToGenerationImageBase64,
+  readFileAsBase64,
+} from "../shared/compressGenerationImage";
 import { useLazyInView } from "./use-lazy-in-view";
 import { WolfPixelFlower } from "./wolf-pixel-flower";
 
@@ -50,20 +54,6 @@ const MAX_IMAGE_MB = 10;
 const MAX_VIDEO_MB = 50;
 const ASSET_PAGE_SIZE = 24;
 const ASSET_LOAD_MORE = 24;
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      if (base64) resolve(base64);
-      else reject(new Error("Failed to read file as base64"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 function base64ToBlobUrl(base64: string, mimeType: string): string {
   const byteChars = atob(base64);
@@ -358,13 +348,22 @@ export function WolfMediaLibrary({
 
     try {
       setIsUploading(true);
-      const dataBase64 = await fileToBase64(file);
+      let dataBase64: string;
+      let mimeType: string;
+      if (type === "image") {
+        const compressed = await fileToGenerationImageBase64(file);
+        dataBase64 = compressed.imageBytes;
+        mimeType = compressed.mimeType;
+      } else {
+        dataBase64 = await readFileAsBase64(file);
+        mimeType = file.type || "video/mp4";
+      }
       const asset: WolfMediaAsset = {
         id: uid(),
         projectId: scopedProjectId,
         name: file.name,
         type,
-        mimeType: file.type || (type === "image" ? "image/png" : "video/mp4"),
+        mimeType,
         dataBase64,
         createdAt: Date.now(),
       };

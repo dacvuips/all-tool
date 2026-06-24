@@ -16,6 +16,10 @@ import {
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { AFFILIATE_CHAT_KIND } from "../../constants";
+import {
+  fileToGenerationImageBase64,
+  readFileAsBase64,
+} from "../../shared/compressGenerationImage";
 
 import {
   AFFILIATE_CHAT_WELCOME_ID,
@@ -68,20 +72,6 @@ function messagesPersistSnapshot(messages: AffiliateChatMessage[]): string {
         })),
       }))
   );
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      if (base64) resolve(base64);
-      else reject(new Error("Failed to read file as base64"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
 }
 
 function base64ToBlobUrl(base64: string, mimeType: string): string {
@@ -400,13 +390,23 @@ export function ChatBotSidebar({
         }
 
         try {
-          const data = await fileToBase64(file);
-          toAdd.push({
-            kind,
-            mimeType: file.type || (kind === "video" ? "video/mp4" : "image/png"),
-            data,
-            name: file.name,
-          });
+          if (kind === "image") {
+            const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
+            toAdd.push({
+              kind,
+              mimeType,
+              data: imageBytes,
+              name: file.name,
+            });
+          } else {
+            const data = await readFileAsBase64(file);
+            toAdd.push({
+              kind,
+              mimeType: file.type || "video/mp4",
+              data,
+              name: file.name,
+            });
+          }
         } catch {
           toast.error(t("Không đọc được file: {{name}}", { name: file.name }));
         }

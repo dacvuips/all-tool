@@ -5,43 +5,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { compressUploadImage } from "../../../../../lib/helpers/image";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
+import {
+  fileToGenerationImageBase64,
+  GENERATION_IMAGE_ACCEPTED_EXTENSIONS,
+  GENERATION_IMAGE_ACCEPTED_TYPES,
+} from "../../shared/compressGenerationImage";
 import { ElementFormImage } from "../../constants";
 import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
 
-const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const ACCEPTED_EXTENSIONS = ".jpg,.jpeg,.png,.webp,.gif";
-const IMAGE_COMPRESS_THRESHOLD_BYTES = 512 * 1024;
-
-async function prepareImageFileForUpload(file: File): Promise<File> {
-  if (file.size <= IMAGE_COMPRESS_THRESHOLD_BYTES) return file;
-  try {
-    const compressed = await compressUploadImage(file, {
-      width: 1920,
-      height: 1920,
-      quality: 72,
-      type: "JPEG",
-    });
-    return compressed as File;
-  } catch {
-    return file;
-  }
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(",")[1];
-      if (base64) resolve(base64);
-      else reject(new Error("Failed to read file as base64"));
-    };
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
+const ACCEPTED_IMAGE_TYPES = GENERATION_IMAGE_ACCEPTED_TYPES;
+const ACCEPTED_EXTENSIONS = GENERATION_IMAGE_ACCEPTED_EXTENSIONS;
 
 export interface SceneElementImageSlotProps {
   slotIndex: number;
@@ -103,12 +77,11 @@ export function SceneElementImageSlot({
 
       try {
         setUploading(true);
-        const prepared = await prepareImageFileForUpload(file);
-        const imageBytes = await fileToBase64(prepared);
+        const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
         onChange({
           fifeUrl: "",
           imageBytes,
-          mimeType: prepared.type || file.type || "image/png",
+          mimeType,
           name: file.name,
         });
       } catch (err) {

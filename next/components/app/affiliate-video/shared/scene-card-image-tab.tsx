@@ -18,6 +18,7 @@ import {
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
+import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
 import { buildSceneImageFileName, getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
@@ -90,23 +91,20 @@ export function SceneCardImageTab({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   /** Xử lý upload ảnh từ file input */
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      if (base64) {
-        onSetImage({
-          imageBytes: base64,
-          mimeType: file.type || "image/png",
-          fifeUrl: "",
-        });
-      }
-    };
-    reader.readAsDataURL(file);
-    // Reset input để có thể chọn lại cùng file
     e.target.value = "";
+    if (!file) return;
+    try {
+      const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
+      onSetImage({
+        imageBytes,
+        mimeType,
+        fifeUrl: "",
+      });
+    } catch {
+      // Caller có thể hiển thị lỗi qua UI khác; bỏ qua nếu đọc file thất bại.
+    }
   };
 
   const imagePaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
