@@ -35,6 +35,7 @@ import { getMediaJobHandler } from "./handlers";
 import {
   FAILED_JOB_RETENTION_MS,
   failOrphanedProcessingMediaJob,
+  failUnrecoverableMediaJob,
   HEARTBEAT_MS,
   LOCK_TTL_MS,
   MediaJobEmitter,
@@ -42,6 +43,10 @@ import {
 } from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
 import { assertMediaStreamAvailable, canStartMediaJobProcessing } from "./media-job-concurrency";
+import {
+  isMediaJobPayloadAvailable,
+  MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE,
+} from "./media-job-data";
 
 /** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
 const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
@@ -118,6 +123,11 @@ class MediaGenerationQueue extends BaseQueue {
       this.logger.info(
         `MediaGenerationJob ${jobId} đã ở trạng thái terminal (${(jobDoc as any).status}), bỏ qua.`
       );
+      return;
+    }
+
+    if (!(await isMediaJobPayloadAvailable(jobDoc))) {
+      await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
       return;
     }
 
@@ -236,9 +246,19 @@ export async function resumeStaleMediaJobs(): Promise<number> {
 
     if (jobs.length === 0) return 0;
     logger.info(`[MediaGenerationQueue] Re-enqueue ${jobs.length} job(s) sau restart`);
+    let skippedExpired = 0;
     for (const job of jobs) {
       const jobId = String((job as any)._id);
       try {
+        if (!(await isMediaJobPayloadAvailable(job))) {
+          const ok = await failUnrecoverableMediaJob(
+            jobId,
+            MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE,
+            410
+          );
+          if (ok) skippedExpired++;
+          continue;
+        }
         await enqueueMediaGenerationJob(jobId);
         if (MEDIA_JOB_RESUME_STAGGER_MS > 0) {
           await new Promise((resolve) => setTimeout(resolve, MEDIA_JOB_RESUME_STAGGER_MS));
@@ -247,7 +267,12 @@ export async function resumeStaleMediaJobs(): Promise<number> {
         logger.error(`[MediaGenerationQueue] Resume jobId=${jobId} lỗi: ${err?.message}`);
       }
     }
-    return jobs.length;
+    if (skippedExpired > 0) {
+      logger.warn(
+        `[MediaGenerationQueue] Bỏ qua ${skippedExpired} job(s) — payload Redis đã hết hạn`
+      );
+    }
+    return jobs.length - skippedExpired;
   } catch (err: any) {
     logger.error(`[MediaGenerationQueue] resumeStaleMediaJobs lỗi: ${err?.message}`);
     return 0;
@@ -305,6 +330,10 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
     for (const job of jobs) {
       const jobId = String((job as any)._id);
       try {
+        if (!(await isMediaJobPayloadAvailable(job))) {
+          await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+          continue;
+        }
         await mediaGenerationJobService.updateOne(jobId, {
           message: "Đang thử lại (tự động khôi phục hàng đợi)...",
         } as any);
@@ -362,6 +391,12 @@ export async function recoverStaleProcessingMediaJobs(): Promise<{
           `Job treo quá lâu ở PROCESSING (đã thử ${attempts} lần). Vui lòng tạo job mới.`,
           504
         );
+        if (ok) failed++;
+        continue;
+      }
+
+      if (!(await isMediaJobPayloadAvailable(job))) {
+        const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
         if (ok) failed++;
         continue;
       }

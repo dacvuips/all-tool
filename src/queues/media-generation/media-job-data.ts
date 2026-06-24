@@ -10,7 +10,35 @@ import redis from "../../helpers/redis";
 /** TTL payload trên Redis — 4 giờ */
 export const MEDIA_JOB_DATA_TTL_SEC = 240 * 60;
 
+/** Job Redis-only mà key đã hết TTL — không thể resume sau restart. */
+export const MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE =
+  "Dữ liệu job đã hết hạn trên Redis. Vui lòng tạo lại job.";
+
 const KEY_PREFIX = "mgj:data:";
+
+export function hasMongoRequestPayload(job: {
+  requestPayload?: Record<string, unknown>;
+}): boolean {
+  const payload = job.requestPayload;
+  return !!payload && typeof payload === "object" && Object.keys(payload).length > 0;
+}
+
+/** Redis còn key hoặc job cũ còn `requestPayload` trên Mongo. */
+export async function isMediaJobPayloadAvailable(job: {
+  dataRedisKey?: string | null;
+  requestPayload?: Record<string, unknown>;
+}): Promise<boolean> {
+  if (!job.dataRedisKey) {
+    return hasMongoRequestPayload(job);
+  }
+  try {
+    const raw = await redis.get(job.dataRedisKey);
+    if (raw) return true;
+  } catch (err: any) {
+    logger.warn(`[MediaJobData] exists key=${job.dataRedisKey} lỗi: ${err?.message}`);
+  }
+  return hasMongoRequestPayload(job);
+}
 
 export function buildMediaJobDataKey(jobId: string): string {
   return `${KEY_PREFIX}${jobId}`;
@@ -45,7 +73,11 @@ export async function loadMediaJobPayload<T extends Record<string, unknown>>(job
       if (raw) {
         return JSON.parse(raw) as T;
       }
-      const err: any = new Error("Lỗi google hãy tạo lại");
+      if (hasMongoRequestPayload(job)) {
+        logger.warn(`[MediaJobData] Redis miss key=${key}, dùng requestPayload Mongo`);
+        return job.requestPayload as T;
+      }
+      const err: any = new Error(MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE);
       err.statusCode = 410;
       throw err;
     } catch (err: any) {

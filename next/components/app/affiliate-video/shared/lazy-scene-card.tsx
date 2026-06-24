@@ -1,5 +1,5 @@
 /**
- * Chỉ mount scene card khi gần viewport — giảm RAM khi danh sách cảnh dài.
+ * Lazy mount scene card — mount lần đầu khi vào viewport, giữ mount để progress UI không mất.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -20,26 +20,35 @@ export function LazySceneCard({
 }: LazySceneCardProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [hasMounted, setHasMounted] = useState(false);
 
   useEffect(() => {
+    if (hasMounted) return;
     const el = rootRef.current;
     if (!el) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setVisible(entry.isIntersecting);
+        if (entry.isIntersecting) {
+          setHasMounted(true);
+        }
       },
       { rootMargin: ROOT_MARGIN, threshold: 0 }
     );
 
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [hasMounted]);
+
+  const showContent = hasMounted;
 
   return (
-    <div ref={rootRef} className="h-full" style={{ minHeight: visible ? undefined : minHeight }}>
-      {visible ? (
+    <div
+      ref={rootRef}
+      className="h-full"
+      style={{ minHeight: showContent ? undefined : minHeight }}
+    >
+      {showContent ? (
         children
       ) : (
         <div

@@ -4,7 +4,7 @@
  * Dùng chung cho single, copy-video, trending
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiVideoFill } from "react-icons/ri";
 import { useAuth } from "../../../../lib/providers/auth-provider";
@@ -14,6 +14,11 @@ import { ActionImageEnum } from "../elements/constants";
 import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
 import { getAutoDownloadDefault, setAutoDownloadDefault } from "./autoDownloadUtils";
 import { LazySceneCard } from "./lazy-scene-card";
+import {
+  BATCH_SCENE_PAGE_SIZE,
+  BATCH_SCENE_PAGINATION_THRESHOLD,
+  BatchScenePagination,
+} from "./batch-scene-pagination";
 import { SceneTabKey } from "./scene-card-tabs";
 
 export type { BatchListHistoryConfig };
@@ -100,7 +105,36 @@ export function SharedBatchListPanel({
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
   const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
   const { customer } = useAuth();
+
+  const paginationEnabled = sceneList.length > BATCH_SCENE_PAGINATION_THRESHOLD;
+  const totalPages = paginationEnabled
+    ? Math.ceil(sceneList.length / BATCH_SCENE_PAGE_SIZE)
+    : 1;
+
+  const paginatedScenes = useMemo(() => {
+    if (!paginationEnabled) return sceneList;
+    const safePage = Math.min(Math.max(1, currentPage), totalPages);
+    const start = (safePage - 1) * BATCH_SCENE_PAGE_SIZE;
+    return sceneList.slice(start, start + BATCH_SCENE_PAGE_SIZE);
+  }, [sceneList, paginationEnabled, currentPage, totalPages]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [scenes, selectedHistoryId]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(Math.max(1, totalPages));
+    }
+  }, [currentPage, totalPages]);
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+    gridContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const pendingSlotUpdatesRef = useRef(
     new Map<
@@ -340,27 +374,45 @@ export function SharedBatchListPanel({
     }
   };
 
-  /** Kéo-thả đổi thứ tự – UI ngay, IndexedDB nền (không chặn thả) */
   const handleReorderScenes = useCallback(
     (reordered: any[]) => {
-      const updated = reorderScenesWithNumbers(reordered);
-      setSceneList(updated);
-      void Promise.resolve(onSyncScenes(updated)).catch((err) =>
-        console.error("[handleReorderScenes] Failed to persist:", err)
-      );
+      setSceneList((prev) => {
+        let updated: any[];
+        if (paginationEnabled) {
+          const start = (currentPage - 1) * BATCH_SCENE_PAGE_SIZE;
+          const end = start + reordered.length;
+          updated = reorderScenesWithNumbers([
+            ...prev.slice(0, start),
+            ...reordered,
+            ...prev.slice(end),
+          ]);
+        } else {
+          updated = reorderScenesWithNumbers(reordered);
+        }
+        void Promise.resolve(onSyncScenes(updated)).catch((err) =>
+          console.error("[handleReorderScenes] Failed to persist:", err)
+        );
+        return updated;
+      });
     },
-    [onSyncScenes]
+    [onSyncScenes, paginationEnabled, currentPage]
   );
 
   const getSceneId = useCallback((scene: { id: string }) => scene.id, []);
 
   const renderSceneRow = useCallback(
-    (scene: any, index: number) => {
+    (scene: any, _index: number) => {
+      const globalIndex = sceneList.findIndex((s) => s.id === scene.id);
+      const nextSceneId =
+        globalIndex >= 0 && globalIndex < sceneList.length - 1
+          ? sceneList[globalIndex + 1].id
+          : undefined;
+
       const row = (
         <SceneRowComponent
           scene={scene}
-          index={index}
-          nextSceneId={index < sceneList.length - 1 ? sceneList[index + 1].id : undefined}
+          index={globalIndex >= 0 ? globalIndex : _index}
+          nextSceneId={nextSceneId}
           isDisabled={!!scene.disabled}
           characters={characters}
           hideImageColumn={hideImageColumn}
@@ -388,7 +440,7 @@ export function SharedBatchListPanel({
       );
     },
     [
-      sceneList.length,
+      sceneList,
       characters,
       hideImageColumn,
       globalTab,
@@ -454,10 +506,20 @@ export function SharedBatchListPanel({
         onOpenIntro={onOpenIntro}
       />
 
+      {paginationEnabled && (
+        <BatchScenePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={BATCH_SCENE_PAGE_SIZE}
+          totalCount={sceneList.length}
+          onPageChange={handlePageChange}
+        />
+      )}
+
       {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}
-      <div id="batch-scene-grid" className="flex-1 p-2 sm:p-3">
+      <div id="batch-scene-grid" ref={gridContainerRef} className="flex-1 p-2 sm:p-3">
         <SortableCardGrid
-          items={sceneList}
+          items={paginatedScenes}
           getItemId={getSceneId}
           onReorder={handleReorderScenes}
           renderItem={renderSceneRow}
@@ -468,6 +530,16 @@ export function SharedBatchListPanel({
           getDragHandleId={getDragHandleId}
         />
       </div>
+
+      {paginationEnabled && (
+        <BatchScenePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={BATCH_SCENE_PAGE_SIZE}
+          totalCount={sceneList.length}
+          onPageChange={handlePageChange}
+        />
+      )}
     </div>
   );
 }

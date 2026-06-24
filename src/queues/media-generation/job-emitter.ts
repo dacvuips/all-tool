@@ -429,6 +429,49 @@ export async function markMediaJobCancelled(jobId: string, customerId: string): 
 }
 
 /**
+ * Đánh dấu FAILED job QUEUED/PROCESSING không còn payload (Redis hết TTL) — không enqueue lại.
+ */
+export async function failUnrecoverableMediaJob(
+  jobId: string,
+  errorMessage: string,
+  errorCode = 410
+): Promise<boolean> {
+  const model = mediaGenerationJobService.model;
+  const doc = await model.findOneAndUpdate(
+    {
+      _id: jobId,
+      status: {
+        $in: [MediaGenerationJobStatus.QUEUED, MediaGenerationJobStatus.PROCESSING],
+      },
+    },
+    {
+      $set: {
+        status: MediaGenerationJobStatus.FAILED,
+        message: errorMessage,
+        errorMessage,
+        errorCode,
+        completedAt: new Date(),
+        workerInstanceId: null,
+        lockExpiresAt: null,
+      },
+    },
+    { new: true }
+  );
+  if (!doc) return false;
+  logger.warn(`[MediaJobEmitter] FAIL unrecoverable jobId=${jobId}: ${errorMessage}`);
+  await publishChange(doc as unknown as IMediaGenerationJob);
+  await clearMediaJobPayload((doc as any).dataRedisKey);
+  const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
+  scheduleTerminalMediaJobDeletion(
+    jobId,
+    MediaGenerationJobStatus.FAILED,
+    completedAt,
+    FAILED_JOB_RETENTION_MS
+  );
+  return true;
+}
+
+/**
  * Đánh dấu FAILED job PROCESSING mồ côi (không worker, lock hết hạn) — dùng từ stale sweep.
  */
 export async function failOrphanedProcessingMediaJob(
