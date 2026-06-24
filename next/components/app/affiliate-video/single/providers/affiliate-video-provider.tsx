@@ -24,6 +24,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 
 /** Key used to persist the last generated script in IndexedDB */
 
@@ -355,14 +356,29 @@ export function AffiliateVideoProvider(props) {
       .catch((err) => console.warn("[affiliate-video] Failed to persist config", err));
   };
 
-  const patchConfig = (partial: Partial<AffiliateVideoFormConfig>) => {
-    setAffiliateVideoFormConfig((prev) => {
-      const next = { ...prev, ...partial };
+  const patchConfig = useCallback(
+    (partial: Partial<AffiliateVideoFormConfig>) => {
+      setAffiliateVideoFormConfig((prev) => {
+        const next = { ...prev, ...partial };
+        persistConfig(next);
+        return next;
+      });
 
-      persistConfig(next);
-      return next;
-    });
-  };
+      if (partial.aspectRatio !== undefined) {
+        syncSidebarPatchToCurrentScript({
+          patch: { aspectRatio: partial.aspectRatio },
+          setScriptData,
+          selectedHistoryId,
+          setSceneHistory,
+          scriptDB,
+          lastScriptCacheKey: CACHE_KEY.lastScript,
+          historyCacheKey: CACHE_KEY.sceneHistory,
+          logTag: "single",
+        });
+      }
+    },
+    [scriptDB, selectedHistoryId]
+  );
 
   /** Wrapped setter that also persists to IndexedDB */
   const updateAffiliateVideoFormConfig = (config: AffiliateVideoFormConfig) => {

@@ -22,6 +22,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 
@@ -344,18 +345,26 @@ export function ElementProvider(props) {
   const patchConfig = useCallback(
     (partial: Partial<ElementFormConfig>) => {
       setElementFormConfig((prev) => ({ ...prev, ...partial }));
-      if (partial.serviceImageType !== undefined) {
-        setScriptDataRaw((prev) => {
-          if (!prev) return prev;
-          const next = { ...prev, serviceImageType: partial.serviceImageType };
-          scriptDB
-            .set(CACHE_KEY.lastElementScript, next)
-            .catch((err) => console.warn("[element] Failed to persist serviceImageType", err));
-          return next;
+
+      if (partial.aspectRatio !== undefined || partial.serviceImageType !== undefined) {
+        syncSidebarPatchToCurrentScript({
+          patch: {
+            ...(partial.aspectRatio !== undefined && { aspectRatio: partial.aspectRatio }),
+            ...(partial.serviceImageType !== undefined && {
+              serviceImageType: partial.serviceImageType,
+            }),
+          },
+          setScriptData: setScriptDataRaw,
+          selectedHistoryId,
+          setSceneHistory,
+          scriptDB,
+          lastScriptCacheKey: CACHE_KEY.lastElementScript,
+          historyCacheKey: CACHE_KEY.elementHistory,
+          logTag: "element",
         });
       }
     },
-    [scriptDB]
+    [scriptDB, selectedHistoryId]
   );
 
   return (

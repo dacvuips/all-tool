@@ -16,6 +16,7 @@ import {
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
+import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 import {
   ReviewAnalysisData,
   ReviewFormConfig,
@@ -326,12 +327,25 @@ export function ReviewProvider(props) {
     }
   }, [reviewFormConfig, scriptDB]);
 
-  const patchConfig = (partial: Partial<ReviewFormConfig>) => {
-    setReviewFormConfig((prev) => {
-      const next = { ...prev, ...partial };
-      return next;
-    });
-  };
+  const patchConfig = useCallback(
+    (partial: Partial<ReviewFormConfig>) => {
+      setReviewFormConfig((prev) => ({ ...prev, ...partial }));
+
+      if (partial.aspectRatio !== undefined) {
+        syncSidebarPatchToCurrentScript({
+          patch: { aspectRatio: partial.aspectRatio },
+          setScriptData: setScriptDataRaw,
+          selectedHistoryId,
+          setSceneHistory,
+          scriptDB,
+          lastScriptCacheKey: CACHE_KEY.lastReviewScript,
+          historyCacheKey: CACHE_KEY.reviewHistory,
+          logTag: "review",
+        });
+      }
+    },
+    [scriptDB, selectedHistoryId]
+  );
 
   return (
     <ReviewContext.Provider

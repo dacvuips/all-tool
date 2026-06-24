@@ -22,6 +22,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 
 /** Key used to persist the last generated script in IndexedDB */
 const COPY_VIDEO_STORE_NAME = STORE_NAME.copyVideo;
@@ -308,12 +309,25 @@ export function CopyVideoProvider(props) {
     }
   }, [copyVideoFormConfig, scriptDB]);
 
-  const patchConfig = (partial: Partial<CopyVideoFormConfig>) => {
-    setCopyVideoFormConfig((prev) => {
-      const next = { ...prev, ...partial };
-      return next;
-    });
-  };
+  const patchConfig = useCallback(
+    (partial: Partial<CopyVideoFormConfig>) => {
+      setCopyVideoFormConfig((prev) => ({ ...prev, ...partial }));
+
+      if (partial.aspectRatio !== undefined) {
+        syncSidebarPatchToCurrentScript({
+          patch: { aspectRatio: partial.aspectRatio },
+          setScriptData: setScriptDataRaw,
+          selectedHistoryId,
+          setSceneHistory,
+          scriptDB,
+          lastScriptCacheKey: CACHE_KEY.lastCopyVideoScript,
+          historyCacheKey: CACHE_KEY.copyVideoHistory,
+          logTag: "copy-video",
+        });
+      }
+    },
+    [scriptDB, selectedHistoryId]
+  );
 
   return (
     <CopyVideoContext.Provider
