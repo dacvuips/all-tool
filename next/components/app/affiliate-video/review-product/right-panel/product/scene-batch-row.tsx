@@ -75,6 +75,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleVoiceDisable,
   onToggleNoText,
   onToggleNoDownload,
+  onSetSceneAutoDownloadImageResolution,
+  onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
   onUpdateReviewImageSlots,
 }: {
@@ -93,6 +95,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onToggleVoiceDisable: (sceneId: string) => void;
   onToggleNoText: (sceneId: string) => void;
   onToggleNoDownload: (sceneId: string) => void;
+  onSetSceneAutoDownloadImageResolution: (sceneId: string, resolution: "1K" | "2K" | "4K") => void;
+  onSetSceneAutoDownloadVideoResolution: (sceneId: string, resolution: "720p" | "1080p") => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
   onUpdateReviewImageSlots?: (
     sceneId: string,
@@ -381,7 +385,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           <SceneAutoDownloadButton
             disabled={isDisabled}
             noDownload={scene.noDownload}
+            autoDownloadImageResolution={scene.autoDownloadImageResolution}
+            autoDownloadVideoResolution={scene.autoDownloadVideoResolution}
             onToggle={() => onToggleNoDownload(scene.id)}
+            onImageResolutionChange={(resolution) =>
+              onSetSceneAutoDownloadImageResolution(scene.id, resolution)
+            }
+            onVideoResolutionChange={(resolution) =>
+              onSetSceneAutoDownloadVideoResolution(scene.id, resolution)
+            }
           />
           <Button
             disabled={isDisabled}
@@ -575,6 +587,8 @@ interface SceneRowGroupProps {
   forcedTab?: SceneTabKey | null;
   onToggleNoText: (sceneId: string) => void;
   onToggleNoDownload: (sceneId: string) => void;
+  onSetSceneAutoDownloadImageResolution: (sceneId: string, resolution: "1K" | "2K" | "4K") => void;
+  onSetSceneAutoDownloadVideoResolution: (sceneId: string, resolution: "720p" | "1080p") => void;
   onInsert: (
     scene: ReviewScene,
     position: InsertPosition,
@@ -604,6 +618,8 @@ export function SceneRowGroup({
   onToggleVoiceDisable,
   onToggleNoText,
   onToggleNoDownload,
+  onSetSceneAutoDownloadImageResolution,
+  onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
   onUpdateReviewImageSlots,
 }: SceneRowGroupProps) {
@@ -645,6 +661,8 @@ export function SceneRowGroup({
           onToggleVoiceDisable={onToggleVoiceDisable}
           onToggleNoText={onToggleNoText}
           onToggleNoDownload={onToggleNoDownload}
+          onSetSceneAutoDownloadImageResolution={onSetSceneAutoDownloadImageResolution}
+          onSetSceneAutoDownloadVideoResolution={onSetSceneAutoDownloadVideoResolution}
           onUpdateSelectedProductImages={onUpdateSelectedProductImages}
           onUpdateReviewImageSlots={onUpdateReviewImageSlots}
         />

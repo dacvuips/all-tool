@@ -176,6 +176,8 @@ export interface SceneScript {
   voiceDisable?: boolean;
   noText?: boolean;
   noDownload?: boolean;
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  autoDownloadVideoResolution?: "720p" | "1080p";
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
   selectedProductImages?: string[];
@@ -257,6 +259,8 @@ export interface CopyVideoLegacyScene {
   voiceDisable?: boolean;
   noText?: boolean;
   noDownload?: boolean;
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  autoDownloadVideoResolution?: "720p" | "1080p";
   selectedProductImages?: string[];
   reviewImageSlots?: (ReviewFormImage | undefined)[];
   reviewVideoSlots?: (ReviewFormVideo | undefined)[];
@@ -323,6 +327,8 @@ export interface ReviewScene {
   voiceDisable?: boolean;
   noText?: boolean;
   noDownload?: boolean;
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  autoDownloadVideoResolution?: "720p" | "1080p";
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   reviewImageSlots?: (ReviewFormImage | undefined)[];

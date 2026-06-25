@@ -22,8 +22,10 @@ import {
   persistGeneratedVideoWithEnrichment,
 } from "../../shared/generatedMediaUtils";
 import {
+  type AutoDownloadImageResolution,
   triggerAutoDownloadAfterImageGen,
   triggerAutoDownloadAfterVideoGen,
+  type VideoDownloadResolution,
 } from "../../shared/autoDownloadUtils";
 import { ServiceImageEnum } from "../constants";
 
@@ -71,6 +73,7 @@ export interface GenerateImageParams {
   noText?: boolean;
   autoDownload?: boolean;
   sceneNumber?: number;
+  autoDownloadImageResolution?: AutoDownloadImageResolution;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
@@ -97,6 +100,7 @@ export interface GenerateVideoParams {
   autoDownload?: boolean;
   sceneNumber?: number;
   isStitch?: boolean;
+  autoDownloadVideoResolution?: VideoDownloadResolution;
   /** Callback nhận progress 0-100 */
   onProgress?: (pct: number) => void;
   /** Callback nhận status message */
@@ -394,6 +398,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         onMediaUpdate,
         autoDownload,
         sceneNumber,
+        autoDownloadImageResolution,
       } = params;
 
       // Gom ảnh tham chiếu (reference + additional)
@@ -438,7 +443,11 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         }
 
         onProgress?.(100);
-        triggerAutoDownloadAfterImageGen(imageData, { autoDownload, sceneNumber });
+        triggerAutoDownloadAfterImageGen(imageData, {
+          autoDownload,
+          sceneNumber,
+          autoDownloadImageResolution,
+        });
         return imageData;
       } catch (err: any) {
         onProgress?.(0);
@@ -489,6 +498,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         autoDownload,
         sceneNumber,
         isStitch,
+        autoDownloadVideoResolution,
       } = params;
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
       try {
@@ -539,7 +549,12 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
-        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
+        triggerAutoDownloadAfterVideoGen(videoData, {
+          autoDownload,
+          sceneNumber,
+          isStitch,
+          autoDownloadVideoResolution,
+        });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);
@@ -583,6 +598,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
         autoDownload,
         sceneNumber,
         isStitch,
+        autoDownloadVideoResolution,
       } = params;
 
       const resolvedGenerateAudio = voiceDisable ? false : generateAudio;
@@ -629,7 +645,12 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
 
         onProgress?.(100);
         onStatusMessage?.("Hoàn thành!");
-        triggerAutoDownloadAfterVideoGen(videoData, { autoDownload, sceneNumber, isStitch });
+        triggerAutoDownloadAfterVideoGen(videoData, {
+          autoDownload,
+          sceneNumber,
+          isStitch,
+          autoDownloadVideoResolution,
+        });
         return videoData;
       } catch (err: any) {
         onProgress?.(0);

@@ -195,6 +195,10 @@ export interface SceneScript {
   noText?: boolean;
   /** Bật tự động tải ảnh/video sau khi gen xong */
   noDownload?: boolean;
+  /** Độ phân giải ảnh khi tự động tải (override mặc định toàn cục) */
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  /** Độ phân giải video khi tự động tải (override mặc định toàn cục) */
+  autoDownloadVideoResolution?: "720p" | "1080p";
   audio?: string;
   aspectRatio?: "16:9" | "9:16";
   selectedProductImages?: string[];
@@ -328,6 +332,10 @@ export const CACHE_KEY = {
   storyboardHistory: "storyboardHistory",
   /** Mặc định tự động tải ảnh/video sau khi gen (localStorage) */
   autoDownloadAfterGen: "affiliate-video:autoDownloadAfterGen",
+  /** Độ phân giải ảnh khi tự động tải sau gen: 1K | 2K | 4K */
+  autoDownloadImageResolution: "affiliate-video:autoDownloadImageResolution",
+  /** Độ phân giải video khi tự động tải sau gen: 720p | 1080p */
+  autoDownloadVideoResolution: "affiliate-video:autoDownloadVideoResolution",
 };
 
 // ── Copy Video Analysis Types ──────────────────────────────────────────────
@@ -355,6 +363,8 @@ export interface CopyVideoScene {
   voiceDisable?: boolean;
   noText?: boolean;
   noDownload?: boolean;
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  autoDownloadVideoResolution?: "720p" | "1080p";
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];
@@ -424,6 +434,8 @@ export interface ElementScene {
   noText?: boolean;
   /** Bật tự động tải ảnh/video sau khi gen xong */
   noDownload?: boolean;
+  autoDownloadImageResolution?: "1K" | "2K" | "4K";
+  autoDownloadVideoResolution?: "720p" | "1080p";
   selectedProductImages?: string[];
   /** 3 ô ảnh tham chiếu (phong cách / đối tượng / SP) theo scene */
   elementImageSlots?: (ElementFormImage | undefined)[];

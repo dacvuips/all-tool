@@ -12,7 +12,14 @@ import { reorderScenesWithNumbers, SortableCardGrid } from "../../../shared/util
 import { CharacterItem } from "../constants";
 import { ActionImageEnum } from "../elements/constants";
 import { BatchListHeader, type BatchListHistoryConfig } from "./batch-list-header";
-import { getAutoDownloadDefault, setAutoDownloadDefault } from "./autoDownloadUtils";
+import {
+  getAutoDownloadDefault,
+  setAutoDownloadDefault,
+  setAutoDownloadImageResolutionDefault,
+  setAutoDownloadVideoResolutionDefault,
+  type AutoDownloadImageResolution,
+  type VideoDownloadResolution,
+} from "./autoDownloadUtils";
 import { LazySceneCard } from "./lazy-scene-card";
 import {
   BATCH_SCENE_PAGE_SIZE,
@@ -244,6 +251,66 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Đặt độ phân giải ảnh cho TẤT CẢ scene + lưu mặc định toàn cục */
+  const handleSetAllAutoDownloadImageResolution = async (
+    resolution: AutoDownloadImageResolution
+  ) => {
+    setAutoDownloadImageResolutionDefault(resolution);
+    const updated = sceneList.map((s) => ({ ...s, autoDownloadImageResolution: resolution }));
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleSetAllAutoDownloadImageResolution] Failed to persist:", err);
+    }
+  };
+
+  /** Đặt độ phân giải video cho TẤT CẢ scene + lưu mặc định toàn cục */
+  const handleSetAllAutoDownloadVideoResolution = async (
+    resolution: VideoDownloadResolution
+  ) => {
+    setAutoDownloadVideoResolutionDefault(resolution);
+    const updated = sceneList.map((s) => ({ ...s, autoDownloadVideoResolution: resolution }));
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleSetAllAutoDownloadVideoResolution] Failed to persist:", err);
+    }
+  };
+
+  /** Đặt độ phân giải ảnh chỉ cho một scene */
+  const handleSetSceneAutoDownloadImageResolution = async (
+    sceneId: string,
+    resolution: AutoDownloadImageResolution
+  ) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, autoDownloadImageResolution: resolution } : s
+    );
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleSetSceneAutoDownloadImageResolution] Failed to persist:", err);
+    }
+  };
+
+  /** Đặt độ phân giải video chỉ cho một scene */
+  const handleSetSceneAutoDownloadVideoResolution = async (
+    sceneId: string,
+    resolution: VideoDownloadResolution
+  ) => {
+    const updated = sceneList.map((s) =>
+      s.id === sceneId ? { ...s, autoDownloadVideoResolution: resolution } : s
+    );
+    setSceneList(updated);
+    try {
+      await onPersistScenes(updated);
+    } catch (err) {
+      console.error("[handleSetSceneAutoDownloadVideoResolution] Failed to persist:", err);
+    }
+  };
+
   /** Insert a new scene above/below a target scene */
   const handleInsert = async (
     targetScene: any,
@@ -422,6 +489,8 @@ export function SharedBatchListPanel({
           onToggleVoiceDisable={handleToggleVoiceDisable}
           onToggleNoText={handleToggleNoText}
           onToggleNoDownload={handleToggleNoDownload}
+          onSetSceneAutoDownloadImageResolution={handleSetSceneAutoDownloadImageResolution}
+          onSetSceneAutoDownloadVideoResolution={handleSetSceneAutoDownloadVideoResolution}
           onUpdateSelectedProductImages={handleUpdateSelectedProductImages}
           onUpdateElementImageSlots={handleUpdateElementImageSlots}
           onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
@@ -451,6 +520,8 @@ export function SharedBatchListPanel({
       handleToggleVoiceDisable,
       handleToggleNoText,
       handleToggleNoDownload,
+      handleSetSceneAutoDownloadImageResolution,
+      handleSetSceneAutoDownloadVideoResolution,
       handleUpdateSelectedProductImages,
       handleUpdateElementImageSlots,
       handleUpdateReviewImageSlots,
@@ -503,6 +574,8 @@ export function SharedBatchListPanel({
         onToggleAllVoiceDisable={handleToggleAllVoiceDisable}
         ActionBarComponent={ActionBarComponent}
         onToggleAllNoDownload={handleToggleAllNoDownload}
+        onSetAllAutoDownloadImageResolution={handleSetAllAutoDownloadImageResolution}
+        onSetAllAutoDownloadVideoResolution={handleSetAllAutoDownloadVideoResolution}
         onOpenIntro={onOpenIntro}
       />
 

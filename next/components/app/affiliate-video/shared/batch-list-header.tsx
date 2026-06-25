@@ -6,15 +6,20 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineVideoCamera, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import {
-  MdFileDownload,
-  MdFileDownloadOff,
   MdRecordVoiceOver,
   MdVoiceOverOff,
 } from "react-icons/md";
 import { RiImageFill, RiText, RiVideoFill } from "react-icons/ri";
 import { NoTextIcon } from "../../../../public/assets/svg/no-text-icon";
 import { Button } from "../../../shared/utilities/form";
-import { getAutoDownloadDefault } from "./autoDownloadUtils";
+import { AutoDownloadSettingsButton } from "./auto-download-settings-button";
+import {
+  getAutoDownloadDefault,
+  getAutoDownloadImageResolutionDefault,
+  getAutoDownloadVideoResolutionDefault,
+  type AutoDownloadImageResolution,
+  type VideoDownloadResolution,
+} from "./autoDownloadUtils";
 import { SceneTabKey } from "./scene-card-tabs";
 import { BaseHistoryItem, SceneHistoryDropdown } from "./scene-history-dropdown";
 import { AffiliateRightPanelGuideButton } from "./affiliate-right-panel-guide-button";
@@ -36,6 +41,8 @@ export interface BatchListHeaderProps {
   onToggleAllNoText: () => void;
   onToggleAllVoiceDisable: () => void;
   onToggleAllNoDownload: () => void;
+  onSetAllAutoDownloadImageResolution: (resolution: AutoDownloadImageResolution) => void;
+  onSetAllAutoDownloadVideoResolution: (resolution: VideoDownloadResolution) => void;
   ActionBarComponent: React.ComponentType<{ scenes: any[] }>;
   onOpenIntro?: () => void;
 }
@@ -48,6 +55,8 @@ export function BatchListHeader({
   onToggleAllNoText,
   onToggleAllVoiceDisable,
   onToggleAllNoDownload,
+  onSetAllAutoDownloadImageResolution,
+  onSetAllAutoDownloadVideoResolution,
   ActionBarComponent,
   onOpenIntro,
 }: BatchListHeaderProps) {
@@ -112,22 +121,14 @@ export function BatchListHeader({
           </div>
         </div>
         <div id="batch-toggle-all-download">
-        <Button
-          onClick={() => onToggleAllNoDownload()}
-          className={`w-6 h-6 px-2 rounded-md shadow-sm ${
-            allNoDownload
-              ? "text-green-500 bg-green-50 hover:bg-green-100"
-              : "text-gray-400 bg-white hover:text-green-500 hover:bg-green-50"
-          }`}
-          iconClassName="text-sm"
-          icon={allNoDownload ? <MdFileDownload /> : <MdFileDownloadOff />}
-          tooltip={
-            allNoDownload
-              ? t("Cho phép tải sau khi tạo ảnh/video xong")
-              : t("Không cho phép tải sau khi tạo ảnh/video xong")
-          }
-          placement="bottom"
-        />
+          <AutoDownloadSettingsButton
+            enabled={allNoDownload}
+            onToggle={() => onToggleAllNoDownload()}
+            imageResolution={getAutoDownloadImageResolutionDefault()}
+            videoResolution={getAutoDownloadVideoResolutionDefault()}
+            onImageResolutionChange={onSetAllAutoDownloadImageResolution}
+            onVideoResolutionChange={onSetAllAutoDownloadVideoResolution}
+          />
         </div>
 
         <div id="batch-toggle-all-notext">

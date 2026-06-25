@@ -32,6 +32,9 @@ export type GeneratedVideoLike = {
 /** Độ phân giải tải video: 720p (gốc) hoặc 1080p (upsample Flow2). */
 export type VideoDownloadResolution = "720p" | "1080p";
 
+/** Độ phân giải tải ảnh: 1K (gốc), 2K hoặc 4K (upsample Flow2). */
+export type AutoDownloadImageResolution = "1K" | "2K" | "4K";
+
 export type MediaPersistStorage<T> = {
   set: (key: string, value: T) => Promise<void>;
 };
@@ -380,6 +383,25 @@ export async function downloadSceneImage(
   const blob = await generatedImageToBlob(img);
   const mime = img.mimeType || blob.type || "image/png";
   triggerBlobDownload(blob, buildSceneImageFileName(sceneNumber, mime));
+}
+
+/** Tải ảnh theo độ phân giải — 1K gốc hoặc upscale 2K/4K; thiếu metadata thì fallback 1K. */
+export async function downloadSceneImageAtResolution(
+  img: GeneratedImageLike,
+  sceneNumber: number,
+  resolution: AutoDownloadImageResolution
+): Promise<void> {
+  if (resolution === "1K") {
+    return downloadSceneImage(img, sceneNumber);
+  }
+  const upsampleRes = resolution as UpsampleResolution;
+  if (!hasFlow2UpsampleMeta(img, upsampleRes)) {
+    console.warn(`[autoDownload] Thiếu metadata ${resolution}, tải 1K thay thế`);
+    return downloadSceneImage(img, sceneNumber);
+  }
+  const mime = img.mimeType || "image/png";
+  const fileName = buildSceneImageFileName(sceneNumber, mime);
+  return downloadUpsampledImage(img, fileName, upsampleRes);
 }
 
 /** Upscale ảnh đã generate qua Flow2 và trả Blob. */
