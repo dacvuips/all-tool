@@ -900,6 +900,7 @@ export const useOptionsTranslation = () => {
     language: LANGUAGE_OPTIONS[0].label,
     artStyle: ART_STYLE_TRANSLATED_OPTIONS[0].label,
     storyModeType: StoryModeTypeEnum.image_to_video,
+    trendingModeType: TrendingModeTypeEnum.single_variant,
     aspectRatio: "9:16",
     batchSize: 1,
   };

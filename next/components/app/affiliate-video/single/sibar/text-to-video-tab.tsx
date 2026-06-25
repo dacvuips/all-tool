@@ -29,23 +29,28 @@ export const TextToVideoTab = ({ onClose, type }: { onClose?: () => void; type: 
     type === TAB_TYPE.single ? IntroGuideKey.SINGLE_SIDEBAR : IntroGuideKey.BATCH_SIDEBAR;
   const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(introKey);
 
-  /** Wrap handleSubmit: nếu single mode thì xoá batchSize để AI tự quyết định số scene */
+    /** Wrap handleSubmit: batchSize chỉ đi lên khi ở chế độ Tùy chỉnh phân cảnh */
   const wrappedSubmit = (data: any, promptText?: string) => {
     // Merge objectToPersonifyCode from provider state – react-hook-form doesn't track this field
     const mergedData = {
       ...data,
-      batchSize: videoConfig?.batchSize ?? 8,
       storyModeType,
       objectToPersonifyCode: videoConfig?.objectToPersonifyCode,
       artStyleId: videoConfig?.artStyleId,
       productImages: videoConfig?.productImages,
       objectToPersonifyImage: videoConfig?.objectToPersonifyImage,
     };
+
+    const isCustomSceneMode = videoConfig?.trendingModeType === "story_script";
+    const payload = isCustomSceneMode
+      ? { ...mergedData, batchSize: videoConfig?.batchSize ?? 8 }
+      : mergedData;
+
     if (type === TAB_TYPE.single) {
-      const { batchSize, ...rest } = mergedData;
+      const { batchSize, ...rest } = payload;
       return handleSubmit?.(rest, promptText);
     }
-    return handleSubmit?.(mergedData, promptText);
+    return handleSubmit?.(payload, promptText);
   };
 
   return (

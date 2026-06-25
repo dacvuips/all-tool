@@ -61,6 +61,12 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   storyboardImage?: ElementFormImage[];
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
+  /**
+   * Chế độ tạo batch ở tab "Đơn":
+   * - single_variant: "Tự động" – AI tự tạo nhiều phiên bản dựa trên prompt gốc
+   * - story_script: "Tùy chỉnh phân cảnh" – Người dùng tự bố cục phân cảnh
+   */
+  trendingModeType?: TrendingModeTypeEnum;
   batchSize: number;
   productImages?: string[];
 }

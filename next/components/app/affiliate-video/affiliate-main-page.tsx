@@ -9,7 +9,6 @@ import { useTranslation } from "react-i18next";
 import {
   RiBookOpenLine,
   RiFileCopy2Line,
-  RiFileTextLine,
   RiGridLine,
   RiImage2Fill,
   RiListOrdered,
@@ -54,12 +53,12 @@ export default function AffiliateMainPage() {
       component: <AppPage />,
     },
 
-    {
-      icon: <RiFileTextLine />,
-      label: t("Đơn Lẻ"),
-      value: "single",
-      component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
-    },
+    // {
+    //   icon: <RiFileTextLine />,
+    //   label: t("Đơn Lẻ"),
+    //   value: "single",
+    //   component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
+    // },
     {
       icon: <RiGridLine />,
       label: t("Kịch Bản"),

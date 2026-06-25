@@ -10,6 +10,7 @@ import {
   ScriptData,
   STORE_NAME,
   StoryModeTypeEnum,
+  TrendingModeTypeEnum,
 } from "../../constants";
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
@@ -130,6 +131,8 @@ export const AffiliateVideoContext = createContext<
 
     storyModeType: StoryModeTypeEnum;
     setStoryModeType: (storyModeType: StoryModeTypeEnum) => void;
+    trendingModeType: TrendingModeTypeEnum;
+    setTrendingModeType: (trendingModeType: TrendingModeTypeEnum) => void;
   }>
 >({});
 
@@ -171,6 +174,9 @@ export function AffiliateVideoProvider(props) {
 
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
     StoryModeTypeEnum.image_to_video
+  );
+  const [trendingModeType, setTrendingModeType] = useState<TrendingModeTypeEnum>(
+    TrendingModeTypeEnum.single_variant
   );
 
   // ── Scene history state ──
@@ -447,6 +453,22 @@ export function AffiliateVideoProvider(props) {
               scriptDB
                 .set(CACHE_KEY.lastScript, { ...cached, storyModeType: mode })
                 .catch((e) => console.warn("[affiliate-video] Failed to persist storyModeType", e));
+            }
+          });
+        },
+
+        // trending mode (Tự động / Tùy chỉnh phân cảnh)
+        trendingModeType,
+        setTrendingModeType: (mode: TrendingModeTypeEnum) => {
+          setTrendingModeType(mode);
+          // Persist trendingModeType into lastScript
+          scriptDB.get(CACHE_KEY.lastScript).then((cached) => {
+            if (cached) {
+              scriptDB
+                .set(CACHE_KEY.lastScript, { ...cached, trendingModeType: mode })
+                .catch((e) =>
+                  console.warn("[affiliate-video] Failed to persist trendingModeType", e)
+                );
             }
           });
         },

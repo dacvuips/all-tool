@@ -78,7 +78,7 @@ export const BatchSizeSlider: React.FC<BatchSizeSliderProps> = ({ value, onChang
 
       <div className="flex justify-between mt-2 text-xs font-medium text-purple-400">
         <span>1</span>
-        <span>10</span>
+        <span>2</span>
         <span>3</span>
         <span>4</span>
         <span>5</span>
