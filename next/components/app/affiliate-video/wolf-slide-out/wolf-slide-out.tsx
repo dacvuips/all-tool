@@ -1,11 +1,11 @@
 import dynamic from "next/dynamic";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiDragMove2Fill, RiLoader4Line } from "react-icons/ri";
 
+import { useResizableWidth } from "../../../../lib/hooks/useResizableWidth";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { SubscriptionPlanEnum } from "../../../../lib/repo";
-import { useResizableWidth } from "../../../../lib/hooks/useResizableWidth";
 import { Slideout, SlideoutProps } from "../../../shared/utilities/dialog/slideout";
 import { Img } from "../../../shared/utilities/misc";
 
@@ -52,6 +52,15 @@ export function WolfSlideOut({
 }: WolfSlideOutProps) {
   const { customer } = useAuth();
   const { t } = useTranslation();
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
   const {
     width: panelWidth,
     isResizing,
@@ -62,7 +71,7 @@ export function WolfSlideOut({
     minWidth: minPanelWidth,
     maxWidth: maxPanelWidth,
     edge: "right",
-    enabled: isOpen,
+    enabled: isOpen && !isMobile,
   });
 
   if (
@@ -75,11 +84,13 @@ export function WolfSlideOut({
     <Slideout
       {...props}
       isOpen={isOpen}
-      width={panelWidth}
-      minWidth={minPanelWidth}
-      maxWidth={maxPanelWidth}
+      width={isMobile ? "80%" : panelWidth}
+      minWidth={isMobile ? undefined : minPanelWidth}
+      maxWidth={isMobile ? undefined : maxPanelWidth}
       placement="right"
-      className={`!bg-white border-l border-slate-200 mt-14 ${isResizing ? "" : "transition-[width] duration-150"} ${className}`}
+      className={`!bg-white border-l border-slate-200 mt-14 ${
+        isResizing ? "" : "transition-[width] duration-150"
+      } ${className}`}
       hasCloseButton
       onOverlayClick={() => {}}
     >
@@ -90,7 +101,7 @@ export function WolfSlideOut({
           aria-label={t("Đổi kích thước panel Wolf")}
           title={t("Kéo để thay đổi chiều rộng")}
           onMouseDown={onResizeStart}
-          className={`group absolute top-0 left-0 z-20 flex h-full w-3 -translate-x-1/2 cursor-col-resize touch-none items-center justify-center ${
+          className={`group absolute top-0 left-0 z-20 hidden h-full w-3 -translate-x-1/2 cursor-col-resize touch-none items-center justify-center md:flex ${
             isResizing ? "bg-primary/10" : ""
           }`}
         >
