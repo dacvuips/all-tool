@@ -150,6 +150,14 @@ export function getSingleSidebarIntroSteps(
       ),
       position: "right",
     });
+    steps.push({
+      element: "#trending-mode-section",
+      title: t("Tự động / Tùy chỉnh phân cảnh"),
+      intro: t(
+        "Tự động sẽ để AI tự quyết định số cảnh; Tùy chỉnh phân cảnh sẽ hiện thanh trượt để bạn chọn số phân cảnh cần tạo."
+      ),
+      position: "right",
+    });
   }
 
   steps.push(
