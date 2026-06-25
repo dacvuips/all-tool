@@ -73,8 +73,8 @@ export const AffiliateVideoContext = createContext<
     /** Convenience getter – returns current form values as AffiliateFormConfig */
     affiliateFormConfig: AffiliateVideoFormConfig;
     // ── Script data ──
-    scriptData: ScriptData | null;
-    setScriptData: (data: ScriptData | null) => void;
+    scriptData: TrendingScriptData | null;
+    setScriptData: (data: TrendingScriptData | null) => void;
     scriptTab: "script" | "batch" | "prompt-rank";
     setScriptTab: (tab: "script" | "batch" | "prompt-rank") => void;
     batchList: string[];
