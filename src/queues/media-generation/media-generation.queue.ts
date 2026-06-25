@@ -43,10 +43,7 @@ import {
 } from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
 import { assertMediaStreamAvailable, canStartMediaJobProcessing } from "./media-job-concurrency";
-import {
-  isMediaJobPayloadAvailable,
-  MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE,
-} from "./media-job-data";
+import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
 
 /** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
 const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
@@ -71,7 +68,7 @@ export const MEDIA_JOB_MAX_STALE_RECOVERIES = 5;
 /** Tham số bee-queue cho mỗi job — chỉ chứa `jobId` để worker load đầy đủ từ Mongo. */
 
 /** Số worker bee-queue — giới hạn tải toàn cục, tránh OOM khi nhiều job video chạy song song. */
-const MEDIA_GENERATION_QUEUE_WORKERS = 15;
+const MEDIA_GENERATION_QUEUE_WORKERS = 30;
 
 /** Job QUEUED chờ slot PROCESSING — re-enqueue sau khoảng này (ms). */
 const MEDIA_JOB_STREAM_DEFER_MS = 5_000;
@@ -251,11 +248,7 @@ export async function resumeStaleMediaJobs(): Promise<number> {
       const jobId = String((job as any)._id);
       try {
         if (!(await isMediaJobPayloadAvailable(job))) {
-          const ok = await failUnrecoverableMediaJob(
-            jobId,
-            MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE,
-            410
-          );
+          const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
           if (ok) skippedExpired++;
           continue;
         }
