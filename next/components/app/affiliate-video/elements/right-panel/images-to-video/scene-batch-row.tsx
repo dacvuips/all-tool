@@ -523,7 +523,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           savedSlots={
             actionImageType === ActionImageEnum.sequential
               ? sceneSavedImageSlots
-              : scene.elementImageSlots
+              : selectedElementImageSlots.length
+                ? selectedElementImageSlots
+                : scene.elementImageSlots
           }
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}

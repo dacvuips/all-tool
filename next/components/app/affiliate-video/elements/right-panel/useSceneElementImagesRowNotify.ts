@@ -27,14 +27,16 @@ export function useSceneElementImagesRowNotify(
     const key = elementImageSlotsFingerprint(slots);
     const shouldPersist = manualMask.some(Boolean);
 
-    if (key !== lastLiveKeyRef.current) {
-      lastLiveKeyRef.current = key;
-      onSlotsChange(slots, { persist: false });
-    }
+    if (key === lastLiveKeyRef.current) return;
+    lastLiveKeyRef.current = key;
 
-    if (shouldPersist && key !== lastPersistKeyRef.current) {
-      lastPersistKeyRef.current = key;
-      onSlotsChange(slots, { persist: true });
+    if (shouldPersist) {
+      if (key !== lastPersistKeyRef.current) {
+        lastPersistKeyRef.current = key;
+        onSlotsChange(slots, { persist: true });
+      }
+    } else {
+      onSlotsChange(slots, { persist: false });
     }
   }, [slots, manualMaskKey, onSlotsChange]);
 }

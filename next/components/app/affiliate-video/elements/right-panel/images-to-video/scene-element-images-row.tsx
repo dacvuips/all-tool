@@ -110,6 +110,7 @@ export function SceneElementImagesRow({
     () => (savedSlots?.length ? elementImageSlotsFingerprint(savedSlots) : ""),
     [savedSlots]
   );
+  const manualMaskKey = manualMask.map(String).join(",");
 
   useEffect(() => {
     setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...resolvedMatched], slotCount));
@@ -130,10 +131,22 @@ export function SceneElementImagesRow({
   }, [actionImageType, resolvedMatched, resolvedMatchedKey, slotCount]);
 
   useEffect(() => {
-    if (!savedSlots?.length) return;
-    setSlots(trimSlots([...savedSlots], slotCount));
-    setManualMask(Array.from({ length: slotCount }, (_, i) => !!savedSlots[i]));
-  }, [savedSlotsKey, slotCount]);
+    if (!savedSlotsKey) return;
+    const next = trimSlots([...savedSlots!], slotCount);
+    setSlots((prev) => {
+      const prevKey = elementImageSlotsFingerprint(prev);
+      if (prevKey === savedSlotsKey) return prev;
+      // Chỉnh tay đang chờ persist — không ghi đè bằng savedSlots cũ từ parent.
+      if (manualMask.some(Boolean) && prevKey !== savedSlotsKey) return prev;
+      return next;
+    });
+    setManualMask((prev) => {
+      const prevKey = elementImageSlotsFingerprint(slots);
+      if (prevKey === savedSlotsKey) return prev;
+      if (manualMask.some(Boolean) && prevKey !== savedSlotsKey) return prev;
+      return Array.from({ length: slotCount }, (_, i) => !!savedSlots![i]);
+    });
+  }, [savedSlotsKey, slotCount, savedSlots, manualMaskKey, slots]);
 
   useEffect(() => {
     setSlots((prev) => trimSlots(prev, slotCount));
@@ -143,8 +156,6 @@ export function SceneElementImagesRow({
       return next.slice(0, slotCount);
     });
   }, [slotCount]);
-
-  const manualMaskKey = manualMask.map(String).join(",");
 
   useEffect(() => {
     setSlots((prev) => {

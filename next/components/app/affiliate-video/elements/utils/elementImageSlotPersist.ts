@@ -48,16 +48,9 @@ export function resolveImageFromCatalog(
   config?: ElementFormConfig
 ): ElementFormImage | undefined {
   if (!ref) return undefined;
-  if (ref.imageBytes || ref.fifeUrl) {
-    const token = getImageMatchToken(ref);
-    if (!token || !config) return ref;
-    const catalog = getOrderedElementImages(config).find(
-      (img) => getImageMatchToken(img) === token
-    );
-    if (!catalog) return ref;
-    if (ref.imageBytes && !ref.fifeUrl) return catalog;
-    return ref;
-  }
+  // Upload thủ công hoặc ảnh đã có URL — giữ nguyên, không swap sang catalog theo tên file.
+  if (ref.imageBytes && !ref.fifeUrl) return ref;
+  if (ref.fifeUrl) return ref;
   const token = getImageMatchToken(ref);
   if (!token || !config) return ref;
   return (

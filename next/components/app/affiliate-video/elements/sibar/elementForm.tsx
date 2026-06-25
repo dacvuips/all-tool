@@ -19,6 +19,7 @@ import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-st
 import { useAffiliateSidebarIntro } from "../../shared/use-affiliate-sidebar-intro";
 import { AffiliateSidebarGuideButton } from "../../shared/affiliate-sidebar-guide-button";
 import { ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
+import { ELEMENT_SCRIPT_TAB_ENUM, setScenesForTab } from "../../shared/script-tab-scenes";
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
@@ -45,6 +46,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
   const toast = useToast();
   const {
     elementFormConfig,
+    scriptData,
     scriptTab,
     setBatchRunning,
     setScriptData,
@@ -54,7 +56,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
   const { introOpen, openIntro, handleIntroDismiss } = useAffiliateSidebarIntro(
     IntroGuideKey.ELEMENT_SIDEBAR
   );
-  const [queryParams] = useQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "" });
+  const [queryParams, setQueryParams] = useQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "" });
   const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
   const activeTab: ElementScriptTabEnum =
     tabParam && Object.values(ElementScriptTabEnum).includes(tabParam as ElementScriptTabEnum)
@@ -73,14 +75,18 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         setBatchRunning?.(true);
         persistElementInput?.();
 
-        const result = buildAnalysisDataFromNumberedPrompt(
+        const serviceImageType = resolveSubmitServiceImageType(
+          activeTab,
+          elementFormConfig?.serviceImageType
+        );
+        const parsed = buildAnalysisDataFromNumberedPrompt(
           promptText,
           elementFormConfig?.aspectRatio,
           elementFormConfig?.artStyleId,
           elementFormConfig?.artStyle,
-          resolveSubmitServiceImageType(activeTab, elementFormConfig?.serviceImageType)
+          serviceImageType
         );
-        if (!result?.scenes?.length) {
+        if (!parsed?.scenes?.length) {
           toast.error(
             `${t("Không tách được cảnh nào từ prompt")}. ${t("Dùng định dạng")}: ${t(
               "1" + "." + " " + t("mô tả cảnh")
@@ -89,9 +95,23 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           return;
         }
 
-        setScriptData?.(result);
-        setScriptTab?.(ElementScriptTabEnum.batch);
-        toast.success(t("Đã tạo {{count}} cảnh từ prompt", { count: result.scenes.length }));
+        const merged = setScenesForTab(
+          {
+            ...(scriptData ?? { scenes: [] }),
+            aspectRatio: parsed.aspectRatio ?? scriptData?.aspectRatio,
+            artStyleId: parsed.artStyleId ?? scriptData?.artStyleId,
+            artStyle: parsed.artStyle ?? scriptData?.artStyle,
+            serviceImageType,
+          },
+          activeTab,
+          ELEMENT_SCRIPT_TAB_ENUM,
+          parsed.scenes
+        );
+
+        setScriptData?.(merged);
+        setScriptTab?.(activeTab);
+        setQueryParams({ [ELEMENT_SCRIPT_TAB_QUERY_KEY]: activeTab });
+        toast.success(t("Đã tạo {{count}} cảnh từ prompt", { count: parsed.scenes.length }));
       } catch (err: any) {
         console.error("[ElementForm] parse prompt error:", err);
         toast.error(err?.message || t("Lỗi khi phân tích prompt"));
@@ -103,9 +123,11 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
       activeTab,
       elementFormConfig,
       persistElementInput,
+      scriptData,
       setBatchRunning,
       setScriptData,
       setScriptTab,
+      setQueryParams,
       t,
       toast,
     ]

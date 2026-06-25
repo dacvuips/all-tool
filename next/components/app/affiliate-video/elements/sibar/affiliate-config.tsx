@@ -4,8 +4,8 @@
  * className only – Tailwind CSS, no inline styles, no arbitrary [] values
  * Field names aligned with AffiliateFormConfig interface.
  */
-import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import { RiListOrdered, RiMagicFill } from "react-icons/ri";
 
@@ -14,9 +14,9 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Label, Radio, Textarea } from "../../../../shared/utilities/form";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } from "../../constants";
-import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
+import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -95,157 +95,167 @@ export const AffiliateConfig = ({
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}
       />
-    <div className="flex-1 bg-white">
-      {/* ── Form Fields ── */}
+      <div className="flex-1 bg-white">
+        {/* ── Form Fields ── */}
 
-      <div className="px-4 pb-4 space-y-3">
-        <Field className="mt-3" noError>
-          <div id="element-image-mode-section" className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl">
-            {(
-              [
-                {
-                  value: ActionImageEnum.auto,
-                  label: t("Nạp ảnh tự động"),
-                  Icon: RiMagicFill,
-                },
-                {
-                  value: ActionImageEnum.sequential,
-                  label: t("Nạp ảnh tuần tự"),
-                  Icon: RiListOrdered,
-                },
-              ] as const
-            ).map(({ value, label, Icon }) => {
-              const isActive = actionImageType === value;
-              return (
-                <div
-                  key={value}
-                  onClick={() => handleActionImageTypeChange(value)}
-                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
-                    isActive
-                      ? "text-gray-800 bg-white shadow-sm"
-                      : "text-gray-500 hover:text-gray-700"
-                  }`}
-                >
-                  <Icon
-                    className={isActive ? "text-pink-500 shrink-0" : "text-gray-400 shrink-0"}
-                  />
-                  {label}
-                </div>
-              );
-            })}
-          </div>
-        </Field>
-
-        <div id="aspect-ratio-section">
-        <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
-          <div className="grid grid-cols-2 gap-2">
-            {ASPECT_RATIOS.map((ar) => {
-              const isPortrait = ar.value === "9:16";
-              const isActive = elementFormConfig?.aspectRatio === ar.value;
-              return (
-                <Button
-                  key={ar.value}
-                  id={`aspect-ratio-${ar.value.replace(":", "-")}`}
-                  onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
-                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                    isActive
-                      ? "text-blue-600 bg-blue-50 border-blue-400"
-                      : "text-gray-600 bg-white border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-base">
-                    {isPortrait ? <BsFile /> : <BsFile style={{ transform: "rotate(90deg)" }} />}
-                  </span>
-                  {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
-                </Button>
-              );
-            })}
-          </div>
-        </Field>
-        </div>
-        <div>
-          <ArtStylePickerDialog
-            name="artStyle"
-            value={elementFormConfig?.artStyle}
-            onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
-            onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
-          />
-        </div>
-
-        <div id="scene-prompt-section">
-        <Field noError label={t("Prompt phân cảnh")}>
-          <Textarea
-            id="scene-prompt-list"
-            className="border-gray-200 min-h-[200px]"
-            maxRows={10}
-            placeholder={`${t("Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ")}:\n${t("1")}. ${t(
-              "Mô tả cảnh đầu"
-            )}...\n${t("2")}. ${t("Mô tả cảnh hai")}...\n${t("3")}. ${t("Mô tả cảnh ba")}...`}
-            value={elementFormConfig?.prompt}
-            onChange={(v) => patchConfig && patchConfig({ prompt: v })}
-          />
-        </Field>
-        </div>
-        {/* Option cho Images to Video*/}
-        {isImagesToVideo && (
-          <Field label={t("Chế độ nạp ảnh")}>
-            <Radio
-              defaultValue={ServiceImageEnum.imageOnly}
-              selectFirst
-              cols={12}
-              value={elementFormConfig.serviceImageType}
-              onChange={(val) => handleServiceImageTypeChange(val)}
-              options={[
-                { label: t("Chỉ có ảnh bắt đầu -> Video"), value: ServiceImageEnum.imageOnly },
-                { label: t("Ảnh bắt đầu và kết thúc -> Video"), value: ServiceImageEnum.startEnd },
-                { label: t("2 ảnh kết hợp -> Video"), value: ServiceImageEnum.startAddEnd },
-              ]}
-            />
-          </Field>
-        )}
-        {isVideoToVideo && (
-          <ElementVideoUpload
-            videoRef={elementFormConfig?.videoRef}
-            readOnly={!customer}
-            onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
-          />
-        )}
-
-        {/* Ảnh thành phần / ảnh tham chiếu */}
-        <div id="element-images-upload">
-        {isSequentialImageMode ? (
-          <div>
-            <Label text={t("Ảnh Tham chiêu (Tùy chọn)")} />
-            <TabGroup
-              name="element-sequential-art-images"
-              flex
-              tabClassName="px-2 py-2"
-              titleClassName="text-xs font-semibold whitespace-nowrap"
-              bodyClassName="pt-3"
-              className="-mx-4"
+        <div className="px-4 pb-4 space-y-3">
+          <Field className="mt-3" noError>
+            <div
+              id="element-image-mode-section"
+              className="grid grid-cols-2 gap-1 p-1 bg-gray-100 rounded-xl"
             >
-              {Array.from({ length: sequentialTabCount }, (_, i) => (
-                <TabGroup.Tab key={i} label={t("Vị trí {{n}}", { n: i + 1 })}>
-                  <ElementImagesUpload
-                    artStyleImg={sequentialImages[i]}
-                    readOnly={!customer}
-                    onArtStyleImgChange={(v) => patchSequentialTabImages(i, v)}
-                  />
-                </TabGroup.Tab>
-              ))}
-            </TabGroup>
+              {(
+                [
+                  {
+                    value: ActionImageEnum.auto,
+                    label: t("Nạp ảnh tự động"),
+                    Icon: RiMagicFill,
+                  },
+                  {
+                    value: ActionImageEnum.sequential,
+                    label: t("Nạp ảnh tuần tự"),
+                    Icon: RiListOrdered,
+                  },
+                ] as const
+              ).map(({ value, label, Icon }) => {
+                const isActive = actionImageType === value;
+                return (
+                  <div
+                    key={value}
+                    onClick={() => handleActionImageTypeChange(value)}
+                    className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer border-0 ${
+                      isActive
+                        ? "text-gray-800 bg-white shadow-sm"
+                        : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    <Icon
+                      className={isActive ? "text-pink-500 shrink-0" : "text-gray-400 shrink-0"}
+                    />
+                    {label}
+                  </div>
+                );
+              })}
+            </div>
+          </Field>
+
+          <div id="aspect-ratio-section">
+            <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
+              <div className="grid grid-cols-2 gap-2">
+                {ASPECT_RATIOS.map((ar) => {
+                  const isPortrait = ar.value === "9:16";
+                  const isActive = elementFormConfig?.aspectRatio === ar.value;
+                  return (
+                    <Button
+                      key={ar.value}
+                      id={`aspect-ratio-${ar.value.replace(":", "-")}`}
+                      onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
+                      className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                        isActive
+                          ? "text-blue-600 bg-blue-50 border-blue-400"
+                          : "text-gray-600 bg-white border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <span className="text-base">
+                        {isPortrait ? (
+                          <BsFile />
+                        ) : (
+                          <BsFile style={{ transform: "rotate(90deg)" }} />
+                        )}
+                      </span>
+                      {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
+                    </Button>
+                  );
+                })}
+              </div>
+            </Field>
           </div>
-        ) : (
-          <ElementImagesUpload
-            label={t("Ảnh Tham chiêu (Tùy chọn)")}
-            artStyleImg={elementFormConfig?.artStyleImg}
-            readOnly={!customer}
-            onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
-          />
-        )}
+          <div>
+            <ArtStylePickerDialog
+              name="artStyle"
+              value={elementFormConfig?.artStyle}
+              onChange={(v) => patchConfig && patchConfig({ artStyle: v })}
+              onCodeChange={(code) => patchConfig && patchConfig({ artStyleId: code })}
+            />
+          </div>
+
+          <div id="scene-prompt-section">
+            <Field noError label={t("Prompt phân cảnh")}>
+              <Textarea
+                id="scene-prompt-list"
+                className="border-gray-200 min-h-[200px]"
+                maxRows={10}
+                placeholder={`${t("Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ")}:\n${t("1")}. ${t(
+                  "Mô tả cảnh đầu"
+                )}...\n${t("2")}. ${t("Mô tả cảnh hai")}...\n${t("3")}. ${t("Mô tả cảnh ba")}...`}
+                value={elementFormConfig?.prompt}
+                onChange={(v) => patchConfig && patchConfig({ prompt: v })}
+              />
+            </Field>
+          </div>
+          {/* Option cho Images to Video*/}
+          {isImagesToVideo && (
+            <Field label={t("Chế độ nạp ảnh")}>
+              <Radio
+                defaultValue={ServiceImageEnum.imageOnly}
+                selectFirst
+                cols={12}
+                value={elementFormConfig.serviceImageType}
+                onChange={(val) => handleServiceImageTypeChange(val)}
+                options={[
+                  { label: t("Chỉ có ảnh bắt đầu -> Video"), value: ServiceImageEnum.imageOnly },
+                  {
+                    label: t("Ảnh bắt đầu và kết thúc -> Video"),
+                    value: ServiceImageEnum.startEnd,
+                  },
+                  { label: t("2 ảnh kết hợp -> Video"), value: ServiceImageEnum.startAddEnd },
+                ]}
+              />
+            </Field>
+          )}
+          {isVideoToVideo && (
+            <ElementVideoUpload
+              videoRef={elementFormConfig?.videoRef}
+              readOnly={!customer}
+              onVideoRefChange={(v) => patchConfig && patchConfig({ videoRef: v })}
+            />
+          )}
+
+          {/* Ảnh thành phần / ảnh tham chiếu */}
+          <div id="element-images-upload">
+            {isSequentialImageMode ? (
+              <div>
+                <Label text={t("Ảnh Tham chiêu (Tùy chọn)")} />
+                <TabGroup
+                  name="element-sequential-art-images"
+                  flex
+                  tabClassName="px-2 py-2"
+                  titleClassName="text-xs font-semibold whitespace-nowrap"
+                  bodyClassName="pt-3"
+                  className="-mx-4"
+                >
+                  {Array.from({ length: sequentialTabCount }, (_, i) => (
+                    <TabGroup.Tab key={i} label={t("Vị trí {{n}}", { n: i + 1 })}>
+                      <ElementImagesUpload
+                        artStyleImg={sequentialImages[i]}
+                        readOnly={!customer}
+                        onArtStyleImgChange={(v) => patchSequentialTabImages(i, v)}
+                      />
+                    </TabGroup.Tab>
+                  ))}
+                </TabGroup>
+              </div>
+            ) : (
+              <ElementImagesUpload
+                label={t("Ảnh Tham chiêu (Tùy chọn)")}
+                artStyleImg={elementFormConfig?.artStyleImg}
+                readOnly={!customer}
+                onArtStyleImgChange={(v) => patchConfig && patchConfig({ artStyleImg: v })}
+              />
+            )}
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 };
