@@ -14,6 +14,15 @@ import logger from "./helpers/logger";
 import { BaseError } from "./libs/core";
 import router from "./routers";
 
+type NextUpgradeHandler = (req: unknown, socket: unknown, head: Buffer) => void;
+
+let nextUpgradeHandler: NextUpgradeHandler | null = null;
+
+/** WebSocket upgrade cho Next.js Fast Refresh (`/_next/webpack-hmr`). */
+export function getNextUpgradeHandler(): NextUpgradeHandler | null {
+  return nextUpgradeHandler;
+}
+
 export default function startExpressApp() {
   const app = express();
 
@@ -70,8 +79,9 @@ export default function startExpressApp() {
     nextApp
       .prepare()
       .then(() => {
+        nextUpgradeHandler = nextApp.getUpgradeHandler();
         logger.info("Next App Initialized!");
-        app.all(["*", /^\/_next\/webpack-hmr(\/.*)?/], (req, res) => {
+        app.all("*", (req, res) => {
           handle(req, res);
         });
         // app.get("*", (req, res) => {

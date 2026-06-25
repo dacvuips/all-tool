@@ -14,6 +14,7 @@ import { Socket } from "net";
 import path from "path";
 import { Server as WebSocketServer } from "ws";
 import { walkSyncFiles } from "../helpers/common";
+import { getNextUpgradeHandler } from "../express";
 import logger from "../helpers/logger";
 import { onContext } from "../libs/graphql/context";
 import { DOMAIN, IS_DEBUG } from "../libs/shared";
@@ -177,9 +178,16 @@ export default async (app: Express, httpServer: Server) => {
       wsServer.handleUpgrade(req, socket as Socket, head, (ws) => {
         wsServer.emit("connection", ws, req);
       });
-    } else {
-      socket.destroy();
+      return;
     }
+    if (pathname === "/_next/webpack-hmr") {
+      const handleNextUpgrade = getNextUpgradeHandler();
+      if (handleNextUpgrade) {
+        handleNextUpgrade(req, socket, head);
+        return;
+      }
+    }
+    socket.destroy();
   });
   // Hand in the schema we just created and have the
   // WebSocketServer start listening.
