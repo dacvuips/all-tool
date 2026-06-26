@@ -95,37 +95,13 @@ export function buildUpsampleImageSnippet(
 ): string {
   const base = getApiBaseUrl();
   const resolution = config.upsampleImageResolution;
-
-  if (resolution === "2K") {
-    const body = { resolution: "2K", flow2RequestId: "FLOW2_REQUEST_ID_FROM_JOB_RESULT" };
-    if (lang === "curl") {
-      return `# Sau khi gen_image status=SUCCEEDED (metadata giữ flow2RequestId)
-curl -X POST "${base}/api/api-media/upsample-image" \\
-  -H "x-api-key: ${apiKey}" \\
-  -H "Content-Type: application/json" \\
-  -d '${JSON.stringify(body)}'`;
-    }
-    return `import requests
-
-res = requests.post(
-    "${base}/api/api-media/upsample-image",
-    headers={"x-api-key": "${apiKey}", "Content-Type": "application/json"},
-    json=${jsonStringify(body).replace(/\n/g, "\n    ")},
-    timeout=600,
-)
-res.raise_for_status()
-print(res.json())`;
-  }
-
   const body = {
-    resolution: "4K",
-    mediaId: "MEDIA_ID_FROM_JOB_RESULT",
-    projectId: "PROJECT_ID_FROM_JOB_RESULT",
-    profileId: "PROFILE_ID_FROM_JOB_RESULT",
+    resolution,
+    flow2RequestId: "FLOW2_REQUEST_ID_FROM_JOB_RESULT",
   };
 
   if (lang === "curl") {
-    return `# Upscale ảnh 4K — cần mediaId/projectId/profileId từ resultData
+    return `# Sau khi gen_image status=SUCCEEDED (lấy flow2RequestId từ resultData.images)
 curl -X POST "${base}/api/api-media/upsample-image" \\
   -H "x-api-key: ${apiKey}" \\
   -H "Content-Type: application/json" \\

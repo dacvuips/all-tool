@@ -402,8 +402,8 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
                   })
                 }
               >
-                <option value="2K">2K (flow2RequestId)</option>
-                <option value="4K">4K (mediaId + projectId + profileId)</option>
+                <option value="2K">2K</option>
+                <option value="4K">4K</option>
               </select>
             </div>
           )}

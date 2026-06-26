@@ -50,14 +50,14 @@ export function hasGeneratedImageData(img: GeneratedImageLike | null | undefined
 /** Độ phân giải upscale qua Flow2. */
 export type UpsampleResolution = "2K" | "4K";
 
-/** Đủ metadata Flow2 để gọi upscale 2K (request_id). */
+/** Đủ metadata Flow2 để gọi upscale 2K/4K (request_id). */
 export function hasFlow2Upsample2kMeta(img: GeneratedImageLike | null | undefined): boolean {
   return !!img?.flow2RequestId?.trim();
 }
 
-/** Đủ metadata Flow2 để gọi upscale 4K (media_id + project_id + profile_id). */
+/** @deprecated Dùng hasFlow2Upsample2kMeta — 4K cũng chỉ cần flow2RequestId */
 export function hasFlow2Upsample4kMeta(img: GeneratedImageLike | null | undefined): boolean {
-  return !!(img?.mediaId?.trim() && img?.projectId?.trim() && img?.profileId?.trim());
+  return hasFlow2Upsample2kMeta(img);
 }
 
 /** @deprecated Dùng hasFlow2Upsample4kMeta */
@@ -67,9 +67,9 @@ export function hasFlow2UpscaleMeta(img: GeneratedImageLike | null | undefined):
 
 export function hasFlow2UpsampleMeta(
   img: GeneratedImageLike | null | undefined,
-  resolution: UpsampleResolution
+  _resolution: UpsampleResolution
 ): boolean {
-  return resolution === "2K" ? hasFlow2Upsample2kMeta(img) : hasFlow2Upsample4kMeta(img);
+  return hasFlow2Upsample2kMeta(img);
 }
 
 /** Đủ metadata Flow2 để upscale video 1080p (request_id từ gen_video). */
@@ -410,21 +410,13 @@ export async function fetchUpsampledImageBlob(
   resolution: UpsampleResolution
 ): Promise<Blob> {
   if (!hasFlow2UpsampleMeta(img, resolution)) {
-    const missing =
-      resolution === "2K"
-        ? "flow2RequestId"
-        : "mediaId, projectId, profileId";
-    throw new Error(`Thiếu metadata Flow2 (${missing}) để upscale ${resolution}`);
+    throw new Error(`Thiếu metadata Flow2 (flow2RequestId) để upscale ${resolution}`);
   }
 
-  const body: Record<string, string> = { resolution };
-  if (resolution === "2K") {
-    body.flow2RequestId = img.flow2RequestId!.trim();
-  } else {
-    body.mediaId = img.mediaId!.trim();
-    body.projectId = img.projectId!.trim();
-    body.profileId = img.profileId!.trim();
-  }
+  const body: Record<string, string> = {
+    resolution,
+    flow2RequestId: img.flow2RequestId!.trim(),
+  };
 
   const res = await fetch("/api/app/upsample-image/", {
     method: "POST",

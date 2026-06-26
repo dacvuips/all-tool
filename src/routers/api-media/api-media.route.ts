@@ -10,10 +10,7 @@ import { createAndEnqueueApiMediaJob } from "./_enqueue-helper";
 import { resolveApiMediaTokenFromRequest } from "./api-media-key";
 import { prepareApiMediaImageRequest, prepareApiMediaVideoRequest } from "./api-media-prepare";
 import { assertApiMediaRateLimit } from "./api-media-rate-limit";
-import {
-  assertApiMediaFlow2RequestOwner,
-  assertApiMediaMediaUpscaleOwner,
-} from "./api-media-upscale-registry";
+import { assertApiMediaFlow2RequestOwner } from "./api-media-upscale-registry";
 import {
   upsampleImageWithFlow2,
   UpsampleResolution,
@@ -127,41 +124,18 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
     resolution?: UpsampleResolution | string;
     flow2RequestId?: string;
     requestId?: string;
-    mediaId?: string;
-    projectId?: string;
-    profileId?: string;
   };
 
   const resolution = parseUpsampleResolution(body?.resolution);
   const flow2RequestId = (body?.flow2RequestId || body?.requestId || "").trim();
-  const mediaId = body?.mediaId?.trim();
-  const projectId = body?.projectId?.trim();
-  const profileId = body?.profileId?.trim();
 
-  if (resolution === "2K") {
-    if (!flow2RequestId) {
-      res.status(400).json({ message: "Thiếu flow2RequestId (request_id từ job gen_image)" });
-      return;
-    }
-    await assertApiMediaFlow2RequestOwner(apiMediaTokenId, flow2RequestId);
-  } else if (!mediaId || !projectId || !profileId) {
-    res.status(400).json({
-      message: "Thiếu mediaId, projectId hoặc profileId để upscale 4K",
-    });
+  if (!flow2RequestId) {
+    res.status(400).json({ message: "Thiếu flow2RequestId (request_id từ job gen_image)" });
     return;
-  } else {
-    await assertApiMediaMediaUpscaleOwner(apiMediaTokenId, mediaId, projectId, profileId);
   }
+  await assertApiMediaFlow2RequestOwner(apiMediaTokenId, flow2RequestId);
 
-  const result =
-    resolution === "2K"
-      ? await upsampleImageWithFlow2({ resolution: "2K", flow2RequestId: flow2RequestId! })
-      : await upsampleImageWithFlow2({
-          resolution: "4K",
-          mediaId: mediaId!,
-          projectId: projectId!,
-          profileId: profileId!,
-        });
+  const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
 
   res.json({
     success: true,

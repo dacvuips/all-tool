@@ -1,7 +1,6 @@
 /**
  * Route POST upscale ảnh đã generate lên 2K/4K qua Flow2.
- * - 2K: flow2RequestId (request_id từ gen_image)
- * - 4K: mediaId + projectId + profileId
+ * Cần flow2RequestId (request_id từ gen_image) + resolution.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
@@ -38,39 +37,19 @@ export default [
         const body = req.body as {
           resolution?: UpsampleResolution | string;
           flow2RequestId?: string;
-          mediaId?: string;
-          projectId?: string;
-          profileId?: string;
           fileName?: string;
         };
 
         const resolution = parseResolution(body?.resolution);
         const flow2RequestId = body?.flow2RequestId?.trim();
-        const mediaId = body?.mediaId?.trim();
-        const projectId = body?.projectId?.trim();
-        const profileId = body?.profileId?.trim();
 
-        if (resolution === "2K") {
-          if (!flow2RequestId) {
-            return res.status(400).json({
-              message: "Thiếu flow2RequestId để upscale 2K",
-            });
-          }
-        } else if (!mediaId || !projectId || !profileId) {
+        if (!flow2RequestId) {
           return res.status(400).json({
-            message: "Thiếu mediaId, projectId hoặc profileId để upscale 4K",
+            message: "Thiếu flow2RequestId để upscale ảnh",
           });
         }
 
-        const result =
-          resolution === "2K"
-            ? await upsampleImageWithFlow2({ resolution: "2K", flow2RequestId: flow2RequestId! })
-            : await upsampleImageWithFlow2({
-                resolution: "4K",
-                mediaId: mediaId!,
-                projectId: projectId!,
-                profileId: profileId!,
-              });
+        const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
 
         const ext = mimeTypeToFileExtension(result.mimeType, "jpg");
         const defaultName = `image-${resolution.toLowerCase()}.${ext}`;

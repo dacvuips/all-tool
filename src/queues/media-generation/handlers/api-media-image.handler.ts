@@ -8,7 +8,6 @@ import {
 } from "./_api-media-quota";
 import {
   registerApiMediaFlow2RequestOwner,
-  registerApiMediaMediaUpscaleOwner,
 } from "../../../routers/api-media/api-media-upscale-registry";
 
 import { ApiMediaImageRequest } from "../../../routers/api-media/api-media-validate";
@@ -57,11 +56,6 @@ export async function handleApiMediaImage(
     if (img.flow2RequestId) {
       await registerApiMediaFlow2RequestOwner(apiMediaTokenId, img.flow2RequestId);
     }
-    await registerApiMediaMediaUpscaleOwner(apiMediaTokenId, {
-      mediaId: img.mediaId,
-      projectId: img.projectId,
-      profileId: img.profileId,
-    });
   }
 
   return { images };
