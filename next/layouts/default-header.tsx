@@ -44,13 +44,13 @@ import {
   getPackageStyle,
   GooglePackagePopoverContent,
 } from "../components/admin/management/customer/components/customer-google-package-cell";
-import { SubscriptionPlanEnum } from "../lib/repo/customer/customer.repo";
 import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { NotifyDropdown } from "../components/shared/common/notify-dropdown";
 import { parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
+import { SubscriptionPlanEnum } from "../lib/repo/customer/customer.repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
@@ -391,7 +391,7 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                         className="px-2 h-8 rounded-md"
                         icon={<RiPriceTag3Line className="text-lg" />}
                         text={screenMd ? t("Bảng giá") : undefined}
-                        href="/pricing"
+                        href="/app/affiliate-video/pricing"
                       />
                       {/* Affiliate Video: API Key status (mobile) */}
                       <Button
@@ -744,9 +744,7 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
   const subscription = customer?.googlePackage?.subscription;
   const packageStyle = getPackageStyle(subscription || SubscriptionPlanEnum.TRIAL);
   const packageClasses = getPackageClasses(packageStyle);
-  const subscriptionLabel = subscription
-    ? formatSubscription(subscription)
-    : t("Dùng thử");
+  const subscriptionLabel = subscription ? formatSubscription(subscription) : t("Dùng thử");
 
   return (
     <>
@@ -755,8 +753,7 @@ function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
         className={`flex overflow-hidden items-center h-8 text-sm rounded-lg cursor-default ${packageClasses.container}`}
       >
         <span className={`px-2.5 font-semibold whitespace-nowrap ${packageStyle.text}`}>
-          {t("Gói")}:{" "}
-          <span className="uppercase">{subscriptionLabel}</span>
+          {t("Gói")}: <span className="uppercase">{subscriptionLabel}</span>
         </span>
       </div>
       <Popover reference={packageRef} trigger="hover" placement="bottom" arrow maxWidth={320}>
