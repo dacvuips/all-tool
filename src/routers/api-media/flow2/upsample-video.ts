@@ -7,6 +7,7 @@ import {
   isFlow2SuccessStatus,
   pickError,
   pickStatus,
+  throwFlow2HttpError,
 } from "./_shared";
 
 export type UpsampledVideoResult = {
@@ -100,9 +101,7 @@ export async function upsampleVideoWithFlow2(params: {
 
   if (!enqueueResp.ok) {
     const errText = await enqueueResp.text();
-    const err: any = new Error(`Flow2 upsample-video enqueue error ${enqueueResp.status}: ${errText}`);
-    err.statusCode = enqueueResp.status;
-    throw err;
+    throwFlow2HttpError("Flow2 upsample-video enqueue error", enqueueResp.status, errText);
   }
 
   const enqueueData = (await enqueueResp.json()) as Record<string, unknown>;
@@ -134,11 +133,7 @@ export async function upsampleVideoWithFlow2(params: {
 
   if (!downloadResp.ok) {
     const errText = await downloadResp.text();
-    const err: any = new Error(
-      `Flow2 upsample-video download error ${downloadResp.status}: ${errText}`
-    );
-    err.statusCode = downloadResp.status;
-    throw err;
+    throwFlow2HttpError("Flow2 upsample-video download error", downloadResp.status, errText);
   }
 
   const contentType = (downloadResp.headers.get("content-type") || "video/mp4")

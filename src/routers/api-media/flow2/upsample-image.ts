@@ -1,5 +1,5 @@
 import logger from "../../../helpers/logger";
-import { fetchFlow2WithRetry, getFlow2Config } from "./_shared";
+import { fetchFlow2WithRetry, getFlow2Config, throwFlow2HttpError } from "./_shared";
 
 export type UpsampleResolution = "2K" | "4K";
 
@@ -53,9 +53,7 @@ export async function upsampleImageWithFlow2(
 
   if (!resp.ok) {
     const errText = await resp.text();
-    const err: any = new Error(`Flow2 upsample error ${resp.status}: ${errText}`);
-    err.statusCode = resp.status;
-    throw err;
+    throwFlow2HttpError("Flow2 upsample error", resp.status, errText);
   }
 
   const contentType = (resp.headers.get("content-type") || "image/jpeg").split(";")[0].trim();

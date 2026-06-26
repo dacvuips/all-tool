@@ -6,13 +6,25 @@ import { useToast } from "../../../../lib/providers/toast-provider";
 
 import { useTranslation } from "react-i18next";
 import { FaRegCommentDots } from "react-icons/fa";
-import { Customer, CustomerService } from "../../../../lib/repo/customer/customer.repo";
+import {
+  Customer,
+  CustomerService,
+  SubscriptionPlanEnum,
+} from "../../../../lib/repo/customer/customer.repo";
 import { ThreadService } from "../../../../lib/repo/thread/thread.repo";
-import { DatePicker, Field } from "../../../shared/utilities/form";
+import { DatePicker, Field, Select } from "../../../shared/utilities/form";
 import { Card } from "../../../shared/utilities/misc";
 import { DataTable } from "../../../shared/utilities/table/data-table";
-import { CustomerGooglePackageCell } from "./components/customer-google-package-cell";
+import {
+  CustomerGooglePackageCell,
+  formatSubscription,
+} from "./components/customer-google-package-cell";
 import { CustomerSlideout } from "./components/customer-slideout";
+
+const PACKAGE_FILTER_OPTIONS = Object.values(SubscriptionPlanEnum).map((plan) => ({
+  value: plan,
+  label: formatSubscription(plan),
+}));
 
 export function CustomerPage(props) {
   const { t } = useTranslation();
@@ -21,6 +33,7 @@ export function CustomerPage(props) {
   const [customerId, setCustomerId] = useState<string>(null);
   const [filter, setFilter] = useState<any>({});
   const [timeRange, setTimeRange] = useState<any>(null);
+  const [packageFilter, setPackageFilter] = useState<SubscriptionPlanEnum>(null);
 
   const toast = useToast();
   useEffect(() => {
@@ -45,8 +58,9 @@ export function CustomerPage(props) {
   useEffect(() => {
     setFilter({
       ...(timeRange ? { createdAt: { $gte: timeRange.startDate, $lte: timeRange.endDate } } : {}),
+      ...(packageFilter ? { "googlePackage.subscription": packageFilter } : {}),
     });
-  }, [timeRange]);
+  }, [timeRange, packageFilter]);
   return (
     <Card>
       <DataTable<Customer>
@@ -81,6 +95,16 @@ export function CustomerPage(props) {
                 fullHeader
                 placeholder={t("Lọc thời gian")}
                 clearable
+              />
+            </Field>
+            <Field noError>
+              <Select
+                className="w-48"
+                value={packageFilter}
+                onChange={setPackageFilter}
+                clearable
+                placeholder={t("Lọc gói")}
+                options={PACKAGE_FILTER_OPTIONS}
               />
             </Field>
           </DataTable.Filter>

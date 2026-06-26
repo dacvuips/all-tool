@@ -217,6 +217,53 @@ export function formatFlow2StatusResponseForLog(
 }
 
 export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
+/** Thông báo khi Flow2 / Cloudflare tunnel không phản hồi (502, 530, ...). */
+export const FLOW2_SYSTEM_BUSY_MESSAGE =
+  "Hệ thống hiện đang bận, vui lòng chờ hoặc liên hệ admin";
+
+const FLOW2_GATEWAY_BUSY_STATUS_CODES = new Set([502, 503, 504, 530]);
+
+function isCloudflareErrorHtml(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return (
+    normalized.includes("<!doctype html") ||
+    normalized.includes("<html") ||
+    normalized.includes("cloudflare")
+  );
+}
+
+function summarizeFlow2ErrorBody(errText: string, maxLen = 500): string {
+  if (isCloudflareErrorHtml(errText)) {
+    return "[Cloudflare/gateway HTML response]";
+  }
+  const trimmed = errText.trim();
+  if (trimmed.length <= maxLen) return trimmed;
+  return `${trimmed.slice(0, maxLen)}…`;
+}
+
+export function isFlow2GatewayBusyError(status: number, errText?: string): boolean {
+  if (FLOW2_GATEWAY_BUSY_STATUS_CODES.has(status)) return true;
+  return !!errText && isCloudflareErrorHtml(errText);
+}
+
+export function throwFlow2HttpError(logPrefix: string, status: number, errText: string): never {
+  if (isFlow2GatewayBusyError(status, errText)) {
+    logger.warn(
+      `[flow2] ${logPrefix} ${status} (gateway/busy): ${summarizeFlow2ErrorBody(errText, 200)}`
+    );
+    const err: any = new Error(FLOW2_SYSTEM_BUSY_MESSAGE);
+    err.statusCode = 502;
+    err.isGatewayBusyError = true;
+    throw err;
+  }
+
+  const err: any = new Error(`${logPrefix} ${status}: ${summarizeFlow2ErrorBody(errText)}`);
+  err.statusCode = status;
+  if (isFlow2RetryableCaptchaError(errText)) {
+    err.isRetryableCaptchaError = true;
+  }
+  throw err;
+}
 /** Số lần tạo request Flow2 mới khi gặp lỗi reCAPTCHA / unusual activity (cùng mức Google Aisandbox). */
 export const FLOW2_UNUSUAL_ACTIVITY_RETRY_MAX = CAPTCHA_GENERATION_MAX_RETRIES;
 /** Số lần retry khi Flow2 trả `video_generation_failed` / `image_generation_failed` (lỗi tạm thời). */
@@ -337,12 +384,7 @@ export async function createFlow2Request(body: {
 
   if (!resp.ok) {
     const errText = await resp.text();
-    const err: any = new Error(`Flow2 create request error ${resp.status}: ${errText}`);
-    err.statusCode = resp.status;
-    if (isFlow2RetryableCaptchaError(errText)) {
-      err.isRetryableCaptchaError = true;
-    }
-    throw err;
+    throwFlow2HttpError("Flow2 create request error", resp.status, errText);
   }
 
   const data = (await resp.json()) as Record<string, unknown>;
@@ -367,9 +409,7 @@ export async function getFlow2RequestStatus(requestId: string): Promise<Flow2Sta
 
   if (!resp.ok) {
     const errText = await resp.text();
-    const err: any = new Error(`Flow2 status error ${resp.status}: ${errText}`);
-    err.statusCode = resp.status;
-    throw err;
+    throwFlow2HttpError("Flow2 status error", resp.status, errText);
   }
   return (await resp.json()) as Flow2StatusResponse;
 }
