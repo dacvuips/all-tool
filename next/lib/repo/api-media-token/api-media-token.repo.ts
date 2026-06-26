@@ -15,6 +15,8 @@ export interface ApiMediaToken extends BaseModel {
   active?: boolean;
   usedQuantity?: number;
   subscriptionPlan?: ApiMediaSubscriptionPlanEnum;
+  /** Số luồng request đồng thời (-1 = không giới hạn) */
+  streamCount?: number;
 }
 
 export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
@@ -31,6 +33,7 @@ export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
     active: Boolean
     usedQuantity: Int
     subscriptionPlan: String
+    streamCount: Int
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -43,6 +46,7 @@ export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
     active: Boolean
     usedQuantity: Int
     subscriptionPlan: String
+    streamCount: Int
   `);
 
   async getMyApiMediaTokens({

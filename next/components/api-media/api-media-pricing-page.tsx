@@ -13,6 +13,7 @@ interface ApiMediaPlan {
   label: string;
   icon: string;
   requestQuantity: number;
+  streamCount: number;
   duration: number; // days
   price: number;
   /** Hex color for accent text (request count) */
@@ -48,7 +49,10 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<ApiMediaPlan[]>([]);
   /** Static styling metadata for each plan – all colors are hex for inline styles */
-  const PLAN_STYLES: Record<string, Omit<ApiMediaPlan, "id" | "requestQuantity" | "price">> = {
+  const PLAN_STYLES: Record<
+    string,
+    Omit<ApiMediaPlan, "id" | "requestQuantity" | "streamCount" | "price">
+  > = {
     [ApiMediaSubscriptionPlanEnum.BASIC]: {
       label: t("Gói Cơ Bản"),
       icon: "🛡️",
@@ -112,6 +116,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
             id: planId,
             ...PLAN_STYLES[planId],
             requestQuantity: getValue("request-quantity"),
+            streamCount: getValue("stream-count"),
             price: getValue("price"),
           });
         }
@@ -132,6 +137,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
     features.push(t("Generate Image Banana 2 & Video Veo 3 "));
     features.push(`${t("Thời hạn")} ${plan.duration} ${t("ngày")}`);
     features.push(t("API Key riêng biệt"));
+    features.push(`${t("Tối đa")} ${formatNumber(plan.streamCount)} ${t("luồng đồng thời")}`);
     features.push(t("Chiệu tải cao  "));
     return features;
   };

@@ -5,9 +5,11 @@ import { HiArrowLeft, HiCheck } from "react-icons/hi";
 import { RiSecurePaymentLine } from "react-icons/ri";
 import { parseNumber } from "../../../../lib/helpers/parser";
 import { useToast } from "../../../../lib/providers/toast-provider";
+import { ApiMediaSubscriptionPlanEnum } from "../../../../lib/repo/api-media-token/api-media-token.repo";
 import { SubscriptionPlanEnum } from "../../../../lib/repo/customer/customer.repo";
 import { Setting, SettingService } from "../../../../lib/repo/general/setting.repo";
 import { orderService, PaymentMethod } from "../../../../lib/repo/order/order.repo";
+import { RecaptchaSubscriptionPlanEnum } from "../../../../lib/repo/recaptcha-token/recaptcha-token.repo";
 import { Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
@@ -16,32 +18,39 @@ import { useCheckoutContext } from "../provider/checkout-provider";
 /** Checkout type: "tool" (default), "recaptcha", or "api-media" */
 type CheckoutType = "tool" | "recaptcha" | "api-media";
 
-/** Map from SubscriptionPlanEnum value → key prefix used in settings */
-const PLAN_KEY_MAP: Record<string, string> = {
-  [SubscriptionPlanEnum.BASIC]: SubscriptionPlanEnum.BASIC,
-  [SubscriptionPlanEnum.STANDARD]: SubscriptionPlanEnum.STANDARD,
-  [SubscriptionPlanEnum.PROFESSIONAL]: SubscriptionPlanEnum.PROFESSIONAL,
-  [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
-};
-
-/** Plans to display (excludes Free) */
-const PLAN_ORDER = [
+/** Plans to display for tool checkout (excludes Free) */
+const TOOL_PLAN_ORDER = [
   SubscriptionPlanEnum.BASIC,
   SubscriptionPlanEnum.STANDARD,
   SubscriptionPlanEnum.PROFESSIONAL,
   SubscriptionPlanEnum.ENTERPRISE,
 ];
 
+const API_MEDIA_PLAN_ORDER = [
+  ApiMediaSubscriptionPlanEnum.BASIC,
+  ApiMediaSubscriptionPlanEnum.STANDARD,
+  ApiMediaSubscriptionPlanEnum.PROFESSIONAL,
+  ApiMediaSubscriptionPlanEnum.UNLIMITED,
+];
+
+const RECAPTCHA_PLAN_ORDER = [
+  RecaptchaSubscriptionPlanEnum.BASIC,
+  RecaptchaSubscriptionPlanEnum.STANDARD,
+  RecaptchaSubscriptionPlanEnum.PROFESSIONAL,
+  RecaptchaSubscriptionPlanEnum.UNLIMITED,
+];
+
 interface PlanConfig {
-  plan: SubscriptionPlanEnum;
+  plan: string;
   price: number;
   // Tool-specific
   videoLimit?: number;
   imageLimit?: number;
   imageStreamCount?: number;
   videoStreamCount?: number;
-  // Recaptcha-specific
+  // Recaptcha / API Media
   requestQuantity?: number;
+  streamCount?: number;
 }
 
 export function CheckoutPaymentForm() {
@@ -95,6 +104,14 @@ export function CheckoutPaymentForm() {
       borderActive: "border-yellow-500",
       badgeLabel: t("Best Value"),
     },
+    unlimited: {
+      label: t("Gói Không Giới Hạn"),
+      icon: "💎",
+      accentColor: "text-yellow-600",
+      accentBg: "bg-yellow-50",
+      borderActive: "border-yellow-500",
+      badgeLabel: t("Best Value"),
+    },
   };
   // Determine checkout type from URL param
   const checkoutType: CheckoutType =
@@ -109,7 +126,7 @@ export function CheckoutPaymentForm() {
   const [loadingPlans, setLoadingPlans] = useState(true);
 
   // Selected plan
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlanEnum | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
   // Payment method
   const PAYMENT_METHOD_OPTIONS: {
@@ -141,6 +158,13 @@ export function CheckoutPaymentForm() {
     const settingPrefix =
       checkoutType === "recaptcha" ? "rpk-" : checkoutType === "api-media" ? "ampk-" : "pk-";
 
+    const planOrder =
+      checkoutType === "api-media"
+        ? API_MEDIA_PLAN_ORDER
+        : checkoutType === "recaptcha"
+        ? RECAPTCHA_PLAN_ORDER
+        : TOOL_PLAN_ORDER;
+
     SettingService.getAll({
       query: { limit: 0, filter: { key: { $regex: `^${settingPrefix}`, $options: "i" } } },
     })
@@ -148,17 +172,24 @@ export function CheckoutPaymentForm() {
         const settings = res.data as Setting[];
         const configs: PlanConfig[] = [];
 
-        for (const plan of PLAN_ORDER) {
-          const prefix = `${settingPrefix}${PLAN_KEY_MAP[plan]}`;
+        for (const plan of planOrder) {
+          const prefix = `${settingPrefix}${plan}`;
           const getValue = (suffix: string) => {
             const s = settings.find((x) => x.key === `${prefix}-${suffix}`);
             return s ? Number(s.value) : 0;
           };
 
-          if (checkoutType === "recaptcha" || checkoutType === "api-media") {
+          if (checkoutType === "recaptcha") {
             configs.push({
               plan,
               requestQuantity: getValue("request-quantity"),
+              price: getValue("price"),
+            });
+          } else if (checkoutType === "api-media") {
+            configs.push({
+              plan,
+              requestQuantity: getValue("request-quantity"),
+              streamCount: getValue("stream-count"),
               price: getValue("price"),
             });
           } else {
@@ -178,7 +209,7 @@ export function CheckoutPaymentForm() {
         // Auto-select plan from URL param `subscription`, fallback to first plan
         const subscriptionParam = router.query.subscription as string | undefined;
         if (subscriptionParam && configs.some((c) => c.plan === subscriptionParam)) {
-          setSelectedPlan(subscriptionParam as SubscriptionPlanEnum);
+          setSelectedPlan(subscriptionParam);
         } else if (configs.length > 0) {
           setSelectedPlan(configs[0].plan);
         }
@@ -314,6 +345,12 @@ export function CheckoutPaymentForm() {
             <li className="flex gap-2 items-center text-xs text-gray-700">
               <HiCheck className="flex-shrink-0 text-green-500" />
               <span>{t("Generate Image Banana 2 & Video Veo 3")}</span>
+            </li>
+            <li className="flex gap-2 items-center text-xs text-gray-700">
+              <HiCheck className="flex-shrink-0 text-green-500" />
+              <span>
+                {t("Tối đa")} {formatNumber(config.streamCount ?? 0)} {t("luồng đồng thời")}
+              </span>
             </li>
             <li className="flex gap-2 items-center text-xs text-gray-700">
               <HiCheck className="flex-shrink-0 text-green-500" />

@@ -15,4 +15,6 @@ export type IApiMediaToken = TimestampEntity & {
   active?: boolean;
   usedQuantity?: number;
   subscriptionPlan?: ApiMediaSubscriptionPlanEnum;
+  /** Số luồng request đồng thời (-1 = không giới hạn) */
+  streamCount?: number;
 };

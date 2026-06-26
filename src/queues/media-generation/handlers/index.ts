@@ -23,6 +23,8 @@ import { handleGenerationReviewVideo } from "./generation-review-video.handler";
 import { handleGenerationVideo } from "./generation-video.handler";
 import { handleGenerationWolfImage } from "./generation-wolf-image.handler";
 import { handleGenerationWolfVideo } from "./generation-wolf-video.handler";
+import { handleApiMediaImage } from "./api-media-image.handler";
+import { handleApiMediaVideo } from "./api-media-video.handler";
 
 export type MediaJobHandlerResult = MediaGenerationImageResult | MediaGenerationVideoResult;
 
@@ -43,6 +45,8 @@ export const HANDLER_REGISTRY: Record<MediaGenerationJobType, MediaJobHandler> =
   [MediaGenerationJobType.GENERATION_REVIEW_VIDEO]: handleGenerationReviewVideo,
   [MediaGenerationJobType.GENERATION_WOLF_VIDEO]: handleGenerationWolfVideo,
   [MediaGenerationJobType.GENERATION_WOLF_IMAGE]: handleGenerationWolfImage,
+  [MediaGenerationJobType.API_MEDIA_IMAGE]: handleApiMediaImage,
+  [MediaGenerationJobType.API_MEDIA_VIDEO]: handleApiMediaVideo,
 };
 
 /**

@@ -34,16 +34,24 @@ export type CreateAndEnqueueArgs = {
   metadata?: Record<string, unknown>;
 };
 
+export type CreateAndEnqueueOptions = {
+  /** API Media tự kiểm tra luồng theo token trước khi gọi */
+  skipStreamCheck?: boolean;
+};
+
 export type CreateAndEnqueueResult = {
   jobId: string;
   status: MediaGenerationJobStatus;
 };
 
 export async function createAndEnqueueMediaJob(
-  args: CreateAndEnqueueArgs
+  args: CreateAndEnqueueArgs,
+  options?: CreateAndEnqueueOptions
 ): Promise<CreateAndEnqueueResult> {
-  // 1. Kiểm tra số job đang chạy/chờ so với giới hạn luồng của customer
-  await assertMediaStreamAvailable(args.customerId, args.type);
+  // 1. Kiểm tra số job đang chạy/chờ so với giới hạn luồng của customer (luồng app)
+  if (!options?.skipStreamCheck) {
+    await assertMediaStreamAvailable(args.customerId, args.type);
+  }
 
   // 2. Sinh jobId trước để dùng làm key Redis
   const jobId = new mongoose.Types.ObjectId().toString();

@@ -53,6 +53,10 @@ export enum MediaGenerationJobType {
   GENERATION_WOLF_VIDEO = "GENERATION_WOLF_VIDEO",
   /** POST /api/app/generate-image-wolf/ — wolf workspace generate image */
   GENERATION_WOLF_IMAGE = "GENERATION_WOLF_IMAGE",
+  /** POST /api/api-media?type=IMAGE_GENERATION — API Media generate image */
+  API_MEDIA_IMAGE = "API_MEDIA_IMAGE",
+  /** POST /api/api-media?type=VIDEO_GENERATION — API Media generate video */
+  API_MEDIA_VIDEO = "API_MEDIA_VIDEO",
 }
 
 /** Output cuối khi job tạo ảnh thành công (1 hoặc nhiều ảnh base64/url) */

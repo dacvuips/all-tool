@@ -49,6 +49,7 @@ export async function handleVideoToVideoGeneration(
     res.status(400).json({ message: "Thiếu prompt" });
     return;
   }
+
   // Upload ảnh lên Google Labs trước nếu có
   const context = new Context({ req });
   const uploadedImageNames = await processAndUploadImages(

@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import { MainConnection } from "../../../helpers/mongo";
 import { ModelLoader } from "../../../libs/core";
-import { IApiMediaToken, ApiMediaSubscriptionPlanEnum } from "./apiMediaToken.interface";
+import { ApiMediaSubscriptionPlanEnum, IApiMediaToken } from "./apiMediaToken.interface";
 
 const Schema = mongoose.Schema;
 
@@ -15,6 +15,7 @@ const apiMediaTokenSchema = new Schema(
     active: { type: Boolean, default: true },
     usedQuantity: { type: Number, default: 0 },
     subscriptionPlan: { type: String, enum: Object.values(ApiMediaSubscriptionPlanEnum) },
+    streamCount: { type: Number, default: 1 },
   },
   { timestamps: true }
 );

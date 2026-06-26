@@ -43,6 +43,11 @@ import {
 } from "./job-emitter";
 import { MediaJobCancelledError } from "./job-errors";
 import { assertMediaStreamAvailable, canStartMediaJobProcessing } from "./media-job-concurrency";
+import {
+  assertApiMediaStreamAvailable,
+  canStartApiMediaJobProcessing,
+  isApiMediaJobType,
+} from "./api-media-job-concurrency";
 import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
 
 /** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
@@ -131,10 +136,15 @@ class MediaGenerationQueue extends BaseQueue {
     // Giới hạn luồng theo customer: job QUEUED chỉ pickup khi còn slot PROCESSING.
     // Tránh race enqueue (nhiều POST đồng thời) hoặc resume sau restart làm quá tải server.
     if ((jobDoc as any).status === MediaGenerationJobStatus.QUEUED) {
-      const canStart = await canStartMediaJobProcessing(
-        (jobDoc as any).customerId,
-        (jobDoc as any).type
-      );
+      const jobType = (jobDoc as any).type as MediaGenerationJobType;
+      const apiMediaTokenId = (jobDoc as any).metadata?.apiMediaTokenId as string | undefined;
+
+      const canStart = isApiMediaJobType(jobType)
+        ? apiMediaTokenId
+          ? await canStartApiMediaJobProcessing(apiMediaTokenId)
+          : false
+        : await canStartMediaJobProcessing((jobDoc as any).customerId, jobType);
+
       if (!canStart) {
         this.logger.info(
           `[MediaGenerationJob] DEFER jobId=${jobId} (đã đạt giới hạn luồng PROCESSING)`
@@ -569,7 +579,14 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
   const jobType = (job as any).type as MediaGenerationJobType;
 
   // Kiểm tra lại giới hạn luồng trước khi retry
-  await assertMediaStreamAvailable(customerId, jobType);
+  if (isApiMediaJobType(jobType)) {
+    const apiMediaTokenId = (job as any).metadata?.apiMediaTokenId as string | undefined;
+    if (apiMediaTokenId) {
+      await assertApiMediaStreamAvailable(apiMediaTokenId);
+    }
+  } else {
+    await assertMediaStreamAvailable(customerId, jobType);
+  }
 
   // Reset trạng thái về QUEUED để worker pickup lại
   await mediaGenerationJobService.updateOne(jobId, {

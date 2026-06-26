@@ -29,6 +29,8 @@ const schema = gql`
     "Trạng thái kích hoạt"
     active: Boolean
     subscriptionPlan: String
+    "Số luồng request đồng thời (-1 = không giới hạn)"
+    streamCount: Int
   }
 
   input UpdateApiMediaTokenInput {
@@ -44,6 +46,8 @@ const schema = gql`
     usedQuantity: Int
     "Gói đăng ký"
     subscriptionPlan: String
+    "Số luồng request đồng thời (-1 = không giới hạn)"
+    streamCount: Int
   }
 
   type ApiMediaToken {
@@ -65,6 +69,8 @@ const schema = gql`
     usedQuantity: Int
     "Gói đăng ký"
     subscriptionPlan: String
+    "Số luồng request đồng thời (-1 = không giới hạn)"
+    streamCount: Int
   }
 
   type ApiMediaTokenPageData {

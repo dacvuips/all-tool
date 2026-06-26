@@ -287,7 +287,10 @@ const Mutation = {
       [SubscriptionPlanEnum.ENTERPRISE]: SubscriptionPlanEnum.ENTERPRISE,
     };
 
-    const planKey = PLAN_KEY_MAP[subscriptionPlan];
+    const planKey =
+      type === "recaptcha" || type === "api-media"
+        ? subscriptionPlan.toLowerCase()
+        : PLAN_KEY_MAP[subscriptionPlan];
     if (!planKey) {
       throw new Error("Gói subscription không hợp lệ");
     }

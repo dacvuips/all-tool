@@ -546,6 +546,11 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     }).lean();
     const requestQuantity = requestQuantitySetting?.value ?? 1000;
 
+    const streamCountSetting = await SettingModel.findOne({
+      key: `ampk-${planKey}-stream-count`,
+    }).lean();
+    const streamCount = streamCountSetting?.value ?? 1;
+
     // Generate a unique key
     const key = crypto.randomBytes(32).toString("hex");
     const expiredDate = new Date();
@@ -555,6 +560,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     await apiMediaTokenService.create({
       key,
       requestQuantity: Number(requestQuantity),
+      streamCount: Number(streamCount),
       expiredDate,
       customerId,
       active: true,

@@ -59,7 +59,12 @@ const Mutation = {
     const requestQuantitySetting = await settingService.findOne({
       key: `ampk-${ApiMediaSubscriptionPlanEnum.FREE}-request-quantity`,
     });
-    const requestQuantity = requestQuantitySetting?.value ?? 1000;
+    const requestQuantity = requestQuantitySetting?.value ?? 100;
+
+    const streamCountSetting = await settingService.findOne({
+      key: `ampk-${ApiMediaSubscriptionPlanEnum.FREE}-stream-count`,
+    });
+    const streamCount = streamCountSetting?.value ?? 1;
 
     // Generate a unique key
     const key = crypto.randomBytes(32).toString("hex");
@@ -69,6 +74,7 @@ const Mutation = {
     return await apiMediaTokenService.create({
       key,
       requestQuantity,
+      streamCount: Number(streamCount),
       expiredDate,
       customerId,
       active: true,

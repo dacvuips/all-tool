@@ -19,7 +19,6 @@ import {
   RiLogoutBoxLine,
   RiMenu3Line,
   RiPriceTag3Line,
-  RiShieldCheckLine,
 } from "react-icons/ri";
 
 import { VideoDialog } from "../components/shared/common/video-dialog";
@@ -628,13 +627,13 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       icon: <RiGalleryFill />,
       gradient: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
     },
-    {
-      label: "reCAPTCHA Token (Flow)",
-      desc: t("Quản lý reCAPTCHA Token"),
-      href: "/recaptcha",
-      icon: <RiShieldCheckLine />,
-      gradient: "linear-gradient(135deg, #10B981, #059669)",
-    },
+    // {
+    //   label: "reCAPTCHA Token (Flow)",
+    //   desc: t("Quản lý reCAPTCHA Token"),
+    //   href: "/recaptcha",
+    //   icon: <RiShieldCheckLine />,
+    //   gradient: "linear-gradient(135deg, #10B981, #059669)",
+    // },
     {
       label: "[API] - Generate Banana 2 & Veo 3",
       desc: t("API tạo ảnh & video tự động"),

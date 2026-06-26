@@ -35,6 +35,7 @@ export interface IApiToken {
   expiredDate?: Date;
   requestQuantity?: number;
   usedQuantity?: number;
+  streamCount?: number;
 }
 
 /** Service tối thiểu cần có findOne và updateOne */
@@ -81,6 +82,7 @@ export async function validateApiKey<T extends IApiToken>(
   }
   if (
     token.requestQuantity != null &&
+    token.requestQuantity >= 0 &&
     token.usedQuantity != null &&
     token.usedQuantity >= token.requestQuantity
   ) {
