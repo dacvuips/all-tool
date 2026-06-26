@@ -9,6 +9,7 @@ export enum ApiMediaSubscriptionPlanEnum {
 }
 export interface ApiMediaToken extends BaseModel {
   key?: string;
+  keyPrefix?: string;
   requestQuantity?: number;
   expiredDate?: string;
   customerId?: string;
@@ -27,6 +28,7 @@ export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
     createdAt: DateTime
     updatedAt: DateTime
     key: String
+    keyPrefix: String
     requestQuantity: Int
     expiredDate: DateTime
     customerId: String
@@ -40,6 +42,7 @@ export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
     createdAt: DateTime
     updatedAt: DateTime
     key: String
+    keyPrefix: String
     requestQuantity: Int
     expiredDate: DateTime
     customerId: String
@@ -82,6 +85,21 @@ export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
     });
     await this.clearStore();
     return result.data["g0"] as ApiMediaToken;
+  }
+
+  async rotateMyApiMediaToken(id: string): Promise<{ plainKey: string; token: ApiMediaToken }> {
+    const result = await this.apollo.mutate({
+      mutation: this.gql`mutation rotateMyApiMediaToken($id: ID!) {
+        g0: rotateMyApiMediaToken(id: $id) {
+          plainKey
+          token { ${this.fullFragment} }
+        }
+      }`,
+      variables: { id },
+      fetchPolicy: "no-cache",
+    });
+    await this.clearStore();
+    return result.data["g0"] as { plainKey: string; token: ApiMediaToken };
   }
 }
 

@@ -8,7 +8,9 @@ const Schema = mongoose.Schema;
 
 const apiMediaTokenSchema = new Schema(
   {
-    key: { type: String, required: true },
+    key: { type: String },
+    keyHash: { type: String },
+    keyPrefix: { type: String },
     requestQuantity: { type: Number, default: 0 },
     expiredDate: { type: Date },
     customerId: { type: Schema.Types.ObjectId, ref: "Customer" },
@@ -20,7 +22,8 @@ const apiMediaTokenSchema = new Schema(
   { timestamps: true }
 );
 
-apiMediaTokenSchema.index({ key: 1 }, { unique: true });
+apiMediaTokenSchema.index({ key: 1 }, { unique: true, sparse: true });
+apiMediaTokenSchema.index({ keyHash: 1 }, { unique: true, sparse: true });
 apiMediaTokenSchema.index({ customerId: 1 });
 
 export const ApiMediaTokenModel = MainConnection.model<IApiMediaToken>(

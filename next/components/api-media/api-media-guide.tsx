@@ -376,13 +376,14 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
                 }
               }}
             >
-              {(config.creationType === "image" ? IMAGE_MODEL_OPTIONS : VIDEO_MODEL_OPTIONS).map(
-                (m) => (
+              {(config.creationType === "image"
+                ? IMAGE_MODEL_OPTIONS
+                : VIDEO_MODEL_OPTIONS.filter((m) => !m.disabled)
+              ).map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}
                   </option>
-                )
-              )}
+                ))}
             </select>
           </div>
 

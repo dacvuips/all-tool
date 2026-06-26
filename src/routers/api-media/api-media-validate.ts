@@ -20,8 +20,9 @@ import {
   ApiMediaVideoQuality,
   isApiMediaOmniQuality,
 } from "./api-media-constants";
+import { badRequest, ApiMediaMediaInput } from "./api-media-validate.shared";
 
-export type ApiMediaMediaInput = string | { imageBytes?: string; videoBytes?: string; mimeType?: string };
+export type { ApiMediaMediaInput };
 
 export type ApiMediaNormalizedImage = string | { imageBytes: string; mimeType?: string };
 export type ApiMediaNormalizedVideo = string | { imageBytes: string; mimeType?: string };
@@ -86,12 +87,6 @@ export type ApiMediaVideoRequest = {
   config?: ApiMediaVideoConfig;
 };
 
-function badRequest(message: string): never {
-  const err: any = new Error(message);
-  err.statusCode = 400;
-  throw err;
-}
-
 function assertAspectRatio(value: unknown): ApiMediaAspectRatio | undefined {
   if (value == null || value === "") return undefined;
   const ratio = String(value).trim() as ApiMediaAspectRatio;
@@ -99,6 +94,14 @@ function assertAspectRatio(value: unknown): ApiMediaAspectRatio | undefined {
     badRequest(`aspectRatio không hợp lệ. Hỗ trợ: ${API_MEDIA_ASPECT_RATIOS.join(", ")}`);
   }
   return ratio;
+}
+
+function countMediaArray(items: unknown, fieldName: string): number {
+  if (items == null) return 0;
+  if (!Array.isArray(items)) {
+    badRequest(`${fieldName} phải là mảng`);
+  }
+  return items.length;
 }
 
 function normalizeMediaArray(
@@ -193,15 +196,15 @@ export function validateApiMediaImageRequest(body: Record<string, unknown>): Api
     badRequest(`imageModel không hợp lệ. Hỗ trợ: ${API_MEDIA_IMAGE_MODELS.join(", ")}`);
   }
 
-  const images = normalizeApiMediaImages(normalizeMediaArray(body.images, "images"));
+  const imageCount = countMediaArray(body.images, "images");
 
-  if (images.length > API_MEDIA_IMAGE_INPUT_MAX) {
+  if (imageCount > API_MEDIA_IMAGE_INPUT_MAX) {
     badRequest(`Image to Image hỗ trợ tối đa ${API_MEDIA_IMAGE_INPUT_MAX} ảnh`);
   }
 
   return {
     prompt,
-    images: images.length ? images : undefined,
+    images: undefined,
     config: {
       aspectRatio,
       imageModel,
@@ -228,7 +231,7 @@ export function validateApiMediaVideoRequest(body: Record<string, unknown>): Api
 
   const isOmni = isApiMediaOmniQuality(videoQuality);
   const imagesOnly = configRaw.imagesOnly !== false;
-  const images = normalizeApiMediaImages(normalizeMediaArray(body.images, "images"));
+  const imageCount = countMediaArray(body.images, "images");
   const videos = normalizeApiMediaVideos(normalizeMediaArray(body.videos, "videos"));
 
   const explicitMode =
@@ -272,19 +275,19 @@ export function validateApiMediaVideoRequest(body: Record<string, unknown>): Api
     badRequest("videos chỉ hỗ trợ khi videoQuality = omni_flash (Thành phần + Có video)");
   }
 
-  const videoMode = resolveVideoMode(explicitMode, images.length, isOmni, imagesOnly);
+  const videoMode = resolveVideoMode(explicitMode, imageCount, isOmni, imagesOnly);
 
-  if (images.length > 0 && !videoMode) {
+  if (imageCount > 0 && !videoMode) {
     badRequest("Thiếu videoMode khi gửi ảnh tham chiếu (frame hoặc component)");
   }
 
-  if (!isOmni && images.length > 0 && videoMode) {
-    assertFlow2VideoImageCount(videoMode, images.length);
+  if (!isOmni && imageCount > 0 && videoMode) {
+    assertFlow2VideoImageCount(videoMode, imageCount);
   }
 
   return {
     prompt,
-    images: images.length ? images : undefined,
+    images: undefined,
     videos: videos.length ? videos : undefined,
     video_mode: videoMode,
     config: {

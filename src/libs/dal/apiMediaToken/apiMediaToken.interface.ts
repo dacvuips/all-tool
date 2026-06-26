@@ -8,7 +8,11 @@ export enum ApiMediaSubscriptionPlanEnum {
   UNLIMITED = "unlimited",
 }
 export type IApiMediaToken = TimestampEntity & {
+  /** Legacy plaintext — migrate sang keyHash */
   key?: string;
+  keyHash?: string;
+  /** Hiển thị mask: f2api_abc1...xyz9 */
+  keyPrefix?: string;
   requestQuantity?: number;
   expiredDate?: Date;
   customerId?: string;

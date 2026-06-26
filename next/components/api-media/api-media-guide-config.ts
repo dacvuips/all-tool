@@ -43,7 +43,7 @@ export const DEFAULT_API_MEDIA_GUIDE_CONFIG: ApiMediaGuideConfig = {
   imageAspectRatio: "16:9",
   videoAspectRatio: "16:9",
   imageModel: "NANO_BANANA_PRO",
-  videoQuality: "fast",
+  videoQuality: "lite_relaxed",
   upsampleImageResolution: "4K",
 };
 
@@ -52,11 +52,11 @@ export const IMAGE_MODEL_OPTIONS: { id: ImageModelId; label: string }[] = [
   { id: "NANO_BANANA", label: "Nano Banana 2" },
 ];
 
-export const VIDEO_MODEL_OPTIONS: { id: VideoQualityId; label: string }[] = [
-  { id: "lite", label: "Veo 3.1 - Lite" },
-  { id: "fast", label: "Veo 3.1 - Fast" },
+export const VIDEO_MODEL_OPTIONS: { id: VideoQualityId; label: string; disabled?: boolean }[] = [
+  { id: "lite", label: "Veo 3.1 - Lite", disabled: true },
+  { id: "fast", label: "Veo 3.1 - Fast", disabled: true },
   { id: "lite_relaxed", label: "Veo 3.1 Lite [Lower Priority]" },
-  { id: "omni_flash", label: "Omni Flash" },
+  { id: "omni_flash", label: "Omni Flash", disabled: true },
 ];
 
 export const OMNI_DURATIONS: OmniDuration[] = [4, 6, 8, 10];

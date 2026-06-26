@@ -13,6 +13,7 @@ const schema = gql`
     updateApiMediaToken(id: ID!, data: UpdateApiMediaTokenInput!): ApiMediaToken
     deleteOneApiMediaToken(id: ID!): ApiMediaToken
     createMyApiMediaToken: ApiMediaToken
+    rotateMyApiMediaToken(id: ID!): RotateApiMediaTokenResult
     toggleMyApiMediaTokenActive(id: ID!): ApiMediaToken
     # Add Mutation
   }
@@ -55,8 +56,10 @@ const schema = gql`
     createdAt: DateTime
     updatedAt: DateTime
 
-    "API Key"
+    "API Key (null nếu đã hash — dùng rotate để lấy key mới)"
     key: String
+    "Prefix hiển thị khi key đã hash"
+    keyPrefix: String
     "Số lượng request cho phép"
     requestQuantity: Int
     "Ngày hết hạn"
@@ -77,6 +80,12 @@ const schema = gql`
     data: [ApiMediaToken]
     total: Int
     pagination: Pagination
+  }
+
+  type RotateApiMediaTokenResult {
+    "Key mới — chỉ hiển thị một lần, hãy lưu ngay"
+    plainKey: String!
+    token: ApiMediaToken!
   }
 `;
 

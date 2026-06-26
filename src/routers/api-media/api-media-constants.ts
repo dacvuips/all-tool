@@ -7,6 +7,18 @@ export const API_MEDIA_IMAGE_MODELS = ["NANO_BANANA_PRO", "NANO_BANANA"] as cons
 
 /** Image to Image — tối đa số ảnh reference upload */
 export const API_MEDIA_IMAGE_INPUT_MAX = 3;
+/** Dung lượng tối đa mỗi ảnh sau nén (bytes) — khớp payload generate */
+export const API_MEDIA_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+/** Max cạnh dài khi resize — khớp compressGenerationImage.ts */
+export const API_MEDIA_IMAGE_MAX_DIMENSION = 1920;
+export const API_MEDIA_IMAGE_JPEG_QUALITY = 72;
+
+export const API_MEDIA_IMAGE_ACCEPTED_MIMES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+] as const;
 
 export const API_MEDIA_VIDEO_QUALITIES = [
   "lite",

@@ -14,7 +14,8 @@ import {
 } from "../../../../services/sepayPG/sepayPG.service";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
-import { ApiMediaSubscriptionPlanEnum, apiMediaTokenService } from "../../../dal/apiMediaToken";
+import { ApiMediaSubscriptionPlanEnum } from "../../../dal/apiMediaToken";
+import { createApiMediaTokenCredentials } from "../../../../routers/api-media/api-media-key";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
 import { IntroduceModel } from "../../../dal/introduce";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
@@ -551,14 +552,11 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     }).lean();
     const streamCount = streamCountSetting?.value ?? 1;
 
-    // Generate a unique key
-    const key = crypto.randomBytes(32).toString("hex");
     const expiredDate = new Date();
-    expiredDate.setDate(expiredDate.getDate() + 30); // 30 ngày
+    expiredDate.setDate(expiredDate.getDate() + 30);
 
-    // Tạo api media token mới
-    await apiMediaTokenService.create({
-      key,
+    // Tạo api media token mới (key hash — user rotate từ dashboard để lấy plain key)
+    await createApiMediaTokenCredentials({
       requestQuantity: Number(requestQuantity),
       streamCount: Number(streamCount),
       expiredDate,

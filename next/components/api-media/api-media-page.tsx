@@ -32,6 +32,25 @@ import ApiMediaGuide from "./api-media-guide";
 
 const LIMIT = 10;
 
+function getTokenPlainKey(token: ApiMediaToken, plainKeys: Record<string, string>): string {
+  return plainKeys[token.id] || token.key || "";
+}
+
+function getTokenDisplayKey(
+  token: ApiMediaToken,
+  plainKeys: Record<string, string>,
+  hiddenLabel: string
+): string {
+  const full = getTokenPlainKey(token, plainKeys);
+  if (full) {
+    if (full.length > 16) {
+      return `${full.slice(0, 8)}••••••••${full.slice(-6)}`;
+    }
+    return full;
+  }
+  return token.keyPrefix || hiddenLabel;
+}
+
 const ApiMediaPage = ({
   hideHeader = false,
   onNavigateToPricing,
@@ -48,6 +67,8 @@ const ApiMediaPage = ({
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [plainKeys, setPlainKeys] = useState<Record<string, string>>({});
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
   const sm = useScreen("sm");
   const { setOpenCustomerLoginDialog } = useGlobalContext();
 
@@ -93,7 +114,10 @@ const ApiMediaPage = ({
     // No tokens yet, create one immediately
     setLoading(true);
     try {
-      await apiMediaTokenService.createMyApiMediaToken();
+      const created = await apiMediaTokenService.createMyApiMediaToken();
+      if (created?.id && created.key) {
+        setPlainKeys((prev) => ({ ...prev, [created.id]: created.key! }));
+      }
       await fetchTokens();
     } catch (err) {
       console.error("Failed to create API Media token:", err);
@@ -198,6 +222,31 @@ const ApiMediaPage = ({
 
   const [openSettingToken, setOpenSettingToken] = useState<string>("");
   const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const openTokenGuide = (token: ApiMediaToken) => {
+    const key = getTokenPlainKey(token, plainKeys);
+    if (!key) {
+      toast.warn(t("Key đã được bảo mật. Nhấn Xoay key để tạo key mới và xem hướng dẫn API."));
+      return;
+    }
+    setOpenSettingToken(key);
+  };
+
+  const handleRotateKey = async (token: ApiMediaToken) => {
+    if (rotatingId) return;
+    setRotatingId(token.id);
+    try {
+      const { plainKey } = await apiMediaTokenService.rotateMyApiMediaToken(token.id);
+      setPlainKeys((prev) => ({ ...prev, [token.id]: plainKey }));
+      copyToClipboard(plainKey);
+      await fetchTokens();
+      toast.success(t("Đã tạo API key mới — hãy lưu key ngay"));
+    } catch (err: any) {
+      toast.error(err?.message || t("Không thể xoay key"));
+    } finally {
+      setRotatingId(null);
+    }
+  };
 
   const handleToggleActive = async (token: ApiMediaToken) => {
     if (togglingId) return;
@@ -389,11 +438,8 @@ const ApiMediaPage = ({
                     const planInfo = getPlanInfo(token.subscriptionPlan);
                     const usagePercent = getUsagePercent(token);
                     const usageColor = getUsageColor(usagePercent);
-                    const maskedKey = token.key
-                      ? `${token.key.substring(0, 8)}••••••••${token.key.substring(
-                          token.key.length - 6
-                        )}`
-                      : "—";
+                    const maskedKey = getTokenDisplayKey(token, plainKeys, t("Đã hash — xoay key"));
+                    const plainKey = getTokenPlainKey(token, plainKeys);
 
                     return (
                       <tr
@@ -419,15 +465,16 @@ const ApiMediaPage = ({
                             </div>
                             <div className="min-w-0">
                               <div
-                                onClick={() => copyToClipboard(token.key)}
+                                onClick={() => plainKey && copyToClipboard(plainKey)}
                                 className="flex items-center gap-2"
                               >
                                 <p className="text-sm font-mono font-medium text-gray-900 truncate max-w-xs">
                                   {maskedKey}
                                 </p>
 
-                                <Button
-                                  onClick={() => copyToClipboard(token.key)}
+                                {plainKey && (
+                                  <Button
+                                    onClick={() => copyToClipboard(plainKey)}
                                   className="px-0"
                                   tooltip={t("Sao chép")}
                                   icon={
@@ -438,6 +485,7 @@ const ApiMediaPage = ({
                                     )
                                   }
                                 />
+                                )}
                               </div>
                               <p className="text-xs text-gray-400 mt-0.5">
                                 {t("Tạo ngày")} {formatDate(token.createdAt)}
@@ -506,11 +554,20 @@ const ApiMediaPage = ({
 
                         {/* Actions */}
                         <td className="px-6 py-4 text-right">
-                          <Button
-                            onClick={() => setOpenSettingToken(token.key)}
-                            className=" bg-gray-50"
-                            icon={<RiSettings4Line />}
-                          ></Button>
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              onClick={() => handleRotateKey(token)}
+                              className="bg-gray-50"
+                              tooltip={t("Xoay key")}
+                              disabled={!!rotatingId}
+                              icon={<HiRefresh className={rotatingId === token.id ? "animate-spin" : ""} />}
+                            />
+                            <Button
+                              onClick={() => openTokenGuide(token)}
+                              className=" bg-gray-50"
+                              icon={<RiSettings4Line />}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -527,9 +584,8 @@ const ApiMediaPage = ({
                 const status = getStatusInfo(token);
                 const usagePercent = getUsagePercent(token);
                 const usageColor = getUsageColor(usagePercent);
-                const maskedKey = token.key
-                  ? `${token.key.substring(0, 6)}••••${token.key.substring(token.key.length - 4)}`
-                  : "—";
+                const maskedKey = getTokenDisplayKey(token, plainKeys, t("Đã hash — xoay key"));
+                const plainKey = getTokenPlainKey(token, plainKeys);
 
                 return (
                   <div key={token.id} className="p-4 sm:p-5">
@@ -550,25 +606,27 @@ const ApiMediaPage = ({
                         </div>
                         <div className="min-w-0">
                           <div
-                            onClick={() => copyToClipboard(token.key)}
+                            onClick={() => plainKey && copyToClipboard(plainKey)}
                             className="flex items-center gap-2"
                           >
                             <p className="text-sm font-mono font-medium text-gray-900 truncate max-w-xs">
                               {maskedKey}
                             </p>
 
-                            <Button
-                              onClick={() => copyToClipboard(token.key)}
-                              className="px-0"
-                              tooltip={t("Sao chép")}
-                              icon={
-                                copiedId === token.id ? (
-                                  <HiCheck className="text-sm" />
-                                ) : (
-                                  <HiClipboardCopy className="text-sm" />
-                                )
-                              }
-                            />
+                            {plainKey && (
+                              <Button
+                                onClick={() => copyToClipboard(plainKey)}
+                                className="px-0"
+                                tooltip={t("Sao chép")}
+                                icon={
+                                  copiedId === token.id ? (
+                                    <HiCheck className="text-sm" />
+                                  ) : (
+                                    <HiClipboardCopy className="text-sm" />
+                                  )
+                                }
+                              />
+                            )}
                           </div>
                           <p className="text-xs text-gray-400">
                             {t("Tạo ngày")} {formatDate(token.createdAt)}
@@ -626,11 +684,24 @@ const ApiMediaPage = ({
                           {t("Hết hạn")}: {formatDate(token.expiredDate)}
                         </span>
                       </div>
-                      <Button
-                        onClick={() => setOpenSettingToken(token.key)}
-                        className=" bg-gray-50"
-                        icon={<RiSettings4Line />}
-                      ></Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          onClick={() => handleRotateKey(token)}
+                          className="bg-gray-50"
+                          tooltip={t("Xoay key")}
+                          disabled={!!rotatingId}
+                          icon={
+                            <HiRefresh
+                              className={rotatingId === token.id ? "animate-spin" : ""}
+                            />
+                          }
+                        />
+                        <Button
+                          onClick={() => openTokenGuide(token)}
+                          className=" bg-gray-50"
+                          icon={<RiSettings4Line />}
+                        />
+                      </div>
                     </div>
                   </div>
                 );

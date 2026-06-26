@@ -1,6 +1,5 @@
 import { Request, Response } from "express";
 import logger from "../../helpers/logger";
-import { apiMediaTokenService } from "../../libs/dal/apiMediaToken";
 import {
   IMediaGenerationJob,
   mediaGenerationJobService,
@@ -8,11 +7,13 @@ import {
 } from "../../libs/dal/mediaGenerationJob";
 import { ActionEnum } from "../app/affiliate-scene/_shared";
 import { createAndEnqueueApiMediaJob } from "./_enqueue-helper";
-import { validateApiKey } from "../helpers/validateApiKey";
+import { resolveApiMediaTokenFromRequest } from "./api-media-key";
+import { prepareApiMediaImageRequest, prepareApiMediaVideoRequest } from "./api-media-prepare";
+import { assertApiMediaRateLimit } from "./api-media-rate-limit";
 import {
-  validateApiMediaImageRequest,
-  validateApiMediaVideoRequest,
-} from "./api-media-validate";
+  assertApiMediaFlow2RequestOwner,
+  assertApiMediaMediaUpscaleOwner,
+} from "./api-media-upscale-registry";
 import {
   upsampleImageWithFlow2,
   UpsampleResolution,
@@ -60,7 +61,10 @@ function parseUpsampleResolution(value: unknown): UpsampleResolution {
 }
 
 async function enqueueApiMediaJob(req: Request, res: Response): Promise<void> {
-  const token = await validateApiKey(req, apiMediaTokenService);
+  const token = await resolveApiMediaTokenFromRequest(req);
+  const apiMediaTokenId = String(token._id);
+  await assertApiMediaRateLimit(req, apiMediaTokenId);
+
   const customerId = token.customerId ? String(token.customerId) : null;
   if (!customerId) {
     const err: any = new Error("Token chưa gắn khách hàng");
@@ -74,10 +78,9 @@ async function enqueueApiMediaJob(req: Request, res: Response): Promise<void> {
 
   const requestPayload =
     jobType === MediaGenerationJobType.API_MEDIA_IMAGE
-      ? validateApiMediaImageRequest(body)
-      : validateApiMediaVideoRequest(body);
+      ? await prepareApiMediaImageRequest(body)
+      : await prepareApiMediaVideoRequest(body);
 
-  const apiMediaTokenId = String(token._id);
   const { jobId, status } = await createAndEnqueueApiMediaJob({
     customerId,
     type: jobType,
@@ -94,7 +97,10 @@ async function enqueueApiMediaJob(req: Request, res: Response): Promise<void> {
 }
 
 async function getApiMediaJob(req: Request, res: Response): Promise<void> {
-  const token = await validateApiKey(req, apiMediaTokenService);
+  const token = await resolveApiMediaTokenFromRequest(req);
+  const apiMediaTokenId = String(token._id);
+  await assertApiMediaRateLimit(req, apiMediaTokenId);
+
   const { id } = req.params as { id: string };
 
   const job = (await mediaGenerationJobService.findOne({ _id: id })) as unknown as IMediaGenerationJob | null;
@@ -104,7 +110,7 @@ async function getApiMediaJob(req: Request, res: Response): Promise<void> {
   }
 
   const jobTokenId = (job as any).metadata?.apiMediaTokenId;
-  if (jobTokenId !== String(token._id)) {
+  if (jobTokenId !== apiMediaTokenId) {
     res.status(403).json({ message: "Bạn không có quyền truy cập job này" });
     return;
   }
@@ -113,7 +119,9 @@ async function getApiMediaJob(req: Request, res: Response): Promise<void> {
 }
 
 async function upsampleApiMediaImage(req: Request, res: Response): Promise<void> {
-  await validateApiKey(req, apiMediaTokenService);
+  const token = await resolveApiMediaTokenFromRequest(req);
+  const apiMediaTokenId = String(token._id);
+  await assertApiMediaRateLimit(req, apiMediaTokenId);
 
   const body = req.body as {
     resolution?: UpsampleResolution | string;
@@ -135,11 +143,14 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
       res.status(400).json({ message: "Thiếu flow2RequestId (request_id từ job gen_image)" });
       return;
     }
+    await assertApiMediaFlow2RequestOwner(apiMediaTokenId, flow2RequestId);
   } else if (!mediaId || !projectId || !profileId) {
     res.status(400).json({
       message: "Thiếu mediaId, projectId hoặc profileId để upscale 4K",
     });
     return;
+  } else {
+    await assertApiMediaMediaUpscaleOwner(apiMediaTokenId, mediaId, projectId, profileId);
   }
 
   const result =
@@ -162,7 +173,9 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
 }
 
 async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void> {
-  await validateApiKey(req, apiMediaTokenService);
+  const token = await resolveApiMediaTokenFromRequest(req);
+  const apiMediaTokenId = String(token._id);
+  await assertApiMediaRateLimit(req, apiMediaTokenId);
 
   const body = req.body as { requestId?: string; flow2RequestId?: string };
   const requestId = (body?.requestId || body?.flow2RequestId || "").trim();
@@ -170,6 +183,8 @@ async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void>
     res.status(400).json({ message: "Thiếu requestId từ job gen video" });
     return;
   }
+
+  await assertApiMediaFlow2RequestOwner(apiMediaTokenId, requestId);
 
   const result = await upsampleVideoWithFlow2({ flow2RequestId: requestId });
 
@@ -185,20 +200,6 @@ async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void>
 export default [
   {
     method: "post",
-    path: "/api/api-media",
-    midd: [],
-    action: async (req: Request, res: Response) => {
-      try {
-        await enqueueApiMediaJob(req, res);
-      } catch (err: any) {
-        logger.error(`[api-media] enqueue lỗi: ${err?.message}`);
-        const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
-      }
-    },
-  },
-  {
-    method: "get",
     path: "/api/api-media",
     midd: [],
     action: async (req: Request, res: Response) => {

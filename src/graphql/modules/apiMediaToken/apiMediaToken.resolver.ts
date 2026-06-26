@@ -1,4 +1,3 @@
-import crypto from "crypto";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import {
   ApiMediaSubscriptionPlanEnum,
@@ -6,6 +5,12 @@ import {
 } from "../../../libs/dal/apiMediaToken";
 import { settingService } from "../../../libs/dal/setting";
 import { Context } from "../../../libs/graphql";
+import {
+  createApiMediaTokenCredentials,
+  generateApiMediaKeyPair,
+  hashApiMediaKey,
+} from "../../../routers/api-media/api-media-key";
+
 const Query = {
   getAllApiMediaToken: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
@@ -29,12 +34,32 @@ const Mutation = {
   createApiMediaToken: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
     const { data } = args;
-    return await apiMediaTokenService.create(data);
+    const { plainKey, keyHash, keyPrefix } = data.key
+      ? {
+          plainKey: data.key.trim(),
+          keyHash: hashApiMediaKey(data.key),
+          keyPrefix: data.key.trim().slice(0, 12) + "...",
+        }
+      : generateApiMediaKeyPair();
+
+    const doc = await apiMediaTokenService.create({
+      ...data,
+      key: undefined,
+      keyHash,
+      keyPrefix,
+    });
+    return { ...(doc as any).toObject?.() ?? doc, key: plainKey };
   },
   updateApiMediaToken: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
     const { id, data } = args;
-    return await apiMediaTokenService.updateOne(id, data);
+    const patch = { ...data };
+    if (patch.key) {
+      patch.keyHash = hashApiMediaKey(patch.key);
+      patch.keyPrefix = patch.key.slice(0, 12) + "...";
+      delete patch.key;
+    }
+    return await apiMediaTokenService.updateOne(id, patch);
   },
   deleteOneApiMediaToken: async (root: any, args: any, context: Context) => {
     await context.auth(TOKEN_ROLES.ADMIN_STAFF);
@@ -45,7 +70,6 @@ const Mutation = {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
     const customerId = context.id;
 
-    // Check if customer already has tokens
     const existing = await apiMediaTokenService.fetch({
       limit: 1,
       filter: { customerId },
@@ -55,7 +79,6 @@ const Mutation = {
       throw new Error("Bạn đã có API Media token. Vui lòng mua thêm gói mới.");
     }
 
-    // Lấy số lượng request từ setting gói Free
     const requestQuantitySetting = await settingService.findOne({
       key: `ampk-${ApiMediaSubscriptionPlanEnum.FREE}-request-quantity`,
     });
@@ -66,14 +89,11 @@ const Mutation = {
     });
     const streamCount = streamCountSetting?.value ?? 1;
 
-    // Generate a unique key
-    const key = crypto.randomBytes(32).toString("hex");
     const expiredDate = new Date();
     expiredDate.setDate(expiredDate.getDate() + 30);
 
-    return await apiMediaTokenService.create({
-      key,
-      requestQuantity,
+    const { plainKey, doc } = await createApiMediaTokenCredentials({
+      requestQuantity: Number(requestQuantity),
       streamCount: Number(streamCount),
       expiredDate,
       customerId,
@@ -81,13 +101,38 @@ const Mutation = {
       usedQuantity: 0,
       subscriptionPlan: ApiMediaSubscriptionPlanEnum.FREE,
     });
+
+    const json = (doc as any).toObject?.() ?? doc;
+    return { ...json, key: plainKey };
+  },
+  rotateMyApiMediaToken: async (root: any, args: any, context: Context) => {
+    await context.auth([TOKEN_ROLES.CUSTOMER]);
+    const { id } = args;
+    const customerId = context.id;
+
+    const token = await apiMediaTokenService.findOne({ _id: id, customerId });
+    if (!token) {
+      throw new Error("Token không tồn tại hoặc bạn không có quyền thực hiện thao tác này.");
+    }
+
+    const { plainKey, keyHash, keyPrefix } = generateApiMediaKeyPair();
+    const updated = await apiMediaTokenService.updateOne(id, {
+      keyHash,
+      keyPrefix,
+      key: null,
+    });
+
+    const json = (updated as any)?.toObject?.() ?? updated ?? token;
+    return {
+      plainKey,
+      token: { ...json, key: plainKey, keyPrefix },
+    };
   },
   toggleMyApiMediaTokenActive: async (root: any, args: any, context: Context) => {
     await context.auth([TOKEN_ROLES.CUSTOMER]);
     const { id } = args;
     const customerId = context.id;
 
-    // Verify ownership
     const token = await apiMediaTokenService.findOne({ _id: id, customerId });
     if (!token) {
       throw new Error("Token không tồn tại hoặc bạn không có quyền thực hiện thao tác này.");

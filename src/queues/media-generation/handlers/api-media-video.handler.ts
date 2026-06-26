@@ -10,6 +10,7 @@ import {
   assertApiMediaTokenRequestQuota,
   incrementApiMediaTokenUsage,
 } from "./_api-media-quota";
+import { registerApiMediaFlow2RequestOwner } from "../../../routers/api-media/api-media-upscale-registry";
 
 export async function handleApiMediaVideo(
   job: IMediaGenerationJob,
@@ -38,6 +39,11 @@ export async function handleApiMediaVideo(
   });
 
   await incrementApiMediaTokenUsage(apiMediaTokenId);
+
+  if (result.flow2RequestId) {
+    await registerApiMediaFlow2RequestOwner(apiMediaTokenId, result.flow2RequestId);
+  }
+
   return {
     videoUri: result.videoUri,
     videoBytes: null,
