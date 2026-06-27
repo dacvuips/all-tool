@@ -12,29 +12,107 @@ import { PackageTransactionModel } from "../../libs/dal/packageTransaction/packa
 import { SettingHelper } from "../../packages/setting-helper";
 import { Agenda } from "../agenda";
 
-/** Lấy thông số gói Free từ Setting (không hardcode) */
-async function loadFreePackageDefaults() {
-  const plan = SubscriptionPlanEnum.FREE;
-  const [videoLimit, imageLimit, requestLimit, imageStreamCount, videoStreamCount] =
-    await SettingHelper.loadMany([
+type PackageLimitsConfig = {
+  videoLimit: number;
+  imageLimit: number;
+  requestLimit: number;
+  imageStreamCount: number;
+  videoStreamCount: number;
+};
+
+const FREE_LIMITS_FALLBACK: PackageLimitsConfig = {
+  videoLimit: 5,
+  imageLimit: 10,
+  requestLimit: 5,
+  imageStreamCount: 1,
+  videoStreamCount: 1,
+};
+
+const PACKAGE_PLANS = Object.values(SubscriptionPlanEnum);
+
+const PAID_PLANS = new Set<string>(
+  PACKAGE_PLANS.filter((plan) => plan !== SubscriptionPlanEnum.FREE)
+);
+
+function isPaidPlan(subscription?: string): boolean {
+  return !!subscription && PAID_PLANS.has(subscription);
+}
+
+function getExpiryDate(pkg: Record<string, any>): Date | null {
+  return pkg.expiryPackageDate ? new Date(pkg.expiryPackageDate) : null;
+}
+
+/** Gói còn hiệu lực: Free vô thời hạn, gói trả phí (trừ Trial) còn hạn hoặc chưa gán ngày hết hạn */
+function isActivePackage(pkg: Record<string, any>, now: Date): boolean {
+  if (pkg.subscription === SubscriptionPlanEnum.FREE) return true;
+  if (pkg.subscription === SubscriptionPlanEnum.TRIAL) return false;
+  if (!isPaidPlan(pkg.subscription)) return false;
+
+  const expiryDate = getExpiryDate(pkg);
+  return !expiryDate || expiryDate > now;
+}
+
+/** Gói trả phí đã hết hạn (Trial không có ngày hết hạn cũng coi là hết hạn) */
+function isExpiredPaidPackage(pkg: Record<string, any>, now: Date): boolean {
+  if (!isPaidPlan(pkg.subscription)) return false;
+
+  const expiryDate = getExpiryDate(pkg);
+  if (pkg.subscription === SubscriptionPlanEnum.TRIAL) {
+    return !expiryDate || expiryDate <= now;
+  }
+  return !!expiryDate && expiryDate <= now;
+}
+
+/** Load toàn bộ limit gói từ Setting (một lần mỗi lần chạy job) */
+async function loadAllPackageLimitsFromSettings(): Promise<Map<string, PackageLimitsConfig>> {
+  const keys: string[] = [];
+  for (const plan of PACKAGE_PLANS) {
+    keys.push(
       `pk-${plan}-video-limit`,
       `pk-${plan}-image-limit`,
       `pk-${plan}-request-limit`,
       `pk-${plan}-image-stream-count`,
-      `pk-${plan}-video-stream-count`,
-    ]);
+      `pk-${plan}-video-stream-count`
+    );
+  }
 
+  const values = await SettingHelper.loadMany(keys);
+  const byKey = new Map(keys.map((k, i) => [k, values[i]]));
+  const num = (plan: string, suffix: string, fallback = 0) =>
+    Number(byKey.get(`pk-${plan}-${suffix}`)) || fallback;
+
+  const result = new Map<string, PackageLimitsConfig>();
+  for (const plan of PACKAGE_PLANS) {
+    const fallback = plan === SubscriptionPlanEnum.FREE ? FREE_LIMITS_FALLBACK : null;
+    result.set(plan, {
+      videoLimit: num(plan, "video-limit", fallback?.videoLimit ?? 0),
+      imageLimit: num(plan, "image-limit", fallback?.imageLimit ?? 0),
+      requestLimit: num(plan, "request-limit", fallback?.requestLimit ?? 0),
+      imageStreamCount: num(plan, "image-stream-count", fallback?.imageStreamCount ?? 0),
+      videoStreamCount: num(plan, "video-stream-count", fallback?.videoStreamCount ?? 0),
+    });
+  }
+  return result;
+}
+
+function buildLimitUpdateSet(limits: PackageLimitsConfig): Record<string, number> {
   return {
-    subscription: SubscriptionPlanEnum.FREE,
-    videoCount: 0,
-    videoLimit: Number(videoLimit) || 5,
-    imageCount: 0,
-    imageLimit: Number(imageLimit) || 10,
-    requestCount: 0,
-    requestLimit: Number(requestLimit) || 5,
-    imageStreamCount: Number(imageStreamCount) || 1,
-    videoStreamCount: Number(videoStreamCount) || 1,
+    "googlePackage.videoLimit": limits.videoLimit,
+    "googlePackage.imageLimit": limits.imageLimit,
+    "googlePackage.requestLimit": limits.requestLimit,
+    "googlePackage.imageStreamCount": limits.imageStreamCount,
+    "googlePackage.videoStreamCount": limits.videoStreamCount,
   };
+}
+
+function limitsChanged(pkg: Record<string, any>, limits: PackageLimitsConfig): boolean {
+  return (
+    pkg.videoLimit !== limits.videoLimit ||
+    pkg.imageLimit !== limits.imageLimit ||
+    pkg.requestLimit !== limits.requestLimit ||
+    pkg.imageStreamCount !== limits.imageStreamCount ||
+    pkg.videoStreamCount !== limits.videoStreamCount
+  );
 }
 
 export class ResetGooglePackageJob {
@@ -49,8 +127,15 @@ export class ResetGooglePackageJob {
     logger.info(`[${ResetGooglePackageJob.jobName}] Started at ${moment(now).format()}`);
 
     try {
-      // Lấy thông số gói Free từ settings
-      const freeDefaults = await loadFreePackageDefaults();
+      const packageLimitsByPlan = await loadAllPackageLimitsFromSettings();
+      const freeLimits = packageLimitsByPlan.get(SubscriptionPlanEnum.FREE)!;
+      const freeDefaults = {
+        subscription: SubscriptionPlanEnum.FREE,
+        videoCount: 0,
+        imageCount: 0,
+        requestCount: 0,
+        ...freeLimits,
+      };
 
       // Lấy tất cả customer có gói Google (bao gồm Trial)
       const customers = await CustomerModel.find({
@@ -68,43 +153,46 @@ export class ResetGooglePackageJob {
       for (const customer of customers) {
         try {
           const pkg = customer.googlePackage || {};
+          const expiryDate = getExpiryDate(pkg);
+          const planLimits = packageLimitsByPlan.get(pkg.subscription);
           const isTrial = pkg.subscription === SubscriptionPlanEnum.TRIAL;
-          const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
-          const expiryDate = pkg.expiryPackageDate ? new Date(pkg.expiryPackageDate) : null;
 
           // Trial còn hạn: không reset count hàng ngày, chờ hết hạn mới downgrade
           if (isTrial && expiryDate && expiryDate > now) {
+            if (planLimits && limitsChanged(pkg, planLimits)) {
+              await CustomerModel.updateOne(
+                { _id: customer._id },
+                { $set: buildLimitUpdateSet(planLimits) }
+              );
+              logger.info(
+                `[${ResetGooglePackageJob.jobName}] Đồng bộ limit từ settings cho customer ${customer.code} - gói ${pkg.subscription}`
+              );
+            }
             continue;
           }
 
-          if (isFree || (expiryDate && expiryDate > now)) {
-            // Gói Free hoặc gói còn hạn → chỉ reset count về 0
+          if (isActivePackage(pkg, now)) {
+            // Free + gói trả phí (Basic/Standard/...) còn hạn → reset count + đồng bộ limit từ settings
             const updateSet: Record<string, any> = {
               "googlePackage.videoCount": 0,
               "googlePackage.imageCount": 0,
               "googlePackage.requestCount": 0,
             };
 
-            // Nếu là gói Free, đồng bộ lại limit từ settings
-            if (isFree) {
-              updateSet["googlePackage.videoLimit"] = freeDefaults.videoLimit;
-              updateSet["googlePackage.imageLimit"] = freeDefaults.imageLimit;
-              updateSet["googlePackage.requestLimit"] = freeDefaults.requestLimit;
-              updateSet["googlePackage.imageStreamCount"] = freeDefaults.imageStreamCount;
-              updateSet["googlePackage.videoStreamCount"] = freeDefaults.videoStreamCount;
+            if (planLimits) {
+              Object.assign(updateSet, buildLimitUpdateSet(planLimits));
             }
 
-            await CustomerModel.updateOne(
-              { _id: customer._id },
-              { $set: updateSet }
-            );
+            await CustomerModel.updateOne({ _id: customer._id }, { $set: updateSet });
 
+            const limitsSynced = planLimits && limitsChanged(pkg, planLimits);
+            const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
             logger.info(
-              `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription}${isFree ? "" : ` (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})`}`
+              `[${ResetGooglePackageJob.jobName}] Reset count${limitsSynced ? " + đồng bộ limit từ settings" : ""} cho customer ${customer.code} - gói ${pkg.subscription}${isFree ? "" : expiryDate ? ` (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})` : ""}`
             );
 
             resetCount++;
-          } else {
+          } else if (isExpiredPaidPackage(pkg, now)) {
             // Gói hết hạn → hạ xuống Free với thông số từ settings
             const beforeSnapshot: PackageTransactionSnapshot = {
               subscription: pkg.subscription,

@@ -26,25 +26,33 @@ interface Props extends ReactProps {
   customer: Customer;
   setCustomer: (customer: Customer) => any;
   loadAll?: () => void;
+  refreshList?: () => void;
 }
 export function CustomerOverviewTab({
   customer,
   loadAll,
+  refreshList,
   setCustomer,
 }: {
   customer: Customer;
   loadAll: () => void;
+  refreshList?: () => void;
   setCustomer: (customer: Customer) => any;
 }) {
   return (
     <>
-      <ProfileHeader customer={customer} setCustomer={setCustomer} loadAll={loadAll} />
+      <ProfileHeader
+        customer={customer}
+        setCustomer={setCustomer}
+        loadAll={loadAll}
+        refreshList={refreshList}
+      />
       <ProfileForm customer={customer} setCustomer={setCustomer} />
     </>
   );
 }
 
-function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
+function ProfileHeader({ customer, setCustomer, loadAll, refreshList }: Props) {
   const { t } = useTranslation();
   const { userPermission, user } = useAuth();
   const toast = useToast();
@@ -274,7 +282,8 @@ function ProfileHeader({ customer, setCustomer, loadAll }: Props) {
         onClose={() => {
           setOpenCustomerPackageConfig(false);
         }}
-        loadAll={loadAll}
+        setCustomer={setCustomer}
+        refreshList={refreshList}
         customer={customer}
       />
     </>

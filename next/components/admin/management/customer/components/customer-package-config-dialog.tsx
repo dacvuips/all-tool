@@ -84,7 +84,25 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   customer: Customer;
-  loadAll?: (refresh?: boolean) => void;
+  setCustomer?: (customer: Customer) => void;
+  refreshList?: () => void;
+}
+
+function buildFieldValuesFromPackage(pkg: GooglePackage | undefined): Record<string, any> {
+  if (!pkg) return {};
+  return {
+    videoLimit: pkg.videoLimit ?? 0,
+    imageLimit: pkg.imageLimit ?? 0,
+    videoCount: pkg.videoCount ?? 0,
+    imageCount: pkg.imageCount ?? 0,
+    requestLimit: pkg.requestLimit ?? 0,
+    requestCount: pkg.requestCount ?? 0,
+    videoStreamCount: pkg.videoStreamCount ?? 0,
+    imageStreamCount: pkg.imageStreamCount ?? 0,
+    expiryPackageDate: pkg.expiryPackageDate
+      ? new Date(pkg.expiryPackageDate).toISOString().slice(0, 16)
+      : "",
+  };
 }
 
 /** Fields in googlePackage that can be edited individually */
@@ -160,7 +178,13 @@ const EDITABLE_FIELDS: {
   },
 ];
 
-export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll }: Props) {
+export function CustomerPackageConfigDialog({
+  isOpen,
+  onClose,
+  customer,
+  setCustomer,
+  refreshList,
+}: Props) {
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
@@ -217,34 +241,25 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
   // Initialize field values from customer's googlePackage
   useEffect(() => {
     if (!isOpen || !customer?.googlePackage) return;
-    const pkg = customer.googlePackage;
-    setFieldValues({
-      videoLimit: pkg.videoLimit ?? 0,
-      imageLimit: pkg.imageLimit ?? 0,
-      videoCount: pkg.videoCount ?? 0,
-      imageCount: pkg.imageCount ?? 0,
-      requestLimit: pkg.requestLimit ?? 0,
-      requestCount: pkg.requestCount ?? 0,
-      videoStreamCount: pkg.videoStreamCount ?? 0,
-      imageStreamCount: pkg.imageStreamCount ?? 0,
-      expiryPackageDate: pkg.expiryPackageDate
-        ? new Date(pkg.expiryPackageDate).toISOString().slice(0, 16)
-        : "",
-    });
+    setFieldValues(buildFieldValuesFromPackage(customer.googlePackage));
     setEditingField(null);
   }, [isOpen, customer]);
+
+  const applyCustomerUpdate = (updated: Customer) => {
+    setCustomer?.({ ...customer, ...updated });
+    refreshList?.();
+  };
 
   const handleSelectPlan = async (config: PlanConfig) => {
     if (!userPermission("EDIT_CUSTOMER")) return;
     setSaving(true);
     try {
-      await CustomerService.customerUpdatePackage({
+      const updated = await CustomerService.customerUpdatePackage({
         customerId: customer.id,
         subscription: config.plan,
       });
+      applyCustomerUpdate(updated);
       toast.success(t("Cập nhật gói thành công"));
-      loadAll?.(true);
-      onClose();
     } catch (err) {
       toast.error(`${t("Cập nhật gói thất bại")}: ${err.message}`);
     } finally {
@@ -266,13 +281,13 @@ export function CustomerPackageConfigDialog({ isOpen, onClose, customer, loadAll
         fieldData[fieldKey] = Number(value);
       }
 
-      await CustomerService.customerUpdatePackageField({
+      const updated = await CustomerService.customerUpdatePackageField({
         customerId: customer.id,
         fieldData,
       });
+      applyCustomerUpdate(updated);
       toast.success(t(`Cập nhật ${fieldKey} thành công`));
       setEditingField(null);
-      loadAll?.(true);
     } catch (err) {
       toast.error(`${t("Cập nhật thất bại")}: ${err.message}`);
     } finally {

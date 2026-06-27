@@ -57,6 +57,7 @@ export function CustomerSlideout({ id, ...props }: Props) {
                 onClose();
                 props.loadAll(true);
               }}
+              refreshList={() => props.loadAll(true)}
             />
           </TabGroup.Tab>
         </TabGroup>
