@@ -14,6 +14,10 @@ export function CheckoutPayment() {
   const discount = order?.discount || 0;
   const totalAmount = order?.totalAmount || 0;
   const paymentMethod = order?.paymentMethod || selectPayment?.value;
+  const isSubscriptionOrder =
+    order?.type === "TOOL" ||
+    order?.type === "RECAPTCHA" ||
+    order?.type === "API_MEDIA";
 
   return (
     <div className="w-full max-w-2xl mx-auto">
@@ -53,12 +57,25 @@ export function CheckoutPayment() {
 
             {/* Subtotal */}
             <div className="flex items-center justify-between py-1.5">
-              <dt className="text-sm font-medium text-gray-600 sm:text-base">{t("Tạm tính")}</dt>
+              <dt className="text-sm font-medium text-gray-600 sm:text-base">
+                {isSubscriptionOrder ? t("Giá gói") : t("Tạm tính")}
+              </dt>
               <dd className="text-sm font-semibold text-gray-900 sm:text-base">
                 {parseNumber(subtotal)}đ
               </dd>
             </div>
 
+            {isSubscriptionOrder && order?.subscriptionPlan && (
+              <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+                <dt className="text-sm font-medium text-gray-600 sm:text-base">{t("Gói")}</dt>
+                <dd className="text-sm font-semibold text-gray-900 sm:text-base uppercase">
+                  {order.subscriptionPlan}
+                </dd>
+              </div>
+            )}
+
+            {!isSubscriptionOrder && (
+              <>
             {/* Shipping Fee */}
             <div className="flex items-center justify-between py-3">
               <dt className="text-sm font-medium text-gray-600 sm:text-base">
@@ -89,6 +106,8 @@ export function CheckoutPayment() {
                   -{parseNumber(discount)}đ
                 </dd>
               </div>
+            )}
+              </>
             )}
           </dl>
         </div>

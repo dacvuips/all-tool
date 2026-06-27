@@ -295,6 +295,13 @@ const Mutation = {
       throw new Error("Gói subscription không hợp lệ");
     }
 
+    const resolvedOrderType =
+      type === "recaptcha"
+        ? OrderTypeEnum.RECAPTCHA
+        : type === "api-media"
+          ? OrderTypeEnum.API_MEDIA
+          : OrderTypeEnum.TOOL;
+
     // Xác định setting prefix theo type: recaptcha → rpk, api-media → ampk, tool → pk
     const settingPrefix =
       type === "recaptcha" ? "rpk" : type === "api-media" ? "ampk" : "pk";
@@ -312,16 +319,28 @@ const Mutation = {
     let order: any;
 
     if (orderId) {
-      // Retry: tái tạo form cho đơn PAYMENT_PENDING+SEPAY_PG đã có
+      // Retry: tái tạo form cho đơn PAYMENT_PENDING+SEPAY_PG đã có (phải đúng loại gói)
       const existing = await orderService.findOne({
         _id: ObjectId(orderId),
         customerId: ObjectId(customerId),
+        type: resolvedOrderType,
         paymentStatus: PaymentStatus.PAYMENT_PENDING,
         "paymentInfo.method": PaymentMethodEnum.SEPAY_PG,
       });
       if (!existing) throw new Error("Đơn hàng không khả dụng để retry");
       order = existing;
     } else {
+      const existingPending = await orderService.findOne({
+        customerId: ObjectId(customerId),
+        type: resolvedOrderType,
+        paymentStatus: PaymentStatus.PAYMENT_PENDING,
+      });
+      if (existingPending) {
+        throw new Error(
+          "Bạn có đơn đang chờ thanh toán cho gói này. Vui lòng hoàn tất hoặc hủy đơn trước khi tạo đơn mới."
+        );
+      }
+
       // CREATE đơn mới với phương thức SEPAY_PG
       order = await orderService.create({
         customerId: ObjectId(customerId),
@@ -331,12 +350,7 @@ const Mutation = {
         status: OrderStatusEnum.CREATED,
         totalAmount,
         subscriptionPlan,
-        type:
-          type === "recaptcha"
-            ? "RECAPTCHA"
-            : type === "api-media"
-              ? "API_MEDIA"
-              : "TOOL",
+        type: resolvedOrderType,
         orderLogs: [
           {
             status: OrderStatusEnum.CREATED,

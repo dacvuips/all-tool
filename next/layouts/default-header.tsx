@@ -621,7 +621,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
 
   const SERVICES = [
     {
-      label: "[Tools] Generate Banana 2 & Veo 3",
+      label: "[Tools] Generate Banana & Veo",
       desc: t("Tạo ảnh & video AI hàng loạt"),
       href: "/app/affiliate-video",
       icon: <RiGalleryFill />,
@@ -635,7 +635,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
     //   gradient: "linear-gradient(135deg, #10B981, #059669)",
     // },
     {
-      label: "[API] - Image Banana & Video Veo 3.1",
+      label: "[API] - Image Banana & Video Veo",
       desc: t("Cổng API dành cho Deverlopers"),
       href: "/api-generate-media",
       icon: <RiCodeLine />,

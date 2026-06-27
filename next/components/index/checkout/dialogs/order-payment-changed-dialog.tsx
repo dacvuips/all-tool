@@ -5,6 +5,10 @@ import { HiOutlineInformationCircle } from "react-icons/hi";
 import { Order, PaymentStatus } from "../../../../lib/repo/order/order.repo";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../shared/utilities/form";
+import {
+  checkoutTypeQueryParam,
+  getPostPaymentSuccessPath,
+} from "../utils/checkout-type";
 
 export interface OrderPaymentChangedDialogProps {
   /** Hiển thị/ẩn dialog */
@@ -30,14 +34,31 @@ export function OrderPaymentChangedDialog({
 
   // Mapping trạng thái thanh toán sang thông tin hiển thị
   const getPaymentInfo = (paymentStatus: PaymentStatus) => {
+    const successPath = getPostPaymentSuccessPath(order.type);
+    const retryPath = `/checkout${checkoutTypeQueryParam(order.type)}`;
+
     switch (paymentStatus) {
       case PaymentStatus.PAYMENT_SUCCESS:
         return {
           icon: "success" as const,
           title: t("Thanh toán thành công"),
-          message: t("Thanh toán thành công. Đơn hàng sẽ được cửa hàng tiếp nhận xử lý."),
-          redirectPath: "/orders",
-          confirmText: t("Xem đơn hàng"),
+          message:
+            order.type === "API_MEDIA"
+              ? t("Gói API Media đã được kích hoạt. Bạn có thể lấy API key tại trang API Media.")
+              : order.type === "RECAPTCHA"
+              ? t("Gói reCAPTCHA đã được kích hoạt. Bạn có thể lấy API key tại trang reCAPTCHA.")
+              : order.type === "NORMAL"
+              ? t("Nạp mPoint thành công. Số dư ví đã được cập nhật.")
+              : t("Thanh toán thành công. Đơn hàng sẽ được cửa hàng tiếp nhận xử lý."),
+          redirectPath: successPath,
+          confirmText:
+            order.type === "API_MEDIA"
+              ? t("Đến trang API Media")
+              : order.type === "RECAPTCHA"
+              ? t("Đến trang reCAPTCHA")
+              : order.type === "NORMAL"
+              ? t("Về trang chủ")
+              : t("Xem đơn hàng"),
         };
 
       case PaymentStatus.PAYMENT_FAILED:
@@ -47,7 +68,7 @@ export function OrderPaymentChangedDialog({
           message: t(
             "Thanh toán của bạn không thành công. Vui lòng thử lại hoặc chọn phương thức thanh toán khác."
           ),
-          redirectPath: "/orders",
+          redirectPath: retryPath,
           confirmText: t("Thử lại"),
         };
 
@@ -56,8 +77,8 @@ export function OrderPaymentChangedDialog({
           icon: "error" as const,
           title: t("Thanh toán đã bị hủy"),
           message: t("Thanh toán của bạn đã bị hủy. Bạn có thể tạo đơn hàng mới hoặc thử lại."),
-          redirectPath: "/",
-          confirmText: t("Về trang chủ"),
+          redirectPath: retryPath,
+          confirmText: t("Tạo đơn mới"),
         };
 
       case PaymentStatus.PAYMENT_TIMEOUT:
@@ -67,8 +88,8 @@ export function OrderPaymentChangedDialog({
           message: `${t("Thời gian thanh toán đã hết")}. ${t(
             "Vui lòng tạo đơn hàng mới hoặc liên hệ hỗ trợ"
           )}.`,
-          redirectPath: "/",
-          confirmText: t("Về trang chủ"),
+          redirectPath: retryPath,
+          confirmText: t("Tạo đơn mới"),
         };
 
       case PaymentStatus.PAYMENT_REFUNDED:
@@ -127,7 +148,6 @@ export function OrderPaymentChangedDialog({
     error: "/assets/lottie/cancel-transaction.json",
   };
 
-  // Xử lý khi click nút xác nhận
   const handleConfirm = () => {
     if (paymentInfo.redirectPath) {
       router.push(paymentInfo.redirectPath);

@@ -19,6 +19,15 @@ import { Spinner } from "../../shared/utilities/misc";
 import { CheckoutNormalPaymentForm } from "./components/checkout-normal-payment-form";
 import { CheckoutPayment } from "./components/checkout-payment";
 import { CheckoutPaymentForm } from "./components/checkout-payment-form";
+import { PendingOrderMismatchView } from "./components/pending-order-mismatch-view";
+import {
+  checkoutTypeQueryParam,
+  getPostPaymentSuccessPath,
+  hasCheckoutTypeMismatch,
+  isPendingOrder,
+  orderTypeToCheckoutUrlType,
+  SubscriptionOrderType,
+} from "./utils/checkout-type";
 
 export function CheckoutPage() {
   return (
@@ -57,39 +66,57 @@ function CheckoutComponent() {
 
   if (!customer) return <Spinner />;
 
+  const urlType = router.query.type as string | undefined;
+
   // Nếu redirect về từ SePay PG (có query param ?payment=...)
   if (paymentStatus && orderNumberFromUrl) {
     return <SePayPGCallbackView paymentStatus={paymentStatus} orderNumber={orderNumberFromUrl} />;
   }
 
-  // Chưa có đơn PAYMENT_PENDING → hiển thị form thanh toán
-  if (!order) {
-    const checkoutType = router.query.type as string;
-    if (checkoutType === "normal") return <CheckoutNormalPaymentForm />;
-    return <CheckoutPaymentForm />;
+  // Nạp mPoint — tách luồng, không lẫn với subscription
+  if (urlType === "normal") {
+    if (order && hasCheckoutTypeMismatch(order, "normal")) {
+      return <PendingOrderMismatchView pendingOrder={order} requestedUrlType="normal" />;
+    }
+    if (order?.type === "NORMAL" && isPendingOrder(order)) {
+      return <PendingOrderCheckoutLayout />;
+    }
+    return <CheckoutNormalPaymentForm />;
   }
 
-  // Có đơn đang chờ thanh toán → hiển thị màn hình thanh toán
+  // Subscription: URL yêu cầu loại khác với đơn pending → chặn (chỉ khi có ?type= rõ ràng)
+  if (order && isPendingOrder(order)) {
+    if (urlType && hasCheckoutTypeMismatch(order, urlType)) {
+      return <PendingOrderMismatchView pendingOrder={order} requestedUrlType={urlType} />;
+    }
+    return <PendingOrderCheckoutLayout />;
+  }
+
+  // Chưa có đơn pending → form chọn gói
+  return <CheckoutPaymentForm />;
+}
+
+/** Layout chung khi có đơn PAYMENT_PENDING (SePay PG hoặc chuyển khoản) */
+function PendingOrderCheckoutLayout() {
+  const { order } = useCheckoutContext();
+
   return (
-    <>
-      <div className="flex flex-col pb-10 bg-gray-100">
-        <div className="container px-2 mx-auto sm:px-4">
-          <div className="flex flex-col-reverse gap-3 lg:grid lg:grid-cols-12">
-            <div className="col-span-full md:col-span-5 lg:col-span-4">
-              <CheckoutPayment />
-            </div>
-            <div className="col-span-full md:col-span-7 lg:col-span-8">
-              {/* Phân nhánh hiển thị theo phương thức thanh toán */}
-              {order.paymentMethod === PaymentMethod.SEPAY_PG ? (
-                <SePayPGWaitingView />
-              ) : (
-                <CheckoutPaymentPay />
-              )}
-            </div>
+    <div className="flex flex-col pb-10 bg-gray-100">
+      <div className="container px-2 mx-auto sm:px-4">
+        <div className="flex flex-col-reverse gap-3 lg:grid lg:grid-cols-12">
+          <div className="col-span-full md:col-span-5 lg:col-span-4">
+            <CheckoutPayment />
+          </div>
+          <div className="col-span-full md:col-span-7 lg:col-span-8">
+            {order?.paymentMethod === PaymentMethod.SEPAY_PG ? (
+              <SePayPGWaitingView />
+            ) : (
+              <CheckoutPaymentPay />
+            )}
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -139,7 +166,11 @@ function SePayPGWaitingView() {
       const data =
         order?.type === "NORMAL"
           ? await orderService.createNormalSePayPGCheckout(order.totalAmount, order.id)
-          : await orderService.createSePayPGCheckout(order.subscriptionPlan, order.id);
+          : await orderService.createSePayPGCheckout(
+              order.subscriptionPlan,
+              order.id,
+              orderTypeToCheckoutUrlType(order.type)
+            );
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
       const form = document.createElement("form");
       form.method = "POST";
@@ -244,15 +275,7 @@ function SePayPGWaitingView() {
             primary
             className="py-3 w-full rounded-xl"
             text={t("Tạo đơn mới")}
-            onClick={() => {
-              const typeParam =
-                order?.type === "RECAPTCHA"
-                  ? "?type=recaptcha"
-                  : order?.type === "NORMAL"
-                  ? "?type=normal"
-                  : "?type=tool";
-              router.replace(`/checkout${typeParam}`);
-            }}
+            onClick={() => router.replace(`/checkout${checkoutTypeQueryParam(order?.type)}`)}
           />
         )}
         {!timeRemaining.expired && (
@@ -265,13 +288,6 @@ function SePayPGWaitingView() {
       </div>
     </div>
   );
-}
-
-function checkoutTypeQueryParam(type?: string) {
-  if (type === "RECAPTCHA") return "?type=recaptcha";
-  if (type === "NORMAL") return "?type=normal";
-  if (type === "API_MEDIA") return "?type=api-media";
-  return "?type=tool";
 }
 
 /**
@@ -294,7 +310,7 @@ function SePayPGCallbackView({
 
   const [verifying, setVerifying] = useState(true);
   const [finalStatus, setFinalStatus] = useState<"success" | "error" | "cancel">("success");
-  const [orderType, setOrderType] = useState<"TOOL" | "RECAPTCHA" | "NORMAL">("TOOL");
+  const [orderType, setOrderType] = useState<SubscriptionOrderType>("TOOL");
 
   useEffect(() => {
     let cancelled = false;
@@ -321,13 +337,7 @@ function SePayPGCallbackView({
         if (resolved) {
           clearInterval(poll);
           if (!cancelled) {
-            setOrderType(
-              order.type === "RECAPTCHA"
-                ? "RECAPTCHA"
-                : order.type === "NORMAL"
-                ? "NORMAL"
-                : "TOOL"
-            );
+            setOrderType((order.type as SubscriptionOrderType) || "TOOL");
             setFinalStatus(resolved);
             setVerifying(false);
           }
@@ -355,19 +365,35 @@ function SePayPGCallbackView({
     );
   }
 
+  const successMessage =
+    orderType === "NORMAL"
+      ? t("Nạp mPoint thành công! Số dư ví của bạn đã được cập nhật.")
+      : orderType === "API_MEDIA"
+      ? t(
+          "Gói API Media đã được kích hoạt. Vào trang API Media để xem token và bắt đầu tích hợp."
+        )
+      : orderType === "RECAPTCHA"
+      ? t("Gói reCAPTCHA đã được kích hoạt. Vào trang reCAPTCHA để lấy API key.")
+      : t("Đơn hàng của bạn đã được thanh toán thành công. Hệ thống đang xử lý đơn hàng.");
+
+  const successButtonText =
+    orderType === "NORMAL"
+      ? t("Về trang chủ")
+      : orderType === "API_MEDIA"
+      ? t("Đến trang API Media")
+      : orderType === "RECAPTCHA"
+      ? t("Đến trang reCAPTCHA")
+      : t("Xem đơn hàng");
+
   // Cấu hình hiển thị theo từng trạng thái
   const statusConfig = {
     success: {
       icon: <HiOutlineCheckCircle className="text-6xl text-green-500" />,
       lottie: "/assets/lottie/payment-success.json",
       title: t("Thanh toán thành công!"),
-      message:
-        orderType === "NORMAL"
-          ? t("Nạp mPoint thành công! Số dư ví của bạn đã được cập nhật.")
-          : t("Đơn hàng của bạn đã được thanh toán thành công. Hệ thống đang xử lý đơn hàng."),
-      buttonText: orderType === "NORMAL" ? t("Về trang chủ") : t("Xem đơn hàng"),
-      buttonAction: () =>
-        orderType === "NORMAL" ? router.push("/") : router.push("/profile/orders-buy"),
+      message: successMessage,
+      buttonText: successButtonText,
+      buttonAction: () => router.push(getPostPaymentSuccessPath(orderType)),
       bgColor: "bg-green-50",
       borderColor: "border-green-200",
     },

@@ -14,6 +14,7 @@ import { Label } from "../../../shared/utilities/form";
 import { Button } from "../../../shared/utilities/form/button";
 import { Spinner } from "../../../shared/utilities/misc";
 import { useCheckoutContext } from "../provider/checkout-provider";
+import { buildPlanMeta, getPlanMeta } from "../utils/plan-meta";
 
 /** Checkout type: "tool" (default), "recaptcha", or "api-media" */
 type CheckoutType = "tool" | "recaptcha" | "api-media";
@@ -57,62 +58,8 @@ export function CheckoutPaymentForm() {
   const { t } = useTranslation();
   const router = useRouter();
   const toast = useToast();
-  const { order, loading } = useCheckoutContext();
-  /** Plan display metadata */
-  const PLAN_META: Record<
-    string,
-    {
-      label: string;
-      icon: string;
-      accentColor: string;
-      accentBg: string;
-      borderActive: string;
-      highlight?: boolean;
-      badgeLabel?: string;
-    }
-  > = {
-    [SubscriptionPlanEnum.BASIC]: {
-      label: t("Gói Cơ Bản"),
-      icon: "⭐",
-      accentColor: "text-blue-600",
-      accentBg: "bg-blue-50",
-      borderActive: "border-blue-500",
-      badgeLabel: t("Phổ biến"),
-    },
-    [SubscriptionPlanEnum.STANDARD]: {
-      label: t("Gói Tiêu Chuẩn"),
-      icon: "⚡",
-      accentColor: "text-primary",
-      accentBg: " bg-gray-100",
-      borderActive: "border-primary",
-      highlight: true,
-      badgeLabel: "Hot",
-    },
-    [SubscriptionPlanEnum.PROFESSIONAL]: {
-      label: t("Gói Chuyên Nghiệp"),
-      icon: "🚀",
-      accentColor: "text-green-600",
-      accentBg: "bg-green-50",
-      borderActive: "border-green-500",
-      badgeLabel: t("Chuyên nghiệp"),
-    },
-    [SubscriptionPlanEnum.ENTERPRISE]: {
-      label: t("Gói Enterprise"),
-      icon: "💎",
-      accentColor: "text-yellow-600",
-      accentBg: "bg-yellow-50",
-      borderActive: "border-yellow-500",
-      badgeLabel: t("Best Value"),
-    },
-    unlimited: {
-      label: t("Gói Enterprise"),
-      icon: "💎",
-      accentColor: "text-yellow-600",
-      accentBg: "bg-yellow-50",
-      borderActive: "border-yellow-500",
-      badgeLabel: t("Best Value"),
-    },
-  };
+  const { order, loading, setOrder, getOneOrderByGuest } = useCheckoutContext();
+  const PLAN_META = buildPlanMeta(t);
   // Determine checkout type from URL param
   const checkoutType: CheckoutType =
     (router.query.type as string) === "recaptcha"
@@ -249,9 +196,16 @@ export function CheckoutPaymentForm() {
 
       document.body.appendChild(form);
       form.submit();
-    } catch (err) {
+    } catch (err: any) {
       console.error(`${t("Lỗi tạo checkout")}:`, err);
-      toast.error(t("Không thể kết nối cổng thanh toán. Vui lòng thử lại."));
+      const message =
+        err?.graphQLErrors?.[0]?.message ||
+        err?.message ||
+        t("Không thể kết nối cổng thanh toán. Vui lòng thử lại.");
+      toast.error(message);
+      if (typeof message === "string" && message.includes("chờ thanh toán")) {
+        await getOneOrderByGuest().then((pending) => pending && setOrder(pending));
+      }
       setSePayLoading(false);
     }
   };
@@ -298,7 +252,7 @@ export function CheckoutPaymentForm() {
 
   /** Render chi tiết gói đã chọn */
   const renderPlanDetails = (config: PlanConfig) => {
-    const meta = PLAN_META[config.plan];
+    const meta = getPlanMeta(PLAN_META, config.plan);
     if (checkoutType === "recaptcha") {
       return (
         <div className={`p-3 rounded-xl border ${meta?.accentBg || "bg-gray-50"} border-gray-200`}>
@@ -446,7 +400,7 @@ export function CheckoutPaymentForm() {
             ) : (
               <div className="flex flex-col gap-2">
                 {planConfigs.map((config) => {
-                  const meta = PLAN_META[config.plan];
+                  const meta = getPlanMeta(PLAN_META, config.plan);
                   const isSelected = selectedPlan === config.plan;
                   const isHighlight = meta?.highlight;
 
