@@ -40,6 +40,16 @@ export function orderTypeToCheckoutUrlType(
   }
 }
 
+/** Subscription SePay PG — không gồm `normal` (dùng createNormalSePayPGCheckout). */
+export type SubscriptionCheckoutUrlType = Exclude<CheckoutUrlType, "normal">;
+
+export function orderTypeToSubscriptionCheckoutUrlType(
+  orderType?: SubscriptionOrderType | string
+): SubscriptionCheckoutUrlType {
+  const urlType = orderTypeToCheckoutUrlType(orderType);
+  return urlType === "normal" ? "tool" : urlType;
+}
+
 export function checkoutTypeQueryParam(orderType?: SubscriptionOrderType | string): string {
   return `?type=${orderTypeToCheckoutUrlType(orderType)}`;
 }

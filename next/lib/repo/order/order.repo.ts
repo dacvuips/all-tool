@@ -384,7 +384,7 @@ export class OrderRepository extends CrudRepository<Order> {
   async createSePayPGCheckout(
     subscriptionPlan: string,
     orderId?: string,
-    type?: "recaptcha" | "tool" | "api-media"
+    type?: SePayPGCheckoutType
   ): Promise<SePayPGCheckoutData> {
     return this.apollo
       .mutate({
@@ -606,6 +606,8 @@ export class OrderRepository extends CrudRepository<Order> {
  * Dữ liệu form thanh toán SePay PG trả về từ backend.
  * Frontend POST form tới checkoutUrl với các hidden field từ formFieldsJson.
  */
+export type SePayPGCheckoutType = "recaptcha" | "tool" | "api-media";
+
 export interface SePayPGCheckoutData {
   /** URL dùng làm action của form POST tới cổng SePay */
   checkoutUrl: string;

@@ -25,7 +25,7 @@ import {
   getPostPaymentSuccessPath,
   hasCheckoutTypeMismatch,
   isPendingOrder,
-  orderTypeToCheckoutUrlType,
+  orderTypeToSubscriptionCheckoutUrlType,
   SubscriptionOrderType,
 } from "./utils/checkout-type";
 
@@ -169,7 +169,7 @@ function SePayPGWaitingView() {
           : await orderService.createSePayPGCheckout(
               order.subscriptionPlan,
               order.id,
-              orderTypeToCheckoutUrlType(order.type)
+              orderTypeToSubscriptionCheckoutUrlType(order.type)
             );
       const formFields: Record<string, string> = JSON.parse(data.formFieldsJson);
       const form = document.createElement("form");
