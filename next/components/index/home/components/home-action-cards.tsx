@@ -69,7 +69,7 @@ export function HomeActionCards() {
                 {/* Title */}
                 <div className="flex-1 min-w-0">
                   <h3 className="text-base sm:text-lg font-bold text-danger-dark truncate">
-                    {t("[API] - Generate Banana 2 & Veo 3")}
+                    {t("[API] Image Banana & Video Veo 3.1")}
                   </h3>
                 </div>
 

@@ -85,7 +85,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
       badgeLabel: "Chuyên nghiệp",
     },
     [ApiMediaSubscriptionPlanEnum.UNLIMITED]: {
-      label: t("Gói Không Giới Hạn"),
+      label: t("Gói Enterprise"),
       icon: "💎",
       duration: 30,
       accentColor: "#d97706", // amber-600
@@ -134,7 +134,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
 
   const getFeatures = (plan: ApiMediaPlan): string[] => {
     const features: string[] = [];
-    features.push(t("Generate Image Banana 2 & Video Veo 3 "));
+    features.push(t("Image Banana & Video Veo 3.1 "));
     features.push(`${t("Thời hạn")} ${plan.duration} ${t("ngày")}`);
     features.push(t("API Key riêng biệt"));
     features.push(`${t("Tối đa")} ${formatNumber(plan.streamCount)} ${t("luồng đồng thời")}`);
@@ -184,11 +184,11 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
           <span>⚡</span> {t("Nâng tầm ứng dụng của bạn")}
         </div>
         <h2 className="mb-3 text-2xl font-bold text-gray-900 sm:text-3xl">
-          {t("Chọn Gói Giải API Media")}
+          {t("Chọn API Tạo Image & Video cho Deverlopers")}
         </h2>
         <p className="mx-auto max-w-lg text-sm text-gray-500 sm:text-base">
           {t(
-            "Giải API Media giúp bạn tiết kiệm thời gian và chi phí khi sử dụng API generate Image Banana 2 và Veo 3. Giúp bạn thực hiện những hình ảnh và video chất lượng cao với giá cả hợp lý."
+            "API giúp bạn tiết kiệm thời gian và chi phí khi sử dụng API generate Image Banana Pro và Veo 3.1. Giúp Deverlopers thực hiện tích hơp API vào ứng dụng cá nhân (Tool/App) của bạn với giá cả hợp lý."
           )}
         </p>
       </div>
@@ -308,7 +308,7 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
                 <p className="mb-1 text-sm font-semibold text-gray-800">{t("Tiết kiệm chi phí")}</p>
                 <p className="text-xs text-gray-500">
                   {t(
-                    "Chi phí sử dụng khi gen Banana 2 /Veo 3 của các gói thấp hơn so với việc mua lẻ"
+                    "Chi phí sử dụng khi gen Banana Pro /Veo 3.1 của các gói thấp hơn so với việc mua lẻ"
                   )}
                 </p>
               </div>
@@ -316,10 +316,10 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
             <div className="flex gap-3 items-start">
               <span className="text-2xl">🛡️</span>
               <div>
-                <p className="mb-1 text-sm font-semibold text-gray-800">{t("Đề phòng lừa đảo")}</p>
+                <p className="mb-1 text-sm font-semibold text-gray-800">{t("API Build sẵn")}</p>
                 <p className="text-xs text-gray-500">
                   {t(
-                    "Nhiều đơn vị lừa đảo, giả mạo bán API gen Video/ảnh, cần test để tránh mất tiền oan. Chúng tôi cho phép test trước khi mua."
+                    "API được build sẵn, bạn chỉ cần sử dụng API Key để sử dụng. Không cần tự build API. Để sử dụng trong các too; và ứng dụng riêng của bạn"
                   )}
                 </p>
               </div>
@@ -329,7 +329,9 @@ export default function ApiMediaPricingPage({ hideHeader = false }: { hideHeader
               <div>
                 <p className="mb-1 text-sm font-semibold text-gray-800">{t("Chịu tải cao")}</p>
                 <p className="text-xs text-gray-500">
-                  {t("Xử lý hàng ngàn request/giây đảm bảo không gián đoạn")}
+                  {t(
+                    "Xử lý hàng ngàn request/giây đảm bảo không gián đoạn, cú pháp đơn giản, dễ sử dụng"
+                  )}
                 </p>
               </div>
             </div>

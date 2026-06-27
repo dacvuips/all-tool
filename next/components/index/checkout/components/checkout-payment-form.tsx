@@ -105,7 +105,7 @@ export function CheckoutPaymentForm() {
       badgeLabel: t("Best Value"),
     },
     unlimited: {
-      label: t("Gói Không Giới Hạn"),
+      label: t("Gói Enterprise"),
       icon: "💎",
       accentColor: "text-yellow-600",
       accentBg: "bg-yellow-50",
@@ -344,7 +344,7 @@ export function CheckoutPaymentForm() {
             </li>
             <li className="flex gap-2 items-center text-xs text-gray-700">
               <HiCheck className="flex-shrink-0 text-green-500" />
-              <span>{t("Generate Image Banana 2 & Video Veo 3")}</span>
+              <span>{t("Image Banana & Video Veo 3.1")}</span>
             </li>
             <li className="flex gap-2 items-center text-xs text-gray-700">
               <HiCheck className="flex-shrink-0 text-green-500" />

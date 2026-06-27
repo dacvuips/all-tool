@@ -635,8 +635,8 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
     //   gradient: "linear-gradient(135deg, #10B981, #059669)",
     // },
     {
-      label: "[API] - Generate Banana 2 & Veo 3",
-      desc: t("API tạo ảnh & video tự động"),
+      label: "[API] - Image Banana & Video Veo 3.1",
+      desc: t("Cổng API dành cho Deverlopers"),
       href: "/api-generate-media",
       icon: <RiCodeLine />,
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
