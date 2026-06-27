@@ -297,12 +297,12 @@ const ApiMediaPage = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div className="bg-white rounded-xl p-4 sm:p-5 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-emerald-50">
-                <HiLightningBolt className="text-lg text-emerald-600" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50">
+                <HiLightningBolt className="text-lg text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">{t("Đang hoạt động")}</p>
-                <p className="text-xl font-bold text-gray-900">
+                <p className="text-xs text-green-500 font-medium">{t("Đang hoạt động")}</p>
+                <p className="text-xl font-bold text-green-900">
                   {loading ? "—" : stats.activeCount}
                 </p>
               </div>
@@ -314,8 +314,8 @@ const ApiMediaPage = ({
                 <HiKey className="text-lg text-blue-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">{t("Tổng Request")}</p>
-                <p className="text-xl font-bold text-gray-900">
+                <p className="text-xs text-blue-500 font-medium">{t("Tổng Request")}</p>
+                <p className="text-xl font-bold text-blue-900">
                   {loading ? "—" : stats.totalRequests.toLocaleString()}
                 </p>
               </div>
@@ -323,12 +323,12 @@ const ApiMediaPage = ({
           </div>
           <div className="bg-white rounded-xl p-4 sm:p-5 border border-gray-200 shadow-sm hover:shadow-md transition-shadow duration-300">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-50">
-                <HiClock className="text-lg text-amber-600" />
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-yellow-50">
+                <HiClock className="text-lg text-yellow-600" />
               </div>
               <div>
-                <p className="text-xs text-gray-500 font-medium">{t("Đã sử dụng")}</p>
-                <p className="text-xl font-bold text-gray-900">
+                <p className="text-xs text-yellow-500 font-medium">{t("Đã sử dụng")}</p>
+                <p className="text-xl font-bold text-yellow-900">
                   {loading ? "—" : stats.usedRequests.toLocaleString()}
                 </p>
               </div>
