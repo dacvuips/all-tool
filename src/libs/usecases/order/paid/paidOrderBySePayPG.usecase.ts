@@ -14,7 +14,7 @@ import {
 } from "../../../../services/sepayPG/sepayPG.service";
 import { BaseCommand, BaseUsecase } from "../../../core";
 import { ForbiddenError } from "../../../core/errors";
-import { ApiMediaSubscriptionPlanEnum } from "../../../dal/apiMediaToken";
+import { ApiMediaSubscriptionPlanEnum, apiMediaTokenService } from "../../../dal/apiMediaToken";
 import { createApiMediaTokenCredentials } from "../../../../routers/api-media/api-media-key";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
 import { IntroduceModel } from "../../../dal/introduce";
@@ -103,98 +103,180 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       new ForbiddenError(t(`Không tìm thấy đơn hàng với invoice number: ${order_invoice_number}`))
     );
 
-    // Idempotency: đã thanh toán thành công trước đó → bỏ qua, không xử lý lại
-    if (order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS) {
+    const alreadyPaid = order.paymentStatus === PaymentStatus.PAYMENT_SUCCESS;
+    const alreadyFulfilled = order.status === OrderStatusEnum.CONFIRMED;
+
+    // Idempotency: đơn đã thanh toán và kích hoạt gói xong → bỏ qua
+    if (alreadyPaid && alreadyFulfilled) {
       return { success: true };
     }
 
-    // Validate: đơn phải đang ở trạng thái chờ thanh toán
-    if (order.paymentStatus !== PaymentStatus.PAYMENT_PENDING) {
-      throw new ForbiddenError(
-        t(`Đơn hàng không ở trạng thái PAYMENT_PENDING (hiện tại: ${order.paymentStatus})`)
-      );
-    }
-
-    // Validate: số tiền thanh toán phải >= tổng đơn hàng
-    const sePayAmount = Number(transaction_amount);
-    if (sePayAmount < order.totalAmount) {
-      throw new ForbiddenError(
-        t(`Số tiền thanh toán (${sePayAmount}) không đủ so với đơn hàng (${order.totalAmount})`)
-      );
-    }
-
     const orderType = (order as any).type;
+    const subscriptionPlan = (order as any).subscriptionPlan;
+    const sePayAmount = Number(transaction_amount);
+    let orderUpdated = order;
 
-    // ── Cập nhật đơn hàng: thanh toán thành công ─────────────────────────
-    const orderUpdated = await OrderModel.findOneAndUpdate(
-      { _id: order._id },
-      {
-        $set: {
-          status: OrderStatusEnum.PAYMENT_UPDATED,
-          paymentStatus: PaymentStatus.PAYMENT_SUCCESS,
-          paidAt: new Date(),
-          "paymentInfo.metaData": {
-            sePayOrderId: command.order.order_id,
-            orderInvoiceNumber: order_invoice_number,
-            orderStatus: order_status,
-            transactionId: transaction_id,
-            transactionDate: command.transaction.transaction_date,
-            transactionStatus: command.transaction.transaction_status,
-            transactionAmount: transaction_amount,
-            paymentMethod: payment_method,
-            cardNumber: command.transaction.card_number,
-            cardHolderName: command.transaction.card_holder_name,
-            cardBrand: command.transaction.card_brand,
-            ipnTimestamp: command.timestamp,
-          },
-        },
-        $push: {
-          orderLogs: {
-            status: OrderStatusEnum.PAYMENT_CONFIRMED,
-            des: "Đơn hàng đã được thanh toán",
-            createdAt: new Date(),
-          } as any,
-          paymentLogs: {
-            status: PaymentStatus.PAYMENT_SUCCESS,
-            des: `Thanh toán thành công - ${payment_method}`,
-            amount: sePayAmount,
-            transactionId: transaction_id,
-            createdAt: new Date(),
-          } as any,
-        },
-      },
-      { new: true }
-    );
+    if (!alreadyPaid) {
+      // Validate: đơn phải đang ở trạng thái chờ thanh toán
+      if (order.paymentStatus !== PaymentStatus.PAYMENT_PENDING) {
+        throw new ForbiddenError(
+          t(`Đơn hàng không ở trạng thái PAYMENT_PENDING (hiện tại: ${order.paymentStatus})`)
+        );
+      }
 
-    // ── Đơn NORMAL: nạp mPoint, không kích hoạt gói ─────────────────────
-    if (orderType === OrderTypeEnum.NORMAL) {
-      await OrderModel.findOneAndUpdate(
+      // Validate: số tiền thanh toán phải >= tổng đơn hàng
+      if (sePayAmount < order.totalAmount) {
+        throw new ForbiddenError(
+          t(`Số tiền thanh toán (${sePayAmount}) không đủ so với đơn hàng (${order.totalAmount})`)
+        );
+      }
+
+      // ── Cập nhật đơn hàng: thanh toán thành công ───────────────────────
+      orderUpdated = await OrderModel.findOneAndUpdate(
         { _id: order._id },
         {
-          $set: { status: OrderStatusEnum.CONFIRMED },
+          $set: {
+            status: OrderStatusEnum.PAYMENT_UPDATED,
+            paymentStatus: PaymentStatus.PAYMENT_SUCCESS,
+            paidAt: new Date(),
+            "paymentInfo.metaData": {
+              sePayOrderId: command.order.order_id,
+              orderInvoiceNumber: order_invoice_number,
+              orderStatus: order_status,
+              transactionId: transaction_id,
+              transactionDate: command.transaction.transaction_date,
+              transactionStatus: command.transaction.transaction_status,
+              transactionAmount: transaction_amount,
+              paymentMethod: payment_method,
+              cardNumber: command.transaction.card_number,
+              cardHolderName: command.transaction.card_holder_name,
+              cardBrand: command.transaction.card_brand,
+              ipnTimestamp: command.timestamp,
+            },
+          },
           $push: {
             orderLogs: {
               status: OrderStatusEnum.PAYMENT_CONFIRMED,
-              des: "Nạp mPoint thành công",
+              des: "Đơn hàng đã được thanh toán",
+              createdAt: new Date(),
+            } as any,
+            paymentLogs: {
+              status: PaymentStatus.PAYMENT_SUCCESS,
+              des: `Thanh toán thành công - ${payment_method}`,
+              amount: sePayAmount,
+              transactionId: transaction_id,
               createdAt: new Date(),
             } as any,
           },
         },
         { new: true }
       );
-      await paidNormalOrderUsecase.fulfillMpointCredit(order);
+
+      // ── Đơn NORMAL: nạp mPoint, không kích hoạt gói ───────────────────
+      if (orderType === OrderTypeEnum.NORMAL) {
+        await OrderModel.findOneAndUpdate(
+          { _id: order._id },
+          {
+            $set: { status: OrderStatusEnum.CONFIRMED },
+            $push: {
+              orderLogs: {
+                status: OrderStatusEnum.PAYMENT_CONFIRMED,
+                des: "Nạp mPoint thành công",
+                createdAt: new Date(),
+              } as any,
+            },
+          },
+          { new: true }
+        );
+        await paidNormalOrderUsecase.fulfillMpointCredit(order);
+        return { success: true };
+      }
+
+      // Chuyển trạng thái đơn sang PROCESSING
+      await OrderModel.findOneAndUpdate(
+        { _id: order._id },
+        {
+          $set: { status: OrderStatusEnum.PROCESSING },
+          $push: {
+            orderLogs: {
+              status: OrderStatusEnum.PROCESSING,
+              des: "Đơn hàng đang được xử lý",
+              createdAt: new Date(),
+            } as any,
+          },
+        },
+        { new: true }
+      );
+    } else if (order.status !== OrderStatusEnum.PROCESSING) {
+      logger.warn("ORDER_PAID: đơn đã thanh toán nhưng không ở PROCESSING/CONFIRMED", {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        status: order.status,
+        type: orderType,
+      });
       return { success: true };
+    } else {
+      logger.info("ORDER_PAID: thử kích hoạt lại gói cho đơn đang PROCESSING", {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        type: orderType,
+      });
     }
 
-    // Chuyển trạng thái đơn sang PROCESSING
-    await OrderModel.findOneAndUpdate(
-      { _id: order._id },
+    // ── Kích hoạt gói subscription cho khách hàng ──────────────────────────
+    if (!order.customerId || !subscriptionPlan) {
+      logger.error("ORDER_PAID: thiếu customerId hoặc subscriptionPlan — bỏ qua kích hoạt gói", {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        customerId: order.customerId?.toString(),
+        subscriptionPlan,
+        orderType,
+      });
+      throw new ForbiddenError(
+        t(
+          `Không thể kích hoạt gói: đơn ${order.orderNumber} thiếu customerId hoặc subscriptionPlan`
+        )
+      );
+    }
+
+    const customerId = order.customerId.toString();
+    const orderId = order._id.toString();
+
+    if (orderType === OrderTypeEnum.RECAPTCHA) {
+      await this._activateRecaptchaSubscription(
+        customerId,
+        subscriptionPlan,
+        orderId,
+        order.orderNumber
+      );
+    } else if (orderType === OrderTypeEnum.API_MEDIA) {
+      await this._activateApiMediaSubscription(
+        customerId,
+        subscriptionPlan,
+        orderId,
+        order.orderNumber
+      );
+    } else if (orderType === OrderTypeEnum.TOOL || !orderType) {
+      await this._activateSubscription(customerId, subscriptionPlan, orderId, order.orderNumber);
+    } else {
+      logger.error("ORDER_PAID: order.type không hỗ trợ kích hoạt gói", {
+        orderId,
+        orderNumber: order.orderNumber,
+        orderType,
+        subscriptionPlan,
+      });
+      throw new ForbiddenError(t(`Loại đơn hàng không hỗ trợ kích hoạt gói: ${orderType}`));
+    }
+
+    // Hoàn tất đơn subscription sau khi kích hoạt gói
+    const confirmedOrder = await OrderModel.findOneAndUpdate(
+      { _id: order._id, status: OrderStatusEnum.PROCESSING },
       {
-        $set: { status: OrderStatusEnum.PROCESSING },
+        $set: { status: OrderStatusEnum.CONFIRMED },
         $push: {
           orderLogs: {
-            status: OrderStatusEnum.PROCESSING,
-            des: "Đơn hàng đang được xử lý",
+            status: OrderStatusEnum.CONFIRMED,
+            des: "Gói đã được kích hoạt thành công",
             createdAt: new Date(),
           } as any,
         },
@@ -202,39 +284,16 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       { new: true }
     );
 
-    // ── Kích hoạt gói subscription cho khách hàng ──────────────────────────
-    const subscriptionPlan = (order as any).subscriptionPlan;
-
-    if (order.customerId && subscriptionPlan) {
-      if (orderType === OrderTypeEnum.RECAPTCHA) {
-        // RECAPTCHA: Tạo recaptcha token key theo gói cụ thể
-        await this._activateRecaptchaSubscription(
-          order.customerId.toString(),
-          subscriptionPlan,
-          order._id.toString(),
-          order.orderNumber
-        );
-      } else if (orderType === OrderTypeEnum.API_MEDIA) {
-        // API_MEDIA: Tạo api media token key theo gói cụ thể
-        await this._activateApiMediaSubscription(
-          order.customerId.toString(),
-          subscriptionPlan,
-          order._id.toString(),
-          order.orderNumber
-        );
-      } else {
-        // TOOL (default): Cập nhật googlePackage cho Customer
-        await this._activateSubscription(
-          order.customerId.toString(),
-          subscriptionPlan,
-          order._id.toString(),
-          order.orderNumber
-        );
-      }
+    if (!confirmedOrder) {
+      logger.warn("ORDER_PAID: không cập nhật được CONFIRMED (đơn có thể đã xử lý)", {
+        orderId,
+        orderNumber: order.orderNumber,
+        status: order.status,
+      });
     }
 
-    // === Hoa hồng giới thiệu: cộng 10% giá đơn cho người giới thiệu ===
-    if (!!order.customerId && order.totalAmount > 0) {
+    // === Hoa hồng giới thiệu: chỉ xử lý lần thanh toán đầu tiên ===
+    if (!alreadyPaid && !!order.customerId && order.totalAmount > 0) {
       try {
         // Tìm bản ghi giới thiệu: người nạp đơn là refereeId
         const introduce = await IntroduceModel.findOne({
@@ -315,8 +374,8 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
         });
       }
     }
-    // ── Thông báo & real-time event ───────────────────────────────────────
-    if (order.customerId) {
+    // ── Thông báo & real-time event (chỉ lần thanh toán đầu) ─────────────
+    if (!alreadyPaid && order.customerId) {
       const customerNotify = new NotificationBuilder(
         "Thanh toán thành công",
         `Hệ thống đã nhận được thanh toán cho đơn hàng ${order.orderNumber}`
@@ -555,16 +614,30 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const expiredDate = new Date();
     expiredDate.setDate(expiredDate.getDate() + 30);
 
-    // Tạo api media token mới (key hash — user rotate từ dashboard để lấy plain key)
-    await createApiMediaTokenCredentials({
-      requestQuantity: Number(requestQuantity),
-      streamCount: Number(streamCount),
-      expiredDate,
-      customerId,
-      active: true,
-      usedQuantity: 0,
-      subscriptionPlan: planKey as ApiMediaSubscriptionPlanEnum,
-    });
+    const existingToken = await apiMediaTokenService.findOne({ customerId, active: true });
+
+    if (existingToken) {
+      // Nâng cấp token hiện có (vd. từ free → basic) thay vì tạo token thứ hai
+      await apiMediaTokenService.updateOne(existingToken._id.toString(), {
+        requestQuantity: Number(requestQuantity),
+        streamCount: Number(streamCount),
+        expiredDate,
+        usedQuantity: 0,
+        subscriptionPlan: planKey as ApiMediaSubscriptionPlanEnum,
+        active: true,
+      });
+    } else {
+      // Tạo api media token mới (key hash — user rotate từ dashboard để lấy plain key)
+      await createApiMediaTokenCredentials({
+        requestQuantity: Number(requestQuantity),
+        streamCount: Number(streamCount),
+        expiredDate,
+        customerId,
+        active: true,
+        usedQuantity: 0,
+        subscriptionPlan: planKey as ApiMediaSubscriptionPlanEnum,
+      });
+    }
 
     // Thông báo cho customer
     const notify = new NotificationBuilder(

@@ -107,6 +107,7 @@ export default [
           .catch((err) => {
             logger.error("Xử lý IPN thất bại", {
               err: err.message,
+              stack: err.stack,
               notification_type: payload.notification_type,
               orderInvoiceNumber: payload.order?.order_invoice_number,
               transactionId: payload.transaction?.transaction_id,
