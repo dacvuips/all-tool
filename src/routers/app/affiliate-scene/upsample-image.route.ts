@@ -10,6 +10,7 @@ import {
   UpsampleResolution,
 } from "../../api-media/flow2/upsample-image";
 import { Context } from "../../../libs/graphql";
+import { assertCustomerMediaGenerationAllowed } from "./_shared";
 
 function mimeTypeToFileExtension(mimeType?: string, fallback = "jpg"): string {
   if (!mimeType) return fallback;
@@ -48,6 +49,8 @@ export default [
             message: "Thiếu flow2RequestId để upscale ảnh",
           });
         }
+
+        await assertCustomerMediaGenerationAllowed(context.id);
 
         const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
 

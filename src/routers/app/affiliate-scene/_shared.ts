@@ -1,7 +1,8 @@
 import logger from "../../../helpers/logger";
 import { ArtStyleModel } from "../../../libs/dal/art-style/art-style.model";
 import { credentialService } from "../../../libs/dal/credential";
-import { CustomerModel } from "../../../libs/dal/customer";
+import { CustomerModel, CustomerStatusEnum } from "../../../libs/dal/customer";
+import { SettingModel } from "../../../libs/dal/setting";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { decryptProviderSecret } from "../../../packages/encryption/encrypt-provider";
@@ -230,6 +231,31 @@ export async function getCustomerGoogleLabsCredentials(): Promise<{
     googleLabsApiKey: decryptProviderSecret(apiKeyCred.value),
     geminiAPIKeys,
   };
+}
+
+/** Kiểm tra customer ACTIVE và sàn chưa bị ngưng hoạt động trước khi generate image/video. */
+export async function assertCustomerMediaGenerationAllowed(customerId: string): Promise<void> {
+  const customer = await CustomerModel.findById(customerId).select("status").lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  if (customer.status !== CustomerStatusEnum.ACTIVE) {
+    const err: any = new Error("Tài khoản bị khóa hoặc ngừng kích hoạt");
+    err.statusCode = 403;
+    throw err;
+  }
+
+  const pageBlockSetting = await SettingModel.findOne({ key: "pa-b-page" }).select("isActive").lean();
+  if (pageBlockSetting?.isActive === true) {
+    const err: any = new Error(
+      "Sàn hiện tại đang ngưng hoạt động, quý khách vui lòng quay lại sau!"
+    );
+    err.statusCode = 403;
+    throw err;
+  }
 }
 
 export async function checkImageLimit(customerId: string): Promise<void> {

@@ -5,7 +5,7 @@ import {
   mediaGenerationJobService,
   MediaGenerationJobType,
 } from "../../libs/dal/mediaGenerationJob";
-import { ActionEnum } from "../app/affiliate-scene/_shared";
+import { ActionEnum, assertCustomerMediaGenerationAllowed } from "../app/affiliate-scene/_shared";
 import { createAndEnqueueApiMediaJob } from "./_enqueue-helper";
 import { resolveApiMediaTokenFromRequest } from "./api-media-key";
 import { prepareApiMediaImageRequest, prepareApiMediaVideoRequest } from "./api-media-prepare";
@@ -69,6 +69,8 @@ async function enqueueApiMediaJob(req: Request, res: Response): Promise<void> {
     throw err;
   }
 
+  await assertCustomerMediaGenerationAllowed(customerId);
+
   const action = (req.query.type as string) || (req.body as { type?: string })?.type;
   const jobType = resolveJobType(action);
   const body = (req.body || {}) as Record<string, unknown>;
@@ -120,6 +122,14 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
 
+  const customerId = token.customerId ? String(token.customerId) : null;
+  if (!customerId) {
+    const err: any = new Error("Token chưa gắn khách hàng");
+    err.statusCode = 403;
+    throw err;
+  }
+  await assertCustomerMediaGenerationAllowed(customerId);
+
   const body = req.body as {
     resolution?: UpsampleResolution | string;
     flow2RequestId?: string;
@@ -150,6 +160,14 @@ async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void>
   const token = await resolveApiMediaTokenFromRequest(req);
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
+
+  const customerId = token.customerId ? String(token.customerId) : null;
+  if (!customerId) {
+    const err: any = new Error("Token chưa gắn khách hàng");
+    err.statusCode = 403;
+    throw err;
+  }
+  await assertCustomerMediaGenerationAllowed(customerId);
 
   const body = req.body as { requestId?: string; flow2RequestId?: string };
   const requestId = (body?.requestId || body?.flow2RequestId || "").trim();

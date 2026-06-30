@@ -17,6 +17,7 @@ import {
   MediaGenerationJobType,
 } from "../../../libs/dal/mediaGenerationJob";
 import { assertMediaStreamAvailable } from "../../../queues/media-generation/media-job-concurrency";
+import { assertCustomerMediaGenerationAllowed } from "../affiliate-scene/_shared";
 import {
   buildMediaJobDataKey,
   saveMediaJobPayload,
@@ -48,16 +49,19 @@ export async function createAndEnqueueMediaJob(
   args: CreateAndEnqueueArgs,
   options?: CreateAndEnqueueOptions
 ): Promise<CreateAndEnqueueResult> {
-  // 1. Kiểm tra số job đang chạy/chờ so với giới hạn luồng của customer (luồng app)
+  // 1. Kiểm tra customer ACTIVE và sàn chưa ngưng hoạt động
+  await assertCustomerMediaGenerationAllowed(args.customerId);
+
+  // 2. Kiểm tra số job đang chạy/chờ so với giới hạn luồng của customer (luồng app)
   if (!options?.skipStreamCheck) {
     await assertMediaStreamAvailable(args.customerId, args.type);
   }
 
-  // 2. Sinh jobId trước để dùng làm key Redis
+  // 3. Sinh jobId trước để dùng làm key Redis
   const jobId = new mongoose.Types.ObjectId().toString();
   const dataRedisKey = buildMediaJobDataKey(jobId);
 
-  // 3. Ghi payload lên Redis (bắt buộc trước khi tạo job Mongo)
+  // 4. Ghi payload lên Redis (bắt buộc trước khi tạo job Mongo)
   await saveMediaJobPayload(jobId, args.requestPayload);
 
   // 4. Tạo doc Mongo — không lưu requestPayload
@@ -76,7 +80,7 @@ export async function createAndEnqueueMediaJob(
   const createdJobId = String((doc as any)._id);
 
   try {
-    // 5. Enqueue vào bee-queue
+    // 6. Enqueue vào bee-queue
     await enqueueMediaGenerationJob(createdJobId);
   } catch (err: any) {
     logger.error(`[createAndEnqueueMediaJob] enqueue ${createdJobId} lỗi: ${err?.message}`);

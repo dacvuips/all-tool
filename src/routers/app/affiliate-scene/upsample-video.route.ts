@@ -12,6 +12,7 @@ import {
   sendGenerationSSEError,
 } from "../../api-media/generation-sse";
 import { Context } from "../../../libs/graphql";
+import { assertCustomerMediaGenerationAllowed } from "./_shared";
 import {
   createUpsampleVideoDownloadToken,
   deleteUpsampleVideoTemp,
@@ -49,6 +50,8 @@ export default [
             message: "Thiếu flow2RequestId để upscale video 1080p",
           });
         }
+
+        await assertCustomerMediaGenerationAllowed(context.id);
 
         const send = initGenerationSSE(res);
         sseStarted = true;
