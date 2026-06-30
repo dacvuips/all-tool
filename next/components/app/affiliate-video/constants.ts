@@ -69,12 +69,15 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   trendingModeType?: TrendingModeTypeEnum;
   batchSize: number;
   productImages?: string[];
+  /** Ảnh SP tham chiếu (base64) — nguồn upload sidebar */
+  productImageRefs?: ElementFormImage[];
 }
 
 export interface TrendingVideoFormConfig extends VideoFormBase {
   tipContent: string;
   batchSize: number;
   productImages?: string[];
+  productImageRefs?: ElementFormImage[];
   trendingModeType: TrendingModeTypeEnum;
   /** ID của trending item đang được sử dụng (nếu user chọn "Dùng ngay") */
   promptId?: string;
@@ -91,6 +94,7 @@ export function withoutPromptSelection(config: TrendingVideoFormConfig): Trendin
 export interface CopyVideoFormConfig extends VideoFormBase {
   sourceVideo?: { base64: string; mimeType: string };
   productImages?: string[];
+  productImageRefs?: ElementFormImage[];
   objectToPersonify: string;
   objectToPersonifyCode?: string;
   objectToPersonifyImage?: ElementFormImage;

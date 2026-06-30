@@ -21,13 +21,13 @@ import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTransl
 import {
   Button,
   Field,
-  ImageInput,
   Label,
   Select,
   Textarea,
 } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum, TAB_TYPE, TrendingModeTypeEnum } from "../../constants";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { ProductImagesUpload } from "../../shared/product-images-upload";
 import { getSingleSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 
@@ -378,17 +378,14 @@ export const AffiliateConfig = ({
 
           {/* Ảnh sản phẩm */}
 
-          <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
-            <div id="product-images-section">
-              <ImageInput
-                multi
-                value={videoConfig?.productImages}
-                onChange={(v) => patchConfig && patchConfig({ productImages: v })}
-                readOnly={!customer}
-                limit={5}
-              />
-            </div>
-          </Field>
+          <div id="product-images-section">
+            <ProductImagesUpload
+              productImageRefs={videoConfig?.productImageRefs}
+              productImages={videoConfig?.productImages}
+              onChange={(patch) => patchConfig && patchConfig(patch)}
+              readOnly={!customer}
+            />
+          </div>
           <Label text={t("Tùy chỉnh số lượng phân cảnh")} />
           {/* SỐ LƯỢNG MẸO CẦN TẠO (batchSize) + Switch "Tự động" / "Tùy chỉnh phân cảnh" */}
           {type == TAB_TYPE.batch && (

@@ -12,11 +12,12 @@ import { BsFile } from "react-icons/bs";
 import { RiLoader4Fill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
-import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
 import { ElementImagesUpload } from "../../elements/sibar/element-images-upload";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { ProductImagesUpload } from "../../shared/product-images-upload";
 import { getStoryboardSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -196,17 +197,14 @@ export const AffiliateConfig = ({
 
         {/* Ảnh sản phẩm */}
 
-        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
-          <div id="product-images-section">
-          <ImageInput
-            multi
-            value={videoConfig?.productImages}
-            onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+        <div id="product-images-section">
+          <ProductImagesUpload
+            productImageRefs={videoConfig?.productImageRefs}
+            productImages={videoConfig?.productImages}
+            onChange={(patch) => patchConfig && patchConfig(patch)}
             readOnly={!customer}
-            limit={5}
           />
-          </div>
-        </Field>
+        </div>
       </div>
     </div>
     </>

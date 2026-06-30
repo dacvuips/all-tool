@@ -29,6 +29,7 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { CharacterItem, CopyVideoScene, DB_NAME } from "../../constants";
+import { resolveSidebarProductImages } from "../../shared/product-images-upload";
 import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button";
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
@@ -115,14 +116,17 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // ── Thumbnail from IndexedDB (saved during video analysis) ──
-  const { sceneThumbnailVersion, scriptData } = useCopyVideoContext();
+  const { sceneThumbnailVersion, scriptData, copyVideoFormConfig } = useCopyVideoContext();
   const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
     scene.id,
     sceneThumbnailVersion
   );
 
   // ── Product image selection (per-scene, persisted in IndexedDB) ──
-  const productImages = scriptData?.productImages || [];
+  const productImages = resolveSidebarProductImages({
+    scriptProductImages: scriptData?.productImages,
+    configProductImages: copyVideoFormConfig?.productImages,
+  });
   const selectedProductImagesDB = useIndexedDB<string[]>(
     "selected-product-images",
     DB_NAME.copyVideo

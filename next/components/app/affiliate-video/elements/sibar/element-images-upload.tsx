@@ -251,6 +251,8 @@ interface MultiImageUploadSlotProps {
   value?: ElementFormImage[];
   onChange: (value: ElementFormImage[] | undefined) => void;
   maxSizeMB?: number;
+  /** Giới hạn tổng số ảnh (undefined = không giới hạn) */
+  maxImages?: number;
   readOnly?: boolean;
   getImageStatus?: (index: number) => StoryboardImageStatus | undefined;
   onRetryImage?: (index: number) => void;
@@ -356,6 +358,7 @@ function MultiImageUploadSlot({
   value = [],
   onChange,
   maxSizeMB = 10,
+  maxImages,
   readOnly = false,
   getImageStatus,
   onRetryImage,
@@ -365,6 +368,7 @@ function MultiImageUploadSlot({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const atMaxImages = maxImages != null && value.length >= maxImages;
 
   const processFile = useCallback(
     async (file: File): Promise<ElementFormImage | null> => {
@@ -406,13 +410,29 @@ function MultiImageUploadSlot({
 
   const addFiles = useCallback(
     async (files: FileList | File[]) => {
-      if (readOnly || uploading) return;
+      if (readOnly || uploading || atMaxImages) {
+        if (atMaxImages && maxImages != null) {
+          toast.error(`${t("Tối đa")} ${maxImages} ${t("ảnh")}`);
+        }
+        return;
+      }
       const fileArr = Array.from(files);
       if (!fileArr.length) return;
 
+      const remaining =
+        maxImages != null ? Math.max(0, maxImages - value.length) : fileArr.length;
+      if (remaining <= 0) {
+        toast.error(`${t("Tối đa")} ${maxImages} ${t("ảnh")}`);
+        return;
+      }
+      const filesToProcess = fileArr.slice(0, remaining);
+      if (filesToProcess.length < fileArr.length && maxImages != null) {
+        toast.info(`${t("Chỉ thêm được")} ${remaining}/${fileArr.length} ${t("ảnh")} (${t("Tối đa")} ${maxImages})`);
+      }
+
       setUploading(true);
       const added: ElementFormImage[] = [];
-      for (const file of fileArr) {
+      for (const file of filesToProcess) {
         const img = await processFile(file);
         if (img) added.push(img);
       }
@@ -427,7 +447,7 @@ function MultiImageUploadSlot({
         );
       }
     },
-    [onChange, processFile, readOnly, t, toast, uploading, value]
+    [atMaxImages, maxImages, onChange, processFile, readOnly, t, toast, uploading, value]
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -462,12 +482,18 @@ function MultiImageUploadSlot({
   };
 
   const openFilePicker = () => {
-    if (!readOnly && !uploading) fileInputRef.current?.click();
+    if (!readOnly && !uploading && !atMaxImages) fileInputRef.current?.click();
   };
+
+  const maxImagesHint =
+    maxImages != null
+      ? `${t("Tối đa")} ${maxImages} ${t("ảnh")} (${value.length}/${maxImages})`
+      : t("Có thể chọn nhiều ảnh");
 
   return (
     <Field noError label={label}>
       <div className="space-y-2">
+        {!atMaxImages && (
         <div
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -497,11 +523,12 @@ function MultiImageUploadSlot({
                   : t("Kéo thả hoặc bấm để chọn ảnh")}
               </span>
               <span className="mt-1 text-xs text-center text-gray-400">
-                JPG, PNG, WebP, GIF • {t("Tối đa")} {maxSizeMB}MB • {t("Có thể chọn nhiều ảnh")}
+                JPG, PNG, WebP, GIF • {t("Tối đa")} {maxSizeMB}MB • {maxImagesHint}
               </span>
             </>
           )}
         </div>
+        )}
 
         <input
           ref={fileInputRef}
@@ -509,7 +536,7 @@ function MultiImageUploadSlot({
           accept={ACCEPTED_EXTENSIONS}
           multiple
           className="sr-only"
-          disabled={readOnly}
+          disabled={readOnly || atMaxImages}
           onChange={handleFileChange}
         />
 
@@ -553,6 +580,7 @@ export interface ElementImagesUploadProps {
   onArtStyleImgChange: (value: ElementFormImage[] | undefined) => void;
   readOnly?: boolean;
   maxSizeMB?: number;
+  maxImages?: number;
   label?: string;
   getImageStatus?: (index: number) => StoryboardImageStatus | undefined;
   onRetryImage?: (index: number) => void;
@@ -869,12 +897,11 @@ export function ElementImagesUpload({
   onArtStyleImgChange,
   readOnly = false,
   maxSizeMB = 10,
+  maxImages,
   label,
   getImageStatus,
   onRetryImage,
 }: ElementImagesUploadProps) {
-  const { t } = useTranslation();
-
   return (
     <div className="space-y-3">
       <MultiImageUploadSlot
@@ -883,6 +910,7 @@ export function ElementImagesUpload({
         onChange={onArtStyleImgChange}
         readOnly={readOnly}
         maxSizeMB={maxSizeMB}
+        maxImages={maxImages}
         getImageStatus={getImageStatus}
         onRetryImage={onRetryImage}
       />

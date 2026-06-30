@@ -9,11 +9,12 @@ import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { Button, Field, ImageInput, Select } from "../../../../shared/utilities/form";
+import { Button, Field, Select } from "../../../../shared/utilities/form";
 import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { ObjectPersonifyPickerDialog } from "../../shared/object-personify-picker-dialog";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
+import { ProductImagesUpload } from "../../shared/product-images-upload";
 import { getCopyVideoSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { VideoUploadPicker } from "./video-upload-picker";
@@ -155,15 +156,12 @@ export const AffiliateConfig = ({ introOpen = false, onIntroDismiss }: Affiliate
         {/* Ảnh sản phẩm */}
 
         <div id="product-images-section">
-        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
-          <ImageInput
-            multi
-            value={copyVideoFormConfig?.productImages}
-            onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+          <ProductImagesUpload
+            productImageRefs={copyVideoFormConfig?.productImageRefs}
+            productImages={copyVideoFormConfig?.productImages}
+            onChange={(patch) => patchConfig && patchConfig(patch)}
             readOnly={!customer}
-            limit={5}
           />
-        </Field>
         </div>
       </div>
     </div>

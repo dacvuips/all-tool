@@ -30,6 +30,7 @@ import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../co
 import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
+import { resolveSidebarProductImages } from "../../shared/product-images-upload";
 import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button";
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
@@ -109,7 +110,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   // ── Product image selection (per-scene, persisted in IndexedDB) ──
   const { scriptData, affiliateVideoFormConfig } = useAffiliateVideoContext();
-  const productImages = scriptData?.productImages || affiliateVideoFormConfig?.productImages || [];
+  const productImages = resolveSidebarProductImages({
+    scriptProductImages: scriptData?.productImages,
+    configProductImages: affiliateVideoFormConfig?.productImages,
+  });
   const selectedProductImagesDB = useIndexedDB<string[]>(
     "selected-product-images",
     DB_NAME.generateScene

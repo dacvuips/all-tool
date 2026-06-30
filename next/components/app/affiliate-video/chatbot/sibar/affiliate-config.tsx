@@ -11,7 +11,7 @@ import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
-import { Button, Field, ImageInput, Select, Textarea } from "../../../../shared/utilities/form";
+import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
 import {
   ASPECT_RATIOS,
   BATCH_SIZE_DESCRIPTIONS,
@@ -19,6 +19,7 @@ import {
   TrendingModeTypeEnum,
 } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { ProductImagesUpload } from "../../shared/product-images-upload";
 
 import { RiCameraLensFill, RiFilmFill } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
@@ -212,15 +213,14 @@ export const AffiliateConfig = () => {
 
         {/* ẢNH THAM CHIẾU (tuỳ chọn) */}
 
-        <Field noError label={t("Ảnh sản phẩm tham chiếu (tùy chọn)")}>
-          <ImageInput
-            multi
-            value={videoConfig?.productImages}
-            onChange={(v) => patchConfig && patchConfig({ productImages: v })}
+        <div id="product-images-section">
+          <ProductImagesUpload
+            productImageRefs={videoConfig?.productImageRefs}
+            productImages={videoConfig?.productImages}
+            onChange={(patch) => patchConfig && patchConfig(patch)}
             readOnly={!customer}
-            limit={5}
           />
-        </Field>
+        </div>
 
         {/* SLIDER SỐ LƯỢNG – label & mô tả thay đổi theo mode */}
         <BatchSizeSlider
