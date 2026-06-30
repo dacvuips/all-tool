@@ -10,12 +10,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCameraAdd } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
+import { RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
 import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
+import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type GeneratedExtendVideoData = GeneratedVideoLike;
@@ -42,6 +43,9 @@ export interface SceneCardExtendVideoTabProps {
   // ── Callbacks ──
   /** Generate/tạo lại extend video. Truyền true để phân biệt với video đơn */
   onGenerateExtendVideo: () => void;
+
+  onStopGeneration?: () => void;
+  generationActionPending?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -56,6 +60,8 @@ export function SceneCardExtendVideoTab({
   sceneNumber = 0,
   errorMessage,
   onGenerateExtendVideo,
+  onStopGeneration,
+  generationActionPending = false,
 }: SceneCardExtendVideoTabProps) {
   const { t } = useTranslation();
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
@@ -149,12 +155,13 @@ export function SceneCardExtendVideoTab({
                 disabled={isDisabled}
               />
               {generatingExtendVideo ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-teal-50 border border-teal-200">
-                  <RiLoader4Line className="text-teal-500 text-sm animate-spin" />
-                  <span className="text-teal-600 text-[10px] font-bold">
-                    {extendVideoProgress}%
-                  </span>
-                </div>
+                <SceneMediaGenerationProgress
+                  variant="extend"
+                  progress={extendVideoProgress}
+                  layout="compact"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />
               ) : (
                 <Button
                   onClick={onGenerateExtendVideo}
@@ -168,13 +175,13 @@ export function SceneCardExtendVideoTab({
             </div>
           </div>
         ) : generatingExtendVideo ? (
-          /* ── Spinner khi đang generate ── */
-          <div className="w-16 h-16 rounded-xl border-2 border-teal-300 bg-teal-50 flex flex-col items-center justify-center">
-            <RiLoader4Line className="text-teal-500 text-xl animate-spin" />
-            <span className="text-teal-600 text-[10px] font-bold mt-0.5">
-              {extendVideoProgress}%
-            </span>
-          </div>
+          <SceneMediaGenerationProgress
+            variant="extend"
+            progress={extendVideoProgress}
+            layout="card"
+            actionPending={generationActionPending}
+            onStop={onStopGeneration}
+          />
         ) : (
           /* ── Default: nút tạo video nối ── */
           <button

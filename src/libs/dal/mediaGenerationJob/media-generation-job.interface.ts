@@ -121,7 +121,10 @@ export type IMediaGenerationJob = TimestampEntity & {
   /** Thời điểm user yêu cầu huỷ (worker đọc để dừng emit) */
   cancelRequestedAt?: Date;
   /** Metadata tự do từ client (ví dụ sceneId, clientRequestId) — *KHÔNG dùng cho logic backend* */
-  metadata?: Record<string, unknown>;
+  metadata?: Record<string, unknown> & {
+    /** Flow2 request_id đang chạy — dùng hủy task khi user cancel job */
+    flow2RequestId?: string;
+  };
   /** Số lần worker pickup (theo dõi stall / retry) */
   attempts: number;
   /** Thời điểm worker bắt đầu xử lý */

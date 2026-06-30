@@ -15,6 +15,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { useSceneJobBroadcast } from "../../hook/useSceneJobBroadcast";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 import {
@@ -95,6 +96,12 @@ interface ReviewContextType {
     sceneId: string,
     callback: (progress: SceneProgress) => void
   ) => () => void;
+  registerSceneJob: (
+    sceneId: string,
+    kind: SceneProgressKind,
+    jobId: string | null
+  ) => void;
+  getSceneJob: (sceneId: string, kind: SceneProgressKind) => string | undefined;
 }
 
 export const ReviewContext = createContext<Partial<ReviewContextType>>({
@@ -199,6 +206,7 @@ export function ReviewProvider(props) {
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError, getSceneErrors } = useSceneErrorBroadcast();
   const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
+  const { registerSceneJob, getSceneJob } = useSceneJobBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -383,6 +391,8 @@ export function ReviewProvider(props) {
         getSceneErrors,
         reportSceneProgress,
         subscribeSceneProgress,
+        registerSceneJob,
+        getSceneJob,
       }}
     >
       {props.children}

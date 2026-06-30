@@ -22,6 +22,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { useSceneJobBroadcast } from "../../hook/useSceneJobBroadcast";
 import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
@@ -104,6 +105,12 @@ interface ElementContextType {
     sceneId: string,
     callback: (progress: SceneProgress) => void
   ) => () => void;
+  registerSceneJob: (
+    sceneId: string,
+    kind: SceneProgressKind,
+    jobId: string | null
+  ) => void;
+  getSceneJob: (sceneId: string, kind: SceneProgressKind) => string | undefined;
 }
 
 export const ElementContext = createContext<Partial<ElementContextType>>({
@@ -204,6 +211,7 @@ export function ElementProvider(props) {
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError, getSceneErrors } = useSceneErrorBroadcast();
   const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
+  const { registerSceneJob, getSceneJob } = useSceneJobBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -403,6 +411,8 @@ export function ElementProvider(props) {
         getSceneErrors,
         reportSceneProgress,
         subscribeSceneProgress,
+        registerSceneJob,
+        getSceneJob,
       }}
     >
       {props.children}

@@ -142,6 +142,8 @@ export interface GenerateImageParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
   onMediaUpdate?: (data: GeneratedImageData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
 }
 
 export interface GenerateVideoParams {
@@ -175,6 +177,8 @@ export interface GenerateVideoParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64/bytes */
   onMediaUpdate?: (data: GeneratedVideoData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
 }
 
 export interface InsertSceneParams {
@@ -343,6 +347,9 @@ export interface UseAffiliateVideoApiReturn {
    */
   saveGeneratedImage: (sceneId: string, imageData: GeneratedImageData) => Promise<void>;
 
+  /** Huỷ job tạo ảnh đang chạy */
+  cancelImageJob: (jobId: string) => Promise<void>;
+
   /**
    * Gọi API tạo video từ prompt (Veo 3.1 fast).
    * Sử dụng SSE để nhận progress từ server.
@@ -357,6 +364,9 @@ export interface UseAffiliateVideoApiReturn {
 
   /** Lưu video trực tiếp vào IndexedDB */
   saveGeneratedVideo: (sceneId: string, videoData: GeneratedVideoData) => Promise<void>;
+
+  /** Huỷ job tạo video đang chạy */
+  cancelVideoJob: (jobId: string) => Promise<void>;
 
   /**
    * Gọi API chèn scene mới giữa 2 scene.
@@ -1398,6 +1408,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onProgress,
         onError,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         autoDownloadImageResolution,
@@ -1428,6 +1439,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),
+          onJobEnqueued,
         });
 
         const resultImages = (data?.images || []) as GeneratedImageData[];
@@ -1502,6 +1514,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         onStatusMessage,
         onError,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         isStitch,
@@ -1531,6 +1544,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           },
           onProgress: (pct) => onProgress?.(pct),
           onStatusMessage: (msg) => onStatusMessage?.(msg),
+          onJobEnqueued,
         });
 
         const videoData = await persistGeneratedVideoWithEnrichment(
@@ -2610,9 +2624,11 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
     generateImage,
     getGeneratedImage,
     saveGeneratedImage,
+    cancelImageJob: imageJob.cancel,
     generateVideo,
     getGeneratedVideo,
     saveGeneratedVideo,
+    cancelVideoJob: videoJob.cancel,
     insertScene,
     suggestConfig,
     generateAudioTTS,

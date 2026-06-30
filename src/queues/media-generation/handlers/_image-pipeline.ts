@@ -71,6 +71,9 @@ export async function runImagePipeline(args: RunImagePipelineArgs): Promise<Gene
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
   });
 
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);

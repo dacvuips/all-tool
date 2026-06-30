@@ -7,7 +7,7 @@
  * - Download ảnh đã tạo về máy
  * - Download video đã tạo về máy
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AffiliateVideoFormConfig, SceneScript, ScriptData } from "../constants";
 import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFormImageUtils";
@@ -21,6 +21,8 @@ import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCo
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
+import { useSceneMediaGenerationActions } from "./useSceneMediaGenerationActions";
+import type { SceneProgressKind } from "./useSceneProgressBroadcast";
 
 // ── Params ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +52,8 @@ export type AffiliateVideoProviderSlice = Partial<{
     sceneId: string,
     callback: (progress: { image?: number; video?: number; extend?: number }) => void
   ) => () => void;
+  registerSceneJob?: (sceneId: string, kind: SceneProgressKind, jobId: string | null) => void;
+  getSceneJob?: (sceneId: string, kind: SceneProgressKind) => string | undefined;
 }>;
 
 interface UseSceneMediaParams {
@@ -116,6 +120,26 @@ export interface UseSceneMediaReturn {
   handleDownloadExtendVideo: () => Promise<void>;
   /** Báo lỗi video inline (vd. chưa có ảnh) */
   reportVideoError: (message: string) => void;
+
+  /** Dừng tạo ảnh đang chạy */
+  handleStopImageGeneration: () => Promise<void>;
+  /** Tạo lại ảnh sau khi dừng / lỗi */
+  handleRetryImageGeneration: () => void;
+  /** Có thể tạo lại ảnh (sau dừng) */
+  imageCanRetry: boolean;
+  imageActionPending: boolean;
+
+  /** Dừng tạo video đơn */
+  handleStopVideoGeneration: () => Promise<void>;
+  handleRetryVideoGeneration: () => void;
+  videoCanRetry: boolean;
+  videoActionPending: boolean;
+
+  /** Dừng tạo video nối */
+  handleStopExtendVideoGeneration: () => Promise<void>;
+  handleRetryExtendVideoGeneration: () => void;
+  extendCanRetry: boolean;
+  extendActionPending: boolean;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -151,7 +175,7 @@ export function useSceneMedia({
   const [extendVideoError, setExtendVideoError] = useState<string | null>(null);
   const [generatedExtendVideo, setGeneratedExtendVideo] = useState<GeneratedVideoData | null>(null);
 
-  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo, saveGeneratedVideo } =
+  const { generateImage, getGeneratedImage, saveGeneratedImage, generateVideo, getGeneratedVideo, saveGeneratedVideo, cancelImageJob, cancelVideoJob } =
     useAffiliateVideoApi();
   const singleContext = useAffiliateVideoContext();
   const {
@@ -165,6 +189,8 @@ export function useSceneMedia({
     subscribeSceneError,
     reportSceneError,
     subscribeSceneProgress,
+    registerSceneJob,
+    getSceneJob,
     scriptData: contextScriptData,
     affiliateVideoFormConfig: contextFormConfig,
   } = { ...singleContext, ...providerContext };
@@ -185,6 +211,70 @@ export function useSceneMedia({
     },
     [scene.id, reportSceneError]
   );
+
+  const generateImageRef = useRef<() => Promise<void>>(async () => undefined);
+  const generateVideoRef = useRef<(isStitch?: boolean) => Promise<void>>(async () => undefined);
+
+  const imageGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id,
+    kind: "image",
+    cancelJob: cancelImageJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingSceneId(scene.id);
+      setGeneratingImage(false);
+      setImageProgress(0);
+    },
+    reportError: (message) => {
+      setImageError(message);
+      reportSceneError?.(scene.id, "image", message);
+    },
+    onRetry: () => {
+      void generateImageRef.current();
+    },
+  });
+
+  const videoGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id,
+    kind: "video",
+    cancelJob: cancelVideoJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingVideoSceneId(scene.id);
+      setGeneratingVideo(false);
+      setVideoProgress(0);
+      setVideoStatusMessage("");
+    },
+    reportError: (message) => {
+      setVideoError(message);
+      reportSceneError?.(scene.id, "video", message);
+    },
+    onRetry: () => {
+      void generateVideoRef.current(false);
+    },
+  });
+
+  const extendGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id + "::stitch",
+    kind: "extend",
+    cancelJob: cancelVideoJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
+      setGeneratingExtendVideo(false);
+      setExtendVideoProgress(0);
+    },
+    reportError: (message) => {
+      setExtendVideoError(message);
+      reportSceneError?.(scene.id + "::stitch", "extend", message);
+    },
+    onRetry: () => {
+      void generateVideoRef.current(true);
+    },
+  });
 
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: affiliateVideoFormConfig?.objectToPersonify,
@@ -279,6 +369,9 @@ export function useSceneMedia({
     setGeneratingExtendVideo(false);
     setExtendVideoProgress(0);
     setGeneratedExtendVideo(null);
+    imageGenActions.setCanRetry(false);
+    videoGenActions.setCanRetry(false);
+    extendGenActions.setCanRetry(false);
   }, [scene.id]);
 
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
@@ -353,6 +446,7 @@ export function useSceneMedia({
     reportSceneError?.(scene.id, "image", null);
     setGeneratingImage(true);
     setImageProgress(0);
+    imageGenActions.setCanRetry(false);
     addBatchGeneratingSceneId(scene.id);
 
     try {
@@ -368,9 +462,11 @@ export function useSceneMedia({
       const result = await generateImage({
         ...imageParams,
         onProgress: (pct) => setImageProgress((prev) => Math.max(prev, pct)),
+        onJobEnqueued: imageGenActions.bindJobEnqueued,
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
+          imageGenActions.setCanRetry(true);
         },
         onMediaUpdate: (data) => {
           setGeneratedImage(data);
@@ -383,16 +479,21 @@ export function useSceneMedia({
         setGeneratedImage(result);
         setImageError(null);
         reportSceneError?.(scene.id, "image", null);
+        imageGenActions.markGenerationEnded(false);
       } else {
         console.warn("[handleGenerateImage] No result returned");
+        imageGenActions.markGenerationEnded(true);
       }
     } catch (err) {
       console.error("[handleGenerateImage] Error:", err);
+      imageGenActions.markGenerationEnded(true);
     } finally {
       removeBatchGeneratingSceneId(scene.id);
       setGeneratingImage(false);
     }
   };
+
+  generateImageRef.current = handleGenerateImage;
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleSetImage
@@ -444,6 +545,7 @@ export function useSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
+      extendGenActions.setCanRetry(false);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -451,6 +553,7 @@ export function useSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
+      videoGenActions.setCanRetry(false);
       addBatchGeneratingVideoSceneId(scene.id);
     }
 
@@ -482,6 +585,9 @@ export function useSceneMedia({
             setVideoProgress((prev) => Math.max(prev, pct));
           }
         },
+        onJobEnqueued: isStitch
+          ? extendGenActions.bindJobEnqueued
+          : videoGenActions.bindJobEnqueued,
         onStatusMessage: (msg) => {
           if (!isStitch) setVideoStatusMessage(msg);
         },
@@ -489,9 +595,11 @@ export function useSceneMedia({
           if (isStitch) {
             setExtendVideoError(msg);
             reportSceneError?.(scene.id + "::stitch", "extend", msg);
+            extendGenActions.setCanRetry(true);
           } else {
             setVideoError(msg);
             reportSceneError?.(scene.id, "video", msg);
+            videoGenActions.setCanRetry(true);
           }
         },
         onMediaUpdate: (data) => {
@@ -511,14 +619,24 @@ export function useSceneMedia({
           setGeneratedExtendVideo(result);
           setExtendVideoError(null);
           reportSceneError?.(scene.id + "::stitch", "extend", null);
+          extendGenActions.markGenerationEnded(false);
         } else {
           setGeneratedVideo(result);
           setVideoError(null);
           reportSceneError?.(scene.id, "video", null);
+          videoGenActions.markGenerationEnded(false);
         }
+      } else if (isStitch) {
+        extendGenActions.markGenerationEnded(true);
+      } else {
+        videoGenActions.markGenerationEnded(true);
       }
     } catch {
-      // Lỗi đã được set qua onError hoặc validation phía trên
+      if (isStitch) {
+        extendGenActions.markGenerationEnded(true);
+      } else {
+        videoGenActions.markGenerationEnded(true);
+      }
     } finally {
       if (isStitch) {
         setGeneratingExtendVideo(false);
@@ -529,6 +647,8 @@ export function useSceneMedia({
       }
     }
   };
+
+  generateVideoRef.current = handleGenerateVideo;
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleDownloadImage
@@ -604,5 +724,17 @@ export function useSceneMedia({
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
+    handleStopImageGeneration: imageGenActions.handleStop,
+    handleRetryImageGeneration: imageGenActions.handleRetry,
+    imageCanRetry: imageGenActions.canRetry,
+    imageActionPending: imageGenActions.actionPending,
+    handleStopVideoGeneration: videoGenActions.handleStop,
+    handleRetryVideoGeneration: videoGenActions.handleRetry,
+    videoCanRetry: videoGenActions.canRetry,
+    videoActionPending: videoGenActions.actionPending,
+    handleStopExtendVideoGeneration: extendGenActions.handleStop,
+    handleRetryExtendVideoGeneration: extendGenActions.handleRetry,
+    extendCanRetry: extendGenActions.canRetry,
+    extendActionPending: extendGenActions.actionPending,
   };
 }

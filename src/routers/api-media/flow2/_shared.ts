@@ -414,6 +414,77 @@ export async function getFlow2RequestStatus(requestId: string): Promise<Flow2Sta
   return (await resp.json()) as Flow2StatusResponse;
 }
 
+/** Trạng thái Flow2 còn có thể hủy bằng DELETE /api/requests/{id}. */
+const FLOW2_ACTIVE_CANCEL_STATUSES = new Set([
+  "queued",
+  "queue",
+  "pending",
+  "running",
+  "processing",
+  "in progress",
+  "in_progress",
+  "in-progress",
+]);
+
+function isFlow2ActiveCancellableStatus(status: string): boolean {
+  if (!status) return false;
+  const normalized = status.toLowerCase().trim();
+  if (FLOW2_ACTIVE_CANCEL_STATUSES.has(normalized)) return true;
+  return (
+    normalized.startsWith("queued") ||
+    normalized.startsWith("pending") ||
+    normalized.startsWith("running") ||
+    normalized.startsWith("processing")
+  );
+}
+
+/**
+ * Hủy 1 task Flow2 (gen_image / gen_video) — chỉ khi status queued hoặc running.
+ * Best-effort: không throw; trả false nếu không hủy được.
+ */
+export async function cancelFlow2Request(requestId: string): Promise<boolean> {
+  const id = requestId?.trim();
+  if (!id) return false;
+
+  const { baseUrl, token } = await getFlow2Config();
+
+  try {
+    const statusData = await getFlow2RequestStatus(id);
+    const status = pickStatus(statusData);
+    if (!isFlow2ActiveCancellableStatus(status)) {
+      logger.info(
+        `[flow2] Bỏ qua hủy request ${id} — status="${status || "unknown"}" không còn queued/running`
+      );
+      return false;
+    }
+  } catch (err: any) {
+    logger.warn(
+      `[flow2] Không đọc được status request ${id} trước khi hủy: ${err?.message} — vẫn thử DELETE`
+    );
+  }
+
+  try {
+    const resp = await fetch(`${baseUrl}/api/requests/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (resp.ok || resp.status === 404) {
+      logger.info(`[flow2] Đã hủy request ${id} (HTTP ${resp.status})`);
+      return true;
+    }
+
+    const errText = await resp.text().catch(() => "");
+    logger.warn(
+      `[flow2] Hủy request ${id} thất bại HTTP ${resp.status}: ${summarizeFlow2ErrorBody(errText, 200)}`
+    );
+    return false;
+  } catch (err: any) {
+    logger.warn(`[flow2] Hủy request ${id} lỗi mạng: ${err?.message}`);
+    return false;
+  }
+}
+
 export function pickStatus(statusData: Flow2StatusResponse): string {
   const candidates = [
     statusData.status,

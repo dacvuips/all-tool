@@ -177,6 +177,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
+    handleStopImageGeneration,
+    imageActionPending,
+    handleStopVideoGeneration,
+    videoActionPending,
+    handleStopExtendVideoGeneration,
+    extendActionPending,
   } = useSceneMedia({ scene, nextSceneId, selectedProductImages, noText: scene.noText });
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
@@ -503,6 +509,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
             errorMessage={imageError}
+            onStopGeneration={() => void handleStopImageGeneration()}
+            generationActionPending={imageActionPending}
           />
         )}
         renderVideoTab={() => (
@@ -518,6 +526,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
             sceneNumber={scene.sceneNumber}
             onGenerateVideo={() => handleGenerateVideo()}
+            onStopGeneration={() => void handleStopVideoGeneration()}
+            generationActionPending={videoActionPending}
           />
         )}
         renderExtendTab={() => (
@@ -531,6 +541,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             errorMessage={extendVideoError}
             sceneNumber={scene.sceneNumber}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
+            onStopGeneration={() => void handleStopExtendVideoGeneration()}
+            generationActionPending={extendActionPending}
           />
         )}
         renderImagePrompt={() => (

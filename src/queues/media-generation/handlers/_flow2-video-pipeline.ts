@@ -65,6 +65,9 @@ export async function runFlow2VideoPipeline(
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
   });
 
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);

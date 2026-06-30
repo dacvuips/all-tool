@@ -22,6 +22,7 @@ import {
 import { pubsub } from "../../libs/graphql/pub-sub";
 import { MediaJobCancelledError } from "./job-errors";
 import { clearMediaJobPayload } from "./media-job-data";
+import { cancelFlow2Request } from "../../routers/api-media/flow2/_shared";
 
 /**
  * UUID duy nhất cho mỗi process Node. Nodemon restart → ID mới.
@@ -305,6 +306,27 @@ export class MediaJobEmitter {
     }
   }
 
+  /** Lưu Flow2 request_id lên job — dùng hủy task Flow2 khi user cancel. */
+  async setFlow2RequestId(flow2RequestId: string): Promise<void> {
+    if (this.terminated) return;
+    const id = flow2RequestId?.trim();
+    if (!id) return;
+
+    const model = mediaGenerationJobService.model;
+    const doc = await model.findOneAndUpdate(
+      {
+        _id: this.jobId,
+        status: { $nin: MEDIA_JOB_TERMINAL_STATUSES },
+      },
+      { $set: { "metadata.flow2RequestId": id } },
+      { new: true }
+    );
+
+    if (doc) {
+      await publishChange(doc as unknown as IMediaGenerationJob);
+    }
+  }
+
   /**
    * Đánh dấu thành công + lưu resultData. Chỉ ghi khi *vẫn* giữ lock.
    *
@@ -404,6 +426,20 @@ export class MediaJobEmitter {
  */
 export async function markMediaJobCancelled(jobId: string, customerId: string): Promise<boolean> {
   const model = mediaGenerationJobService.model;
+
+  const existing = (await mediaGenerationJobService.findOne({
+    _id: jobId,
+    customerId,
+  })) as IMediaGenerationJob | null;
+
+  const flow2RequestId =
+    typeof existing?.metadata?.flow2RequestId === "string"
+      ? existing.metadata.flow2RequestId.trim()
+      : "";
+  if (flow2RequestId) {
+    await cancelFlow2Request(flow2RequestId);
+  }
+
   const doc = await model.findOneAndUpdate(
     {
       _id: jobId,

@@ -22,6 +22,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { useSceneJobBroadcast } from "../../hook/useSceneJobBroadcast";
 import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -79,6 +80,12 @@ interface CopyVideoContextType {
     sceneId: string,
     callback: (progress: SceneProgress) => void
   ) => () => void;
+  registerSceneJob: (
+    sceneId: string,
+    kind: SceneProgressKind,
+    jobId: string | null
+  ) => void;
+  getSceneJob: (sceneId: string, kind: SceneProgressKind) => string | undefined;
 
   /** Increments when scene origin thumbnails finish saving to IndexedDB */
   sceneThumbnailVersion: number;
@@ -180,6 +187,7 @@ export function CopyVideoProvider(props) {
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError, getSceneErrors } = useSceneErrorBroadcast();
   const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
+  const { registerSceneJob, getSceneJob } = useSceneJobBroadcast();
 
   /** Notify a scene's subscriber of its current batch state */
   const notifySubscriber = useCallback((sceneId: string) => {
@@ -365,6 +373,8 @@ export function CopyVideoProvider(props) {
         getSceneErrors,
         reportSceneProgress,
         subscribeSceneProgress,
+        registerSceneJob,
+        getSceneJob,
 
         sceneThumbnailVersion,
         notifySceneThumbnailsSaved,

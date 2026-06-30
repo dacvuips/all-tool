@@ -36,6 +36,9 @@ export async function handleApiMediaVideo(
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
   });
 
   await incrementApiMediaTokenUsage(apiMediaTokenId);

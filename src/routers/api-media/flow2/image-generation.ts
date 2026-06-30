@@ -26,6 +26,8 @@ export type Flow2CreateImageRequestParams = {
   variantCount?: number;
   imageInputTypes?: string[];
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  /** Gọi ngay sau khi Flow2 trả request_id — dùng lưu lên job để hủy khi user cancel */
+  onRequestCreated?: (requestId: string) => void | Promise<void>;
 };
 
 export type GeneratedImage = {
@@ -221,6 +223,7 @@ export async function generateImageWithFlow2(
     retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
     runOnce: async () => {
       const created = await createFlow2ImageRequest(params);
+      await params.onRequestCreated?.(created.requestId);
       await safeProgress(
         params.onProgress,
         55,

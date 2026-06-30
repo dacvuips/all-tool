@@ -120,6 +120,8 @@ export interface GenerateImageParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
   onMediaUpdate?: (data: GeneratedImageData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
   noText?: boolean;
   autoDownload?: boolean;
   sceneNumber?: number;
@@ -160,6 +162,8 @@ export interface GenerateVideoParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64/bytes */
   onMediaUpdate?: (data: GeneratedVideoData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
@@ -385,6 +389,9 @@ export interface UseAffiliateVideoApiReturn {
   generateVideoToVideo: (
     params: GenerateVideoToVideoParams
   ) => Promise<GeneratedVideoData | undefined>;
+
+  cancelImageJob: (jobId: string) => Promise<void>;
+  cancelVideoJob: (jobId: string) => Promise<void>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -514,6 +521,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyleId,
         artStyle,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         autoDownloadImageResolution,
@@ -551,6 +559,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),
+          onJobEnqueued,
         });
 
         const resultImages = (data?.images || []) as GeneratedImageData[];
@@ -620,6 +629,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         artStyle,
         serviceImageType,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         isStitch,
@@ -650,6 +660,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           },
           onProgress: (pct) => onProgress?.(pct),
           onStatusMessage: (msg) => onStatusMessage?.(msg),
+          onJobEnqueued,
         });
 
         if (!data) {
@@ -720,6 +731,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         serviceImageType,
         video,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         isStitch,
@@ -753,6 +765,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           },
           onProgress: (pct) => onProgress?.(pct),
           onStatusMessage: (msg) => onStatusMessage?.(msg),
+          onJobEnqueued,
         });
 
         const videoData = await persistGeneratedVideoWithEnrichment(
@@ -939,5 +952,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
     getSceneHistory,
     clearSceneHistory,
     generateVideoToVideo,
+    cancelImageJob: imageJob.cancel,
+    cancelVideoJob: videoJob.cancel,
   };
 }

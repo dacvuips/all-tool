@@ -20,6 +20,7 @@ import { ReviewScene } from "../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { THUMBNAIL_KEY_PREFIX } from "../../hook/useVideoThumbnail";
 import { useReviewContext } from "../providers/review-provider";
+import { bindSceneJobEnqueue } from "../../hook/sceneMediaJobHelpers";
 import {
   buildReviewImageGenerateParams,
   buildReviewVideoGenerateParams,
@@ -72,6 +73,7 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     getSceneErrors,
     scriptData,
     reviewFormConfig,
+    registerSceneJob,
   } = useReviewContext();
 
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
@@ -666,11 +668,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             noText: scene.noText,
             objectToPersonifyImage,
           });
-          await reviewGenerateImage({
-            ...imageParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-          });
+          await reviewGenerateImage(
+            bindSceneJobEnqueue(
+              {
+                ...imageParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+              },
+              scene.id,
+              "image",
+              registerSceneJob
+            )
+          );
           completed++;
           setBatchCompleted(completed);
         } catch (err: any) {
@@ -782,11 +791,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             scriptData,
             generatedImage: sceneImage,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+              },
+              scene.id,
+              "video",
+              registerSceneJob
+            )
+          );
           completed++;
           setVideoBatchCompleted(completed);
         } catch (err: any) {
@@ -916,11 +932,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
             generatedImage: startImage,
             nextGeneratedImage: endImage,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-            onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+              },
+              scene.id + "::stitch",
+              "extend",
+              registerSceneJob
+            )
+          );
           completed++;
           setExtendBatchCompleted(completed);
         } catch (err: any) {
@@ -1032,11 +1055,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
               noText: scene.noText,
               objectToPersonifyImage,
             });
-            await reviewGenerateImage({
-              ...imageParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-            });
+            await reviewGenerateImage(
+              bindSceneJobEnqueue(
+                {
+                  ...imageParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                },
+                scene.id,
+                "image",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
@@ -1059,11 +1089,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
               scriptData,
               generatedImage: sceneImage,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+                },
+                scene.id,
+                "video",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
@@ -1089,11 +1126,18 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
               generatedImage: startImage,
               nextGeneratedImage: endImage,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-              onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                  onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+                },
+                scene.id + "::stitch",
+                "extend",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(

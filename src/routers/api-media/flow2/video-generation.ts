@@ -48,6 +48,7 @@ export type Flow2CreateVideoRequestParams = {
    */
   videoMode?: Flow2VideoMode;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  onRequestCreated?: (requestId: string) => void | Promise<void>;
 };
 
 export type GeneratedVideo = {
@@ -299,6 +300,7 @@ export async function generateVideoWithFlow2(
     retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
     runOnce: async () => {
       const created = await createFlow2VideoRequest(params);
+      await params.onRequestCreated?.(created.requestId);
       await safeProgress(
         params.onProgress,
         55,

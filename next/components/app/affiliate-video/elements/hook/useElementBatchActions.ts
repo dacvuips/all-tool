@@ -19,6 +19,7 @@ import { CopyVideoScene, DB_NAME } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { THUMBNAIL_KEY_PREFIX } from "../../hook/useVideoThumbnail";
 import { useElementContext } from "../providers/element-provider";
+import { bindSceneJobEnqueue } from "../../hook/sceneMediaJobHelpers";
 import {
   buildElementImageGenerateParams,
   buildElementVideoGenerateParams,
@@ -79,6 +80,7 @@ export function useCopyVideoBatchActions(
     getSceneErrors,
     scriptData,
     elementFormConfig,
+    registerSceneJob,
   } = useElementContext();
   // Elements: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
@@ -672,11 +674,18 @@ export function useCopyVideoBatchActions(
             componentTab,
             noText: scene.noText,
           });
-          await elementGenerateImage({
-            ...imageParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-          });
+          await elementGenerateImage(
+            bindSceneJobEnqueue(
+              {
+                ...imageParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+              },
+              scene.id,
+              "image",
+              registerSceneJob
+            )
+          );
           completed++;
           setBatchCompleted(completed);
         } catch (err: any) {
@@ -785,11 +794,18 @@ export function useCopyVideoBatchActions(
             elementFormConfig,
             componentTab,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+              },
+              scene.id,
+              "video",
+              registerSceneJob
+            )
+          );
           completed++;
           setVideoBatchCompleted(completed);
         } catch (err: any) {
@@ -921,11 +937,18 @@ export function useCopyVideoBatchActions(
             generatedImage: startImage,
             nextGeneratedImage: endImage,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-            onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+              },
+              scene.id + "::stitch",
+              "extend",
+              registerSceneJob
+            )
+          );
           completed++;
           setExtendBatchCompleted(completed);
         } catch (err: any) {
@@ -1041,11 +1064,18 @@ export function useCopyVideoBatchActions(
               componentTab,
               noText: scene.noText,
             });
-            await elementGenerateImage({
-              ...imageParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-            });
+            await elementGenerateImage(
+              bindSceneJobEnqueue(
+                {
+                  ...imageParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                },
+                scene.id,
+                "image",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
@@ -1072,11 +1102,18 @@ export function useCopyVideoBatchActions(
               elementFormConfig,
               componentTab,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+                },
+                scene.id,
+                "video",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
@@ -1104,11 +1141,18 @@ export function useCopyVideoBatchActions(
               generatedImage: startImage,
               nextGeneratedImage: endImage,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-              onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                  onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+                },
+                scene.id + "::stitch",
+                "extend",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(

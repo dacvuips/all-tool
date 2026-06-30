@@ -80,6 +80,8 @@ export interface GenerateImageParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64 */
   onMediaUpdate?: (data: GeneratedImageData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
   noText?: boolean;
   autoDownload?: boolean;
   sceneNumber?: number;
@@ -116,6 +118,8 @@ export interface GenerateVideoParams {
   onError?: (message: string) => void;
   /** Cập nhật UI: lần 1 = link preview, lần 2 = đã có base64/bytes */
   onMediaUpdate?: (data: GeneratedVideoData) => void;
+  /** Gọi ngay sau khi enqueue — dùng để gắn jobId lên scene UI */
+  onJobEnqueued?: (jobId: string) => void;
 }
 
 export interface ExtendVideoParams {
@@ -325,6 +329,9 @@ export interface UseAffiliateVideoApiReturn {
    * Tự động lưu kết quả vào IndexedDB.
    */
   analyzeVideoForCopy: (data: CopyVideoFormConfig) => Promise<CopyVideoAnalysisData | undefined>;
+
+  cancelImageJob: (jobId: string) => Promise<void>;
+  cancelVideoJob: (jobId: string) => Promise<void>;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -480,8 +487,9 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         productImagePrompt,
         onProgress,
         onError,
-        noText,
         onMediaUpdate,
+        onJobEnqueued,
+        noText,
         autoDownload,
         sceneNumber,
         autoDownloadImageResolution,
@@ -515,6 +523,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             _metadata: { sceneId },
           },
           onProgress: (pct) => onProgress?.(pct),
+          onJobEnqueued,
         });
 
         const resultImages = (data?.images || []) as GeneratedImageData[];
@@ -581,6 +590,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         onStatusMessage,
         onError,
         onMediaUpdate,
+        onJobEnqueued,
         autoDownload,
         sceneNumber,
         isStitch,
@@ -611,6 +621,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           },
           onProgress: (pct) => onProgress?.(pct),
           onStatusMessage: (msg) => onStatusMessage?.(msg),
+          onJobEnqueued,
         });
 
         const videoData = await persistGeneratedVideoWithEnrichment(
@@ -804,5 +815,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
     getSceneHistory,
     clearSceneHistory,
     analyzeVideoForCopy,
+    cancelImageJob: imageJob.cancel,
+    cancelVideoJob: videoJob.cancel,
   };
 }

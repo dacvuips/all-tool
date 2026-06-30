@@ -188,6 +188,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     handleDownloadVideo,
     handleDownloadExtendVideo,
     reportVideoError,
+    handleStopImageGeneration,
+    imageActionPending,
+    handleStopVideoGeneration,
+    videoActionPending,
+    handleStopExtendVideoGeneration,
+    extendActionPending,
   } = useCopyVideoSceneMedia({
     scene,
     nextSceneId,
@@ -533,6 +539,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             sceneTimestamp={scene.timestamp}
             errorMessage={imageError}
             generateButtonId={isGuideTarget ? "scene-generate-image" : undefined}
+            onStopGeneration={() => void handleStopImageGeneration()}
+            generationActionPending={imageActionPending}
           />
         )}
         renderVideoTab={() => (
@@ -548,6 +556,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             sceneNumber={scene.sceneNumber}
             onGenerateVideo={() => handleGenerateVideo()}
             generateButtonId={isGuideTarget ? "scene-generate-video" : undefined}
+            onStopGeneration={() => void handleStopVideoGeneration()}
+            generationActionPending={videoActionPending}
           />
         )}
         renderExtendTab={() => (
@@ -561,6 +571,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             errorMessage={extendVideoError}
             sceneNumber={scene.sceneNumber}
             onGenerateExtendVideo={() => handleGenerateVideo(true)}
+            onStopGeneration={() => void handleStopExtendVideoGeneration()}
+            generationActionPending={extendActionPending}
           />
         )}
         renderImagePrompt={() => (

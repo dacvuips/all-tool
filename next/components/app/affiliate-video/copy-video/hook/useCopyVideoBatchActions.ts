@@ -38,6 +38,7 @@ import {
 
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useCopyVideoContext } from "../providers/copy-video-provider";
+import { bindSceneJobEnqueue } from "../../hook/sceneMediaJobHelpers";
 import { useCopyVideoApi } from "./useCopyVideoApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -63,6 +64,7 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     reportSceneError,
     reportSceneProgress,
     getSceneErrors,
+    registerSceneJob,
   } = useCopyVideoContext();
   const objectToPersonifyImage = resolveObjectToPersonifyImageForApi({
     objectToPersonify: copyVideoFormConfig?.objectToPersonify,
@@ -658,11 +660,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             noText: scene.noText,
             objectToPersonifyImage,
           });
-          await copyVideoGenerateImage({
-            ...imageParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-          });
+          await copyVideoGenerateImage(
+            bindSceneJobEnqueue(
+              {
+                ...imageParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+              },
+              scene.id,
+              "image",
+              registerSceneJob
+            )
+          );
           completed++;
           setBatchCompleted(completed);
         } catch (err: any) {
@@ -779,11 +788,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               noText: scene.noText,
               objectToPersonifyImage,
             });
-            existingImage = await copyVideoGenerateImage({
-              ...imageParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-            });
+            existingImage = await copyVideoGenerateImage(
+              bindSceneJobEnqueue(
+                {
+                  ...imageParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                },
+                scene.id,
+                "image",
+                registerSceneJob
+              )
+            );
           } catch (imgErr: any) {
             console.error(
               `[BatchCreateAllVideo] Scene #${scene.sceneNumber} image generation error:`,
@@ -816,11 +832,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             scriptData,
             generatedImage: existingImage,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-            onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+              },
+              scene.id,
+              "video",
+              registerSceneJob
+            )
+          );
           completed++;
           setVideoBatchCompleted(completed);
         } catch (err: any) {
@@ -951,11 +974,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
             generatedImage: startImage,
             nextGeneratedImage: endImage,
           });
-          await generateVideo({
-            ...videoParams,
-            onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-            onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-          });
+          await generateVideo(
+            bindSceneJobEnqueue(
+              {
+                ...videoParams,
+                onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+              },
+              scene.id + "::stitch",
+              "extend",
+              registerSceneJob
+            )
+          );
           completed++;
           setExtendBatchCompleted(completed);
         } catch (err: any) {
@@ -1067,11 +1097,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               noText: scene.noText,
               objectToPersonifyImage,
             });
-            await copyVideoGenerateImage({
-              ...imageParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-            });
+            await copyVideoGenerateImage(
+              bindSceneJobEnqueue(
+                {
+                  ...imageParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                },
+                scene.id,
+                "image",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
@@ -1099,11 +1136,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
                 noText: scene.noText,
                 objectToPersonifyImage,
               });
-              existingImage = await copyVideoGenerateImage({
-                ...imageParams,
-                onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
-                onError: (msg) => reportSceneError?.(scene.id, "image", msg),
-              });
+              existingImage = await copyVideoGenerateImage(
+                bindSceneJobEnqueue(
+                  {
+                    ...imageParams,
+                    onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                    onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                  },
+                  scene.id,
+                  "image",
+                  registerSceneJob
+                )
+              );
               reportSceneProgress?.(scene.id, "image", null);
               removeBatchGeneratingSceneId(scene.id);
             }
@@ -1116,11 +1160,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               scriptData,
               generatedImage: existingImage,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
-              onError: (msg) => reportSceneError?.(scene.id, "video", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+                },
+                scene.id,
+                "video",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
@@ -1146,11 +1197,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
               generatedImage: startImage,
               nextGeneratedImage: endImage,
             });
-            await generateVideo({
-              ...videoParams,
-              onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
-              onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
-            });
+            await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id + "::stitch", "extend", pct),
+                  onError: (msg) => reportSceneError?.(scene.id + "::stitch", "extend", msg),
+                },
+                scene.id + "::stitch",
+                "extend",
+                registerSceneJob
+              )
+            );
             return true;
           } catch (err: any) {
             reportSceneError?.(

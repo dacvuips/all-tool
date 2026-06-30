@@ -29,6 +29,7 @@ import {
   SceneProgressKind,
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
+import { useSceneJobBroadcast } from "../../hook/useSceneJobBroadcast";
 import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -120,6 +121,12 @@ export const AffiliateVideoContext = createContext<
       sceneId: string,
       callback: (progress: SceneProgress) => void
     ) => () => void;
+    registerSceneJob: (
+      sceneId: string,
+      kind: SceneProgressKind,
+      jobId: string | null
+    ) => void;
+    getSceneJob: (sceneId: string, kind: SceneProgressKind) => string | undefined;
 
     // ── Scene history ──
     /** Full history list (newest first) */
@@ -182,6 +189,7 @@ export function AffiliateVideoProvider(props) {
   // ── Per-scene inline error broadcast (batch generation failures) ──
   const { reportSceneError, subscribeSceneError, getSceneErrors } = useSceneErrorBroadcast();
   const { reportSceneProgress, subscribeSceneProgress } = useSceneProgressBroadcast();
+  const { registerSceneJob, getSceneJob } = useSceneJobBroadcast();
 
   const [storyModeType, setStoryModeType] = useState<StoryModeTypeEnum>(
     StoryModeTypeEnum.image_to_video
@@ -560,6 +568,8 @@ export function AffiliateVideoProvider(props) {
         getSceneErrors,
         reportSceneProgress,
         subscribeSceneProgress,
+        registerSceneJob,
+        getSceneJob,
 
         // aliases used by AffiliateConfig
         videoConfig: affiliateVideoFormConfig,

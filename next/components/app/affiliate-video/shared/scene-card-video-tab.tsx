@@ -10,12 +10,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { RiLoader4Line, RiVideoFill } from "react-icons/ri";
+import { RiVideoFill } from "react-icons/ri";
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
 import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
+import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
 // ── Types cho video data ─────────────────────────────────────────────────────
 export type GeneratedVideoData = GeneratedVideoLike;
@@ -48,6 +49,9 @@ export interface SceneCardVideoTabProps {
   onGenerateVideo: () => void;
   /** ID cho nút tạo video (intro tour) */
   generateButtonId?: string;
+
+  onStopGeneration?: () => void;
+  generationActionPending?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -65,6 +69,8 @@ export function SceneCardVideoTab({
   errorMessage,
   onGenerateVideo,
   generateButtonId,
+  onStopGeneration,
+  generationActionPending = false,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
   const [showVideoModal, setShowVideoModal] = useState(false);
@@ -153,10 +159,13 @@ export function SceneCardVideoTab({
                 disabled={isDisabled}
               />
               {generatingVideo ? (
-                <div className="flex items-center gap-1 px-2 py-1 rounded-lg bg-purple-50 border border-purple-200">
-                  <RiLoader4Line className="text-purple-500 text-sm animate-spin" />
-                  <span className="text-purple-600 text-[10px] font-bold">{videoProgress}%</span>
-                </div>
+                <SceneMediaGenerationProgress
+                  variant="video"
+                  progress={videoProgress}
+                  layout="compact"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />
               ) : (
                 <Button
                   onClick={handleClickGenerate}
@@ -170,11 +179,13 @@ export function SceneCardVideoTab({
             </div>
           </div>
         ) : generatingVideo ? (
-          /* ── Spinner khi đang generate ── */
-          <div className="w-16 h-16 rounded-xl border-2 border-purple-300 bg-purple-50 flex flex-col items-center justify-center">
-            <RiLoader4Line className="text-purple-500 text-xl animate-spin" />
-            <span className="text-purple-600 text-[10px] font-bold mt-0.5">{videoProgress}%</span>
-          </div>
+          <SceneMediaGenerationProgress
+            variant="video"
+            progress={videoProgress}
+            layout="card"
+            actionPending={generationActionPending}
+            onStop={onStopGeneration}
+          />
         ) : (
           /* ── Default: nút tạo video ── */
           <button

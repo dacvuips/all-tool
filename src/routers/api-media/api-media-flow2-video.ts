@@ -103,6 +103,7 @@ export async function createApiMediaFlow2VideoRequest(
 export async function generateApiMediaVideoWithFlow2(
   params: CreateApiMediaFlow2VideoParams & {
     onProgress?: (progress: number, message?: string) => void | Promise<void>;
+    onRequestCreated?: (requestId: string) => void | Promise<void>;
   }
 ): Promise<{ requestId: string; video: GeneratedVideo }> {
   const result = await runFlow2WithRetry({
@@ -113,6 +114,7 @@ export async function generateApiMediaVideoWithFlow2(
     retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
     runOnce: async () => {
       const created = await createApiMediaFlow2VideoRequest(params);
+      await params.onRequestCreated?.(created.requestId);
       await safeProgress(
         params.onProgress,
         55,
@@ -147,6 +149,7 @@ export async function runApiMediaVideoFlow2(
   options: {
     customerId: string;
     onProgress?: (progress: number, message?: string) => void | Promise<void>;
+    onRequestCreated?: (requestId: string) => void | Promise<void>;
     logPrefix?: string;
   }
 ): Promise<{ videoUri: string; mimeType: string; flow2RequestId: string }> {
@@ -163,6 +166,7 @@ export async function runApiMediaVideoFlow2(
   const { requestId, video } = await generateApiMediaVideoWithFlow2({
     ...flow2Params,
     onProgress,
+    onRequestCreated: options.onRequestCreated,
   });
 
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);

@@ -7,10 +7,11 @@
  * - Download ảnh đã tạo về máy
  * - Download video đã tạo về máy
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CopyVideoScene, ElementFormImage, ElementFormVideo } from "../../constants";
 import { useConcurrencyLimits } from "../../hook/useConcurrencyLimits";
+import { useSceneMediaGenerationActions } from "../../hook/useSceneMediaGenerationActions";
 
 import { useElementContext } from "../providers/element-provider";
 import {
@@ -97,6 +98,21 @@ export interface UseSceneMediaReturn {
   handleDownloadExtendVideo: () => Promise<void>;
   reportVideoError: (message: string) => void;
   handleGenerateVideoToVideo: () => Promise<void>;
+
+  handleStopImageGeneration: () => Promise<void>;
+  handleRetryImageGeneration: () => void;
+  imageCanRetry: boolean;
+  imageActionPending: boolean;
+
+  handleStopVideoGeneration: () => Promise<void>;
+  handleRetryVideoGeneration: () => void;
+  videoCanRetry: boolean;
+  videoActionPending: boolean;
+
+  handleStopExtendVideoGeneration: () => Promise<void>;
+  handleRetryExtendVideoGeneration: () => void;
+  extendCanRetry: boolean;
+  extendActionPending: boolean;
 }
 
 // ── Hook ───────────────────────────────────────────────────────────────────
@@ -142,6 +158,8 @@ export function useElementSceneMedia({
     generateVideo,
     getGeneratedVideo,
     generateVideoToVideo,
+    cancelImageJob,
+    cancelVideoJob,
   } = useElementApi();
   const {
     batchGeneratingSceneIdsRef,
@@ -154,6 +172,8 @@ export function useElementSceneMedia({
     subscribeSceneError,
     reportSceneError,
     subscribeSceneProgress,
+    registerSceneJob,
+    getSceneJob,
     scriptData,
     elementFormConfig,
   } = useElementContext();
@@ -167,6 +187,74 @@ export function useElementSceneMedia({
     },
     [scene.id, reportSceneError]
   );
+
+  const generateImageRef = useRef<() => Promise<void>>(async () => undefined);
+  const generateVideoRef = useRef<(isStitch?: boolean) => Promise<void>>(async () => undefined);
+  const generateVideoToVideoRef = useRef<() => Promise<void>>(async () => undefined);
+  const videoRetryRef = useRef<() => void>(() => {
+    void generateVideoRef.current(false);
+  });
+
+  const imageGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id,
+    kind: "image",
+    cancelJob: cancelImageJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingSceneId(scene.id);
+      setGeneratingImage(false);
+      setImageProgress(0);
+    },
+    reportError: (message) => {
+      setImageError(message);
+      reportSceneError?.(scene.id, "image", message);
+    },
+    onRetry: () => {
+      void generateImageRef.current();
+    },
+  });
+
+  const videoGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id,
+    kind: "video",
+    cancelJob: cancelVideoJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingVideoSceneId(scene.id);
+      setGeneratingVideo(false);
+      setVideoProgress(0);
+      setVideoStatusMessage("");
+    },
+    reportError: (message) => {
+      setVideoError(message);
+      reportSceneError?.(scene.id, "video", message);
+    },
+    onRetry: () => {
+      videoRetryRef.current();
+    },
+  });
+
+  const extendGenActions = useSceneMediaGenerationActions({
+    sceneId: scene.id + "::stitch",
+    kind: "extend",
+    cancelJob: cancelVideoJob,
+    registerSceneJob,
+    getSceneJob,
+    onStopCleanup: () => {
+      removeBatchGeneratingVideoSceneId(scene.id + "::stitch");
+      setGeneratingExtendVideo(false);
+      setExtendVideoProgress(0);
+    },
+    reportError: (message) => {
+      setExtendVideoError(message);
+      reportSceneError?.(scene.id + "::stitch", "extend", message);
+    },
+    onRetry: () => {
+      void generateVideoRef.current(true);
+    },
+  });
 
   // ── Per-scene batch state via subscription (only THIS scene re-renders) ──
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
@@ -250,6 +338,9 @@ export function useElementSceneMedia({
     setGeneratingExtendVideo(false);
     setExtendVideoProgress(0);
     setGeneratedExtendVideo(null);
+    imageGenActions.setCanRetry(false);
+    videoGenActions.setCanRetry(false);
+    extendGenActions.setCanRetry(false);
   }, [scene.id]);
 
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
@@ -311,6 +402,7 @@ export function useElementSceneMedia({
     reportSceneError?.(scene.id, "image", null);
     setGeneratingImage(true);
     setImageProgress(0);
+    imageGenActions.setCanRetry(false);
     addBatchGeneratingSceneId(scene.id);
 
     try {
@@ -330,9 +422,11 @@ export function useElementSceneMedia({
       const result = await elementGenerateImage({
         ...imageParams,
         onProgress: (pct) => setImageProgress((prev) => Math.max(prev, pct)),
+        onJobEnqueued: imageGenActions.bindJobEnqueued,
         onError: (msg) => {
           setImageError(msg);
           reportSceneError?.(scene.id, "image", msg);
+          imageGenActions.setCanRetry(true);
         },
         onMediaUpdate: (data) => {
           setGeneratedImage(data);
@@ -345,16 +439,21 @@ export function useElementSceneMedia({
         setGeneratedImage(result);
         setImageError(null);
         reportSceneError?.(scene.id, "image", null);
+        imageGenActions.markGenerationEnded(false);
       } else {
         console.warn("[handleGenerateImage] No result returned");
+        imageGenActions.markGenerationEnded(true);
       }
     } catch (err) {
       console.error("[handleGenerateImage] Error:", err);
+      imageGenActions.markGenerationEnded(true);
     } finally {
       removeBatchGeneratingSceneId(scene.id);
       setGeneratingImage(false);
     }
   };
+
+  generateImageRef.current = handleGenerateImage;
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleSetImage
@@ -409,6 +508,7 @@ export function useElementSceneMedia({
       reportSceneError?.(scene.id + "::stitch", "extend", null);
       setGeneratingExtendVideo(true);
       setExtendVideoProgress(0);
+      extendGenActions.setCanRetry(false);
       addBatchGeneratingVideoSceneId(scene.id + "::stitch");
     } else {
       setVideoError(null);
@@ -416,6 +516,10 @@ export function useElementSceneMedia({
       setGeneratingVideo(true);
       setVideoProgress(0);
       setVideoStatusMessage("");
+      videoGenActions.setCanRetry(false);
+      videoRetryRef.current = () => {
+        void generateVideoRef.current(false);
+      };
       addBatchGeneratingVideoSceneId(scene.id);
     }
 
@@ -452,6 +556,9 @@ export function useElementSceneMedia({
             setVideoProgress((prev) => Math.max(prev, pct));
           }
         },
+        onJobEnqueued: isStitch
+          ? extendGenActions.bindJobEnqueued
+          : videoGenActions.bindJobEnqueued,
         onStatusMessage: (msg) => {
           if (!isStitch) setVideoStatusMessage(msg);
         },
@@ -459,9 +566,11 @@ export function useElementSceneMedia({
           if (isStitch) {
             setExtendVideoError(msg);
             reportSceneError?.(scene.id + "::stitch", "extend", msg);
+            extendGenActions.setCanRetry(true);
           } else {
             setVideoError(msg);
             reportSceneError?.(scene.id, "video", msg);
+            videoGenActions.setCanRetry(true);
           }
         },
         onMediaUpdate: (data) => {
@@ -481,14 +590,24 @@ export function useElementSceneMedia({
           setGeneratedExtendVideo(result);
           setExtendVideoError(null);
           reportSceneError?.(scene.id + "::stitch", "extend", null);
+          extendGenActions.markGenerationEnded(false);
         } else {
           setGeneratedVideo(result);
           setVideoError(null);
           reportSceneError?.(scene.id, "video", null);
+          videoGenActions.markGenerationEnded(false);
         }
+      } else if (isStitch) {
+        extendGenActions.markGenerationEnded(true);
+      } else {
+        videoGenActions.markGenerationEnded(true);
       }
     } catch {
-      // Lỗi đã được set qua onError hoặc validation phía trên
+      if (isStitch) {
+        extendGenActions.markGenerationEnded(true);
+      } else {
+        videoGenActions.markGenerationEnded(true);
+      }
     } finally {
       if (isStitch) {
         setGeneratingExtendVideo(false);
@@ -499,6 +618,8 @@ export function useElementSceneMedia({
       }
     }
   };
+
+  generateVideoRef.current = handleGenerateVideo;
 
   const handleGenerateVideoToVideo = async () => {
     const countFilledVideoSlots = (arr?: (ElementFormVideo | undefined)[]) =>
@@ -535,6 +656,10 @@ export function useElementSceneMedia({
     setGeneratingVideo(true);
     setVideoProgress(0);
     setVideoStatusMessage("");
+    videoGenActions.setCanRetry(false);
+    videoRetryRef.current = () => {
+      void generateVideoToVideoRef.current();
+    };
     addBatchGeneratingVideoSceneId(scene.id);
     try {
       let imagesArray: any[] | undefined = undefined;
@@ -570,12 +695,14 @@ export function useElementSceneMedia({
         voiceDisable: scene.voiceDisable,
         generateAudio: scene.voiceDisable ? false : undefined,
         onProgress: (pct) => setVideoProgress((prev) => Math.max(prev, pct)),
+        onJobEnqueued: videoGenActions.bindJobEnqueued,
         onStatusMessage: (msg) => {
           setVideoStatusMessage(msg);
         },
         onError: (msg) => {
           setVideoError(msg);
           reportSceneError?.(scene.id, "video", msg);
+          videoGenActions.setCanRetry(true);
         },
         onMediaUpdate: (data) => {
           setGeneratedVideo(data);
@@ -589,14 +716,19 @@ export function useElementSceneMedia({
         setGeneratedVideo(result);
         setVideoError(null);
         reportSceneError?.(scene.id, "video", null);
+        videoGenActions.markGenerationEnded(false);
+      } else {
+        videoGenActions.markGenerationEnded(true);
       }
     } catch {
-      // Lỗi đã được set qua onError hoặc validation phía trên
+      videoGenActions.markGenerationEnded(true);
     } finally {
       removeBatchGeneratingVideoSceneId(scene.id);
       setGeneratingVideo(false);
     }
   };
+
+  generateVideoToVideoRef.current = handleGenerateVideoToVideo;
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleDownloadImage
@@ -673,5 +805,17 @@ export function useElementSceneMedia({
     handleDownloadExtendVideo,
     reportVideoError,
     handleGenerateVideoToVideo,
+    handleStopImageGeneration: imageGenActions.handleStop,
+    handleRetryImageGeneration: imageGenActions.handleRetry,
+    imageCanRetry: imageGenActions.canRetry,
+    imageActionPending: imageGenActions.actionPending,
+    handleStopVideoGeneration: videoGenActions.handleStop,
+    handleRetryVideoGeneration: videoGenActions.handleRetry,
+    videoCanRetry: videoGenActions.canRetry,
+    videoActionPending: videoGenActions.actionPending,
+    handleStopExtendVideoGeneration: extendGenActions.handleStop,
+    handleRetryExtendVideoGeneration: extendGenActions.handleRetry,
+    extendCanRetry: extendGenActions.canRetry,
+    extendActionPending: extendGenActions.actionPending,
   };
 }

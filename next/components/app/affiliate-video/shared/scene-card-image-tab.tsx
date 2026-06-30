@@ -22,6 +22,7 @@ import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
 import { buildSceneImageFileName, getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
+import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -64,6 +65,10 @@ export interface SceneCardImageTabProps {
   onAssignToSlot?: (slotIndex: number) => void;
   /** ID cho nút tạo ảnh (intro tour) */
   generateButtonId?: string;
+
+  /** Dừng khi đang generate (hover loader) */
+  onStopGeneration?: () => void;
+  generationActionPending?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -86,6 +91,8 @@ export function SceneCardImageTab({
   assignedSlotIndices = [],
   onAssignToSlot,
   generateButtonId,
+  onStopGeneration,
+  generationActionPending = false,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -192,10 +199,13 @@ export function SceneCardImageTab({
               />
               {/* Tạo lại / progress */}
               {generatingImage ? (
-                <div className="flex gap-1 items-center px-2 py-1 bg-pink-50 rounded-lg border border-pink-200">
-                  <RiLoader4Line className="text-sm text-pink-500 animate-spin" />
-                  <span className="font-bold text-pink-600 text-10">{imageProgress}%</span>
-                </div>
+                <SceneMediaGenerationProgress
+                  variant="image"
+                  progress={imageProgress}
+                  layout="compact"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />
               ) : (
                 <Button
                   onClick={onGenerateImage}
@@ -227,11 +237,13 @@ export function SceneCardImageTab({
             </div>
           </div>
         ) : generatingImage ? (
-          /* ── Spinner + progress khi chưa có ảnh ── */
-          <div className="flex flex-col justify-center items-center w-16 h-16 bg-pink-50 rounded-xl border-2 border-pink-300">
-            <RiLoader4Line className="text-xl text-pink-500 animate-spin" />
-            <span className="text-pink-600 text-[10px] font-bold mt-0.5">{imageProgress}%</span>
-          </div>
+          <SceneMediaGenerationProgress
+            variant="image"
+            progress={imageProgress}
+            layout="card"
+            actionPending={generationActionPending}
+            onStop={onStopGeneration}
+          />
         ) : (
           /* ── Default: nút tạo ảnh ── */
           <button
