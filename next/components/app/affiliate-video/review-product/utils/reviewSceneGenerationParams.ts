@@ -9,7 +9,6 @@ import type {
   GenerateImageParams,
   GenerateVideoParams,
 } from "../hook/useReviewApi";
-import { productImageUrlsToApiImages } from "./reviewFormImageUtils";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
 
@@ -71,14 +70,14 @@ export function buildReviewVideoPrompt(scene: ReviewScene, isStitch?: boolean): 
 }
 
 /** Image generation params – identical to handleGenerateImage in useElementSceneMedia. */
-export async function buildReviewImageGenerateParams(options: {
+export function buildReviewImageGenerateParams(options: {
   scene: ReviewScene;
   scriptData?: ElementScriptLike;
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
   noText?: boolean;
   objectToPersonifyImage?: ReviewFormImage;
-}): Promise<GenerateImageParams> {
+}): GenerateImageParams {
   const {
     scene,
     scriptData,
@@ -87,7 +86,6 @@ export async function buildReviewImageGenerateParams(options: {
     noText,
     objectToPersonifyImage,
   } = options;
-  const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
   return {
     sceneId: scene.id,
     prompt: `${scene.imageGenPrompt || scene.visualPrompt || ""}`,
@@ -96,7 +94,6 @@ export async function buildReviewImageGenerateParams(options: {
     artStyle: scriptData?.artStyle,
     artStyleId: scriptData?.artStyleId,
     referenceImage: parseThumbnailReferenceImage(thumbnailOriginImage),
-    additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     productImagePrompt: scene.product_image_prompt || undefined,
     serviceImageType: scriptData?.serviceImageType,

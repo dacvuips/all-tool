@@ -204,7 +204,6 @@ export async function buildElementImageGenerateParams(options: {
     { componentTab, serviceImageType: resolvedServiceImageType }
   );
   const additionalImages = await resolveElementReferenceImagesForApi({
-    urls: selectedProductImages,
     slots: slotsForImage,
     slotCount,
   });

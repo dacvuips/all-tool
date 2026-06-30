@@ -3,7 +3,6 @@
  */
 import type { ElementFormImage, SceneScript } from "../constants";
 import type { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
-import { productImageUrlsToApiImages } from "../elements/utils/elementFormImageUtils";
 import type { GenerateImageParams, GenerateVideoParams } from "../hook/useAffiliateVideoApi";
 import { buildAutoDownloadOptions } from "./autoDownloadUtils";
 import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
@@ -47,7 +46,7 @@ export function buildAffiliateVideoPrompt(
       }, ${scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""}`;
 }
 
-export async function buildAffiliateImageGenerateParams(options: {
+export function buildAffiliateImageGenerateParams(options: {
   scene: SceneScript;
   scriptData?: AffiliateScriptLike;
   /** Fallback khi scriptData chưa có aspectRatio */
@@ -55,10 +54,9 @@ export async function buildAffiliateImageGenerateParams(options: {
   selectedProductImages?: string[];
   noText?: boolean;
   objectToPersonifyImage?: ElementFormImage;
-}): Promise<GenerateImageParams> {
+}): GenerateImageParams {
   const { scene, scriptData, aspectRatio, selectedProductImages, noText, objectToPersonifyImage } =
     options;
-  const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
 
   const storyboardReference = scene.storyboardCropImage
     ? {
@@ -72,7 +70,6 @@ export async function buildAffiliateImageGenerateParams(options: {
     prompt: scene.imageGenPrompt || "",
     aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
     referenceImage: storyboardReference,
-    additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,

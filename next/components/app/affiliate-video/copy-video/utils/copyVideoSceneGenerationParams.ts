@@ -2,7 +2,6 @@
  * Shared payloads for copy-video image/video generation (single scene + batch).
  */
 import type { CopyVideoAnalysisData, CopyVideoScene, ElementFormImage } from "../../constants";
-import { productImageUrlsToApiImages } from "../../elements/utils/elementFormImageUtils";
 import { parseThumbnailReferenceImage } from "../../elements/utils/elementSceneGenerationParams";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
@@ -16,14 +15,14 @@ export type CopyVideoScriptLike = Pick<CopyVideoAnalysisData, "aspectRatio"> | n
 
 export { parseThumbnailReferenceImage };
 
-export async function buildCopyVideoImageGenerateParams(options: {
+export function buildCopyVideoImageGenerateParams(options: {
   scene: CopyVideoScene;
   scriptData?: CopyVideoScriptLike;
   thumbnailOriginImage?: string | null;
   selectedProductImages?: string[];
   noText?: boolean;
   objectToPersonifyImage?: ElementFormImage;
-}): Promise<GenerateImageParams> {
+}): GenerateImageParams {
   const {
     scene,
     scriptData,
@@ -32,7 +31,6 @@ export async function buildCopyVideoImageGenerateParams(options: {
     noText,
     objectToPersonifyImage,
   } = options;
-  const additionalImages = await productImageUrlsToApiImages(selectedProductImages);
 
   return {
     sceneId: scene.id,
@@ -40,7 +38,6 @@ export async function buildCopyVideoImageGenerateParams(options: {
     noText: noText ?? scene.noText,
     aspectRatio: scriptData?.aspectRatio,
     referenceImage: parseThumbnailReferenceImage(thumbnailOriginImage),
-    additionalImages: additionalImages.length > 0 ? additionalImages : undefined,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
