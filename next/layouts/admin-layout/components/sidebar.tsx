@@ -15,6 +15,7 @@ import {
   RiKey2Line,
   RiLayoutGridLine,
   RiLayoutTop2Line,
+  RiLoader4Line,
   RiNotification2Line,
   RiQuestionLine,
   RiSettings3Line,
@@ -373,6 +374,13 @@ const useSidebarMenuConstants = () => {
           path: "/admin/management/all-notifications",
           icon: <AiOutlineBell />,
           scope: SCOPES.VIEW_NOTIFICATION,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
+          title: "Quản lý Job",
+          path: "/admin/management/jobs",
+          icon: <RiLoader4Line />,
+
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
       ],

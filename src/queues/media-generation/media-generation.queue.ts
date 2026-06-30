@@ -216,6 +216,30 @@ export function getMediaGenerationQueueStatus() {
   return mediaGenerationQueue.getQueueStatus();
 }
 
+/** Đánh thức queue thủ công (admin): restart consumer + khôi phục job treo/orphan. */
+export async function wakeMediaGenerationQueue(): Promise<{
+  consumerRestarted: boolean;
+  orphanedRequeued: number;
+  staleRequeued: number;
+  staleFailed: number;
+  queueRunning: boolean;
+  queueActive: number;
+  queueWaiting: number;
+}> {
+  const orphaned = await recoverOrphanedQueuedMediaJobs();
+  const stale = await recoverStaleProcessingMediaJobs();
+  const queueStatus = await getMediaGenerationQueueStatus();
+  return {
+    consumerRestarted: orphaned.consumerRestarted,
+    orphanedRequeued: orphaned.requeued,
+    staleRequeued: stale.requeued,
+    staleFailed: stale.failed,
+    queueRunning: queueStatus.running,
+    queueActive: queueStatus.active,
+    queueWaiting: queueStatus.waiting,
+  };
+}
+
 /**
  * Quét các job đang PROCESSING mà lock đã hết hạn (worker chết / nodemon restart)
  * và đẩy lại vào bee-queue để worker khác tiếp nhận.

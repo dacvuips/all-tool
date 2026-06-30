@@ -1,14 +1,13 @@
 /**
  * Repository gọi GraphQL cho `MediaGenerationJob`:
- *   - Query   : `mediaGenerationJob(id)`            — lấy snapshot trạng thái (fallback poll)
- *   - Mutation: `cancelMediaGenerationJob(id)`      — huỷ job đang chạy
- *   - Mutation: `retryMediaGenerationJob(id)`       — retry job FAILED
+ *   - Query   : `getAllMediaGenerationJob` — danh sách (admin)
+ *   - Query   : `mediaGenerationJob(id)`     — lấy snapshot trạng thái (fallback poll)
+ *   - Mutation: `cancelMediaGenerationJob`   — huỷ job đang chạy
+ *   - Mutation: `retryMediaGenerationJob`  — retry job FAILED
  *   - Subscription: `mediaGenerationJobChanged(jobId)` — push update realtime
- *
- * Đây là lớp giao tiếp thô; logic ghép subscribe + fallback poll + lifecycle nằm trong
- * hook `useMediaGenerationJob`.
  */
-import { GraphRepository } from "../graph.repo";
+import { t } from "../../functions/i18n";
+import { BaseModel, CrudRepository } from "../crud.repo";
 
 /** Trạng thái vòng đời job (đồng bộ với backend enum `MediaGenerationJobStatus`) */
 export type MediaGenerationJobStatus =
@@ -19,9 +18,13 @@ export type MediaGenerationJobStatus =
   | "CANCELLED";
 
 /** Bản ghi job — generic `T` là kiểu `resultData` (image hoặc video). */
-export type MediaGenerationJob<T = unknown> = {
-  id: string;
+export type MediaGenerationJob<T = unknown> = BaseModel & {
   customerId: string;
+  customer?: {
+    id?: string;
+    email?: string;
+    name?: string;
+  } | null;
   type: string;
   status: MediaGenerationJobStatus;
   progress: number;
@@ -31,7 +34,6 @@ export type MediaGenerationJob<T = unknown> = {
   errorCode?: number | null;
   metadata?: Record<string, unknown> | null;
   attempts?: number;
-  createdAt?: string;
   startedAt?: string | null;
   completedAt?: string | null;
 };
@@ -39,6 +41,11 @@ export type MediaGenerationJob<T = unknown> = {
 const FULL_FRAGMENT = `
   id
   customerId
+  customer {
+    id
+    email
+    name
+  }
   type
   status
   progress
@@ -53,7 +60,22 @@ const FULL_FRAGMENT = `
   completedAt
 `;
 
-class MediaGenerationJobRepository extends GraphRepository {
+export type WakeMediaGenerationQueueResult = {
+  consumerRestarted: boolean;
+  orphanedRequeued: number;
+  staleRequeued: number;
+  staleFailed: number;
+  queueRunning: boolean;
+  queueActive: number;
+  queueWaiting: number;
+};
+
+class MediaGenerationJobRepository extends CrudRepository<MediaGenerationJob> {
+  apiName: string = "MediaGenerationJob";
+  displayName: string = t("job");
+  shortFragment: string = this.parseFragment(FULL_FRAGMENT);
+  fullFragment: string = this.parseFragment(FULL_FRAGMENT);
+
   /** Lấy snapshot trạng thái job (no-cache để luôn fresh). */
   async getJob<T = unknown>(id: string): Promise<MediaGenerationJob<T> | null> {
     const res = await this.query({
@@ -84,6 +106,23 @@ class MediaGenerationJobRepository extends GraphRepository {
       clearStore: false,
     });
     return res.data?.g0 ?? null;
+  }
+
+  /** Đánh thức queue: restart consumer + khôi phục job treo/orphan. */
+  async wakeQueue(): Promise<WakeMediaGenerationQueueResult> {
+    const res = await this.mutate({
+      mutation: `wakeMediaGenerationQueue {
+        consumerRestarted
+        orphanedRequeued
+        staleRequeued
+        staleFailed
+        queueRunning
+        queueActive
+        queueWaiting
+      }`,
+      clearStore: false,
+    });
+    return res.data?.g0;
   }
 
   /**

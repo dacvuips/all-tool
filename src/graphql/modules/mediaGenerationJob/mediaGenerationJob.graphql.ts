@@ -15,8 +15,11 @@
  */
 import { gql, withFilter } from "apollo-server-express";
 import { CONSTANTS } from "../../../constants/constant.const";
+import { TOKEN_ROLES } from "../../../constants/role.const";
+import { CustomerLoader } from "../../../libs/dal/customer";
 import { Context } from "../../../libs/graphql";
 import { pubsub } from "../../../libs/graphql/pub-sub";
+import { GraphqlResolver } from "../../graphqlResolver";
 import {
   IMediaGenerationJob,
   mediaGenerationJobService,
@@ -25,7 +28,7 @@ import {
   markMediaJobCancelled,
   MediaGenerationJobPubsubPayload,
 } from "../../../queues/media-generation/job-emitter";
-import { retryMediaGenerationJob } from "../../../queues/media-generation/media-generation.queue";
+import { retryMediaGenerationJob, wakeMediaGenerationQueue } from "../../../queues/media-generation/media-generation.queue";
 
 /** Chuẩn hoá doc Mongo → object trả về cho GraphQL */
 function toGraphQLJob(doc: IMediaGenerationJob | null | undefined): Record<string, unknown> | null {
@@ -69,6 +72,12 @@ function payloadToGraphQL(payload: MediaGenerationJobPubsubPayload): Record<stri
   };
 }
 
+function canAccessJob(job: IMediaGenerationJob, context: Context): boolean {
+  if (context.isAdmin || context.isStaff) return true;
+  const ownerId = context.isShop ? context.shopOwnerId : context.id;
+  return (job as any).customerId === ownerId;
+}
+
 /** Poll / heartbeat: trả null/false thay vì throw — tránh log ồn khi job đã xóa khỏi Mongo. */
 async function findJobOwnedOrNull(
   jobId: string,
@@ -81,7 +90,7 @@ async function findJobOwnedOrNull(
     _id: jobId,
   })) as unknown as IMediaGenerationJob | null;
   if (!job) return null;
-  if ((job as any).customerId !== context.id) return null;
+  if (!canAccessJob(job, context)) return null;
   return job;
 }
 
@@ -99,6 +108,7 @@ export default {
     type MediaGenerationJob {
       id: String
       customerId: String
+      customer: Customer
       type: String
       status: String
       progress: Int
@@ -113,11 +123,32 @@ export default {
       completedAt: DateTime
     }
 
+    type MediaGenerationJobPageData {
+      data: [MediaGenerationJob]
+      total: Int
+      pagination: Pagination
+    }
+
+    type WakeMediaGenerationQueueResult {
+      consumerRestarted: Boolean
+      orphanedRequeued: Int
+      staleRequeued: Int
+      staleFailed: Int
+      queueRunning: Boolean
+      queueActive: Int
+      queueWaiting: Int
+    }
+
     extend type Query {
       """
       Lấy trạng thái 1 job (fallback poll khi socket chưa kết nối).
       """
       mediaGenerationJob(id: String!): MediaGenerationJob
+
+      """
+      Danh sách job (admin/staff).
+      """
+      getAllMediaGenerationJob(q: QueryGetListInput): MediaGenerationJobPageData
     }
 
     extend type Mutation {
@@ -130,6 +161,11 @@ export default {
       Đẩy lại 1 job FAILED vào queue (reset progress).
       """
       retryMediaGenerationJob(id: String!): MediaGenerationJob
+
+      """
+      Đánh thức queue media generation (restart consumer + khôi phục job treo).
+      """
+      wakeMediaGenerationQueue: WakeMediaGenerationQueueResult
     }
 
     extend type Subscription {
@@ -148,6 +184,18 @@ export default {
       ) => {
         const job = await findJobOwnedOrNull(args.id, context);
         return toGraphQLJob(job);
+      },
+      getAllMediaGenerationJob: async (
+        _root: unknown,
+        args: { q?: Record<string, unknown> },
+        context: Context
+      ) => {
+        context.auth(TOKEN_ROLES.ADMIN_STAFF);
+        const result = await mediaGenerationJobService.fetch(args.q);
+        return {
+          ...result,
+          data: (result?.data || []).map((doc: IMediaGenerationJob) => toGraphQLJob(doc)),
+        };
       },
     },
     Mutation: {
@@ -176,6 +224,17 @@ export default {
         })) as unknown as IMediaGenerationJob | null;
         return toGraphQLJob(updated);
       },
+      wakeMediaGenerationQueue: async (
+        _root: unknown,
+        _args: unknown,
+        context: Context
+      ) => {
+        context.auth(TOKEN_ROLES.ADMIN_STAFF);
+        return wakeMediaGenerationQueue();
+      },
+    },
+    MediaGenerationJob: {
+      customer: GraphqlResolver.loadById(CustomerLoader, "customerId"),
     },
     Subscription: {
       mediaGenerationJobChanged: {
