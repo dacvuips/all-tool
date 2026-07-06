@@ -1,6 +1,9 @@
 import logger from "../../../helpers/logger";
 import { CAPTCHA_GENERATION_MAX_RETRIES, getApiSetting } from "../../helpers/validateApiKey";
 
+/** Thời gian chờ tối đa khi poll Flow2 tạo ảnh/video (30 phút). */
+export const FLOW2_GENERATION_TIMEOUT_MS = 30 * 60 * 1000;
+
 export type Flow2StatusResponse = Record<string, unknown>;
 
 /** Payload `result` Flow2 trả về khi gen_image / gen_text_video / gen_image_video hoàn tất. */
@@ -608,7 +611,7 @@ export async function waitForFlow2Result<T>(params: {
   doneProgressMessage: string;
   logTag: string;
 }): Promise<T[]> {
-  const timeoutMs = params.timeoutMs || 600_000;
+  const timeoutMs = params.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS;
   const pollIntervalMs = params.pollIntervalMs || 2_500;
   const startedAt = Date.now();
 

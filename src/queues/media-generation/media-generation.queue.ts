@@ -10,8 +10,8 @@
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
  *   7. **Giới hạn luồng**: route kiểm tra số job QUEUED/PROCESSING theo `imageStreamCount`/`videoStreamCount`.
- *   8. **Payload Redis**: worker đọc `dataRedisKey` (TTL 1 giờ) thay vì `requestPayload` Mongo.
- *   9. **Terminal retention**: SUCCEEDED giữ 10 phút; FAILED giữ 15 phút kể từ `completedAt`.
+ *   8. **Payload Redis**: worker đọc `dataRedisKey` (TTL 4 giờ) thay vì `requestPayload` Mongo.
+ *   9. **Terminal retention**: SUCCEEDED / FAILED giữ 30 phút kể từ `completedAt`.
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
  *   10. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
  *      sau 5 lần claim vẫn treo → FAILED (504).
@@ -50,8 +50,8 @@ import {
 } from "./api-media-job-concurrency";
 import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
 
-/** Tối đa 20 phút cho 1 job trước khi bị coi là stalled. */
-const MEDIA_GENERATION_STALL_INTERVAL_MS = 20 * 60 * 1000;
+/** Tối đa 30 phút cho 1 job trước khi bị coi là stalled. */
+const MEDIA_GENERATION_STALL_INTERVAL_MS = 30 * 60 * 1000;
 
 /** Mọi job Redis được giữ tối đa 72h, sau đó cleanup (state vẫn còn ở Mongo). */
 const MEDIA_GENERATION_JOB_RETENTION_MS = 72 * 60 * 60 * 1000;

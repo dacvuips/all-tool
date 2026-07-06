@@ -1,7 +1,7 @@
 /**
  * Lưu payload request của media job trên Redis (thay vì MongoDB).
  *
- * Key: `mgj:data:{jobId}` — TTL 1 giờ.
+ * Key: `mgj:data:{jobId}` — TTL 4 giờ.
  * Job Mongo chỉ giữ `dataRedisKey` để worker đọc lại khi xử lý.
  */
 import logger from "../../helpers/logger";

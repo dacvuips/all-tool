@@ -3,6 +3,7 @@ import {
   buildFlow2DerivedVideoUrl,
   collectFlow2VideoUrls,
   createFlow2Request,
+  FLOW2_GENERATION_TIMEOUT_MS,
   Flow2StatusResponse,
   formatFlow2StatusResponseForLog,
   getFlow2Config,
@@ -278,7 +279,7 @@ export async function waitForFlow2VideoResult(params: {
 }): Promise<GeneratedVideo[]> {
   return waitForFlow2Result({
     requestId: params.requestId,
-    timeoutMs: params.timeoutMs ?? 900_000,
+    timeoutMs: params.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS,
     pollIntervalMs: params.pollIntervalMs,
     onProgress: params.onProgress,
     extract: extractFlow2Videos,

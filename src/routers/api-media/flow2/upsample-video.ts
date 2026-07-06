@@ -1,6 +1,7 @@
 import logger from "../../../helpers/logger";
 import {
   fetchFlow2WithRetry,
+  FLOW2_GENERATION_TIMEOUT_MS,
   getFlow2Config,
   getFlow2RequestStatus,
   isFlow2FailedStatus,
@@ -34,7 +35,7 @@ async function waitForUpsampleVideoDone(
     onProgress?: (progress: number, message?: string) => void | Promise<void>;
   }
 ): Promise<void> {
-  const timeoutMs = options?.timeoutMs ?? 900_000;
+  const timeoutMs = options?.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS;
   const pollIntervalMs = options?.pollIntervalMs ?? 2_500;
   const startedAt = Date.now();
   let pollCount = 0;

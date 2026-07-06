@@ -41,10 +41,10 @@ const WORKER_INSTANCE_ID = `worker-${Date.now()}-${Math.random().toString(36).sl
 export const LOCK_TTL_MS = 60 * 1000;
 /** Tần suất heartbeat tự động (gia hạn lock dù handler không gọi progress) */
 export const HEARTBEAT_MS = 15 * 1000;
-/** Giữ job SUCCEEDED để poll fallback vẫn lấy được resultData khi WS lỗi */
-export const SUCCESS_JOB_RETENTION_MS = 10 * 60 * 1000; // 5 phút
-/** Giữ job FAILED để client poll/retry; xóa 10 phút sau completedAt (sweep 5 phút/lần) */
-export const FAILED_JOB_RETENTION_MS = 30 * 60 * 1000;
+/** Giữ job terminal trên Mongo để client poll fallback vẫn lấy được kết quả/lỗi (30 phút). */
+export const MEDIA_JOB_RETENTION_MS = 30 * 60 * 1000;
+export const SUCCESS_JOB_RETENTION_MS = MEDIA_JOB_RETENTION_MS;
+export const FAILED_JOB_RETENTION_MS = MEDIA_JOB_RETENTION_MS;
 
 /** Payload phát qua pubsub — gửi xuống GraphQL Subscription resolver */
 export type MediaGenerationJobPubsubPayload = {
