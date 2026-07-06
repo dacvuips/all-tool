@@ -19,6 +19,7 @@ import {
   RiLogoutBoxLine,
   RiMenu3Line,
   RiPriceTag3Line,
+  RiVideoAddLine,
 } from "react-icons/ri";
 
 import { VideoDialog } from "../components/shared/common/video-dialog";
@@ -640,6 +641,13 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       href: "/api-generate-media",
       icon: <RiCodeLine />,
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
+    },
+    {
+      label: "Video Affiliate Plus",
+      desc: t("Quản lý và tạo danh sách affiliate"),
+      href: "/video-affiliate-plus",
+      icon: <RiVideoAddLine />,
+      gradient: "linear-gradient(135deg, #0EA5E9, #6366F1)",
     },
   ];
 
