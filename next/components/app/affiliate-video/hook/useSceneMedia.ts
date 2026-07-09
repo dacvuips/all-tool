@@ -15,7 +15,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { downloadGeneratedVideo, downloadSceneImage, enrichGeneratedImageWithBase64, enrichGeneratedVideoWithBase64, getGeneratedImageUrl } from "../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, enrichGeneratedImageWithBase64, getGeneratedImageUrl, hasPendingGeneratedVideoBase64, resumePendingGeneratedVideoBase64 } from "../shared/generatedMediaUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -408,22 +408,25 @@ export function useSceneMedia({
     getGeneratedVideo(scene.id).then(async (vid) => {
       if (!vid) return;
       setGeneratedVideo(vid);
-      if (!vid.videoBytes && vid.videoUri) {
-        const enriched = await enrichGeneratedVideoWithBase64(vid);
-        if (enriched.videoBytes) {
-          await saveGeneratedVideo(scene.id, enriched);
-          setGeneratedVideo(enriched);
-        }
-      }
+      if (!hasPendingGeneratedVideoBase64(vid)) return;
+      await resumePendingGeneratedVideoBase64(scene.id, vid, { set: saveGeneratedVideo }, {
+        onUpdate: setGeneratedVideo,
+      });
     });
   }, [scene.id, isBatchGeneratingVideo, getGeneratedVideo, saveGeneratedVideo]);
 
   // ── Load video nối (stitch) đã tạo trước đó từ IndexedDB ──
   useEffect(() => {
-    getGeneratedVideo(scene.id + "::stitch").then((vid) => {
-      if (vid) setGeneratedExtendVideo(vid);
+    const stitchId = scene.id + "::stitch";
+    getGeneratedVideo(stitchId).then(async (vid) => {
+      if (!vid) return;
+      setGeneratedExtendVideo(vid);
+      if (!hasPendingGeneratedVideoBase64(vid)) return;
+      await resumePendingGeneratedVideoBase64(stitchId, vid, { set: saveGeneratedVideo }, {
+        onUpdate: setGeneratedExtendVideo,
+      });
     });
-  }, [scene.id, isBatchGeneratingExtendVideo]);
+  }, [scene.id, isBatchGeneratingExtendVideo, getGeneratedVideo, saveGeneratedVideo]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateImage

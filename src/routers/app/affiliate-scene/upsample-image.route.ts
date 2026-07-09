@@ -10,7 +10,11 @@ import {
   UpsampleResolution,
 } from "../../api-media/flow2/upsample-image";
 import { Context } from "../../../libs/graphql";
-import { assertCustomerMediaGenerationAllowed } from "./_shared";
+import {
+  assertCustomerMediaGenerationAllowed,
+  checkImageLimit,
+  incrementImageCount,
+} from "./_shared";
 
 function mimeTypeToFileExtension(mimeType?: string, fallback = "jpg"): string {
   if (!mimeType) return fallback;
@@ -51,8 +55,10 @@ export default [
         }
 
         await assertCustomerMediaGenerationAllowed(context.id);
+        await checkImageLimit(context.id);
 
         const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
+        await incrementImageCount(context.id);
 
         const ext = mimeTypeToFileExtension(result.mimeType, "jpg");
         const defaultName = `image-${resolution.toLowerCase()}.${ext}`;

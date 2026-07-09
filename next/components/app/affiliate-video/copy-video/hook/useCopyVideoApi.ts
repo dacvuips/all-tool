@@ -287,6 +287,11 @@ export interface UseAffiliateVideoApiReturn {
   generateVideo: (params: GenerateVideoParams) => Promise<GeneratedVideoData | undefined>;
 
   /**
+   * Lưu video trực tiếp vào IndexedDB (enrich base64 sau khi load lại trang).
+   */
+  saveGeneratedVideo: (sceneId: string, videoData: GeneratedVideoData) => Promise<void>;
+
+  /**
    * Lấy video đã tạo từ IndexedDB theo sceneId.
    */
   getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoData | undefined>;
@@ -658,6 +663,14 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
     [videoJob, videoDB]
   );
 
+  // ── saveGeneratedVideo – lưu video trực tiếp vào IndexedDB ──
+  const saveGeneratedVideo = useCallback(
+    async (sceneId: string, videoData: GeneratedVideoData): Promise<void> => {
+      await videoDB.set(sceneId, videoData);
+    },
+    [videoDB]
+  );
+
   // ── getGeneratedVideo – lấy video đã tạo từ IndexedDB ──
   const getGeneratedVideo = useCallback(
     async (sceneId: string): Promise<GeneratedVideoData | undefined> => {
@@ -807,6 +820,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
     getGeneratedImage,
     saveGeneratedImage,
     generateVideo,
+    saveGeneratedVideo,
     getGeneratedVideo,
     insertScene,
     suggestConfig,

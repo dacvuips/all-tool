@@ -12,6 +12,10 @@ import { prepareApiMediaImageRequest, prepareApiMediaVideoRequest } from "./api-
 import { assertApiMediaRateLimit } from "./api-media-rate-limit";
 import { assertApiMediaFlow2RequestOwner } from "./api-media-upscale-registry";
 import {
+  assertApiMediaTokenRequestQuota,
+  incrementApiMediaTokenUsage,
+} from "../../queues/media-generation/handlers/_api-media-quota";
+import {
   upsampleImageWithFlow2,
   UpsampleResolution,
 } from "./flow2/upsample-image";
@@ -144,8 +148,10 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
     return;
   }
   await assertApiMediaFlow2RequestOwner(apiMediaTokenId, flow2RequestId);
+  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
 
   const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
+  await incrementApiMediaTokenUsage(apiMediaTokenId);
 
   res.json({
     success: true,
@@ -177,8 +183,10 @@ async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void>
   }
 
   await assertApiMediaFlow2RequestOwner(apiMediaTokenId, requestId);
+  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
 
   const result = await upsampleVideoWithFlow2({ flow2RequestId: requestId });
+  await incrementApiMediaTokenUsage(apiMediaTokenId);
 
   res.json({
     success: true,

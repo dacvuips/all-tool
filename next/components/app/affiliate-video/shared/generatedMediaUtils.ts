@@ -184,10 +184,10 @@ export function normalizeGeneratedImageFromApi<T extends GeneratedImageLike>(
 }
 
 export function normalizeGeneratedVideoFromApi<T extends GeneratedVideoLike>(
-  item: Partial<T> | undefined | null
+  item: Partial<T> & { videoUrl?: string | null } | undefined | null
 ): T | undefined {
   if (!item) return undefined;
-  const videoUri = item.videoUri ?? null;
+  const videoUri = (item.videoUri ?? item.videoUrl ?? null) as string | null;
   if (!videoUri && !item.videoBytes) return undefined;
   return {
     ...item,
@@ -258,10 +258,10 @@ export async function enrichGeneratedImageWithBase64<T extends GeneratedImageLik
 export async function enrichGeneratedVideoWithBase64<T extends GeneratedVideoLike>(
   videoData: T
 ): Promise<T> {
-  if (videoData.videoBytes) return videoData;
+  if (hasStoredGeneratedVideoBase64(videoData)) return videoData;
 
   const uri = (videoData.videoUri || "").trim();
-  if (!uri) return videoData;
+  if (!uri || !isHttpVideoUri(uri)) return videoData;
 
   const fetched = await fetchUrlToBase64Payload(uri, videoData.mimeType || "video/mp4");
   if (!fetched) return videoData;
@@ -272,6 +272,53 @@ export async function enrichGeneratedVideoWithBase64<T extends GeneratedVideoLik
     mimeType: fetched.mimeType || videoData.mimeType || "video/mp4",
     videoUri: uri,
   };
+}
+
+function isHttpVideoUri(uri: string): boolean {
+  return /^https?:\/\//i.test(uri.trim());
+}
+
+/** Đã có base64 (videoBytes hoặc data: trong videoUri) — refresh không cần chuyển lại. */
+export function hasStoredGeneratedVideoBase64(
+  video: GeneratedVideoLike | null | undefined
+): boolean {
+  if (!video) return false;
+  if ((video.videoBytes || "").trim()) return true;
+  const uri = (video.videoUri || "").trim();
+  return uri.startsWith("data:");
+}
+
+/** Video còn link HTTP chưa có base64 — cần enrich khi refresh / load lại trang. */
+export function hasPendingGeneratedVideoBase64(
+  video: GeneratedVideoLike | null | undefined
+): boolean {
+  if (!video || hasStoredGeneratedVideoBase64(video)) return false;
+  const uri = (video.videoUri || "").trim();
+  return isHttpVideoUri(uri);
+}
+
+/**
+ * Tiếp tục chuyển link → base64 nếu lần trước bị kẹt.
+ * Hiển thị link trước; gọi hàm này khi load scene / refresh trang.
+ */
+export async function resumePendingGeneratedVideoBase64<T extends GeneratedVideoLike>(
+  sceneId: string,
+  video: T,
+  storage: MediaPersistStorage<T>,
+  options?: { onUpdate?: (data: T) => void }
+): Promise<T> {
+  if (!hasPendingGeneratedVideoBase64(video)) return video;
+
+  try {
+    const enriched = await enrichGeneratedVideoWithBase64(video);
+    if (!enriched.videoBytes || enriched.videoBytes === video.videoBytes) return video;
+    await storage.set(sceneId, enriched);
+    options?.onUpdate?.(enriched);
+    return enriched;
+  } catch (err) {
+    console.warn("[resumePendingGeneratedVideoBase64]", err);
+    return video;
+  }
 }
 
 /**
@@ -319,6 +366,7 @@ export async function persistGeneratedVideoWithEnrichment<T extends GeneratedVid
 
   void (async () => {
     try {
+      if (!hasPendingGeneratedVideoBase64(preview)) return;
       const enriched = await enrichGeneratedVideoWithBase64(preview);
       if (!enriched.videoBytes || enriched.videoBytes === preview.videoBytes) return;
       await storage.set(sceneId, enriched);

@@ -1,60 +1,93 @@
 /**
  * scene-card-video-tab.tsx
  * Tab component "Video đơn" cho Scene Card
- * Hiển thị video đã generate + action buttons (tải, tạo lại)
- * Hover video để play, click để mở fullscreen modal
+ * Hover preview tắt tiếng; trong video: play + fullscreen; bên ngoài: download + tạo lại
  * Tái sử dụng cho: single, trending, copy-video modules
  * className only – Tailwind CSS, no inline styles
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { RiVideoFill } from "react-icons/ri";
-import { VideoDialog } from "../../../shared/common/video-dialog";
+import { RiFullscreenExitLine, RiFullscreenLine, RiLoader4Line, RiPauseFill, RiPlayFill, RiVideoFill } from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
-import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
+import {
+  GeneratedVideoLike,
+  getGeneratedVideoPreviewSrc,
+  hasGeneratedVideoData,
+} from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+
+const CONTROL_BTN_INSIDE =
+  "flex items-center justify-center w-8 h-8 rounded-md bg-black bg-opacity-60 text-white hover:bg-opacity-80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
+
+type FullscreenDocument = Document & {
+  webkitFullscreenElement?: Element | null;
+  mozFullScreenElement?: Element | null;
+  webkitExitFullscreen?: () => Promise<void> | void;
+  mozCancelFullScreen?: () => Promise<void> | void;
+};
+
+type FullscreenVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void;
+  webkitExitFullscreen?: () => void;
+};
+
+function getFullscreenElement(): Element | null {
+  const doc = document as FullscreenDocument;
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? doc.mozFullScreenElement ?? null;
+}
+
+async function exitAnyFullscreen(video?: HTMLVideoElement | null): Promise<void> {
+  const doc = document as FullscreenDocument;
+  const fsEl = getFullscreenElement();
+
+  if (fsEl && doc.exitFullscreen) {
+    await doc.exitFullscreen();
+    return;
+  }
+  if (doc.webkitExitFullscreen) {
+    await doc.webkitExitFullscreen();
+    return;
+  }
+  if (doc.mozCancelFullScreen) {
+    await doc.mozCancelFullScreen();
+    return;
+  }
+  const vid = video as FullscreenVideoElement | null | undefined;
+  if (vid?.webkitExitFullscreen) {
+    vid.webkitExitFullscreen();
+  }
+}
+
+function isContainerFullscreen(container: HTMLElement | null): boolean {
+  if (!container) return false;
+  const fsEl = getFullscreenElement();
+  return fsEl === container || !!fsEl?.contains(container);
+}
 
 // ── Types cho video data ─────────────────────────────────────────────────────
 export type GeneratedVideoData = GeneratedVideoLike;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardVideoTabProps {
-  /** Dữ liệu video đã generate */
   generatedVideo: GeneratedVideoData | null;
-  /** Đang generate video */
   generatingVideo: boolean;
-  /** Phần trăm tiến trình */
   videoProgress: number;
-  /** Vô hiệu hóa tương tác */
   isDisabled?: boolean;
-  /** Có ảnh chưa (cần ảnh trước khi tạo video, trừ prompt_to_video) */
   hasImage: boolean;
-  /** Chế độ prompt_to_video (không cần ảnh trước) */
   isPromptToVideo?: boolean;
-  /** Aspect ratio của video (preview + dialog) */
   aspectRatio?: "16:9" | "9:16";
-  /** Số phân cảnh — dùng đặt tên file tải */
   sceneNumber?: number;
-  /** Thông báo lỗi khi chưa có ảnh */
   onImageRequired?: () => void;
-  /** Lỗi tạo video (hiển thị inline) */
   errorMessage?: string | null;
-
-  // ── Callbacks ──
-  /** Generate/tạo lại video */
   onGenerateVideo: () => void;
-  /** ID cho nút tạo video (intro tour) */
   generateButtonId?: string;
-
   onStopGeneration?: () => void;
   generationActionPending?: boolean;
 }
-
-// ── Component ────────────────────────────────────────────────────────────────
 
 export function SceneCardVideoTab({
   generatedVideo,
@@ -73,9 +106,14 @@ export function SceneCardVideoTab({
   generationActionPending = false,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
-  const [showVideoModal, setShowVideoModal] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const prevVideoSrcRef = useRef<string | null>(null);
+  const [isVideoFrameReady, setIsVideoFrameReady] = useState(false);
+  const [playingWithSound, setPlayingWithSound] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  /** Kiểm tra điều kiện trước khi generate video */
   const handleClickGenerate = () => {
     if (!isPromptToVideo && !hasImage) {
       onImageRequired?.();
@@ -84,14 +122,170 @@ export function SceneCardVideoTab({
     onGenerateVideo();
   };
 
-  /** Lấy video source — ưu tiên base64, fallback link */
-  const getVideoSrc = (): string | null => {
-    if (!generatedVideo) return null;
-    return getGeneratedVideoPreviewSrc(generatedVideo);
+  const videoSrc =
+    generatedVideo && hasGeneratedVideoData(generatedVideo)
+      ? getGeneratedVideoPreviewSrc(generatedVideo)
+      : null;
+  const canClickVideo = !!videoSrc && isVideoFrameReady && !isDisabled;
+
+  const videoMimeType = generatedVideo?.mimeType || "video/mp4";
+
+  useEffect(() => {
+    const prev = prevVideoSrcRef.current;
+    prevVideoSrcRef.current = videoSrc;
+
+    // URL → base64 cùng clip: giữ preview, không reset spinner
+    const isEnrichTransition =
+      !!prev &&
+      !!videoSrc &&
+      prev.includes("/api/file/download-proxy") &&
+      videoSrc.startsWith("data:");
+
+    if (!isEnrichTransition) {
+      setIsVideoFrameReady(false);
+      setPlayingWithSound(false);
+      setIsPlaying(false);
+    }
+  }, [videoSrc]);
+
+  const markVideoReady = () => setIsVideoFrameReady(true);
+
+  // Video đã cache / load xong trước khi gắn listener
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !videoSrc) return;
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      markVideoReady();
+    }
+  }, [videoSrc]);
+
+  // Không để spinner che mãi nếu proxy/base64 load chậm hoặc lỗi im lặng
+  useEffect(() => {
+    if (!videoSrc || isVideoFrameReady) return;
+    const timer = window.setTimeout(markVideoReady, 8000);
+    return () => window.clearTimeout(timer);
+  }, [videoSrc, isVideoFrameReady]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
+    return () => {
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+    };
+  }, [videoSrc]);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(isContainerFullscreen(containerRef.current));
+    };
+
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    document.addEventListener("webkitfullscreenchange", syncFullscreenState);
+    document.addEventListener("mozfullscreenchange", syncFullscreenState);
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+      document.removeEventListener("webkitfullscreenchange", syncFullscreenState);
+      document.removeEventListener("mozfullscreenchange", syncFullscreenState);
+    };
+  }, []);
+
+  const handleVideoMouseEnter = () => {
+    const video = videoRef.current;
+    if (!video || !videoSrc || playingWithSound || isFullscreen) return;
+    video.muted = true;
+    video.play().catch(() => {});
   };
 
-  const videoSrc = getVideoSrc();
-  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
+  const handleVideoMouseLeave = () => {
+    const video = videoRef.current;
+    if (!video || playingWithSound || isFullscreen) return;
+    video.pause();
+    video.currentTime = 0;
+  };
+
+  const handleTogglePlayPause = () => {
+    if (!canClickVideo) return;
+    const video = videoRef.current;
+    if (!video) return;
+
+    // Đang play tắt tiếng (hover preview) → bật tiếng, giữ play
+    if (!playingWithSound && !video.paused) {
+      video.muted = false;
+      setPlayingWithSound(true);
+      return;
+    }
+
+    if (video.paused) {
+      video.muted = false;
+      setPlayingWithSound(true);
+      video.play().catch(() => {});
+    } else {
+      video.pause();
+    }
+  };
+
+  const handleVideoClick = (e: React.MouseEvent) => {
+    if (isFullscreen) return;
+    e.stopPropagation();
+    handleTogglePlayPause();
+  };
+
+  const handleExitFullscreen = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    try {
+      await exitAnyFullscreen(videoRef.current);
+    } catch (err) {
+      console.warn("[SceneCardVideoTab] Exit fullscreen failed:", err);
+    } finally {
+      setIsFullscreen(false);
+    }
+  };
+
+  const handleEnterFullscreen = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    if (!canClickVideo) return;
+    const container = containerRef.current;
+    const video = videoRef.current as FullscreenVideoElement | null;
+    if (!container || !video) return;
+
+    try {
+      if (container.requestFullscreen) {
+        await container.requestFullscreen();
+      } else if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen();
+      }
+      setIsFullscreen(true);
+      video.muted = false;
+      setPlayingWithSound(true);
+      await video.play().catch(() => {});
+    } catch (err) {
+      console.warn("[SceneCardVideoTab] Fullscreen failed:", err);
+    }
+  };
+
+  const handleToggleFullscreen = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isContainerFullscreen(containerRef.current)) {
+      void handleExitFullscreen();
+    } else {
+      void handleEnterFullscreen();
+    }
+  };
+
+  const isPortrait = aspectRatio === "9:16";
+  const previewBoxClass = isPortrait
+    ? "w-[140px] shrink-0 aspect-[9/16]"
+    : "w-full max-w-[240px] shrink-0 aspect-video";
   const videoFileName = `scene-${sceneNumber || "video"}-video.mp4`;
 
   return (
@@ -99,59 +293,102 @@ export function SceneCardVideoTab({
       <div className="flex items-center justify-center gap-2 group">
         {generatedVideo ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
-            {/* ── Video preview ── */}
-            <div className="w-full min-h-20">
+            <div className="flex flex-col gap-1 items-center w-full">
               {videoSrc ? (
-                <>
-                  {/* Video preview — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
-                  <div
-                    className="relative w-full rounded-md overflow-hidden border-2 border-purple-300 shadow-sm"
-                    style={{ paddingTop: videoPaddingTop }}
+                <div
+                  ref={containerRef}
+                  className={`relative rounded-md overflow-hidden border-2 border-purple-300 shadow-sm bg-black ${previewBoxClass} [&:fullscreen]:overflow-visible [&:fullscreen]:border-0 [&:fullscreen]:rounded-none ${
+                    isFullscreen ? "flex items-center justify-center !w-full !h-full !max-w-none !aspect-auto" : ""
+                  }`}
+                  onMouseEnter={handleVideoMouseEnter}
+                  onMouseLeave={handleVideoMouseLeave}
+                >
+                  <video
+                    ref={videoRef}
+                    key={videoSrc}
+                    className={`relative z-0 ${
+                      isFullscreen
+                        ? "w-full h-full max-h-screen object-contain"
+                        : "block w-full h-full object-contain"
+                    } ${canClickVideo ? "cursor-pointer" : "cursor-default pointer-events-none"}`}
+                    muted={!playingWithSound && !isFullscreen}
+                    loop
+                    playsInline
+                    controls={canClickVideo && isFullscreen}
+                    controlsList="nofullscreen"
+                    preload="auto"
+                    onClick={handleVideoClick}
+                    onLoadedMetadata={markVideoReady}
+                    onLoadedData={markVideoReady}
+                    onCanPlay={markVideoReady}
+                    onError={(e) => {
+                      console.error("[SceneCardVideoTab] Video load error:", videoSrc, e);
+                      markVideoReady();
+                    }}
                   >
-                    <video
-                      src={videoSrc}
-                      className="absolute inset-0 w-full h-full object-cover cursor-pointer"
-                      muted
-                      loop
-                      playsInline
-                      preload="metadata"
-                      onMouseEnter={(e) => (e.target as HTMLVideoElement).play()}
-                      onMouseLeave={(e) => {
-                        const v = e.target as HTMLVideoElement;
-                        v.pause();
-                        v.currentTime = 0;
-                      }}
-                      onClick={() => setShowVideoModal(true)}
-                      onError={(e) => {
-                        console.error("[SceneCardVideoTab] Video load error:", videoSrc, e);
-                      }}
-                    />
-                    {/* Play icon overlay */}
+                    <source src={videoSrc} type={videoMimeType} />
+                  </video>
+                  {!isPlaying && !isFullscreen && (
                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none rounded-sm bg-black bg-opacity-20 opacity-100 hover-parent-hide transition-opacity">
-                      <div className="w-10 h-10 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
-                        <BiPlayCircle className="text-white w-12 h-12" />
+                      <div className="w-8 h-8 rounded-full bg-white bg-opacity-80 flex items-center justify-center">
+                        <BiPlayCircle className="text-white w-10 h-10" />
                       </div>
                     </div>
-                  </div>
-                  {/* Fullscreen video modal */}
-                  <VideoDialog
-                    videoUrl={videoSrc}
-                    isOpen={showVideoModal}
-                    onClose={() => setShowVideoModal(false)}
-                    aspectRatio={aspectRatio}
-                  />
-                </>
+                  )}
+                  {!isVideoFrameReady && (
+                    <div className="absolute inset-0 z-10 flex items-center justify-center bg-purple-50 bg-opacity-80 pointer-events-none">
+                      <RiLoader4Line className="text-2xl text-purple-400 animate-spin" />
+                    </div>
+                  )}
+                  {canClickVideo && (
+                    <div
+                      className={`absolute z-[9999] flex items-center gap-2 ${
+                        isFullscreen
+                          ? "top-3 right-3"
+                          : "inset-x-0 bottom-0 justify-center px-2 py-1.5 bg-gradient-to-t from-black/80 to-transparent"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleTogglePlayPause();
+                        }}
+                        title={isPlaying ? t("Tạm dừng") : t("Phát")}
+                        className={`${CONTROL_BTN_INSIDE} ${isFullscreen ? "w-10 h-10" : ""}`}
+                      >
+                        {isPlaying ? (
+                          <RiPauseFill className={isFullscreen ? "text-xl" : "text-base"} />
+                        ) : (
+                          <RiPlayFill className={isFullscreen ? "text-xl" : "text-base"} />
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={handleToggleFullscreen}
+                        title={isFullscreen ? t("Thoát toàn màn hình") : t("Toàn màn hình")}
+                        className={`${CONTROL_BTN_INSIDE} ${isFullscreen ? "w-10 h-10 ring-1 ring-white/40" : ""}`}
+                      >
+                        {isFullscreen ? (
+                          <RiFullscreenExitLine className={isFullscreen ? "text-xl" : "text-base"} />
+                        ) : (
+                          <RiFullscreenLine className={isFullscreen ? "text-xl" : "text-base"} />
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                /* Video placeholder khi có data nhưng không có src */
                 <div
-                  className="relative w-full rounded-xl border-2 border-purple-300 bg-purple-50"
-                  style={{ paddingTop: videoPaddingTop }}
+                  className={`relative flex items-center justify-center rounded-xl border-2 border-purple-300 bg-purple-50 ${previewBoxClass}`}
                 >
-                  <RiVideoFill className="absolute inset-0 m-auto text-purple-400 text-xl" />
+                  <RiVideoFill className="text-purple-400 text-xl" />
                 </div>
               )}
             </div>
-            {/* Action buttons bên dưới video */}
             <div className="flex flex-row gap-1.5 items-center justify-center">
               <GeneratedVideoDownloadButtons
                 video={generatedVideo}
@@ -187,7 +424,6 @@ export function SceneCardVideoTab({
             onStop={onStopGeneration}
           />
         ) : (
-          /* ── Default: nút tạo video ── */
           <button
             id={generateButtonId}
             onClick={handleClickGenerate}

@@ -12,7 +12,11 @@ import {
   sendGenerationSSEError,
 } from "../../api-media/generation-sse";
 import { Context } from "../../../libs/graphql";
-import { assertCustomerMediaGenerationAllowed } from "./_shared";
+import {
+  assertCustomerMediaGenerationAllowed,
+  checkVideoLimit,
+  incrementVideoCount,
+} from "./_shared";
 import {
   createUpsampleVideoDownloadToken,
   deleteUpsampleVideoTemp,
@@ -52,6 +56,7 @@ export default [
         }
 
         await assertCustomerMediaGenerationAllowed(context.id);
+        await checkVideoLimit(context.id);
 
         const send = initGenerationSSE(res);
         sseStarted = true;
@@ -73,6 +78,8 @@ export default [
         const downloadName = (body.fileName || defaultName).replace(/[^\w.\-]+/g, "_");
 
         send({ type: "progress", progress: 96, message: "Đang chuẩn bị tải xuống..." });
+
+        await incrementVideoCount(context.id);
 
         const downloadToken = createUpsampleVideoDownloadToken();
         await saveUpsampleVideoTemp(downloadToken, {
