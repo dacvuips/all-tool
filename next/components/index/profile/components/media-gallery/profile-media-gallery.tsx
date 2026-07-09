@@ -206,7 +206,7 @@ function ServerMediaGallery() {
           ))}
         </div>
         <div className="relative">
-          <RiSearchLine className="absolute text-gray-400 -translate-y-1/2 left-3 top-1/2" />
+          <RiSearchLine className="absolute left-3 top-1/2 text-gray-400 -translate-y-1/2" />
           <input
             type="text"
             placeholder={t("Tìm kiếm...")}
@@ -219,14 +219,14 @@ function ServerMediaGallery() {
 
       {/* Loading */}
       {loading && (
-        <div className="flex items-center justify-center py-20">
+        <div className="flex justify-center items-center py-20">
           <RiLoader4Line className="text-3xl animate-spin text-primary" />
         </div>
       )}
 
       {/* Empty state */}
       {!loading && mediaList.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+        <div className="flex flex-col justify-center items-center py-20 text-gray-400">
           <RiImageLine className="mb-3 text-5xl" />
           <p className="text-base">{t("Chưa có media nào")}</p>
           <p className="mt-1 text-sm">{t("Media bạn tạo từ AI sẽ xuất hiện ở đây")}</p>
@@ -252,7 +252,7 @@ function ServerMediaGallery() {
 
       {/* Pagination */}
       {!loading && totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2 mt-6">
+        <div className="flex gap-2 justify-center items-center mt-6">
           <button
             onClick={() => setPage((p) => Math.max(1, p - 1))}
             disabled={page <= 1}
@@ -336,8 +336,11 @@ function LocalMediaGallery() {
   const getVideoEntries = videoDB.getAllWithKeys;
   const getAudioEntries = audioDB.getAllWithKeys;
   const removeImageEntry = imageDB.remove;
+  const clearImageStore = imageDB.clear;
   const removeVideoEntry = videoDB.remove;
+  const clearVideoStore = videoDB.clear;
   const removeAudioEntry = audioDB.remove;
+  const clearAudioStore = audioDB.clear;
 
   const [localMedia, setLocalMedia] = useState<LocalMediaItem[]>([]);
   const [localLoading, setLocalLoading] = useState(true);
@@ -352,95 +355,98 @@ function LocalMediaGallery() {
   toastRef.current = toast;
   tRef.current = t;
 
-  const fetchLocalMedia = useCallback(async (options?: { showSpinner?: boolean }) => {
-    if (fetchInFlightRef.current) return;
-    fetchInFlightRef.current = true;
+  const fetchLocalMedia = useCallback(
+    async (options?: { showSpinner?: boolean }) => {
+      if (fetchInFlightRef.current) return;
+      fetchInFlightRef.current = true;
 
-    const showSpinner = options?.showSpinner ?? false;
-    if (showSpinner) setLocalLoading(true);
+      const showSpinner = options?.showSpinner ?? false;
+      if (showSpinner) setLocalLoading(true);
 
-    let skippedWhileMapping = 0;
+      let skippedWhileMapping = 0;
 
-    try {
-      const [images, videos, audios] = await Promise.all([
-        getImageEntries(),
-        getVideoEntries(),
-        getAudioEntries(),
-      ]);
+      try {
+        const [images, videos, audios] = await Promise.all([
+          getImageEntries(),
+          getVideoEntries(),
+          getAudioEntries(),
+        ]);
 
-      const items: LocalMediaItem[] = [];
+        const items: LocalMediaItem[] = [];
 
-      for (const entry of images) {
-        const img = entry.value;
-        if (!img?.imageBytes) continue;
-        try {
-          items.push({
-            id: `local-img-${String(entry.key)}`,
-            type: "image",
-            key: entry.key,
-            dataUrl: buildLocalDataUrl(img.mimeType || "image/png", img.imageBytes),
-            mimeType: img.mimeType || "image/png",
-          });
-        } catch (err) {
-          skippedWhileMapping++;
-          console.warn("[LocalMediaGallery] Skip corrupt image entry", entry.key, err);
+        for (const entry of images) {
+          const img = entry.value;
+          if (!img?.imageBytes) continue;
+          try {
+            items.push({
+              id: `local-img-${String(entry.key)}`,
+              type: "image",
+              key: entry.key,
+              dataUrl: buildLocalDataUrl(img.mimeType || "image/png", img.imageBytes),
+              mimeType: img.mimeType || "image/png",
+            });
+          } catch (err) {
+            skippedWhileMapping++;
+            console.warn("[LocalMediaGallery] Skip corrupt image entry", entry.key, err);
+          }
         }
-      }
 
-      for (const entry of videos) {
-        const vid = entry.value;
-        if (!vid?.videoBytes && !vid?.videoUri) continue;
-        try {
-          const mimeType = vid.mimeType || "video/mp4";
-          const dataUrl = buildLocalDataUrl(mimeType, vid.videoBytes, vid.videoUri);
-          if (!dataUrl) continue;
-          items.push({
-            id: `local-vid-${String(entry.key)}`,
-            type: "video",
-            key: entry.key,
-            dataUrl,
-            mimeType,
-          });
-        } catch (err) {
-          skippedWhileMapping++;
-          console.warn("[LocalMediaGallery] Skip corrupt video entry", entry.key, err);
+        for (const entry of videos) {
+          const vid = entry.value;
+          if (!vid?.videoBytes && !vid?.videoUri) continue;
+          try {
+            const mimeType = vid.mimeType || "video/mp4";
+            const dataUrl = buildLocalDataUrl(mimeType, vid.videoBytes, vid.videoUri);
+            if (!dataUrl) continue;
+            items.push({
+              id: `local-vid-${String(entry.key)}`,
+              type: "video",
+              key: entry.key,
+              dataUrl,
+              mimeType,
+            });
+          } catch (err) {
+            skippedWhileMapping++;
+            console.warn("[LocalMediaGallery] Skip corrupt video entry", entry.key, err);
+          }
         }
-      }
 
-      for (const entry of audios) {
-        const aud = entry.value;
-        if (!aud?.audioBytes) continue;
-        try {
-          items.push({
-            id: `local-aud-${String(entry.key)}`,
-            type: "audio",
-            key: entry.key,
-            dataUrl: buildLocalDataUrl(aud.mimeType || "audio/wav", aud.audioBytes),
-            mimeType: aud.mimeType || "audio/wav",
-          });
-        } catch (err) {
-          skippedWhileMapping++;
-          console.warn("[LocalMediaGallery] Skip corrupt audio entry", entry.key, err);
+        for (const entry of audios) {
+          const aud = entry.value;
+          if (!aud?.audioBytes) continue;
+          try {
+            items.push({
+              id: `local-aud-${String(entry.key)}`,
+              type: "audio",
+              key: entry.key,
+              dataUrl: buildLocalDataUrl(aud.mimeType || "audio/wav", aud.audioBytes),
+              mimeType: aud.mimeType || "audio/wav",
+            });
+          } catch (err) {
+            skippedWhileMapping++;
+            console.warn("[LocalMediaGallery] Skip corrupt audio entry", entry.key, err);
+          }
         }
-      }
 
-      setLocalMedia(items);
+        setLocalMedia(items);
 
-      if (skippedWhileMapping > 0) {
-        toastRef.current.info(
-          tRef.current(
-            "Một số media cục bộ bị hỏng đã được bỏ qua. Hãy tạo lại từ công cụ AI nếu cần."
-          )
-        );
+        if (skippedWhileMapping > 0) {
+          toastRef.current.info(
+            tRef.current(
+              "Một số media cục bộ bị hỏng đã được bỏ qua. Hãy tạo lại từ công cụ AI nếu cần."
+            )
+          );
+        }
+      } catch (err) {
+        console.error("[LocalMediaGallery] Error loading IndexedDB media:", err);
+        toastRef.current.error(tRef.current("Không thể tải media từ bộ nhớ cục bộ"));
+      } finally {
+        fetchInFlightRef.current = false;
+        setLocalLoading(false);
       }
-    } catch (err) {
-      console.error("[LocalMediaGallery] Error loading IndexedDB media:", err);
-      toastRef.current.error(tRef.current("Không thể tải media từ bộ nhớ cục bộ"));
-    } finally {
-      fetchInFlightRef.current = false;
-      setLocalLoading(false);
-    }
-  }, [getImageEntries, getVideoEntries, getAudioEntries]);
+    },
+    [getImageEntries, getVideoEntries, getAudioEntries]
+  );
 
   useEffect(() => {
     fetchLocalMedia({ showSpinner: true });
@@ -488,6 +494,57 @@ function LocalMediaGallery() {
     a.click();
   };
 
+  const handleDeleteAllByType = async (
+    type: "image" | "video" | "audio",
+    clearStore: () => Promise<void>,
+    labels: { title: string; message: string; success: string; error: string }
+  ) => {
+    const count = localMedia.filter((m) => m.type === type).length;
+    if (count === 0) return;
+
+    const confirmed = await alert.danger(t(labels.title), t(labels.message, { count }));
+    if (!confirmed) return;
+
+    try {
+      await clearStore();
+      setLocalMedia((prev) => prev.filter((m) => m.type !== type));
+      setPreviewLocal((prev) => (prev?.type === type ? null : prev));
+      toast.success(t(labels.success));
+    } catch (err) {
+      toast.error(t(labels.error));
+    }
+  };
+
+  const handleDeleteAllImages = () =>
+    handleDeleteAllByType("image", clearImageStore, {
+      title: t("Xác nhận xóa tất cả ảnh"),
+      message: t(
+        "Bạn có chắc muốn xóa {{count}} ảnh khỏi bộ nhớ cục bộ? Dữ liệu sẽ không thể khôi phục."
+      ),
+      success: t("Đã xóa tất cả ảnh khỏi IndexedDB"),
+      error: t("Không thể xóa ảnh"),
+    });
+
+  const handleDeleteAllVideos = () =>
+    handleDeleteAllByType("video", clearVideoStore, {
+      title: t("Xác nhận xóa tất cả video"),
+      message: t(
+        "Bạn có chắc muốn xóa {{count}} video khỏi bộ nhớ cục bộ? Dữ liệu sẽ không thể khôi phục."
+      ),
+      success: t("Đã xóa tất cả video khỏi IndexedDB"),
+      error: t("Không thể xóa video"),
+    });
+
+  const handleDeleteAllAudios = () =>
+    handleDeleteAllByType("audio", clearAudioStore, {
+      title: t("Xác nhận xóa tất cả âm thanh"),
+      message: t(
+        "Bạn có chắc muốn xóa {{count}} âm thanh khỏi bộ nhớ cục bộ? Dữ liệu sẽ không thể khôi phục."
+      ),
+      success: t("Đã xóa tất cả âm thanh khỏi IndexedDB"),
+      error: t("Không thể xóa âm thanh"),
+    });
+
   const typeCounts = useMemo(() => {
     const counts = { all: localMedia.length, image: 0, video: 0, audio: 0 };
     localMedia.forEach((m) => {
@@ -500,8 +557,38 @@ function LocalMediaGallery() {
 
   return (
     <>
-      {/* Refresh button */}
-      <div className="flex items-center justify-end mb-4">
+      {/* Actions */}
+      <div className="flex flex-wrap gap-2 justify-end items-center mb-4">
+        {typeCounts.image > 0 && (
+          <button
+            onClick={handleDeleteAllImages}
+            disabled={localLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition disabled:opacity-50"
+          >
+            <RiDeleteBin6Line />
+            {t("Xóa tất cả ảnh")} ({typeCounts.image})
+          </button>
+        )}
+        {typeCounts.video > 0 && (
+          <button
+            onClick={handleDeleteAllVideos}
+            disabled={localLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition disabled:opacity-50"
+          >
+            <RiDeleteBin6Line />
+            {t("Xóa tất cả video")} ({typeCounts.video})
+          </button>
+        )}
+        {typeCounts.audio > 0 && (
+          <button
+            onClick={handleDeleteAllAudios}
+            disabled={localLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition disabled:opacity-50"
+          >
+            <RiDeleteBin6Line />
+            {t("Xóa tất cả âm thanh")} ({typeCounts.audio})
+          </button>
+        )}
         <button
           onClick={() => fetchLocalMedia({ showSpinner: true })}
           disabled={localLoading}
@@ -553,14 +640,14 @@ function LocalMediaGallery() {
 
       {/* Loading – chỉ full-screen lần đầu; làm mới giữ grid */}
       {showInitialSpinner && (
-        <div className="flex items-center justify-center py-16">
-          <RiLoader4Line className="text-3xl animate-spin text-indigo-500" />
+        <div className="flex justify-center items-center py-16">
+          <RiLoader4Line className="text-3xl text-indigo-500 animate-spin" />
         </div>
       )}
 
       {/* Empty */}
       {!showInitialSpinner && filteredMedia.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+        <div className="flex flex-col justify-center items-center py-16 text-gray-400">
           <RiDatabase2Line className="mb-3 text-5xl" />
           <p className="text-base">{t("Chưa có media cục bộ")}</p>
           <p className="mt-1 text-sm">{t("Ảnh, video, audio tạo từ AI sẽ được lưu tại đây")}</p>
@@ -571,8 +658,7 @@ function LocalMediaGallery() {
       {filteredMedia.length > 0 && (
         <div
           className={`grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 ${
-            localLoading ? "opacity-60 pointer-events-none" : ""
-          }`}
+            localLoading ? "opacity-60 pointer-events-none" : ""}`}
         >
           {filteredMedia.map((item) => (
             <LocalMediaCard
@@ -633,9 +719,9 @@ function LocalMediaCard({
       : "bg-purple-500/80";
 
   return (
-    <div className="overflow-hidden transition-shadow bg-white border border-gray-100 rounded-xl group hover:shadow-lg">
+    <div className="overflow-hidden bg-white rounded-xl border border-gray-100 transition-shadow group hover:shadow-lg">
       {/* Thumbnail */}
-      <div className="relative cursor-pointer aspect-square bg-gray-50" onClick={onPreview}>
+      <div className="relative bg-gray-50 cursor-pointer aspect-square" onClick={onPreview}>
         {item.type === "image" && (
           <img
             src={item.dataUrl}
@@ -645,7 +731,7 @@ function LocalMediaCard({
           />
         )}
         {item.type === "video" && (
-          <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-gray-800 to-gray-900">
+          <div className="flex justify-center items-center w-full h-full bg-gradient-to-br from-gray-800 to-gray-900">
             {item.dataUrl && (
               <video
                 src={item.dataUrl}
@@ -654,24 +740,24 @@ function LocalMediaCard({
                 preload="metadata"
               />
             )}
-            <RiPlayCircleLine className="absolute text-5xl text-white/80 drop-shadow-lg" />
+            <RiPlayCircleLine className="absolute text-5xl drop-shadow-lg text-white/80" />
           </div>
         )}
         {item.type === "audio" && (
-          <div className="flex flex-col items-center justify-center w-full h-full gap-2 bg-gradient-to-br from-purple-50 to-indigo-50">
+          <div className="flex flex-col gap-2 justify-center items-center w-full h-full bg-gradient-to-br from-purple-50 to-indigo-50">
             <RiMusic2Line className="text-4xl text-purple-400" />
             <span className="text-xs text-purple-400">{t("Âm thanh")}</span>
           </div>
         )}
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 flex items-center justify-center gap-2 transition-opacity opacity-0 bg-black/30 group-hover:opacity-100">
+        <div className="flex absolute inset-0 gap-2 justify-center items-center opacity-0 transition-opacity bg-black/30 group-hover:opacity-100">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onPreview();
             }}
-            className="p-2 text-white rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
           >
             <RiZoomInLine className="text-lg" />
           </button>
@@ -680,7 +766,7 @@ function LocalMediaCard({
               e.stopPropagation();
               onDownload();
             }}
-            className="p-2 text-white rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
           >
             <RiDownloadLine className="text-lg" />
           </button>
@@ -689,7 +775,7 @@ function LocalMediaCard({
               e.stopPropagation();
               onDelete();
             }}
-            className="p-2 text-white rounded-full bg-red-500/60 backdrop-blur-sm hover:bg-red-500/80"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-red-500/60 hover:bg-red-500/80"
           >
             <RiDeleteBin6Line className="text-lg" />
           </button>
@@ -710,7 +796,7 @@ function LocalMediaCard({
 
       {/* Info */}
       <div className="p-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-xs text-gray-500 truncate max-w-[120px]" title={String(item.key)}>
             {String(item.key)}
           </span>
@@ -750,12 +836,12 @@ function LocalMediaPreviewModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl mx-4 overflow-hidden bg-white shadow-2xl rounded-2xl"
+        className="overflow-hidden relative mx-4 w-full max-w-3xl bg-white rounded-2xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div className="flex items-center gap-2">
+        <div className="flex justify-between items-center p-4 border-b">
+          <div className="flex gap-2 items-center">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-indigo-50 text-indigo-600">
               {item.type === "image" && <RiImageLine />}
               {item.type === "video" && <RiVideoLine />}
@@ -792,7 +878,7 @@ function LocalMediaPreviewModal({
             />
           )}
           {item.type === "audio" && (
-            <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex flex-col gap-4 items-center py-8">
               <RiMusic2Line className="text-6xl text-purple-400" />
               <audio src={item.dataUrl} controls autoPlay className="w-full max-w-md" />
             </div>
@@ -800,7 +886,7 @@ function LocalMediaPreviewModal({
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t">
+        <div className="flex gap-2 justify-end items-center p-4 border-t">
           <button
             onClick={onDownload}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
@@ -841,9 +927,9 @@ function MediaCard({
   const { t } = useTranslation();
 
   return (
-    <div className="overflow-hidden transition-shadow bg-white border border-gray-100 rounded-xl group hover:shadow-lg">
+    <div className="overflow-hidden bg-white rounded-xl border border-gray-100 transition-shadow group hover:shadow-lg">
       {/* Thumbnail */}
-      <div className="relative cursor-pointer aspect-square bg-gray-50" onClick={onPreview}>
+      <div className="relative bg-gray-50 cursor-pointer aspect-square" onClick={onPreview}>
         {media.type === "image" && (
           <Img
             src={media.url}
@@ -853,7 +939,7 @@ function MediaCard({
           />
         )}
         {media.type === "video" && (
-          <div className="flex items-center justify-center w-full h-full bg-gradient-to-br from-gray-800 to-gray-900">
+          <div className="flex justify-center items-center w-full h-full bg-gradient-to-br from-gray-800 to-gray-900">
             {media.url ? (
               <video
                 src={media.url}
@@ -862,30 +948,30 @@ function MediaCard({
                 preload="metadata"
               />
             ) : null}
-            <RiPlayCircleLine className="absolute text-5xl text-white/80 drop-shadow-lg" />
+            <RiPlayCircleLine className="absolute text-5xl drop-shadow-lg text-white/80" />
           </div>
         )}
         {media.type === "audio" && (
-          <div className="flex flex-col items-center justify-center w-full h-full gap-2 bg-gradient-to-br from-purple-50 to-indigo-50">
+          <div className="flex flex-col gap-2 justify-center items-center w-full h-full bg-gradient-to-br from-purple-50 to-indigo-50">
             <RiMusic2Line className="text-4xl text-purple-400" />
             <span className="text-xs text-purple-400">{t("Âm thanh")}</span>
           </div>
         )}
         {media.type === "file" && (
-          <div className="flex flex-col items-center justify-center w-full h-full gap-2 bg-gradient-to-br from-blue-50 to-cyan-50">
+          <div className="flex flex-col gap-2 justify-center items-center w-full h-full bg-gradient-to-br from-blue-50 to-cyan-50">
             <RiFileLine className="text-4xl text-blue-400" />
             <span className="text-xs text-blue-400">{media.mimeType || t("Tệp")}</span>
           </div>
         )}
 
         {/* Hover overlay */}
-        <div className="absolute inset-0 flex items-center justify-center gap-2 transition-opacity opacity-0 bg-black/30 group-hover:opacity-100">
+        <div className="flex absolute inset-0 gap-2 justify-center items-center opacity-0 transition-opacity bg-black/30 group-hover:opacity-100">
           <button
             onClick={(e) => {
               e.stopPropagation();
               onPreview();
             }}
-            className="p-2 text-white rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
           >
             <RiZoomInLine className="text-lg" />
           </button>
@@ -894,7 +980,7 @@ function MediaCard({
               e.stopPropagation();
               onDownload();
             }}
-            className="p-2 text-white rounded-full bg-white/20 backdrop-blur-sm hover:bg-white/30"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
           >
             <RiDownloadLine className="text-lg" />
           </button>
@@ -903,7 +989,7 @@ function MediaCard({
               e.stopPropagation();
               onDelete();
             }}
-            className="p-2 text-white rounded-full bg-red-500/60 backdrop-blur-sm hover:bg-red-500/80"
+            className="p-2 text-white rounded-full backdrop-blur-sm bg-red-500/60 hover:bg-red-500/80"
           >
             <RiDeleteBin6Line className="text-lg" />
           </button>
@@ -917,7 +1003,7 @@ function MediaCard({
 
       {/* Info */}
       <div className="p-2.5">
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between items-center">
           <span className="text-xs text-gray-400">{formatDate(media.createdAt)}</span>
           {media.size ? (
             <span className="text-xs text-gray-400">{formatFileSize(media.size)}</span>
@@ -959,11 +1045,11 @@ function MediaPreviewModal({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-3xl mx-4 overflow-hidden bg-white shadow-2xl rounded-2xl"
+        className="overflow-hidden relative mx-4 w-full max-w-3xl bg-white rounded-2xl shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className="flex justify-between items-center p-4 border-b">
           <div>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-full bg-primary/10 text-primary">
               {media.type === "image" && <RiImageLine />}
@@ -1000,13 +1086,13 @@ function MediaPreviewModal({
             />
           )}
           {media.type === "audio" && media.url && (
-            <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex flex-col gap-4 items-center py-8">
               <RiMusic2Line className="text-6xl text-purple-400" />
               <audio src={media.url} controls autoPlay className="w-full max-w-md" />
             </div>
           )}
           {media.type === "file" && (
-            <div className="flex flex-col items-center gap-4 py-8">
+            <div className="flex flex-col gap-4 items-center py-8">
               <RiFileLine className="text-6xl text-blue-400" />
               <p className="text-gray-500">{media.mimeType || t("Tệp")}</p>
             </div>
@@ -1014,7 +1100,7 @@ function MediaPreviewModal({
         </div>
 
         {/* Footer actions */}
-        <div className="flex items-center justify-end gap-2 p-4 border-t">
+        <div className="flex gap-2 justify-end items-center p-4 border-t">
           <button
             onClick={onDownload}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
