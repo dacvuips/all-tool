@@ -30,12 +30,15 @@ function buildStoryboardAnalysisPrompt(opts: {
   aspectRatio?: string;
   tipContent?: string;
 }): string {
-  const artStyle = opts.artStyle || "Realistic";
+  const artStyle = opts.artStyle?.trim();
   const language = opts.language || "Vietnamese";
   const aspectRatio = opts.aspectRatio || "9:16";
   const tipContent = opts.tipContent?.trim()
     ? `\nNội dung / thông điệp chính cần ưu tiên: ${opts.tipContent}`
     : "";
+  const artStyleLine = artStyle
+    ? `- Phong cách nghệ thuật: ${artStyle}`
+    : "- Phong cách nghệ thuật: (không chỉ định)";
 
   return `
 Bạn là chuyên gia Storyboard Analysis và AI Video Director.
@@ -55,7 +58,7 @@ QUY TẮC cropRegion (QUAN TRỌNG – dùng để cắt ảnh bằng JavaScript
 - Không chồng lấn giữa các panel. Không cắt mất nội dung panel.
 
 THÔNG TIN BỔ SUNG:
-- Phong cách nghệ thuật: ${artStyle}
+${artStyleLine}
 - Tỉ lệ khung hình mục tiêu: ${aspectRatio}
 - Ngôn ngữ lời thoại: ${language}${tipContent}
 
@@ -66,7 +69,9 @@ CHO MỖI PHÂN CẢNH (trong mảng scenes – BẮT BUỘC, ưu tiên hoàn th
 - dialogue: lời thoại/narration bằng ${language} – suy ra từ nội dung panel hoặc sáng tạo phù hợp
 - motionPrompt: mô tả chuyển động bằng tiếng Anh (ngắn gọn)
 - audio: metadata giọng đọc cho phân cảnh bằng ${language} (ngắn gọn)
-- visualDescription: mô tả khung hình tĩnh bằng tiếng Anh, phong cách ${artStyle} (ngắn gọn)
+- visualDescription: mô tả khung hình tĩnh bằng tiếng Anh${
+    artStyle ? `, phong cách ${artStyle}` : ""
+  } (ngắn gọn)
 
 SAU KHI hoàn thành toàn bộ scenes, mới trả metadata giọng đọc toàn video (ngắn gọn):
 - topicTitle: tiêu đề video bằng ${language} (tối đa ~60 ký tự)
