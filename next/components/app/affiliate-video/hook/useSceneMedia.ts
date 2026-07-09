@@ -409,8 +409,8 @@ export function useSceneMedia({
       if (!vid) return;
       setGeneratedVideo(vid);
       if (!hasPendingGeneratedVideoBase64(vid)) return;
-      await resumePendingGeneratedVideoBase64(scene.id, vid, { set: saveGeneratedVideo }, {
-        onUpdate: setGeneratedVideo,
+      await resumePendingGeneratedVideoBase64<GeneratedVideoData>(scene.id, vid, { set: saveGeneratedVideo }, {
+        onUpdate: (data) => setGeneratedVideo(data),
       });
     });
   }, [scene.id, isBatchGeneratingVideo, getGeneratedVideo, saveGeneratedVideo]);
@@ -422,8 +422,8 @@ export function useSceneMedia({
       if (!vid) return;
       setGeneratedExtendVideo(vid);
       if (!hasPendingGeneratedVideoBase64(vid)) return;
-      await resumePendingGeneratedVideoBase64(stitchId, vid, { set: saveGeneratedVideo }, {
-        onUpdate: setGeneratedExtendVideo,
+      await resumePendingGeneratedVideoBase64<GeneratedVideoData>(stitchId, vid, { set: saveGeneratedVideo }, {
+        onUpdate: (data) => setGeneratedExtendVideo(data),
       });
     });
   }, [scene.id, isBatchGeneratingExtendVideo, getGeneratedVideo, saveGeneratedVideo]);
