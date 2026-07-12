@@ -22,14 +22,21 @@ export interface AffiliatePlusItem {
   id: string;
   shopName: string;
   shopId: string;
+  /** Mã sản phẩm Shopee (cột "Mã sản phẩm") — key IndexedDB video nối */
+  productId: string;
   productName: string;
   productLink: string;
   commission: string;
   imageUrl: string;
   /** Prompt generate video áp dụng cho luồng này */
   prompt: string;
-  /** Các video variant trả về từ generate */
+  /**
+   * Các video variant theo slot (độ dài = videosPerJob lúc generate).
+   * Slot rỗng = lỗi / thiếu kết quả.
+   */
   videoUrls: string[];
+  /** Slot bị tắt — bỏ qua khi nối video */
+  videoDisabled: boolean[];
   /** Video đã nối (ffmpeg) từ các variant */
   mergedVideoUrl: string;
   hostPort: string;
@@ -133,7 +140,7 @@ export interface GenerateVideoConfig {
   imageModel: string;
   videoModel: string;
   videosPerJob: number;
-  /** Số luồng chạy song song */
+  /** Số luồng chạy song song khi Bắt Đầu */
   threadCount: number;
   quality: string;
 }
@@ -336,12 +343,14 @@ export function createEmptyItem(partial?: Partial<AffiliatePlusItem>): Affiliate
     id: crypto.randomUUID(),
     shopName: "",
     shopId: "",
+    productId: "",
     productName: "",
     productLink: "",
     commission: "",
     imageUrl: "",
     prompt: "",
     videoUrls: [],
+    videoDisabled: [],
     mergedVideoUrl: "",
     hostPort: "",
     country: "VN",
@@ -437,7 +446,32 @@ export function buildActivePromptFromConfig(config: GenerateVideoConfig): string
 }
 
 export function getTotalVideos(item: AffiliatePlusItem): number {
-  return Math.max(item.videoUrls.length, item.uploaded + item.pending, 1);
+  const filled = (item.videoUrls || []).filter((u) => String(u || "").trim()).length;
+  return Math.max(filled, item.uploaded + item.pending, 1);
+}
+
+/** Pad/cắt videoUrls về đúng số slot config; giữ index (slot trống = lỗi). */
+export function padVideoSlots(
+  urls: string[],
+  slotCount: number
+): { videoUrls: string[]; videoDisabled: boolean[] } {
+  const n = Math.max(1, Math.round(slotCount) || 1);
+  const videoUrls = Array.from({ length: n }, (_, i) => String(urls[i] || "").trim());
+  return {
+    videoUrls,
+    videoDisabled: Array.from({ length: n }, () => false),
+  };
+}
+
+/** URL dùng để nối — bỏ slot trống và slot bị disable. */
+export function getMergeableVideoUrls(item: AffiliatePlusItem): string[] {
+  return (item.videoUrls || [])
+    .map((u, idx) => ({
+      url: String(u || "").trim(),
+      disabled: Boolean(item.videoDisabled?.[idx]),
+    }))
+    .filter((x) => x.url && !x.disabled)
+    .map((x) => x.url);
 }
 
 export const STATUS_LABELS: Record<ThreadStatus, string> = {

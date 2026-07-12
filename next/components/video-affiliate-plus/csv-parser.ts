@@ -15,6 +15,17 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "username",
   ],
   shopId: ["mã shop", "ma shop", "ma_shop", "shop_id", "shopid", "shop id"],
+  productId: [
+    "mã sản phẩm",
+    "ma san pham",
+    "ma_san_pham",
+    "mã_sản_phẩm",
+    "product_id",
+    "productid",
+    "product id",
+    "item_id",
+    "itemid",
+  ],
   productName: [
     "tên sản phẩm",
     "ten san pham",
@@ -140,6 +151,7 @@ function mapHeaderToField(header: string): string | null {
   if (normalized.startsWith("link") && normalized.includes("san pham")) return "productLink";
   if (normalized.startsWith("ten") && normalized.includes("san pham")) return "productName";
   if (normalized.startsWith("ten") && normalized.includes("shop")) return "shopName";
+  if (normalized.startsWith("ma") && normalized.includes("san pham")) return "productId";
   if (normalized.startsWith("ma") && normalized.includes("shop") && !normalized.includes("san pham")) {
     return "shopId";
   }
@@ -171,13 +183,17 @@ function toRowArray(row: unknown): string[] {
 function buildItemFromRaw(raw: Record<string, string>, index: number): AffiliatePlusItem {
   const videoUrls = parseVideoUrls(raw.videoUrls || "");
   const total = videoUrls.length;
+  // Ưu tiên Link sản phẩm (canonical); affiliate chỉ fallback
+  const productLink = raw.productLink || raw.affiliateLink || "";
+  const productId =
+    String(raw.productId || "").trim() || extractShopeeProductId(productLink) || "";
 
   return createEmptyItem({
     shopName: raw.shopName || "",
     shopId: raw.shopId || `row-${index + 1}`,
+    productId,
     productName: raw.productName || "",
-    // Ưu tiên link affiliate nếu có
-    productLink: raw.affiliateLink || raw.productLink || "",
+    productLink,
     commission: raw.commission || "",
     imageUrl: raw.imageUrl || "",
     prompt: raw.prompt || "",
@@ -191,6 +207,22 @@ function buildItemFromRaw(raw: Record<string, string>, index: number): Affiliate
     delayMax: Number(raw.delayMax) || 245,
     status: "waiting",
   });
+}
+
+/** Parse product id từ URL Shopee: /product/{shopId}/{itemId} hoặc -i.{shopId}.{itemId} */
+export function extractShopeeProductId(link: string): string {
+  const raw = String(link || "").trim();
+  if (!raw) return "";
+  try {
+    const path = raw.includes("://") ? new URL(raw).pathname : raw;
+    const productMatch = path.match(/\/product\/\d+\/(\d+)/i);
+    if (productMatch?.[1]) return productMatch[1];
+    const iMatch = path.match(/-i\.(\d+)\.(\d+)/i);
+    if (iMatch?.[2]) return iMatch[2];
+  } catch {
+    // ignore
+  }
+  return "";
 }
 
 /** Build fieldMap từ hàng header — chỉ theo tên cột. */

@@ -14,6 +14,7 @@ import {
   createEmptyItem,
   migrateToCharacterProfile,
 } from "./types";
+import { extractShopeeProductId } from "./csv-parser";
 import { idbGetConfig, idbSetConfig } from "./idb";
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -31,25 +32,45 @@ function writeJSON(key: string, value: unknown) {
 }
 
 function migrateItem(raw: Record<string, unknown>): AffiliatePlusItem {
-  const videoUrls = Array.isArray(raw.videoUrls)
+  // Giữ index slot (kể cả chuỗi rỗng) — không collapse bằng filter
+  const rawUrls = Array.isArray(raw.videoUrls)
     ? (raw.videoUrls as string[])
     : raw.videoUrl
-    ? String(raw.videoUrl).split("|").filter(Boolean)
+    ? String(raw.videoUrl).split("|")
     : [];
+  const videoUrls = rawUrls.map((u) => {
+    const s = String(u || "").trim();
+    if (!s || s.startsWith("blob:") || s.startsWith("data:")) return "";
+    return s;
+  });
 
-  const total = videoUrls.length || 1;
+  const filled = videoUrls.filter(Boolean).length;
+  const total = filled || 1;
+
+  const rawDisabled = Array.isArray(raw.videoDisabled) ? (raw.videoDisabled as boolean[]) : [];
+  const videoDisabled = videoUrls.map((_, idx) => Boolean(rawDisabled[idx]));
+
+  const productLink = String(raw.productLink || "");
+  const productId =
+    String(raw.productId || "").trim() || extractShopeeProductId(productLink) || "";
+
+  const rawMerged = String(raw.mergedVideoUrl || "");
+  const mergedVideoUrl =
+    rawMerged.startsWith("blob:") || rawMerged.startsWith("data:") ? "" : rawMerged;
 
   return createEmptyItem({
     id: String(raw.id || crypto.randomUUID()),
     shopName: String(raw.shopName || ""),
     shopId: String(raw.shopId || ""),
+    productId,
     productName: String(raw.productName || ""),
-    productLink: String(raw.productLink || ""),
+    productLink,
     commission: String(raw.commission || ""),
     imageUrl: String(raw.imageUrl || ""),
     prompt: String(raw.prompt || ""),
     videoUrls,
-    mergedVideoUrl: String(raw.mergedVideoUrl || ""),
+    videoDisabled,
+    mergedVideoUrl,
     hostPort: String(raw.hostPort || ""),
     country: String(raw.country || "VN"),
     cookie: String(raw.cookie || ""),
@@ -69,14 +90,27 @@ export function loadItems(): AffiliatePlusItem[] {
   return raw.map(migrateItem);
 }
 
+function isEphemeralMediaUrl(url: string): boolean {
+  const u = String(url || "").trim();
+  return u.startsWith("blob:") || u.startsWith("data:");
+}
+
 export function saveItems(items: AffiliatePlusItem[]) {
-  // Không persist blob: URL (chết sau reload) — blob nằm trong IndexedDB theo itemId
+  // Không persist blob:/data: — media nằm IndexedDB (link → enrich base64)
+  // Giữ index slot (chuỗi rỗng = slot lỗi), không filter collapse
   writeJSON(
     STORAGE_KEY,
-    items.map((i) => ({
-      ...i,
-      mergedVideoUrl: i.mergedVideoUrl?.startsWith("blob:") ? "" : i.mergedVideoUrl || "",
-    }))
+    items.map((i) => {
+      const videoUrls = (i.videoUrls || []).map((u) =>
+        isEphemeralMediaUrl(u) ? "" : String(u || "").trim()
+      );
+      return {
+        ...i,
+        videoUrls,
+        videoDisabled: videoUrls.map((_, idx) => Boolean(i.videoDisabled?.[idx])),
+        mergedVideoUrl: isEphemeralMediaUrl(i.mergedVideoUrl || "") ? "" : i.mergedVideoUrl || "",
+      };
+    })
   );
 }
 
@@ -110,6 +144,12 @@ function clampThreadCount(value: unknown, fallback = 5): number {
   return Math.min(50, Math.max(1, Math.round(n)));
 }
 
+function clampVideosPerJob(value: unknown, fallback = 2): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(4, Math.max(1, Math.round(n)));
+}
+
 function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): GenerateVideoConfig {
   const data = raw || {};
   const characters = data.characters?.length
@@ -120,10 +160,15 @@ function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): Ge
     data.threadCount ?? legacyLoop,
     DEFAULT_GENERATE_VIDEO_CONFIG.threadCount
   );
+  const videosPerJob = clampVideosPerJob(
+    data.videosPerJob,
+    DEFAULT_GENERATE_VIDEO_CONFIG.videosPerJob
+  );
   return {
     ...DEFAULT_GENERATE_VIDEO_CONFIG,
     ...data,
     threadCount,
+    videosPerJob,
     prompts: { ...DEFAULT_GENERATE_VIDEO_CONFIG.prompts, ...data.prompts },
     watermark: { ...DEFAULT_GENERATE_VIDEO_CONFIG.watermark, ...data.watermark },
     techniques: data.techniques?.length ? data.techniques : DEFAULT_GENERATE_VIDEO_CONFIG.techniques,

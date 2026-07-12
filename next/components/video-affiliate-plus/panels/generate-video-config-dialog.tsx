@@ -1040,17 +1040,17 @@ export function GenerateVideoConfigDialog({
                   <p className="m-0 mb-1 font-bold tracking-wider text-teal-600 uppercase text-10">
                     {t("Cài Đặt")}
                   </p>
-                  <FieldRow label={t("Số Video / Job")}>
+                  <FieldRow label={t("Số video mỗi job")}>
                     <NativeSelect
-                      value={String(config.videosPerJob)}
-                      onChange={(v) => patch({ videosPerJob: Number(v) })}
-                      options={[1, 2, 3, 4, 5].map((n) => ({
+                      value={String(Math.min(4, Math.max(1, config.videosPerJob || 1)))}
+                      onChange={(v) => patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })}
+                      options={[1, 2, 3, 4].map((n) => ({
                         value: String(n),
                         label: String(n),
                       }))}
                     />
                   </FieldRow>
-                  <FieldRow label={t("Số luồng")}>
+                  <FieldRow label={t("Số luồng video chạy song song")}>
                     <NativeSelect
                       value={String(config.threadCount)}
                       onChange={(v) => patch({ threadCount: Number(v) })}
