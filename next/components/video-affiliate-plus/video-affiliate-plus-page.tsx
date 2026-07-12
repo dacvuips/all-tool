@@ -2,14 +2,9 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft } from "react-icons/hi";
-import {
-  RiFileList3Line,
-  RiPlayList2Line,
-  RiSettings4Line,
-  RiUser3Line,
-  RiVideoAddLine,
-} from "react-icons/ri";
+import { RiVideoAddLine } from "react-icons/ri";
 import { useScreen } from "../../lib/hooks/useScreen";
+import { TabGroup } from "../shared/utilities/tab/tab-group";
 import { LogsPanel } from "./panels/logs-panel";
 import { SettingsPanel } from "./panels/settings-panel";
 import { ThreadManagementPanel } from "./panels/thread-management-panel";
@@ -25,6 +20,7 @@ import {
   saveSettings,
   saveUsers,
 } from "./storage";
+import { hydrateMergedVideoUrls } from "./merged-video";
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
@@ -34,17 +30,12 @@ import {
   getTotalVideos,
 } from "./types";
 
-type TabId = "users" | "threads" | "logs" | "settings";
-
-const TABS: { id: TabId; label: string; icon: JSX.Element }[] = [
-  { id: "users", label: "Quản Lý Người Dùng", icon: <RiUser3Line /> },
-  { id: "threads", label: "Quản Lý Luồng", icon: <RiPlayList2Line /> },
-  { id: "logs", label: "Quản Lý Nhật Ký", icon: <RiFileList3Line /> },
-  { id: "settings", label: "Cài Đặt", icon: <RiSettings4Line /> },
-];
-
 function simulateTick(items: AffiliatePlusItem[]): AffiliatePlusItem[] {
   return items.map((item) => {
+    // Đang chờ job Flow2 thật — không simulate
+    if (item.countdown >= 90000 && (item.status === "running" || item.status === "uploading")) {
+      return item;
+    }
     if (item.status !== "running" && item.status !== "uploading") return item;
 
     let countdown = item.countdown - 1;
@@ -95,7 +86,7 @@ export default function VideoAffiliatePlusPage() {
   const router = useRouter();
   const sm = useScreen("sm");
 
-  const [activeTab, setActiveTab] = useState<TabId>("threads");
+  const [activeTab, setActiveTab] = useState(1);
   const [items, setItems] = useState<AffiliatePlusItem[]>([]);
   const [users, setUsers] = useState<AffiliatePlusUser[]>([]);
   const [logs, setLogs] = useState<AffiliatePlusLog[]>([]);
@@ -103,10 +94,31 @@ export default function VideoAffiliatePlusPage() {
   const itemsRef = useRef(items);
 
   useEffect(() => {
-    setItems(loadItems());
+    let cancelled = false;
+    (async () => {
+      const loaded = loadItems().map((item) => {
+        // Tránh spinner kẹt sau reload: status running cũ không còn job thật
+        if (item.status === "running" || item.status === "uploading") {
+          return {
+            ...item,
+            status: (item.videoUrls?.length ? "success" : "waiting") as ThreadStatus,
+            countdown: 0,
+          };
+        }
+        return item;
+      });
+      const hydrated = await hydrateMergedVideoUrls(loaded);
+      if (!cancelled) {
+        setItems(hydrated);
+        saveItems(hydrated);
+      }
+    })();
     setUsers(loadUsers());
     setLogs(loadLogs());
     setSettings(loadSettings());
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -171,7 +183,7 @@ export default function VideoAffiliatePlusPage() {
     <div className="min-h-screen bg-gray-100">
       {/* Top banner */}
       <div className="text-white bg-primary">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-4">
+        <div className="max-w-[1600px] mx-auto P-1 px-4">
           <div className="flex gap-4 justify-between items-center">
             <div className="flex gap-3 items-center">
               <div
@@ -187,12 +199,9 @@ export default function VideoAffiliatePlusPage() {
                   <RiVideoAddLine className="text-2xl" />
                 </div>
                 <div>
-                  <h1 className="m-0 text-lg font-black tracking-tight sm:text-xl">
-                    VIDEO AFFILIATE PLUS MANAGER
+                  <h1 className="m-0 text-lg font-bold sm:text-xl">
+                    XƯỞNG VIDEO AFFILIATE MANAGER
                   </h1>
-                  <p className="text-xs text-white/70 m-0 mt-0.5">
-                    All Country · {new Date().toLocaleDateString("vi-VN")} · VietTheo
-                  </p>
                 </div>
               </div>
             </div>
@@ -200,67 +209,54 @@ export default function VideoAffiliatePlusPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="sticky top-14 z-30 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6">
-          <div className="flex overflow-x-auto no-scrollbar">
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-3.5 text-sm font-semibold whitespace-nowrap border-b-2 transition-colors ${
-                  activeTab === tab.id
-                    ? "border-red-500 text-red-600 bg-red-50/50"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
-                }`}
-              >
-                {tab.icon}
-                {t(tab.label)}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 py-5">
-        {activeTab === "threads" && (
-          <ThreadManagementPanel
-            items={items}
-            settings={settings}
-            isGlobalRunning={isGlobalRunning}
-            onUpdateItems={handleUpdateItems}
-            onAddLog={handleAddLog}
-          />
-        )}
-        {activeTab === "users" && (
-          <UsersPanel
-            users={users}
-            onUpdateUsers={(next) => {
-              setUsers(next);
-              saveUsers(next);
-            }}
-          />
-        )}
-        {activeTab === "logs" && (
-          <LogsPanel
-            logs={logs}
-            onClearLogs={() => {
-              setLogs([]);
-              saveLogs([]);
-            }}
-          />
-        )}
-        {activeTab === "settings" && (
-          <SettingsPanel
-            settings={settings}
-            onUpdateSettings={(next) => {
-              setSettings(next);
-              saveSettings(next);
-            }}
-          />
-        )}
+      <div className="max-w-[1600px] mx-auto">
+        <TabGroup
+          index={activeTab}
+          onChange={setActiveTab}
+          name="video-affiliate-plus"
+          flex={false}
+          tabClassName="px-5 py-3.5"
+          titleClassName="text-sm font-semibold whitespace-nowrap"
+          bodyClassName="px-4 sm:px-6 py-5"
+          className="px-4 sm:px-6"
+        >
+          <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
+            <UsersPanel
+              users={users}
+              onUpdateUsers={(next) => {
+                setUsers(next);
+                saveUsers(next);
+              }}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Quản Lý Luồng")}>
+            <ThreadManagementPanel
+              items={items}
+              settings={settings}
+              isGlobalRunning={isGlobalRunning}
+              onUpdateItems={handleUpdateItems}
+              onAddLog={handleAddLog}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Quản Lý Nhật Ký")}>
+            <LogsPanel
+              logs={logs}
+              onClearLogs={() => {
+                setLogs([]);
+                saveLogs([]);
+              }}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Cài Đặt")}>
+            <SettingsPanel
+              settings={settings}
+              onUpdateSettings={(next) => {
+                setSettings(next);
+                saveSettings(next);
+              }}
+            />
+          </TabGroup.Tab>
+        </TabGroup>
       </div>
     </div>
   );

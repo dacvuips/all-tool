@@ -53,6 +53,8 @@ export enum MediaGenerationJobType {
   GENERATION_WOLF_VIDEO = "GENERATION_WOLF_VIDEO",
   /** POST /api/app/generate-image-wolf/ — wolf workspace generate image */
   GENERATION_WOLF_IMAGE = "GENERATION_WOLF_IMAGE",
+  /** POST /api/app/generation-shopee-video/ — video-affiliate-plus Shopee generate video (component) */
+  GENERATION_SHOPEE_VIDEO = "GENERATION_SHOPEE_VIDEO",
   /** POST /api/api-media?type=IMAGE_GENERATION — API Media generate image */
   API_MEDIA_IMAGE = "API_MEDIA_IMAGE",
   /** POST /api/api-media?type=VIDEO_GENERATION — API Media generate video */
@@ -82,6 +84,8 @@ export type MediaGenerationVideoResult = {
   aspectRatio?: string;
   /** request_id Flow2 — dùng upscale video 1080p */
   flow2RequestId?: string;
+  /** Nhiều URL khi variant_count > 1 */
+  videoUris?: string[];
 };
 
 /** Output chung — union, cho phép resultData mềm dẻo */

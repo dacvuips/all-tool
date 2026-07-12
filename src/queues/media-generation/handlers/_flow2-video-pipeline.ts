@@ -18,6 +18,8 @@ export type RunFlow2VideoPipelineArgs = {
   prompt: string;
   aspectRatio?: "16:9" | "9:16";
   videoQuality?: string;
+  /** Số biến thể video / job */
+  variantCount?: number;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
   /** Chế độ nạp ảnh — quyết định video_mode (image_only/start_end → frame; start_add_end → component) */
   serviceImageType?: ServiceImageEnum;
@@ -29,12 +31,13 @@ export type RunFlow2VideoPipelineArgs = {
 
 export async function runFlow2VideoPipeline(
   args: RunFlow2VideoPipelineArgs
-): Promise<PollVideoResult> {
+): Promise<PollVideoResult & { videoUris?: string[] }> {
   const {
     customerId,
     prompt,
     aspectRatio,
     videoQuality,
+    variantCount,
     images = [],
     videoMode,
     serviceImageType,
@@ -53,13 +56,14 @@ export async function runFlow2VideoPipeline(
   logger.info(
     `[${logPrefix}] Bắt đầu gọi Flow2 tạo video (user ${customerId}, video_mode=${
       resolvedVideoMode ?? "text"
-    }, images=${imageCount})`
+    }, images=${imageCount}, variant_count=${variantCount || 1})`
   );
 
-  const { requestId, video } = await generateVideoWithFlow2({
+  const { requestId, video, videos } = await generateVideoWithFlow2({
     prompt,
     aspectRatio,
     videoQuality,
+    variantCount,
     imageInputs: images,
     videoMode: resolvedVideoMode,
     onProgress: async (progress, message) => {
@@ -73,10 +77,13 @@ export async function runFlow2VideoPipeline(
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);
   await emitter.progress(95, "Đang hoàn tất dữ liệu video...");
 
+  const videoUris = (videos || []).map((v) => v.videoUri).filter(Boolean);
+
   return {
     videoUri: video.videoUri,
     videoBytes: null,
     mimeType: video.mimeType,
     flow2RequestId: requestId,
+    videoUris: videoUris.length > 1 ? videoUris : undefined,
   };
 }

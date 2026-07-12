@@ -48,6 +48,8 @@ export type Flow2CreateVideoRequestParams = {
    * - `component` — Reference (1–3 ảnh)
    */
   videoMode?: Flow2VideoMode;
+  /** Số biến thể video / job (map từ config `videosPerJob`) */
+  variantCount?: number;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
   onRequestCreated?: (requestId: string) => void | Promise<void>;
 };
@@ -258,6 +260,7 @@ export async function createFlow2VideoRequest(
   }
 
   const image_base64s = await Promise.all(imageInputs.map(normalizeImageToDataUrl));
+  const variant_count = Math.max(1, Math.min(5, Math.round(params.variantCount || 1)));
 
   return createFlow2Request({
     type: "gen_image_video",
@@ -267,6 +270,7 @@ export async function createFlow2VideoRequest(
       image_base64s,
       video_mode,
       video_quality,
+      variant_count,
     },
   });
 }
@@ -292,7 +296,7 @@ export async function waitForFlow2VideoResult(params: {
 
 export async function generateVideoWithFlow2(
   params: Flow2CreateVideoRequestParams
-): Promise<{ requestId: string; video: GeneratedVideo }> {
+): Promise<{ requestId: string; video: GeneratedVideo; videos: GeneratedVideo[] }> {
   const result = await runFlow2WithRetry({
     logTag: "video",
     onProgress: params.onProgress,
@@ -311,7 +315,7 @@ export async function generateVideoWithFlow2(
         requestId: created.requestId,
         onProgress: params.onProgress,
       });
-      return { requestId: created.requestId, video: videos[0] };
+      return { requestId: created.requestId, video: videos[0], videos };
     },
   });
   return result;

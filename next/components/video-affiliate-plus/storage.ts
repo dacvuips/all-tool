@@ -3,13 +3,18 @@ import {
   AffiliatePlusLog,
   AffiliatePlusSettings,
   AffiliatePlusUser,
+  DEFAULT_GENERATE_VIDEO_CONFIG,
   DEFAULT_SETTINGS,
+  GENERATE_VIDEO_CONFIG_KEY,
+  GenerateVideoConfig,
   LOGS_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
   STORAGE_KEY,
   USERS_STORAGE_KEY,
   createEmptyItem,
+  migrateToCharacterProfile,
 } from "./types";
+import { idbGetConfig, idbSetConfig } from "./idb";
 
 function readJSON<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -38,9 +43,13 @@ function migrateItem(raw: Record<string, unknown>): AffiliatePlusItem {
     id: String(raw.id || crypto.randomUUID()),
     shopName: String(raw.shopName || ""),
     shopId: String(raw.shopId || ""),
+    productName: String(raw.productName || ""),
+    productLink: String(raw.productLink || ""),
     commission: String(raw.commission || ""),
     imageUrl: String(raw.imageUrl || ""),
+    prompt: String(raw.prompt || ""),
     videoUrls,
+    mergedVideoUrl: String(raw.mergedVideoUrl || ""),
     hostPort: String(raw.hostPort || ""),
     country: String(raw.country || "VN"),
     cookie: String(raw.cookie || ""),
@@ -61,7 +70,14 @@ export function loadItems(): AffiliatePlusItem[] {
 }
 
 export function saveItems(items: AffiliatePlusItem[]) {
-  writeJSON(STORAGE_KEY, items);
+  // Không persist blob: URL (chết sau reload) — blob nằm trong IndexedDB theo itemId
+  writeJSON(
+    STORAGE_KEY,
+    items.map((i) => ({
+      ...i,
+      mergedVideoUrl: i.mergedVideoUrl?.startsWith("blob:") ? "" : i.mergedVideoUrl || "",
+    }))
+  );
 }
 
 export function loadUsers(): AffiliatePlusUser[] {
@@ -86,6 +102,67 @@ export function loadSettings(): AffiliatePlusSettings {
 
 export function saveSettings(settings: AffiliatePlusSettings) {
   writeJSON(SETTINGS_STORAGE_KEY, settings);
+}
+
+function clampThreadCount(value: unknown, fallback = 5): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(50, Math.max(1, Math.round(n)));
+}
+
+function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): GenerateVideoConfig {
+  const data = raw || {};
+  const characters = data.characters?.length
+    ? data.characters.map((c) => migrateToCharacterProfile(c as any))
+    : DEFAULT_GENERATE_VIDEO_CONFIG.characters;
+  const legacyLoop = (data as { loopVideo?: number }).loopVideo;
+  const threadCount = clampThreadCount(
+    data.threadCount ?? legacyLoop,
+    DEFAULT_GENERATE_VIDEO_CONFIG.threadCount
+  );
+  return {
+    ...DEFAULT_GENERATE_VIDEO_CONFIG,
+    ...data,
+    threadCount,
+    prompts: { ...DEFAULT_GENERATE_VIDEO_CONFIG.prompts, ...data.prompts },
+    watermark: { ...DEFAULT_GENERATE_VIDEO_CONFIG.watermark, ...data.watermark },
+    techniques: data.techniques?.length ? data.techniques : DEFAULT_GENERATE_VIDEO_CONFIG.techniques,
+    characters,
+    actionsV1: data.actionsV1?.length ? data.actionsV1 : DEFAULT_GENERATE_VIDEO_CONFIG.actionsV1,
+    actionsV2: data.actionsV2?.length ? data.actionsV2 : DEFAULT_GENERATE_VIDEO_CONFIG.actionsV2,
+  };
+}
+
+/** Load generate-video config từ IndexedDB `video-affiliate-manager`. */
+export async function loadGenerateVideoConfig(): Promise<GenerateVideoConfig> {
+  const fromIdb = await idbGetConfig<Partial<GenerateVideoConfig>>();
+  if (fromIdb) return mergeGenerateVideoConfig(fromIdb);
+
+  // Migrate 1 lần từ localStorage cũ (nếu còn)
+  const legacy = readJSON<Partial<GenerateVideoConfig> | null>(GENERATE_VIDEO_CONFIG_KEY, null);
+  if (legacy && Object.keys(legacy).length > 0) {
+    const merged = mergeGenerateVideoConfig(legacy);
+    try {
+      await idbSetConfig(merged);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem(GENERATE_VIDEO_CONFIG_KEY);
+      }
+    } catch (err) {
+      console.warn("[video-affiliate-manager] migrate failed", err);
+    }
+    return merged;
+  }
+
+  return mergeGenerateVideoConfig();
+}
+
+/** Lưu generate-video config vào IndexedDB `video-affiliate-manager`. */
+export async function saveGenerateVideoConfig(
+  config: GenerateVideoConfig
+): Promise<GenerateVideoConfig> {
+  const next = mergeGenerateVideoConfig(config);
+  await idbSetConfig(next);
+  return next;
 }
 
 export function appendLog(

@@ -1,0 +1,8 @@
+{
+  "directives": "Keep the product clearly visible and in focus throughout the video.\nHighlight key selling points naturally within the scene.\nMaintain consistent character appearance, lighting, and color tone.\nPrefer smooth camera movement and clean framing.\nEnd with a clear call-to-action that matches the product.",
+  "rulesNegative": "Do not obscure the product with hands, text, or objects.\nDo not change the product shape, logo, or brand identity.\nDo not use blurry, distorted, or low-quality frames.\nDo not add unrelated props that distract from the product.\nDo not use aggressive or misleading claims.",
+  "dialogueSystem": "You are a professional short-form affiliate video scriptwriter.\nWrite natural spoken Vietnamese suitable for TikTok/Shopee video.\nKeep sentences short, clear, and easy to speak aloud.\nTone: friendly, trustworthy, and persuasive.\nAlways mention the product benefit before the call-to-action.",
+  "dialogueSection1": "Hook (2-3 giây): Mở đầu bằng 1 câu gây tò mò về vấn đề người xem đang gặp.\nGiới thiệu sản phẩm ngắn gọn và nêu 1-2 lợi ích chính.\nGiọng nói tự nhiên, gần gũi, không đọc quảng cáo cứng nhắc.",
+  "dialogueSectionLast": "Tóm tắt lợi ích nổi bật trong 1 câu.\nKêu gọi hành động rõ ràng: nhấn giỏ hàng / mua ngay / xem link.\nKết thúc bằng câu ngắn, dễ nhớ, phù hợp với sản phẩm.",
+  "image": "Create a high-quality product showcase image for affiliate marketing.\nFocus on the product as the main subject with clean composition.\nUse natural lighting, realistic materials, and accurate brand details.\nInclude soft lifestyle context without distracting from the product.\nVertical 9:16 framing suitable for short-form video thumbnails."
+}
