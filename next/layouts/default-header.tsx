@@ -151,6 +151,8 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   className="px-2 h-8 rounded-md"
                   icon={<RiBookOpenLine className="text-lg" />}
                   text={t("Hướng dẫn")}
+                  href="https://docs.google.com/spreadsheets/d/1EWgT-5Ig9LcTK47Sr2UfyIXRW4y2C6oTTFV7AkFbM_I/edit?usp=sharing"
+                  targetBlank
                 />{" "}
                 {/* Bảng giá */}
                 <Button

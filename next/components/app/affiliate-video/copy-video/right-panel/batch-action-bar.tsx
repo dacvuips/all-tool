@@ -23,6 +23,7 @@ import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input, Select } from "../../../../shared/utilities/form";
 import { CopyVideoScene } from "../../constants";
 import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
+import { BatchMergeVideosDropdown } from "../../shared/batch-merge-videos-dropdown";
 import { useCopyVideoBatchActions } from "../hook/useCopyVideoBatchActions";
 
 interface BatchActionBarProps {
@@ -93,6 +94,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     pendingVideoCount,
     availableVideoCount,
     pendingExtendCount,
+    availableExtendCount,
 
     // Downloads
     downloading,
@@ -109,6 +111,12 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     handleDownloadAllVideosZip,
     handleDownloadAllVideos1080p,
     handleDownloadAllVideos1080pZip,
+
+    // Merge videos
+    mergingVideos,
+    mergeVideosLabel,
+    handleMergeNormalVideos,
+    handleMergeStitchVideos,
 
     // Retry failed scenes
     retryRunning,
@@ -200,6 +208,10 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       mediaDownloadDropdown: true as const,
     },
     {
+      id: "batch-merge-videos",
+      mergeVideosDropdown: true as const,
+    },
+    {
       id: "batch-retry-video",
       icon: retryRunning ? <RiLoader4Line className="animate-spin" /> : <RiRefreshLine />,
       label: retryRunning
@@ -213,7 +225,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
         videoBatchRunning ||
         extendBatchRunning ||
         downloading ||
-        downloadingVideo,
+        downloadingVideo ||
+        mergingVideos,
     },
     ...(retryRunning
       ? [
@@ -270,6 +283,28 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   onDownloadAllImages4kZip={handleDownloadAllImages4kZip}
                   onDownloadAllVideosZip={handleDownloadAllVideosZip}
                   onDownloadAllVideos1080pZip={handleDownloadAllVideos1080pZip}
+                />
+              );
+            }
+
+            if ("mergeVideosDropdown" in action && action.mergeVideosDropdown) {
+              return (
+                <BatchMergeVideosDropdown
+                  key={action.id}
+                  id={action.id}
+                  merging={mergingVideos}
+                  mergeLabel={mergeVideosLabel}
+                  availableVideoCount={availableVideoCount}
+                  availableExtendCount={availableExtendCount}
+                  disabled={
+                    batchRunning ||
+                    videoBatchRunning ||
+                    extendBatchRunning ||
+                    downloading ||
+                    downloadingVideo
+                  }
+                  onMergeNormal={handleMergeNormalVideos}
+                  onMergeStitch={handleMergeStitchVideos}
                 />
               );
             }

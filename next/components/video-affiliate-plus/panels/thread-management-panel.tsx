@@ -20,7 +20,10 @@ import {
   HiUpload,
 } from "react-icons/hi";
 import { RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
-import { useMediaGenerationJob } from "../../../lib/hooks/useMediaGenerationJob";
+import {
+  MediaGenerationJobError,
+  useMediaGenerationJob,
+} from "../../../lib/hooks/useMediaGenerationJob";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
@@ -738,34 +741,55 @@ export function ThreadManagementPanel({
         const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
         const images = [characterPrepared, productPrepared];
 
-        const result = await shopeeVideoJob.run({
-          url: "/api/app/generation-shopee-video/",
-          body: {
-            prompt: fresh.prompt?.trim() || prompt,
-            images,
-            characterImage: characterPrepared,
-            productImage: productPrepared,
-            videosPerJob: config!.videosPerJob,
-            variantCount: config!.videosPerJob,
-            videoModel: config!.videoModel,
-            config: {
-              prompt: fresh.prompt?.trim() || prompt,
-              aspectRatio: "9:16",
-              videosPerJob: config!.videosPerJob,
-              variantCount: config!.videosPerJob,
-              videoModel: config!.videoModel,
-              videoMode: "component",
-            },
-            _metadata: {
-              threadId: fresh.id,
-              shopName: fresh.shopName,
-              productName: fresh.productName,
-            },
-          },
-          onProgress: (_pct, msg) => {
-            if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
-          },
-        });
+        // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
+        let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
+        for (let attempt = 0; ; attempt++) {
+          if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+          try {
+            result = await shopeeVideoJob.run({
+              url: "/api/app/generation-shopee-video/",
+              body: {
+                prompt: fresh.prompt?.trim() || prompt,
+                images,
+                characterImage: characterPrepared,
+                productImage: productPrepared,
+                videosPerJob: config!.videosPerJob,
+                variantCount: config!.videosPerJob,
+                videoModel: config!.videoModel,
+                config: {
+                  prompt: fresh.prompt?.trim() || prompt,
+                  aspectRatio: "9:16",
+                  videosPerJob: config!.videosPerJob,
+                  variantCount: config!.videosPerJob,
+                  videoModel: config!.videoModel,
+                  videoMode: "component",
+                },
+                _metadata: {
+                  threadId: fresh.id,
+                  shopName: fresh.shopName,
+                  productName: fresh.productName,
+                },
+              },
+              onProgress: (_pct, msg) => {
+                if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+              },
+            });
+            break;
+          } catch (enqueueErr: any) {
+            const isStreamLimit =
+              enqueueErr instanceof MediaGenerationJobError &&
+              enqueueErr.code === "ENQUEUE_FAILED" &&
+              (enqueueErr.httpStatus === 429 ||
+                /giới hạn luồng/i.test(String(enqueueErr.message || "")));
+            if (!isStreamLimit || attempt >= 90) throw enqueueErr;
+            onAddLog(
+              t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
+              "warning",
+              fresh.id
+            );
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+        }
 
         if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
@@ -802,32 +826,41 @@ export function ThreadManagementPanel({
           console.warn("[persistProductVideosWithEnrichment]", persistErr);
         }
 
-        let mergedUrl = "";
+        // Nối video chạy nền — KHÔNG giữ slot concurrency của ThreadRunner.
+        // (Trước đây await merge → UI đã success nhưng pool không lấy job mới.)
         const mergeUrls = videoUrls
           .map((u, idx) => ({ u, disabled: videoDisabled[idx] }))
           .filter((x) => x.u && !x.disabled)
           .map((x) => x.u);
-        if (mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current) {
+        const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
+        if (willMerge) {
+          // Chặn effect auto-merge trùng trong lúc nối nền
+          autoMergeAttemptedRef.current[fresh.id] = true;
           setMergingIds((prev) => ({ ...prev, [fresh.id]: true }));
           onAddLog(t("Đang nối {{count}} video...", { count: mergeUrls.length }), "info", fresh.id);
-          try {
-            mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(fresh), mergeUrls);
-            if (!ctx.isPaused() && !pauseAllRef.current) {
-              await patchThread(sessionId, fresh.id, { mergedVideoUrl: mergedUrl, error: "" });
-              onAddLog(t("Đã nối video và lưu IndexedDB"), "success", fresh.id);
+          const mergeItemId = fresh.id;
+          const mergeKey = getMergedVideoStorageKey(fresh);
+          void (async () => {
+            try {
+              const mergedUrl = await mergeVideosToIndexedDb(mergeKey, mergeUrls);
+              if (pauseAllRef.current) return;
+              await patchThread(sessionId, mergeItemId, { mergedVideoUrl: mergedUrl, error: "" });
+              onAddLog(t("Đã nối video và lưu IndexedDB"), "success", mergeItemId);
+              scheduleParentSync();
+            } catch (mergeErr: any) {
+              console.error(mergeErr);
+              const msg = mergeErr?.message || t("Nối video thất bại");
+              await patchThread(sessionId, mergeItemId, { error: msg });
+              onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", mergeItemId);
+              scheduleParentSync();
+            } finally {
+              setMergingIds((prev) => {
+                const next = { ...prev };
+                delete next[mergeItemId];
+                return next;
+              });
             }
-          } catch (mergeErr: any) {
-            console.error(mergeErr);
-            const msg = mergeErr?.message || t("Nối video thất bại");
-            await patchThread(sessionId, fresh.id, { error: msg });
-            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", fresh.id);
-          } finally {
-            setMergingIds((prev) => {
-              const next = { ...prev };
-              delete next[fresh.id];
-              return next;
-            });
-          }
+          })();
         }
 
         if (!ctx.isPaused() && !pauseAllRef.current) {
@@ -835,7 +868,7 @@ export function ThreadManagementPanel({
             t("Hoàn tất video cho {{name}} ({{count}} file{{merged}})", {
               name: fresh.productName || fresh.shopName || fresh.id,
               count: filledCount || 1,
-              merged: mergedUrl ? `, ${t("đã nối")}` : "",
+              merged: willMerge ? `, ${t("đang nối")}` : "",
             }),
             "success",
             fresh.id

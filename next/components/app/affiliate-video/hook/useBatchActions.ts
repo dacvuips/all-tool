@@ -29,6 +29,7 @@ import {
   handleBatchUpsampleDownloadAction,
   handleBatchUpsampleVideoDownloadAction,
 } from "../shared/batchDownloadMedia";
+import { mergeSceneVideosAndDownload } from "../shared/batchMergeVideos";
 import {
   collectFailedRetryTasks,
   runBatchRetryWorkerPool,
@@ -290,6 +291,7 @@ export function useBatchActions(
   const [availableExtendCount, setAvailableExtendCount] = useState<number>(0);
 
   useEffect(() => {
+    if (extendBatchRunning) return;
     let cancelled = false;
     (async () => {
       // Match the actual batch logic: pairs from all eligible (non-disabled) scenes
@@ -325,7 +327,7 @@ export function useBatchActions(
     return () => {
       cancelled = true;
     };
-  }, [scenes, getGeneratedVideo]);
+  }, [scenes, getGeneratedVideo, extendBatchRunning]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── Download states ──
@@ -582,6 +584,52 @@ export function useBatchActions(
       setDownloadVideoLabel("");
     }
   }, [downloadingVideo, videoBatchRunning, scenes, getGeneratedVideo, toast, t]);
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ── Nối file (ffmpeg): video thường / video nối ──
+  // ═══════════════════════════════════════════════════════════════════
+  const [mergingVideos, setMergingVideos] = useState(false);
+  const [mergeVideosLabel, setMergeVideosLabel] = useState("");
+
+  const handleMergeNormalVideos = useCallback(async () => {
+    if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
+    setMergingVideos(true);
+    setMergeVideosLabel(t("Video thường"));
+    try {
+      const count = await mergeSceneVideosAndDownload({
+        scenes,
+        kind: "normal",
+        getGeneratedVideo,
+      });
+      toast.success(`${t("Đã nối")} ${count} ${t("video thường thành 1 file MP4")}`);
+    } catch (err: any) {
+      console.error("[handleMergeNormalVideos] Error:", err);
+      toast.error(err?.message || t("Lỗi khi nối video thường"));
+    } finally {
+      setMergingVideos(false);
+      setMergeVideosLabel("");
+    }
+  }, [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]);
+
+  const handleMergeStitchVideos = useCallback(async () => {
+    if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
+    setMergingVideos(true);
+    setMergeVideosLabel(t("Video nối"));
+    try {
+      const count = await mergeSceneVideosAndDownload({
+        scenes,
+        kind: "stitch",
+        getGeneratedVideo,
+      });
+      toast.success(`${t("Đã nối")} ${count} ${t("video nối thành 1 file MP4")}`);
+    } catch (err: any) {
+      console.error("[handleMergeStitchVideos] Error:", err);
+      toast.error(err?.message || t("Lỗi khi nối video nối"));
+    } finally {
+      setMergingVideos(false);
+      setMergeVideosLabel("");
+    }
+  }, [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]);
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllImage: worker pool ──
@@ -1431,6 +1479,13 @@ export function useBatchActions(
     handleDownloadAllVideosZip,
     handleDownloadAllVideos1080p,
     handleDownloadAllVideos1080pZip,
+
+    // Merge videos (ffmpeg)
+    mergingVideos,
+    mergeVideosLabel,
+    handleMergeNormalVideos,
+    handleMergeStitchVideos,
+
     // Export
     handleExportPromptCSV,
   };

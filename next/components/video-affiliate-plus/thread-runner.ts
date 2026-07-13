@@ -75,6 +75,10 @@ export class ThreadRunner {
     error: number;
     cancelled: number;
   }> {
+    // Mỗi lần run() là một phiên mới — luôn mở lại queue (tránh stop/pause lần trước kẹt).
+    this.stopped = false;
+    this.paused = false;
+    this.inflight.clear();
     this.queue = items.slice();
     this.resultCounts = { success: 0, error: 0, cancelled: 0 };
     this.opts.onEvent?.({ type: "started", total: this.queue.length });
