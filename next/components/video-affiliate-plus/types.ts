@@ -37,7 +37,7 @@ export interface AffiliatePlusItem {
   videoUrls: string[];
   /** Slot bị tắt — bỏ qua khi nối video */
   videoDisabled: boolean[];
-  /** Video đã nối (ffmpeg) từ các variant */
+  /** Video đã nối (ffmpeg) — runtime có thể là blob URL; persist dùng marker "indexeddb". */
   mergedVideoUrl: string;
   hostPort: string;
   country: string;
@@ -145,13 +145,37 @@ export interface GenerateVideoConfig {
   quality: string;
 }
 
+export interface AffiliatePlusUserGenerateLink {
+  /** Id phiên Generate Video (import history) */
+  sessionId: string;
+  /** Id item trong phiên */
+  itemId: string;
+  productId: string;
+  productName: string;
+  productLink: string;
+  caption: string;
+  /** Link/key video đã nối — blob/data không persist; dùng marker "indexeddb". */
+  mergedVideoUrl: string;
+  assignedAt: number;
+}
+
 export interface AffiliatePlusUser {
   id: string;
   username: string;
   email: string;
   role: string;
+  cookie?: string;
+  proxy?: string;
+  error?: string;
   active: boolean;
   createdAt: string;
+  /**
+   * Nhiều video + thông tin SP đã gắn từ Generate Video.
+   * Persist IndexedDB (mỗi account tối đa theo cấu hình Tạo Luồng, hard-cap 90).
+   */
+  generateItems?: AffiliatePlusUserGenerateLink[];
+  /** @deprecated migrate → generateItems */
+  generateItem?: AffiliatePlusUserGenerateLink | null;
 }
 
 export interface AffiliatePlusLog {

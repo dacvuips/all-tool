@@ -58,4 +58,6 @@ report.**.json
 
 tmp
 
+.cache
+
 config/**/*.yml

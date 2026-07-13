@@ -1,39 +1,73 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaPhotoVideo } from "react-icons/fa";
 import {
   HiBan,
   HiCheck,
+  HiChevronLeft,
+  HiChevronRight,
   HiClock,
   HiCog,
   HiDownload,
   HiOutlinePause,
   HiOutlinePhotograph,
   HiOutlineTrash,
+  HiOutlineX,
   HiPencil,
   HiPlay,
   HiRefresh,
+  HiSearch,
+  HiUpload,
 } from "react-icons/hi";
-import { RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
+import { RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { useMediaGenerationJob } from "../../../lib/hooks/useMediaGenerationJob";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
-import { exportAffiliatePlusCSV, parseAffiliatePlusExcel } from "../csv-parser";
+import {
+  exportAffiliatePlusCSV,
+  parseAffiliatePlusCSV,
+  parseAffiliatePlusExcel,
+} from "../csv-parser";
+import { ThreadMetaRecord } from "../idb";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import {
   getMergedVideoBlob,
   getMergedVideoStorageKey,
+  hasMergedVideoRef,
+  hydrateMergedVideoUrls,
   mergeVideosToIndexedDb,
   persistProductVideosWithEnrichment,
   removeMergedVideoFromIndexedDb,
   resolveMergedPreviewUrl,
   resolveVariantPreviewUrls,
 } from "../merged-video";
+import {
+  formatDuration,
+  formatSessionTime,
+  listScrapeCsvSessions,
+  ScrapeCsvSession,
+} from "../scrape-csv-history";
 import { prepareShopeeImageInput } from "../shopee-image";
 import { loadGenerateVideoConfig } from "../storage";
+import { ThreadRunner } from "../thread-runner";
+import {
+  countSelectedInSession,
+  DEFAULT_SESSION_ID,
+  getSessionItems,
+  getSessionMeta,
+  getThreadItem,
+  normalizeSearch,
+  patchThread,
+  queryThreadPage,
+  removeThread,
+  removeThreads,
+  replaceSessionThreads,
+  sessionHasMergedVideos,
+  subscribeThreadEvents,
+} from "../thread-store";
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
@@ -126,10 +160,30 @@ export function ThreadManagementPanel({
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
+  const sessionId = selectedHistoryId || DEFAULT_SESSION_ID;
+  const runnerRef = useRef<ThreadRunner | null>(null);
+  const parentSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [listMeta, setListMeta] = useState<ThreadMetaRecord | null>(null);
+  const [visibleItems, setVisibleItems] = useState<AffiliatePlusItem[]>([]);
+  const [listTotal, setListTotal] = useState(0);
+  const [listTotalMatched, setListTotalMatched] = useState(0);
+  const [listLoading, setListLoading] = useState(false);
+  const [selectedCount, setSelectedCount] = useState(0);
+  const [hasMergedVideos, setHasMergedVideos] = useState(false);
+
   const [editField, setEditField] = useState<EditField>(null);
   const [editItemId, setEditItemId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const [generateConfigOpen, setGenerateConfigOpen] = useState(false);
+  const [scrapeImportOpen, setScrapeImportOpen] = useState(false);
+  const [scrapeSessions, setScrapeSessions] = useState<ScrapeCsvSession[]>([]);
+  const [scrapeLoading, setScrapeLoading] = useState(false);
+  const [importingSessionId, setImportingSessionId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(100);
   const [genConfig, setGenConfig] = useState<GenerateVideoConfig | null>(null);
   const [characterPreview, setCharacterPreview] = useState<{ url: string; name: string }>({
     url: "",
@@ -146,6 +200,95 @@ export function ThreadManagementPanel({
     mimeType?: string;
   }>();
 
+  const scheduleParentSync = useCallback(() => {
+    if (parentSyncTimerRef.current) clearTimeout(parentSyncTimerRef.current);
+    parentSyncTimerRef.current = setTimeout(() => {
+      void getSessionItems(sessionId)
+        .then(onUpdateItems)
+        .catch((err) => console.warn("[thread-panel] parent sync failed", err));
+    }, 400);
+  }, [sessionId, onUpdateItems]);
+
+  const totalPages = Math.max(1, Math.ceil(listTotalMatched / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageStartIndex = (safePage - 1) * pageSize;
+
+  const loadPage = useCallback(async () => {
+    setListLoading(true);
+    try {
+      const offset = (safePage - 1) * pageSize;
+      const [pageResult, meta, selected, hasMerged] = await Promise.all([
+        queryThreadPage(sessionId, { offset, limit: pageSize, q: searchTerm }),
+        getSessionMeta(sessionId),
+        countSelectedInSession(sessionId),
+        sessionHasMergedVideos(sessionId),
+      ]);
+      const hydrated = await hydrateMergedVideoUrls(pageResult.items);
+      setVisibleItems(hydrated);
+      setListTotalMatched(pageResult.totalMatched);
+      setListTotal(pageResult.total);
+      setListMeta(meta);
+      setSelectedCount(selected);
+      setHasMergedVideos(hasMerged);
+    } catch (err) {
+      console.error("[thread-panel] loadPage failed", err);
+    } finally {
+      setListLoading(false);
+    }
+  }, [sessionId, safePage, pageSize, searchTerm]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const existing = await getSessionItems(sessionId);
+        if (cancelled) return;
+        if (!existing.length && items.length) {
+          await replaceSessionThreads(sessionId, items);
+        }
+      } catch (err) {
+        console.warn("[thread-panel] seed IDB failed", err);
+      }
+      if (!cancelled) await loadPage();
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  useEffect(() => {
+    void loadPage();
+  }, [loadPage]);
+
+  useEffect(() => {
+    return subscribeThreadEvents((ev) => {
+      if (ev.sessionId !== sessionId) return;
+      if (ev.type === "patch") {
+        setVisibleItems((prev) => prev.map((i) => (i.id === ev.id ? ev.next : i)));
+        if ("selected" in ev.patch) {
+          void countSelectedInSession(sessionId).then(setSelectedCount);
+        }
+        if ("mergedVideoUrl" in ev.patch) {
+          void sessionHasMergedVideos(sessionId).then(setHasMergedVideos);
+        }
+        scheduleParentSync();
+      } else if (ev.type === "removed") {
+        void loadPage();
+        scheduleParentSync();
+      } else if (ev.type === "meta") {
+        setListMeta(ev.meta);
+      }
+    });
+  }, [sessionId, loadPage, scheduleParentSync]);
+
+  useEffect(() => {
+    return () => {
+      if (parentSyncTimerRef.current) clearTimeout(parentSyncTimerRef.current);
+      runnerRef.current?.stop();
+    };
+  }, []);
+
   const openVideoPreviewMerged = (title: string, itemId: string, urls: string[]) => {
     const clean = urls.map((u) => String(u || "").trim()).filter(Boolean);
     if (!clean.length) return;
@@ -155,16 +298,10 @@ export function ThreadManagementPanel({
   /** Preview variant: đủ số tab = config; slot trống = lỗi (tab đỏ). */
   const openVariantPreview = async (item: AffiliatePlusItem) => {
     const config = genConfig || (await loadGenerateVideoConfig());
-    const slotCount = Math.max(
-      item.videoUrls?.length || 0,
-      config.videosPerJob || 1,
-      1
-    );
+    const slotCount = Math.max(item.videoUrls?.length || 0, config.videosPerJob || 1, 1);
     const slots = await resolveVariantPreviewUrls(item, slotCount);
     const paddedSlots = Array.from({ length: slotCount }, (_, i) => slots[i] || "");
-    const disabled = Array.from({ length: slotCount }, (_, i) =>
-      Boolean(item.videoDisabled?.[i])
-    );
+    const disabled = Array.from({ length: slotCount }, (_, i) => Boolean(item.videoDisabled?.[i]));
     setVideoPreview({
       kind: "variants",
       title: t("Kết quả video"),
@@ -176,32 +313,51 @@ export function ThreadManagementPanel({
     });
   };
 
-  /** Preview video đã nối: ưu tiên base64 IDB, fallback blob URL trên item. */
+  /** Preview video đã nối: luôn resolve Blob mới từ IndexedDB / URL còn sống. */
   const openMergedPreview = async (item: AffiliatePlusItem) => {
-    const fromIdb = await resolveMergedPreviewUrl(item);
-    const url = fromIdb || item.mergedVideoUrl || "";
-    if (!url) return;
-    openVideoPreviewMerged(t("Video đã nối"), item.id, [url]);
+    try {
+      const url = await resolveMergedPreviewUrl(item);
+      if (!url) {
+        toast.warn(t("Không mở được video — thử Nối lại"));
+        return;
+      }
+      openVideoPreviewMerged(t("Video đã nối"), item.id, [url]);
+    } catch (err: any) {
+      console.warn("[openMergedPreview]", err);
+      toast.error(err?.message || t("Không mở được video"));
+    }
   };
 
   const autoMergeAttemptedRef = useRef<Record<string, boolean>>({});
 
-  // Tự nối lại các item đã có ≥2 video (sau khi bỏ slot disable/trống) nhưng chưa có merged
+  // Tự nối lại các item đã có ≥2 video nhưng chưa có merged (và chưa có trong IDB)
   useEffect(() => {
-    const pending = items.filter((i) => {
-      const mergeUrls = getMergeableVideoUrls(i);
-      return (
-        mergeUrls.length >= 2 &&
-        !i.mergedVideoUrl &&
-        !mergingIds[i.id] &&
-        !generatingIds[i.id] &&
-        !autoMergeAttemptedRef.current[i.id]
-      );
-    });
-    if (!pending.length) return;
-
     let cancelled = false;
     (async () => {
+      const all = await getSessionItems(sessionId);
+      if (cancelled) return;
+      // Hydrate từ product-videos trước — tránh F5 tưởng chưa nối rồi chạy spinner lại
+      const hydrated = await hydrateMergedVideoUrls(all);
+      if (cancelled) return;
+
+      const pending = hydrated.filter((i) => {
+        const mergeUrls = getMergeableVideoUrls(i);
+        return (
+          mergeUrls.length >= 2 &&
+          !hasMergedVideoRef(i.mergedVideoUrl) &&
+          !mergingIds[i.id] &&
+          !generatingIds[i.id] &&
+          !autoMergeAttemptedRef.current[i.id]
+        );
+      });
+      if (!pending.length) {
+        // Đồng bộ URL đã hydrate lên UI nếu chưa có
+        if (hydrated.some((i, idx) => i.mergedVideoUrl !== all[idx]?.mergedVideoUrl)) {
+          void loadPage();
+        }
+        return;
+      }
+
       for (const item of pending) {
         if (cancelled) return;
         autoMergeAttemptedRef.current[item.id] = true;
@@ -210,16 +366,14 @@ export function ThreadManagementPanel({
           const urls = getMergeableVideoUrls(item);
           const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item), urls);
           if (cancelled) return;
-          onUpdateItems(
-            itemsRef.current.map((i) =>
-              i.id === item.id ? { ...i, mergedVideoUrl: mergedUrl, error: "" } : i
-            )
-          );
+          await patchThread(sessionId, item.id, { mergedVideoUrl: mergedUrl, error: "" });
+          scheduleParentSync();
           onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
         } catch (err: any) {
           if (cancelled) return;
           const msg = err?.message || t("Nối video thất bại");
-          onUpdateItems(itemsRef.current.map((i) => (i.id === item.id ? { ...i, error: msg } : i)));
+          await patchThread(sessionId, item.id, { error: msg });
+          scheduleParentSync();
           onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
         } finally {
           setMergingIds((prev) => {
@@ -229,13 +383,14 @@ export function ThreadManagementPanel({
           });
         }
       }
+      if (!cancelled) void loadPage();
     })();
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items]);
+  }, [sessionId, listMeta?.success, generatingIds, mergingIds]);
 
   useEffect(() => {
     let cancelled = false;
@@ -255,93 +410,192 @@ export function ThreadManagementPanel({
   }, [generateConfigOpen]);
 
   const stats = useMemo(() => {
-    const total = items.length;
-    const waiting = items.filter(
-      (i) => i.status === "waiting" || (i.status === "stopped" && i.pending > 0)
-    ).length;
-    const uploading = items.filter(
-      (i) => i.status === "uploading" || i.status === "running"
-    ).length;
-    const success = items.filter((i) => i.status === "success").length;
-    // Lỗi hiển thị: status error hoặc có message error dưới cột Video
-    const error = items.filter(
-      (i) => i.status === "error" || Boolean(String(i.error || "").trim())
-    ).length;
-    return { total, waiting, uploading, success, error };
-  }, [items]);
+    return {
+      total: listMeta?.total ?? listTotal,
+      waiting: listMeta?.waiting ?? 0,
+      uploading: listMeta?.uploading ?? 0,
+      success: listMeta?.success ?? 0,
+      error: listMeta?.error ?? 0,
+    };
+  }, [listMeta, listTotal]);
 
   const getErrorItems = (list: AffiliatePlusItem[]) =>
     list.filter((i) => i.status === "error" || Boolean(String(i.error || "").trim()));
 
-  const selectedCount = items.filter((i) => i.selected).length;
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchTerm(searchQuery.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, pageSize, sessionId]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const patchItem = async (id: string, patch: Partial<AffiliatePlusItem>) => {
+    const next = await patchThread(sessionId, id, patch);
+    if (next) {
+      setVisibleItems((prev) => prev.map((i) => (i.id === id ? next : i)));
+      if ("selected" in patch) {
+        setSelectedCount(await countSelectedInSession(sessionId));
+      }
+      scheduleParentSync();
+    }
+  };
 
   const updateItem = (id: string, patch: Partial<AffiliatePlusItem>) => {
-    onUpdateItems(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    void patchItem(id, patch);
   };
 
   const updateAll = (fn: (item: AffiliatePlusItem) => AffiliatePlusItem) => {
-    onUpdateItems(items.map(fn));
+    void (async () => {
+      const all = await getSessionItems(sessionId);
+      const next = all.map(fn);
+      await replaceSessionThreads(sessionId, next);
+      await loadPage();
+      scheduleParentSync();
+    })();
+  };
+
+  /** Apply patch cho tập item hiện hữu; khi đang search chỉ áp lên item khớp. */
+  const applyToVisible = (fn: (item: AffiliatePlusItem) => AffiliatePlusItem) => {
+    void (async () => {
+      const q = searchTerm.trim() ? searchTerm : undefined;
+      const { items: matched } = await queryThreadPage(sessionId, {
+        offset: 0,
+        limit: 999999,
+        q,
+      });
+      for (const item of matched) {
+        const next = fn(item);
+        if (next !== item) await patchThread(sessionId, item.id, next);
+      }
+      await loadPage();
+      scheduleParentSync();
+    })();
+  };
+
+  const handleImportParsed = async (fileName: string, parsed: AffiliatePlusItem[]) => {
+    if (!parsed.length) {
+      toast.warn(
+        t(
+          "Không đọc được dữ liệu sản phẩm. Cần các cột: Tên shop, Tên sản phẩm, Ảnh, Link sản phẩm / Link affiliate"
+        )
+      );
+      return false;
+    }
+
+    const genConfigLoaded = await loadGenerateVideoConfig();
+    const withPrompt = parsed.map((item) => ({
+      ...item,
+      prompt: item.prompt || genConfigLoaded.activePrompt || "",
+    }));
+
+    await onImportComplete(fileName, withPrompt);
+    await loadPage();
+    scheduleParentSync();
+    onAddLog(t("Đã import {{count}} luồng từ file", { count: withPrompt.length }), "success");
+    toast.success(t("Đã import {{count}} sản phẩm", { count: withPrompt.length }));
+    return true;
   };
 
   const handleImport = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
-      // Dùng SheetJS cho cả csv/xls/xlsx để nhận đúng format Shopee
       const parsed = await parseAffiliatePlusExcel(buffer);
-
-      if (!parsed.length) {
-        toast.warn(
-          t(
-            "Không đọc được dữ liệu sản phẩm. Cần các cột: Tên shop, Tên sản phẩm, Ảnh, Link sản phẩm / Link affiliate"
-          )
-        );
-        return;
-      }
-
-      const genConfig = await loadGenerateVideoConfig();
-      const withPrompt = parsed.map((item) => ({
-        ...item,
-        prompt: item.prompt || genConfig.activePrompt || "",
-      }));
-
-      // Mỗi import = phiên mới: thay thế danh sách, không gắn thêm vào phiên hiện tại
-      await onImportComplete(file.name, withPrompt);
-      onAddLog(t("Đã import {{count}} luồng từ file", { count: withPrompt.length }), "success");
-      toast.success(t("Đã import {{count}} sản phẩm", { count: withPrompt.length }));
+      await handleImportParsed(file.name, parsed);
     } catch (err) {
       console.error("Import affiliate file failed:", err);
       toast.error(t("Không thể đọc file. Thử lại với file .csv hoặc .xlsx từ Shopee Affiliate."));
     }
   };
 
-  const handleRetryErrors = () => {
-    const errorItems = getErrorItems(itemsRef.current);
+  const openScrapeImportDialog = async () => {
+    setScrapeImportOpen(true);
+    setScrapeLoading(true);
+    try {
+      setScrapeSessions(await listScrapeCsvSessions());
+    } catch (err) {
+      console.error("Load scrape CSV sessions failed:", err);
+      toast.error(t("Không tải được danh sách CSV từ IndexedDB"));
+      setScrapeSessions([]);
+    } finally {
+      setScrapeLoading(false);
+    }
+  };
+
+  const handleImportScrapeSession = async (session: ScrapeCsvSession) => {
+    if (importingSessionId) return;
+    setImportingSessionId(session.id);
+    try {
+      const parsed = parseAffiliatePlusCSV(session.csv || "");
+      const fileName = session.keyword?.trim()
+        ? `scrape-${session.keyword.trim()}-${session.id}.csv`
+        : `scrape-${session.id}.csv`;
+      const ok = await handleImportParsed(fileName, parsed);
+      if (ok) setScrapeImportOpen(false);
+    } catch (err) {
+      console.error("Import scrape session failed:", err);
+      toast.error(t("Không import được phiên CSV này"));
+    } finally {
+      setImportingSessionId(null);
+    }
+  };
+
+  const domainLabel = (host: string) => {
+    if (!host) return "—";
+    const m = host.match(/^affiliate\.shopee\.(.+)$/i);
+    if (!m) return host;
+    const code = m[1].split(".").pop()?.toUpperCase() || "";
+    return code ? `${code} — ${host}` : host;
+  };
+
+  const handleRetryErrors = async () => {
+    const all = await getSessionItems(sessionId);
+    const errorItems = getErrorItems(all);
     if (!errorItems.length) {
       toast.warn(t("Không có luồng lỗi"));
       return;
     }
     const ids = errorItems.map((i) => i.id);
-    const idSet = new Set(ids);
-    const cleared = itemsRef.current.map((i) =>
-      idSet.has(i.id)
-        ? { ...i, status: "waiting" as ThreadStatus, error: "", countdown: 0 }
-        : i
-    );
-    itemsRef.current = cleared;
-    onUpdateItems(cleared);
+    for (const id of ids) {
+      await patchThread(sessionId, id, {
+        status: "waiting" as ThreadStatus,
+        error: "",
+        countdown: 0,
+      });
+    }
+    await loadPage();
+    scheduleParentSync();
     onAddLog(t("Retry {{count}} luồng lỗi", { count: ids.length }), "warning");
     void handleStart(ids);
   };
 
-  const handleDeleteErrorTasks = () => {
-    const errorItems = getErrorItems(items);
+  const handleDeleteErrorTasks = async () => {
+    const all = await getSessionItems(sessionId);
+    const errorItems = getErrorItems(all);
     if (!errorItems.length) {
       toast.warn(t("Không có task lỗi"));
       return;
     }
     if (!confirm(t("Xóa {{count}} task lỗi?", { count: errorItems.length }))) return;
-    const idSet = new Set(errorItems.map((i) => i.id));
-    onUpdateItems(items.filter((i) => !idSet.has(i.id)));
+    const ids = errorItems.map((i) => i.id);
+    for (const item of errorItems) {
+      if (item.mergedVideoUrl?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(item.mergedVideoUrl);
+        } catch {
+          // ignore
+        }
+      }
+      void removeMergedVideoFromIndexedDb(item);
+    }
+    await removeThreads(sessionId, ids);
+    await loadPage();
+    scheduleParentSync();
     onAddLog(t("Đã xóa {{count}} task lỗi", { count: errorItems.length }), "warning");
   };
 
@@ -355,7 +609,7 @@ export function ThreadManagementPanel({
 
   const handleDownloadAllMerged = async () => {
     if (downloadingMerged) return;
-    const candidates = itemsRef.current.filter(
+    const candidates = (await getSessionItems(sessionId)).filter(
       (i) => Boolean(i.mergedVideoUrl) || Boolean(i.productId) || Boolean(i.productLink)
     );
     if (!candidates.length) {
@@ -373,7 +627,7 @@ export function ThreadManagementPanel({
         if (!blob) continue;
 
         const base = safeDownloadName(
-          item.productName || item.productId || item.shopName || item.id,
+          item.productId || getMergedVideoStorageKey(item) || item.id,
           "merged-video"
         );
         let fileName = `${base}.mp4`;
@@ -404,11 +658,10 @@ export function ThreadManagementPanel({
   };
 
   const handleStart = async (ids?: string[]) => {
-    const currentItems = itemsRef.current;
-    // Toolbar "Bắt Đầu": chỉ item switch = true. Nút Play từng dòng: theo ids.
+    const allItems = await getSessionItems(sessionId);
     const targets = ids?.length
-      ? currentItems.filter((i) => ids.includes(i.id))
-      : currentItems.filter((i) => i.selected);
+      ? allItems.filter((i) => ids.includes(i.id))
+      : allItems.filter((i) => i.selected);
     if (!targets.length) {
       toast.warn(t("Chưa bật switch luồng nào để chạy"));
       return;
@@ -446,6 +699,7 @@ export function ThreadManagementPanel({
     }
 
     pauseAllRef.current = false;
+    runnerRef.current?.stop();
     const concurrency = Math.max(1, Math.min(50, Math.round(config.threadCount || 5)));
     onAddLog(
       t("Bắt đầu {{count}} luồng (song song {{n}})", {
@@ -464,34 +718,30 @@ export function ThreadManagementPanel({
       return;
     }
 
-    let cursor = 0;
-    const runOne = async (target: AffiliatePlusItem) => {
-      if (pauseAllRef.current) return;
+    const runJob = async (
+      target: AffiliatePlusItem,
+      ctx: { isPaused: () => boolean }
+    ): Promise<"success" | "error" | "cancelled"> => {
+      if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
       setGeneratingIds((prev) => ({ ...prev, [target.id]: true }));
-      onUpdateItems(
-        itemsRef.current.map((i) =>
-          i.id === target.id
-            ? {
-                ...i,
-                status: "running" as ThreadStatus,
-                error: "",
-                countdown: 99999,
-              }
-            : i
-        )
-      );
+      await patchThread(sessionId, target.id, {
+        status: "running" as ThreadStatus,
+        error: "",
+        countdown: 99999,
+      });
 
       try {
-        if (pauseAllRef.current) return;
+        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
-        const productPrepared = await prepareShopeeImageInput(target.imageUrl);
+        const fresh = (await getThreadItem(sessionId, target.id)) || target;
+        const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
         const images = [characterPrepared, productPrepared];
 
         const result = await shopeeVideoJob.run({
           url: "/api/app/generation-shopee-video/",
           body: {
-            prompt: target.prompt?.trim() || prompt,
+            prompt: fresh.prompt?.trim() || prompt,
             images,
             characterImage: characterPrepared,
             productImage: productPrepared,
@@ -499,7 +749,7 @@ export function ThreadManagementPanel({
             variantCount: config!.videosPerJob,
             videoModel: config!.videoModel,
             config: {
-              prompt: target.prompt?.trim() || prompt,
+              prompt: fresh.prompt?.trim() || prompt,
               aspectRatio: "9:16",
               videosPerJob: config!.videosPerJob,
               variantCount: config!.videosPerJob,
@@ -507,17 +757,17 @@ export function ThreadManagementPanel({
               videoMode: "component",
             },
             _metadata: {
-              threadId: target.id,
-              shopName: target.shopName,
-              productName: target.productName,
+              threadId: fresh.id,
+              shopName: fresh.shopName,
+              productName: fresh.productName,
             },
           },
           onProgress: (_pct, msg) => {
-            if (msg) onAddLog(`${target.productName || target.id}: ${msg}`, "info", target.id);
+            if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
           },
         });
 
-        if (pauseAllRef.current) return;
+        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
         const fromUris = ((result.data.videoUris?.length ? result.data.videoUris : []) as string[])
           .map((u) => String(u || "").trim())
@@ -530,30 +780,24 @@ export function ThreadManagementPanel({
         const { videoUrls, videoDisabled } = padVideoSlots(rawUris, slotCount);
         const filledCount = videoUrls.filter(Boolean).length;
 
-        onUpdateItems(
-          itemsRef.current.map((i) => {
-            if (i.id !== target.id) return i;
-            return {
-              ...i,
-              status: "success" as ThreadStatus,
-              videoUrls,
-              videoDisabled,
-              uploaded: filledCount,
-              pending: Math.max(slotCount - filledCount, 0),
-              error: "",
-              countdown: 0,
-            };
-          })
-        );
+        await patchThread(sessionId, fresh.id, {
+          status: "success" as ThreadStatus,
+          videoUrls,
+          videoDisabled,
+          uploaded: filledCount,
+          pending: Math.max(slotCount - filledCount, 0),
+          error: "",
+          countdown: 0,
+        });
+
         setGeneratingIds((prev) => {
           const next = { ...prev };
-          delete next[target.id];
+          delete next[fresh.id];
           return next;
         });
 
-        // Lưu link IndexedDB ngay → enrich base64 chạy ngầm (giống affiliate-video)
         try {
-          await persistProductVideosWithEnrichment(getMergedVideoStorageKey(target), videoUrls);
+          await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh), videoUrls);
         } catch (persistErr) {
           console.warn("[persistProductVideosWithEnrichment]", persistErr);
         }
@@ -563,65 +807,50 @@ export function ThreadManagementPanel({
           .map((u, idx) => ({ u, disabled: videoDisabled[idx] }))
           .filter((x) => x.u && !x.disabled)
           .map((x) => x.u);
-        if (mergeUrls.length >= 2 && !pauseAllRef.current) {
-          setMergingIds((prev) => ({ ...prev, [target.id]: true }));
-          onAddLog(
-            t("Đang nối {{count}} video...", { count: mergeUrls.length }),
-            "info",
-            target.id
-          );
+        if (mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current) {
+          setMergingIds((prev) => ({ ...prev, [fresh.id]: true }));
+          onAddLog(t("Đang nối {{count}} video...", { count: mergeUrls.length }), "info", fresh.id);
           try {
-            mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(target), mergeUrls);
-            if (!pauseAllRef.current) {
-              onUpdateItems(
-                itemsRef.current.map((i) =>
-                  i.id === target.id ? { ...i, mergedVideoUrl: mergedUrl, error: "" } : i
-                )
-              );
-              onAddLog(t("Đã nối video và lưu IndexedDB"), "success", target.id);
+            mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(fresh), mergeUrls);
+            if (!ctx.isPaused() && !pauseAllRef.current) {
+              await patchThread(sessionId, fresh.id, { mergedVideoUrl: mergedUrl, error: "" });
+              onAddLog(t("Đã nối video và lưu IndexedDB"), "success", fresh.id);
             }
           } catch (mergeErr: any) {
             console.error(mergeErr);
             const msg = mergeErr?.message || t("Nối video thất bại");
-            onUpdateItems(
-              itemsRef.current.map((i) => (i.id === target.id ? { ...i, error: msg } : i))
-            );
-            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", target.id);
+            await patchThread(sessionId, fresh.id, { error: msg });
+            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", fresh.id);
           } finally {
             setMergingIds((prev) => {
               const next = { ...prev };
-              delete next[target.id];
+              delete next[fresh.id];
               return next;
             });
           }
         }
 
-        if (!pauseAllRef.current) {
+        if (!ctx.isPaused() && !pauseAllRef.current) {
           onAddLog(
             t("Hoàn tất video cho {{name}} ({{count}} file{{merged}})", {
-              name: target.productName || target.shopName || target.id,
+              name: fresh.productName || fresh.shopName || fresh.id,
               count: filledCount || 1,
               merged: mergedUrl ? `, ${t("đã nối")}` : "",
             }),
             "success",
-            target.id
+            fresh.id
           );
         }
+        scheduleParentSync();
+        return "success";
       } catch (err: any) {
-        if (pauseAllRef.current) return;
+        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
         console.error(err);
-        onUpdateItems(
-          itemsRef.current.map((i) =>
-            i.id === target.id
-              ? {
-                  ...i,
-                  status: "error" as ThreadStatus,
-                  error: err?.message || t("Generate video thất bại"),
-                  countdown: 0,
-                }
-              : i
-          )
-        );
+        await patchThread(sessionId, target.id, {
+          status: "error" as ThreadStatus,
+          error: err?.message || t("Generate video thất bại"),
+          countdown: 0,
+        });
         onAddLog(
           t("Lỗi generate video: {{msg}}", {
             msg: err?.message || "unknown",
@@ -629,6 +858,8 @@ export function ThreadManagementPanel({
           "error",
           target.id
         );
+        scheduleParentSync();
+        return "error";
       } finally {
         setGeneratingIds((prev) => {
           const next = { ...prev };
@@ -638,30 +869,39 @@ export function ThreadManagementPanel({
       }
     };
 
-    const workerCount = Math.min(concurrency, targets.length);
-    await Promise.all(
-      Array.from({ length: workerCount }, async () => {
-        while (!pauseAllRef.current) {
-          const myIndex = cursor++;
-          if (myIndex >= targets.length) return;
-          await runOne(targets[myIndex]);
-        }
-      })
-    );
+    const runner = new ThreadRunner({
+      sessionId,
+      concurrency,
+      autoPatchStatus: false,
+      runJob,
+      onEvent: (ev) => {
+        if (ev.type === "finished") scheduleParentSync();
+      },
+    });
+    runnerRef.current = runner;
+    await runner.run(targets);
+    runnerRef.current = null;
+    await loadPage();
   };
 
-  const handlePause = (ids?: string[]) => {
+  const handlePause = async (ids?: string[]) => {
+    pauseAllRef.current = true;
+    runnerRef.current?.pause();
+
     if (!ids?.length) {
-      pauseAllRef.current = true;
       setGeneratingIds({});
       setMergingIds({});
-      onUpdateItems(
-        itemsRef.current.map((i) =>
-          i.status === "running" || i.status === "uploading"
-            ? { ...i, status: "stopped" as ThreadStatus, countdown: 0 }
-            : i
-        )
-      );
+      const running = await getSessionItems(sessionId);
+      for (const i of running) {
+        if (i.status === "running" || i.status === "uploading") {
+          await patchThread(sessionId, i.id, {
+            status: "stopped" as ThreadStatus,
+            countdown: 0,
+          });
+        }
+      }
+      await loadPage();
+      scheduleParentSync();
       onAddLog(t("Tạm dừng tất cả luồng"), "warning");
       toast.success(t("Đã tạm dừng tất cả"));
       return;
@@ -682,19 +922,21 @@ export function ThreadManagementPanel({
       });
       return next;
     });
-    onUpdateItems(
-      itemsRef.current.map((i) =>
-        pausedIds.has(i.id) && (i.status === "running" || i.status === "uploading")
-          ? { ...i, status: "stopped" as ThreadStatus, countdown: 0 }
-          : i
-      )
-    );
+    for (const id of ids) {
+      const item = await getThreadItem(sessionId, id);
+      if (item && (item.status === "running" || item.status === "uploading")) {
+        await patchThread(sessionId, id, { status: "stopped" as ThreadStatus, countdown: 0 });
+      }
+    }
+    await loadPage();
+    scheduleParentSync();
     onAddLog(t("Tạm dừng luồng"), "warning");
     toast.success(t("Đã tạm dừng"));
   };
 
-  const handleDeleteSelected = () => {
-    const selected = items.filter((i) => i.selected);
+  const handleDeleteSelected = async () => {
+    const all = await getSessionItems(sessionId);
+    const selected = all.filter((i) => i.selected);
     if (!selected.length) {
       toast.warn(t("Chưa chọn luồng nào"));
       return;
@@ -710,12 +952,17 @@ export function ThreadManagementPanel({
       }
       void removeMergedVideoFromIndexedDb(i);
     });
-    onUpdateItems(items.filter((i) => !i.selected));
+    await removeThreads(
+      sessionId,
+      selected.map((i) => i.id)
+    );
+    await loadPage();
+    scheduleParentSync();
     onAddLog(t("Xóa {{count}} luồng", { count: selected.length }), "warning");
   };
 
-  const handleDelete = (id: string) => {
-    const target = items.find((i) => i.id === id);
+  const handleDelete = async (id: string) => {
+    const target = (await getThreadItem(sessionId, id)) || items.find((i) => i.id === id);
     if (target?.mergedVideoUrl?.startsWith("blob:")) {
       try {
         URL.revokeObjectURL(target.mergedVideoUrl);
@@ -725,7 +972,9 @@ export function ThreadManagementPanel({
     }
     if (target) void removeMergedVideoFromIndexedDb(target);
     else void removeMergedVideoFromIndexedDb(id);
-    onUpdateItems(items.filter((i) => i.id !== id));
+    await removeThread(sessionId, id);
+    await loadPage();
+    scheduleParentSync();
     onAddLog(t("Xóa luồng"), "warning", id);
   };
 
@@ -738,7 +987,7 @@ export function ThreadManagementPanel({
     if (mergingIds[item.id]) return;
 
     setMergingIds((prev) => ({ ...prev, [item.id]: true }));
-    onUpdateItems(itemsRef.current.map((i) => (i.id === item.id ? { ...i, error: "" } : i)));
+    await patchThread(sessionId, item.id, { error: "" });
     try {
       // Revoke blob cũ nếu có
       if (item.mergedVideoUrl?.startsWith("blob:")) {
@@ -749,11 +998,8 @@ export function ThreadManagementPanel({
         }
       }
       const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item), urls);
-      onUpdateItems(
-        itemsRef.current.map((i) =>
-          i.id === item.id ? { ...i, mergedVideoUrl: mergedUrl, error: "" } : i
-        )
-      );
+      await patchThread(sessionId, item.id, { mergedVideoUrl: mergedUrl, error: "" });
+      scheduleParentSync();
       autoMergeAttemptedRef.current[item.id] = true;
       onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
       toast.success(t("Đã nối lại video"));
@@ -766,7 +1012,8 @@ export function ThreadManagementPanel({
       );
     } catch (err: any) {
       const msg = err?.message || t("Nối video thất bại");
-      onUpdateItems(itemsRef.current.map((i) => (i.id === item.id ? { ...i, error: msg } : i)));
+      await patchThread(sessionId, item.id, { error: msg });
+      scheduleParentSync();
       onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
       toast.error(msg);
     } finally {
@@ -780,7 +1027,8 @@ export function ThreadManagementPanel({
 
   /** Tạo lại 1 slot variant (gắn vào đúng tab; URL → IDB → base64 ngầm). */
   const regenerateVariantSlot = async (itemId: string, slotIndex: number) => {
-    const target = itemsRef.current.find((i) => i.id === itemId);
+    const target =
+      (await getThreadItem(sessionId, itemId)) || itemsRef.current.find((i) => i.id === itemId);
     if (!target) return;
 
     setVideoPreview((prev) =>
@@ -791,7 +1039,8 @@ export function ThreadManagementPanel({
 
     try {
       const config = genConfig || (await loadGenerateVideoConfig());
-      const character = config.characters.find((c) => c.id === config.characterId) || config.characters[0];
+      const character =
+        config.characters.find((c) => c.id === config.characterId) || config.characters[0];
       const characterImage =
         character?.images?.[character.previewPose] ||
         character?.images?.fashion ||
@@ -854,23 +1103,16 @@ export function ThreadManagementPanel({
       );
       const filledCount = nextUrls.filter(Boolean).length;
 
-      onUpdateItems(
-        itemsRef.current.map((i) =>
-          i.id === itemId
-            ? {
-                ...i,
-                videoUrls: nextUrls,
-                videoDisabled: nextDisabled,
-                uploaded: filledCount,
-                pending: Math.max(slotCount - filledCount, 0),
-                status: "success" as ThreadStatus,
-                error: "",
-                // Reset merged — slot đổi thì cần nối lại
-                mergedVideoUrl: "",
-              }
-            : i
-        )
-      );
+      await patchThread(sessionId, itemId, {
+        videoUrls: nextUrls,
+        videoDisabled: nextDisabled,
+        uploaded: filledCount,
+        pending: Math.max(slotCount - filledCount, 0),
+        status: "success" as ThreadStatus,
+        error: "",
+        mergedVideoUrl: "",
+      });
+      scheduleParentSync();
       autoMergeAttemptedRef.current[itemId] = false;
 
       await persistProductVideosWithEnrichment(getMergedVideoStorageKey(target), nextUrls);
@@ -890,11 +1132,7 @@ export function ThreadManagementPanel({
           : prev
       );
 
-      onAddLog(
-        t("Đã tạo lại video {{n}}", { n: slotIndex + 1 }),
-        "success",
-        itemId
-      );
+      onAddLog(t("Đã tạo lại video {{n}}", { n: slotIndex + 1 }), "success", itemId);
       toast.success(t("Đã tạo lại Video {{n}}", { n: slotIndex + 1 }));
     } catch (err: any) {
       console.error(err);
@@ -932,25 +1170,19 @@ export function ThreadManagementPanel({
     }
   };
 
-  const toggleVariantDisabled = (itemId: string, slotIndex: number) => {
-    const target = itemsRef.current.find((i) => i.id === itemId);
+  const toggleVariantDisabled = async (itemId: string, slotIndex: number) => {
+    const target =
+      (await getThreadItem(sessionId, itemId)) || itemsRef.current.find((i) => i.id === itemId);
     if (!target) return;
     const slotCount = Math.max(target.videoUrls?.length || 0, slotIndex + 1, 1);
     const nextDisabled = Array.from({ length: slotCount }, (_, i) =>
       i === slotIndex ? !Boolean(target.videoDisabled?.[i]) : Boolean(target.videoDisabled?.[i])
     );
-    onUpdateItems(
-      itemsRef.current.map((i) =>
-        i.id === itemId
-          ? {
-              ...i,
-              videoDisabled: nextDisabled,
-              // Cần nối lại sau khi đổi danh sách merge
-              mergedVideoUrl: "",
-            }
-          : i
-      )
-    );
+    await patchThread(sessionId, itemId, {
+      videoDisabled: nextDisabled,
+      mergedVideoUrl: "",
+    });
+    scheduleParentSync();
     autoMergeAttemptedRef.current[itemId] = false;
     setVideoPreview((prev) =>
       prev?.kind === "variants" && prev.itemId === itemId
@@ -975,17 +1207,27 @@ export function ThreadManagementPanel({
   };
 
   const toggleSelectAll = (checked: boolean) => {
-    updateAll((i) => ({ ...i, selected: checked }));
+    applyToVisible((i) => ({ ...i, selected: checked }));
   };
+
+  const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((i) => i.selected);
+
+  const normalizedTerm = useMemo(() => normalizeSearch(searchTerm), [searchTerm]);
 
   const handleSaveGenerateConfig = (config: GenerateVideoConfig, promptForAll: string) => {
     setGenConfig(config);
     setCharacterPreview(getCharacterPreview(config));
-    onUpdateItems(items.map((i) => ({ ...i, prompt: promptForAll })));
-    onAddLog(
-      t("Đã áp dụng prompt generate video cho {{count}} luồng", { count: items.length }),
-      "success"
-    );
+    void (async () => {
+      const all = await getSessionItems(sessionId);
+      const next = all.map((i) => ({ ...i, prompt: promptForAll }));
+      await replaceSessionThreads(sessionId, next);
+      await loadPage();
+      scheduleParentSync();
+      onAddLog(
+        t("Đã áp dụng prompt generate video cho {{count}} luồng", { count: next.length }),
+        "success"
+      );
+    })();
   };
 
   return (
@@ -993,19 +1235,55 @@ export function ThreadManagementPanel({
       {/* Stats */}
       <div className="flex flex-wrap gap-2">
         {[
-          { label: t("Tổng"), value: stats.total, color: "bg-sky-500" },
-          { label: t("Chờ"), value: stats.waiting, color: "bg-amber-500" },
-          { label: t("Đang upload"), value: stats.uploading, color: "bg-cyan-500" },
-          { label: t("Thành công"), value: stats.success, color: "bg-emerald-500" },
-          { label: t("Lỗi"), value: stats.error, color: "bg-rose-500" },
+          {
+            label: t("Tổng"),
+            value: stats.total,
+            bg: "#e0f2fe",
+            border: "#38bdf8",
+            text: "#0284c7",
+            dot: "#0ea5e9",
+          },
+          {
+            label: t("Chờ"),
+            value: stats.waiting,
+            bg: "#fef9c3",
+            border: "#fbbf24",
+            text: "#ca8a04",
+            dot: "#eab308",
+          },
+          {
+            label: t("Đang upload"),
+            value: stats.uploading,
+            bg: "#ecfeff",
+            border: "#22d3ee",
+            text: "#0891b2",
+            dot: "#06b6d4",
+          },
+          {
+            label: t("Thành công"),
+            value: stats.success,
+            bg: "#ecfdf5",
+            border: "#34d399",
+            text: "#059669",
+            dot: "#10b981",
+          },
+          {
+            label: t("Lỗi"),
+            value: stats.error,
+            bg: "#fff1f2",
+            border: "#fb7185",
+            text: "#e11d48",
+            dot: "#f43f5e",
+          },
         ].map((s) => (
           <div
             key={s.label}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-200 shadow-sm"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm"
+            style={{ backgroundColor: s.bg, borderColor: s.border, color: s.text }}
           >
-            <span className={`w-2 h-2 rounded-full ${s.color}`} />
-            <span className="text-xs text-gray-500">{s.label}</span>
-            <span className="text-sm font-bold text-gray-800">{s.value}</span>
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
+            <span className="text-xs font-medium">{s.label}</span>
+            <span className="text-sm font-bold">{s.value}</span>
           </div>
         ))}
       </div>
@@ -1029,17 +1307,25 @@ export function ThreadManagementPanel({
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) handleImport(file);
+                if (file) void handleImport(file);
                 e.target.value = "";
               }}
             />
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => void openScrapeImportDialog()}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
             >
+              <RiDatabase2Line className="text-base" />
+              {t("Nhập từ Data")}
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3.5 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
+            >
               <RiFileExcel2Line className="text-base" />
-              {t("Nhập Excel & Tạo Luồng")}
+              {t("Nhập thủ công")}
             </button>
             <button
               type="button"
@@ -1053,7 +1339,12 @@ export function ThreadManagementPanel({
               type="button"
               onClick={handleRetryErrors}
               disabled={stats.error === 0}
-              className="inline-flex gap-1 items-center px-3 h-9 text-sm font-semibold text-amber-700 bg-amber-50 rounded-lg border border-amber-300 transition-colors hover:bg-amber-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                stats.error === 0
+                  ? undefined
+                  : { backgroundColor: "#fef9c3", borderColor: "#fbbf24", color: "#ca8a04" }
+              }
             >
               <HiRefresh className="text-base" />
               {t("Retry Lỗi")}
@@ -1062,17 +1353,26 @@ export function ThreadManagementPanel({
               type="button"
               onClick={handleDeleteErrorTasks}
               disabled={stats.error === 0}
-              className="inline-flex items-center px-3 h-9 text-sm font-semibold text-rose-600 bg-rose-50 rounded-lg border border-rose-300 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                stats.error === 0
+                  ? undefined
+                  : { backgroundColor: "#fff1f2", borderColor: "#fb7185", color: "#e11d48" }
+              }
             >
+              <HiOutlineTrash className="text-base" />
               {t("Xóa Tasks")}
             </button>
             <button
               type="button"
               onClick={() => void handleDownloadAllMerged()}
-              disabled={
-                downloadingMerged || !items.some((i) => Boolean(i.mergedVideoUrl))
+              disabled={downloadingMerged || !hasMergedVideos}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                downloadingMerged || !hasMergedVideos
+                  ? undefined
+                  : { backgroundColor: "#ecfdf5", borderColor: "#34d399", color: "#059669" }
               }
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 transition-colors hover:bg-emerald-100 disabled:cursor-not-allowed disabled:border-gray-200 disabled:bg-gray-50 disabled:text-gray-400"
             >
               {downloadingMerged ? (
                 <RiLoader4Line className="text-base animate-spin" />
@@ -1084,8 +1384,11 @@ export function ThreadManagementPanel({
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-gray-50 px-3 text-xs font-medium text-gray-600">
-              <HiClock className="text-sm text-gray-500" />
+            <span
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-medium"
+              style={{ backgroundColor: "#f8fafc", borderColor: "#cbd5e1", color: "#475569" }}
+            >
+              <HiClock className="text-sm" />
               {t("Chạy lại lúc")} {settings.scheduleTime} SA
             </span>
             <button
@@ -1094,16 +1397,24 @@ export function ThreadManagementPanel({
                 onAddLog(t("Check 24h hoàn tất"), "info");
                 toast.success(t("Đã kiểm tra 24h"));
               }}
-              className="inline-flex items-center px-3 h-9 text-sm font-semibold text-sky-700 bg-white rounded-lg border border-sky-300 transition-colors hover:bg-sky-50"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity hover:opacity-90"
+              style={{ backgroundColor: "#e0f2fe", borderColor: "#38bdf8", color: "#0284c7" }}
             >
+              <HiCheck className="text-base" />
               Check 24h
             </button>
             <button
               type="button"
               onClick={() => handleStart()}
               disabled={selectedCount === 0}
-              className="inline-flex items-center px-3 h-9 text-sm font-semibold text-sky-700 bg-white rounded-lg border border-sky-300 transition-colors hover:bg-sky-50"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                selectedCount === 0
+                  ? undefined
+                  : { backgroundColor: "#dbeafe", borderColor: "#60a5fa", color: "#1d4ed8" }
+              }
             >
+              <HiPlay className="text-base" />
               {t("Bắt Đầu")}
             </button>
             <button
@@ -1112,18 +1423,32 @@ export function ThreadManagementPanel({
               disabled={
                 Object.keys(generatingIds).length === 0 &&
                 Object.keys(mergingIds).length === 0 &&
-                !items.some((i) => i.status === "running" || i.status === "uploading")
+                stats.uploading === 0
               }
-              className="inline-flex items-center px-3 h-9 text-sm font-semibold text-sky-700 bg-white rounded-lg border border-sky-300 transition-colors hover:bg-sky-50"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                Object.keys(generatingIds).length === 0 &&
+                Object.keys(mergingIds).length === 0 &&
+                stats.uploading === 0
+                  ? undefined
+                  : { backgroundColor: "#ffedd5", borderColor: "#fb923c", color: "#c2410c" }
+              }
             >
+              <HiOutlinePause className="text-base" />
               {t("Tạm Dừng")}
             </button>
             <button
               type="button"
               onClick={handleDeleteSelected}
               disabled={selectedCount === 0}
-              className="inline-flex items-center px-3 h-9 text-sm font-semibold text-sky-700 bg-white rounded-lg border border-sky-300 transition-colors hover:bg-sky-50"
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                selectedCount === 0
+                  ? undefined
+                  : { backgroundColor: "#fff1f2", borderColor: "#fb7185", color: "#e11d48" }
+              }
             >
+              <HiBan className="text-base" />
               {t("Xóa Chọn")}
               {selectedCount > 0 ? ` (${selectedCount})` : ""}
             </button>
@@ -1133,366 +1458,493 @@ export function ThreadManagementPanel({
 
       {/* Table */}
       <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
-        {items.length === 0 ? (
+        {listTotal === 0 ? (
           <div className="py-16 text-sm text-center text-gray-400">
             {t('Chưa có luồng. Nhấn "Nhập Excel & Tạo Luồng" để bắt đầu.')}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs tracking-wide text-gray-600 uppercase bg-gray-50 border-b border-gray-200">
-                  <th className="px-4 py-3 w-12">
-                    <input
-                      type="checkbox"
-                      checked={items.length > 0 && items.every((i) => i.selected)}
-                      onChange={(e) => toggleSelectAll(e.target.checked)}
-                      className="rounded"
-                    />
-                  </th>
-                  <th className="px-4 py-3 w-10 text-left">#</th>
-                  <th className="px-4 py-3 text-left" style={{ maxWidth: 300, width: 300 }}>
-                    {t("Shop / Sản phẩm")}
-                  </th>
-                  <th className="px-4 py-3 w-28 text-center">{t("Ảnh sản phẩm")}</th>
-                  <th className="px-4 py-3 w-28 text-center">{t("Ảnh nhân vật")}</th>
-                  <th className="px-4 py-3 min-w-[140px] text-center">{t("Video")}</th>
-                  <th className="px-4 py-3 w-32 text-center">{t("Thao tác")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {items.map((item, idx) => (
-                  <tr
-                    key={item.id}
-                    className={`hover:bg-sky-50/30 transition-colors ${
-                      item.error
-                        ? "bg-rose-50/70"
-                        : item.selected
-                        ? "bg-sky-50/50"
-                        : idx % 2 === 0
-                        ? "bg-white"
-                        : "bg-gray-50/40"
-                    }`}
+          <>
+            <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 bg-white border-b border-gray-100">
+              <div className="relative flex-1 min-w-[240px] max-w-md">
+                <HiSearch className="absolute left-3 top-1/2 text-base text-gray-400 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t("Tìm tên shop / tên sản phẩm...") as string}
+                  className="pr-9 pl-9 w-full h-9 text-sm bg-white rounded-lg border border-gray-200 focus:border-sky-400 focus:outline-none"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="flex absolute right-2 top-1/2 justify-center items-center w-6 h-6 text-gray-400 rounded-md -translate-y-1/2 hover:bg-gray-100 hover:text-gray-600"
+                    aria-label={t("Xóa tìm kiếm")}
                   >
-                    <td className="px-4 py-3">
-                      <Switch
-                        size="sm"
-                        value={item.selected}
-                        onChange={(val) => updateItem(item.id, { selected: val })}
+                    <HiOutlineX className="text-sm" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex gap-2 items-center text-xs text-gray-500">
+                {normalizedTerm ? (
+                  <span>
+                    {t("Khớp")}: <b className="text-gray-800">{listTotalMatched}</b>/{listTotal}
+                  </span>
+                ) : (
+                  <span>
+                    {t("Tổng")}: <b className="text-gray-800">{listTotal}</b>
+                  </span>
+                )}
+                {listLoading ? (
+                  <RiLoader4Line className="text-sm text-gray-400 animate-spin" />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs tracking-wide text-gray-600 uppercase bg-gray-50 border-b border-gray-200">
+                    <th className="px-4 py-3 w-12">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={(e) => toggleSelectAll(e.target.checked)}
+                        className="rounded"
                       />
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-400">{idx + 1}</td>
-                    <td className="px-4 py-3" style={{ maxWidth: 300, width: 300 }}>
-                      <div className="overflow-hidden space-y-1" style={{ maxWidth: 300 }}>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="block flex-1 min-w-0 font-semibold text-gray-900 truncate"
-                            title={item.shopName || undefined}
-                          >
-                            {item.shopName || "—"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(item, "shopName")}
-                            className="text-sky-500 shrink-0 hover:text-sky-700"
-                          >
-                            <HiPencil className="text-xs" />
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            className="block flex-1 min-w-0 text-gray-600 truncate"
-                            title={item.productName || undefined}
-                          >
-                            {item.productName || "—"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => openEdit(item, "productName")}
-                            className="text-sky-500 shrink-0 hover:text-sky-700"
-                          >
-                            <HiPencil className="text-xs" />
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1 items-center">
-                        {item.imageUrl ? (
-                          <a
-                            href={item.imageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title={t("Xem ảnh sản phẩm")}
-                          >
-                            <img
-                              src={item.imageUrl}
-                              alt={item.productName || t("Ảnh sản phẩm")}
-                              className="object-cover w-16 h-16 rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
-                            />
-                          </a>
-                        ) : (
-                          <div className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200">
-                            <HiOutlinePhotograph className="text-xl" />
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => openEdit(item, "imageUrl")}
-                          className="text-sky-600 text-10 hover:underline"
-                        >
-                          {t("Sửa")}
-                        </button>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1 items-center">
-                        {characterPreview.url ? (
-                          <img
-                            src={characterPreview.url}
-                            alt={characterPreview.name || t("Ảnh nhân vật")}
-                            title={characterPreview.name || t("Ảnh nhân vật từ config")}
-                            className="object-cover w-16 h-16 rounded-lg border border-gray-200"
+                    </th>
+                    <th className="px-4 py-3 w-10 text-left">#</th>
+                    <th className="px-4 py-3 text-left" style={{ maxWidth: 300, width: 300 }}>
+                      {t("Shop / Sản phẩm")}
+                    </th>
+                    <th className="px-4 py-3 w-28 text-center">{t("Ảnh sản phẩm")}</th>
+                    <th className="px-4 py-3 w-28 text-center">{t("Ảnh nhân vật")}</th>
+                    <th className="px-4 py-3 min-w-[140px] text-center">{t("Video")}</th>
+                    <th className="px-4 py-3 w-32 text-center">{t("Thao tác")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {visibleItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-10 text-sm text-center text-gray-400">
+                        {t("Không có luồng nào khớp tìm kiếm.")}
+                      </td>
+                    </tr>
+                  ) : null}
+                  {visibleItems.map((item, localIdx) => {
+                    const idx = pageStartIndex + localIdx;
+                    return (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-sky-50/30 transition-colors ${
+                          item.error
+                            ? "bg-rose-50/70"
+                            : item.selected
+                            ? "bg-sky-50/50"
+                            : "bg-white"
+                        }`}
+                      >
+                        <td className="px-4 py-3">
+                          <Switch
+                            size="sm"
+                            value={item.selected}
+                            onChange={(val) => updateItem(item.id, { selected: val })}
                           />
-                        ) : (
-                          <div
-                            className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
-                            title={t("Chưa có ảnh nhân vật trong config")}
-                          >
-                            <HiOutlinePhotograph className="text-xl" />
-                          </div>
-                        )}
-                        {characterPreview.name ? (
-                          <span
-                            className="max-w-[88px] truncate text-10 text-gray-500"
-                            title={characterPreview.name}
-                          >
-                            {characterPreview.name}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1.5 items-center min-w-4xs">
-                        <div className="flex gap-2 justify-center items-center">
-                          {(() => {
-                            const isGenerating = Boolean(generatingIds[item.id]);
-                            const filledUrls = (item.videoUrls || []).filter((u) =>
-                              String(u || "").trim()
-                            );
-                            const slotCount = item.videoUrls?.length || 0;
-                            const hasVideos = slotCount > 0;
-                            const filled = filledUrls.length;
-                            const configTotal = Math.max(
-                              1,
-                              Math.min(4, genConfig?.videosPerJob || slotCount || 1)
-                            );
-
-                            if (isGenerating) {
-                              return (
-                                <div
-                                  className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm"
-                                  title={t("Đang tạo video...")}
-                                >
-                                  <RiLoader4Line className="text-xl animate-spin" />
-                                </div>
-                              );
-                            }
-
-                            return (
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-400">{idx + 1}</td>
+                        <td className="px-4 py-3" style={{ maxWidth: 300, width: 300 }}>
+                          <div className="overflow-hidden space-y-1" style={{ maxWidth: 300 }}>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span
+                                className="block flex-1 min-w-0 font-semibold text-gray-900 truncate"
+                                title={item.shopName || undefined}
+                              >
+                                {item.shopName || "—"}
+                              </span>
                               <button
                                 type="button"
-                                disabled={!hasVideos}
-                                onClick={() => void openVariantPreview(item)}
-                                className={`relative flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors disabled:opacity-100 ${
-                                  hasVideos
-                                    ? "text-white bg-purple-500 border-purple-500 cursor-pointer hover:border-purple-600 hover:bg-purple-600"
-                                    : "text-gray-400 bg-gray-200 border-gray-300 cursor-default"
-                                }`}
-                                title={
-                                  hasVideos
-                                    ? t("{{filled}}/{{total}} video — xem", {
-                                        filled,
-                                        total: configTotal,
-                                      })
-                                    : t("Chưa có video")
-                                }
+                                onClick={() => openEdit(item, "shopName")}
+                                className="text-sky-500 shrink-0 hover:text-sky-700"
                               >
-                                <FaPhotoVideo
-                                  className={`text-lg ${
-                                    hasVideos ? "text-white" : "text-gray-400"
-                                  }`}
-                                />
-                                {hasVideos ? (
-                                  <span
-                                    className={`flex absolute -top-1 -left-1 justify-center items-center px-1 h-4 font-semibold text-white rounded-full min-w-4 text-10 whitespace-nowrap ${
-                                      filled !== configTotal ? "bg-danger" : "bg-purple-700"
-                                    }`}
-                                  >
-                                    {filled}/{configTotal}
-                                  </span>
-                                ) : null}
-                                {hasVideos && filled >= configTotal ? (
-                                  <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-success shadow-sm ring-1 ring-success">
-                                    <HiCheck className="text-[11px] font-bold" />
-                                  </span>
-                                ) : null}
+                                <HiPencil className="text-xs" />
                               </button>
-                            );
-                          })()}
-                          {(() => {
-                            const hasMerged = Boolean(item.mergedVideoUrl);
-                            const isMerging = Boolean(mergingIds[item.id]);
-                            const canMerge = getMergeableVideoUrls(item).length >= 2;
+                            </div>
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span
+                                className="block flex-1 min-w-0 text-gray-600 truncate"
+                                title={item.productName || undefined}
+                              >
+                                {item.productName || "—"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => openEdit(item, "productName")}
+                                className="text-sky-500 shrink-0 hover:text-sky-700"
+                              >
+                                <HiPencil className="text-xs" />
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1 items-center">
+                            {item.imageUrl ? (
+                              <a
+                                href={item.imageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={t("Xem ảnh sản phẩm")}
+                              >
+                                <img
+                                  src={item.imageUrl}
+                                  alt={item.productName || t("Ảnh sản phẩm")}
+                                  className="object-cover w-16 h-16 rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                                />
+                              </a>
+                            ) : (
+                              <div className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200">
+                                <HiOutlinePhotograph className="text-xl" />
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openEdit(item, "imageUrl")}
+                              className="text-sky-600 text-10 hover:underline"
+                            >
+                              {t("Sửa")}
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1 items-center">
+                            {characterPreview.url ? (
+                              <img
+                                src={characterPreview.url}
+                                alt={characterPreview.name || t("Ảnh nhân vật")}
+                                title={characterPreview.name || t("Ảnh nhân vật từ config")}
+                                className="object-cover w-16 h-16 rounded-lg border border-gray-200"
+                              />
+                            ) : (
+                              <div
+                                className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
+                                title={t("Chưa có ảnh nhân vật trong config")}
+                              >
+                                <HiOutlinePhotograph className="text-xl" />
+                              </div>
+                            )}
+                            {characterPreview.name ? (
+                              <span
+                                className="max-w-[88px] truncate text-10 text-gray-500"
+                                title={characterPreview.name}
+                              >
+                                {characterPreview.name}
+                              </span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-1.5 items-center min-w-4xs">
+                            <div className="flex gap-2 justify-center items-center">
+                              {(() => {
+                                const isGenerating = Boolean(generatingIds[item.id]);
+                                const filledUrls = (item.videoUrls || []).filter((u) =>
+                                  String(u || "").trim()
+                                );
+                                const slotCount = item.videoUrls?.length || 0;
+                                const hasVideos = slotCount > 0;
+                                const filled = filledUrls.length;
+                                const configTotal = Math.max(
+                                  1,
+                                  Math.min(4, genConfig?.videosPerJob || slotCount || 1)
+                                );
 
-                            if (isMerging) {
-                              return (
-                                <div
-                                  className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm"
-                                  title={t("Đang nối video...")}
-                                >
-                                  <RiLoader4Line className="text-xl animate-spin" />
-                                </div>
-                              );
-                            }
+                                if (isGenerating) {
+                                  return (
+                                    <div
+                                      className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm"
+                                      title={t("Đang tạo video...")}
+                                    >
+                                      <RiLoader4Line className="text-xl animate-spin" />
+                                    </div>
+                                  );
+                                }
 
-                            if (hasMerged) {
-                              return (
-                                <div className="flex gap-1.5 items-center">
+                                return (
                                   <button
                                     type="button"
-                                    onClick={() => void openMergedPreview(item)}
-                                    className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
-                                    title={t("Xem video đã nối")}
+                                    disabled={!hasVideos}
+                                    onClick={() => void openVariantPreview(item)}
+                                    className={`relative flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors disabled:opacity-100 ${
+                                      hasVideos
+                                        ? "text-white bg-purple-500 border-purple-500 cursor-pointer hover:border-purple-600 hover:bg-purple-600"
+                                        : "text-gray-400 bg-gray-200 border-gray-300 cursor-default"
+                                    }`}
+                                    title={
+                                      hasVideos
+                                        ? t("{{filled}}/{{total}} video — xem", {
+                                            filled,
+                                            total: configTotal,
+                                          })
+                                        : t("Chưa có video")
+                                    }
                                   >
-                                    <RiVideoFill className="text-lg text-white" />
-                                    <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
-                                      <HiCheck className="text-[11px] font-bold" />
-                                    </span>
+                                    <FaPhotoVideo
+                                      className={`text-lg ${
+                                        hasVideos ? "text-white" : "text-gray-400"
+                                      }`}
+                                    />
+                                    {hasVideos ? (
+                                      <span
+                                        className={`flex absolute -top-1 -left-1 justify-center items-center px-1 h-4 font-semibold text-white rounded-full min-w-4 text-10 whitespace-nowrap ${
+                                          filled !== configTotal ? "bg-danger" : "bg-purple-700"
+                                        }`}
+                                      >
+                                        {filled}/{configTotal}
+                                      </span>
+                                    ) : null}
+                                    {hasVideos && filled >= configTotal ? (
+                                      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-success shadow-sm ring-1 ring-success">
+                                        <HiCheck className="text-[11px] font-bold" />
+                                      </span>
+                                    ) : null}
                                   </button>
-                                  {canMerge ? (
+                                );
+                              })()}
+                              {(() => {
+                                const hasMerged = hasMergedVideoRef(item.mergedVideoUrl);
+                                const isMerging = Boolean(mergingIds[item.id]);
+                                const canMerge = getMergeableVideoUrls(item).length >= 2;
+
+                                if (isMerging) {
+                                  return (
+                                    <div
+                                      className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm"
+                                      title={t("Đang nối video...")}
+                                    >
+                                      <RiLoader4Line className="text-xl animate-spin" />
+                                    </div>
+                                  );
+                                }
+
+                                if (hasMerged) {
+                                  return (
+                                    <div className="flex gap-1.5 items-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => void openMergedPreview(item)}
+                                        className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
+                                        title={t("Xem video đã nối")}
+                                      >
+                                        <RiVideoFill className="text-lg text-white" />
+                                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
+                                          <HiCheck className="text-[11px] font-bold" />
+                                        </span>
+                                      </button>
+                                      {canMerge ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleRetryMerge(item)}
+                                          className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-warning bg-warning/10 border-warning hover:bg-warning/20"
+                                          title={t("Nối lại video")}
+                                        >
+                                          <HiRefresh className="text-sm" />
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  );
+                                }
+
+                                if (canMerge) {
+                                  return (
                                     <button
                                       type="button"
                                       onClick={() => void handleRetryMerge(item)}
-                                      className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-warning bg-warning/10 border-warning hover:bg-warning/20"
-                                      title={t("Nối lại video")}
+                                      className="flex justify-center items-center w-9 h-9 text-amber-600 bg-amber-50 rounded-full border border-amber-400 shadow-sm transition-colors hover:bg-amber-100"
+                                      title={
+                                        item.error
+                                          ? `${t("Nối lại")}: ${item.error}`
+                                          : t("Chưa nối — bấm để nối video")
+                                      }
                                     >
-                                      <HiRefresh className="text-sm" />
+                                      <RiVideoFill className="text-lg text-amber-600" />
                                     </button>
-                                  ) : null}
-                                </div>
-                              );
-                            }
+                                  );
+                                }
 
-                            if (canMerge) {
-                              return (
+                                return (
+                                  <button
+                                    type="button"
+                                    disabled
+                                    className="flex justify-center items-center w-9 h-9 text-gray-400 bg-gray-200 rounded-full border border-gray-300 shadow-sm cursor-default disabled:opacity-100"
+                                    title={t("Chưa có video đã nối")}
+                                  >
+                                    <RiVideoFill className="text-lg text-gray-400" />
+                                  </button>
+                                );
+                              })()}
+                            </div>
+                            {item.error ? (
+                              <div
+                                className="w-full max-w-[160px] text-center text-10 leading-snug text-danger line-clamp-3"
+                                title={item.error}
+                              >
+                                {item.error}
+                              </div>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {(() => {
+                            const isItemRunning =
+                              item.status === "running" ||
+                              item.status === "uploading" ||
+                              Boolean(generatingIds[item.id]) ||
+                              Boolean(mergingIds[item.id]);
+                            return (
+                              <div className="flex items-center justify-center gap-1.5">
                                 <button
                                   type="button"
-                                  onClick={() => void handleRetryMerge(item)}
-                                  className="flex justify-center items-center w-9 h-9 text-amber-600 bg-amber-50 rounded-full border border-amber-400 shadow-sm transition-colors hover:bg-amber-100"
-                                  title={
-                                    item.error
-                                      ? `${t("Nối lại")}: ${item.error}`
-                                      : t("Chưa nối — bấm để nối video")
-                                  }
+                                  onClick={() => handleStart([item.id])}
+                                  disabled={isItemRunning}
+                                  className={`flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors ${
+                                    isItemRunning
+                                      ? "text-purple-600 bg-purple-50 border-purple-300 cursor-default"
+                                      : "text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300"
+                                  }`}
+                                  title={isItemRunning ? t("Đang chạy...") : t("Chạy")}
                                 >
-                                  <RiVideoFill className="text-lg text-amber-600" />
+                                  {isItemRunning ? (
+                                    <RiLoader4Line className="text-sm animate-spin" />
+                                  ) : (
+                                    <HiPlay className="text-lg" />
+                                  )}
                                 </button>
-                              );
-                            }
-
-                            return (
-                              <button
-                                type="button"
-                                disabled
-                                className="flex justify-center items-center w-9 h-9 text-gray-400 bg-gray-200 rounded-full border border-gray-300 shadow-sm cursor-default disabled:opacity-100"
-                                title={t("Chưa có video đã nối")}
-                              >
-                                <RiVideoFill className="text-lg text-gray-400" />
-                              </button>
+                                {isItemRunning ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handlePause([item.id])}
+                                    className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-warning bg-warning/10 border-warning hover:bg-warning/20"
+                                    title={t("Tạm dừng")}
+                                  >
+                                    <HiOutlinePause className="text-sm" />
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(item.id)}
+                                  className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-danger bg-danger/10 border-danger hover:bg-danger/20"
+                                  title={t("Xóa")}
+                                >
+                                  <HiOutlineTrash className="text-sm" />
+                                </button>
+                              </div>
                             );
                           })()}
-                        </div>
-                        {item.error ? (
-                          <div
-                            className="w-full max-w-[160px] text-center text-10 leading-snug text-danger line-clamp-3"
-                            title={item.error}
-                          >
-                            {item.error}
-                          </div>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {(() => {
-                        const isItemRunning =
-                          item.status === "running" ||
-                          item.status === "uploading" ||
-                          Boolean(generatingIds[item.id]) ||
-                          Boolean(mergingIds[item.id]);
-                        return (
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => handleStart([item.id])}
-                              disabled={isItemRunning}
-                              className={`flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors ${
-                                isItemRunning
-                                  ? "text-purple-600 bg-purple-50 border-purple-300 cursor-default"
-                                  : "text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300"
-                              }`}
-                              title={isItemRunning ? t("Đang chạy...") : t("Chạy")}
-                            >
-                              {isItemRunning ? (
-                                <RiLoader4Line className="text-sm animate-spin" />
-                              ) : (
-                                <HiPlay className="text-lg" />
-                              )}
-                            </button>
-                            {isItemRunning ? (
-                              <button
-                                type="button"
-                                onClick={() => handlePause([item.id])}
-                                className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-warning bg-warning/10 border-warning hover:bg-warning/20"
-                                title={t("Tạm dừng")}
-                              >
-                                <HiOutlinePause className="text-sm" />
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={() => handleDelete(item.id)}
-                              className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-danger bg-danger/10 border-danger hover:bg-danger/20"
-                              title={t("Xóa")}
-                            >
-                              <HiOutlineTrash className="text-sm" />
-                            </button>
-                          </div>
-                        );
-                      })()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {listTotalMatched > 0 ? (
+              <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 border-t border-gray-100 bg-gray-50/60">
+                <div className="flex gap-3 items-center text-xs text-gray-500">
+                  <span>
+                    {t("Trang")} <b className="text-gray-800">{safePage}</b>/{totalPages}
+                    <span className="mx-1 text-gray-300">·</span>
+                    {pageStartIndex + 1}–{Math.min(safePage * pageSize, listTotalMatched)} /{" "}
+                    {listTotalMatched}
+                  </span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value) || 100)}
+                    className="h-7 text-xs rounded-md border border-gray-200 bg-white px-1.5"
+                    aria-label={t("Số dòng mỗi trang")}
+                  >
+                    {[100, 200, 400, 500].map((n) => (
+                      <option key={n} value={n}>
+                        {n}/{t("trang")}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex gap-1 items-center">
+                  <button
+                    type="button"
+                    disabled={safePage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                    aria-label={t("Trang trước")}
+                  >
+                    <HiChevronLeft />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter((p) => {
+                      if (totalPages <= 7) return true;
+                      if (p === 1 || p === totalPages) return true;
+                      return Math.abs(p - safePage) <= 1;
+                    })
+                    .reduce<number[]>((acc, p, i, arr) => {
+                      if (i > 0 && p - arr[i - 1] > 1) acc.push(-p);
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p) =>
+                      p < 0 ? (
+                        <span key={`e${p}`} className="px-1 text-xs text-gray-400">
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPage(p)}
+                          className={`inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
+                            p === safePage
+                              ? "border-sky-300 bg-sky-50 text-sky-800"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+                  <button
+                    type="button"
+                    disabled={safePage >= totalPages}
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
+                    aria-label={t("Trang sau")}
+                  >
+                    <HiChevronRight />
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
       {/* Quick export */}
-      {items.length > 0 && (
+      {listTotal > 0 && (
         <div className="flex justify-end">
           <Button
             text={t("Xuất CSV")}
             onClick={() => {
-              const csv = exportAffiliatePlusCSV(items);
-              const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement("a");
-              a.href = url;
-              a.download = `video-affiliate-plus-${new Date().toISOString().slice(0, 10)}.csv`;
-              a.click();
-              URL.revokeObjectURL(url);
+              void (async () => {
+                const all = await getSessionItems(sessionId);
+                const csv = exportAffiliatePlusCSV(all);
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `video-affiliate-plus-${new Date().toISOString().slice(0, 10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              })();
             }}
           />
         </div>
@@ -1533,6 +1985,125 @@ export function ThreadManagementPanel({
       />
 
       <Dialog
+        isOpen={scrapeImportOpen}
+        onClose={() => {
+          if (importingSessionId) return;
+          setScrapeImportOpen(false);
+        }}
+        width="720px"
+        maxWidth="95vw"
+        hasCloseIcon={false}
+        slideFromBottom="mobile-only"
+      >
+        <Dialog.Header>
+          <div className="flex flex-wrap flex-1 gap-2 justify-between items-center mt-4 w-full">
+            <div className="min-w-0">
+              <p className="m-0 text-base font-bold text-gray-800">{t("Chọn CSV từ Data")}</p>
+              <p className="m-0 mt-0.5 text-xs text-gray-500">
+                {t("Danh sách phiên cào đã lưu — bấm Import để tạo luồng")}
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 items-center shrink-0">
+              <button
+                type="button"
+                disabled={!!importingSessionId}
+                onClick={() => {
+                  setScrapeImportOpen(false);
+                  fileInputRef.current?.click();
+                }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 text-xs font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+              >
+                <RiFileExcel2Line />
+                {t("Nhập thủ công")}
+              </button>
+              <button
+                type="button"
+                disabled={!!importingSessionId}
+                onClick={() => setScrapeImportOpen(false)}
+                className="flex justify-center items-center w-8 h-8 text-gray-400 rounded-lg transition-colors hover:bg-gray-100 hover:text-gray-700 disabled:opacity-50"
+                aria-label={t("Đóng")}
+              >
+                <HiOutlineX className="text-lg" />
+              </button>
+            </div>
+          </div>
+        </Dialog.Header>
+        <Dialog.Body>
+          {scrapeLoading ? (
+            <div className="flex gap-2 justify-center items-center py-10 text-sm text-gray-500">
+              <RiLoader4Line className="text-lg animate-spin" />
+              {t("Đang tải danh sách...")}
+            </div>
+          ) : !scrapeSessions.length ? (
+            <div className="py-8 space-y-3 text-center">
+              <p className="m-0 text-sm text-gray-500">
+                {t("Chưa có CSV trong IndexedDB. Cào dữ liệu trước hoặc nhập thủ công.")}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setScrapeImportOpen(false);
+                  fileInputRef.current?.click();
+                }}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+              >
+                <RiFileExcel2Line />
+                {t("Nhập thủ công")}
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-auto max-h-[420px] rounded-lg border border-gray-100">
+              <table className="w-full text-xs text-left">
+                <thead className="sticky top-0 text-gray-500 bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 font-semibold">{t("Thời gian")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("Domain")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("Keyword")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("SP")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("Thực hiện")}</th>
+                    <th className="px-3 py-2 font-semibold" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {scrapeSessions.map((s) => {
+                    const busy = importingSessionId === s.id;
+                    return (
+                      <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50/80">
+                        <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
+                          {formatSessionTime(s.createdAt)}
+                        </td>
+                        <td className="px-3 py-2 max-w-[140px] truncate" title={s.marketHost}>
+                          {domainLabel(s.marketHost)}
+                        </td>
+                        <td className="px-3 py-2 max-w-[120px] truncate" title={s.keyword}>
+                          {s.keyword || "—"}
+                        </td>
+                        <td className="px-3 py-2 font-semibold text-gray-800">{s.productCount}</td>
+                        <td className="px-3 py-2 text-gray-600">{formatDuration(s.durationMs)}</td>
+                        <td className="px-3 py-2">
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              disabled={!!importingSessionId}
+                              onClick={() => void handleImportScrapeSession(s)}
+                              className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-10 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                            >
+                              {busy ? <RiLoader4Line className="animate-spin" /> : <HiUpload />}
+                              {t("Import")}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Dialog.Body>
+      </Dialog>
+
+      <Dialog
         isOpen={!!videoPreview}
         onClose={() => setVideoPreview(null)}
         title={videoPreview?.title || t("Xem video")}
@@ -1553,8 +2124,7 @@ export function ThreadManagementPanel({
               </div>
               {(() => {
                 const mergedItem = items.find((i) => i.id === videoPreview.itemId);
-                const canRetry =
-                  mergedItem && getMergeableVideoUrls(mergedItem).length >= 2;
+                const canRetry = mergedItem && getMergeableVideoUrls(mergedItem).length >= 2;
                 const isRetrying = Boolean(mergingIds[videoPreview.itemId]);
                 if (!canRetry) return null;
                 return (
@@ -1586,7 +2156,9 @@ export function ThreadManagementPanel({
                 const isFailed = !src;
                 const isDisabled = Boolean(videoPreview.disabled[idx]);
                 const isRegen = Boolean(videoPreview.regenerating[idx]);
-                const failedCount = videoPreview.slots.filter((s) => !String(s || "").trim()).length;
+                const failedCount = videoPreview.slots.filter(
+                  (s) => !String(s || "").trim()
+                ).length;
                 const anyRegen = Object.values(videoPreview.regenerating).some(Boolean);
 
                 return (
@@ -1594,7 +2166,7 @@ export function ThreadManagementPanel({
                     <div className="overflow-hidden bg-black rounded-lg min-h-[220px] flex items-center justify-center relative">
                       {isRegen ? (
                         <div className="flex flex-col gap-2 items-center py-16 text-white/90">
-                          <RiLoader4Line className="text-3xl animate-spin text-purple-300" />
+                          <RiLoader4Line className="text-3xl text-purple-300 animate-spin" />
                           <span className="text-xs">{t("Đang tạo lại...")}</span>
                         </div>
                       ) : isFailed ? (
@@ -1613,9 +2185,7 @@ export function ThreadManagementPanel({
                           <button
                             type="button"
                             disabled={anyRegen}
-                            onClick={() =>
-                              void regenerateVariantSlot(videoPreview.itemId, idx)
-                            }
+                            onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
                             className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-600 disabled:opacity-50"
                           >
                             <HiRefresh className="text-sm" />
@@ -1647,9 +2217,7 @@ export function ThreadManagementPanel({
                           <button
                             type="button"
                             disabled={anyRegen}
-                            onClick={() =>
-                              void regenerateVariantSlot(videoPreview.itemId, idx)
-                            }
+                            onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
                             className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-300 bg-purple-50 px-3 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-100 disabled:opacity-50"
                           >
                             {isRegen ? (

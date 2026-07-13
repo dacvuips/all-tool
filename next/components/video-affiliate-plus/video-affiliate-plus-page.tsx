@@ -11,14 +11,16 @@ import {
   getImportHistory,
   getSelectedImportHistoryId,
   ImportHistoryItem,
+  migrateLegacyImportHistory,
   pushImportHistory,
   setSelectedImportHistoryId,
-  updateImportHistoryItems,
+  updateImportHistoryCount,
 } from "./import-history";
 import { hydrateMergedVideoUrls } from "./merged-video";
 import { LogsPanel } from "./panels/logs-panel";
 import { ScrapeDataPanel } from "./panels/scrape-data-panel";
 import { SettingsPanel } from "./panels/settings-panel";
+import { ShopeeVideoUploadPanel } from "./panels/shopee-video-upload-panel";
 import { ThreadManagementPanel } from "./panels/thread-management-panel";
 import { UsersPanel } from "./panels/users-panel";
 import {
@@ -27,19 +29,60 @@ import {
   loadLogs,
   loadSettings,
   loadUsers,
-  saveItems,
   saveLogs,
   saveSettings,
   saveUsers,
 } from "./storage";
+import { DEFAULT_SESSION_ID, getSessionItems, replaceSessionThreads } from "./thread-store";
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
   AffiliatePlusSettings,
   AffiliatePlusUser,
-  ThreadStatus,
   getTotalVideos,
+  ThreadStatus,
 } from "./types";
+
+const VIDEO_AFFILIATE_TAB_KEYS = [
+  "scrape",
+  "generate",
+  "upload",
+  "logs",
+  "users",
+  "settings",
+] as const;
+
+function getVideoAffiliateTabIndex(tab: string | string[] | undefined): number {
+  const value = Array.isArray(tab) ? tab[0] : tab;
+  if (!value) return 1;
+
+  const numeric = Number(value);
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric < VIDEO_AFFILIATE_TAB_KEYS.length) {
+    return numeric;
+  }
+
+  const key = value.toLowerCase();
+  const aliases: Record<string, number> = {
+    crawl: 0,
+    data: 0,
+    scrape: 0,
+    generate: 1,
+    threads: 1,
+    thread: 1,
+    upload: 2,
+    post: 2,
+    shopee: 2,
+    shope: 2,
+    logs: 3,
+    log: 3,
+    users: 4,
+    user: 4,
+    settings: 5,
+    setting: 5,
+  };
+
+  return aliases[key] ?? 1;
+}
 
 function simulateTick(items: AffiliatePlusItem[]): AffiliatePlusItem[] {
   return items.map((item) => {
@@ -97,7 +140,7 @@ export default function VideoAffiliatePlusPage() {
   const router = useRouter();
   const sm = useScreen("sm");
 
-  const [activeTab, setActiveTab] = useState(2);
+  const [activeTab, setActiveTab] = useState(1);
   const [items, setItems] = useState<AffiliatePlusItem[]>([]);
   const [users, setUsers] = useState<AffiliatePlusUser[]>([]);
   const [logs, setLogs] = useState<AffiliatePlusLog[]>([]);
@@ -106,10 +149,33 @@ export default function VideoAffiliatePlusPage() {
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const itemsRef = useRef(items);
   const selectedHistoryIdRef = useRef<string | null>(null);
-  const skipHistorySyncRef = useRef(false);
-  const historySyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipCountSyncRef = useRef(false);
+  const countSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   selectedHistoryIdRef.current = selectedHistoryId;
+
+  useEffect(() => {
+    if (!router.isReady) return;
+    setActiveTab(getVideoAffiliateTabIndex(router.query.tab));
+  }, [router.isReady, router.query.tab]);
+
+  const handleTabChange = useCallback(
+    (index: number) => {
+      const nextIndex = Math.max(0, Math.min(VIDEO_AFFILIATE_TAB_KEYS.length - 1, index));
+      const tab = VIDEO_AFFILIATE_TAB_KEYS[nextIndex];
+      setActiveTab(nextIndex);
+
+      void router.replace(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, tab },
+        },
+        undefined,
+        { shallow: true, scroll: false }
+      );
+    },
+    [router]
+  );
 
   const refreshImportHistory = useCallback(async () => {
     try {
@@ -120,17 +186,20 @@ export default function VideoAffiliatePlusPage() {
     }
   }, []);
 
-  const scheduleHistorySync = useCallback((nextItems: AffiliatePlusItem[]) => {
-    if (skipHistorySyncRef.current) return;
-    const id = selectedHistoryIdRef.current;
-    if (!id) return;
-    if (historySyncTimerRef.current) clearTimeout(historySyncTimerRef.current);
-    historySyncTimerRef.current = setTimeout(() => {
-      void updateImportHistoryItems(id, nextItems)
-        .then(() => refreshImportHistory())
-        .catch((err) => console.warn("[video-affiliate-plus] sync history failed", err));
-    }, 500);
-  }, [refreshImportHistory]);
+  const scheduleCountSync = useCallback(
+    (count: number) => {
+      if (skipCountSyncRef.current) return;
+      const id = selectedHistoryIdRef.current;
+      if (!id) return;
+      if (countSyncTimerRef.current) clearTimeout(countSyncTimerRef.current);
+      countSyncTimerRef.current = setTimeout(() => {
+        void updateImportHistoryCount(id, count)
+          .then(() => refreshImportHistory())
+          .catch((err) => console.warn("[video-affiliate-plus] sync history count failed", err));
+      }, 500);
+    },
+    [refreshImportHistory]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -146,30 +215,45 @@ export default function VideoAffiliatePlusPage() {
         }
         return item;
       });
-      const hydrated = await hydrateMergedVideoUrls(loaded);
-      if (cancelled) return;
-
-      setItems(hydrated);
-      saveItems(hydrated);
 
       try {
-        const history = await ensureImportHistoryFromItems(hydrated);
+        await migrateLegacyImportHistory();
+        const history = await ensureImportHistoryFromItems(loaded);
         const selected = (await getSelectedImportHistoryId()) || history[0]?.id || null;
+        const sessionId = selected || DEFAULT_SESSION_ID;
+
+        let sessionItems = await getSessionItems(sessionId);
+        if (!sessionItems.length && loaded.length) {
+          await replaceSessionThreads(sessionId, loaded);
+          sessionItems = loaded;
+        }
+
+        const hydrated = await hydrateMergedVideoUrls(sessionItems);
         if (cancelled) return;
+
+        setItems(hydrated);
         setImportHistory(history);
         setSelectedHistoryId(selected);
         selectedHistoryIdRef.current = selected;
         if (selected) await setSelectedImportHistoryId(selected);
       } catch (err) {
         console.warn("[video-affiliate-plus] init import history failed", err);
+        if (!cancelled) {
+          const hydrated = await hydrateMergedVideoUrls(loaded);
+          setItems(hydrated);
+        }
       }
     })();
-    setUsers(loadUsers());
+    void loadUsers()
+      .then((list) => {
+        if (!cancelled) setUsers(list);
+      })
+      .catch((err) => console.warn("[video-affiliate-plus] load users failed", err));
     setLogs(loadLogs());
     setSettings(loadSettings());
     return () => {
       cancelled = true;
-      if (historySyncTimerRef.current) clearTimeout(historySyncTimerRef.current);
+      if (countSyncTimerRef.current) clearTimeout(countSyncTimerRef.current);
     };
   }, []);
 
@@ -182,10 +266,9 @@ export default function VideoAffiliatePlusPage() {
   const handleUpdateItems = useCallback(
     (next: AffiliatePlusItem[]) => {
       setItems(next);
-      saveItems(next);
-      scheduleHistorySync(next);
+      scheduleCountSync(next.length);
     },
-    [scheduleHistorySync]
+    [scheduleCountSync]
   );
 
   const handleImportComplete = useCallback(
@@ -202,15 +285,18 @@ export default function VideoAffiliatePlusPage() {
       });
 
       try {
-        const entry = await pushImportHistory({ fileName, items: nextItems });
+        const entry = await pushImportHistory({
+          fileName,
+          itemCount: nextItems.length,
+        });
         selectedHistoryIdRef.current = entry.id;
         setSelectedHistoryId(entry.id);
+        await replaceSessionThreads(entry.id, nextItems);
         await refreshImportHistory();
       } catch (err) {
         console.warn("[video-affiliate-plus] push import history failed", err);
       }
       setItems(nextItems);
-      saveItems(nextItems);
     },
     [refreshImportHistory]
   );
@@ -220,7 +306,7 @@ export default function VideoAffiliatePlusPage() {
       const entry = importHistory.find((h) => h.id === id);
       if (!entry) return;
 
-      skipHistorySyncRef.current = true;
+      skipCountSyncRef.current = true;
       setSelectedHistoryId(id);
       selectedHistoryIdRef.current = id;
       await setSelectedImportHistoryId(id);
@@ -236,10 +322,10 @@ export default function VideoAffiliatePlusPage() {
         }
       });
 
-      const hydrated = await hydrateMergedVideoUrls(entry.data.items || []);
+      const sessionItems = await getSessionItems(id);
+      const hydrated = await hydrateMergedVideoUrls(sessionItems);
       setItems(hydrated);
-      saveItems(hydrated);
-      skipHistorySyncRef.current = false;
+      skipCountSyncRef.current = false;
     },
     [importHistory]
   );
@@ -273,8 +359,7 @@ export default function VideoAffiliatePlusPage() {
       const changed = next.some((item, i) => item !== current[i]);
       if (changed) {
         setItems(next);
-        saveItems(next);
-        scheduleHistorySync(next);
+        scheduleCountSync(next.length);
 
         next.forEach((item, i) => {
           const prev = current[i];
@@ -297,62 +382,60 @@ export default function VideoAffiliatePlusPage() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [handleAddLog, scheduleHistorySync, t]);
+  }, [handleAddLog, scheduleCountSync, t]);
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Top banner */}
-      <div className="text-white bg-primary">
-        <div className="max-w-[1600px] mx-auto P-1 px-4">
-          <div className="flex gap-4 justify-between items-center">
-            <div className="flex gap-3 items-center">
-              <div
-                onClick={() => router.back()}
-                className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
-              >
-                <HiArrowLeft />
-                {sm && <span>{t("Quay lại")}</span>}
-              </div>
-              <div className="w-px h-5 bg-white/30" />
-              <div className="flex gap-2 items-center">
-                <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
-                  <RiVideoAddLine className="text-2xl" />
-                </div>
-                <div>
-                  <h1 className="m-0 text-lg font-bold sm:text-xl">
-                    XƯỞNG VIDEO AFFILIATE MANAGER
-                  </h1>
+      <div className="mx-auto">
+        <TabGroup
+          index={activeTab}
+          onChange={handleTabChange}
+          name="video-affiliate-plus"
+          flex={false}
+          stickyHeader
+          stickyHeaderClassName="sticky top-14 z-50 shadow-sm"
+          beforeHeader={
+            <div className="text-white bg-primary">
+              <div className="px-4 mx-auto w-full" style={{ maxWidth: 1600 }}>
+                <div className="flex gap-4 justify-between items-center py-1">
+                  <div className="flex gap-3 items-center">
+                    <div
+                      onClick={() => router.back()}
+                      className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
+                    >
+                      <HiArrowLeft />
+                      {sm && <span>{t("Quay lại")}</span>}
+                    </div>
+                    <div className="w-px h-5 bg-white/30" />
+                    <div className="flex gap-2 items-center">
+                      <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
+                        <RiVideoAddLine className="text-2xl" />
+                      </div>
+                      <div>
+                        <h1 className="m-0 text-lg font-bold sm:text-xl">
+                          {t("XƯỞNG VIDEO AFFILIATE MANAGER")}
+                        </h1>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-[1600px] mx-auto">
-        <TabGroup
-          index={activeTab}
-          onChange={setActiveTab}
-          name="video-affiliate-plus"
-          flex={false}
+          }
           tabClassName="px-5 py-3.5"
           titleClassName="text-sm font-semibold whitespace-nowrap"
           bodyClassName="px-4 sm:px-6 py-5"
           className="px-4 sm:px-6"
         >
           <TabGroup.Tab label={t("Cào dữ liệu")}>
-            <ScrapeDataPanel />
-          </TabGroup.Tab>
-          <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
-            <UsersPanel
-              users={users}
-              onUpdateUsers={(next) => {
-                setUsers(next);
-                saveUsers(next);
+            <ScrapeDataPanel
+              onImportItems={async (fileName, nextItems) => {
+                await handleImportComplete(fileName, nextItems);
+                handleTabChange(1); // Generate Video
               }}
             />
           </TabGroup.Tab>
-          <TabGroup.Tab label={t("Quản Lý Luồng")}>
+          <TabGroup.Tab label={t("Generate Video")}>
             <ThreadManagementPanel
               items={items}
               settings={settings}
@@ -364,6 +447,26 @@ export default function VideoAffiliatePlusPage() {
               onSelectHistory={handleSelectHistory}
               onClearHistory={handleClearHistory}
               onAddLog={handleAddLog}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Đăng video Shope")}>
+            <ShopeeVideoUploadPanel
+              users={users}
+              importHistory={importHistory}
+              selectedHistoryId={selectedHistoryId}
+              onUpdateUsers={async (next) => {
+                setUsers(next);
+                await saveUsers(next);
+              }}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
+            <UsersPanel
+              users={users}
+              onUpdateUsers={(next) => {
+                setUsers(next);
+                void saveUsers(next);
+              }}
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Quản Lý Nhật Ký")}>

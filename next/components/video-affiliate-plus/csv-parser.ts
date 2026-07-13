@@ -13,6 +13,10 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "shop_name",
     "shop name",
     "username",
+    "tên account",
+    "ten account",
+    "ten_account",
+    "account",
   ],
   shopId: ["mã shop", "ma shop", "ma_shop", "shop_id", "shopid", "shop id"],
   productId: [
@@ -45,7 +49,17 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "product link",
     "product_url",
   ],
-  affiliateLink: ["link affiliate", "link_affiliate", "affiliate link", "affiliate_link"],
+  affiliateLink: [
+    "link affiliate",
+    "link_affiliate",
+    "affiliate link",
+    "affiliate_link",
+    "link affiliate shot",
+    "link affiliate short",
+    "affiliate_link_short",
+    "affiliate link short",
+    "affiliate link shot",
+  ],
   commission: [
     "hoa hồng shop",
     "hoa hong shop",
@@ -72,8 +86,17 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "hinh anh",
     "product_image",
   ],
-  prompt: ["prompt", "prompts", "nội dung prompt", "noi dung prompt", "generate_prompt"],
-  videoUrls: ["video", "video_url", "link_video", "videos", "caption"],
+  prompt: [
+    "prompt",
+    "prompts",
+    "nội dung prompt",
+    "noi dung prompt",
+    "generate_prompt",
+    "caption",
+    "nội dung caption",
+    "noi dung caption",
+  ],
+  videoUrls: ["video", "video_url", "link_video", "videos", "file video", "file_video"],
   hostPort: ["host_port", "host port", "hostport", "proxy"],
   country: ["quốc gia", "quoc gia", "country", "country_code"],
   cookie: ["cookie", "cookies", "session"],
@@ -256,6 +279,19 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
             // Ưu tiên "Hoa hồng shop" hơn mặc định / tối đa
             if (headerName.includes("shop") || !raw.commission) {
               raw.commission = value;
+            }
+            return;
+          }
+
+          if (field === "affiliateLink") {
+            const headerName = normalizeHeader(firstRow[colIndex] || "");
+            // Ưu tiên link short/shot hơn long link
+            if (
+              headerName.includes("shot") ||
+              headerName.includes("short") ||
+              !raw.affiliateLink
+            ) {
+              raw.affiliateLink = value;
             }
             return;
           }

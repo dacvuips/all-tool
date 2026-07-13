@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Viet-Theo-Bridge</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 0;
+      padding: 12px;
+      width: 320px;
+      color: #111;
+    }
+
+    h1 {
+      font-size: 14px;
+      margin: 0 0 6px;
+    }
+
+    p {
+      font-size: 12px;
+      margin: 0 0 8px;
+      color: #444;
+      line-height: 1.4;
+    }
+
+    label {
+      font-size: 11px;
+      color: #666;
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      margin-bottom: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .row>div {
+      flex: 1;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #0f766e;
+      background: #f0fdfa;
+      border: 1px solid #99f6e4;
+      border-radius: 8px;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+
+    .hint.off {
+      color: #9a3412;
+      background: #fff7ed;
+      border-color: #fed7aa;
+    }
+
+    button {
+      width: 100%;
+      padding: 9px;
+      border: 0;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: #7c3aed;
+      color: #fff;
+    }
+
+    button.secondary {
+      background: #f3f4f6;
+      color: #111;
+      margin-top: 6px;
+    }
+
+    .presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-bottom: 8px;
+    }
+
+    .presets button {
+      width: auto;
+      padding: 4px 8px;
+      font-size: 11px;
+      background: #f3f4f6;
+      color: #333;
+    }
+
+    .presets button.active {
+      background: #ede9fe;
+      color: #5b21b6;
+    }
+
+    .status {
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 8px;
+      background: #f8fafc;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Viet-Theo-Bridge</h1>
+  <p>Chọn số SP / delay → tìm kiếm trên Affiliate → <b>Gửi</b> CSV về web.</p>
+  <div class="hint off" id="apiHint">Chưa kết nối API — bấm Mở Trình duyệt trên Viet-Theo-Bridge</div>
+
+  <label>Số sản phẩm (0 = tất cả)</label>
+  <div class="presets" id="productPresets">
+    <button type="button" data-v="20">20</button>
+    <button type="button" data-v="100">100</button>
+    <button type="button" data-v="500">500</button>
+    <button type="button" data-v="0">Tất cả</button>
+  </div>
+  <input id="maxProducts" type="number" min="0" value="500" />
+
+  <label>Delay (ms)</label>
+  <div class="presets" id="delayPresets">
+    <button type="button" data-v="200">200</button>
+    <button type="button" data-v="400">400</button>
+    <button type="button" data-v="800">800</button>
+  </div>
+  <input id="delayMs" type="number" min="0" value="400" />
+
+  <button class="primary" id="send">Gửi CSV</button>
+  <button class="secondary" id="refresh">Làm mới trạng thái</button>
+  <div class="status" id="status">...</div>
+  <script src="popup.js"></script>
+</body>
+
+</html>

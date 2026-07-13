@@ -62,7 +62,7 @@ function PromptFieldResetButton({
     <button
       type="button"
       onClick={() => onReset(getDefaultPrompt(field))}
-      className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-1 text-10 font-semibold text-gray-600 hover:bg-gray-50"
+      className="inline-flex gap-1 items-center px-2 py-1 font-semibold text-gray-600 bg-white rounded-md border border-gray-200 text-10 hover:bg-gray-50"
       title={t("Reset về prompt mẫu ({{field}})", { field })}
     >
       <RiRefreshLine />
@@ -223,9 +223,9 @@ export function GenerateVideoConfigDialog({
   const [dialogueSectionLastDraft, setDialogueSectionLastDraft] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
-  const [manageList, setManageList] = useState<
-    "techniques" | "actionsV1" | "actionsV2" | null
-  >(null);
+  const [manageList, setManageList] = useState<"techniques" | "actionsV1" | "actionsV2" | null>(
+    null
+  );
   const [manageDraft, setManageDraft] = useState("");
   const [showCustomPos, setShowCustomPos] = useState(false);
   const [characterManagerOpen, setCharacterManagerOpen] = useState(false);
@@ -461,11 +461,11 @@ export function GenerateVideoConfigDialog({
       const saved = await saveGenerateVideoConfig(next);
       setConfig(saved);
       onSaveAndApply(saved, buildActivePromptFromConfig(saved));
-      toast.success(t("Đã lưu setting (IndexedDB) và áp dụng prompt cho tất cả luồng"));
+      toast.success(t("Đã lưu setting và áp dụng prompt cho tất cả luồng"));
       onClose();
     } catch (err) {
       console.error(err);
-      toast.error(t("Không lưu được setting vào IndexedDB"));
+      toast.error(t("Không lưu được cấu hình"));
     }
   };
 
@@ -550,9 +550,7 @@ export function GenerateVideoConfigDialog({
               <RiVideoAddLine className="text-xl" />
             </div>
             <div>
-              <div className="text-sm font-bold tracking-tight text-gray-900">
-                {t("Cấu hình Generate Video")}
-              </div>
+              <div className="text-sm font-bold tracking-tight text-gray-900">{t("Cấu hình")}</div>
               <div className="text-10 text-gray-500 mt-0.5">
                 {t("Prompt áp dụng cho tất cả luồng · {{count}}/4 prompt đã điền", {
                   count: filledPromptCount,
@@ -577,46 +575,46 @@ export function GenerateVideoConfigDialog({
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Prompt */}
               <SectionCard title={t("Cấu Hình Prompt")} accent="#7C3AED" icon={<HiCog />}>
-                <div className="grid grid-cols-2 gap-2">
-                {PROMPT_BUTTONS.map((btn) => {
-                  const filled =
-                    btn.key === "rulesNegative"
-                      ? !!(
-                          config.prompts.directives?.trim() ||
-                          config.prompts.rulesNegative?.trim()
-                        )
-                      : btn.key === "dialogue"
-                      ? !!(
-                          config.prompts.dialogueSystem?.trim() ||
-                          config.prompts.dialogueSection1?.trim() ||
-                          config.prompts.dialogueSectionLast?.trim() ||
-                          config.prompts.dialogue?.trim()
-                        )
-                      : btn.key === "checkTotal"
-                      ? !!buildCheckTotalPrompt(config.prompts).trim()
-                      : !!config.prompts[btn.key]?.trim();
-                  return (
-                    <button
-                      key={btn.key}
-                      type="button"
-                      onClick={() => openPromptEditor(btn.key)}
-                      style={btn.style}
-                      className="relative rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
-                    >
-                      {t(btn.label)}
-                      {filled && (
-                        <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-white border-2 border-emerald-500" />
-                      )}
-                    </button>
-                  );
-                })}
+                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+                  {PROMPT_BUTTONS.map((btn) => {
+                    const filled =
+                      btn.key === "rulesNegative"
+                        ? !!(
+                            config.prompts.directives?.trim() ||
+                            config.prompts.rulesNegative?.trim()
+                          )
+                        : btn.key === "dialogue"
+                        ? !!(
+                            config.prompts.dialogueSystem?.trim() ||
+                            config.prompts.dialogueSection1?.trim() ||
+                            config.prompts.dialogueSectionLast?.trim() ||
+                            config.prompts.dialogue?.trim()
+                          )
+                        : btn.key === "checkTotal"
+                        ? !!buildCheckTotalPrompt(config.prompts).trim()
+                        : !!config.prompts[btn.key]?.trim();
+                    return (
+                      <button
+                        key={btn.key}
+                        type="button"
+                        onClick={() => openPromptEditor(btn.key)}
+                        style={btn.style}
+                        className="relative shrink-0 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                      >
+                        {t(btn.label)}
+                        {filled && (
+                          <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-white border-2 border-emerald-500" />
+                        )}
+                      </button>
+                    );
+                  })}
                   <button
                     type="button"
                     onClick={() => {
                       setImportText("");
                       setImportOpen(true);
                     }}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
                     style={{ background: "#7C3AED" }}
                   >
                     <HiDownload className="text-sm" />
@@ -625,7 +623,7 @@ export function GenerateVideoConfigDialog({
                   <button
                     type="button"
                     onClick={handleExportTemplate}
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
                     style={{ background: "#4F46E5" }}
                   >
                     <HiUpload className="text-sm" />
@@ -854,7 +852,7 @@ export function GenerateVideoConfigDialog({
                     <button
                       type="button"
                       onClick={() => setCharacterManagerOpen(true)}
-                      className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 whitespace-nowrap border-primary bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
+                      className="px-3 h-9 text-xs font-semibold whitespace-nowrap rounded-lg border border-opacity-30 shrink-0 border-primary bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
                     >
                       {t("Quản lý")}
                     </button>
@@ -1043,7 +1041,9 @@ export function GenerateVideoConfigDialog({
                   <FieldRow label={t("Số video mỗi job")}>
                     <NativeSelect
                       value={String(Math.min(4, Math.max(1, config.videosPerJob || 1)))}
-                      onChange={(v) => patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })}
+                      onChange={(v) =>
+                        patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })
+                      }
                       options={[1, 2, 3, 4].map((n) => ({
                         value: String(n),
                         label: String(n),
@@ -1136,7 +1136,7 @@ export function GenerateVideoConfigDialog({
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <label className="block text-sm font-medium text-gray-700">
                     {t("Directives")}{" "}
-                    <span className="text-gray-400 font-normal">
+                    <span className="font-normal text-gray-400">
                       ({t("Mỗi dòng 1 chỉ thị")} · {t("Nên làm")})
                     </span>
                   </label>
@@ -1149,7 +1149,7 @@ export function GenerateVideoConfigDialog({
                   value={directivesDraft}
                   onChange={(e) => setDirectivesDraft(e.target.value)}
                   rows={8}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                   placeholder={t("Mỗi dòng một chỉ thị nên làm...")}
                   autoFocus
                 />
@@ -1158,7 +1158,7 @@ export function GenerateVideoConfigDialog({
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <label className="block text-sm font-medium text-gray-700">
                     {t("Negative Prompt")}{" "}
-                    <span className="text-gray-400 font-normal">
+                    <span className="font-normal text-gray-400">
                       ({t("Mỗi dòng 1 chỉ thị")} · {t("Không nên làm")})
                     </span>
                   </label>
@@ -1171,7 +1171,7 @@ export function GenerateVideoConfigDialog({
                   value={negativeDraft}
                   onChange={(e) => setNegativeDraft(e.target.value)}
                   rows={8}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                   placeholder={t("Mỗi dòng một chỉ thị không nên làm...")}
                 />
               </div>
@@ -1185,9 +1185,7 @@ export function GenerateVideoConfigDialog({
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                   <label className="block text-sm font-medium text-gray-700">
                     {t("System Instruction")}{" "}
-                    <span className="text-gray-400 font-normal">
-                      ({t("Vai trò & Luật lệ")})
-                    </span>
+                    <span className="font-normal text-gray-400">({t("Vai trò & Luật lệ")})</span>
                   </label>
                   <PromptFieldResetButton
                     field="dialogueSystem"
@@ -1198,7 +1196,7 @@ export function GenerateVideoConfigDialog({
                   value={dialogueSystemDraft}
                   onChange={(e) => setDialogueSystemDraft(e.target.value)}
                   rows={7}
-                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                   placeholder={t("Nhập system instruction...")}
                   autoFocus
                 />
@@ -1207,7 +1205,7 @@ export function GenerateVideoConfigDialog({
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-gray-700">
                   {t("User Prompt")}{" "}
-                  <span className="text-gray-400 font-normal">
+                  <span className="font-normal text-gray-400">
                     ({t("2 Thoại — mỗi tab là 1 section")})
                   </span>
                 </label>
@@ -1230,7 +1228,7 @@ export function GenerateVideoConfigDialog({
                       value={dialogueSection1Draft}
                       onChange={(e) => setDialogueSection1Draft(e.target.value)}
                       rows={8}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                      className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                       placeholder={t("Thoại 1 — Hook + Giới thiệu sản phẩm...")}
                     />
                   </TabGroup.Tab>
@@ -1245,7 +1243,7 @@ export function GenerateVideoConfigDialog({
                       value={dialogueSectionLastDraft}
                       onChange={(e) => setDialogueSectionLastDraft(e.target.value)}
                       rows={8}
-                      className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                      className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                       placeholder={t("Thoại Cuối — CTA / kết thúc...")}
                     />
                   </TabGroup.Tab>
@@ -1264,16 +1262,13 @@ export function GenerateVideoConfigDialog({
           ) : (
             <>
               <div className="mb-1.5 flex justify-end">
-                <PromptFieldResetButton
-                  field="image"
-                  onReset={(v) => setPromptDraft(v)}
-                />
+                <PromptFieldResetButton field="image" onReset={(v) => setPromptDraft(v)} />
               </div>
               <textarea
                 value={promptDraft}
                 onChange={(e) => setPromptDraft(e.target.value)}
                 rows={8}
-                className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary"
+                className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
                 placeholder={t("Nhập prompt...")}
                 autoFocus
               />
@@ -1282,7 +1277,7 @@ export function GenerateVideoConfigDialog({
               </p>
             </>
           )}
-          <div className="mt-4 flex gap-2 justify-end">
+          <div className="flex gap-2 justify-end mt-4">
             <button
               type="button"
               onClick={closePromptEditor}

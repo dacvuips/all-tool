@@ -1,8 +1,11 @@
+import { extractShopeeProductId } from "./csv-parser";
+import { idbGetConfig, idbGetUsersList, idbSetConfig, idbSetUsersList } from "./idb";
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
   AffiliatePlusSettings,
   AffiliatePlusUser,
+  AffiliatePlusUserGenerateLink,
   DEFAULT_GENERATE_VIDEO_CONFIG,
   DEFAULT_SETTINGS,
   GENERATE_VIDEO_CONFIG_KEY,
@@ -14,8 +17,6 @@ import {
   createEmptyItem,
   migrateToCharacterProfile,
 } from "./types";
-import { extractShopeeProductId } from "./csv-parser";
-import { idbGetConfig, idbSetConfig } from "./idb";
 
 function readJSON<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
@@ -114,12 +115,99 @@ export function saveItems(items: AffiliatePlusItem[]) {
   );
 }
 
-export function loadUsers(): AffiliatePlusUser[] {
-  return readJSON<AffiliatePlusUser[]>(USERS_STORAGE_KEY, []);
+function normalizeGenerateLink(
+  raw: AffiliatePlusUserGenerateLink | null | undefined
+): AffiliatePlusUserGenerateLink | null {
+  if (!raw || typeof raw !== "object") return null;
+  const mergedVideoUrl = String(raw.mergedVideoUrl || "").trim();
+  const cleaned =
+    mergedVideoUrl.startsWith("blob:") || mergedVideoUrl.startsWith("data:") ? "" : mergedVideoUrl;
+  return {
+    sessionId: String(raw.sessionId || ""),
+    itemId: String(raw.itemId || ""),
+    productId: String(raw.productId || ""),
+    productName: String(raw.productName || ""),
+    productLink: String(raw.productLink || ""),
+    caption: String(raw.caption || ""),
+    mergedVideoUrl: cleaned,
+    assignedAt: Number(raw.assignedAt) || Date.now(),
+  };
 }
 
-export function saveUsers(users: AffiliatePlusUser[]) {
-  writeJSON(USERS_STORAGE_KEY, users);
+function normalizeGenerateItems(raw: Partial<AffiliatePlusUser>): AffiliatePlusUserGenerateLink[] {
+  const fromList = Array.isArray(raw.generateItems) ? raw.generateItems : [];
+  const migrated = normalizeGenerateLink(raw.generateItem);
+  const merged = [...fromList, ...(migrated ? [migrated] : [])]
+    .map((item) => normalizeGenerateLink(item))
+    .filter((item): item is AffiliatePlusUserGenerateLink => Boolean(item));
+
+  // Dedupe theo itemId / productId+mergedVideoUrl
+  const seen = new Set<string>();
+  const unique: AffiliatePlusUserGenerateLink[] = [];
+  for (const item of merged) {
+    const key =
+      item.itemId ||
+      `${item.productId}|${item.mergedVideoUrl}|${item.productLink}|${item.caption}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(item);
+  }
+  return unique.slice(0, 90);
+}
+
+function normalizeUser(raw: Partial<AffiliatePlusUser>): AffiliatePlusUser {
+  return {
+    id: String(raw.id || crypto.randomUUID()),
+    username: String(raw.username || "").trim(),
+    email: String(raw.email || ""),
+    role: String(raw.role || "user"),
+    cookie: String(raw.cookie || ""),
+    proxy: String(raw.proxy || ""),
+    error: String(raw.error || ""),
+    active: raw.active !== false,
+    createdAt: raw.createdAt || new Date().toISOString(),
+    generateItems: normalizeGenerateItems(raw),
+    generateItem: null,
+  };
+}
+
+export async function loadUsers(): Promise<AffiliatePlusUser[]> {
+  const legacy = readJSON<AffiliatePlusUser[]>(USERS_STORAGE_KEY, []).map(normalizeUser);
+  let fromIdb: AffiliatePlusUser[] = [];
+  try {
+    fromIdb = (await idbGetUsersList<AffiliatePlusUser>()).map(normalizeUser);
+  } catch (err) {
+    console.warn("[loadUsers] IndexedDB read failed", err);
+  }
+
+  const score = (list: AffiliatePlusUser[]) =>
+    list.length * 1000 +
+    list.reduce((sum, u) => sum + (u.generateItems?.length || 0), 0);
+
+  // Ưu tiên nguồn có nhiều data hơn (tránh IDB rỗng ghi đè localStorage)
+  const best = score(fromIdb) >= score(legacy) ? fromIdb : legacy;
+
+  if (best.length) {
+    try {
+      await idbSetUsersList(best);
+    } catch (err) {
+      console.warn("[loadUsers] sync IndexedDB failed", err);
+    }
+    writeJSON(USERS_STORAGE_KEY, best);
+  }
+
+  return best;
+}
+
+export async function saveUsers(users: AffiliatePlusUser[]): Promise<void> {
+  const normalized = users.map(normalizeUser);
+  // localStorage trước (đồng bộ, không mất khi F5 nếu IDB chậm/fail)
+  writeJSON(USERS_STORAGE_KEY, normalized);
+  try {
+    await idbSetUsersList(normalized);
+  } catch (err) {
+    console.warn("[saveUsers] IndexedDB failed, đã lưu localStorage", err);
+  }
 }
 
 export function loadLogs(): AffiliatePlusLog[] {

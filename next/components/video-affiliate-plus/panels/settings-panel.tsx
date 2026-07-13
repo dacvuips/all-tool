@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../lib/providers/toast-provider";
-import { Button, Field, Input, Switch } from "../../shared/utilities/form";
+import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
 import { AffiliatePlusSettings } from "../types";
 
 interface SettingsPanelProps {
@@ -20,10 +20,10 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
   };
 
   return (
-    <div className="max-w-lg space-y-5">
-      <h3 className="text-sm font-bold text-gray-700 m-0">{t("Cài đặt hệ thống")}</h3>
+    <div className="space-y-5 max-w-lg">
+      <h3 className="m-0 text-sm font-bold text-gray-700">{t("Cài đặt hệ thống")}</h3>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+      <Form className="p-5 space-y-4 bg-white rounded-xl border border-gray-200">
         <Field label={t("Giờ chạy lại tự động")}>
           <Input
             value={form.scheduleTime}
@@ -52,7 +52,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
             placeholder="VN"
           />
         </Field>
-        <div className="flex items-center gap-3">
+        <div className="flex gap-3 items-center">
           <span className="text-sm font-medium text-gray-700">{t("Tự động retry lỗi")}</span>
           <Switch
             value={form.autoRetry}
@@ -60,7 +60,7 @@ export function SettingsPanel({ settings, onUpdateSettings }: SettingsPanelProps
           />
         </div>
         <Button primary text={t("Lưu cài đặt")} onClick={handleSave} />
-      </div>
+      </Form>
     </div>
   );
 }

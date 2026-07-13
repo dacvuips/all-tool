@@ -1,5 +1,6 @@
 /**
- * Lịch sử import / phiên làm việc — lưu IndexedDB (giống scene history affiliate-video).
+ * Lịch sử import / phiên làm việc — metadata trong IndexedDB.
+ * Items thực tế nằm ở store `threads` (keyed by sessionId = history id).
  */
 import {
   idbClearImportHistory,
@@ -8,38 +9,27 @@ import {
   idbSetImportHistoryList,
   idbSetSelectedImportHistoryId,
 } from "./idb";
+import { replaceSessionThreads } from "./thread-store";
 import { AffiliatePlusItem } from "./types";
-
-export const MAX_IMPORT_HISTORY = 30;
-
-export type ImportSessionData = {
-  fileName: string;
-  items: AffiliatePlusItem[];
-};
-
-export type ImportHistoryItem = {
-  id: string;
-  createdAt: number;
-  label: string;
-  data: ImportSessionData;
-};
+import { toPersistedMergedVideoUrl } from "./merged-video";
 
 function isEphemeralMediaUrl(url: string): boolean {
   const u = String(url || "").trim();
   return u.startsWith("blob:") || u.startsWith("data:");
 }
 
-/** Chuẩn hóa items trước khi ghi history (không lưu blob/data; giữ index slot). */
-export function sanitizeItemsForHistory(items: AffiliatePlusItem[]): AffiliatePlusItem[] {
+/** Chuẩn hóa items trước khi ghi threads (không lưu blob/data/prompt; giữ index slot). */
+function sanitizeItemsForHistory(items: AffiliatePlusItem[]): AffiliatePlusItem[] {
   return items.map((i) => {
     const videoUrls = (i.videoUrls || []).map((u) =>
       isEphemeralMediaUrl(u) ? "" : String(u || "").trim()
     );
     return {
       ...i,
+      prompt: "",
       videoUrls,
       videoDisabled: videoUrls.map((_, idx) => Boolean(i.videoDisabled?.[idx])),
-      mergedVideoUrl: isEphemeralMediaUrl(i.mergedVideoUrl || "") ? "" : i.mergedVideoUrl || "",
+      mergedVideoUrl: toPersistedMergedVideoUrl(i.mergedVideoUrl),
       status:
         i.status === "running" || i.status === "uploading"
           ? videoUrls.some(Boolean)
@@ -51,6 +41,22 @@ export function sanitizeItemsForHistory(items: AffiliatePlusItem[]): AffiliatePl
   });
 }
 
+export const MAX_IMPORT_HISTORY = 30;
+
+export type ImportSessionData = {
+  fileName: string;
+  itemCount: number;
+  /** @deprecated Chỉ còn trên bản ghi cũ — đã migrate sang threads store */
+  items?: AffiliatePlusItem[];
+};
+
+export type ImportHistoryItem = {
+  id: string;
+  createdAt: number;
+  label: string;
+  data: ImportSessionData;
+};
+
 function buildLabel(fileName: string, createdAt: number): string {
   const now = new Date(createdAt);
   const date = now.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
@@ -59,8 +65,62 @@ function buildLabel(fileName: string, createdAt: number): string {
   return `${name} – ${date} ${time}`;
 }
 
+function normalizeHistoryEntry(raw: ImportHistoryItem): ImportHistoryItem {
+  const fileName = String(raw.data?.fileName || "").trim() || "Import";
+  const legacyItems = Array.isArray(raw.data?.items) ? raw.data.items : undefined;
+  const itemCount =
+    typeof raw.data?.itemCount === "number"
+      ? raw.data.itemCount
+      : legacyItems?.length ?? 0;
+  return {
+    ...raw,
+    data: {
+      fileName,
+      itemCount,
+      ...(legacyItems?.length ? { items: legacyItems } : {}),
+    },
+  };
+}
+
+function stripLegacyItems(entry: ImportHistoryItem): ImportHistoryItem {
+  const { items: _legacy, ...restData } = entry.data;
+  return {
+    ...entry,
+    data: {
+      fileName: restData.fileName,
+      itemCount: restData.itemCount,
+    },
+  };
+}
+
+/** Migrate bản ghi cũ (có data.items) → threads store; history chỉ giữ metadata. */
+export async function migrateLegacyImportHistory(): Promise<ImportHistoryItem[]> {
+  const raw = await idbGetImportHistoryList<ImportHistoryItem>();
+  if (!raw.length) return [];
+
+  let changed = false;
+  const next: ImportHistoryItem[] = [];
+
+  for (const entry of raw.map(normalizeHistoryEntry)) {
+    const legacyItems = entry.data.items;
+    if (legacyItems?.length) {
+      const sanitized = sanitizeItemsForHistory(legacyItems);
+      await replaceSessionThreads(entry.id, sanitized);
+      next.push(stripLegacyItems({ ...entry, data: { ...entry.data, itemCount: sanitized.length } }));
+      changed = true;
+    } else {
+      next.push(stripLegacyItems(entry));
+      if (entry.data.items) changed = true;
+    }
+  }
+
+  if (changed) await idbSetImportHistoryList(next);
+  return next;
+}
+
 export async function getImportHistory(): Promise<ImportHistoryItem[]> {
-  return idbGetImportHistoryList<ImportHistoryItem>();
+  const list = await idbGetImportHistoryList<ImportHistoryItem>();
+  return list.map(normalizeHistoryEntry).map(stripLegacyItems);
 }
 
 export async function getSelectedImportHistoryId(): Promise<string | null> {
@@ -73,7 +133,7 @@ export async function setSelectedImportHistoryId(id: string | null): Promise<voi
 
 export async function pushImportHistory(params: {
   fileName: string;
-  items: AffiliatePlusItem[];
+  itemCount: number;
 }): Promise<ImportHistoryItem> {
   const existing = await getImportHistory();
   const createdAt = Date.now();
@@ -83,7 +143,7 @@ export async function pushImportHistory(params: {
     label: buildLabel(params.fileName, createdAt),
     data: {
       fileName: String(params.fileName || "").trim() || "Import",
-      items: sanitizeItemsForHistory(params.items),
+      itemCount: Math.max(0, params.itemCount),
     },
   };
   const updated = [newItem, ...existing].slice(0, MAX_IMPORT_HISTORY);
@@ -92,23 +152,21 @@ export async function pushImportHistory(params: {
   return newItem;
 }
 
-/** Cập nhật snapshot items của một phiên (đồng bộ tiến độ generate/merge). */
-export async function updateImportHistoryItems(
-  id: string,
-  items: AffiliatePlusItem[]
-): Promise<void> {
+/** Cập nhật số luồng của phiên (đồng bộ sau import/xóa). */
+export async function updateImportHistoryCount(id: string, itemCount: number): Promise<void> {
   if (!id) return;
-  const existing = await getImportHistory();
+  const existing = await idbGetImportHistoryList<ImportHistoryItem>();
   const idx = existing.findIndex((h) => h.id === id);
   if (idx < 0) return;
   const next = [...existing];
-  next[idx] = {
-    ...next[idx],
+  const entry = normalizeHistoryEntry(next[idx]);
+  next[idx] = stripLegacyItems({
+    ...entry,
     data: {
-      ...next[idx].data,
-      items: sanitizeItemsForHistory(items),
+      fileName: entry.data.fileName,
+      itemCount: Math.max(0, itemCount),
     },
-  };
+  });
   await idbSetImportHistoryList(next);
 }
 
@@ -118,17 +176,18 @@ export async function clearImportHistory(): Promise<void> {
 
 /**
  * Nếu chưa có history nhưng localStorage đã có items → tạo 1 phiên "Phiên hiện tại".
+ * Caller phải ghi items vào threads store (replaceSessionThreads).
  */
 export async function ensureImportHistoryFromItems(
   items: AffiliatePlusItem[]
 ): Promise<ImportHistoryItem[]> {
   const existing = await getImportHistory();
   if (existing.length || !items.length) return existing;
-  await pushImportHistory({ fileName: "Phiên hiện tại", items });
+  await pushImportHistory({ fileName: "Phiên hiện tại", itemCount: items.length });
   return getImportHistory();
 }
 
 export function formatImportHistoryOption(item: ImportHistoryItem): string {
-  const count = item.data?.items?.length ?? 0;
+  const count = item.data?.itemCount ?? item.data?.items?.length ?? 0;
   return `${item.label} (${count} luồng)`;
 }
