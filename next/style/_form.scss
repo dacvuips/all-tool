@@ -273,6 +273,10 @@ input[disabled] ~ .react-datepicker__close-icon {
   @apply min-h-10;
   @apply flex items-center;
 
+  &.is-sm {
+    @apply min-h-0;
+  }
+
   &.readOnly,
   &.disabled {
     opacity: 0.65;
@@ -348,6 +352,26 @@ input[disabled] ~ .react-datepicker__close-icon {
 
   .slider.round:before {
     border-radius: 50%;
+  }
+}
+
+.form-switch.is-sm .switch {
+  width: 34px;
+  height: 18px;
+
+  .slider:before {
+    height: 14px;
+    width: 14px;
+    left: 2px;
+    bottom: 2px;
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(16px);
+  }
+
+  .slider.round {
+    border-radius: 18px;
   }
 }
 .ck-focused {

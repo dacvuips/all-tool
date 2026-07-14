@@ -151,6 +151,8 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   className="px-2 h-8 rounded-md"
                   icon={<RiBookOpenLine className="text-lg" />}
                   text={t("Hướng dẫn")}
+                  href="https://docs.google.com/spreadsheets/d/1EWgT-5Ig9LcTK47Sr2UfyIXRW4y2C6oTTFV7AkFbM_I/edit?usp=sharing"
+                  targetBlank
                 />{" "}
                 {/* Bảng giá */}
                 <Button
@@ -641,6 +643,13 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       icon: <RiCodeLine />,
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
     },
+    // {
+    //   label: "Video Affiliate Plus",
+    //   desc: t("Quản lý và tạo danh sách affiliate"),
+    //   href: "/video-affiliate-plus",
+    //   icon: <RiVideoAddLine />,
+    //   gradient: "linear-gradient(135deg, #0EA5E9, #6366F1)",
+    // },
   ];
 
   const isActive = (href: string) => router.pathname.startsWith(href);

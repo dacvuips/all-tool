@@ -115,9 +115,11 @@ export function Dialog({
   if (title && !header?.length) {
     header = [
       <>
-        <div className="flex items-center flex-1 h-10" style={{ justifyContent: "inherit" }}>
-          {icon ? <i className="mr-2 text-lg text-primary">{icon}</i> : null}
-          <span className="text-sm font-semibold text-gray-600 uppercase">{title}</span>
+        <div className="flex items-center flex-1 h-10 min-w-0" style={{ justifyContent: "inherit" }}>
+          {icon ? <i className="mr-2 text-lg text-primary shrink-0">{icon}</i> : null}
+          <span className="text-sm font-semibold text-gray-600 uppercase truncate" title={title}>
+            {title}
+          </span>
         </div>
         {hasCloseIcon && (
           <button className="transform translate-x-5 btn-default" onClick={() => props.onClose()}>

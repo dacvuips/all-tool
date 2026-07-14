@@ -1,0 +1,68 @@
+{
+  "manifest_version": 3,
+  "name": "Viet-Theo-Bridge",
+  "version": "1.4.4",
+  "description": "Gửi CSV Shopee Affiliate về Viet-Theo-Bridge (domain tự bắt / Số SP / Delay / link short).",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://affiliate.shopee.vn/*",
+    "https://affiliate.shopee.ph/*",
+    "https://affiliate.shopee.sg/*",
+    "https://affiliate.shopee.co.th/*",
+    "https://affiliate.shopee.com.my/*",
+    "https://affiliate.shopee.co.id/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Viet-Theo-Bridge",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://127.0.0.1/*", "http://localhost/*"],
+      "js": ["app-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://affiliate.shopee.vn/offer/product_offer*",
+        "https://affiliate.shopee.ph/offer/product_offer*",
+        "https://affiliate.shopee.sg/offer/product_offer*",
+        "https://affiliate.shopee.co.th/offer/product_offer*",
+        "https://affiliate.shopee.com.my/offer/product_offer*",
+        "https://affiliate.shopee.co.id/offer/product_offer*"
+      ],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "https://affiliate.shopee.vn/offer/product_offer*",
+        "https://affiliate.shopee.ph/offer/product_offer*",
+        "https://affiliate.shopee.sg/offer/product_offer*",
+        "https://affiliate.shopee.co.th/offer/product_offer*",
+        "https://affiliate.shopee.com.my/offer/product_offer*",
+        "https://affiliate.shopee.co.id/offer/product_offer*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

@@ -11,12 +11,28 @@ interface VideoDialogExtraProps {
   aspectRatio?: string;
 }
 
+function isLocalMediaUrl(url: string): boolean {
+  const u = String(url || "").trim();
+  return u.startsWith("blob:") || u.startsWith("data:");
+}
+
 export function VideoDialog({
   videoUrl = "",
   aspectRatio,
   ...props
 }: DialogProps & VideoDialogExtraProps) {
   const screenSm = useScreen("sm");
+  const useNativeVideo = isLocalMediaUrl(videoUrl);
+  const playerConfig = useMemo(() => {
+    const base = getYoutubePlayerConfig();
+    return {
+      ...base,
+      file: {
+        ...base.file,
+        forceVideo: true,
+      },
+    };
+  }, []);
 
   /** Compute player dimensions based on aspect ratio */
   const { playerWidth, playerHeight, dialogWidth } = useMemo(() => {
@@ -60,14 +76,28 @@ export function VideoDialog({
       >
         <HiOutlineX />
       </i>
-      <div>
-        <ReactPlayer
-          url={videoUrl}
-          width={playerWidth}
-          height={playerHeight}
-          controls
-          config={getYoutubePlayerConfig()}
-        />
+      <div className="overflow-hidden bg-black rounded-lg">
+        {useNativeVideo ? (
+          // blob:/data: không có đuôi .mp4 → ReactPlayer thường không play được
+          <video
+            key={videoUrl}
+            src={videoUrl}
+            controls
+            autoPlay
+            playsInline
+            style={{ width: playerWidth, height: playerHeight, objectFit: "contain" }}
+            className="mx-auto bg-black"
+          />
+        ) : (
+          <ReactPlayer
+            url={videoUrl}
+            width={playerWidth}
+            height={playerHeight}
+            controls
+            playing
+            config={playerConfig}
+          />
+        )}
       </div>
     </Dialog>
   );

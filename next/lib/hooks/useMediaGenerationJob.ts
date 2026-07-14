@@ -138,6 +138,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
       try {
         const res = await fetch(opts.url, {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
           body: JSON.stringify(opts.body),
         });

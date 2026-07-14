@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { CgSpinner } from "react-icons/cg";
 
-interface SwitchProps extends FormControlProps {}
+interface SwitchProps extends FormControlProps {
+  /** Kích thước nhỏ hơn (dùng trong bảng) */
+  size?: "sm" | "md";
+}
 export function Switch({
   controlClassName = "form-switch",
   className = "",
   style = {},
   dependent = false,
+  size = "md",
   ...props
 }: SwitchProps) {
   const [value, setValue] = useState<boolean>(props.value || getDefaultValue({}));
@@ -40,11 +44,15 @@ export function Switch({
     <div
       className={`${controlClassName} cursor-pointer ${props.error ? "error" : ""} ${className} ${
         props.readOnly ? "readOnly" : ""
-      }`}
+      } ${size === "sm" ? "is-sm" : ""}`}
       style={{ ...style }}
       onClick={toggle}
     >
-      <span className={`switch flex-shrink-0 flex-grow-0 self-start mt-2`}>
+      <span
+        className={`switch flex-shrink-0 flex-grow-0 self-start ${
+          size === "sm" ? "mt-0" : "mt-2"
+        }`}
+      >
         <input
           type="checkbox"
           value={dependent ? props.value : value || false}

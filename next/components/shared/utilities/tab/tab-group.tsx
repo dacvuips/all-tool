@@ -19,6 +19,11 @@ interface PropsType extends ReactProps {
   inkbarClassName?: string;
   onChange?: (index: number) => any;
   count?: number;
+  /** Nội dung render phía trên thanh tab (vd: banner) */
+  beforeHeader?: ReactNode;
+  /** Sticky header (banner + tabs), không scroll theo nội dung */
+  stickyHeader?: boolean;
+  stickyHeaderClassName?: string;
 }
 export function TabGroup({
   index,
@@ -36,6 +41,9 @@ export function TabGroup({
   hasArrowClassName = "",
   className = "",
   count = null,
+  beforeHeader = null,
+  stickyHeader = false,
+  stickyHeaderClassName = "sticky top-14 z-50",
   ...props
 }: PropsType) {
   const id = useUUID();
@@ -121,77 +129,80 @@ export function TabGroup({
     <>
       {!!tabs.length && (
         <>
-          <div className="relative w-full overflow-hidden bg-white border-b border-gray-200">
-            <Button
-              icon={<RiArrowLeftSLine />}
-              iconClassName="text-2xl"
-              style={{
-                boxShadow: "4px 0 8px -1px rgba(0, 0, 0, 0.1), 2px 0 6px -1px rgba(0, 0, 0, 0.06)",
-                opacity: showLeft ? 1 : 0,
-              }}
-              className={`absolute left-0 z-10 h-full px-0 transition-opacity bg-white border-r border-gray-100 rounded-none shadow-xl w-7 ${hasArrowClassName}`}
-              onClick={() => {
-                tabRef.current.scrollTo({
-                  left: tabRef.current.scrollLeft - tabRef.current.scrollWidth / 4,
-                  behavior: "smooth",
-                });
-                checkArrow();
-              }}
-            />
-            <Button
-              icon={<RiArrowRightSLine />}
-              iconClassName="text-2xl"
-              style={{
-                boxShadow:
-                  "-4px 0 8px -1px rgba(0, 0, 0, 0.1), -2px 0 6px -1px rgba(0, 0, 0, 0.06)",
-                opacity: showRight ? 1 : 0,
-              }}
-              className={`absolute right-0 z-10 h-full px-0 bg-white border-l border-gray-100 rounded-none shadow-xl w-7 ${hasArrowClassName}`}
-              onClick={() => {
-                tabRef.current.scrollTo({
-                  left: tabRef.current.scrollLeft + tabRef.current.scrollWidth / 4,
-                  behavior: "smooth",
-                });
-                checkArrow();
-              }}
-            />
-            <div
-              id={id}
-              ref={tabRef}
-              className={`text-center relative flex items-center overflow-x-auto no-scrollbar ${
-                hasArrow ? "px-4" : ""
-              } ${className}`}
-            >
-              {tabs.map((tab, index) => (
-                <a
-                  key={index}
-                  id={id + "-" + index}
-                  className={`cursor-pointer relative flex flex-col items-center ${
-                    activeIndex == index
-                      ? `text-gray-800 ${activeClassName}`
-                      : "text-gray-600 hover:text-gray-800"
-                  } ${flex ? "flex-1" : ""} ${tabClassName}`}
-                  onClick={() => {
-                    if (isControlled) {
-                      setPendingIndex(index);
-                    } else {
-                      setSelectedIndex(index);
-                    }
-                    if (props.onChange) props.onChange(index);
-                  }}
-                >
-                  {tab.count && tab.count != 0 ? (
-                    <div className="absolute top-1 right-1 w-4 p-0.5 leading-none text-white bg-red-500 border rounded-full text-10">
-                      {tab.count}
-                    </div>
-                  ) : (
-                    ""
-                  )}
-                  <div className={titleClassName}>{tab.label}</div>
-                  <div className={subtitleClassName}>{tab.subtitle}</div>
-                </a>
-              ))}
-              {hasInkBar && <div className={`${inkbarClassName}`} ref={inkbarRef}></div>}
+          <div className={stickyHeader ? stickyHeaderClassName : undefined}>
+            {beforeHeader}
+            <div className="relative w-full overflow-hidden bg-white border-b border-gray-200">
+              <Button
+                icon={<RiArrowLeftSLine />}
+                iconClassName="text-2xl"
+                style={{
+                  boxShadow: "4px 0 8px -1px rgba(0, 0, 0, 0.1), 2px 0 6px -1px rgba(0, 0, 0, 0.06)",
+                  opacity: showLeft ? 1 : 0,
+                }}
+                className={`absolute left-0 z-10 h-full px-0 transition-opacity bg-white border-r border-gray-100 rounded-none shadow-xl w-7 ${hasArrowClassName}`}
+                onClick={() => {
+                  tabRef.current.scrollTo({
+                    left: tabRef.current.scrollLeft - tabRef.current.scrollWidth / 4,
+                    behavior: "smooth",
+                  });
+                  checkArrow();
+                }}
+              />
+              <Button
+                icon={<RiArrowRightSLine />}
+                iconClassName="text-2xl"
+                style={{
+                  boxShadow:
+                    "-4px 0 8px -1px rgba(0, 0, 0, 0.1), -2px 0 6px -1px rgba(0, 0, 0, 0.06)",
+                  opacity: showRight ? 1 : 0,
+                }}
+                className={`absolute right-0 z-10 h-full px-0 bg-white border-l border-gray-100 rounded-none shadow-xl w-7 ${hasArrowClassName}`}
+                onClick={() => {
+                  tabRef.current.scrollTo({
+                    left: tabRef.current.scrollLeft + tabRef.current.scrollWidth / 4,
+                    behavior: "smooth",
+                  });
+                  checkArrow();
+                }}
+              />
+              <div
+                id={id}
+                ref={tabRef}
+                className={`text-center relative flex items-center overflow-x-auto no-scrollbar ${
+                  hasArrow ? "px-4" : ""
+                } ${className}`}
+              >
+                {tabs.map((tab, index) => (
+                  <a
+                    key={index}
+                    id={id + "-" + index}
+                    className={`cursor-pointer relative flex flex-col items-center ${
+                      activeIndex == index
+                        ? `text-gray-800 ${activeClassName}`
+                        : "text-gray-600 hover:text-gray-800"
+                    } ${flex ? "flex-1" : ""} ${tabClassName}`}
+                    onClick={() => {
+                      if (isControlled) {
+                        setPendingIndex(index);
+                      } else {
+                        setSelectedIndex(index);
+                      }
+                      if (props.onChange) props.onChange(index);
+                    }}
+                  >
+                    {tab.count && tab.count != 0 ? (
+                      <div className="absolute top-1 right-1 w-4 p-0.5 leading-none text-white bg-red-500 border rounded-full text-10">
+                        {tab.count}
+                      </div>
+                    ) : (
+                      ""
+                    )}
+                    <div className={titleClassName}>{tab.label}</div>
+                    <div className={subtitleClassName}>{tab.subtitle}</div>
+                  </a>
+                ))}
+                {hasInkBar && <div className={`${inkbarClassName}`} ref={inkbarRef}></div>}
+              </div>
             </div>
           </div>
           <div className={`${bodyClassName}`} style={bodyStyle}>
