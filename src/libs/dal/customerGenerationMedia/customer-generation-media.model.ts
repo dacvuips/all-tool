@@ -17,6 +17,7 @@ const customerGenerationMediaSchema = new Schema(
     mimeType: { type: String },
     size: { type: Number },
     order: { type: Number },
+    flow2RequestId: { type: String, index: true },
   },
   { timestamps: true }
 );

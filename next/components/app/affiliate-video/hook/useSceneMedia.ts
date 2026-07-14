@@ -15,7 +15,7 @@ import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
 } from "../shared/affiliateSceneGenerationParams";
-import { downloadGeneratedVideo, downloadSceneImage, enrichGeneratedImageWithBase64, getGeneratedImageUrl, hasPendingGeneratedVideoBase64, resumePendingGeneratedVideoBase64 } from "../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -379,14 +379,12 @@ export function useSceneMedia({
   useEffect(() => {
     getGeneratedImage(scene.id).then(async (img) => {
       if (!img) return;
-      setGeneratedImage(img);
-      if (!img.imageBytes && getGeneratedImageUrl(img)) {
-        const enriched = await enrichGeneratedImageWithBase64(img);
-        if (enriched.imageBytes) {
-          await saveGeneratedImage(scene.id, enriched);
-          setGeneratedImage(enriched);
-        }
-      }
+      await resumePendingGeneratedImageBinary<GeneratedImageData>(
+        scene.id,
+        img,
+        { set: saveGeneratedImage },
+        { onUpdate: (data) => setGeneratedImage(data) }
+      );
     });
   }, [scene.id, isBatchGenerating, getGeneratedImage, saveGeneratedImage]);
 
@@ -394,7 +392,7 @@ export function useSceneMedia({
   useEffect(() => {
     if (nextSceneId) {
       getGeneratedImage(nextSceneId).then((img) => {
-        if (img) setNextGeneratedImage(img);
+        if (img) setNextGeneratedImage(toUiGeneratedImage(img));
         else setNextGeneratedImage(null);
       });
     } else {
@@ -407,7 +405,7 @@ export function useSceneMedia({
   useEffect(() => {
     getGeneratedVideo(scene.id).then(async (vid) => {
       if (!vid) return;
-      setGeneratedVideo(vid);
+      setGeneratedVideo(toUiGeneratedVideo(vid));
       if (!hasPendingGeneratedVideoBase64(vid)) return;
       await resumePendingGeneratedVideoBase64<GeneratedVideoData>(scene.id, vid, { set: saveGeneratedVideo }, {
         onUpdate: (data) => setGeneratedVideo(data),
@@ -420,7 +418,7 @@ export function useSceneMedia({
     const stitchId = scene.id + "::stitch";
     getGeneratedVideo(stitchId).then(async (vid) => {
       if (!vid) return;
-      setGeneratedExtendVideo(vid);
+      setGeneratedExtendVideo(toUiGeneratedVideo(vid));
       if (!hasPendingGeneratedVideoBase64(vid)) return;
       await resumePendingGeneratedVideoBase64<GeneratedVideoData>(stitchId, vid, { set: saveGeneratedVideo }, {
         onUpdate: (data) => setGeneratedExtendVideo(data),
@@ -506,7 +504,7 @@ export function useSceneMedia({
   const handleSetImage = async (imageData: GeneratedImageData) => {
     try {
       await saveGeneratedImage(scene.id, imageData);
-      setGeneratedImage(imageData);
+      setGeneratedImage(toUiGeneratedImage(imageData));
       setImageError(null);
       reportSceneError?.(scene.id, "image", null);
     } catch (err: any) {

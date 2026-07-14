@@ -30,6 +30,19 @@ import {
   GeneratedVideoData,
 } from "../../../../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../../../app/affiliate-video/hook/useIndexedDB";
+import { GeneratedImageDownloadButtons } from "../../../../app/affiliate-video/shared/generated-image-download-buttons";
+import { GeneratedVideoDownloadButtons } from "../../../../app/affiliate-video/shared/generated-video-download-buttons";
+import {
+  GeneratedImageLike,
+  GeneratedVideoLike,
+  getGeneratedImagePreviewSrc,
+  getGeneratedVideoPreviewSrc,
+  hasGeneratedImageData,
+  hasGeneratedVideoData,
+  toUiGeneratedImage,
+  toUiGeneratedVideo,
+} from "../../../../app/affiliate-video/shared/generatedMediaUtils";
+import { toDownloadProxyUrl } from "../../../../app/affiliate-video/shared/videoDownloadUtils";
 import { Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
 import { TabGroup } from "../../../../shared/utilities/tab";
@@ -60,8 +73,10 @@ interface LocalMediaItem {
   id: string;
   type: "image" | "video" | "audio";
   key: IDBValidKey;
-  dataUrl: string;
+  previewUrl: string;
   mimeType: string;
+  imageData?: GeneratedImageData;
+  videoData?: GeneratedVideoData;
 }
 
 function buildLocalDataUrl(
@@ -70,7 +85,30 @@ function buildLocalDataUrl(
   fallbackUri?: string | null
 ): string {
   if (base64) return `data:${mimeType};base64,${base64}`;
-  return fallbackUri || "";
+  const uri = (fallbackUri || "").trim();
+  if (!uri) return "";
+  if (uri.startsWith("blob:") || uri.startsWith("data:")) return uri;
+  if (/^https?:\/\//i.test(uri)) return toDownloadProxyUrl(uri, true);
+  return uri;
+}
+
+function customerMediaToImageLike(media: CustomerGenerationMedia): GeneratedImageLike {
+  const url = (media.url || "").trim();
+  return {
+    imageUrl: url,
+    fifeUrl: url,
+    mimeType: media.mimeType || "image/jpeg",
+    flow2RequestId: media.flow2RequestId,
+  };
+}
+
+function customerMediaToVideoLike(media: CustomerGenerationMedia): GeneratedVideoLike {
+  const url = (media.url || "").trim();
+  return {
+    videoUri: url || null,
+    mimeType: media.mimeType || "video/mp4",
+    flow2RequestId: media.flow2RequestId,
+  };
 }
 
 export function ProfileMediaGallery() {
@@ -376,14 +414,18 @@ function LocalMediaGallery() {
 
         for (const entry of images) {
           const img = entry.value;
-          if (!img?.imageBytes) continue;
+          if (!hasGeneratedImageData(img)) continue;
           try {
+            const ui = toUiGeneratedImage(img);
+            const previewUrl = getGeneratedImagePreviewSrc(ui);
+            if (!previewUrl) continue;
             items.push({
               id: `local-img-${String(entry.key)}`,
               type: "image",
               key: entry.key,
-              dataUrl: buildLocalDataUrl(img.mimeType || "image/png", img.imageBytes),
-              mimeType: img.mimeType || "image/png",
+              previewUrl,
+              mimeType: ui.mimeType || "image/png",
+              imageData: ui,
             });
           } catch (err) {
             skippedWhileMapping++;
@@ -393,17 +435,18 @@ function LocalMediaGallery() {
 
         for (const entry of videos) {
           const vid = entry.value;
-          if (!vid?.videoBytes && !vid?.videoUri) continue;
+          if (!hasGeneratedVideoData(vid)) continue;
           try {
-            const mimeType = vid.mimeType || "video/mp4";
-            const dataUrl = buildLocalDataUrl(mimeType, vid.videoBytes, vid.videoUri);
-            if (!dataUrl) continue;
+            const ui = toUiGeneratedVideo(vid);
+            const previewUrl = getGeneratedVideoPreviewSrc(ui) || "";
+            if (!previewUrl) continue;
             items.push({
               id: `local-vid-${String(entry.key)}`,
               type: "video",
               key: entry.key,
-              dataUrl,
-              mimeType,
+              previewUrl,
+              mimeType: ui.mimeType || "video/mp4",
+              videoData: ui,
             });
           } catch (err) {
             skippedWhileMapping++;
@@ -419,7 +462,7 @@ function LocalMediaGallery() {
               id: `local-aud-${String(entry.key)}`,
               type: "audio",
               key: entry.key,
-              dataUrl: buildLocalDataUrl(aud.mimeType || "audio/wav", aud.audioBytes),
+              previewUrl: buildLocalDataUrl(aud.mimeType || "audio/wav", aud.audioBytes),
               mimeType: aud.mimeType || "audio/wav",
             });
           } catch (err) {
@@ -487,9 +530,10 @@ function LocalMediaGallery() {
   };
 
   const handleDownloadLocal = (item: LocalMediaItem) => {
-    const ext = item.type === "image" ? "png" : item.type === "video" ? "mp4" : "wav";
+    if (item.type === "image" || item.type === "video") return;
+    const ext = "wav";
     const a = document.createElement("a");
-    a.href = item.dataUrl;
+    a.href = item.previewUrl;
     a.download = `${String(item.key)}.${ext}`;
     a.click();
   };
@@ -717,6 +761,7 @@ function LocalMediaCard({
       : item.type === "video"
       ? "bg-blue-500/80"
       : "bg-purple-500/80";
+  const fileBase = String(item.key);
 
   return (
     <div className="overflow-hidden bg-white rounded-xl border border-gray-100 transition-shadow group hover:shadow-lg">
@@ -724,7 +769,7 @@ function LocalMediaCard({
       <div className="relative bg-gray-50 cursor-pointer aspect-square" onClick={onPreview}>
         {item.type === "image" && (
           <img
-            src={item.dataUrl}
+            src={item.previewUrl}
             className="object-cover w-full h-full"
             alt="local-image"
             loading="lazy"
@@ -732,9 +777,9 @@ function LocalMediaCard({
         )}
         {item.type === "video" && (
           <div className="flex justify-center items-center w-full h-full bg-gradient-to-br from-gray-800 to-gray-900">
-            {item.dataUrl && (
+            {item.previewUrl && (
               <video
-                src={item.dataUrl}
+                src={item.previewUrl}
                 className="object-cover w-full h-full opacity-70"
                 muted
                 preload="metadata"
@@ -761,15 +806,17 @@ function LocalMediaCard({
           >
             <RiZoomInLine className="text-lg" />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDownload();
-            }}
-            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
-          >
-            <RiDownloadLine className="text-lg" />
-          </button>
+          {item.type === "audio" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload();
+              }}
+              className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
+            >
+              <RiDownloadLine className="text-lg" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -794,14 +841,31 @@ function LocalMediaCard({
         </span>
       </div>
 
-      {/* Info */}
-      <div className="p-2.5">
+      {/* Info + upsample download */}
+      <div className="p-2.5 flex flex-col gap-2">
         <div className="flex justify-between items-center">
-          <span className="text-xs text-gray-500 truncate max-w-[120px]" title={String(item.key)}>
-            {String(item.key)}
+          <span className="text-xs text-gray-500 truncate max-w-[120px]" title={fileBase}>
+            {fileBase}
           </span>
           <span className="text-xs text-gray-400">{item.mimeType}</span>
         </div>
+        {item.type === "image" && item.imageData && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <GeneratedImageDownloadButtons
+              image={item.imageData}
+              fileName={`${fileBase}.png`}
+              show1kLabel
+            />
+          </div>
+        )}
+        {item.type === "video" && item.videoData && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <GeneratedVideoDownloadButtons
+              video={item.videoData}
+              fileName={`${fileBase}.mp4`}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -821,6 +885,7 @@ function LocalMediaPreviewModal({
   onDownload: () => void;
 }) {
   const { t } = useTranslation();
+  const fileBase = String(item.key);
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -828,7 +893,7 @@ function LocalMediaPreviewModal({
     };
     document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
-  }, []);
+  }, [onClose]);
 
   return (
     <div
@@ -848,8 +913,8 @@ function LocalMediaPreviewModal({
               {item.type === "audio" && <RiMusic2Line />}
               {item.type}
             </span>
-            <span className="text-sm text-gray-400 truncate max-w-[200px]" title={String(item.key)}>
-              Key: {String(item.key)}
+            <span className="text-sm text-gray-400 truncate max-w-[200px]" title={fileBase}>
+              Key: {fileBase}
             </span>
             <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-full">
               IndexedDB
@@ -864,14 +929,14 @@ function LocalMediaPreviewModal({
         <div className="flex items-center justify-center p-4 bg-gray-50 max-h-[70vh] overflow-auto">
           {item.type === "image" && (
             <img
-              src={item.dataUrl}
+              src={item.previewUrl}
               alt="preview"
               className="object-contain max-w-full rounded-lg max-h-[60vh]"
             />
           )}
           {item.type === "video" && (
             <video
-              src={item.dataUrl}
+              src={item.previewUrl}
               controls
               autoPlay
               className="max-w-full rounded-lg max-h-[60vh]"
@@ -880,20 +945,35 @@ function LocalMediaPreviewModal({
           {item.type === "audio" && (
             <div className="flex flex-col gap-4 items-center py-8">
               <RiMusic2Line className="text-6xl text-purple-400" />
-              <audio src={item.dataUrl} controls autoPlay className="w-full max-w-md" />
+              <audio src={item.previewUrl} controls autoPlay className="w-full max-w-md" />
             </div>
           )}
         </div>
 
         {/* Footer actions */}
-        <div className="flex gap-2 justify-end items-center p-4 border-t">
-          <button
-            onClick={onDownload}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-          >
-            <RiDownloadLine />
-            {t("Tải xuống")}
-          </button>
+        <div className="flex flex-wrap gap-2 justify-end items-center p-4 border-t">
+          {item.type === "image" && item.imageData && (
+            <GeneratedImageDownloadButtons
+              image={item.imageData}
+              fileName={`${fileBase}.png`}
+              show1kLabel
+            />
+          )}
+          {item.type === "video" && item.videoData && (
+            <GeneratedVideoDownloadButtons
+              video={item.videoData}
+              fileName={`${fileBase}.mp4`}
+            />
+          )}
+          {item.type === "audio" && (
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+            >
+              <RiDownloadLine />
+              {t("Tải xuống")}
+            </button>
+          )}
           <button
             onClick={onDelete}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition"
@@ -907,7 +987,7 @@ function LocalMediaPreviewModal({
   );
 }
 
-// ── Server Media Card (unchanged) ──────────────────────────────────────────
+// ── Server Media Card ──────────────────────────────────────────────────────
 
 function MediaCard({
   media,
@@ -925,6 +1005,10 @@ function MediaCard({
   formatDate: (date: string) => string;
 }) {
   const { t } = useTranslation();
+  const fileBase = `media-${media.id}`;
+  const canUpsampleImage = media.type === "image" && !!media.url;
+  const canUpsampleVideo = media.type === "video" && !!media.url;
+  const showPlainDownload = media.type === "audio" || media.type === "file" || !media.url;
 
   return (
     <div className="overflow-hidden bg-white rounded-xl border border-gray-100 transition-shadow group hover:shadow-lg">
@@ -975,15 +1059,17 @@ function MediaCard({
           >
             <RiZoomInLine className="text-lg" />
           </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDownload();
-            }}
-            className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
-          >
-            <RiDownloadLine className="text-lg" />
-          </button>
+          {showPlainDownload && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownload();
+              }}
+              className="p-2 text-white rounded-full backdrop-blur-sm bg-white/20 hover:bg-white/30"
+            >
+              <RiDownloadLine className="text-lg" />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -1001,14 +1087,31 @@ function MediaCard({
         </span>
       </div>
 
-      {/* Info */}
-      <div className="p-2.5">
+      {/* Info + upsample download */}
+      <div className="p-2.5 flex flex-col gap-2">
         <div className="flex justify-between items-center">
           <span className="text-xs text-gray-400">{formatDate(media.createdAt)}</span>
           {media.size ? (
             <span className="text-xs text-gray-400">{formatFileSize(media.size)}</span>
           ) : null}
         </div>
+        {canUpsampleImage && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <GeneratedImageDownloadButtons
+              image={customerMediaToImageLike(media)}
+              fileName={`${fileBase}.png`}
+              show1kLabel
+            />
+          </div>
+        )}
+        {canUpsampleVideo && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <GeneratedVideoDownloadButtons
+              video={customerMediaToVideoLike(media)}
+              fileName={`${fileBase}.mp4`}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1030,6 +1133,7 @@ function MediaPreviewModal({
   formatDate: (date: string) => string;
 }) {
   const { t } = useTranslation();
+  const fileBase = `media-${media.id}`;
 
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
@@ -1037,7 +1141,7 @@ function MediaPreviewModal({
     };
     document.addEventListener("keydown", handleEsc);
     return () => document.removeEventListener("keydown", handleEsc);
-  }, []);
+  }, [onClose]);
 
   return (
     <div
@@ -1100,14 +1204,29 @@ function MediaPreviewModal({
         </div>
 
         {/* Footer actions */}
-        <div className="flex gap-2 justify-end items-center p-4 border-t">
-          <button
-            onClick={onDownload}
-            className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
-          >
-            <RiDownloadLine />
-            {t("Tải xuống")}
-          </button>
+        <div className="flex flex-wrap gap-2 justify-end items-center p-4 border-t">
+          {media.type === "image" && media.url && (
+            <GeneratedImageDownloadButtons
+              image={customerMediaToImageLike(media)}
+              fileName={`${fileBase}.png`}
+              show1kLabel
+            />
+          )}
+          {media.type === "video" && media.url && (
+            <GeneratedVideoDownloadButtons
+              video={customerMediaToVideoLike(media)}
+              fileName={`${fileBase}.mp4`}
+            />
+          )}
+          {(media.type === "audio" || media.type === "file") && (
+            <button
+              onClick={onDownload}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition"
+            >
+              <RiDownloadLine />
+              {t("Tải xuống")}
+            </button>
+          )}
           <button
             onClick={onDelete}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition"

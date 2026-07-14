@@ -34,6 +34,11 @@ import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button
 import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { fileToGenerationImageBase64 } from "../../shared/compressGenerationImage";
+import {
+  getGeneratedImagePreviewSrc,
+  hasGeneratedImageData,
+  toUiGeneratedImage,
+} from "../../shared/generatedMediaUtils";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { GeneratedImageData } from "../hook/useCopyVideoApi";
@@ -789,10 +794,10 @@ function ImageGalleryDialog({
     try {
       const entries = await imageDB.getAllWithKeys();
       const items = entries
-        .filter((e) => e.value?.imageBytes)
+        .filter((e) => hasGeneratedImageData(e.value))
         .map((e) => ({
           key: String(e.key),
-          data: e.value,
+          data: toUiGeneratedImage(e.value),
         }))
         .reverse(); // newest first
       setImages(items);
@@ -862,7 +867,7 @@ function ImageGalleryDialog({
                   <Img
                     showImageOnClick
                     lazyload={false}
-                    src={`data:${item.data.mimeType};base64,${item.data.imageBytes}`}
+                    src={getGeneratedImagePreviewSrc(item.data)}
                     alt={item.key}
                     className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
                     ratio916

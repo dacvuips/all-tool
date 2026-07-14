@@ -16,6 +16,8 @@ import { useIndexedDB } from "../hook/useIndexedDB";
 import {
   enrichGeneratedImageWithBase64,
   enrichGeneratedVideoWithBase64,
+  generatedImageToApiBase64Input,
+  generatedVideoToApiBase64Input,
   persistGeneratedImageWithEnrichment,
   persistGeneratedVideoWithEnrichment,
 } from "../shared/generatedMediaUtils";
@@ -313,17 +315,22 @@ async function generatedImageToWolfAsset(
   data: GeneratedImageData,
   name: string
 ): Promise<WolfMediaAsset | null> {
-  const enriched = await enrichGeneratedImageWithBase64(data);
-  if (!enriched.imageBytes) return null;
-  return {
-    id: uid(),
-    projectId,
-    name,
-    type: "image",
-    mimeType: enriched.mimeType || "image/jpeg",
-    dataBase64: enriched.imageBytes,
-    createdAt: Date.now(),
-  };
+  try {
+    const enriched = await enrichGeneratedImageWithBase64(data);
+    const { imageBytes, mimeType } = await generatedImageToApiBase64Input(enriched);
+    if (!imageBytes) return null;
+    return {
+      id: uid(),
+      projectId,
+      name,
+      type: "image",
+      mimeType: mimeType || "image/jpeg",
+      dataBase64: imageBytes,
+      createdAt: Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function generatedVideoToWolfAsset(
@@ -331,17 +338,22 @@ async function generatedVideoToWolfAsset(
   data: GeneratedVideoData,
   name: string
 ): Promise<WolfMediaAsset | null> {
-  const enriched = await enrichGeneratedVideoWithBase64(data);
-  if (!enriched.videoBytes) return null;
-  return {
-    id: uid(),
-    projectId,
-    name,
-    type: "video",
-    mimeType: enriched.mimeType || "video/mp4",
-    dataBase64: enriched.videoBytes,
-    createdAt: Date.now(),
-  };
+  try {
+    const enriched = await enrichGeneratedVideoWithBase64(data);
+    const { videoBytes, mimeType } = await generatedVideoToApiBase64Input(enriched);
+    if (!videoBytes) return null;
+    return {
+      id: uid(),
+      projectId,
+      name,
+      type: "video",
+      mimeType: mimeType || "video/mp4",
+      dataBase64: videoBytes,
+      createdAt: Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 export function useWolfWorkspaceGeneration() {

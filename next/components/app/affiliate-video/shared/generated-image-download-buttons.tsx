@@ -193,18 +193,22 @@ export function GeneratedImageDownloadButtons({
           innerRef={downloadTriggerRef}
           disabled={disabled}
           className={
-            show1kLabel
+            isDownloading
+              ? "w-8 h-8 rounded-lg bg-success-light text-success-dark"
+              : show1kLabel
               ? "px-2 h-8 text-xs font-bold rounded-lg min-w-8 bg-success-light text-success"
               : "w-8 h-8 rounded-lg bg-success-light text-success"
           }
           iconClassName="text-xl font-bold"
-          icon={show1kLabel || isDownloading ? undefined : <HiOutlineArrowDownTray />}
+          icon={
+            isDownloading ? (
+              <RiLoader4Line className="animate-spin" />
+            ) : show1kLabel ? undefined : (
+              <HiOutlineArrowDownTray />
+            )
+          }
         >
-          {isDownloading ? (
-            <RiLoader4Line className="animate-spin" />
-          ) : show1kLabel ? (
-            "1K"
-          ) : undefined}
+          {!isDownloading && show1kLabel ? "1K" : undefined}
         </Button>
       </div>
 

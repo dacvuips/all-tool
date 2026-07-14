@@ -29,6 +29,8 @@ import {
 import {
   persistGeneratedImageWithEnrichment,
   persistGeneratedVideoWithEnrichment,
+  prepareGeneratedImageForIdb,
+  prepareGeneratedVideoForIdb,
 } from "../../shared/generatedMediaUtils";
 import {
   type AutoDownloadImageResolution,
@@ -291,7 +293,9 @@ export interface GeneratedAudioData {
 }
 
 export interface GeneratedImageData {
-  imageBytes: string; // base64
+  imageBytes?: string;
+  mediaBlob?: Blob;
+  previewUrl?: string;
   mimeType: string;
   fifeUrl: string;
   /** URL trực tiếp — fallback khi server không fetch được binary từ fifeUrl */
@@ -304,7 +308,9 @@ export interface GeneratedImageData {
 
 export interface GeneratedVideoData {
   videoUri: string | null;
-  videoBytes: string | null; // base64 – returned when no outputGcsUri is set
+  videoBytes?: string | null;
+  mediaBlob?: Blob;
+  previewUrl?: string;
   mimeType: string;
   /** Aspect ratio used when this video was generated (e.g. "9:16", "16:9") */
   aspectRatio?: string;
@@ -611,7 +617,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   // ── saveGeneratedImage – lưu ảnh trực tiếp vào IndexedDB ──
   const saveGeneratedImage = useCallback(
     async (sceneId: string, imageData: GeneratedImageData): Promise<void> => {
-      await imageDB.set(sceneId, imageData);
+      await imageDB.set(sceneId, await prepareGeneratedImageForIdb(imageData));
     },
     [imageDB]
   );
@@ -712,7 +718,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   // ── saveGeneratedVideo – lưu video trực tiếp vào IndexedDB ──
   const saveGeneratedVideo = useCallback(
     async (sceneId: string, videoData: GeneratedVideoData): Promise<void> => {
-      await videoDB.set(sceneId, videoData);
+      await videoDB.set(sceneId, await prepareGeneratedVideoForIdb(videoData));
     },
     [videoDB]
   );

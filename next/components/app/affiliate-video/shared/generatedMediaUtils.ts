@@ -8,9 +8,18 @@ export type Flow2ImageMeta = {
   profileId?: string;
 };
 
-/** Shape tối thiểu của ảnh generate — hỗ trợ base64 hoặc URL Flow2. */
+/**
+ * Shape tối thiểu của ảnh generate.
+ * - IDB: ưu tiên `mediaBlob` (URL hết hạn → enrich binary local)
+ * - React UI: `previewUrl` (blob:) + metadata; không giữ chuỗi base64 lớn
+ * - `imageBytes`: legacy / input upload — convert sang mediaBlob rồi xoá khỏi state
+ */
 export type GeneratedImageLike = {
   imageBytes?: string;
+  /** Binary local (IndexedDB + state) — thay base64 để tránh phình heap/DOM */
+  mediaBlob?: Blob;
+  /** Object URL hoặc remote URL để preview — không persist blob: */
+  previewUrl?: string;
   mimeType?: string;
   fifeUrl?: string;
   imageUrl?: string;
@@ -21,13 +30,36 @@ export type Flow2VideoMeta = {
   flow2RequestId?: string;
 };
 
-/** Shape tối thiểu của video generate — hỗ trợ URI hoặc base64. */
+/** Shape tối thiểu của video generate — URI / Blob local / legacy base64. */
 export type GeneratedVideoLike = {
   videoUri?: string | null;
   videoBytes?: string | null;
+  mediaBlob?: Blob;
+  previewUrl?: string;
   mimeType?: string;
   aspectRatio?: string;
 } & Flow2VideoMeta;
+
+/** Cache Object URL theo Blob — tránh tạo lại mỗi lần render. */
+const blobPreviewUrlCache = new WeakMap<Blob, string>();
+
+export function getOrCreateBlobPreviewUrl(blob: Blob): string {
+  const cached = blobPreviewUrlCache.get(blob);
+  if (cached) return cached;
+  const url = URL.createObjectURL(blob);
+  blobPreviewUrlCache.set(blob, url);
+  return url;
+}
+
+function revokeBlobPreviewUrl(url?: string | null) {
+  if (url?.startsWith("blob:")) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 /** Độ phân giải tải video: 720p (gốc) hoặc 1080p (upsample Flow2). */
 export type VideoDownloadResolution = "720p" | "1080p";
@@ -43,8 +75,22 @@ export function getGeneratedImageUrl(img: GeneratedImageLike): string {
   return (img.imageUrl || img.fifeUrl || "").trim();
 }
 
+export function hasStoredGeneratedImageBinary(
+  img: GeneratedImageLike | null | undefined
+): boolean {
+  if (!img) return false;
+  if (img.mediaBlob) return true;
+  return !!(img.imageBytes || "").trim();
+}
+
 export function hasGeneratedImageData(img: GeneratedImageLike | null | undefined): boolean {
-  return !!(img && (img.imageBytes || getGeneratedImageUrl(img)));
+  return !!(
+    img &&
+    (img.mediaBlob ||
+      img.previewUrl ||
+      (img.imageBytes || "").trim() ||
+      getGeneratedImageUrl(img))
+  );
 }
 
 /** Độ phân giải upscale qua Flow2. */
@@ -80,24 +126,43 @@ export function hasFlow2Upsample1080pVideoMeta(
 }
 
 export function hasGeneratedVideoData(video: GeneratedVideoLike | null | undefined): boolean {
-  return !!(video && (video.videoUri || video.videoBytes));
+  return !!(
+    video &&
+    (video.mediaBlob ||
+      video.previewUrl ||
+      (video.videoBytes || "").trim() ||
+      (video.videoUri || "").trim())
+  );
 }
 
-/** Ưu tiên base64; fallback link (chỉ dùng hiển thị / preview). */
+/**
+ * Preview ảnh: blob:/previewUrl → mediaBlob Object URL → remote URL → legacy data: (cuối).
+ * Không ưu tiên data:base64 để tránh DOM/heap phình khi nhiều phân cảnh.
+ */
 export function getGeneratedImagePreviewSrc(img: GeneratedImageLike): string {
-  if (img.imageBytes) {
-    return `data:${img.mimeType || "image/jpeg"};base64,${img.imageBytes}`;
+  if (img.previewUrl) return img.previewUrl;
+  if (img.mediaBlob) return getOrCreateBlobPreviewUrl(img.mediaBlob);
+  const remote = getGeneratedImageUrl(img);
+  if (remote) return remote;
+  if ((img.imageBytes || "").trim()) {
+    return `data:${img.mimeType || "image/jpeg"};base64,${stripBase64Payload(img.imageBytes!)}`;
   }
-  return getGeneratedImageUrl(img);
+  return "";
 }
 
-/** Ưu tiên base64; fallback videoUri qua download-proxy (tránh CORS flow2.viettheo.site). */
+/**
+ * Preview video: blob:/previewUrl → mediaBlob → proxy(HTTP) → legacy data:.
+ */
 export function getGeneratedVideoPreviewSrc(video: GeneratedVideoLike): string | null {
-  if (video.videoBytes) {
-    return `data:${video.mimeType || "video/mp4"};base64,${video.videoBytes}`;
+  if (video.previewUrl) return video.previewUrl;
+  if (video.mediaBlob) return getOrCreateBlobPreviewUrl(video.mediaBlob);
+  if ((video.videoBytes || "").trim()) {
+    // Legacy — tránh khi đã hydrate; giữ để bản IDB cũ còn chạy
+    return `data:${video.mimeType || "video/mp4"};base64,${stripBase64Payload(video.videoBytes!)}`;
   }
   const uri = (video.videoUri || "").trim();
   if (!uri) return null;
+  if (uri.startsWith("blob:") || uri.startsWith("data:")) return uri;
   return toDownloadProxyUrl(uri, true);
 }
 
@@ -107,23 +172,217 @@ function stripBase64Payload(value: string): string {
   return dataMatch ? dataMatch[1] : trimmed;
 }
 
+async function blobToBase64Payload(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Fetch URL / data URL → Blob (không qua base64 trung gian khi HTTP). */
+export async function fetchUrlToBlob(
+  url: string,
+  fallbackMimeType: string
+): Promise<Blob | null> {
+  try {
+    const dataMatch = url.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataMatch) {
+      return base64ToBlob(dataMatch[2], dataMatch[1] || fallbackMimeType);
+    }
+    const blob = await uriToBlob(url);
+    if (!blob) return null;
+    if (blob.type) return blob;
+    return new Blob([blob], { type: fallbackMimeType });
+  } catch (err) {
+    console.warn("[fetchUrlToBlob] Failed:", url, err);
+    return null;
+  }
+}
+
+/** Đưa imageBytes legacy → mediaBlob; giữ mediaBlob nếu đã có. */
+export async function ensureGeneratedImageBinary<T extends GeneratedImageLike>(
+  imageData: T
+): Promise<T> {
+  if (imageData.mediaBlob) {
+    return { ...imageData, imageBytes: "" } as T;
+  }
+  const bytes = (imageData.imageBytes || "").trim();
+  if (!bytes) return imageData;
+  const mimeType = imageData.mimeType || "image/jpeg";
+  return {
+    ...imageData,
+    mediaBlob: base64ToBlob(stripBase64Payload(bytes), mimeType),
+    imageBytes: "",
+    mimeType,
+  } as T;
+}
+
+export async function ensureGeneratedVideoBinary<T extends GeneratedVideoLike>(
+  videoData: T
+): Promise<T> {
+  if (videoData.mediaBlob) {
+    return { ...videoData, videoBytes: null } as T;
+  }
+  const bytes = (videoData.videoBytes || "").trim();
+  if (bytes) {
+    const mimeType = videoData.mimeType || "video/mp4";
+    return {
+      ...videoData,
+      mediaBlob: base64ToBlob(stripBase64Payload(bytes), mimeType),
+      videoBytes: null,
+      mimeType,
+    } as T;
+  }
+  const uri = (videoData.videoUri || "").trim();
+  if (uri.startsWith("data:")) {
+    const blob = await fetchUrlToBlob(uri, videoData.mimeType || "video/mp4");
+    if (!blob) return videoData;
+    return {
+      ...videoData,
+      mediaBlob: blob,
+      videoBytes: null,
+      mimeType: blob.type || videoData.mimeType || "video/mp4",
+    } as T;
+  }
+  return videoData;
+}
+
+/** Bản ghi IDB: có mediaBlob, không lưu previewUrl / chuỗi base64 lớn. */
+export function toPersistGeneratedImage<T extends GeneratedImageLike>(img: T): T {
+  const { previewUrl: _p, ...rest } = img as T & { previewUrl?: string };
+  return {
+    ...rest,
+    previewUrl: undefined,
+    imageBytes: img.mediaBlob ? "" : img.imageBytes || "",
+  } as T;
+}
+
+export function toPersistGeneratedVideo<T extends GeneratedVideoLike>(video: T): T {
+  const { previewUrl: _p, ...rest } = video as T & { previewUrl?: string };
+  return {
+    ...rest,
+    previewUrl: undefined,
+    videoBytes: video.mediaBlob ? null : video.videoBytes ?? null,
+  } as T;
+}
+
+/**
+ * Bản nhẹ cho React state: bỏ imageBytes/videoBytes, gắn previewUrl từ Blob.
+ * Giữ mediaBlob (tham chiếu) để gọi API / download không phải đọc lại IDB.
+ */
+export function toUiGeneratedImage<T extends GeneratedImageLike>(
+  img: T,
+  previous?: T | null
+): T {
+  const ensured =
+    img.mediaBlob || !(img.imageBytes || "").trim()
+      ? img
+      : ({
+          ...img,
+          mediaBlob: base64ToBlob(
+            stripBase64Payload(img.imageBytes!),
+            img.mimeType || "image/jpeg"
+          ),
+          imageBytes: "",
+        } as T);
+
+  let previewUrl = ensured.previewUrl;
+  if (ensured.mediaBlob) {
+    previewUrl = getOrCreateBlobPreviewUrl(ensured.mediaBlob);
+  } else {
+    previewUrl = getGeneratedImageUrl(ensured) || previous?.previewUrl;
+    if (previous?.previewUrl?.startsWith("blob:") && previous.previewUrl !== previewUrl) {
+      revokeBlobPreviewUrl(previous.previewUrl);
+    }
+  }
+
+  return {
+    ...ensured,
+    imageBytes: "",
+    previewUrl,
+  } as T;
+}
+
+export function toUiGeneratedVideo<T extends GeneratedVideoLike>(
+  video: T,
+  previous?: T | null
+): T {
+  let ensured = video;
+  if (!video.mediaBlob && (video.videoBytes || "").trim()) {
+    ensured = {
+      ...video,
+      mediaBlob: base64ToBlob(
+        stripBase64Payload(video.videoBytes!),
+        video.mimeType || "video/mp4"
+      ),
+      videoBytes: null,
+    } as T;
+  }
+
+  let previewUrl = ensured.previewUrl;
+  if (ensured.mediaBlob) {
+    previewUrl = getOrCreateBlobPreviewUrl(ensured.mediaBlob);
+  } else {
+    const uri = (ensured.videoUri || "").trim();
+    previewUrl = uri
+      ? uri.startsWith("blob:") || uri.startsWith("data:")
+        ? uri
+        : toDownloadProxyUrl(uri, true)
+      : previous?.previewUrl;
+    if (previous?.previewUrl?.startsWith("blob:") && previous.previewUrl !== previewUrl) {
+      revokeBlobPreviewUrl(previous.previewUrl);
+    }
+  }
+
+  return {
+    ...ensured,
+    videoBytes: null,
+    previewUrl,
+  } as T;
+}
+
+export async function prepareGeneratedImageForIdb<T extends GeneratedImageLike>(
+  img: T
+): Promise<T> {
+  return toPersistGeneratedImage(await ensureGeneratedImageBinary(img));
+}
+
+export async function prepareGeneratedVideoForIdb<T extends GeneratedVideoLike>(
+  video: T
+): Promise<T> {
+  return toPersistGeneratedVideo(await ensureGeneratedVideoBinary(video));
+}
+
 /**
  * Chuẩn hoá ảnh đã generate → payload API (luôn base64).
- * Nếu chưa có base64 (chỉ có link) sẽ fetch tại thời điểm gọi — tách biệt với enrich nền sau generate.
+ * Ưu tiên mediaBlob → imageBytes → fetch URL.
  */
 export async function generatedImageToApiBase64Input(
   img: GeneratedImageLike
 ): Promise<{ imageBytes: string; mimeType: string }> {
-  if (img.imageBytes) {
+  if (img.mediaBlob) {
     return {
-      imageBytes: stripBase64Payload(img.imageBytes),
+      imageBytes: await blobToBase64Payload(img.mediaBlob),
+      mimeType: img.mimeType || img.mediaBlob.type || "image/jpeg",
+    };
+  }
+
+  if ((img.imageBytes || "").trim()) {
+    return {
+      imageBytes: stripBase64Payload(img.imageBytes!),
       mimeType: img.mimeType || "image/jpeg",
     };
   }
 
   const url = getGeneratedImageUrl(img);
   if (!url) {
-    throw new Error("Thiếu dữ liệu ảnh (base64 hoặc link)");
+    throw new Error("Thiếu dữ liệu ảnh (blob, base64 hoặc link)");
   }
 
   const fetched = await fetchUrlToBase64Payload(url, img.mimeType || "image/jpeg");
@@ -143,21 +402,27 @@ export async function generatedImageToVideoApiInput(
 
 /**
  * Chuẩn hoá video đã generate → payload API (luôn base64).
- * Dùng cho video-to-video khi nguồn là kết quả generate (videoUri + videoBytes).
  */
 export async function generatedVideoToApiBase64Input(
   video: GeneratedVideoLike
 ): Promise<{ videoBytes: string; mimeType: string }> {
-  if (video.videoBytes) {
+  if (video.mediaBlob) {
     return {
-      videoBytes: stripBase64Payload(video.videoBytes),
+      videoBytes: await blobToBase64Payload(video.mediaBlob),
+      mimeType: video.mimeType || video.mediaBlob.type || "video/mp4",
+    };
+  }
+
+  if ((video.videoBytes || "").trim()) {
+    return {
+      videoBytes: stripBase64Payload(video.videoBytes!),
       mimeType: video.mimeType || "video/mp4",
     };
   }
 
   const uri = (video.videoUri || "").trim();
   if (!uri) {
-    throw new Error("Thiếu dữ liệu video (base64 hoặc link)");
+    throw new Error("Thiếu dữ liệu video (blob, base64 hoặc link)");
   }
 
   const fetched = await fetchUrlToBase64Payload(uri, video.mimeType || "video/mp4");
@@ -173,11 +438,11 @@ export function normalizeGeneratedImageFromApi<T extends GeneratedImageLike>(
 ): T | undefined {
   if (!item) return undefined;
   const url = (item.imageUrl || item.fifeUrl || "").trim();
-  if (!item.imageBytes && !url) return undefined;
+  if (!item.imageBytes && !item.mediaBlob && !url) return undefined;
   return {
     ...item,
     imageBytes: item.imageBytes || "",
-    mimeType: item.mimeType || "image/jpeg",
+    mimeType: item.mimeType || item.mediaBlob?.type || "image/jpeg",
     fifeUrl: item.fifeUrl || url,
     imageUrl: item.imageUrl || url,
   } as T;
@@ -188,12 +453,12 @@ export function normalizeGeneratedVideoFromApi<T extends GeneratedVideoLike>(
 ): T | undefined {
   if (!item) return undefined;
   const videoUri = (item.videoUri ?? item.videoUrl ?? null) as string | null;
-  if (!videoUri && !item.videoBytes) return undefined;
+  if (!videoUri && !item.videoBytes && !item.mediaBlob) return undefined;
   return {
     ...item,
     videoUri,
     videoBytes: item.videoBytes ?? null,
-    mimeType: item.mimeType || "video/mp4",
+    mimeType: item.mimeType || item.mediaBlob?.type || "video/mp4",
   } as T;
 }
 
@@ -235,60 +500,69 @@ export async function fetchUrlToBase64Payload(
   }
 }
 
+/**
+ * Enrich local binary từ URL hết hạn.
+ * Lưu `mediaBlob` (không nhét chuỗi base64) — tên hàm giữ để tương thích call site.
+ */
 export async function enrichGeneratedImageWithBase64<T extends GeneratedImageLike>(
   imageData: T
 ): Promise<T> {
-  if (imageData.imageBytes) return imageData;
+  const ensured = await ensureGeneratedImageBinary(imageData);
+  if (ensured.mediaBlob) return ensured;
 
-  const url = getGeneratedImageUrl(imageData);
-  if (!url) return imageData;
+  const url = getGeneratedImageUrl(ensured);
+  if (!url) return ensured;
 
-  const fetched = await fetchUrlToBase64Payload(url, imageData.mimeType || "image/jpeg");
-  if (!fetched) return imageData;
+  const blob = await fetchUrlToBlob(url, ensured.mimeType || "image/jpeg");
+  if (!blob) return ensured;
 
   return {
-    ...imageData,
-    imageBytes: fetched.bytes,
-    mimeType: fetched.mimeType || imageData.mimeType || "image/jpeg",
-    fifeUrl: imageData.fifeUrl || url,
-    imageUrl: imageData.imageUrl || url,
-  };
+    ...ensured,
+    mediaBlob: blob,
+    imageBytes: "",
+    mimeType: blob.type || ensured.mimeType || "image/jpeg",
+    fifeUrl: ensured.fifeUrl || url,
+    imageUrl: ensured.imageUrl || url,
+  } as T;
 }
 
 export async function enrichGeneratedVideoWithBase64<T extends GeneratedVideoLike>(
   videoData: T
 ): Promise<T> {
-  if (hasStoredGeneratedVideoBase64(videoData)) return videoData;
+  const ensured = await ensureGeneratedVideoBinary(videoData);
+  if (hasStoredGeneratedVideoBase64(ensured)) return ensured;
 
-  const uri = (videoData.videoUri || "").trim();
-  if (!uri || !isHttpVideoUri(uri)) return videoData;
+  const uri = (ensured.videoUri || "").trim();
+  if (!uri || !isHttpVideoUri(uri)) return ensured;
 
-  const fetched = await fetchUrlToBase64Payload(uri, videoData.mimeType || "video/mp4");
-  if (!fetched) return videoData;
+  const blob = await fetchUrlToBlob(uri, ensured.mimeType || "video/mp4");
+  if (!blob) return ensured;
 
   return {
-    ...videoData,
-    videoBytes: fetched.bytes,
-    mimeType: fetched.mimeType || videoData.mimeType || "video/mp4",
+    ...ensured,
+    mediaBlob: blob,
+    videoBytes: null,
+    mimeType: blob.type || ensured.mimeType || "video/mp4",
     videoUri: uri,
-  };
+  } as T;
 }
 
 function isHttpVideoUri(uri: string): boolean {
   return /^https?:\/\//i.test(uri.trim());
 }
 
-/** Đã có base64 (videoBytes hoặc data: trong videoUri) — refresh không cần chuyển lại. */
+/** Đã có binary local (mediaBlob / legacy bytes / data: URI). */
 export function hasStoredGeneratedVideoBase64(
   video: GeneratedVideoLike | null | undefined
 ): boolean {
   if (!video) return false;
+  if (video.mediaBlob) return true;
   if ((video.videoBytes || "").trim()) return true;
   const uri = (video.videoUri || "").trim();
   return uri.startsWith("data:");
 }
 
-/** Video còn link HTTP chưa có base64 — cần enrich khi refresh / load lại trang. */
+/** Video còn link HTTP chưa có binary local — cần enrich khi refresh / load lại trang. */
 export function hasPendingGeneratedVideoBase64(
   video: GeneratedVideoLike | null | undefined
 ): boolean {
@@ -298,7 +572,7 @@ export function hasPendingGeneratedVideoBase64(
 }
 
 /**
- * Tiếp tục chuyển link → base64 nếu lần trước bị kẹt.
+ * Tiếp tục chuyển link → Blob nếu lần trước bị kẹt.
  * Hiển thị link trước; gọi hàm này khi load scene / refresh trang.
  */
 export async function resumePendingGeneratedVideoBase64<T extends GeneratedVideoLike>(
@@ -307,23 +581,81 @@ export async function resumePendingGeneratedVideoBase64<T extends GeneratedVideo
   storage: MediaPersistStorage<T>,
   options?: { onUpdate?: (data: T) => void }
 ): Promise<T> {
-  if (!hasPendingGeneratedVideoBase64(video)) return video;
+  if (!hasPendingGeneratedVideoBase64(video)) {
+    const ensured = await ensureGeneratedVideoBinary(video);
+    if (ensured.mediaBlob && (video.videoBytes || "").trim()) {
+      try {
+        await storage.set(sceneId, toPersistGeneratedVideo(ensured));
+      } catch (err) {
+        console.warn("[resumePendingGeneratedVideoBase64] migrate failed", err);
+      }
+    }
+    const ui = toUiGeneratedVideo(ensured);
+    options?.onUpdate?.(ui);
+    return ui;
+  }
 
   try {
     const enriched = await enrichGeneratedVideoWithBase64(video);
-    if (!enriched.videoBytes || enriched.videoBytes === video.videoBytes) return video;
-    await storage.set(sceneId, enriched);
-    options?.onUpdate?.(enriched);
-    return enriched;
+    if (!enriched.mediaBlob) return toUiGeneratedVideo(video);
+    await storage.set(sceneId, toPersistGeneratedVideo(enriched));
+    const ui = toUiGeneratedVideo(enriched);
+    options?.onUpdate?.(ui);
+    return ui;
   } catch (err) {
     console.warn("[resumePendingGeneratedVideoBase64]", err);
-    return video;
+    return toUiGeneratedVideo(video);
+  }
+}
+
+/** Ảnh còn link HTTP chưa có binary local — cần enrich khi refresh. */
+export function hasPendingGeneratedImageBinary(
+  img: GeneratedImageLike | null | undefined
+): boolean {
+  if (!img || hasStoredGeneratedImageBinary(img)) return false;
+  return !!getGeneratedImageUrl(img);
+}
+
+/**
+ * Tiếp tục chuyển link ảnh → Blob nếu lần trước bị kẹt.
+ */
+export async function resumePendingGeneratedImageBinary<T extends GeneratedImageLike>(
+  sceneId: string,
+  image: T,
+  storage: MediaPersistStorage<T>,
+  options?: { onUpdate?: (data: T) => void }
+): Promise<T> {
+  if (!hasPendingGeneratedImageBinary(image)) {
+    const ensured = await ensureGeneratedImageBinary(image);
+    // Migrate legacy base64 → mediaBlob trong IDB
+    if (ensured.mediaBlob && (image.imageBytes || "").trim()) {
+      try {
+        await storage.set(sceneId, toPersistGeneratedImage(ensured));
+      } catch (err) {
+        console.warn("[resumePendingGeneratedImageBinary] migrate failed", err);
+      }
+    }
+    const ui = toUiGeneratedImage(ensured);
+    options?.onUpdate?.(ui);
+    return ui;
+  }
+
+  try {
+    const enriched = await enrichGeneratedImageWithBase64(image);
+    if (!hasStoredGeneratedImageBinary(enriched)) return toUiGeneratedImage(image);
+    await storage.set(sceneId, toPersistGeneratedImage(enriched));
+    const ui = toUiGeneratedImage(enriched);
+    options?.onUpdate?.(ui);
+    return ui;
+  } catch (err) {
+    console.warn("[resumePendingGeneratedImageBinary]", err);
+    return toUiGeneratedImage(image);
   }
 }
 
 /**
  * Lưu link vào IndexedDB ngay (hiển thị trước).
- * Enrich base64 chạy ngầm — không block caller; API gửi sau dùng `*ToApiBase64Input`.
+ * Enrich Blob chạy ngầm — React nhận bản UI nhẹ (không base64 string).
  */
 export async function persistGeneratedImageWithEnrichment<T extends GeneratedImageLike>(
   sceneId: string,
@@ -334,24 +666,27 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
   const preview = normalizeGeneratedImageFromApi(raw);
   if (!preview) return undefined;
 
-  await storage.set(sceneId, preview);
-  options?.onUpdate?.(preview);
+  const initial = await ensureGeneratedImageBinary(preview);
+  await storage.set(sceneId, toPersistGeneratedImage(initial));
+  const initialUi = toUiGeneratedImage(initial);
+  options?.onUpdate?.(initialUi);
 
   void (async () => {
     try {
-      const enriched = await enrichGeneratedImageWithBase64(preview);
-      if (!enriched.imageBytes || enriched.imageBytes === preview.imageBytes) return;
-      await storage.set(sceneId, enriched);
-      options?.onUpdate?.(enriched);
+      if (hasStoredGeneratedImageBinary(initial)) return;
+      const enriched = await enrichGeneratedImageWithBase64(initial);
+      if (!hasStoredGeneratedImageBinary(enriched)) return;
+      await storage.set(sceneId, toPersistGeneratedImage(enriched));
+      options?.onUpdate?.(toUiGeneratedImage(enriched));
     } catch (err) {
       console.warn("[persistGeneratedImageWithEnrichment]", err);
     }
   })();
 
-  return preview;
+  return initialUi;
 }
 
-/** Lưu link trước; enrich base64 chạy ngầm (xem persistGeneratedImageWithEnrichment). */
+/** Lưu link trước; enrich Blob chạy ngầm (xem persistGeneratedImageWithEnrichment). */
 export async function persistGeneratedVideoWithEnrichment<T extends GeneratedVideoLike>(
   sceneId: string,
   raw: Partial<T> | undefined | null,
@@ -361,34 +696,37 @@ export async function persistGeneratedVideoWithEnrichment<T extends GeneratedVid
   const preview = normalizeGeneratedVideoFromApi(raw);
   if (!preview) return undefined;
 
-  await storage.set(sceneId, preview);
-  options?.onUpdate?.(preview);
+  const initial = await ensureGeneratedVideoBinary(preview);
+  await storage.set(sceneId, toPersistGeneratedVideo(initial));
+  const initialUi = toUiGeneratedVideo(initial);
+  options?.onUpdate?.(initialUi);
 
   void (async () => {
     try {
-      if (!hasPendingGeneratedVideoBase64(preview)) return;
-      const enriched = await enrichGeneratedVideoWithBase64(preview);
-      if (!enriched.videoBytes || enriched.videoBytes === preview.videoBytes) return;
-      await storage.set(sceneId, enriched);
-      options?.onUpdate?.(enriched);
+      if (!hasPendingGeneratedVideoBase64(initial)) return;
+      const enriched = await enrichGeneratedVideoWithBase64(initial);
+      if (!enriched.mediaBlob) return;
+      await storage.set(sceneId, toPersistGeneratedVideo(enriched));
+      options?.onUpdate?.(toUiGeneratedVideo(enriched));
     } catch (err) {
       console.warn("[persistGeneratedVideoWithEnrichment]", err);
     }
   })();
 
-  return preview;
+  return initialUi;
 }
 
 export async function generatedImageToBlob(img: GeneratedImageLike): Promise<Blob> {
-  if (img.imageBytes) {
+  if (img.mediaBlob) return img.mediaBlob;
+  if ((img.imageBytes || "").trim()) {
     return base64ToBlob(
-      stripBase64Payload(img.imageBytes),
+      stripBase64Payload(img.imageBytes!),
       img.mimeType || "image/png"
     );
   }
   const url = getGeneratedImageUrl(img);
   if (!url) {
-    throw new Error("Thiếu dữ liệu ảnh (URL hoặc base64)");
+    throw new Error("Thiếu dữ liệu ảnh (URL hoặc blob)");
   }
   return uriToBlob(url);
 }
@@ -503,15 +841,16 @@ export async function downloadUpsampled4kImage(
   return downloadUpsampledImage(img, fileName, "4K");
 }
 
-/** Ưu tiên videoBytes (local); fallback videoUri (data URL hoặc HTTP + proxy). */
+/** Ưu tiên mediaBlob; legacy videoBytes; fallback videoUri. */
 export async function generatedVideoToBlob(video: GeneratedVideoLike): Promise<Blob> {
-  if (video.videoBytes) {
-    return base64ToBlob(stripBase64Payload(video.videoBytes), video.mimeType || "video/mp4");
+  if (video.mediaBlob) return video.mediaBlob;
+  if ((video.videoBytes || "").trim()) {
+    return base64ToBlob(stripBase64Payload(video.videoBytes!), video.mimeType || "video/mp4");
   }
 
   const uri = (video.videoUri || "").trim();
   if (!uri) {
-    throw new Error("Thiếu dữ liệu video (URI hoặc base64)");
+    throw new Error("Thiếu dữ liệu video (URI hoặc blob)");
   }
   return uriToBlob(uri);
 }

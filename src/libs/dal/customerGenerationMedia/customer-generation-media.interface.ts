@@ -28,4 +28,6 @@ export type ICustomerGenerationMedia = TimestampEntity & {
   size?: number;
   /** Thứ tự trong run (1, 2, 3...) */
   order?: number;
+  /** request_id Flow2 — dùng upsample 2K/4K (ảnh) hoặc 1080p (video) */
+  flow2RequestId?: string;
 };

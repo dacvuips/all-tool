@@ -18,6 +18,7 @@ const generationOutputRefSchema = new Schema(
     mimeType: { type: String },
     size: { type: Number },
     order: { type: Number },
+    flow2RequestId: { type: String },
   },
   { _id: false }
 );

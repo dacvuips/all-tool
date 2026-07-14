@@ -12,6 +12,9 @@ import {
   getGeneratedImagePreviewSrc,
   getGeneratedVideoPreviewSrc,
   hasGeneratedImageData,
+  hasGeneratedVideoData,
+  toUiGeneratedImage,
+  toUiGeneratedVideo,
 } from "../shared/generatedMediaUtils";
 import type { WolfMediaAsset } from "./wolf-media-library";
 import { WolfProjectItem } from "./wolf-project-item";
@@ -35,10 +38,6 @@ function formatProjectName(date: Date): string {
   return `${hours}:${minutes} ${day} thg ${month}`;
 }
 
-function hasGeneratedVideoData(video: GeneratedVideoData | null | undefined): boolean {
-  return !!(video && (video.videoBytes || video.videoUri));
-}
-
 function hasCoverMedia(media: WolfProjectCoverMedia | undefined): boolean {
   return !!(
     (media?.sceneImage && hasGeneratedImageData(media.sceneImage)) ||
@@ -48,10 +47,22 @@ function hasCoverMedia(media: WolfProjectCoverMedia | undefined): boolean {
 
 function sceneMediaFromAsset(asset: WolfMediaAsset): WolfProjectCoverMedia {
   if (asset.type === "image") {
-    return { sceneImage: { imageBytes: asset.dataBase64, mimeType: asset.mimeType, fifeUrl: "" } };
+    return {
+      sceneImage: toUiGeneratedImage({
+        imageBytes: asset.dataBase64,
+        mimeType: asset.mimeType,
+        fifeUrl: "",
+      }),
+    };
   }
 
-  return { sceneVideo: { videoBytes: asset.dataBase64, mimeType: asset.mimeType, videoUri: null } };
+  return {
+    sceneVideo: toUiGeneratedVideo({
+      videoBytes: asset.dataBase64,
+      mimeType: asset.mimeType,
+      videoUri: null,
+    }),
+  };
 }
 
 const COVER_ASPECT_PADDING = "56.25%";

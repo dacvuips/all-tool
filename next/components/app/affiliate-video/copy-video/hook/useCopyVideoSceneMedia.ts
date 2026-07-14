@@ -17,7 +17,7 @@ import {
   buildCopyVideoImageGenerateParams,
   buildCopyVideoVideoGenerateParams,
 } from "../utils/copyVideoSceneGenerationParams";
-import { downloadGeneratedVideo, downloadSceneImage, hasPendingGeneratedVideoBase64, resumePendingGeneratedVideoBase64 } from "../../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../../shared/generatedMediaUtils";
 
 import { useCopyVideoContext } from "../providers/copy-video-provider";
 import { GeneratedImageData, GeneratedVideoData, useCopyVideoApi } from "./useCopyVideoApi";
@@ -331,16 +331,22 @@ export function useCopyVideoSceneMedia({
   // // ── Load ảnh đã tạo trước đó từ IndexedDB ──
   // // Re-check whenever batch generating state changes (image may have been saved)
   useEffect(() => {
-    getGeneratedImage(scene.id).then((img) => {
-      if (img) setGeneratedImage(img);
+    getGeneratedImage(scene.id).then(async (img) => {
+      if (!img) return;
+      await resumePendingGeneratedImageBinary<GeneratedImageData>(
+        scene.id,
+        img,
+        { set: saveGeneratedImage },
+        { onUpdate: (data) => setGeneratedImage(data) }
+      );
     });
-  }, [scene.id, isBatchGenerating]);
+  }, [scene.id, isBatchGenerating, getGeneratedImage, saveGeneratedImage]);
 
   // // ── Load ảnh của scene kế tiếp từ IndexedDB ──
   useEffect(() => {
     if (nextSceneId) {
       getGeneratedImage(nextSceneId).then((img) => {
-        if (img) setNextGeneratedImage(img);
+        if (img) setNextGeneratedImage(toUiGeneratedImage(img));
         else setNextGeneratedImage(null);
       });
     } else {
@@ -353,7 +359,7 @@ export function useCopyVideoSceneMedia({
   useEffect(() => {
     getGeneratedVideo(scene.id).then(async (vid) => {
       if (!vid) return;
-      setGeneratedVideo(vid);
+      setGeneratedVideo(toUiGeneratedVideo(vid));
       if (!hasPendingGeneratedVideoBase64(vid)) return;
       await resumePendingGeneratedVideoBase64<GeneratedVideoData>(scene.id, vid, { set: saveGeneratedVideo }, {
         onUpdate: (data) => setGeneratedVideo(data),
@@ -366,7 +372,7 @@ export function useCopyVideoSceneMedia({
     const stitchId = scene.id + "::stitch";
     getGeneratedVideo(stitchId).then(async (vid) => {
       if (!vid) return;
-      setGeneratedExtendVideo(vid);
+      setGeneratedExtendVideo(toUiGeneratedVideo(vid));
       if (!hasPendingGeneratedVideoBase64(vid)) return;
       await resumePendingGeneratedVideoBase64<GeneratedVideoData>(stitchId, vid, { set: saveGeneratedVideo }, {
         onUpdate: (data) => setGeneratedExtendVideo(data),
@@ -455,7 +461,7 @@ export function useCopyVideoSceneMedia({
   const handleSetImage = async (imageData: GeneratedImageData) => {
     try {
       await saveGeneratedImage(scene.id, imageData);
-      setGeneratedImage(imageData);
+      setGeneratedImage(toUiGeneratedImage(imageData));
       setImageError(null);
       reportSceneError?.(scene.id, "image", null);
     } catch (err: any) {

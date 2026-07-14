@@ -29,6 +29,8 @@ export type GenerationOutputRef = {
   size?: number;
   /** Thứ tự hiển thị (1, 2, 3...) */
   order?: number;
+  /** request_id Flow2 — upsample ảnh 2K/4K hoặc video 1080p */
+  flow2RequestId?: string;
 };
 
 /** Metadata response từ API (token usage, model, ...) – không lưu blob */

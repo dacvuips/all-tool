@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { MediaGenerationJobService } from "../../../../lib/repo/media-generation-job/media-generation-job.repo";
 import { DB_NAME, STORE_NAME, uid } from "../constants";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
+import { toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import type { WolfMediaAsset } from "./wolf-media-library";
 import type { WolfMediaType, WolfImageModelKey, WolfVideoMode } from "./wolf-workspace-generation";
@@ -219,15 +220,17 @@ export function useWolfProjectItems(projectId?: string | null) {
       media: { sceneImage?: GeneratedImageData; sceneVideo?: GeneratedVideoData }
     ) => {
       if (media.sceneImage) {
+        const uiImage = toUiGeneratedImage(media.sceneImage);
         setSceneImages((prev) => {
-          if (prev[sceneId] === media.sceneImage) return prev;
-          return { ...prev, [sceneId]: media.sceneImage! };
+          if (prev[sceneId] === uiImage) return prev;
+          return { ...prev, [sceneId]: uiImage };
         });
       }
       if (media.sceneVideo) {
+        const uiVideo = toUiGeneratedVideo(media.sceneVideo);
         setSceneVideos((prev) => {
-          if (prev[sceneId] === media.sceneVideo) return prev;
-          return { ...prev, [sceneId]: media.sceneVideo! };
+          if (prev[sceneId] === uiVideo) return prev;
+          return { ...prev, [sceneId]: uiVideo };
         });
       }
     },

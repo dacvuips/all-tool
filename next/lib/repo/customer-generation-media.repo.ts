@@ -14,6 +14,8 @@ export interface CustomerGenerationMedia extends BaseModel {
   mimeType?: string;
   size?: number;
   order?: number;
+  /** request_id Flow2 — upsample ảnh 2K/4K hoặc video 1080p */
+  flow2RequestId?: string;
 }
 
 export class CustomerGenerationMediaRepository extends CrudRepository<CustomerGenerationMedia> {
@@ -33,6 +35,7 @@ export class CustomerGenerationMediaRepository extends CrudRepository<CustomerGe
     mimeType: String
     size: Int
     order: Int
+    flow2RequestId: String
   `);
   fullFragment: string = this.parseFragment(`
     id: String
@@ -48,6 +51,7 @@ export class CustomerGenerationMediaRepository extends CrudRepository<CustomerGe
     mimeType: String
     size: Int
     order: Int
+    flow2RequestId: String
   `);
 }
 

@@ -134,12 +134,12 @@ export function SceneCardVideoTab({
     const prev = prevVideoSrcRef.current;
     prevVideoSrcRef.current = videoSrc;
 
-    // URL → base64 cùng clip: giữ preview, không reset spinner
+    // URL/proxy → blob: cùng clip (sau enrich): giữ preview, không reset spinner
     const isEnrichTransition =
       !!prev &&
       !!videoSrc &&
       prev.includes("/api/file/download-proxy") &&
-      videoSrc.startsWith("data:");
+      (videoSrc.startsWith("blob:") || videoSrc.startsWith("data:"));
 
     if (!isEnrichTransition) {
       setIsVideoFrameReady(false);

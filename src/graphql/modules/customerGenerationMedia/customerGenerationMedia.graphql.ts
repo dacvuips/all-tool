@@ -37,6 +37,7 @@ export default {
       mimeType: String
       size: Int
       order: Int
+      flow2RequestId: String
     }
 
     type CustomerGenerationMediaPageData {

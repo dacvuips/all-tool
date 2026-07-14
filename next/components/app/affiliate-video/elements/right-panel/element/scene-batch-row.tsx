@@ -30,6 +30,12 @@ import { SceneAutoDownloadButton } from "../../../shared/scene-auto-download-but
 import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
 import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
 import { fileToGenerationImageBase64 } from "../../../shared/compressGenerationImage";
+import {
+  generatedImageToApiBase64Input,
+  getGeneratedImagePreviewSrc,
+  hasGeneratedImageData,
+  toUiGeneratedImage,
+} from "../../../shared/generatedMediaUtils";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
 import { GeneratedImageData } from "../../hook/useElementApi";
@@ -65,12 +71,14 @@ function isSlotMatchingGeneratedImage(
   generated: GeneratedImageData
 ): boolean {
   if (!slot) return false;
+  const genUrl =
+    generated.fifeUrl || generated.imageUrl || generated.previewUrl || "";
+  const slotUrl = slot.fifeUrl || "";
+  if (genUrl && slotUrl && genUrl === slotUrl) return true;
   if (generated.imageBytes && slot.imageBytes) {
     return slot.imageBytes === generated.imageBytes;
   }
-  const genUrl = generated.fifeUrl || generated.imageUrl || "";
-  const slotUrl = slot.fifeUrl || "";
-  return !!(genUrl && slotUrl && genUrl === slotUrl);
+  return false;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -291,22 +299,33 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [generatedImage, selectedElementImageSlots]);
 
   const handleAssignGeneratedImageToSlot = useCallback(
-    (slotIndex: number) => {
+    async (slotIndex: number) => {
       if (!generatedImage || isDisabled) return;
       const existingSlot = selectedElementImageSlots[slotIndex];
-      const elementImage: ElementFormImage = {
-        fifeUrl: generatedImage.fifeUrl || generatedImage.imageUrl || "",
-        imageBytes: generatedImage.imageBytes || "",
-        mimeType: generatedImage.mimeType || "image/png",
-        name:
-          existingSlot?.name ||
-          `generated-scene-${scene.sceneNumber}-slot-${slotIndex + 1}`,
-      };
-      const nextSlots = [...selectedElementImageSlots];
-      while (nextSlots.length < imageSlotCount) nextSlots.push(undefined);
-      nextSlots[slotIndex] = elementImage;
-      handleElementImageSlotsChange(nextSlots.slice(0, imageSlotCount));
-      toast.success(t("Đã gắn ảnh vào ô {{n}}", { n: slotIndex + 1 }));
+      try {
+        const { imageBytes, mimeType } =
+          await generatedImageToApiBase64Input(generatedImage);
+        const elementImage: ElementFormImage = {
+          fifeUrl:
+            generatedImage.fifeUrl ||
+            generatedImage.imageUrl ||
+            generatedImage.previewUrl ||
+            "",
+          imageBytes,
+          mimeType: mimeType || generatedImage.mimeType || "image/png",
+          name:
+            existingSlot?.name ||
+            `generated-scene-${scene.sceneNumber}-slot-${slotIndex + 1}`,
+        };
+        const nextSlots = [...selectedElementImageSlots];
+        while (nextSlots.length < imageSlotCount) nextSlots.push(undefined);
+        nextSlots[slotIndex] = elementImage;
+        handleElementImageSlotsChange(nextSlots.slice(0, imageSlotCount));
+        toast.success(t("Đã gắn ảnh vào ô {{n}}", { n: slotIndex + 1 }));
+      } catch (err) {
+        console.error("[handleAssignGeneratedImageToSlot]", err);
+        toast.error(t("Không thể gắn ảnh vào ô"));
+      }
     },
     [
       generatedImage,
@@ -814,10 +833,10 @@ function ImageGalleryDialog({
     try {
       const entries = await imageDB.getAllWithKeys();
       const items = entries
-        .filter((e) => e.value?.imageBytes)
+        .filter((e) => hasGeneratedImageData(e.value))
         .map((e) => ({
           key: String(e.key),
-          data: e.value,
+          data: toUiGeneratedImage(e.value),
         }))
         .reverse(); // newest first
       setImages(items);
@@ -887,7 +906,7 @@ function ImageGalleryDialog({
                   <Img
                     showImageOnClick
                     lazyload={false}
-                    src={`data:${item.data.mimeType};base64,${item.data.imageBytes}`}
+                    src={getGeneratedImagePreviewSrc(item.data)}
                     alt={item.key}
                     className="object-cover rounded-md border border-green-300 border-dashed shadow-sm"
                     ratio916

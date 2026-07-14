@@ -150,6 +150,7 @@ class AiGenerationQueue extends BaseQueue {
       //         mimeType: ref.mimeType,
       //         size: ref.size,
       //         order: ref.order ?? index + 1,
+      //         flow2RequestId: ref.flow2RequestId,
       //       })
       //     )
       //   );
