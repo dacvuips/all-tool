@@ -3,11 +3,9 @@ import { useTranslation } from "react-i18next";
 import {
   HiDownload,
   HiOutlineTrash,
-  HiOutlineX,
   HiPencil,
   HiPlus,
   HiRefresh,
-  HiSearch,
   HiUpload,
 } from "react-icons/hi";
 import { RiArrowDownSLine, RiFileTextLine } from "react-icons/ri";
@@ -15,6 +13,14 @@ import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Popover } from "../../shared/utilities/popover/popover";
 import { downloadCsvText } from "../scrape/api";
+import {
+  PanelListCard,
+  PanelListMatchCount,
+  PanelListSearch,
+  PanelListToolbar,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { AffiliatePlusProxy, AffiliatePlusUser } from "../types";
 
 interface UsersPanelProps {
@@ -575,71 +581,52 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
         </p>
       </div>
 
-      <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
+      <PanelListCard>
         {users.length === 0 ? (
-          <div className="py-16 text-sm text-center text-gray-400">{t("Chưa có người dùng")}</div>
+          <div className={panelListClasses.empty}>{t("Chưa có người dùng")}</div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <div className="relative flex-1 max-w-md" style={{ minWidth: 240 }}>
-                <HiSearch className="absolute left-3 top-1/2 text-base text-gray-400 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("Tìm username / cookie / proxy...") as string}
-                  className="pr-9 pl-9 w-full h-9 text-sm bg-white rounded-lg border border-gray-200 focus:border-blue-400 focus:outline-none"
+            <PanelListToolbar
+              trailing={
+                <PanelListMatchCount
+                  term={normalizedTerm}
+                  matched={filteredUsers.length}
+                  total={users.length}
                 />
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="flex absolute right-2 top-1/2 justify-center items-center w-6 h-6 text-gray-400 rounded-md -translate-y-1/2 hover:bg-gray-100 hover:text-gray-600"
-                    aria-label={t("Xóa tìm kiếm")}
-                  >
-                    <HiOutlineX className="text-sm" />
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex gap-2 items-center text-xs text-gray-500">
-                {normalizedTerm ? (
-                  <span>
-                    {t("Khớp")}: <b className="text-gray-800">{filteredUsers.length}</b>/
-                    {users.length}
-                  </span>
-                ) : (
-                  <span>
-                    {t("Tổng")}: <b className="text-gray-800">{users.length}</b>
-                  </span>
-                )}
-              </div>
-            </div>
+              }
+            >
+              <PanelListSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={t("Tìm username / cookie / proxy...") as string}
+              />
+            </PanelListToolbar>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: 1000 }}>
+              <table className={panelListClasses.table} style={{ minWidth: 1000 }}>
                 <thead>
-                  <tr className="text-xs tracking-wide text-gray-600 uppercase bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 w-12">
+                  <tr className={panelListClasses.theadTr}>
+                    <th className={`${panelListClasses.th} w-12`}>
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
                         onChange={(e) => toggleSelectVisible(e.target.checked)}
-                        className="rounded"
+                        className={panelListClasses.checkbox}
                       />
                     </th>
-                    <th className="px-4 py-3 w-10 text-left">#</th>
-                    <th className="px-4 py-3 text-left">Username</th>
-                    <th className="px-4 py-3 text-left">{t("Item Generate")}</th>
-                    <th className="px-4 py-3 text-left">Cookie</th>
-                    <th className="px-4 py-3 text-left">Proxy</th>
-                    <th className="px-4 py-3 text-center">Lỗi</th>
-                    <th className="px-4 py-3 w-32 text-center">{t("Thao tác")}</th>
+                    <th className={`${panelListClasses.th} w-10 text-left`}>#</th>
+                    <th className={`${panelListClasses.th} text-left`}>Username</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Item Generate")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>Cookie</th>
+                    <th className={`${panelListClasses.th} text-left`}>Proxy</th>
+                    <th className={`${panelListClasses.th} text-center`}>Lỗi</th>
+                    <th className={`${panelListClasses.th} w-32 text-center`}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className={panelListClasses.tbody}>
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-10 text-sm text-center text-gray-400">
+                      <td colSpan={8} className={panelListClasses.emptyMatch}>
                         {t("Không có người dùng nào khớp tìm kiếm.")}
                       </td>
                     </tr>
@@ -647,19 +634,19 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                     filteredUsers.map((user, index) => (
                       <tr
                         key={user.id}
-                        className={`bg-white transition-colors hover:bg-blue-50 ${
-                          selectedIds.has(user.id) ? "bg-blue-50" : ""
-                        }`}
+                        className={panelListRowClass({ selected: selectedIds.has(user.id) })}
                       >
-                        <td className="px-4 py-3">
+                        <td className={panelListClasses.td}>
                           <input
                             type="checkbox"
                             checked={selectedIds.has(user.id)}
                             onChange={(e) => toggleSelectOne(user.id, e.target.checked)}
-                            className="rounded"
+                            className={panelListClasses.checkbox}
                           />
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-400">{index + 1}</td>
+                        <td className={`${panelListClasses.td} font-mono text-xs text-gray-400`}>
+                          {index + 1}
+                        </td>
                         <td className="px-4 py-3 font-semibold text-gray-900">{user.username}</td>
                         <td className="px-4 py-3" style={{ maxWidth: 260 }}>
                           {(user.generateItems?.length || 0) > 0 ? (
@@ -732,7 +719,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             </div>
           </>
         )}
-      </div>
+      </PanelListCard>
 
       <Dialog
         isOpen={!!editUser}

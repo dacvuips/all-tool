@@ -116,6 +116,12 @@ export interface PaymentLog {
 
 export interface Order extends BaseModel {
   customerId?: string;
+  customer?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    phoneNumber?: string;
+  } | null;
   sessionId?: string;
 
   orderNumber?: string;
@@ -172,85 +178,93 @@ export interface ShippingResult {
 export class OrderRepository extends CrudRepository<Order> {
   apiName: string = "Order";
   displayName: string = t("đơn hàng");
-  shortFragment: string = this.parseFragment(`
-    id
-    orderNumber
-    status
-    paymentStatus
-    totalAmount 
-    subscriptionPlan
-    type
-    creditAmount
-    customerId  
-     paymentInfo {
-      method 
-      bankImage 
-      bankCode 
-      bankName
-      accountNumber
-      accountName
-      bin
-      metadata
-    }
-    createdAt
-    updatedAt
-  `);
-  fullFragment: string = this.parseFragment(`
-    id
-    createdAt
-    updatedAt
-    customerId
-    sessionId 
-    orderNumber
-    status
-    
-    subtotal 
-    tax
-    discount
-    totalAmount
-    subscriptionPlan
-    type
-    paymentMethod
-    paymentStatus
-    paymentInfo {
-      method 
-      bankImage 
-      bankCode 
-      bankName
-      accountNumber
-      accountName
-      bin
-      metadata
-    }
-    paidAt
-    shippedAt
-    deliveredAt
-    cancelledAt
-    customerNote
-    adminNote
-    orderLogs {
+  shortFragment: string = `
+    ${this.parseFragment(`
+      id
+      orderNumber
       status
-      des
-      note
-      meta
+      paymentStatus
+      paymentMethod
+      totalAmount 
+      subscriptionPlan
+      type
+      creditAmount
+      customerId  
+      paymentInfo {
+        method 
+        bankImage 
+        bankCode 
+        bankName
+        accountNumber
+        accountName
+        bin
+        metadata
+      }
       createdAt
-      creatorId
-    }
-    paymentLogs {
+      updatedAt
+    `)}
+    customer { id email name phoneNumber }
+  `;
+  fullFragment: string = `
+    ${this.parseFragment(`
+      id
+      createdAt
+      updatedAt
+      customerId
+      sessionId 
+      orderNumber
       status
-      des
-      note
-      meta
-      createdAt
-      creatorId
-      amount
-      transactionId
-    }
-    
-    product{
-      slug
-    }
-  `);
+      
+      subtotal 
+      tax
+      discount
+      totalAmount
+      subscriptionPlan
+      type
+      creditAmount
+      paymentMethod
+      paymentStatus
+      paymentInfo {
+        method 
+        bankImage 
+        bankCode 
+        bankName
+        accountNumber
+        accountName
+        bin
+        metadata
+      }
+      paidAt
+      shippedAt
+      deliveredAt
+      cancelledAt
+      customerNote
+      adminNote
+      orderLogs {
+        status
+        des
+        note
+        meta
+        createdAt
+        creatorId
+      }
+      paymentLogs {
+        status
+        des
+        note
+        meta
+        createdAt
+        creatorId
+        amount
+        transactionId
+      }
+      
+      product{
+        slug
+      }
+    `)}
+    customer { id email name phoneNumber }
+  `;
 
   async getMyOrders(limit: number = 20): Promise<Order[]> {
     return this.apollo

@@ -4,7 +4,7 @@ import moment from "moment-timezone";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Scope } from "../../../libs/dal/authority";
 import { BankModel, PaymentMethodEnum } from "../../../libs/dal/bank";
-import { SubscriptionPlanEnum } from "../../../libs/dal/customer";
+import { CustomerLoader, SubscriptionPlanEnum } from "../../../libs/dal/customer";
 import {
   OrderStatusEnum,
   OrderTypeEnum,
@@ -16,6 +16,7 @@ import { Context } from "../../../libs/graphql";
 import { ObjectId } from "../../../packages/object-id";
 import ProcessExpiredOrderJob from "../../../scheduler/jobs/processExpiredOrder.job";
 import { sePayPGService } from "../../../services/sepayPG/sepayPG.service";
+import { GraphqlResolver } from "../../graphqlResolver";
 
 const Query = {
   getAllOrder: async (root: any, args: any, context: Context) => {
@@ -424,7 +425,9 @@ const Mutation = {
   },
 };
 
-const Order = {};
+const Order = {
+  customer: GraphqlResolver.loadById(CustomerLoader, "customerId"),
+};
 
 export default {
   Query,

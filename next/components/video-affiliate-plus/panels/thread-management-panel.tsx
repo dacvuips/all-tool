@@ -4,8 +4,6 @@ import { FaPhotoVideo } from "react-icons/fa";
 import {
   HiBan,
   HiCheck,
-  HiChevronLeft,
-  HiChevronRight,
   HiClock,
   HiCog,
   HiDownload,
@@ -16,7 +14,6 @@ import {
   HiPencil,
   HiPlay,
   HiRefresh,
-  HiSearch,
   HiUpload,
 } from "react-icons/hi";
 import { RiArrowDownSLine, RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
@@ -28,8 +25,17 @@ import { useToast } from "../../../lib/providers/toast-provider";
 import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
+import {
+  PanelListCard,
+  PanelListMatchCount,
+  PanelListPagination,
+  PanelListSearch,
+  PanelListToolbar,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
-import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
+import { Button, Field, Form, Input } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
   exportAffiliatePlusCSV,
@@ -1589,76 +1595,63 @@ export function ThreadManagementPanel({
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
+      <PanelListCard>
         {listTotal === 0 ? (
-          <div className="py-16 text-sm text-center text-gray-400">
+          <div className={panelListClasses.empty}>
             {t('Chưa có luồng. Nhấn "Nhập Excel & Tạo Luồng" để bắt đầu.')}
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 bg-white border-b border-gray-100">
-              <div className="relative flex-1 min-w-[240px] max-w-md">
-                <HiSearch className="absolute left-3 top-1/2 text-base text-gray-400 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("Tìm tên shop / tên sản phẩm...") as string}
-                  className="pr-9 pl-9 w-full h-9 text-sm bg-white rounded-lg border border-gray-200 focus:border-sky-400 focus:outline-none"
-                />
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="flex absolute right-2 top-1/2 justify-center items-center w-6 h-6 text-gray-400 rounded-md -translate-y-1/2 hover:bg-gray-100 hover:text-gray-600"
-                    aria-label={t("Xóa tìm kiếm")}
-                  >
-                    <HiOutlineX className="text-sm" />
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex gap-2 items-center text-xs text-gray-500">
-                {normalizedTerm ? (
-                  <span>
-                    {t("Khớp")}: <b className="text-gray-800">{listTotalMatched}</b>/{listTotal}
-                  </span>
-                ) : (
-                  <span>
-                    {t("Tổng")}: <b className="text-gray-800">{listTotal}</b>
-                  </span>
-                )}
-                {listLoading ? (
-                  <RiLoader4Line className="text-sm text-gray-400 animate-spin" />
-                ) : null}
-              </div>
-            </div>
+            <PanelListToolbar
+              trailing={
+                <>
+                  <PanelListMatchCount
+                    term={normalizedTerm}
+                    matched={listTotalMatched}
+                    total={listTotal}
+                  />
+                  {listLoading ? (
+                    <RiLoader4Line className="text-sm text-gray-400 animate-spin" />
+                  ) : null}
+                </>
+              }
+            >
+              <PanelListSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={t("Tìm tên shop / tên sản phẩm...") as string}
+              />
+            </PanelListToolbar>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={panelListClasses.table}>
                 <thead>
-                  <tr className="text-xs tracking-wide text-gray-600 uppercase bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 w-12">
+                  <tr className={panelListClasses.theadTr}>
+                    <th className={`${panelListClasses.th} w-12`}>
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
                         onChange={(e) => toggleSelectAll(e.target.checked)}
-                        className="rounded"
+                        className={panelListClasses.checkbox}
                       />
                     </th>
-                    <th className="px-4 py-3 w-10 text-left">#</th>
-                    <th className="px-4 py-3 text-left" style={{ maxWidth: 300, width: 300 }}>
+                    <th className={`${panelListClasses.th} w-10 text-left`}>#</th>
+                    <th
+                      className={`${panelListClasses.th} text-left`}
+                      style={{ maxWidth: 300, width: 300 }}
+                    >
                       {t("Shop / Sản phẩm")}
                     </th>
-                    <th className="px-4 py-3 w-28 text-center">{t("Ảnh sản phẩm")}</th>
-                    <th className="px-4 py-3 w-28 text-center">{t("Ảnh nhân vật")}</th>
-                    <th className="px-4 py-3 min-w-[140px] text-center">{t("Video")}</th>
-                    <th className="px-4 py-3 w-32 text-center">{t("Thao tác")}</th>
+                    <th className={`${panelListClasses.th} w-28 text-center`}>{t("Ảnh sản phẩm")}</th>
+                    <th className={`${panelListClasses.th} w-28 text-center`}>{t("Ảnh nhân vật")}</th>
+                    <th className={`${panelListClasses.th} min-w-[140px] text-center`}>{t("Video")}</th>
+                    <th className={`${panelListClasses.th} w-32 text-center`}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className={panelListClasses.tbody}>
                   {visibleItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-10 text-sm text-center text-gray-400">
+                      <td colSpan={7} className={panelListClasses.emptyMatch}>
                         {t("Không có luồng nào khớp tìm kiếm.")}
                       </td>
                     </tr>
@@ -1668,22 +1661,22 @@ export function ThreadManagementPanel({
                     return (
                       <tr
                         key={item.id}
-                        className={`hover:bg-sky-50/30 transition-colors ${
-                          item.error
-                            ? "bg-rose-50/70"
-                            : item.selected
-                            ? "bg-sky-50/50"
-                            : "bg-white"
-                        }`}
+                        className={panelListRowClass({
+                          selected: item.selected,
+                          error: Boolean(item.error),
+                        })}
                       >
-                        <td className="px-4 py-3">
-                          <Switch
-                            size="sm"
-                            value={item.selected}
-                            onChange={(val) => updateItem(item.id, { selected: val })}
+                        <td className={panelListClasses.td}>
+                          <input
+                            type="checkbox"
+                            checked={item.selected}
+                            onChange={(e) => updateItem(item.id, { selected: e.target.checked })}
+                            className={panelListClasses.checkbox}
                           />
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-400">{idx + 1}</td>
+                        <td className={`${panelListClasses.td} font-mono text-xs text-gray-400`}>
+                          {idx + 1}
+                        </td>
                         <td className="px-4 py-3" style={{ maxWidth: 300, width: 300 }}>
                           <div className="overflow-hidden space-y-1" style={{ maxWidth: 300 }}>
                             <div className="flex items-center gap-1.5 min-w-0">
@@ -1977,84 +1970,20 @@ export function ThreadManagementPanel({
             </div>
 
             {listTotalMatched > 0 ? (
-              <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 border-t border-gray-100 bg-gray-50/60">
-                <div className="flex gap-3 items-center text-xs text-gray-500">
-                  <span>
-                    {t("Trang")} <b className="text-gray-800">{safePage}</b>/{totalPages}
-                    <span className="mx-1 text-gray-300">·</span>
-                    {pageStartIndex + 1}–{Math.min(safePage * pageSize, listTotalMatched)} /{" "}
-                    {listTotalMatched}
-                  </span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value) || 100)}
-                    className="h-7 text-xs rounded-md border border-gray-200 bg-white px-1.5"
-                    aria-label={t("Số dòng mỗi trang")}
-                  >
-                    {[100, 200, 400, 500].map((n) => (
-                      <option key={n} value={n}>
-                        {n}/{t("trang")}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex gap-1 items-center">
-                  <button
-                    type="button"
-                    disabled={safePage <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
-                    aria-label={t("Trang trước")}
-                  >
-                    <HiChevronLeft />
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((p) => {
-                      if (totalPages <= 7) return true;
-                      if (p === 1 || p === totalPages) return true;
-                      return Math.abs(p - safePage) <= 1;
-                    })
-                    .reduce<number[]>((acc, p, i, arr) => {
-                      if (i > 0 && p - arr[i - 1] > 1) acc.push(-p);
-                      acc.push(p);
-                      return acc;
-                    }, [])
-                    .map((p) =>
-                      p < 0 ? (
-                        <span key={`e${p}`} className="px-1 text-xs text-gray-400">
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPage(p)}
-                          className={`inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
-                            p === safePage
-                              ? "border-sky-300 bg-sky-50 text-sky-800"
-                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          {p}
-                        </button>
-                      )
-                    )}
-                  <button
-                    type="button"
-                    disabled={safePage >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
-                    aria-label={t("Trang sau")}
-                  >
-                    <HiChevronRight />
-                  </button>
-                </div>
-              </div>
+              <PanelListPagination
+                page={safePage}
+                totalPages={totalPages}
+                pageSize={pageSize}
+                from={pageStartIndex + 1}
+                to={Math.min(safePage * pageSize, listTotalMatched)}
+                total={listTotalMatched}
+                onPageChange={setPage}
+                onPageSizeChange={setPageSize}
+              />
             ) : null}
           </>
         )}
-      </div>
+      </PanelListCard>
 
       {/* Quick export */}
       {listTotal > 0 && (

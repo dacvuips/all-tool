@@ -64,6 +64,16 @@ export const AuthorityData = [
         ],
       },
       {
+        code: "AM-1",
+        name: t("API Media"),
+        scopes: [
+          { code: "AM-1-1", name: t("Truy cập") },
+          { code: "AM-1-2", name: t("Tạo mới") },
+          { code: "AM-1-3", name: t("Cập nhật") },
+          { code: "AM-1-4", name: t("Xóa") },
+        ],
+      },
+      {
         code: "QT-4",
         name: t("Sản phẩm"),
         scopes: [

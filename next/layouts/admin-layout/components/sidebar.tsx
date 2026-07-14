@@ -355,6 +355,13 @@ const useSidebarMenuConstants = () => {
           role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
         },
         {
+          title: t("API Media"),
+          path: "/admin/management/api-media",
+          icon: <RiKey2Line />,
+          scope: SCOPES.VIEW_API_MEDIA,
+          role: [UserRoleEnum.STAFF, UserRoleEnum.ADMIN],
+        },
+        {
           title: t("Banner"),
           path: "/admin/management/banners",
           icon: <RiLayoutTop2Line />,

@@ -3,6 +3,8 @@ import {
   ApiMediaSubscriptionPlanEnum,
   apiMediaTokenService,
 } from "../../../libs/dal/apiMediaToken";
+import { Scope } from "../../../libs/dal/authority/scope.enum";
+import { CustomerLoader } from "../../../libs/dal/customer";
 import { settingService } from "../../../libs/dal/setting";
 import { Context } from "../../../libs/graphql";
 import {
@@ -10,14 +12,15 @@ import {
   generateApiMediaKeyPair,
   hashApiMediaKey,
 } from "../../../routers/api-media/api-media-key";
+import { GraphqlResolver } from "../../graphqlResolver";
 
 const Query = {
   getAllApiMediaToken: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AM-1-1"]]);
     return apiMediaTokenService.fetch(args.q);
   },
   getOneApiMediaToken: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AM-1-1"]]);
     const { id } = args;
     return await apiMediaTokenService.findOne({ _id: id });
   },
@@ -32,7 +35,7 @@ const Query = {
 
 const Mutation = {
   createApiMediaToken: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AM-1-2"]]);
     const { data } = args;
     const { plainKey, keyHash, keyPrefix } = data.key
       ? {
@@ -51,7 +54,7 @@ const Mutation = {
     return { ...(doc as any).toObject?.() ?? doc, key: plainKey };
   },
   updateApiMediaToken: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AM-1-3"]]);
     const { id, data } = args;
     const patch = { ...data };
     if (patch.key) {
@@ -62,7 +65,7 @@ const Mutation = {
     return await apiMediaTokenService.updateOne(id, patch);
   },
   deleteOneApiMediaToken: async (root: any, args: any, context: Context) => {
-    await context.auth(TOKEN_ROLES.ADMIN_STAFF);
+    await context.auth(TOKEN_ROLES.ADMIN_STAFF).grant([Scope["AM-1-4"]]);
     const { id } = args;
     return await apiMediaTokenService.deleteOne(id);
   },
@@ -142,7 +145,12 @@ const Mutation = {
   },
 };
 
+const ApiMediaToken = {
+  customer: GraphqlResolver.loadById(CustomerLoader, "customerId"),
+};
+
 export default {
   Query,
   Mutation,
+  ApiMediaToken,
 };

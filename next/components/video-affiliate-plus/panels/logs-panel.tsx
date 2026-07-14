@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiChevronLeft, HiChevronRight, HiOutlineTrash } from "react-icons/hi";
+import { HiOutlineTrash } from "react-icons/hi";
 import { Button } from "../../shared/utilities/form";
+import {
+  PanelListCard,
+  PanelListPagination,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { AffiliatePlusLog } from "../types";
 
 interface LogsPanelProps {
@@ -132,40 +138,38 @@ export function LogsPanel({ logs, onClearLogs }: LogsPanelProps) {
         })}
       </div>
 
-      <div className="overflow-hidden bg-white rounded-xl border border-gray-200">
+      <PanelListCard>
         {logs.length === 0 ? (
-          <div className="py-12 text-sm text-center text-gray-400">{t("Chưa có nhật ký")}</div>
+          <div className={panelListClasses.empty}>{t("Chưa có nhật ký")}</div>
         ) : filteredLogs.length === 0 ? (
-          <div className="py-12 text-sm text-center text-gray-400">
-            {t("Không có nhật ký khớp bộ lọc.")}
-          </div>
+          <div className={panelListClasses.empty}>{t("Không có nhật ký khớp bộ lọc.")}</div>
         ) : (
           <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={panelListClasses.table}>
                 <thead>
-                  <tr className="text-xs text-gray-600 uppercase bg-gray-50 border-b border-gray-200">
-                    <th className="px-4 py-3 w-40 text-left">{t("Thời gian")}</th>
-                    <th className="px-4 py-3 w-28 text-left">{t("Trạng thái")}</th>
-                    <th className="px-4 py-3 text-left">{t("Nội dung")}</th>
+                  <tr className={panelListClasses.theadTr}>
+                    <th className={`${panelListClasses.th} w-40 text-left`}>{t("Thời gian")}</th>
+                    <th className={`${panelListClasses.th} w-28 text-left`}>{t("Trạng thái")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Nội dung")}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody className={panelListClasses.tbody}>
                   {pageLogs.map((log) => {
                     const meta = LEVEL_META[log.level] || LEVEL_META.info;
                     return (
-                      <tr key={log.id} className="bg-white hover:bg-gray-50">
-                        <td className="px-4 py-2.5 font-mono text-xs text-gray-500">
+                      <tr key={log.id} className={panelListRowClass()}>
+                        <td className={`${panelListClasses.td} font-mono text-xs text-gray-500`}>
                           {formatTime(log.time)}
                         </td>
-                        <td className="px-4 py-2.5">
+                        <td className={panelListClasses.td}>
                           <span
                             className={`inline-flex h-6 items-center rounded-full px-2.5 text-10 font-bold uppercase ${meta.className}`}
                           >
                             {t(meta.label)}
                           </span>
                         </td>
-                        <td className="px-4 py-2.5 text-gray-700">{log.message}</td>
+                        <td className={`${panelListClasses.td} text-gray-700`}>{log.message}</td>
                       </tr>
                     );
                   })}
@@ -173,84 +177,20 @@ export function LogsPanel({ logs, onClearLogs }: LogsPanelProps) {
               </table>
             </div>
 
-            <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 bg-gray-50 border-t border-gray-100">
-              <div className="flex gap-3 items-center text-xs text-gray-500">
-                <span>
-                  {t("Trang")} <b className="text-gray-800">{safePage}</b>/{totalPages}
-                  <span className="mx-1 text-gray-300">·</span>
-                  {pageStartIndex + 1}–{Math.min(safePage * pageSize, filteredLogs.length)} /{" "}
-                  {filteredLogs.length}
-                </span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value) || 50)}
-                  className="px-1.5 h-7 text-xs bg-white rounded-md border border-gray-200"
-                  aria-label={t("Số dòng mỗi trang")}
-                >
-                  {PAGE_SIZE_OPTIONS.map((n) => (
-                    <option key={n} value={n}>
-                      {n}/{t("trang")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-1 items-center">
-                <button
-                  type="button"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
-                  aria-label={t("Trang trước")}
-                >
-                  <HiChevronLeft />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((p) => {
-                    if (totalPages <= 7) return true;
-                    if (p === 1 || p === totalPages) return true;
-                    return Math.abs(p - safePage) <= 1;
-                  })
-                  .reduce<number[]>((acc, p, i, arr) => {
-                    if (i > 0 && p - arr[i - 1] > 1) acc.push(-p);
-                    acc.push(p);
-                    return acc;
-                  }, [])
-                  .map((p) =>
-                    p < 0 ? (
-                      <span key={`e${p}`} className="px-1 text-xs text-gray-400">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(p)}
-                        className={`inline-flex h-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold ${
-                          p === safePage
-                            ? "text-white border-primary bg-primary"
-                            : "text-gray-700 bg-white border-gray-200 hover:bg-gray-50"
-                        }`}
-                        style={{ minWidth: "1.75rem" }}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                <button
-                  type="button"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
-                  aria-label={t("Trang sau")}
-                >
-                  <HiChevronRight />
-                </button>
-              </div>
-            </div>
+            <PanelListPagination
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              from={pageStartIndex + 1}
+              to={Math.min(safePage * pageSize, filteredLogs.length)}
+              total={filteredLogs.length}
+              onPageChange={setPage}
+              onPageSizeChange={setPageSize}
+            />
           </>
         )}
-      </div>
+      </PanelListCard>
     </div>
   );
 }

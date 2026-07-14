@@ -24,6 +24,11 @@ import {
   removeScrapeCsvSession,
   syncExtensionCsvToIdb,
 } from "../scrape/api";
+import {
+  PanelListCard,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
 
 const MARKET_OPTIONS = [
@@ -459,47 +464,52 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
 
         {!sessions.length ? (
-          <p className="m-0 text-sm text-gray-500">
-            {t("Chưa có CSV. Mở trình duyệt → trên extension bấm Gửi.")}
-          </p>
+          <PanelListCard>
+            <div className={panelListClasses.empty}>
+              {t("Chưa có CSV. Mở trình duyệt → trên extension bấm Gửi.")}
+            </div>
+          </PanelListCard>
         ) : !filteredSessions.length ? (
-          <p className="m-0 text-sm text-gray-500">{t("Không có phiên khớp bộ lọc.")}</p>
+          <PanelListCard>
+            <div className={panelListClasses.empty}>{t("Không có phiên khớp bộ lọc.")}</div>
+          </PanelListCard>
         ) : (
           <>
-            <div className="overflow-auto max-h-[420px] rounded-lg border border-gray-100">
-              <table className="w-full text-xs text-left">
-                <thead className="sticky top-0 bg-gray-50 text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">{t("Thời gian")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Domain")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Keyword")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("SP")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Thực hiện")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("ID")}</th>
-                    <th className="px-3 py-2 font-semibold" />
+            <PanelListCard>
+              <div className="overflow-auto max-h-[420px]">
+              <table className={panelListClasses.table}>
+                <thead className="sticky top-0 z-10">
+                  <tr className={panelListClasses.theadTr}>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Thời gian")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Keyword")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("Thực hiện")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("ID")}</th>
+                    <th className={`${panelListClasses.th} text-left`} />
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className={panelListClasses.tbody}>
                   {pagedSessions.map((s) => (
-                    <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50/80">
-                      <td className="px-3 py-2 whitespace-nowrap text-gray-700">
+                    <tr key={s.id} className={panelListRowClass()}>
+                      <td className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}>
                         {formatSessionTime(s.createdAt)}
                       </td>
-                      <td className="px-3 py-2 max-w-[160px] truncate" title={s.marketHost}>
+                      <td className={`${panelListClasses.td} max-w-[160px] truncate`} title={s.marketHost}>
                         {s.marketHost ? domainLabel(s.marketHost) : "—"}
                       </td>
-                      <td className="px-3 py-2 max-w-[140px] truncate" title={s.keyword}>
+                      <td className={`${panelListClasses.td} max-w-[140px] truncate`} title={s.keyword}>
                         {s.keyword || "—"}
                       </td>
-                      <td className="px-3 py-2 font-semibold text-gray-800">{s.productCount}</td>
-                      <td className="px-3 py-2 text-gray-600">{formatDuration(s.durationMs)}</td>
+                      <td className={`${panelListClasses.td} font-semibold text-gray-800`}>{s.productCount}</td>
+                      <td className={`${panelListClasses.td} text-gray-600`}>{formatDuration(s.durationMs)}</td>
                       <td
-                        className="px-3 py-2 font-mono text-10 text-gray-400 max-w-[120px] truncate"
+                        className={`${panelListClasses.td} font-mono text-10 text-gray-400 max-w-[120px] truncate`}
                         title={s.id}
                       >
                         {s.id}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className={panelListClasses.td}>
                         <div className="flex gap-1 justify-end">
                           <button
                             type="button"
@@ -525,6 +535,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 </tbody>
               </table>
             </div>
+            </PanelListCard>
 
             <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
               <div className="flex gap-2 items-center text-xs text-gray-500">

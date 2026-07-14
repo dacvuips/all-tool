@@ -13,6 +13,11 @@ export interface ApiMediaToken extends BaseModel {
   requestQuantity?: number;
   expiredDate?: string;
   customerId?: string;
+  customer?: {
+    id?: string;
+    email?: string;
+    name?: string;
+  } | null;
   active?: boolean;
   usedQuantity?: number;
   subscriptionPlan?: ApiMediaSubscriptionPlanEnum;
@@ -22,35 +27,41 @@ export interface ApiMediaToken extends BaseModel {
 
 export class ApiMediaTokenRepository extends CrudRepository<ApiMediaToken> {
   apiName: string = "ApiMediaToken";
-  displayName: string = "Api Media Token";
-  shortFragment: string = this.parseFragment(`
-    id: String
-    createdAt: DateTime
-    updatedAt: DateTime
-    key: String
-    keyPrefix: String
-    requestQuantity: Int
-    expiredDate: DateTime
-    customerId: String
-    active: Boolean
-    usedQuantity: Int
-    subscriptionPlan: String
-    streamCount: Int
-  `);
-  fullFragment: string = this.parseFragment(`
-    id: String
-    createdAt: DateTime
-    updatedAt: DateTime
-    key: String
-    keyPrefix: String
-    requestQuantity: Int
-    expiredDate: DateTime
-    customerId: String
-    active: Boolean
-    usedQuantity: Int
-    subscriptionPlan: String
-    streamCount: Int
-  `);
+  displayName: string = "API Media";
+  shortFragment: string = `
+    ${this.parseFragment(`
+      id: String
+      createdAt: DateTime
+      updatedAt: DateTime
+      key: String
+      keyPrefix: String
+      requestQuantity: Int
+      expiredDate: DateTime
+      customerId: String
+      active: Boolean
+      usedQuantity: Int
+      subscriptionPlan: String
+      streamCount: Int
+    `)}
+    customer { id email name }
+  `;
+  fullFragment: string = `
+    ${this.parseFragment(`
+      id: String
+      createdAt: DateTime
+      updatedAt: DateTime
+      key: String
+      keyPrefix: String
+      requestQuantity: Int
+      expiredDate: DateTime
+      customerId: String
+      active: Boolean
+      usedQuantity: Int
+      subscriptionPlan: String
+      streamCount: Int
+    `)}
+    customer { id email name }
+  `;
 
   async getMyApiMediaTokens({
     query = { limit: 10 },

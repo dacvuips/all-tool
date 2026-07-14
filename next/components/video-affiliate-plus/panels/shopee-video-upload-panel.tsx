@@ -8,10 +8,8 @@ import {
   HiClock,
   HiOutlinePause,
   HiOutlineTrash,
-  HiOutlineX,
   HiPlay,
   HiRefresh,
-  HiSearch,
   HiUpload,
 } from "react-icons/hi";
 import { RiAddLine, RiLoader4Line, RiVideoFill } from "react-icons/ri";
@@ -21,6 +19,14 @@ import { VideoDialog } from "../../shared/common/video-dialog";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import { hydrateMergedVideoUrls, resolveMergedPreviewUrl } from "../merged-video";
+import {
+  PanelListCard,
+  PanelListMatchCount,
+  PanelListSearch,
+  PanelListToolbar,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { getSessionItems } from "../thread-store";
 import { AffiliatePlusUser, createEmptyItem } from "../types";
 import {
@@ -846,77 +852,66 @@ export function ShopeeVideoUploadPanel({
         </div>
       </div>
 
-      <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
+      <PanelListCard>
         {threads.length === 0 ? (
-          <div className="py-16 text-sm text-center text-gray-400">
+          <div className={panelListClasses.empty}>
             {t("Chưa có luồng đăng video. Nhấn Nhập Excel & Tạo Luồng để bắt đầu.")}
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-3 justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100">
-              <div className="relative flex-1 max-w-md" style={{ minWidth: 240 }}>
-                <HiSearch className="absolute left-3 top-1/2 text-base text-gray-400 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={t("Tìm username / caption / proxy...") as string}
-                  className="pr-9 pl-9 w-full h-9 text-sm bg-white rounded-lg border border-gray-200 focus:border-blue-400 focus:outline-none"
+            <PanelListToolbar
+              trailing={
+                <PanelListMatchCount
+                  term={normalizedTerm}
+                  matched={filteredGroups.length}
+                  total={accountGroups.length}
+                  totalExtra={
+                    !normalizedTerm ? (
+                      <>
+                        {" "}
+                        {t("tài khoản")} ({threads.length} video)
+                      </>
+                    ) : null
+                  }
                 />
-                {searchQuery ? (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="flex absolute right-2 top-1/2 justify-center items-center w-6 h-6 text-gray-400 rounded-md -translate-y-1/2 hover:bg-gray-100 hover:text-gray-600"
-                    aria-label={t("Xóa tìm kiếm")}
-                  >
-                    <HiOutlineX className="text-sm" />
-                  </button>
-                ) : null}
-              </div>
-              <div className="flex gap-2 items-center text-xs text-gray-500">
-                {normalizedTerm ? (
-                  <span>
-                    {t("Khớp")}: <b className="text-gray-800">{filteredGroups.length}</b>/
-                    {accountGroups.length}
-                  </span>
-                ) : (
-                  <span>
-                    {t("Tổng")}: <b className="text-gray-800">{accountGroups.length}</b>{" "}
-                    {t("tài khoản")} ({threads.length} video)
-                  </span>
-                )}
-              </div>
-            </div>
+              }
+            >
+              <PanelListSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={t("Tìm username / caption / proxy...") as string}
+              />
+            </PanelListToolbar>
 
             <div className="overflow-x-auto">
-              <table className="w-full text-xs" style={{ minWidth: 1100 }}>
+              <table className={panelListClasses.table} style={{ minWidth: 1100 }}>
                 <thead>
-                  <tr className="font-bold tracking-wide text-left text-gray-600 uppercase bg-gray-50 text-10">
-                    <th className="px-3 py-2 w-10 text-center">
+                  <tr className={panelListClasses.theadTr}>
+                    <th className={`${panelListClasses.th} w-12`}>
                       <input
                         type="checkbox"
                         checked={allVisibleSelected}
                         onChange={(e) => toggleSelectVisible(e.target.checked)}
+                        className={panelListClasses.checkbox}
                       />
                     </th>
-                    <th className="px-3 py-2 w-12">#</th>
-                    <th className="px-3 py-2">Username</th>
-                    <th className="px-3 py-2 text-center">{t("Video")}</th>
-                    <th className="px-3 py-2">Cookie</th>
-                    <th className="px-3 py-2 text-center">Quốc gia</th>
-                    <th className="px-3 py-2 text-center">Uploaded</th>
-                    <th className="px-3 py-2 text-center">Pending</th>
-                    <th className="px-3 py-2 text-center">Delay</th>
-                    <th className="px-3 py-2">Proxy</th>
-                    <th className="px-3 py-2 text-center">Trạng thái</th>
-                    <th className="px-3 py-2 text-center">Thao tác</th>
+                    <th className={`${panelListClasses.th} w-10 text-left`}>#</th>
+                    <th className={`${panelListClasses.th} text-left`}>Username</th>
+                    <th className={`${panelListClasses.th} text-center`}>{t("Video")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>Cookie</th>
+                    <th className={`${panelListClasses.th} text-center`}>Quốc gia</th>
+                    <th className={`${panelListClasses.th} text-center`}>Uploaded</th>
+                    <th className={`${panelListClasses.th} text-center`}>Pending</th>
+                    <th className={`${panelListClasses.th} text-center`}>Delay</th>
+                    <th className={`${panelListClasses.th} text-left`}>Proxy</th>
+                    <th className={`${panelListClasses.th} text-center`}>Trạng thái</th>
+                    <th className={`${panelListClasses.th} text-center`}>Thao tác</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className={panelListClasses.tbody}>
                   {filteredGroups.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="px-4 py-10 text-sm text-center text-gray-400">
+                      <td colSpan={12} className={panelListClasses.emptyMatch}>
                         {t("Không có luồng nào khớp tìm kiếm.")}
                       </td>
                     </tr>
@@ -931,16 +926,19 @@ export function ShopeeVideoUploadPanel({
 
                       return (
                         <Fragment key={group.key}>
-                          <tr className="bg-white border-b border-gray-100">
-                            <td className="px-3 py-2 text-center">
+                          <tr className={panelListRowClass({ selected: accountSelected })}>
+                            <td className={panelListClasses.td}>
                               <input
                                 type="checkbox"
                                 checked={accountSelected}
                                 onChange={(e) => toggleSelectAccount(group, e.target.checked)}
+                                className={panelListClasses.checkbox}
                               />
                             </td>
-                            <td className="px-3 py-2 text-center text-gray-500">{index + 1}</td>
-                            <td className="px-3 py-2 font-bold text-gray-900">
+                            <td className={`${panelListClasses.td} font-mono text-xs text-gray-400`}>
+                              {index + 1}
+                            </td>
+                            <td className={`${panelListClasses.td} font-semibold text-gray-900`}>
                               <div className="flex gap-1.5 items-center">
                                 <button
                                   type="button"
@@ -955,7 +953,7 @@ export function ShopeeVideoUploadPanel({
                                 <span>{group.username}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               <button
                                 type="button"
                                 onClick={() => toggleExpandAccount(group.key)}
@@ -967,34 +965,34 @@ export function ShopeeVideoUploadPanel({
                               </button>
                             </td>
                             <td
-                              className="px-3 py-2 font-mono truncate text-10 text-danger"
+                              className={`${panelListClasses.td} font-mono truncate text-10 text-danger`}
                               style={{ maxWidth: 180 }}
                             >
                               {group.cookie || "-"}
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               <span className="rounded bg-gray-100 px-2 py-0.5 font-semibold text-gray-700">
                                 {group.country}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               {uploadedSum}/{uploadedSum + pendingSum}
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               <span className="inline-flex justify-center items-center px-2 h-6 font-bold text-yellow-900 bg-yellow-400 rounded-full min-w-6">
                                 {pendingSum}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               {group.delayMin}-{group.delayMax}s
                             </td>
                             <td
-                              className="px-3 py-2 font-mono truncate text-10 text-pink"
+                              className={`${panelListClasses.td} font-mono truncate text-10 text-pink`}
                               style={{ maxWidth: 220 }}
                             >
                               {group.proxy || "-"}
                             </td>
-                            <td className="px-3 py-2 text-center">
+                            <td className={`${panelListClasses.td} text-center`}>
                               <span
                                 className={`inline-flex h-6 items-center rounded-full px-2 text-10 font-bold text-white ${
                                   status === "running"
@@ -1165,7 +1163,7 @@ export function ShopeeVideoUploadPanel({
             </div>
           </>
         )}
-      </div>
+      </PanelListCard>
 
       <Dialog
         isOpen={importOpen}

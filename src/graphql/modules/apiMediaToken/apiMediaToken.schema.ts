@@ -19,8 +19,8 @@ const schema = gql`
   }
 
   input CreateApiMediaTokenInput {
-    "API Key"
-    key: String!
+    "API Key (để trống để hệ thống tự sinh)"
+    key: String
     "Số lượng request cho phép"
     requestQuantity: Int
     "Ngày hết hạn"
@@ -66,6 +66,8 @@ const schema = gql`
     expiredDate: DateTime
     "ID khách hàng"
     customerId: String
+    "Khách hàng"
+    customer: Customer
     "Trạng thái kích hoạt"
     active: Boolean
     "Số lượng đã sử dụng"

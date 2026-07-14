@@ -129,6 +129,8 @@ const schema = gql`
     orderLogs: [OrderLog]
     paymentLogs: [PaymentLog]
     product: Product
+    "Khách hàng"
+    customer: Customer
   }
 
   type OrderLog {

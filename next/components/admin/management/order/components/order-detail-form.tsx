@@ -13,7 +13,6 @@ import { OrderPaymentSummary } from "./order-payment-summary";
 import { OrderShippingInfo } from "./order-shipping-info";
 import { OrderStatusTimeline } from "./order-status-timeline";
 import { OrderUpdateDialog } from "./order-update-dialog";
-import { ShipmentsTable } from "./shipping/shipments-table";
 
 export function OrderDetailForm() {
   const { t } = useTranslation();
@@ -22,7 +21,6 @@ export function OrderDetailForm() {
   const { userPermission } = useAuth();
   const { formItem, loadAll, onRefresh } = useDataTable();
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-  const [showShippingTable, setShowShippingTable] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [order, setOrder] = useState<Order>(formItem as Order);
 
@@ -62,10 +60,6 @@ export function OrderDetailForm() {
     setShowUpdateDialog(true);
   };
 
-  const handleToggleShippingTable = () => {
-    setShowShippingTable(!showShippingTable);
-  };
-
   if (!order) return null;
 
   return (
@@ -88,7 +82,7 @@ export function OrderDetailForm() {
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Left Column - Order Details */}
         <div className="space-y-4 lg:col-span-2">
-          {/* Customer & Shipping Information */}
+          {/* Customer & Order Information */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <OrderCustomerInfo order={order} />
             <OrderShippingInfo order={order} />
@@ -96,15 +90,6 @@ export function OrderDetailForm() {
 
           {/* Order Items */}
           <OrderItemsList order={order} />
-          {/* Shipping Providers Table */}
-
-          <ShipmentsTable
-            order={order}
-            onSuccess={() => {
-              loadAll();
-              onRefresh();
-            }}
-          />
         </div>
 
         {/* Right Column - Order Summary */}
