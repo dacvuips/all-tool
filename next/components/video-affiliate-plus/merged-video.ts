@@ -44,6 +44,46 @@ export function hasMergedVideoRef(url?: string): boolean {
   return Boolean(String(url || "").trim());
 }
 
+/**
+ * Đã có file video nối thật (ref trên item / bytes IndexedDB / legacy blob).
+ * Không decode full base64 — chỉ kiểm tra tồn tại.
+ */
+export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<boolean> {
+  const url = String(item.mergedVideoUrl || "").trim();
+  if (url && !isMergedVideoIdbMarker(url)) {
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
+      return true;
+    }
+    if (url.startsWith("blob:")) {
+      try {
+        const res = await fetch(url);
+        if (res.ok) {
+          const blob = await res.blob();
+          if (blob.size > 0) return true;
+        }
+      } catch {
+        // fall through → check IDB
+      }
+    } else {
+      return true;
+    }
+  }
+
+  const key = getMergedVideoStorageKey(item);
+  if (key) {
+    const rec = await idbGetProductVideo(key);
+    if (rec?.mergedVideoBytes) return true;
+    const legacy = await idbGetMergedVideo(key);
+    if (legacy?.blob && legacy.blob.size > 0) return true;
+  }
+  if (item.id && item.id !== key) {
+    const legacyById = await idbGetMergedVideo(item.id);
+    if (legacyById?.blob && legacyById.blob.size > 0) return true;
+  }
+
+  return isMergedVideoIdbMarker(url);
+}
+
 /** Chuẩn hóa URL trước khi ghi thread store (không lưu blob/data). */
 export function toPersistedMergedVideoUrl(url?: string): string {
   const u = String(url || "").trim();

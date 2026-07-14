@@ -18,6 +18,7 @@ import {
 } from "./import-history";
 import { hydrateMergedVideoUrls } from "./merged-video";
 import { LogsPanel } from "./panels/logs-panel";
+import { ProxiesPanel } from "./panels/proxies-panel";
 import { ScrapeDataPanel } from "./panels/scrape-data-panel";
 import { SettingsPanel } from "./panels/settings-panel";
 import { ShopeeVideoUploadPanel } from "./panels/shopee-video-upload-panel";
@@ -27,9 +28,11 @@ import {
   appendLog,
   loadItems,
   loadLogs,
+  loadProxies,
   loadSettings,
   loadUsers,
   saveLogs,
+  saveProxies,
   saveSettings,
   saveUsers,
 } from "./storage";
@@ -37,6 +40,7 @@ import { DEFAULT_SESSION_ID, getSessionItems, replaceSessionThreads } from "./th
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
+  AffiliatePlusProxy,
   AffiliatePlusSettings,
   AffiliatePlusUser,
   getTotalVideos,
@@ -47,8 +51,9 @@ const VIDEO_AFFILIATE_TAB_KEYS = [
   "scrape",
   "generate",
   "upload",
-  "logs",
   "users",
+  "proxies",
+  "logs",
   "settings",
 ] as const;
 
@@ -73,12 +78,14 @@ function getVideoAffiliateTabIndex(tab: string | string[] | undefined): number {
     post: 2,
     shopee: 2,
     shope: 2,
-    logs: 3,
-    log: 3,
-    users: 4,
-    user: 4,
-    settings: 5,
-    setting: 5,
+    users: 3,
+    user: 3,
+    proxies: 4,
+    proxy: 4,
+    logs: 5,
+    log: 5,
+    settings: 6,
+    setting: 6,
   };
 
   return aliases[key] ?? 1;
@@ -143,6 +150,7 @@ export default function VideoAffiliatePlusPage() {
   const [activeTab, setActiveTab] = useState(1);
   const [items, setItems] = useState<AffiliatePlusItem[]>([]);
   const [users, setUsers] = useState<AffiliatePlusUser[]>([]);
+  const [proxies, setProxies] = useState<AffiliatePlusProxy[]>([]);
   const [logs, setLogs] = useState<AffiliatePlusLog[]>([]);
   const [settings, setSettings] = useState<AffiliatePlusSettings>(loadSettings());
   const [importHistory, setImportHistory] = useState<ImportHistoryItem[]>([]);
@@ -249,6 +257,11 @@ export default function VideoAffiliatePlusPage() {
         if (!cancelled) setUsers(list);
       })
       .catch((err) => console.warn("[video-affiliate-plus] load users failed", err));
+    void loadProxies()
+      .then((list) => {
+        if (!cancelled) setProxies(list);
+      })
+      .catch((err) => console.warn("[video-affiliate-plus] load proxies failed", err));
     setLogs(loadLogs());
     setSettings(loadSettings());
     return () => {
@@ -463,9 +476,19 @@ export default function VideoAffiliatePlusPage() {
           <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
             <UsersPanel
               users={users}
+              proxies={proxies}
               onUpdateUsers={(next) => {
                 setUsers(next);
                 void saveUsers(next);
+              }}
+            />
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Quản lý Proxy")}>
+            <ProxiesPanel
+              proxies={proxies}
+              onUpdateProxies={(next) => {
+                setProxies(next);
+                void saveProxies(next);
               }}
             />
           </TabGroup.Tab>

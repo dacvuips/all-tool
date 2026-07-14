@@ -19,6 +19,7 @@ import {
   RiVideoAddLine,
 } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
+import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
@@ -210,6 +211,7 @@ export function GenerateVideoConfigDialog({
 }: GenerateVideoConfigDialogProps) {
   const { t } = useTranslation();
   const toast = useToast();
+  const { VIDEO_CONCURRENCY } = useConcurrencyLimits();
   const musicInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
 
@@ -535,10 +537,10 @@ export function GenerateVideoConfigDialog({
         maxWidth="96vw"
         hasCloseIcon={false}
         slideFromBottom="none"
-        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-center justify-center overflow-hidden p-4"
-        dialogClass="relative bg-white shadow-md rounded-2xl m-auto overflow-hidden flex flex-col"
-        headerClass="relative flex items-center px-5 py-3 bg-white border-b border-gray-100 rounded-t-2xl z-10 shrink-0"
-        bodyClass="relative p-0 bg-gray-50 overflow-hidden flex-1 min-h-0"
+        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-start justify-center overflow-y-auto px-4 pt-16 pb-8 sm:items-center sm:py-12"
+        dialogClass="relative bg-white shadow-md rounded-2xl m-auto overflow-hidden flex flex-col max-h-[calc(100vh-6rem)] sm:max-h-[90vh]"
+        headerClass="relative flex items-center px-5 py-4 bg-white border-b border-gray-100 rounded-t-2xl z-10 shrink-0"
+        bodyClass="relative p-0 bg-gray-50 overflow-y-auto flex-1 min-h-0"
         footerClass="relative flex flex-wrap items-center gap-2 px-4 py-3 bg-white border-t border-gray-200 rounded-b-2xl shrink-0 z-10"
       >
         <Dialog.Header>
@@ -568,14 +570,11 @@ export function GenerateVideoConfigDialog({
         </Dialog.Header>
 
         <Dialog.Body>
-          <div
-            className="overflow-y-auto p-4 space-y-4"
-            style={{ maxHeight: "calc(90vh - 140px)" }}
-          >
+          <div className="overflow-y-auto p-4 space-y-4">
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Prompt */}
               <SectionCard title={t("Cấu Hình Prompt")} accent="#7C3AED" icon={<HiCog />}>
-                <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {PROMPT_BUTTONS.map((btn) => {
                     const filled =
                       btn.key === "rulesNegative"
@@ -599,7 +598,7 @@ export function GenerateVideoConfigDialog({
                         type="button"
                         onClick={() => openPromptEditor(btn.key)}
                         style={btn.style}
-                        className="relative shrink-0 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                        className="relative w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 text-left"
                       >
                         {t(btn.label)}
                         {filled && (
@@ -614,7 +613,7 @@ export function GenerateVideoConfigDialog({
                       setImportText("");
                       setImportOpen(true);
                     }}
-                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
                     style={{ background: "#7C3AED" }}
                   >
                     <HiDownload className="text-sm" />
@@ -623,7 +622,7 @@ export function GenerateVideoConfigDialog({
                   <button
                     type="button"
                     onClick={handleExportTemplate}
-                    className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
                     style={{ background: "#4F46E5" }}
                   >
                     <HiUpload className="text-sm" />
@@ -1051,14 +1050,17 @@ export function GenerateVideoConfigDialog({
                     />
                   </FieldRow>
                   <FieldRow label={t("Số luồng video chạy song song")}>
-                    <NativeSelect
-                      value={String(config.threadCount)}
-                      onChange={(v) => patch({ threadCount: Number(v) })}
-                      options={Array.from({ length: 50 }, (_, i) => {
-                        const n = i + 1;
-                        return { value: String(n), label: String(n) };
-                      })}
-                    />
+                    <div className="flex flex-1 gap-2 items-center min-w-0">
+                      <input
+                        className={`${fieldClass} bg-gray-50 text-gray-700`}
+                        value={Math.max(1, Math.round(VIDEO_CONCURRENCY || 1))}
+                        readOnly
+                        title={t("Theo gói customer (videoStreamCount) — không chỉnh trong cấu hình") as string}
+                      />
+                      <span className="text-10 text-gray-400 whitespace-nowrap shrink-0">
+                        {t("Theo gói KH")}
+                      </span>
+                    </div>
                   </FieldRow>
                 </div>
               </div>
@@ -1126,158 +1128,165 @@ export function GenerateVideoConfigDialog({
             ? "720px"
             : "560px"
         }
+        maxWidth="96vw"
         slideFromBottom="none"
-        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-center justify-center overflow-hidden p-4"
+        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-center justify-center overflow-y-auto p-4"
+        dialogClass="relative bg-white shadow-md rounded-2xl m-auto overflow-hidden flex flex-col max-h-[90vh]"
+        bodyClass="relative px-5 pb-4 pt-1 bg-white flex-1 min-h-0 overflow-y-auto"
       >
         <Dialog.Body>
-          {editingPrompt === "rulesNegative" ? (
-            <div className="space-y-4">
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t("Directives")}{" "}
-                    <span className="font-normal text-gray-400">
-                      ({t("Mỗi dòng 1 chỉ thị")} · {t("Nên làm")})
-                    </span>
-                  </label>
-                  <PromptFieldResetButton
-                    field="directives"
-                    onReset={(v) => setDirectivesDraft(v)}
+          <div className="min-h-0">
+            {editingPrompt === "rulesNegative" ? (
+              <div className="space-y-4">
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t("Directives")}{" "}
+                      <span className="font-normal text-gray-400">
+                        ({t("Mỗi dòng 1 chỉ thị")} · {t("Nên làm")})
+                      </span>
+                    </label>
+                    <PromptFieldResetButton
+                      field="directives"
+                      onReset={(v) => setDirectivesDraft(v)}
+                    />
+                  </div>
+                  <textarea
+                    value={directivesDraft}
+                    onChange={(e) => setDirectivesDraft(e.target.value)}
+                    rows={8}
+                    className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                    placeholder={t("Mỗi dòng một chỉ thị nên làm...")}
+                    autoFocus
                   />
                 </div>
-                <textarea
-                  value={directivesDraft}
-                  onChange={(e) => setDirectivesDraft(e.target.value)}
-                  rows={8}
-                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                  placeholder={t("Mỗi dòng một chỉ thị nên làm...")}
-                  autoFocus
-                />
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t("Negative Prompt")}{" "}
-                    <span className="font-normal text-gray-400">
-                      ({t("Mỗi dòng 1 chỉ thị")} · {t("Không nên làm")})
-                    </span>
-                  </label>
-                  <PromptFieldResetButton
-                    field="rulesNegative"
-                    onReset={(v) => setNegativeDraft(v)}
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t("Negative Prompt")}{" "}
+                      <span className="font-normal text-gray-400">
+                        ({t("Mỗi dòng 1 chỉ thị")} · {t("Không nên làm")})
+                      </span>
+                    </label>
+                    <PromptFieldResetButton
+                      field="rulesNegative"
+                      onReset={(v) => setNegativeDraft(v)}
+                    />
+                  </div>
+                  <textarea
+                    value={negativeDraft}
+                    onChange={(e) => setNegativeDraft(e.target.value)}
+                    rows={8}
+                    className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                    placeholder={t("Mỗi dòng một chỉ thị không nên làm...")}
                   />
                 </div>
-                <textarea
-                  value={negativeDraft}
-                  onChange={(e) => setNegativeDraft(e.target.value)}
-                  rows={8}
-                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                  placeholder={t("Mỗi dòng một chỉ thị không nên làm...")}
-                />
+                <p className="m-0 text-gray-500 text-10">
+                  {t("Nội dung sẽ được tổng hợp vào Check Prompt Tổng (chỉ xem).")}
+                </p>
               </div>
-              <p className="m-0 text-gray-500 text-10">
-                {t("Nội dung sẽ được tổng hợp vào Check Prompt Tổng (chỉ xem).")}
-              </p>
-            </div>
-          ) : editingPrompt === "dialogue" ? (
-            <div className="space-y-4 max-h-[65vh] overflow-y-auto pr-1">
-              <div>
-                <div className="mb-1.5 flex items-center justify-between gap-2">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t("System Instruction")}{" "}
-                    <span className="font-normal text-gray-400">({t("Vai trò & Luật lệ")})</span>
-                  </label>
-                  <PromptFieldResetButton
-                    field="dialogueSystem"
-                    onReset={(v) => setDialogueSystemDraft(v)}
+            ) : editingPrompt === "dialogue" ? (
+              <div className="space-y-4 pr-1">
+                <div>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      {t("System Instruction")}{" "}
+                      <span className="font-normal text-gray-400">({t("Vai trò & Luật lệ")})</span>
+                    </label>
+                    <PromptFieldResetButton
+                      field="dialogueSystem"
+                      onReset={(v) => setDialogueSystemDraft(v)}
+                    />
+                  </div>
+                  <textarea
+                    value={dialogueSystemDraft}
+                    onChange={(e) => setDialogueSystemDraft(e.target.value)}
+                    rows={7}
+                    className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                    placeholder={t("Nhập system instruction...")}
+                    autoFocus
                   />
                 </div>
-                <textarea
-                  value={dialogueSystemDraft}
-                  onChange={(e) => setDialogueSystemDraft(e.target.value)}
-                  rows={7}
-                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                  placeholder={t("Nhập system instruction...")}
-                  autoFocus
-                />
-              </div>
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-gray-700">
-                  {t("User Prompt")}{" "}
-                  <span className="font-normal text-gray-400">
-                    ({t("2 Thoại — mỗi tab là 1 section")})
-                  </span>
-                </label>
-                <TabGroup
-                  name="dialogue-prompt-sections"
-                  flex={false}
-                  tabClassName="px-4 py-2"
-                  titleClassName="text-xs font-semibold whitespace-nowrap"
-                  bodyClassName="pt-3"
-                  className="border-b border-gray-200"
-                >
-                  <TabGroup.Tab label={t("Thoại 1")}>
-                    <div className="mb-1.5 flex justify-end">
-                      <PromptFieldResetButton
-                        field="dialogueSection1"
-                        onReset={(v) => setDialogueSection1Draft(v)}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700">
+                    {t("User Prompt")}{" "}
+                    <span className="font-normal text-gray-400">
+                      ({t("2 Thoại — mỗi tab là 1 section")})
+                    </span>
+                  </label>
+                  <TabGroup
+                    name="dialogue-prompt-sections"
+                    flex={false}
+                    tabClassName="px-4 py-2"
+                    titleClassName="text-xs font-semibold whitespace-nowrap"
+                    bodyClassName="pt-3"
+                    className="border-b border-gray-200"
+                  >
+                    <TabGroup.Tab label={t("Thoại 1")}>
+                      <div className="mb-1.5 flex justify-end">
+                        <PromptFieldResetButton
+                          field="dialogueSection1"
+                          onReset={(v) => setDialogueSection1Draft(v)}
+                        />
+                      </div>
+                      <textarea
+                        value={dialogueSection1Draft}
+                        onChange={(e) => setDialogueSection1Draft(e.target.value)}
+                        rows={8}
+                        className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                        placeholder={t("Thoại 1 — Hook + Giới thiệu sản phẩm...")}
                       />
-                    </div>
-                    <textarea
-                      value={dialogueSection1Draft}
-                      onChange={(e) => setDialogueSection1Draft(e.target.value)}
-                      rows={8}
-                      className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                      placeholder={t("Thoại 1 — Hook + Giới thiệu sản phẩm...")}
-                    />
-                  </TabGroup.Tab>
-                  <TabGroup.Tab label={t("Thoại Cuối")}>
-                    <div className="mb-1.5 flex justify-end">
-                      <PromptFieldResetButton
-                        field="dialogueSectionLast"
-                        onReset={(v) => setDialogueSectionLastDraft(v)}
+                    </TabGroup.Tab>
+                    <TabGroup.Tab label={t("Thoại Cuối")}>
+                      <div className="mb-1.5 flex justify-end">
+                        <PromptFieldResetButton
+                          field="dialogueSectionLast"
+                          onReset={(v) => setDialogueSectionLastDraft(v)}
+                        />
+                      </div>
+                      <textarea
+                        value={dialogueSectionLastDraft}
+                        onChange={(e) => setDialogueSectionLastDraft(e.target.value)}
+                        rows={8}
+                        className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                        placeholder={t("Thoại Cuối — CTA / kết thúc...")}
                       />
-                    </div>
-                    <textarea
-                      value={dialogueSectionLastDraft}
-                      onChange={(e) => setDialogueSectionLastDraft(e.target.value)}
-                      rows={8}
-                      className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                      placeholder={t("Thoại Cuối — CTA / kết thúc...")}
-                    />
-                  </TabGroup.Tab>
-                </TabGroup>
+                    </TabGroup.Tab>
+                  </TabGroup>
+                </div>
               </div>
-            </div>
-          ) : editingPrompt === "checkTotal" ? (
-            <div className="space-y-2">
-              <p className="m-0 text-xs text-gray-500">
-                {t("Tổng hợp từ Rules / Prompt Tạo Thoại / Prompt Tạo Ảnh — chỉ xem, không sửa.")}
-              </p>
-              <pre className="m-0 max-h-[60vh] overflow-y-auto whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-800">
-                {promptDraft.trim() || t("Chưa có prompt nào được cấu hình.")}
-              </pre>
-            </div>
-          ) : (
-            <>
-              <div className="mb-1.5 flex justify-end">
-                <PromptFieldResetButton field="image" onReset={(v) => setPromptDraft(v)} />
+            ) : editingPrompt === "checkTotal" ? (
+              <div className="space-y-2">
+                <p className="m-0 text-xs text-gray-500">
+                  {t(
+                    "Tổng hợp từ Rules / Prompt Tạo Thoại / Prompt Tạo Ảnh — chỉ xem, không sửa."
+                  )}
+                </p>
+                <pre className="m-0 whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-800">
+                  {promptDraft.trim() || t("Chưa có prompt nào được cấu hình.")}
+                </pre>
               </div>
-              <textarea
-                value={promptDraft}
-                onChange={(e) => setPromptDraft(e.target.value)}
-                rows={8}
-                className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
-                placeholder={t("Nhập prompt...")}
-                autoFocus
-              />
-              <p className="m-0 mt-2 text-gray-500 text-10">
-                {t("Sẽ được gộp vào Check Prompt Tổng khi Lưu.")}
-              </p>
-            </>
-          )}
-          <div className="flex gap-2 justify-end mt-4">
+            ) : (
+              <>
+                <div className="mb-1.5 flex justify-end">
+                  <PromptFieldResetButton field="image" onReset={(v) => setPromptDraft(v)} />
+                </div>
+                <textarea
+                  value={promptDraft}
+                  onChange={(e) => setPromptDraft(e.target.value)}
+                  rows={8}
+                  className="px-3 py-2 w-full text-sm text-gray-800 bg-white rounded-lg border border-gray-200 outline-none focus:border-primary"
+                  placeholder={t("Nhập prompt...")}
+                  autoFocus
+                />
+                <p className="m-0 mt-2 text-gray-500 text-10">
+                  {t("Sẽ được gộp vào Check Prompt Tổng khi Lưu.")}
+                </p>
+              </>
+            )}
+          </div>
+          <div className="flex sticky bottom-0 gap-2 justify-end pt-4 mt-4 bg-white border-t border-gray-100">
             <button
               type="button"
               onClick={closePromptEditor}
@@ -1307,8 +1316,11 @@ export function GenerateVideoConfigDialog({
         }}
         title={t("Import Template")}
         width="560px"
+        maxWidth="96vw"
         slideFromBottom="none"
-        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-center justify-center overflow-hidden p-4"
+        wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex items-center justify-center overflow-y-auto p-4"
+        dialogClass="relative bg-white shadow-md rounded-2xl m-auto overflow-hidden flex flex-col max-h-[90vh]"
+        bodyClass="relative px-5 pb-4 bg-white flex-1 min-h-0 overflow-y-auto"
       >
         <Dialog.Body>
           <div className="space-y-3">

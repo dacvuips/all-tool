@@ -19,16 +19,18 @@ import {
   HiSearch,
   HiUpload,
 } from "react-icons/hi";
-import { RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
+import { RiArrowDownSLine, RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import {
   MediaGenerationJobError,
   useMediaGenerationJob,
 } from "../../../lib/hooks/useMediaGenerationJob";
 import { useToast } from "../../../lib/providers/toast-provider";
+import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
+import { Popover } from "../../shared/utilities/popover/popover";
 import {
   exportAffiliatePlusCSV,
   parseAffiliatePlusCSV,
@@ -39,6 +41,7 @@ import { formatImportHistoryOption, ImportHistoryItem } from "../import-history"
 import {
   getMergedVideoBlob,
   getMergedVideoStorageKey,
+  hasMergedVideoFile,
   hasMergedVideoRef,
   hydrateMergedVideoUrls,
   mergeVideosToIndexedDb,
@@ -159,7 +162,10 @@ export function ThreadManagementPanel({
 }: ThreadManagementPanelProps) {
   const { t } = useTranslation();
   const toast = useToast();
+  const { VIDEO_CONCURRENCY } = useConcurrencyLimits();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importMenuRef = useRef<HTMLButtonElement>(null);
+  const [importMenuOpen, setImportMenuOpen] = useState(false);
   const itemsRef = useRef(items);
   itemsRef.current = items;
 
@@ -662,11 +668,61 @@ export function ThreadManagementPanel({
 
   const handleStart = async (ids?: string[]) => {
     const allItems = await getSessionItems(sessionId);
-    const targets = ids?.length
+    const candidates = ids?.length
       ? allItems.filter((i) => ids.includes(i.id))
       : allItems.filter((i) => i.selected);
-    if (!targets.length) {
+    if (!candidates.length) {
       toast.warn(t("Chưa bật switch luồng nào để chạy"));
+      return;
+    }
+
+    // Bỏ qua luồng đã có file video nối (UI ref / IndexedDB)
+    const presence = await Promise.all(
+      candidates.map(async (item) => {
+        const hasMerged =
+          hasMergedVideoRef(item.mergedVideoUrl) || (await hasMergedVideoFile(item));
+        return { item, hasMerged };
+      })
+    );
+    const skippedMerged = presence.filter((p) => p.hasMerged).map((p) => p.item);
+    const targets = presence.filter((p) => !p.hasMerged).map((p) => p.item);
+
+    if (skippedMerged.length) {
+      // Gỡ status "running" bị kẹt — tránh spinner nút Chạy dù đã có video nối
+      await Promise.all(
+        skippedMerged
+          .filter((i) => i.status === "running" || i.status === "uploading")
+          .map((i) =>
+            patchThread(sessionId, i.id, {
+              status: "success" as ThreadStatus,
+              countdown: 0,
+              error: "",
+            })
+          )
+      );
+      setGeneratingIds((prev) => {
+        const next = { ...prev };
+        for (const i of skippedMerged) delete next[i.id];
+        return next;
+      });
+      setMergingIds((prev) => {
+        const next = { ...prev };
+        for (const i of skippedMerged) delete next[i.id];
+        return next;
+      });
+      onAddLog(
+        t("Bỏ qua {{count}} luồng đã có video nối", { count: skippedMerged.length }),
+        "info"
+      );
+      void loadPage();
+    }
+
+    if (!targets.length) {
+      toast.warn(
+        skippedMerged.length
+          ? t("Tất cả luồng đã có video nối — không cần generate lại")
+          : t("Chưa bật switch luồng nào để chạy")
+      );
       return;
     }
 
@@ -703,7 +759,8 @@ export function ThreadManagementPanel({
 
     pauseAllRef.current = false;
     runnerRef.current?.stop();
-    const concurrency = Math.max(1, Math.min(50, Math.round(config.threadCount || 5)));
+    // Concurrency = số luồng video của customer (googlePackage), không dùng threadCount trong config
+    const concurrency = Math.max(1, Math.min(50, Math.round(VIDEO_CONCURRENCY || 1)));
     onAddLog(
       t("Bắt đầu {{count}} luồng (song song {{n}})", {
         count: targets.length,
@@ -1345,21 +1402,63 @@ export function ThreadManagementPanel({
               }}
             />
             <button
+              ref={importMenuRef}
               type="button"
-              onClick={() => void openScrapeImportDialog()}
+              onClick={() => setImportMenuOpen((v) => !v)}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
             >
               <RiDatabase2Line className="text-base" />
-              {t("Nhập từ Data")}
+              {t("Nhập dữ liệu")}
+              <RiArrowDownSLine className="text-sm opacity-80" />
             </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3.5 text-sm font-semibold text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
+            <Popover
+              reference={importMenuRef}
+              trigger="click"
+              placement="bottom-start"
+              arrow={false}
+              maxWidth={280}
+              visible={importMenuOpen}
+              hideOnClickOutside
+              zIndex={10050}
+              onHidden={() => setImportMenuOpen(false)}
+              onClickOutside={() => setImportMenuOpen(false)}
             >
-              <RiFileExcel2Line className="text-base" />
-              {t("Nhập thủ công")}
-            </button>
+              <div className="py-1 min-w-[240px]">
+                {[
+                  {
+                    label: t("Nhập từ Data"),
+                    hint: t("Chọn phiên cào đã lưu để tạo luồng"),
+                    icon: <RiDatabase2Line className="text-base text-blue-600" />,
+                    action: () => {
+                      setImportMenuOpen(false);
+                      void openScrapeImportDialog();
+                    },
+                  },
+                  {
+                    label: t("Nhập thủ công"),
+                    hint: t("Upload file CSV / Excel"),
+                    icon: <RiFileExcel2Line className="text-base text-blue-600" />,
+                    action: () => {
+                      setImportMenuOpen(false);
+                      fileInputRef.current?.click();
+                    },
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className="flex gap-2.5 items-start px-3 py-2 w-full text-left transition-colors hover:bg-gray-50"
+                    onClick={item.action}
+                  >
+                    <span className="mt-0.5 shrink-0">{item.icon}</span>
+                    <span>
+                      <span className="block text-xs font-medium text-gray-800">{item.label}</span>
+                      <span className="block mt-0.5 text-[11px] text-gray-400">{item.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Popover>
             <button
               type="button"
               onClick={() => setGenerateConfigOpen(true)}
@@ -1761,29 +1860,17 @@ export function ThreadManagementPanel({
 
                                 if (hasMerged) {
                                   return (
-                                    <div className="flex gap-1.5 items-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => void openMergedPreview(item)}
-                                        className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
-                                        title={t("Xem video đã nối")}
-                                      >
-                                        <RiVideoFill className="text-lg text-white" />
-                                        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
-                                          <HiCheck className="text-[11px] font-bold" />
-                                        </span>
-                                      </button>
-                                      {canMerge ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => void handleRetryMerge(item)}
-                                          className="flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors text-warning bg-warning/10 border-warning hover:bg-warning/20"
-                                          title={t("Nối lại video")}
-                                        >
-                                          <HiRefresh className="text-sm" />
-                                        </button>
-                                      ) : null}
-                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => void openMergedPreview(item)}
+                                      className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
+                                      title={t("Xem video đã nối")}
+                                    >
+                                      <RiVideoFill className="text-lg text-white" />
+                                      <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
+                                        <HiCheck className="text-[11px] font-bold" />
+                                      </span>
+                                    </button>
                                   );
                                 }
 
@@ -1828,11 +1915,11 @@ export function ThreadManagementPanel({
                         </td>
                         <td className="px-4 py-3">
                           {(() => {
+                            // Chỉ dựa state thực sự đang gen/nối — không dùng status "running" kẹt
+                            // (item đã 2/2 + video nối vẫn bị spinner nếu chỉ nhìn status).
                             const isItemRunning =
-                              item.status === "running" ||
-                              item.status === "uploading" ||
-                              Boolean(generatingIds[item.id]) ||
-                              Boolean(mergingIds[item.id]);
+                              Boolean(generatingIds[item.id]) || Boolean(mergingIds[item.id]);
+                            const alreadyDone = hasMergedVideoRef(item.mergedVideoUrl);
                             return (
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
@@ -1842,9 +1929,17 @@ export function ThreadManagementPanel({
                                   className={`flex justify-center items-center w-8 h-8 rounded-full border shadow-sm transition-colors ${
                                     isItemRunning
                                       ? "text-purple-600 bg-purple-50 border-purple-300 cursor-default"
+                                      : alreadyDone
+                                      ? "text-green-600 bg-green-50 border-green-200 hover:bg-green-100 hover:border-green-300"
                                       : "text-purple-600 bg-purple-50 border-purple-200 hover:bg-purple-100 hover:border-purple-300"
                                   }`}
-                                  title={isItemRunning ? t("Đang chạy...") : t("Chạy")}
+                                  title={
+                                    isItemRunning
+                                      ? t("Đang chạy...")
+                                      : alreadyDone
+                                      ? t("Đã có video nối — bỏ qua khi Bắt Đầu")
+                                      : t("Chạy")
+                                  }
                                 >
                                   {isItemRunning ? (
                                     <RiLoader4Line className="text-sm animate-spin" />

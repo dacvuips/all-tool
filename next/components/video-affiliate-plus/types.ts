@@ -140,7 +140,7 @@ export interface GenerateVideoConfig {
   imageModel: string;
   videoModel: string;
   videosPerJob: number;
-  /** Số luồng chạy song song khi Bắt Đầu */
+  /** @deprecated Không còn dùng khi Bắt Đầu — concurrency lấy từ customer.videoStreamCount */
   threadCount: number;
   quality: string;
 }
@@ -178,6 +178,21 @@ export interface AffiliatePlusUser {
   generateItem?: AffiliatePlusUserGenerateLink | null;
 }
 
+/** Proxy lưu dạng host:port:user:pass */
+export interface AffiliatePlusProxy {
+  id: string;
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+  /** Chuỗi gốc để gán nhanh: host:port:user:pass */
+  raw: string;
+  note?: string;
+  error?: string;
+  active: boolean;
+  createdAt: string;
+}
+
 export interface AffiliatePlusLog {
   id: string;
   time: string;
@@ -196,8 +211,90 @@ export interface AffiliatePlusSettings {
 
 export const STORAGE_KEY = "video-affiliate-plus-items";
 export const USERS_STORAGE_KEY = "video-affiliate-plus-users";
+export const PROXIES_STORAGE_KEY = "video-affiliate-plus-proxies";
 export const LOGS_STORAGE_KEY = "video-affiliate-plus-logs";
 export const SETTINGS_STORAGE_KEY = "video-affiliate-plus-settings";
+
+/** Chuẩn hoá raw → host:port[:user:pass] */
+export function buildProxyRaw(parts: {
+  host: string;
+  port: string;
+  username?: string;
+  password?: string;
+}): string {
+  const host = String(parts.host || "").trim();
+  const port = String(parts.port || "").trim();
+  const username = String(parts.username || "").trim();
+  const password = String(parts.password || "").trim();
+  if (!host || !port) return "";
+  if (username || password) return `${host}:${port}:${username}:${password}`;
+  return `${host}:${port}`;
+}
+
+/** Parse 1 dòng proxy: host:port:user:pass | host:port | CSV host,port,user,pass */
+export function parseProxyLine(line: string): Omit<AffiliatePlusProxy, "id" | "createdAt"> | null {
+  const trimmed = String(line || "").trim();
+  if (!trimmed || trimmed.startsWith("#") || trimmed.startsWith("//")) return null;
+
+  const lower = trimmed.toLowerCase().replace(/\s+/g, "");
+  if (
+    lower === "host:port:user:pass" ||
+    lower === "host,port,user,pass" ||
+    lower === "host\tport\tuser\tpass" ||
+    lower === "proxy" ||
+    lower === "host,port" ||
+    lower.startsWith("host,port,")
+  ) {
+    return null;
+  }
+
+  let host = "";
+  let port = "";
+  let username = "";
+  let password = "";
+
+  if (trimmed.includes(",") || trimmed.includes("\t")) {
+    const parts = trimmed.split(/[\t,]/).map((p) => p.trim());
+    host = parts[0] || "";
+    port = parts[1] || "";
+    username = parts[2] || "";
+    password = parts.slice(3).join(",") || "";
+  } else {
+    const parts = trimmed.split(":");
+    if (parts.length >= 4) {
+      host = parts[0] || "";
+      port = parts[1] || "";
+      username = parts[2] || "";
+      password = parts.slice(3).join(":");
+    } else if (parts.length === 2) {
+      host = parts[0] || "";
+      port = parts[1] || "";
+    } else if (parts.length === 3) {
+      host = parts[0] || "";
+      port = parts[1] || "";
+      username = parts[2] || "";
+    } else {
+      return null;
+    }
+  }
+
+  host = host.trim();
+  port = port.trim();
+  if (!host || !port) return null;
+  if (!/^\d+$/.test(port)) return null;
+
+  const raw = buildProxyRaw({ host, port, username, password });
+  return {
+    host,
+    port,
+    username,
+    password,
+    raw,
+    note: "",
+    error: "",
+    active: true,
+  };
+}
 export const GENERATE_VIDEO_CONFIG_KEY = "video-affiliate-plus-generate-video-config"; // legacy localStorage (migrate → IndexedDB)
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
 

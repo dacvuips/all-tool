@@ -1,8 +1,16 @@
 import { extractShopeeProductId } from "./csv-parser";
-import { idbGetConfig, idbGetUsersList, idbSetConfig, idbSetUsersList } from "./idb";
+import {
+  idbGetConfig,
+  idbGetProxiesList,
+  idbGetUsersList,
+  idbSetConfig,
+  idbSetProxiesList,
+  idbSetUsersList,
+} from "./idb";
 import {
   AffiliatePlusItem,
   AffiliatePlusLog,
+  AffiliatePlusProxy,
   AffiliatePlusSettings,
   AffiliatePlusUser,
   AffiliatePlusUserGenerateLink,
@@ -11,11 +19,14 @@ import {
   GENERATE_VIDEO_CONFIG_KEY,
   GenerateVideoConfig,
   LOGS_STORAGE_KEY,
+  PROXIES_STORAGE_KEY,
   SETTINGS_STORAGE_KEY,
   STORAGE_KEY,
   USERS_STORAGE_KEY,
+  buildProxyRaw,
   createEmptyItem,
   migrateToCharacterProfile,
+  parseProxyLine,
 } from "./types";
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -207,6 +218,70 @@ export async function saveUsers(users: AffiliatePlusUser[]): Promise<void> {
     await idbSetUsersList(normalized);
   } catch (err) {
     console.warn("[saveUsers] IndexedDB failed, đã lưu localStorage", err);
+  }
+}
+
+function normalizeProxy(raw: Partial<AffiliatePlusProxy> | Record<string, unknown>): AffiliatePlusProxy {
+  const host = String(raw.host || "").trim();
+  const port = String(raw.port || "").trim();
+  const username = String(raw.username || "").trim();
+  const password = String(raw.password || "").trim();
+  const fromRaw = String(raw.raw || "").trim();
+  const parsed = fromRaw && (!host || !port) ? parseProxyLine(fromRaw) : null;
+  const nextHost = host || parsed?.host || "";
+  const nextPort = port || parsed?.port || "";
+  const nextUser = username || parsed?.username || "";
+  const nextPass = password || parsed?.password || "";
+  const built = buildProxyRaw({
+    host: nextHost,
+    port: nextPort,
+    username: nextUser,
+    password: nextPass,
+  });
+
+  return {
+    id: String(raw.id || crypto.randomUUID()),
+    host: nextHost,
+    port: nextPort,
+    username: nextUser,
+    password: nextPass,
+    raw: built || fromRaw,
+    note: String(raw.note || ""),
+    error: String(raw.error || ""),
+    active: (raw as AffiliatePlusProxy).active !== false,
+    createdAt: String(raw.createdAt || new Date().toISOString()),
+  };
+}
+
+export async function loadProxies(): Promise<AffiliatePlusProxy[]> {
+  const legacy = readJSON<AffiliatePlusProxy[]>(PROXIES_STORAGE_KEY, []).map(normalizeProxy);
+  let fromIdb: AffiliatePlusProxy[] = [];
+  try {
+    fromIdb = (await idbGetProxiesList<AffiliatePlusProxy>()).map(normalizeProxy);
+  } catch (err) {
+    console.warn("[loadProxies] IndexedDB read failed", err);
+  }
+
+  const best = fromIdb.length >= legacy.length ? fromIdb : legacy;
+  if (best.length) {
+    try {
+      await idbSetProxiesList(best);
+    } catch (err) {
+      console.warn("[loadProxies] sync IndexedDB failed", err);
+    }
+    writeJSON(PROXIES_STORAGE_KEY, best);
+  }
+
+  return best.filter((p) => p.host && p.port);
+}
+
+export async function saveProxies(proxies: AffiliatePlusProxy[]): Promise<void> {
+  const normalized = proxies.map(normalizeProxy).filter((p) => p.host && p.port);
+  writeJSON(PROXIES_STORAGE_KEY, normalized);
+  try {
+    await idbSetProxiesList(normalized);
+  } catch (err) {
+    console.warn("[saveProxies] IndexedDB failed, đã lưu localStorage", err);
   }
 }
 

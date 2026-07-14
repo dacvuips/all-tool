@@ -6,37 +6,125 @@ import {
   HiOutlineX,
   HiPencil,
   HiPlus,
+  HiRefresh,
   HiSearch,
   HiUpload,
 } from "react-icons/hi";
-import { RiFileTextLine } from "react-icons/ri";
+import { RiArrowDownSLine, RiFileTextLine } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { Popover } from "../../shared/utilities/popover/popover";
 import { downloadCsvText } from "../scrape/api";
-import { AffiliatePlusUser } from "../types";
+import { AffiliatePlusProxy, AffiliatePlusUser } from "../types";
 
 interface UsersPanelProps {
   users: AffiliatePlusUser[];
+  proxies: AffiliatePlusProxy[];
   onUpdateUsers: (users: AffiliatePlusUser[]) => void;
 }
 
+const SAMPLE_USERS_ROWS = [
+  ["ACC001", "cookie_sample_1", "1.2.3.4:8080:user1:pass1"],
+  ["ACC002", "cookie_sample_2", "5.6.7.8:3128:user2:pass2"],
+  ["ACC003", "cookie_sample_3", "9.10.11.12:8000:user3:pass3"],
+  ["ACC004", "cookie_sample_4", "13.14.15.16:8888:user4:pass4"],
+  ["ACC005", "cookie_sample_5", "17.18.19.20:9000:user5:pass5"],
+];
+
 const SAMPLE_USERS_CSV =
   "\uFEFF" +
-  [
-    "Username,Cookie,Proxy",
-    "ACC001,cookie_here,host:port:user:pass",
-    "ACC002,cookie_here,host:port:user:pass",
-  ].join("\n");
+  ["Username,Cookie,Proxy", ...SAMPLE_USERS_ROWS.map((r) => r.join(","))].join("\n");
+
+const SAMPLE_USERS_TXT = SAMPLE_USERS_ROWS.map((r) => r.join("|")).join("\n") + "\n";
 
 function downloadSampleExcel() {
   downloadCsvText(SAMPLE_USERS_CSV, "mau-quan-ly-nguoi-dung.csv");
 }
 
-export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
+function downloadSampleTxt() {
+  const blob = new Blob([SAMPLE_USERS_TXT], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "mau-quan-ly-nguoi-dung.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Gán mỗi user một proxy duy nhất từ pool (không trùng lắp). */
+function syncUsersWithUniqueProxies(
+  users: AffiliatePlusUser[],
+  proxies: AffiliatePlusProxy[]
+): { next: AffiliatePlusUser[]; assigned: number; skipped: number } {
+  const pool = proxies
+    .filter((p) => p.active !== false && String(p.raw || "").trim())
+    .map((p) => String(p.raw).trim());
+
+  const uniquePool: string[] = [];
+  const seenPool = new Set<string>();
+  for (const raw of pool) {
+    const key = raw.toLowerCase();
+    if (seenPool.has(key)) continue;
+    seenPool.add(key);
+    uniquePool.push(raw);
+  }
+
+  const used = new Set<string>();
+  const next = users.map((u) => ({ ...u }));
+
+  // Pass 1: giữ proxy hiện có nếu còn trong pool và chưa bị user khác chiếm
+  for (const user of next) {
+    const current = String(user.proxy || "").trim();
+    if (!current) continue;
+    const key = current.toLowerCase();
+    const stillInPool = uniquePool.some((p) => p.toLowerCase() === key);
+    if (stillInPool && !used.has(key)) {
+      used.add(key);
+      user.proxy = uniquePool.find((p) => p.toLowerCase() === key) || current;
+    } else {
+      user.proxy = "";
+    }
+  }
+
+  // Pass 2: gán proxy còn trống theo thứ tự
+  let poolIdx = 0;
+  const takeFree = (): string | null => {
+    while (poolIdx < uniquePool.length) {
+      const raw = uniquePool[poolIdx++];
+      const key = raw.toLowerCase();
+      if (used.has(key)) continue;
+      used.add(key);
+      return raw;
+    }
+    return null;
+  };
+
+  let assigned = 0;
+  let skipped = 0;
+  for (const user of next) {
+    if (String(user.proxy || "").trim()) {
+      assigned++;
+      continue;
+    }
+    const free = takeFree();
+    if (free) {
+      user.proxy = free;
+      assigned++;
+    } else {
+      skipped++;
+    }
+  }
+
+  return { next, assigned, skipped };
+}
+
+export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const txtInputRef = useRef<HTMLInputElement>(null);
-  const jsonInputRef = useRef<HTMLInputElement>(null);
+  const excelInputRef = useRef<HTMLInputElement>(null);
+  const addMenuRef = useRef<HTMLButtonElement>(null);
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [editUser, setEditUser] = useState<AffiliatePlusUser | null>(null);
   const [form, setForm] = useState({ username: "", cookie: "", proxy: "" });
   const [isNew, setIsNew] = useState(false);
@@ -54,7 +142,8 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
     const active = users.filter((u) => u.active !== false).length;
     const inactive = total - active;
     const error = users.filter((u) => Boolean(String(u.error || "").trim())).length;
-    return { total, active, inactive, error };
+    const withProxy = users.filter((u) => Boolean(String(u.proxy || "").trim())).length;
+    return { total, active, inactive, error, withProxy };
   }, [users]);
 
   const normalizedTerm = useMemo(() => searchTerm.toLowerCase(), [searchTerm]);
@@ -114,16 +203,27 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
   };
 
   const handleSave = () => {
-    if (!form.username.trim()) {
+    const username = form.username.trim();
+    if (!username) {
       toast.warn(t("Vui lòng nhập username"));
       return;
     }
+    const dup = users.some(
+      (u) =>
+        u.username.trim().toLowerCase() === username.toLowerCase() &&
+        (isNew || u.id !== editUser?.id)
+    );
+    if (dup) {
+      toast.warn(t("Username đã tồn tại"));
+      return;
+    }
+
     if (isNew) {
       onUpdateUsers([
         ...users,
         {
           id: crypto.randomUUID(),
-          username: form.username.trim(),
+          username,
           email: "",
           role: "user",
           cookie: form.cookie.trim(),
@@ -142,7 +242,7 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
           u.id === editUser.id
             ? {
                 ...u,
-                username: form.username.trim(),
+                username,
                 cookie: form.cookie.trim(),
                 proxy: form.proxy.trim(),
                 error: "",
@@ -166,96 +266,117 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
     toast.success(t("Đã xóa"));
   };
 
-  const parseUserLines = (text: string): AffiliatePlusUser[] => {
-    return text
-      .split(/\r?\n/)
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .filter((line) => {
-        const lower = line.toLowerCase();
-        return !(
-          lower.startsWith("username") ||
-          lower.startsWith("tên account") ||
-          lower.startsWith("ten account")
-        );
-      })
-      .map((line) => {
-        const parts = line.split(/[\t|,]/).map((part) => part.trim());
-        const [username, cookie = "", proxy = ""] = parts;
-        return {
-          id: crypto.randomUUID(),
-          username,
-          email: "",
-          role: "user",
-          cookie,
-          proxy,
-          error: "",
-          active: true,
-          createdAt: new Date().toISOString(),
-          generateItems: [],
-          generateItem: null,
-        };
-      })
-      .filter((user) => user.username);
+  const isHeaderLine = (line: string) => {
+    const lower = line.toLowerCase().replace(/\s+/g, "");
+    return (
+      lower.startsWith("username") ||
+      lower.startsWith("user,") ||
+      lower.startsWith("user|") ||
+      lower.startsWith("tênaccount") ||
+      lower.startsWith("tenaccount") ||
+      lower === "username,cookie,proxy" ||
+      lower === "username|cookie|proxy"
+    );
   };
 
-  const normalizeImportedUser = (
-    raw: Partial<AffiliatePlusUser>,
-    index: number
-  ): AffiliatePlusUser => ({
-    id: raw.id || crypto.randomUUID(),
-    username: String(raw.username || raw.email || `USER${index + 1}`).trim(),
-    email: String(raw.email || ""),
-    role: String(raw.role || "user"),
-    cookie: String(raw.cookie || ""),
-    proxy: String(raw.proxy || (raw as any).hostPort || ""),
-    error: String(raw.error || ""),
-    active: raw.active !== false,
-    createdAt: raw.createdAt || new Date().toISOString(),
-    generateItems: Array.isArray(raw.generateItems)
-      ? raw.generateItems
-      : raw.generateItem
-      ? [raw.generateItem]
-      : [],
-    generateItem: null,
-  });
+  /** Parse TXT/CSV → list user; bỏ header, dòng trống, username rỗng. */
+  const parseUserLines = (text: string): AffiliatePlusUser[] => {
+    const seen = new Set<string>();
+    const list: AffiliatePlusUser[] = [];
+    const cleaned = String(text || "").replace(/^\uFEFF/, "");
 
-  const handleImportTxt = async (file: File) => {
-    const imported = parseUserLines(await file.text());
+    for (const rawLine of cleaned.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || isHeaderLine(line)) continue;
+
+      const parts = line.split(/[\t|,]/).map((part) => part.trim());
+      const username = (parts[0] || "").trim();
+      if (!username) continue;
+
+      const key = username.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      list.push({
+        id: crypto.randomUUID(),
+        username,
+        email: "",
+        role: "user",
+        cookie: parts[1] || "",
+        proxy: parts[2] || "",
+        error: "",
+        active: true,
+        createdAt: new Date().toISOString(),
+        generateItems: [],
+        generateItem: null,
+      });
+    }
+    return list;
+  };
+
+  /** Merge import: bỏ trùng username với list hiện có + trong file. */
+  const mergeImportedUsers = (imported: AffiliatePlusUser[], sourceLabel: string) => {
     if (!imported.length) {
-      toast.warn(t("Không đọc được user từ file TXT"));
+      toast.warn(t("Không đọc được user từ {{source}}", { source: sourceLabel }));
       return;
     }
-    onUpdateUsers([...users, ...imported]);
-    toast.success(t("Đã nhập {{count}} người dùng", { count: imported.length }));
-  };
-
-  const handleImportJson = async (file: File) => {
-    try {
-      const data = JSON.parse(await file.text());
-      const list = Array.isArray(data) ? data : Array.isArray(data?.users) ? data.users : [];
-      const imported = list.map(normalizeImportedUser).filter((user) => user.username);
-      if (!imported.length) {
-        toast.warn(t("Không đọc được user từ JSON"));
-        return;
-      }
-      onUpdateUsers(imported);
-      toast.success(t("Đã nhập {{count}} người dùng", { count: imported.length }));
-    } catch (err: any) {
-      toast.error(err?.message || t("File JSON không hợp lệ"));
-    }
-  };
-
-  const exportJson = () => {
-    const blob = new Blob([JSON.stringify(users, null, 2)], {
-      type: "application/json;charset=utf-8",
+    const existing = new Set(users.map((u) => u.username.trim().toLowerCase()).filter(Boolean));
+    const fresh = imported.filter((u) => {
+      const key = u.username.trim().toLowerCase();
+      if (!key || existing.has(key)) return false;
+      existing.add(key);
+      return true;
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `video-affiliate-users-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const skipped = imported.length - fresh.length;
+    if (!fresh.length) {
+      toast.warn(t("Tất cả username đã tồn tại — không thêm mới"));
+      return;
+    }
+    onUpdateUsers([...users, ...fresh]);
+    toast.success(
+      skipped > 0
+        ? t("Đã nhập {{count}} người dùng (bỏ trùng {{skipped}})", {
+            count: fresh.length,
+            skipped,
+          })
+        : t("Đã nhập {{count}} người dùng", { count: fresh.length })
+    );
+  };
+
+  const handleImportTxt = async (file: File) => {
+    mergeImportedUsers(parseUserLines(await file.text()), "TXT");
+  };
+
+  const handleImportExcel = async (file: File) => {
+    mergeImportedUsers(parseUserLines(await file.text()), "Excel/CSV");
+  };
+
+  const handleSyncProxies = () => {
+    if (!users.length) {
+      toast.warn(t("Chưa có người dùng để đồng bộ"));
+      return;
+    }
+    const activeProxies = proxies.filter((p) => p.active !== false && String(p.raw || "").trim());
+    if (!activeProxies.length) {
+      toast.warn(t("Chưa có proxy trong tab Quản lý Proxy"));
+      return;
+    }
+
+    const { next, assigned, skipped } = syncUsersWithUniqueProxies(users, proxies);
+    onUpdateUsers(next);
+
+    if (skipped > 0) {
+      toast.warn(
+        t("Đã gán {{assigned}} proxy (thiếu {{skipped}} — thêm proxy hoặc giảm account)", {
+          assigned,
+          skipped,
+        })
+      );
+    } else {
+      toast.success(
+        t("Đã đồng bộ {{count}} account ↔ proxy (1-1, không trùng)", { count: assigned })
+      );
+    }
   };
 
   return (
@@ -277,6 +398,14 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
             border: "#34d399",
             text: "#059669",
             dot: "#10b981",
+          },
+          {
+            label: t("Có Proxy"),
+            value: stats.withProxy,
+            bg: "#fdf4ff",
+            border: "#e879f9",
+            text: "#c026d3",
+            dot: "#d946ef",
           },
           {
             label: t("Tắt"),
@@ -313,7 +442,7 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
             <input
               ref={txtInputRef}
               type="file"
-              accept=".txt,.csv,text/plain,text/csv"
+              accept=".txt,text/plain"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -322,41 +451,86 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
               }}
             />
             <input
-              ref={jsonInputRef}
+              ref={excelInputRef}
               type="file"
-              accept=".json,application/json"
+              accept=".csv,.xlsx,.xls,text/csv"
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) void handleImportJson(file);
+                if (file) void handleImportExcel(file);
                 e.target.value = "";
               }}
             />
+
+            {/* Gộp: Thêm thủ công / Nhập Excel / Nhập TXT */}
             <button
+              ref={addMenuRef}
               type="button"
-              onClick={openNew}
+              onClick={() => setAddMenuOpen((v) => !v)}
               className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
             >
               <HiPlus className="text-base" />
-              {t("Thêm Người Dùng")}
+              {t("Thêm / Nhập")}
+              <RiArrowDownSLine className="text-sm opacity-80" />
             </button>
-            <button
-              type="button"
-              onClick={() => txtInputRef.current?.click()}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3.5 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-100"
+            <Popover
+              reference={addMenuRef}
+              trigger="click"
+              placement="bottom-start"
+              arrow={false}
+              maxWidth={280}
+              visible={addMenuOpen}
+              hideOnClickOutside
+              zIndex={10050}
+              onHidden={() => setAddMenuOpen(false)}
+              onClickOutside={() => setAddMenuOpen(false)}
             >
-              <RiFileTextLine className="text-base" />
-              {t("Nhập TXT")}
-            </button>
-            <button
-              type="button"
-              onClick={() => jsonInputRef.current?.click()}
-              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border hover:opacity-90"
-              style={{ backgroundColor: "#ecfeff", borderColor: "#22d3ee", color: "#0891b2" }}
-            >
-              <HiUpload className="text-base" />
-              {t("Nhập JSON")}
-            </button>
+              <div className="py-1 min-w-[240px]">
+                {[
+                  {
+                    label: t("Thêm Người Dùng"),
+                    hint: t("Nhập thủ công username / cookie / proxy"),
+                    icon: <HiPlus className="text-base text-blue-600" />,
+                    action: () => {
+                      setAddMenuOpen(false);
+                      openNew();
+                    },
+                  },
+                  {
+                    label: t("Nhập Excel"),
+                    hint: t("File CSV/Excel — Username,Cookie,Proxy"),
+                    icon: <HiUpload className="text-base text-cyan-600" />,
+                    action: () => {
+                      setAddMenuOpen(false);
+                      excelInputRef.current?.click();
+                    },
+                  },
+                  {
+                    label: t("Nhập TXT"),
+                    hint: t("Mỗi dòng: Username|Cookie|Proxy"),
+                    icon: <RiFileTextLine className="text-base text-blue-600" />,
+                    action: () => {
+                      setAddMenuOpen(false);
+                      txtInputRef.current?.click();
+                    },
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    className="flex gap-2.5 items-start px-3 py-2 w-full text-left transition-colors hover:bg-gray-50"
+                    onClick={item.action}
+                  >
+                    <span className="mt-0.5 shrink-0">{item.icon}</span>
+                    <span>
+                      <span className="block text-xs font-medium text-gray-800">{item.label}</span>
+                      <span className="block mt-0.5 text-[11px] text-gray-400">{item.hint}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </Popover>
+
             <button
               type="button"
               onClick={downloadSampleExcel}
@@ -368,20 +542,37 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
             </button>
             <button
               type="button"
-              onClick={exportJson}
-              disabled={!users.length}
-              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border disabled:cursor-not-allowed disabled:opacity-40"
-              style={
-                !users.length
-                  ? undefined
-                  : { backgroundColor: "#ecfdf5", borderColor: "#34d399", color: "#059669" }
-              }
+              onClick={downloadSampleTxt}
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border hover:opacity-90"
+              style={{ backgroundColor: "#fff7ed", borderColor: "#fb923c", color: "#c2410c" }}
             >
               <HiDownload className="text-base" />
-              {t("Xuất JSON")}
+              {t("Tải TXT mẫu")}
+            </button>
+            <button
+              type="button"
+              onClick={handleSyncProxies}
+              disabled={!users.length || !proxies.length}
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                !users.length || !proxies.length
+                  ? { backgroundColor: "#a78bfa" }
+                  : { backgroundColor: "#7c3aed" }
+              }
+              title={t("Gán mỗi tài khoản 1 proxy duy nhất từ tab Quản lý Proxy") as string}
+            >
+              <HiRefresh className="text-base" />
+              {t("Đồng bộ Proxy")}
+              {proxies.length > 0 ? ` (${proxies.length})` : ""}
             </button>
           </div>
         </div>
+        <p className="mt-2 text-xs text-gray-500">
+          {t("TXT/Excel")}:{" "}
+          <code className="px-1.5 py-0.5 bg-gray-100 rounded">Username|Cookie|Proxy</code>
+          {" · "}
+          {t("Đồng bộ Proxy")}: 1 account ↔ 1 proxy (không trùng lắp)
+        </p>
       </div>
 
       <div className="overflow-hidden bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -585,7 +776,7 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
                 className="px-3 w-full h-10 text-sm rounded border border-gray-300 outline-none focus:border-blue-400"
               />
               <span className="block mt-1 text-xs text-gray-500">
-                {t("Để trống nếu không dùng proxy")}
+                {t("Để trống nếu không dùng proxy — hoặc dùng nút Đồng bộ Proxy")}
               </span>
             </label>
           </div>
@@ -602,7 +793,7 @@ export function UsersPanel({ users, onUpdateUsers }: UsersPanelProps) {
               onClick={handleSave}
               className="px-4 h-9 text-sm font-bold text-white rounded-lg bg-primary hover:bg-primary-dark"
             >
-              {t("Lưu Thay Đổi")}
+              {t("Lưu")}
             </button>
           </div>
         </Dialog.Body>

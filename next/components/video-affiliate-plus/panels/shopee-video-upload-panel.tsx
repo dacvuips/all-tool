@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiBan,
@@ -16,16 +16,52 @@ import {
 } from "react-icons/hi";
 import { RiAddLine, RiLoader4Line, RiVideoFill } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
+import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
 import { VideoDialog } from "../../shared/common/video-dialog";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import { hydrateMergedVideoUrls, resolveMergedPreviewUrl } from "../merged-video";
 import { getSessionItems } from "../thread-store";
 import { AffiliatePlusUser, createEmptyItem } from "../types";
+import {
+  clearUploadHistory,
+  formatUploadHistoryOption,
+  getSelectedUploadHistoryId,
+  getUploadHistory,
+  PersistedUploadThread,
+  pushUploadHistory,
+  setSelectedUploadHistoryId,
+  updateUploadHistorySession,
+  UploadHistoryItem,
+} from "../upload-history";
 
 type UploadStatus = "stopped" | "running" | "success" | "error";
 
 const MAX_UPLOAD_ITEMS = 90;
+
+/**
+ * Rải đều `videoCount` video cho `accountCount` account.
+ * Mỗi account nhận số lượng gần bằng nhau (lệch tối đa 1), không vượt `cap`.
+ */
+function computeEvenPerAccountCounts(
+  videoCount: number,
+  accountCount: number,
+  cap: number
+): number[] {
+  const counts = Array.from({ length: Math.max(0, accountCount) }, () => 0);
+  if (accountCount <= 0 || videoCount <= 0 || cap <= 0) return counts;
+
+  const toAssign = Math.min(videoCount, accountCount * cap);
+  const base = Math.floor(toAssign / accountCount);
+  let rem = toAssign % accountCount;
+
+  for (let i = 0; i < accountCount; i++) {
+    const n = base + (rem > 0 ? 1 : 0);
+    counts[i] = Math.min(cap, n);
+    if (rem > 0) rem--;
+  }
+  return counts;
+}
 
 type ShopeeVideoUploadThread = {
   id: string;
@@ -46,6 +82,32 @@ type ShopeeVideoUploadThread = {
   error: string;
   status: UploadStatus;
 };
+
+async function hydrateUploadThreads(
+  list: PersistedUploadThread[]
+): Promise<ShopeeVideoUploadThread[]> {
+  if (!list.length) return [];
+  const pseudoItems = list.map((row) =>
+    createEmptyItem({
+      id: row.generateItemId || row.id,
+      productId: row.productId || "",
+      productName: row.caption || "",
+      productLink: row.productLink || "",
+      prompt: row.caption || "",
+      mergedVideoUrl: row.videoFile || "",
+    })
+  );
+  const hydrated = await hydrateMergedVideoUrls(pseudoItems);
+  return list.map((row, index) => {
+    const merged =
+      String(hydrated[index]?.mergedVideoUrl || "").trim() || String(row.videoFile || "").trim();
+    return {
+      ...row,
+      videoFile: merged,
+      status: row.status === "running" ? "stopped" : row.status,
+    };
+  });
+}
 
 const COUNTRY_OPTIONS = [
   { value: "VN", label: "VN - Việt Nam" },
@@ -136,34 +198,80 @@ export function ShopeeVideoUploadPanel({
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedAccounts, setExpandedAccounts] = useState<Record<string, boolean>>({});
   const [previewVideoUrl, setPreviewVideoUrl] = useState("");
-  const restoredFromUsersRef = useRef(false);
+  const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
+  const [selectedUploadHistoryId, setSelectedUploadHistoryIdState] = useState<string | null>(null);
+  const restoredRef = useRef(false);
+  const skipPersistRef = useRef(false);
+  const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedUploadHistoryIdRef = useRef<string | null>(null);
+
+  selectedUploadHistoryIdRef.current = selectedUploadHistoryId;
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchTerm(searchQuery.trim()), 250);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // F5: khôi phục luồng từ generateItems đã lưu trên account (IndexedDB/localStorage)
-  useEffect(() => {
-    if (restoredFromUsersRef.current) return;
-    if (!users.length) return;
-
-    const linkedPairs = users.flatMap((u) => {
-      if (u.active === false) return [];
-      const items = u.generateItems || [];
-      return items
-        .filter((g) => g.itemId || g.productId || g.mergedVideoUrl || g.productLink)
-        .map((g) => ({ user: u, g }));
-    });
-
-    if (!linkedPairs.length) {
-      restoredFromUsersRef.current = true;
-      return;
+  const refreshUploadHistory = useCallback(async () => {
+    try {
+      const history = await getUploadHistory();
+      setUploadHistory(history);
+      return history;
+    } catch (err) {
+      console.warn("[ShopeeVideoUploadPanel] load upload history failed", err);
+      return [] as UploadHistoryItem[];
     }
+  }, []);
 
+  // Khôi phục phiên upload đã lưu (ưu tiên hơn generateItems trên user)
+  useEffect(() => {
+    if (restoredRef.current) return;
     let cancelled = false;
+
     void (async () => {
       try {
+        const history = await getUploadHistory();
+        const selectedId =
+          (await getSelectedUploadHistoryId()) || history[0]?.id || null;
+
+        if (cancelled) return;
+        setUploadHistory(history);
+        setSelectedUploadHistoryIdState(selectedId);
+        selectedUploadHistoryIdRef.current = selectedId;
+
+        if (selectedId) {
+          const entry = history.find((h) => h.id === selectedId);
+          const rawThreads = entry?.data?.threads || [];
+          if (rawThreads.length) {
+            skipPersistRef.current = true;
+            const next = await hydrateUploadThreads(rawThreads);
+            if (cancelled) return;
+            setThreads(next);
+            restoredRef.current = true;
+            skipPersistRef.current = false;
+            return;
+          }
+        }
+
+        // Fallback: generateItems trên account (lần đầu chưa có lịch sử upload)
+        if (!users.length) {
+          restoredRef.current = true;
+          return;
+        }
+
+        const linkedPairs = users.flatMap((u) => {
+          if (u.active === false) return [];
+          const items = u.generateItems || [];
+          return items
+            .filter((g) => g.itemId || g.productId || g.mergedVideoUrl || g.productLink)
+            .map((g) => ({ user: u, g }));
+        });
+
+        if (!linkedPairs.length) {
+          restoredRef.current = true;
+          return;
+        }
+
         const pseudoItems = linkedPairs.map(({ g }) =>
           createEmptyItem({
             id: g.itemId || crypto.randomUUID(),
@@ -199,10 +307,14 @@ export function ShopeeVideoUploadPanel({
             status: "stopped",
           });
         });
-        restoredFromUsersRef.current = true;
+
+        skipPersistRef.current = true;
         setThreads(next);
+        restoredRef.current = true;
+        skipPersistRef.current = false;
       } catch (err) {
-        console.warn("[ShopeeVideoUploadPanel] restore from users failed", err);
+        console.warn("[ShopeeVideoUploadPanel] restore failed", err);
+        restoredRef.current = true;
       }
     })();
 
@@ -211,6 +323,22 @@ export function ShopeeVideoUploadPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [users]);
+
+  // Auto-lưu phiên đang chọn khi danh sách luồng đổi
+  useEffect(() => {
+    if (!restoredRef.current || skipPersistRef.current) return;
+    const id = selectedUploadHistoryIdRef.current;
+    if (!id) return;
+    if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    persistTimerRef.current = setTimeout(() => {
+      void updateUploadHistorySession(id, threads as PersistedUploadThread[])
+        .then(() => refreshUploadHistory())
+        .catch((err) => console.warn("[ShopeeVideoUploadPanel] persist session failed", err));
+    }, 400);
+    return () => {
+      if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
+    };
+  }, [threads, refreshUploadHistory]);
 
   useEffect(() => {
     if (!importOpen) return;
@@ -327,6 +455,41 @@ export function ShopeeVideoUploadPanel({
     setThreads((prev) => prev.filter((item) => !item.selected));
   };
 
+  const handleSelectUploadHistory = async (id: string) => {
+    const entry = uploadHistory.find((h) => h.id === id);
+    if (!entry) return;
+    try {
+      skipPersistRef.current = true;
+      const next = await hydrateUploadThreads(entry.data.threads || []);
+      setThreads(next);
+      setSelectedUploadHistoryIdState(id);
+      selectedUploadHistoryIdRef.current = id;
+      await setSelectedUploadHistoryId(id);
+    } catch (err: any) {
+      console.warn("[ShopeeVideoUploadPanel] select upload history failed", err);
+      toast.error(err?.message || t("Không tải được phiên"));
+    } finally {
+      skipPersistRef.current = false;
+    }
+  };
+
+  const handleClearUploadHistory = async () => {
+    if (!confirm(t("Xóa toàn bộ lịch sử phiên Đăng video Shope?"))) return;
+    try {
+      skipPersistRef.current = true;
+      await clearUploadHistory();
+      setUploadHistory([]);
+      setSelectedUploadHistoryIdState(null);
+      selectedUploadHistoryIdRef.current = null;
+      setThreads([]);
+      toast.success(t("Đã xóa lịch sử phiên upload"));
+    } catch (err: any) {
+      toast.error(err?.message || t("Không xóa được lịch sử"));
+    } finally {
+      skipPersistRef.current = false;
+    }
+  };
+
   const startAccount = (group: AccountGroup) => {
     startThreads(group.videos.map((v) => v.id));
   };
@@ -385,11 +548,15 @@ export function ShopeeVideoUploadPanel({
         return;
       }
 
-      // Mỗi account tối đa N video; không trùng video giữa các account
-      // ACC1 lấy 0..N-1, ACC2 lấy N..2N-1, ...
-      const perAccount = Math.max(
+      // Rãi đều video nối cho các account; lệch tối đa 1; không vượt cap setting
+      const perAccountCap = Math.max(
         1,
         Math.min(MAX_UPLOAD_ITEMS, Math.round(Number(videosPerAccount) || MAX_UPLOAD_ITEMS))
+      );
+      const perAccountCounts = computeEvenPerAccountCounts(
+        readyItems.length,
+        accountPool.length,
+        perAccountCap
       );
       const next: ShopeeVideoUploadThread[] = [];
       const assignedAt = Date.now();
@@ -397,10 +564,22 @@ export function ShopeeVideoUploadPanel({
       let rowIndex = 0;
       let itemCursor = 0;
 
-      for (const user of accountPool) {
-        if (itemCursor >= readyItems.length) break;
+      for (let ai = 0; ai < accountPool.length; ai++) {
+        const user = accountPool[ai];
+        const take = perAccountCounts[ai] || 0;
+        if (take <= 0 || itemCursor >= readyItems.length) {
+          const userIndex = updatedUsers.findIndex((u) => u.id === user.id);
+          if (userIndex >= 0) {
+            updatedUsers[userIndex] = {
+              ...updatedUsers[userIndex],
+              generateItems: [],
+              generateItem: null,
+            };
+          }
+          continue;
+        }
 
-        const chunk = readyItems.slice(itemCursor, itemCursor + perAccount);
+        const chunk = readyItems.slice(itemCursor, itemCursor + take);
         itemCursor += chunk.length;
 
         const links = chunk.map((item) => {
@@ -455,35 +634,46 @@ export function ShopeeVideoUploadPanel({
         }
       }
 
-      // Account chưa được gắn video → clear generateItems cũ
-      for (const user of accountPool) {
-        const userIndex = updatedUsers.findIndex((u) => u.id === user.id);
-        if (userIndex < 0) continue;
-        if (
-          (updatedUsers[userIndex].generateItems || []).some((g) => g.assignedAt === assignedAt)
-        ) {
-          continue;
-        }
-        updatedUsers[userIndex] = {
-          ...updatedUsers[userIndex],
-          generateItems: [],
-          generateItem: null,
-        };
-      }
-
       if (!next.length) {
         toast.warn(t("Không còn video để gắn cho tài khoản"));
         return;
       }
 
+      const assignedCounts = perAccountCounts.filter((n) => n > 0);
+      const minPer = assignedCounts.length ? Math.min(...assignedCounts) : 0;
+      const maxPer = assignedCounts.length ? Math.max(...assignedCounts) : 0;
+
       await onUpdateUsers(updatedUsers);
+
+      const genEntry = importHistory.find((h) => h.id === selectedSessionId);
+      const genName = genEntry?.data?.fileName || genEntry?.label || "Generate";
+
+      skipPersistRef.current = true;
       setThreads(next);
+      const entry = await pushUploadHistory({
+        fileName: `Upload – ${genName}`,
+        threads: next as PersistedUploadThread[],
+        generateSessionId: selectedSessionId,
+      });
+      setSelectedUploadHistoryIdState(entry.id);
+      selectedUploadHistoryIdRef.current = entry.id;
+      await refreshUploadHistory();
+      skipPersistRef.current = false;
+
       setImportOpen(false);
       toast.success(
-        t("Đã tạo {{count}} luồng ({{per}} video/account)", {
-          count: next.length,
-          per: perAccount,
-        })
+        minPer === maxPer
+          ? t("Đã tạo {{count}} luồng — {{per}} video/account (rãi đều, max {{cap}})", {
+              count: next.length,
+              per: maxPer,
+              cap: perAccountCap,
+            })
+          : t("Đã tạo {{count}} luồng — {{min}}–{{max}} video/account (rãi đều, max {{cap}})", {
+              count: next.length,
+              min: minPer,
+              max: maxPer,
+              cap: perAccountCap,
+            })
       );
     } catch (err: any) {
       console.error(err);
@@ -551,6 +741,14 @@ export function ShopeeVideoUploadPanel({
       </div>
 
       <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+        <SceneHistoryDropdown
+          items={uploadHistory}
+          selectedId={selectedUploadHistoryId}
+          onSelect={(id) => void handleSelectUploadHistory(id)}
+          onClear={() => void handleClearUploadHistory()}
+          formatOptionLabel={formatUploadHistoryOption}
+          className="px-2 py-2 mb-3 rounded-lg"
+        />
         <div className="flex flex-col gap-3 justify-between lg:flex-row lg:items-center">
           <div className="flex flex-wrap gap-2 items-center">
             <button
@@ -1026,13 +1224,12 @@ export function ShopeeVideoUploadPanel({
                 />
                 <p className="mt-1 text-xs text-gray-500">
                   {t(
-                    "Gắn tối đa {{max}} video/account (tối đa {{cap}}). Không trùng video giữa các account.",
+                    "Rãi đều video nối cho mọi account (lệch tối đa 1). Mỗi account ≤ {{max}} video, không trùng video.",
                     {
                       max: Math.max(
                         1,
                         Math.min(MAX_UPLOAD_ITEMS, Math.round(Number(videosPerAccount) || 1))
                       ),
-                      cap: MAX_UPLOAD_ITEMS,
                     }
                   )}
                 </p>

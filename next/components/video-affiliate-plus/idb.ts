@@ -9,10 +9,12 @@
  * - threads (per-item record; source of truth cho lazy list)
  * - thread-meta (aggregate stats theo sessionId)
  * - users (danh sách tài khoản + item Generate đã gắn)
+ * - proxies (danh sách proxy host:port:user:pass)
+ * - upload-history (phiên Đăng video Shope)
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 7;
+const DB_VERSION = 9;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
@@ -21,10 +23,15 @@ const STORE_SCRAPE_CSV = "scrape-csv-sessions";
 const STORE_THREADS = "threads";
 const STORE_THREAD_META = "thread-meta";
 const STORE_USERS = "users";
+const STORE_PROXIES = "proxies";
+const STORE_UPLOAD_HISTORY = "upload-history";
 const CONFIG_KEY = "config";
 const IMPORT_HISTORY_KEY = "list";
 const SELECTED_HISTORY_KEY = "selectedId";
 const USERS_LIST_KEY = "list";
+const PROXIES_LIST_KEY = "list";
+const UPLOAD_HISTORY_KEY = "list";
+const SELECTED_UPLOAD_HISTORY_KEY = "selectedId";
 
 /** Bản ghi video theo mã sản phẩm — giống pattern affiliate-video (link → base64). */
 export type ProductVideoRecord = {
@@ -134,6 +141,12 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_USERS)) {
         db.createObjectStore(STORE_USERS);
+      }
+      if (!db.objectStoreNames.contains(STORE_PROXIES)) {
+        db.createObjectStore(STORE_PROXIES);
+      }
+      if (!db.objectStoreNames.contains(STORE_UPLOAD_HISTORY)) {
+        db.createObjectStore(STORE_UPLOAD_HISTORY);
       }
     };
 
@@ -549,4 +562,94 @@ export async function idbClearUsersList(): Promise<void> {
   } catch (err) {
     console.warn("[video-affiliate-manager] clear users failed", err);
   }
+}
+
+/** ==================== PROXIES ==================== */
+
+export async function idbGetProxiesList<T>(): Promise<T[]> {
+  try {
+    const list = await withStore<T[] | undefined>(
+      STORE_PROXIES,
+      "readonly",
+      (s) => s.get(PROXIES_LIST_KEY) as IDBRequest<T[] | undefined>
+    );
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get proxies failed", err);
+    return [];
+  }
+}
+
+export async function idbSetProxiesList<T>(list: T[]): Promise<void> {
+  await withStore(STORE_PROXIES, "readwrite", (s) => s.put(list, PROXIES_LIST_KEY));
+}
+
+export async function idbClearProxiesList(): Promise<void> {
+  try {
+    await withStore(STORE_PROXIES, "readwrite", (s) => s.delete(PROXIES_LIST_KEY));
+  } catch (err) {
+    console.warn("[video-affiliate-manager] clear proxies failed", err);
+  }
+}
+
+/** ==================== UPLOAD HISTORY (Đăng video Shope) ==================== */
+
+export async function idbGetUploadHistoryList<T>(): Promise<T[]> {
+  try {
+    const list = await withStore<T[] | undefined>(
+      STORE_UPLOAD_HISTORY,
+      "readonly",
+      (s) => s.get(UPLOAD_HISTORY_KEY) as IDBRequest<T[] | undefined>
+    );
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get upload history failed", err);
+    return [];
+  }
+}
+
+export async function idbSetUploadHistoryList<T>(list: T[]): Promise<void> {
+  await withStore(STORE_UPLOAD_HISTORY, "readwrite", (s) => s.put(list, UPLOAD_HISTORY_KEY));
+}
+
+export async function idbClearUploadHistory(): Promise<void> {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORE_UPLOAD_HISTORY, "readwrite");
+    const store = tx.objectStore(STORE_UPLOAD_HISTORY);
+    store.delete(UPLOAD_HISTORY_KEY);
+    store.delete(SELECTED_UPLOAD_HISTORY_KEY);
+    await new Promise<void>((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("[video-affiliate-manager] clear upload history failed", err);
+  }
+}
+
+export async function idbGetSelectedUploadHistoryId(): Promise<string | null> {
+  try {
+    const id = await withStore<string | undefined>(
+      STORE_UPLOAD_HISTORY,
+      "readonly",
+      (s) => s.get(SELECTED_UPLOAD_HISTORY_KEY) as IDBRequest<string | undefined>
+    );
+    return id ? String(id) : null;
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get selected upload history failed", err);
+    return null;
+  }
+}
+
+export async function idbSetSelectedUploadHistoryId(id: string | null): Promise<void> {
+  if (!id) {
+    await withStore(STORE_UPLOAD_HISTORY, "readwrite", (s) =>
+      s.delete(SELECTED_UPLOAD_HISTORY_KEY)
+    );
+    return;
+  }
+  await withStore(STORE_UPLOAD_HISTORY, "readwrite", (s) =>
+    s.put(id, SELECTED_UPLOAD_HISTORY_KEY)
+  );
 }
