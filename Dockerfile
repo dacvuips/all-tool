@@ -45,6 +45,7 @@ COPY --from=build /app/next/public ./next/public
 COPY --from=build /app/next/.next ./next/.next
 COPY --from=build /app/next/next.config.js ./next/next.config.js
 COPY --from=build /app/config ./config
+COPY --from=build /app/extensions ./extensions
 COPY package.json package-lock.json ./
 
 EXPOSE 5555
