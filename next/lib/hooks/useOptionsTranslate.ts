@@ -9,6 +9,7 @@ import {
 import { OrderStatus, PaymentStatus, ShipmentStatusEnum } from "../repo";
 import { BannerActionType } from "../repo/list/banner.repo";
 import { ShippingProviderCodeEnum } from "../repo/list/shippingProvider.repo";
+import { PaymentMethod } from "../repo/order/order.repo";
 import { AiProviderKeyEnum } from "../repo/product/productApp.repo";
 import { ThreadChannel, ThreadStatus } from "../repo/thread/thread.repo";
 import {
@@ -28,7 +29,6 @@ import {
   MyUtilitesActionEnum,
   OrderTypeEnum,
   PartnerGroupStatusEnum,
-  PaymentMethodEnum,
   PopupNotifyActionType,
   PopupNotifyStatusEnum,
   PopupNotifyTypeEnum,
@@ -126,11 +126,12 @@ export const useOptionsTranslation = () => {
   ];
 
   const PAYMENT_METHOD_OPTIONS = [
-    { value: PaymentMethodEnum.COD, label: t("Thanh toán khi nhận hàng") },
-    { value: PaymentMethodEnum.BANK, label: t("Chuyển khoản ngân hàng") },
-    { value: PaymentMethodEnum.MOMO, label: t("Ví MoMo") },
-    { value: PaymentMethodEnum.ZALO_PAY, label: t("Ví ZaloPay") },
-    { value: PaymentMethodEnum.CREDIT_CARD, label: t("Thẻ tín dụng / thẻ ghi nợ") },
+    { value: PaymentMethod.COD, label: t("Thanh toán khi nhận hàng") },
+    { value: PaymentMethod.BANK, label: t("Chuyển khoản ngân hàng") },
+    { value: PaymentMethod.MOMO, label: t("Ví MoMo") },
+    { value: PaymentMethod.ZALO_PAY, label: t("Ví ZaloPay") },
+    { value: PaymentMethod.CREDIT_CARD, label: t("Thẻ tín dụng / thẻ ghi nợ") },
+    { value: PaymentMethod.SEPAY_PG, label: t("Thanh toán qua cổng thanh toán") },
   ];
 
   const GAME_CARD_MODE = [
