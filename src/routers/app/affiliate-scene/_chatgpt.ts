@@ -330,13 +330,20 @@ async function pollChatGPTJob(params: {
       throw err;
     }
 
-    if (status === "done" || status === "succeeded" || status === "success" || data.ok === true) {
+    const isPending =
+      status === "queued" ||
+      status === "running" ||
+      status === "pending" ||
+      status === "processing";
+
+    // Chỉ coi xong khi status = done (KHÔNG dùng data.ok — ok=true thường xuất hiện cả lúc running)
+    if (status === "done" || status === "succeeded" || status === "success") {
       return parseChatGPTV1Result(data);
     }
 
-    // queued | running | thiếu status nhưng chưa có text → tiếp tục poll
+    // Fallback: có text thật và không còn pending
     const maybeText = pickChatGPTResultText(data);
-    if (maybeText && (status === "done" || !status)) {
+    if (maybeText && !isPending) {
       return extractPureJsonText(maybeText);
     }
 
