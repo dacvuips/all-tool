@@ -3,10 +3,11 @@ import { useTranslation } from "react-i18next";
 
 interface OrderSectionProps {
   title: string;
-  icon?: string;
+  icon?: ReactNode;
   children: ReactNode;
   className?: string;
   sticky?: boolean;
+  actions?: ReactNode;
 }
 
 export function OrderSection({
@@ -15,20 +16,24 @@ export function OrderSection({
   children,
   className = "",
   sticky = false,
+  actions,
 }: OrderSectionProps) {
   const { t } = useTranslation();
 
   return (
-    <div className={`overflow-hidden border rounded-lg ${className}`}>
-      <h3
-        className={`p-4 pb-2 text-base font-semibold bg-gray-50 border-b ${
+    <div className={`overflow-hidden bg-white rounded-xl border border-gray-200 ${className}`}>
+      <div
+        className={`flex gap-2 justify-between items-center px-4 py-3 bg-gray-50 border-b border-gray-100 ${
           sticky ? "sticky top-0 z-10" : ""
         }`}
       >
-        {icon && <i className={`${icon} text-primary mr-2`}></i>}
-        {t(title)}
-      </h3>
-      <div className="p-2 pt-1">{children}</div>
+        <h3 className="flex gap-2 items-center text-sm font-semibold text-gray-800">
+          {icon ? <span className="text-primary">{icon}</span> : null}
+          {t(title)}
+        </h3>
+        {actions}
+      </div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }

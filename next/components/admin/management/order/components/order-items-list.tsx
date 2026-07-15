@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
+import { HiOutlineCube } from "react-icons/hi";
 import { Order } from "../../../../../lib/repo";
 import { OrderSection } from "./order-section";
+import { formatMoney, getOrderPackageTitle, getOrderTypeLabel } from "./order-ui-helpers";
 
 interface OrderItemsListProps {
   order: Order;
@@ -8,101 +10,91 @@ interface OrderItemsListProps {
 
 export function OrderItemsList({ order }: OrderItemsListProps) {
   const { t } = useTranslation();
+  const items = order?.items || [];
+
+  if (items.length === 0) {
+    return (
+      <OrderSection title={t("Nội dung đơn")} icon={<HiOutlineCube className="w-4 h-4" />}>
+        <div className="flex flex-col gap-3 p-4 rounded-xl border border-gray-100 bg-gray-50/80 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <div className="text-base font-semibold text-gray-900">
+              {getOrderPackageTitle(order)}
+            </div>
+            <div className="mt-1 text-sm text-gray-500">
+              {t("Loại")}: {t(getOrderTypeLabel(order.type))}
+              {order.subscriptionPlan ? (
+                <>
+                  {" · "}
+                  {t("Gói")}: <span className="capitalize">{order.subscriptionPlan}</span>
+                </>
+              ) : null}
+              {order.creditAmount != null ? (
+                <>
+                  {" · "}
+                  Credit: {Number(order.creditAmount).toLocaleString("vi-VN")}
+                </>
+              ) : null}
+            </div>
+          </div>
+          <div className="text-right shrink-0">
+            <div className="text-xs text-gray-500">{t("Thành tiền")}</div>
+            <div className="text-lg font-bold text-primary">{formatMoney(order.totalAmount)}</div>
+          </div>
+        </div>
+      </OrderSection>
+    );
+  }
 
   return (
-    <OrderSection title={`Danh sách sản phẩm (${order?.items?.length || 0} ${t("sản phẩm")})`}>
-      {/* Desktop Table View */}
-      <div className="hidden overflow-x-auto md:block">
+    <OrderSection
+      title={`${t("Danh sách sản phẩm")} (${items.length})`}
+      icon={<HiOutlineCube className="w-4 h-4" />}
+    >
+      <div className="overflow-x-auto -mx-1">
         <table className="w-full text-sm">
-          <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 text-left">STT</th>
-              <th className="px-3 py-2 text-left">{t("Tên sản phẩm")}</th>
-              <th className="px-3 py-2 text-center">{t("Phân loại")}</th>
-
-              <th className="px-3 py-2 text-center">{t("Số lượng")}</th>
-              <th className="px-3 py-2 text-right">{t("Đơn giá")}</th>
-              <th className="px-3 py-2 text-right">{t("Thành tiền")}</th>
+          <thead>
+            <tr className="text-xs tracking-wide text-gray-500 uppercase border-b border-gray-100">
+              <th className="px-3 py-2.5 font-semibold text-left">#</th>
+              <th className="px-3 py-2.5 font-semibold text-left">{t("Sản phẩm")}</th>
+              <th className="px-3 py-2.5 font-semibold text-center">{t("SL")}</th>
+              <th className="px-3 py-2.5 font-semibold text-right">{t("Đơn giá")}</th>
+              <th className="px-3 py-2.5 font-semibold text-right">{t("Thành tiền")}</th>
             </tr>
           </thead>
-          <tbody className="divide-y">
-            {order?.items?.map((item, idx) => (
-              <tr key={idx} className="hover:bg-gray-50">
-                <td className="px-3 py-3">{idx + 1}</td>
+          <tbody className="divide-y divide-gray-100">
+            {items.map((item, idx) => (
+              <tr key={idx} className="hover:bg-gray-50/80">
+                <td className="px-3 py-3 text-gray-400">{idx + 1}</td>
                 <td className="px-3 py-3">
-                  <div className="flex gap-3 items-center">
-                    {item.thumbnail && (
+                  <div className="flex gap-3 items-center min-w-0">
+                    {item.thumbnail ? (
                       <img
                         src={item.thumbnail}
                         alt={item.productName}
-                        className="object-cover w-12 h-12 rounded"
+                        className="object-cover w-12 h-12 rounded-lg border border-gray-200 shrink-0"
                       />
-                    )}
-                    {/* <div>
-                      <div className="font-medium">{item.productName}</div>
-                      {item.sku && <div className="text-xs text-gray-500">SKU: {item.sku}</div>}
-                    </div> */}
+                    ) : null}
+                    <div className="font-medium text-gray-900 truncate">
+                      {item.productName || "-"}
+                    </div>
                   </div>
                 </td>
-                {/* <td className="px-3 py-3 text-center">{item.variantName?.split("/")[0] || "-"}</td> */}
-
-                <td className="px-3 py-3 text-center">{item.quantity}</td>
-                <td className="px-3 py-3 text-right">
-                  <div className="font-medium">{item.price?.toLocaleString()} đ</div>
-                  {item.originalPrice && item.originalPrice > item.price && (
-                    <div className="text-xs text-gray-500 line-through">
-                      {item.originalPrice?.toLocaleString()} đ
+                <td className="px-3 py-3 text-center">{item.quantity ?? 0}</td>
+                <td className="px-3 py-3 text-right whitespace-nowrap">
+                  <div className="font-medium">{formatMoney(item.price)}</div>
+                  {item.originalPrice != null && item.originalPrice > (item.price ?? 0) ? (
+                    <div className="text-xs text-gray-400 line-through">
+                      {formatMoney(item.originalPrice)}
                     </div>
-                  )}
+                  ) : null}
                 </td>
-                <td className="px-3 py-3 font-semibold text-right">
-                  {item.subtotal?.toLocaleString()} đ
+                <td className="px-3 py-3 font-semibold text-right whitespace-nowrap">
+                  {formatMoney(item.subtotal)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Mobile Card View */}
-      <div className="space-y-3 md:hidden">
-        {order?.items?.map((item, idx) => (
-          <div key={idx} className="p-3 bg-gray-50 rounded border">
-            <div className="flex gap-3">
-              {item.thumbnail && (
-                <img
-                  src={item.thumbnail}
-                  alt={item.productName}
-                  className="object-cover w-16 h-16 rounded"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="font-medium truncate">{item.productName}</div>
-                {/* <div className="text-xs text-gray-600">
-                  {item.variantName && <span>{item.variantName}</span>}
-                  {item.sku && <span className="ml-2">SKU: {item.sku}</span>}
-                </div> */}
-                <div className="flex justify-between items-center mt-2">
-                  <div className="text-sm text-gray-600">x {item.quantity}</div>
-                  <div className="text-right">
-                    <div className="font-semibold text-primary">
-                      {item.price?.toLocaleString()}đ
-                    </div>
-                    {item.originalPrice && item.originalPrice > item.price && (
-                      <div className="text-xs text-gray-500 line-through">
-                        {item.originalPrice?.toLocaleString()}đ
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="flex justify-between pt-2 mt-2 text-sm border-t">
-              <span className="text-gray-600">{t("Thành tiền")}:</span>
-              <span className="font-semibold">{item.subtotal?.toLocaleString()}đ</span>
-            </div>
-          </div>
-        ))}
       </div>
     </OrderSection>
   );

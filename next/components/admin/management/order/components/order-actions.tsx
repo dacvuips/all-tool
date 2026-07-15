@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { HiOutlinePencil, HiOutlinePrinter, HiOutlineX } from "react-icons/hi";
 import { Order, OrderStatus } from "../../../../../lib/repo";
 import { Button } from "../../../../shared/utilities/form/button";
 
@@ -20,36 +21,33 @@ export function OrderActions({
   onCancelOrder,
 }: OrderActionsProps) {
   const { t } = useTranslation();
+  const cancelled = order.status === OrderStatus.CANCELLED;
 
   return (
-    <div className="flex flex-col gap-2 md:flex-row md:justify-end">
+    <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
       <Button
         text={t("In hóa đơn")}
-        primary
-        className="w-full md:w-auto"
+        outline
+        className="w-full sm:w-auto"
         onClick={onPrintInvoice}
-        icon={<i className="fas fa-print"></i>}
+        icon={<HiOutlinePrinter />}
       />
       <Button
         text={t("Chỉnh sửa đơn hàng")}
         primary
-        className="w-full md:w-auto"
-        disabled={!canEdit || order.status === OrderStatus.CANCELLED}
+        className="w-full sm:w-auto"
+        disabled={!canEdit || cancelled}
         onClick={onUpdateOrder}
-        icon={<i className="fas fa-edit"></i>}
+        icon={<HiOutlinePencil />}
       />
       <Button
         text={t("Hủy đơn hàng")}
-        className="w-full text-white bg-red-600 hover:bg-red-700 md:w-auto"
-        disabled={
-          !canEdit ||
-          cancelling ||
-          order.status === OrderStatus.CANCELLED ||
-          order.status === OrderStatus.DELIVERED
-        }
+        danger
+        className="w-full sm:w-auto"
+        disabled={!canEdit || cancelling || cancelled || order.status === OrderStatus.DELIVERED}
         isLoading={cancelling}
         onClick={onCancelOrder}
-        icon={<i className="fas fa-times"></i>}
+        icon={<HiOutlineX />}
       />
     </div>
   );

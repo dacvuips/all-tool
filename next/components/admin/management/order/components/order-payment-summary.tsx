@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FaEdit } from "react-icons/fa";
+import { HiOutlineReceiptTax } from "react-icons/hi";
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Order, PaymentStatus } from "../../../../../lib/repo";
@@ -10,6 +11,7 @@ import { Button, Field, Select, Textarea } from "../../../../shared/utilities/fo
 import { StatusLabel } from "../../../../shared/utilities/misc";
 import { OrderInfoField } from "./order-info-field";
 import { OrderSection } from "./order-section";
+import { formatMoney } from "./order-ui-helpers";
 
 interface OrderPaymentSummaryProps {
   order: Order;
@@ -18,51 +20,68 @@ interface OrderPaymentSummaryProps {
 
 export function OrderPaymentSummary({ order, onUpdate }: OrderPaymentSummaryProps) {
   const { t } = useTranslation();
-  const { PAYMENT_STATUS_OPTIONS } = useOptionsTranslation();
+  const { PAYMENT_STATUS_OPTIONS, PAYMENT_METHOD_OPTIONS } = useOptionsTranslation();
   const [openUpdatePayment, setOpenUpdatePayment] = useState(false);
 
- 
-   
+  const methodLabel =
+    PAYMENT_METHOD_OPTIONS.find(
+      (o) => o.value === (order?.paymentInfo?.method || order?.paymentMethod)
+    )?.label ||
+    order?.paymentInfo?.method ||
+    order?.paymentMethod ||
+    "-";
+
+  const discount = order?.discount ?? 0;
+  const tax = order?.tax ?? 0;
+  const merchandise = order?.subtotal ?? order?.totalAmount ?? 0;
 
   return (
-    <OrderSection title="Tổng kết thanh toán" icon="fas fa-receipt">
-      <div className="space-y-2 text-sm">
+    <OrderSection title={t("Tổng kết thanh toán")} icon={<HiOutlineReceiptTax className="w-4 h-4" />}>
+      <div className="space-y-2.5 text-sm">
         <OrderInfoField
           layout="horizontal"
-          label={t("Tổng tiền hàng")}
-          value={`${order?.subtotal?.toLocaleString()} đ`}
+          label={t("Giá gói / hàng")}
+          value={formatMoney(merchandise)}
         />
-        <OrderInfoField
-          layout="horizontal"
-          label={t("Giảm giá")}
-          value={`${order?.discount?.toLocaleString()} đ`}
-          labelClassName="text-red-600"
-          valueClassName="text-red-600"
-        />
-        <OrderInfoField
-          layout="horizontal"
-          label={t("Phí vận chuyển")}
-          value={`${order?.shippingFee?.toLocaleString()} đ`}
-        />
+        {discount > 0 ? (
+          <OrderInfoField
+            layout="horizontal"
+            label={t("Giảm giá")}
+            value={`-${formatMoney(discount)}`}
+            labelClassName="text-rose-600"
+            valueClassName="text-rose-600"
+          />
+        ) : null}
+        {tax > 0 ? (
+          <OrderInfoField layout="horizontal" label={t("Thuế")} value={formatMoney(tax)} />
+        ) : null}
+        <OrderInfoField layout="horizontal" label={t("Phương thức")} value={methodLabel} />
         <OrderInfoField
           layout="horizontal"
           label={t("Trạng thái thanh toán")}
           value={
-            <div className="flex items-center gap-2">
-              <StatusLabel className="rounded-sm px-2 py-1" type="border-light" value={order?.paymentStatus} options={PAYMENT_STATUS_OPTIONS} />
+            <div className="flex gap-2 items-center">
+              <StatusLabel
+                className="px-2 py-1 rounded-md"
+                type="border-light"
+                value={order?.paymentStatus}
+                options={PAYMENT_STATUS_OPTIONS}
+              />
               <Button
                 icon={<FaEdit />}
-                className="h-6 w-6 px-0 text-gray-500 hover:text-primary"
+                className="px-0 w-6 h-6 text-gray-500 hover:text-primary"
                 onClick={() => setOpenUpdatePayment(true)}
                 tooltip={t("Cập nhật trạng thái")}
               />
             </div>
           }
-        />  
-        <div className="pt-2 mt-2 border-t">
-          <div className="flex justify-between text-base font-bold">
-            <span>{t("TỔNG TIỀN")}:</span>
-            <span className="text-lg text-primary">{order?.totalAmount?.toLocaleString()} đ</span>
+        />
+        <div className="pt-3 mt-1 border-t border-gray-100">
+          <div className="flex justify-between items-end">
+            <span className="text-sm font-semibold text-gray-700">{t("Tổng tiền")}</span>
+            <span className="text-xl font-bold text-primary">
+              {formatMoney(order?.totalAmount)}
+            </span>
           </div>
         </div>
       </div>
@@ -108,14 +127,10 @@ function UpdatePaymentStatusModal({
     try {
       setUpdating(true);
       const updatedOrder = await orderService.updatePaymentStatus(orderId, status, reason);
-     
       toast.success(t("Cập nhật trạng thái thanh toán thành công"));
-      if (onSuccess && updatedOrder) {
-        onSuccess(updatedOrder);
-      }
+      if (onSuccess && updatedOrder) onSuccess(updatedOrder);
       onClose();
     } catch (error) {
-      
       toast.error(t("Cập nhật thất bại"));
       console.error(error);
     } finally {
@@ -125,7 +140,6 @@ function UpdatePaymentStatusModal({
 
   return (
     <Dialog isOpen={open} onClose={onClose} title={t("Cập nhật trạng thái thanh toán")}>
-       
       <Dialog.Body>
         <div className="space-y-4">
           <Field label={t("Trạng thái")}>
@@ -144,18 +158,17 @@ function UpdatePaymentStatusModal({
               rows={3}
             />
           </Field>
-        </div> 
-       <div className="w-full flex justify-end">
-        <Button 
-          onClick={handleUpdate}
-          text={t("Cập nhật")}
-          primary
-          isLoading={updating}
-          disabled={updating || !status}
-        /></div>
-    
+        </div>
+        <div className="flex justify-end mt-4 w-full">
+          <Button
+            onClick={handleUpdate}
+            text={t("Cập nhật")}
+            primary
+            isLoading={updating}
+            disabled={updating || !status}
+          />
+        </div>
       </Dialog.Body>
-      
     </Dialog>
   );
 }

@@ -9,18 +9,12 @@ import { Button } from "../../../../shared/utilities/form/button";
 import { Input } from "../../../../shared/utilities/form/input";
 import { Select } from "../../../../shared/utilities/form/select";
 import { Textarea } from "../../../../shared/utilities/form/textarea";
+import { ORDER_TYPE_LABELS } from "./order-ui-helpers";
 
 interface OrderUpdateDialogProps extends DialogProps {
   order: Order;
   onSuccess?: (updatedOrder: Order) => void;
 }
-
-const ORDER_TYPE_LABELS: Record<string, string> = {
-  TOOL: "Tool",
-  RECAPTCHA: "Recaptcha",
-  API_MEDIA: "API Media",
-  NORMAL: "Thường",
-};
 
 export function OrderUpdateDialog({ order, onSuccess, ...props }: OrderUpdateDialogProps) {
   const { t } = useTranslation();
@@ -103,13 +97,7 @@ export function OrderUpdateDialog({ order, onSuccess, ...props }: OrderUpdateDia
 
         <div className="flex gap-3 justify-end pt-4 border-t">
           <Button text={t("Hủy")} onClick={props.onClose} />
-          <Button
-            text={t("Lưu")}
-            primary
-            isLoading={loading}
-            onClick={handleSave}
-            icon={<i className="fas fa-save"></i>}
-          />
+          <Button text={t("Lưu")} primary isLoading={loading} onClick={handleSave} />
         </div>
       </div>
     </Form>
