@@ -91,7 +91,7 @@ Return valid JSON only with this structure:
 }
   ]
 }
-
+CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 `;
 
         const referenceInputs = collectOrderedReviewReferenceImages(body.config);
@@ -119,7 +119,10 @@ Return valid JSON only with this structure:
         } else {
           responseText = await callChatGPTGateway({
             text: interpolatedText,
-            images: imageBase64List,
+            images: imageBase64List.map((img, index) => ({
+              ...img,
+              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+            })),
             label: "generation-review",
             model: await getChatGPTSceneModel("REVIEW_SCENE"),
             jsonSchema: ReviewOpenAIJsonSchema,

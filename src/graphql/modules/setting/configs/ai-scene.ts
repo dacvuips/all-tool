@@ -13,7 +13,7 @@ export default {
       type: Type.json,
       isPrivate: true,
       desc: t(
-        "Cấu hình provider (geminiActive/chatgptActive), endpoint ChatGPT và model AI theo từng route (chỉ 1 provider được phép 'true')"
+        "Cấu hình provider (geminiActive/chatgptActive), endpoint Flow2 ChatGPT (/api/v1/chatgpt) và model AI theo từng route (chỉ 1 provider được phép 'true')"
       ),
       value: DEFAULT_AI_SCENE_MORE_SETTING,
     },

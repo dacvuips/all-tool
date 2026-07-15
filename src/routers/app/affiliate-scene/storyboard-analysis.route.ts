@@ -81,7 +81,7 @@ SAU KHI hoàn thành toàn bộ scenes, mới trả metadata giọng đọc toà
 
 QUAN TRỌNG: Mảng scenes phải đầy đủ và hợp lệ. Nếu thiếu token, rút ngắn dialogue/mô tả nhưng KHÔNG được bỏ scene.
 
-Trả về JSON hợp lệ theo schema đã định nghĩa.
+CRITICAL OUTPUT: Return ONLY a raw JSON object matching the schema. No markdown, no code fences, no explanation, no extra text.
 `;
 }
 
@@ -107,7 +107,13 @@ async function callStoryboardAnalysisAi(params: {
 
   return callChatGPTGateway({
     text,
-    images: [{ imageBytes: storyboardImageBase64, mimeType }],
+    images: [
+      {
+        imageBytes: storyboardImageBase64,
+        mimeType,
+        fileName: mimeType.includes("png") ? "storyboard.png" : "storyboard.jpg",
+      },
+    ],
     label: "storyboard-analysis",
     model: await getChatGPTSceneModel("STORYBOARD"),
     jsonSchema: StoryboardAnalysisOpenAIJsonSchema,

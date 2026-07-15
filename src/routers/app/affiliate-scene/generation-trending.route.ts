@@ -22,6 +22,7 @@ import {
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
 } from "./_shared";
+import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 
 export default [
   {
@@ -114,12 +115,25 @@ Root JSON structure:
   ]
 }
 CRITICAL RULE: Always keep character and environment identical across all scenes.
+CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 `;
         const interpolatedText =
           interpolateTrendingTemplate(prompt, body.config) + productImageNote;
 
         const aiProvider = await resolveAiSceneProvider();
         let responseText: string;
+        const chatgptImages =
+          aiProvider === "chatgpt" && productImageUrls.length > 0
+            ? await Promise.all(
+                productImageUrls.map(async (url, index) => {
+                  const img = await fetchImageAsBase64(url);
+                  return {
+                    ...img,
+                    fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+                  };
+                })
+              )
+            : undefined;
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
@@ -131,6 +145,7 @@ CRITICAL RULE: Always keep character and environment identical across all scenes
         } else {
           responseText = await callChatGPTGateway({
             text: interpolatedText,
+            images: chatgptImages,
             label: "generation-trending",
             model: await getChatGPTSceneModel("TRENDING"),
             jsonSchema: AffiliateVideoOpenAIJsonSchema,

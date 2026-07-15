@@ -48,7 +48,8 @@ export default [
           body.prompt ||
           `
 Bạn là chuyên gia Video Production và AI Animation Director. Nhiệm vụ: Phân tích các bức ảnh được gửi lên và từ phân tích ấy hãy tạo cho tôi 1 prompt để tôi có thể điều chỉnh style của hình ảnh theo phong cách của các bức ảnh đó. Quan trọng mô tả thật chi tiết (con người , cảnh vật , đồ vật, con thú , vật phẩm, đường nét, chất liệu, màu sắc, ánh sáng, và tất cả các chi tiết khác) giống với các bức ảnh được gửi lên, mục đích là tạo ra ảnh có phong cách giống như các bức ảnh được gửi lên. kết quả là Prompt tổng thể chi tiết nhất .
-Trả về kết quả JSON theo cấu trúc đã định nghĩa.
+
+CRITICAL OUTPUT: Return ONLY a raw JSON object {"text":"..."}. No markdown, no code fences, no explanation, no extra text.
 `;
         if (!body?.images?.length) {
           return res.status(400).json({ message: "Thiếu dữ liệu ảnh tham chiếu" });
@@ -77,7 +78,10 @@ Trả về kết quả JSON theo cấu trúc đã định nghĩa.
         } else {
           responseText = await callChatGPTGateway({
             text: prompt,
-            images: imageBase64List,
+            images: imageBase64List.map((img, index) => ({
+              ...img,
+              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+            })),
             label: "generation-style-text",
             model: await getChatGPTSceneModel("STYLE_TEXT"),
             jsonSchema: GenerationStyleTextOpenAIJsonSchema,

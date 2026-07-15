@@ -8,21 +8,31 @@ import {
 export { AI_SCENE_SETTING_KEY, DEFAULT_CHATGPT_GATEWAY_BASE_URL, DEFAULT_CHATGPT_MODELS, type AiSceneMoreSetting };
 export { DEFAULT_CHATGPT_MODELS as CHATGPT_MODELS } from "./_ai-scene.constants";
 
-/** Model Claude VietAPI mặc định khi route không truyền `model`. */
+/** Model ChatGPT Flow2 mặc định khi route không truyền `model`. */
 export const DEFAULT_CHATGPT_MODEL = DEFAULT_CHATGPT_MODELS.SCENE;
 
-export const CHATGPT_GATEWAY_SYSTEM_MESSAGE =
-  "You must respond with valid JSON only. No markdown, no explanation.";
+export const CHATGPT_GATEWAY_SYSTEM_MESSAGE = [
+  "CRITICAL OUTPUT RULES:",
+  "1. Your entire reply MUST be a single valid JSON object or array.",
+  "2. Do NOT write any prose, greeting, apology, markdown, code fences, or commentary before/after the JSON.",
+  "3. Do NOT wrap JSON in ```json or ```.",
+  "4. First character must be { or [, last character must be } or ].",
+].join("\n");
 
 export const CHATGPT_JSON_SCHEMA_NAME = "affiliate_video_response";
 
-/** Storyboard có nhiều panel + mô tả dài — cần max_tokens cao hơn mặc định VietAPI/Claude. */
+/** Storyboard có nhiều panel + mô tả dài — giữ để tương thích caller (Flow2 v1 không nhận max_tokens). */
 export const CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS = 16384;
 
-export type ChatGPTGatewayImage = { imageBytes: string; mimeType: string };
+export type ChatGPTGatewayImage = {
+  imageBytes: string;
+  mimeType: string;
+  /** Tên file gửi Flow2 (`file_name`) — ví dụ `photo.jpg`. */
+  fileName?: string;
+};
 export type ChatGPTGatewayVideo = { imageBytes: string; mimeType: string };
 
-/** JSON Schema chuẩn OpenAI cho VietAPI gateway (Claude qua /v1/chat/completions). */
+/** JSON Schema gợi ý trong prompt Flow2 ChatGPT (`/api/v1/chatgpt/chat`). */
 export const AffiliateVideoOpenAIJsonSchema = {
   type: "object",
   properties: {

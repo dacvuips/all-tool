@@ -16,8 +16,126 @@
 import { useCallback, useMemo, useRef } from "react";
 import { DB_NAME_TYPE } from "../constants";
 
-// ── Cache: one promise per dbName ────────────────────────────────────────────
+// ── Cache: one promise / live connection per dbName ──────────────────────────
 const _dbCache = new Map<string, Promise<IDBDatabase>>();
+const _liveConnections = new Map<string, IDBDatabase>();
+/** Serialize open/upgrade per DB — tránh race khi nhiều store cùng DB. */
+const _dbLocks = new Map<string, Promise<unknown>>();
+
+function withDbLock<T>(dbName: string, fn: () => Promise<T>): Promise<T> {
+  const prev = _dbLocks.get(dbName) ?? Promise.resolve();
+  const next = prev.catch(() => undefined).then(fn);
+  _dbLocks.set(
+    dbName,
+    next.then(
+      () => undefined,
+      () => undefined
+    )
+  );
+  return next;
+}
+
+function trackConnection(dbName: string, db: IDBDatabase): void {
+  const prev = _liveConnections.get(dbName);
+  if (prev && prev !== db) {
+    try {
+      prev.close();
+    } catch {
+      // ignore
+    }
+  }
+  _liveConnections.set(dbName, db);
+  // Cho phép tab/request khác upgrade — đóng connection của mình khi version đổi
+  db.onversionchange = () => {
+    try {
+      db.close();
+    } catch {
+      // ignore
+    }
+    if (_liveConnections.get(dbName) === db) {
+      _liveConnections.delete(dbName);
+    }
+    _dbCache.delete(dbName);
+  };
+}
+
+function closeLiveConnection(dbName: string): void {
+  const db = _liveConnections.get(dbName);
+  if (db) {
+    try {
+      db.close();
+    } catch {
+      // ignore
+    }
+    _liveConnections.delete(dbName);
+  }
+  _dbCache.delete(dbName);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function openDBRequest(
+  dbName: string,
+  version?: number,
+  onUpgrade?: (db: IDBDatabase) => void,
+  options?: { timeoutMs?: number }
+): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = version != null ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
+    let settled = false;
+
+    const finish = (fn: () => void) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      fn();
+    };
+
+    const timer =
+      options?.timeoutMs != null
+        ? setTimeout(() => {
+            finish(() => {
+              closeLiveConnection(dbName);
+              reject(
+                new Error(
+                  `[useIndexedDB] Database open timed out for "${dbName}" (likely blocked by another tab).`
+                )
+              );
+            });
+          }, options.timeoutMs)
+        : undefined;
+
+    req.onupgradeneeded = (e) => {
+      const db = (e.target as IDBOpenDBRequest).result;
+      onUpgrade?.(db);
+    };
+
+    req.onsuccess = (e) => {
+      finish(() => {
+        const db = (e.target as IDBOpenDBRequest).result;
+        trackConnection(dbName, db);
+        resolve(db);
+      });
+    };
+
+    req.onerror = (e) => {
+      finish(() => {
+        _dbCache.delete(dbName);
+        reject((e.target as IDBOpenDBRequest).error ?? new Error("[useIndexedDB] open failed"));
+      });
+    };
+
+    // Blocked: đóng connection local rồi chờ — KHÔNG reject ngay (thường do chính cache/tab này).
+    req.onblocked = () => {
+      console.warn(
+        `[useIndexedDB] Database open blocked for "${dbName}" — closing live connections…`
+      );
+      closeLiveConnection(dbName);
+    };
+  });
+}
 
 /**
  * Open DB with the CURRENT version (no version = latest).
@@ -27,19 +145,9 @@ function openDB(dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
   const cached = _dbCache.get(dbName);
   if (cached) return cached;
 
-  const promise = new Promise<IDBDatabase>((resolve, reject) => {
-    // Open WITHOUT version → uses current/latest version
-    const req = indexedDB.open(dbName);
-
-    req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-    req.onerror = (e) => {
-      _dbCache.delete(dbName);
-      reject((e.target as IDBOpenDBRequest).error);
-    };
-    req.onblocked = () => {
-      _dbCache.delete(dbName);
-      reject(new Error("[useIndexedDB] Database blocked. Close other tabs."));
-    };
+  const promise = openDBRequest(dbName).catch((err) => {
+    _dbCache.delete(dbName);
+    throw err;
   });
 
   _dbCache.set(dbName, promise);
@@ -52,40 +160,56 @@ function openDB(dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
  * onupgradeneeded again.
  */
 async function ensureStore(storeName: string, dbName: DB_NAME_TYPE): Promise<IDBDatabase> {
-  let db = await openDB(dbName);
+  return withDbLock(dbName, async () => {
+    let db = await openDB(dbName);
 
-  if (!db.objectStoreNames.contains(storeName)) {
-    // Need to upgrade – bump version by 1
+    if (db.objectStoreNames.contains(storeName)) {
+      return db;
+    }
+
     const newVersion = db.version + 1;
-    db.close();
-    _dbCache.delete(dbName);
+    closeLiveConnection(dbName);
 
-    const upgradePromise = new Promise<IDBDatabase>((resolve, reject) => {
-      const req = indexedDB.open(dbName, newVersion);
+    // Retry upgrade vài lần nếu vẫn bị block (tab khác chưa kịp release).
+    const maxAttempts = 5;
+    let lastError: unknown;
 
-      req.onupgradeneeded = (e) => {
-        const upgraded = (e.target as IDBOpenDBRequest).result;
-        if (!upgraded.objectStoreNames.contains(storeName)) {
-          upgraded.createObjectStore(storeName);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const upgradePromise = openDBRequest(
+          dbName,
+          newVersion,
+          (upgraded) => {
+            if (!upgraded.objectStoreNames.contains(storeName)) {
+              upgraded.createObjectStore(storeName);
+            }
+          },
+          { timeoutMs: 2500 }
+        );
+        _dbCache.set(dbName, upgradePromise);
+        db = await upgradePromise;
+
+        if (!db.objectStoreNames.contains(storeName)) {
+          // Race với upgrade khác — thử lại
+          closeLiveConnection(dbName);
+          await sleep(50 * attempt);
+          continue;
         }
-      };
+        return db;
+      } catch (err) {
+        lastError = err;
+        closeLiveConnection(dbName);
+        await sleep(80 * attempt);
+      }
+    }
 
-      req.onsuccess = (e) => resolve((e.target as IDBOpenDBRequest).result);
-      req.onerror = (e) => {
-        _dbCache.delete(dbName);
-        reject((e.target as IDBOpenDBRequest).error);
-      };
-      req.onblocked = () => {
-        _dbCache.delete(dbName);
-        reject(new Error("[useIndexedDB] Database upgrade blocked. Close other tabs."));
-      };
-    });
-
-    _dbCache.set(dbName, upgradePromise);
-    db = await upgradePromise;
-  }
-
-  return db;
+    throw (
+      lastError ??
+      new Error(
+        `[useIndexedDB] Database upgrade blocked for "${dbName}". Close other tabs đang mở cùng app rồi thử lại.`
+      )
+    );
+  });
 }
 
 // ── Low-level helpers ────────────────────────────────────────────────────────
@@ -109,6 +233,18 @@ function txPromise<T>(
   });
 }
 
+function isRetryableIdbError(err: any): boolean {
+  const msg = String(err?.message || "");
+  return (
+    err?.name === "InvalidStateError" ||
+    err?.name === "VersionError" ||
+    err?.name === "AbortError" ||
+    msg.includes("closing") ||
+    msg.includes("blocked") ||
+    msg.includes("upgrade")
+  );
+}
+
 /**
  * Wraps a DB operation with automatic retry on closed connection errors.
  */
@@ -122,14 +258,9 @@ async function withRetry<T>(
     const db = await ensureStore(storeName, dbName);
     return await txPromise<T>(db, storeName, mode, fn);
   } catch (err: any) {
-    // If the connection was closed or version mismatch, clear cache and retry once
-    if (
-      err?.name === "InvalidStateError" ||
-      err?.name === "VersionError" ||
-      err?.message?.includes("closing")
-    ) {
+    if (isRetryableIdbError(err)) {
       console.warn("[useIndexedDB] Connection issue, retrying...", dbName, storeName, err?.message);
-      _dbCache.delete(dbName);
+      closeLiveConnection(dbName);
       const db = await ensureStore(storeName, dbName);
       return await txPromise<T>(db, storeName, mode, fn);
     }
@@ -209,13 +340,17 @@ export function useIndexedDB<T = unknown>(
     const dbName = dbNameRef.current;
 
     try {
-      const keys = await withRetry<IDBValidKey[]>(storeName, dbName, "readonly", (s) => s.getAllKeys());
+      const keys = await withRetry<IDBValidKey[]>(storeName, dbName, "readonly", (s) =>
+        s.getAllKeys()
+      );
       const results: { key: IDBValidKey; value: T }[] = [];
       const unreadableKeys: IDBValidKey[] = [];
 
       for (const key of keys) {
         try {
-          const value = await withRetry<T | undefined>(storeName, dbName, "readonly", (s) => s.get(key));
+          const value = await withRetry<T | undefined>(storeName, dbName, "readonly", (s) =>
+            s.get(key)
+          );
           if (value !== undefined) {
             results.push({ key, value });
           }
@@ -235,8 +370,15 @@ export function useIndexedDB<T = unknown>(
       if (unreadableKeys.length > 0) {
         void Promise.all(
           unreadableKeys.map((key) =>
-            withRetry<undefined>(storeName, dbName, "readwrite", (s) => s.delete(key)).catch((delErr) =>
-              console.warn("[useIndexedDB] Failed to remove unreadable record", dbName, storeName, key, delErr)
+            withRetry<undefined>(storeName, dbName, "readwrite", (s) => s.delete(key)).catch(
+              (delErr) =>
+                console.warn(
+                  "[useIndexedDB] Failed to remove unreadable record",
+                  dbName,
+                  storeName,
+                  key,
+                  delErr
+                )
             )
           )
         );

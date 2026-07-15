@@ -134,6 +134,7 @@ Root JSON structure:
   ]
 }
 CRITICAL RULE: Always keep character and environment identical across all scenes.
+CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 `;
 
         // Thay thế placeholder trong text
@@ -160,7 +161,10 @@ CRITICAL RULE: Always keep character and environment identical across all scenes
         } else {
           responseText = await callChatGPTGateway({
             text: interpolatedText,
-            images: personifyImageBase64List,
+            images: personifyImageBase64List.map((img, index) => ({
+              ...img,
+              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+            })),
             label: "generation-scene",
             model: await getChatGPTSceneModel("SCENE"),
             jsonSchema: AffiliateVideoOpenAIJsonSchema,

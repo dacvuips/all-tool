@@ -1,7 +1,7 @@
 /** Setting key trong admin — xem `graphql/modules/setting/configs/ai-scene.ts`. */
 export const AI_SCENE_SETTING_KEY = "ai-scene-more";
 
-export const DEFAULT_CHATGPT_GATEWAY_BASE_URL = "https://api.vietapi.tech/v1";
+export const DEFAULT_CHATGPT_GATEWAY_BASE_URL = "https://flow2.viettheo.site";
 
 /** Model Gemini mặc định (fallback khi setting chưa cấu hình). */
 export const DEFAULT_GEMINI_MODELS = {
@@ -17,15 +17,15 @@ export const DEFAULT_GEMINI_MODELS = {
   AUDIO_TTS: "gemini-3.1-flash-tts-preview",
 } as const;
 
-/** Model Claude qua VietAPI (fallback khi setting chưa cấu hình). */
+/** Model ChatGPT qua Flow2 (fallback khi setting chưa cấu hình). */
 export const DEFAULT_CHATGPT_MODELS = {
-  SCENE: "claude-opus-4-6",
-  TRENDING: "claude-opus-4-6",
-  REVIEW_SCENE: "claude-opus-4-6",
-  COPY_VIDEO: "claude-opus-4-6",
-  STYLE_TEXT: "claude-opus-4-6",
-  SUGGEST_CONFIG: "claude-opus-4-6",
-  STORYBOARD: "claude-opus-4-6",
+  SCENE: "gpt-5-5",
+  TRENDING: "gpt-5-5",
+  REVIEW_SCENE: "gpt-5-5",
+  COPY_VIDEO: "gpt-5-5",
+  STYLE_TEXT: "gpt-5-5",
+  SUGGEST_CONFIG: "gpt-5-5",
+  STORYBOARD: "gpt-5-5",
 } as const;
 
 export type AiSceneGeminiModelKey = keyof typeof DEFAULT_GEMINI_MODELS;
