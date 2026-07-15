@@ -8,6 +8,7 @@ import { AffiliateVideoResponseSchema } from "../constanst";
 import { AffiliateVideoOpenAIJsonSchema } from "./_chatgpt.constants";
 import {
   assertNonEmptyScenesArray,
+  buildProductImageScriptNote,
   callChatGPTGateway,
   callGeminiJsonGenerate,
   checkRequestLimit,
@@ -19,10 +20,10 @@ import {
   parseGeminiJsonResponse,
   resolveAiSceneProvider,
   resolveArtStylePrompt,
+  resolveProductImagesForAi,
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
 } from "./_shared";
-import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 
 export default [
   {
@@ -60,14 +61,9 @@ export default [
           body.config.artStyle = resolvedArtStylePrompt;
         }
 
-        // Build product image reference text
+        // Build product image reference text (không nhúng base64 vào prompt)
         const productImageUrls = body.productImages?.filter(Boolean) || [];
-        const productImageNote =
-          productImageUrls.length > 0
-            ? `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${productImageUrls.join(
-                ", "
-              )}`
-            : "";
+        const productImageNote = buildProductImageScriptNote(productImageUrls);
 
         const trendingModeTypes = req?.body?.config?.trendingModeType;
         const IsTrendingSingle = trendingModeTypes === TrendingModeTypeEnum.single_variant;
@@ -120,32 +116,25 @@ CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no 
         const interpolatedText =
           interpolateTrendingTemplate(prompt, body.config) + productImageNote;
 
+        const productImageBase64List = await resolveProductImagesForAi(productImageUrls);
         const aiProvider = await resolveAiSceneProvider();
         let responseText: string;
-        const chatgptImages =
-          aiProvider === "chatgpt" && productImageUrls.length > 0
-            ? await Promise.all(
-                productImageUrls.map(async (url, index) => {
-                  const img = await fetchImageAsBase64(url);
-                  return {
-                    ...img,
-                    fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-                  };
-                })
-              )
-            : undefined;
 
         if (aiProvider === "gemini") {
           responseText = await callGeminiJsonGenerate({
             model: await getGeminiSceneModel("TRENDING"),
             text: interpolatedText,
+            media: productImageBase64List,
             label: "generation-trending",
             responseSchema: AffiliateVideoResponseSchema,
           });
         } else {
           responseText = await callChatGPTGateway({
             text: interpolatedText,
-            images: chatgptImages,
+            images: productImageBase64List.map((img, index) => ({
+              ...img,
+              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+            })),
             label: "generation-trending",
             model: await getChatGPTSceneModel("TRENDING"),
             jsonSchema: AffiliateVideoOpenAIJsonSchema,

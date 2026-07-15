@@ -617,19 +617,60 @@ export function buildObjectPersonifyImageReferenceNote(images?: ReferenceImageIn
 }
 
 export function buildProductImageScriptNote(urls: string[]): string {
-  const filtered = urls?.filter(Boolean) || [];
+  const filtered = urls?.filter(Boolean).map((u) => u.trim()).filter(Boolean) || [];
   if (filtered.length === 0) return "";
-  return `\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\nCác ảnh sản phẩm dưới đây là tham chiếu cho sản phẩm chính trong video. Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.\nURLs: ${filtered.join(
-    ", "
-  )}`;
+
+  // Chỉ liệt kê http(s); data:/base64 không được nhét vào prompt text.
+  const httpUrls = filtered.filter((u) => /^https?:\/\//i.test(u));
+  const hasAttached =
+    filtered.some((u) => u.startsWith("data:") || !/^https?:\/\//i.test(u)) || httpUrls.length > 0;
+
+  if (!hasAttached) return "";
+
+  let note =
+    "\n\n*** ẢNH SẢN PHẨM THAM CHIẾU ***\n" +
+    "Các ảnh sản phẩm đính kèm là tham chiếu cho sản phẩm chính trong video. " +
+    "Hãy sử dụng chúng để mô tả chính xác hơn các props / sản phẩm trong visual_prompt.";
+  if (httpUrls.length > 0) {
+    note += `\nURLs: ${httpUrls.join(", ")}`;
+  }
+  return note;
 }
 
 export function buildObjectPersonifyImageScriptNote(images?: ReferenceImageInput[]): string {
   const filtered = filterReferenceImages(images);
   if (filtered.length === 0) return "";
-  const urls = filtered.filter((i): i is string => typeof i === "string");
-  const urlPart = urls.length ? `\nURLs: ${urls.join(", ")}` : "";
-  return `\n\n*** ẢNH THAM CHIẾU NHÂN HOÁ ĐỒ VẬT ***\nCó ảnh tham chiếu nhân hoá đồ vật (base64 hoặc URL). Hãy dùng để mô tả chính xác hơn nhân vật nhân hoá trong visual_prompt.${urlPart}`;
+  const httpUrls = filtered.filter(
+    (i): i is string => typeof i === "string" && /^https?:\/\//i.test(i.trim())
+  );
+  let note =
+    "\n\n*** ẢNH THAM CHIẾU NHÂN HOÁ ĐỒ VẬT ***\n" +
+    "Có ảnh tham chiếu nhân hoá đồ vật đính kèm. Hãy dùng để mô tả chính xác hơn nhân vật nhân hoá trong visual_prompt.";
+  if (httpUrls.length > 0) {
+    note += `\nURLs: ${httpUrls.join(", ")}`;
+  }
+  return note;
+}
+
+/** Resolve productImages (http URL hoặc data URL) thành media base64 cho Gemini/ChatGPT. */
+export async function resolveProductImagesForAi(
+  productImages?: string[]
+): Promise<{ imageBytes: string; mimeType: string }[]> {
+  const filtered = productImages?.filter(Boolean).map((u) => u.trim()).filter(Boolean) || [];
+  if (filtered.length === 0) return [];
+
+  return Promise.all(
+    filtered.map(async (item) => {
+      if (item.startsWith("data:")) {
+        return stripDataUrlBase64(item);
+      }
+      if (/^https?:\/\//i.test(item)) {
+        return fetchImageAsBase64(item);
+      }
+      // Raw base64 (không kèm data: prefix)
+      return { imageBytes: item, mimeType: "image/jpeg" };
+    })
+  );
 }
 
 export {

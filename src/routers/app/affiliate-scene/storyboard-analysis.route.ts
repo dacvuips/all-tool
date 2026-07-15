@@ -21,6 +21,7 @@ import {
   reserveRequestSlots,
   resolveAiSceneProvider,
   resolveArtStylePrompt,
+  resolveProductImagesForAi,
 } from "./_shared";
 import { StoryboardAnalysisResponseSchema } from "./storyboard-analysis.schema";
 
@@ -90,14 +91,19 @@ async function callStoryboardAnalysisAi(params: {
   text: string;
   storyboardImageBase64: string;
   mimeType: string;
+  productImages?: { imageBytes: string; mimeType: string }[];
 }): Promise<string> {
-  const { aiProvider, text, storyboardImageBase64, mimeType } = params;
+  const { aiProvider, text, storyboardImageBase64, mimeType, productImages = [] } = params;
+  const media = [
+    { imageBytes: storyboardImageBase64, mimeType },
+    ...productImages,
+  ];
 
   if (aiProvider === "gemini") {
     return callGeminiJsonGenerate({
       model: await getGeminiSceneModel("STORYBOARD"),
       text,
-      media: [{ imageBytes: storyboardImageBase64, mimeType }],
+      media,
       label: "storyboard-analysis",
       responseSchema: StoryboardAnalysisResponseSchema,
       temperature: 0.3,
@@ -107,13 +113,15 @@ async function callStoryboardAnalysisAi(params: {
 
   return callChatGPTGateway({
     text,
-    images: [
-      {
-        imageBytes: storyboardImageBase64,
-        mimeType,
-        fileName: mimeType.includes("png") ? "storyboard.png" : "storyboard.jpg",
-      },
-    ],
+    images: media.map((img, index) => ({
+      ...img,
+      fileName:
+        index === 0
+          ? mimeType.includes("png")
+            ? "storyboard.png"
+            : "storyboard.jpg"
+          : `photo-${index}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
+    })),
     label: "storyboard-analysis",
     model: await getChatGPTSceneModel("STORYBOARD"),
     jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
@@ -192,6 +200,7 @@ export default [
 
         const artStyle = resolvedArtStylePrompt || body.artStyle;
         const productImageNote = buildProductImageScriptNote(body.productImages || []);
+        const productImages = await resolveProductImagesForAi(body.productImages);
 
         const text =
           buildStoryboardAnalysisPrompt({
@@ -211,6 +220,7 @@ export default [
             text,
             storyboardImageBase64: body.storyboardImageBase64,
             mimeType,
+            productImages,
           });
           return parseGeminiJsonResponse(responseText);
         }, "storyboard-analysis")) as any;

@@ -23,6 +23,7 @@ import {
   resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
+  resolveProductImagesForAi,
   resolveReferenceImagesForGemini,
 } from "./_shared";
 
@@ -146,6 +147,8 @@ CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no 
         const personifyImageBase64List = usePersonifyImage
           ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
           : [];
+        const productImageBase64List = await resolveProductImagesForAi(body.productImages);
+        const mediaImages = [...personifyImageBase64List, ...productImageBase64List];
 
         const aiProvider = await resolveAiSceneProvider();
         let responseText: string;
@@ -154,14 +157,14 @@ CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no 
           responseText = await callGeminiJsonGenerate({
             model: await getGeminiSceneModel("SCENE"),
             text: interpolatedText,
-            media: personifyImageBase64List,
+            media: mediaImages,
             label: "generation-scene",
             responseSchema: AffiliateVideoResponseSchema,
           });
         } else {
           responseText = await callChatGPTGateway({
             text: interpolatedText,
-            images: personifyImageBase64List.map((img, index) => ({
+            images: mediaImages.map((img, index) => ({
               ...img,
               fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
             })),
