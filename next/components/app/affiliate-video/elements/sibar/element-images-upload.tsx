@@ -247,7 +247,7 @@ function ImageUploadSlot({
 }
 
 interface MultiImageUploadSlotProps {
-  label: string;
+  label: string | JSX.Element;
   value?: ElementFormImage[];
   onChange: (value: ElementFormImage[] | undefined) => void;
   maxSizeMB?: number;
@@ -581,7 +581,7 @@ export interface ElementImagesUploadProps {
   readOnly?: boolean;
   maxSizeMB?: number;
   maxImages?: number;
-  label?: string;
+  label?: string | JSX.Element;
   getImageStatus?: (index: number) => StoryboardImageStatus | undefined;
   onRetryImage?: (index: number) => void;
 }
