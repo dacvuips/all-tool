@@ -355,6 +355,19 @@ export function SharedBatchListPanel({
     }
   };
 
+  /** Delete a scene, renumber remaining, sync UI + IndexedDB */
+  const handleDeleteScene = async (sceneId: string) => {
+    const updated = sceneList
+      .filter((s) => s.id !== sceneId)
+      .map((s, i) => ({ ...s, sceneNumber: i + 1 }));
+    setSceneList(updated);
+    try {
+      await onSyncScenes(updated);
+    } catch (err) {
+      console.error("[handleDeleteScene] Failed to persist:", err);
+    }
+  };
+
   /** Update selected product images for a scene and persist to IndexedDB */
   const handleUpdateSelectedProductImages = async (sceneId: string, images: string[]) => {
     const updated = sceneList.map((s) =>
@@ -495,6 +508,7 @@ export function SharedBatchListPanel({
           onUpdateElementImageSlots={handleUpdateElementImageSlots}
           onUpdateReviewImageSlots={handleUpdateReviewImageSlots}
           onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
+          onDeleteScene={handleDeleteScene}
           forcedTab={globalTab}
           {...sceneRowExtraProps}
         />
@@ -526,6 +540,7 @@ export function SharedBatchListPanel({
       handleUpdateElementImageSlots,
       handleUpdateReviewImageSlots,
       handleUpdateElementVideoSlots,
+      handleDeleteScene,
       lazyMountSceneRows,
     ]
   );

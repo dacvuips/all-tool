@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
   RiCloseLine,
+  RiDeleteBinLine,
   RiEyeLine,
   RiEyeOffLine,
   RiFileCopyLine,
@@ -21,6 +22,7 @@ import {
   RiText,
 } from "react-icons/ri";
 
+import { useAlert } from "../../../../../lib/providers/alert-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
@@ -78,6 +80,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onSetSceneAutoDownloadImageResolution,
   onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
+  onDeleteScene,
 }: {
   scene: SceneScript;
   index: number;
@@ -98,9 +101,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onSetSceneAutoDownloadImageResolution: (sceneId: string, resolution: "1K" | "2K" | "4K") => void;
   onSetSceneAutoDownloadVideoResolution: (sceneId: string, resolution: "720p" | "1080p") => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
+  onDeleteScene?: (sceneId: string) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const Alert = useAlert();
 
   const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
@@ -222,6 +227,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       setCopiedField(field);
       setTimeout(() => setCopiedField(null), 1500);
     });
+  };
+
+  const handleDeleteScene = async () => {
+    const confirmed = await Alert.danger(
+      t("Xác nhận xoá phân cảnh"),
+      t("Nếu xoá sẽ không thể hoàn lại, cân nhắc trước khi xác nhận.")
+    );
+    if (!confirmed) return;
+    onDeleteScene?.(scene.id);
   };
 
   // auto-resize textarea
@@ -422,6 +436,16 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
             placement="bottom"
           />
+          {onDeleteScene && (
+            <Button
+              onClick={() => void handleDeleteScene()}
+              className="w-6 h-6 px-2 rounded-md shadow-sm text-gray-400 bg-white hover:text-red-600 hover:bg-red-50"
+              iconClassName="text-sm"
+              icon={<RiDeleteBinLine />}
+              tooltip={t("Xoá phân cảnh")}
+              placement="bottom"
+            />
+          )}
         </div>
       </div>
 
@@ -656,6 +680,7 @@ interface SceneRowGroupProps {
   onSetSceneAutoDownloadImageResolution: (sceneId: string, resolution: "1K" | "2K" | "4K") => void;
   onSetSceneAutoDownloadVideoResolution: (sceneId: string, resolution: "720p" | "1080p") => void;
   onUpdateSelectedProductImages?: (sceneId: string, images: string[]) => void;
+  onDeleteScene?: (sceneId: string) => void;
 }
 
 export function SceneRowGroup({
@@ -675,6 +700,7 @@ export function SceneRowGroup({
   onSetSceneAutoDownloadImageResolution,
   onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
+  onDeleteScene,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -717,6 +743,7 @@ export function SceneRowGroup({
         onSetSceneAutoDownloadImageResolution={onSetSceneAutoDownloadImageResolution}
         onSetSceneAutoDownloadVideoResolution={onSetSceneAutoDownloadVideoResolution}
         onUpdateSelectedProductImages={onUpdateSelectedProductImages}
+        onDeleteScene={onDeleteScene}
       />
 
       {/* Add BELOW button – centered on bottom border, only visible on hover
