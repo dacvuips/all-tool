@@ -73,6 +73,82 @@ function sanitizeAssistantReply(raw: string): string {
   return text;
 }
 
+type SuggestSSEEvent = {
+  type?: string;
+  progress?: number;
+  message?: string;
+  data?: {
+    reply?: string;
+    images?: SuggestImage[];
+    conversationId?: string;
+    messageId?: string;
+  };
+};
+
+function parseSuggestSSELine(line: string): SuggestSSEEvent | null {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("data:")) return null;
+  const jsonStr = trimmed.slice(5).trim();
+  if (!jsonStr) return null;
+  try {
+    return JSON.parse(jsonStr) as SuggestSSEEvent;
+  } catch {
+    return null;
+  }
+}
+
+async function consumeStoryboardSuggestSSE(
+  res: Response,
+  onProgress?: (message?: string) => void
+): Promise<NonNullable<SuggestSSEEvent["data"]>> {
+  const reader = res.body?.getReader();
+  if (!reader) {
+    throw new Error("Không đọc được stream AI gợi ý");
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let doneData: SuggestSSEEvent["data"] | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const evt = parseSuggestSSELine(line);
+      if (!evt?.type) continue;
+
+      if (evt.type === "progress") {
+        onProgress?.(evt.message);
+      }
+      if (evt.type === "done" && evt.data) {
+        doneData = evt.data;
+      }
+      if (evt.type === "error") {
+        throw new Error(evt.message || "Lỗi AI gợi ý storyboard");
+      }
+    }
+  }
+
+  const tail = parseSuggestSSELine(buffer);
+  if (tail?.type === "error") {
+    throw new Error(tail.message || "Lỗi AI gợi ý storyboard");
+  }
+  if (tail?.type === "done" && tail.data) {
+    doneData = tail.data;
+  }
+
+  if (!doneData) {
+    throw new Error("Không nhận được kết quả AI gợi ý");
+  }
+
+  return doneData;
+}
+
 export interface StoryboardAiSuggestDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -97,6 +173,7 @@ export function StoryboardAiSuggestDialog({
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [parentMessageId, setParentMessageId] = useState<string | undefined>();
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
@@ -120,6 +197,7 @@ export function StoryboardAiSuggestDialog({
     setParentMessageId(undefined);
     setPendingAttachments([]);
     setSceneCount(DEFAULT_SCENES);
+    setLoadingMessage("");
   }, [isOpen]);
 
   const processFiles = useCallback(
@@ -194,6 +272,7 @@ export function StoryboardAiSuggestDialog({
     setInput("");
     setPendingAttachments([]);
     setLoading(true);
+    setLoadingMessage(t("Đang tạo ảnh storyboard..."));
 
     try {
       const res = await fetch("/api/app/storyboard-ai-suggest/", {
@@ -221,11 +300,28 @@ export function StoryboardAiSuggestDialog({
         throw new Error(err?.message || `Lỗi ${res.status}`);
       }
 
-      const result = await res.json();
-      const reply = sanitizeAssistantReply((result?.data?.reply as string) || "");
-      const images = (result?.data?.images as SuggestImage[]) || [];
-      const nextConversationId = result?.data?.conversationId as string | undefined;
-      const nextMessageId = result?.data?.messageId as string | undefined;
+      const contentType = res.headers.get("content-type") || "";
+      let reply = "";
+      let images: SuggestImage[] = [];
+      let nextConversationId: string | undefined;
+      let nextMessageId: string | undefined;
+
+      if (contentType.includes("event-stream")) {
+        const data = await consumeStoryboardSuggestSSE(res, (message) => {
+          if (message) setLoadingMessage(message);
+        });
+        reply = sanitizeAssistantReply(data.reply || "");
+        images = data.images || [];
+        nextConversationId = data.conversationId;
+        nextMessageId = data.messageId;
+      } else {
+        // Fallback JSON sync (nếu proxy không giữ SSE)
+        const result = await res.json();
+        reply = sanitizeAssistantReply((result?.data?.reply as string) || "");
+        images = (result?.data?.images as SuggestImage[]) || [];
+        nextConversationId = result?.data?.conversationId as string | undefined;
+        nextMessageId = result?.data?.messageId as string | undefined;
+      }
 
       if (!reply && images.length === 0) {
         throw new Error(t("AI không trả lời"));
@@ -248,6 +344,7 @@ export function StoryboardAiSuggestDialog({
       setPendingAttachments(attachments);
     } finally {
       setLoading(false);
+      setLoadingMessage("");
       inputRef.current?.focus();
     }
   }, [
@@ -329,8 +426,8 @@ export function StoryboardAiSuggestDialog({
             {loading ? (
               <div className="flex justify-start">
                 <div className="inline-flex gap-2 items-center px-3 py-2 text-sm text-gray-500 bg-gray-100 rounded-2xl rounded-bl-md">
-                  <RiLoader4Line className="animate-spin" />
-                  {t("Đang tạo ảnh storyboard...")}
+                  <RiLoader4Line className="animate-spin flex-shrink-0" />
+                  <span>{loadingMessage || t("Đang tạo ảnh storyboard...")}</span>
                 </div>
               </div>
             ) : null}

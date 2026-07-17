@@ -622,12 +622,25 @@ async function pollChatGPTPictureJob(params: {
   label: string;
   timeoutMs?: number;
   pollIntervalMs?: number;
+  onProgress?: (progress: number, message?: string) => void | Promise<void>;
 }): Promise<ChatGPTPictureResult> {
   const timeoutMs = params.timeoutMs ?? CHATGPT_ASYNC_TIMEOUT_MS;
   const pollIntervalMs = params.pollIntervalMs ?? CHATGPT_ASYNC_POLL_INTERVAL_MS;
   const pollUrl = `${params.baseUrl}/api/v1/chatgpt/chat/${encodeURIComponent(params.jobId)}`;
   const startedAt = Date.now();
   let lastStatus = "";
+  let tick = 0;
+
+  const emitProgress = async (progress: number, message?: string) => {
+    if (!params.onProgress) return;
+    try {
+      await params.onProgress(progress, message);
+    } catch (err: any) {
+      logger.warn(`[${params.label}] onProgress lỗi: ${err?.message}`);
+    }
+  };
+
+  await emitProgress(12, "Đã xếp hàng Conversation image...");
 
   while (Date.now() - startedAt < timeoutMs) {
     const resp = await fetch(pollUrl, {
@@ -673,6 +686,7 @@ async function pollChatGPTPictureJob(params: {
       status === "processing";
 
     if (status === "done" || status === "succeeded" || status === "success") {
+      await emitProgress(88, "Đang tải ảnh kết quả...");
       return parseChatGPTPictureResult(data, {
         baseUrl: params.baseUrl,
         apiKey: params.apiKey,
@@ -686,12 +700,24 @@ async function pollChatGPTPictureJob(params: {
         apiKey: params.apiKey,
       });
       if (maybeText || maybeImages.length > 0) {
+        await emitProgress(88, "Đang tải ảnh kết quả...");
         return parseChatGPTPictureResult(data, {
           baseUrl: params.baseUrl,
           apiKey: params.apiKey,
         });
       }
     }
+
+    // Heartbeat SSE — tránh proxy/Cloudflare 504 khi chờ lâu
+    tick += 1;
+    const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
+    const progress = Math.min(85, 15 + tick * 2);
+    await emitProgress(
+      progress,
+      status === "queued"
+        ? `Đang xếp hàng... (${elapsedSec}s)`
+        : `Đang tạo ảnh storyboard... (${elapsedSec}s)`
+    );
 
     await sleep(pollIntervalMs);
   }
@@ -717,6 +743,7 @@ export async function callChatGPTPictureSuggest(params: {
   conversationId?: string;
   parentMessageId?: string;
   images?: ChatGPTGatewayImage[];
+  onProgress?: (progress: number, message?: string) => void | Promise<void>;
 }): Promise<ChatGPTPictureResult> {
   const [baseUrl, apiKey] = await Promise.all([
     getChatGPTGatewayBaseUrl(),
@@ -746,7 +773,18 @@ export async function callChatGPTPictureSuggest(params: {
     requestBody.images = publicImages;
   }
 
+  const emitProgress = async (progress: number, message?: string) => {
+    if (!params.onProgress) return;
+    try {
+      await params.onProgress(progress, message);
+    } catch (err: any) {
+      logger.warn(`[${params.label}] onProgress lỗi: ${err?.message}`);
+    }
+  };
+
   return retryAICall(async () => {
+    await emitProgress(5, "Đang kiểm tra ChatGPT...");
+
     if (publicImages?.length) {
       await ensureChatGPTReadyForImages(params.label);
     } else {
@@ -756,6 +794,8 @@ export async function callChatGPTPictureSuggest(params: {
     logger.info(
       `[${params.label}] Flow2 ChatGPT Conversation image ${isFollowUp ? "follow-up" : "new"} model=${model} refImages=${publicImages?.length || 0}`
     );
+
+    await emitProgress(8, "Đang gửi yêu cầu tạo ảnh...");
 
     const resp = await fetch(enqueueUrl, {
       method: "POST",
@@ -788,6 +828,7 @@ export async function callChatGPTPictureSuggest(params: {
 
     if (!jobId) {
       logger.info(`[${params.label}] Flow2 ChatGPT trả kết quả sync`);
+      await emitProgress(90, "Đang xử lý kết quả...");
       return parseChatGPTPictureResult(data, { baseUrl, apiKey });
     }
 
@@ -797,12 +838,14 @@ export async function callChatGPTPictureSuggest(params: {
       apiKey,
       jobId,
       label: params.label,
+      onProgress: params.onProgress,
     });
     if (result.conversationId || result.messageId) {
       logger.info(
         `[${params.label}] conversation_id=${result.conversationId || "-"} message_id=${result.messageId || "-"}`
       );
     }
+    await emitProgress(98, "Hoàn tất");
     return result;
   }, params.label);
 }

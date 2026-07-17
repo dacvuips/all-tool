@@ -1,6 +1,6 @@
 /**
  * Chat AI gợi ý storyboard — Flow2 ChatGPT Conversation image (picture_v2).
- * POST /api/app/storyboard-ai-suggest/
+ * POST /api/app/storyboard-ai-suggest/ — SSE stream (tránh Cloudflare/proxy 504 khi chờ lâu).
  *
  * Frontend chỉ gửi: prompt (ý tưởng ngắn) + sceneCount (+ conversationId/parentMessageId khi follow-up).
  * Prompt mẫu được ráp ở backend.
@@ -10,6 +10,10 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { Context } from "../../../libs/graphql";
+import {
+  initGenerationSSE,
+  sendGenerationSSEError,
+} from "../../api-media/generation-sse";
 import {
   callChatGPTPictureSuggest,
   checkImageLimit,
@@ -62,10 +66,14 @@ function sanitizeReferenceImages(
 }
 
 const STORYBOARD_SUGGEST_TEMPLATE = `Bạn là chuyên gia viết kịch bản, đạo diễn sitcom phim, chuyên gia marketing, chuyên gia về phim ngắn
+
+Negative prompt: tạo ảnh storyboard và chỉ xuất duy nhất 1 ảnh, không xuất text, tất cả các khung hình phân cảnh phải có kích thước giống nhau ,Đàm thoại (tên: thoại cho từng nhân vật) , hành động biểu cảm từng nhân vật (tên: hành động biểu cảm từng) , viết: text , đoàn thoại, bhành động biểu cảm, góc máy ngay trong từng phân cảnh trong ảnh storyboard 
+
+
 Hãy viết 1 kịch bản sitcom phim quảng cáo về ({{USER_PROMPT}})
 Mở đầu phải có hook để hút , dài {{DURATION_SECONDS}}s ( {{SCENE_COUNT}} phân cảnh ),khả năng viral cao, góc máy , 
 
-Negative prompt: tạo ảnh storyboard và chỉ xuất duy nhất 1 ảnh, không xuất text, tất cả các khung hình phân cảnh phải có kích thước giống nhau ,Đàm thoại (tên: thoại cho từng nhân vật) , hành động biểu cảm từng nhân vật (tên: hành động biểu cảm từng) , viết: text , đoàn thoại, bhành động biểu cảm, góc máy ngay trong từng phân cảnh trong ảnh storyboard `;
+`;
 
 function clampSceneCount(value: unknown): number {
   const n = Number(value);
@@ -88,6 +96,7 @@ export default [
     path: "/api/app/storyboard-ai-suggest/",
     midd: [],
     action: async (req: Request, res: Response) => {
+      let sseStarted = false;
       try {
         const context = new Context({ req });
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
@@ -136,6 +145,11 @@ export default [
 
         const storyboardModel = await getChatGPTSceneModel("STORYBOARD");
 
+        // SSE sớm — proxy/Cloudflare không 504 khi chờ Conversation image lâu
+        const send = initGenerationSSE(res);
+        sseStarted = true;
+        send({ type: "progress", progress: 3, message: "Đang bắt đầu AI gợi ý..." });
+
         const result = await callChatGPTPictureSuggest({
           prompt,
           label: "storyboard-ai-suggest",
@@ -143,10 +157,18 @@ export default [
           conversationId: body.conversationId,
           parentMessageId: body.parentMessageId,
           images: referenceImages.length > 0 ? referenceImages : undefined,
+          onProgress: async (progress, message) => {
+            send({
+              type: "progress",
+              progress,
+              message: message || "Đang tạo ảnh storyboard...",
+            });
+          },
         });
 
         if (!result.text && result.images.length === 0) {
-          return res.status(502).json({ message: "AI không trả lời" });
+          sendGenerationSSEError(res, "AI không trả lời", 502);
+          return;
         }
 
         await incrementRequestCount(context.id);
@@ -154,8 +176,10 @@ export default [
           await incrementImageCount(context.id);
         }
 
-        res.json({
-          success: true,
+        send({
+          type: "done",
+          progress: 100,
+          message: "Hoàn tất",
           data: {
             reply: result.text || undefined,
             images: result.images.length > 0 ? result.images : undefined,
@@ -165,8 +189,17 @@ export default [
             messageId: result.messageId,
           },
         });
+        res.end();
       } catch (err: any) {
         logger.error(`[storyboard-ai-suggest] Lỗi: ${err?.message}`);
+        if (sseStarted) {
+          sendGenerationSSEError(
+            res,
+            err?.message || "Lỗi server",
+            err?.statusCode || 500
+          );
+          return;
+        }
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }

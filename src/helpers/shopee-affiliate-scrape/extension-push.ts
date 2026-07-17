@@ -25,12 +25,16 @@ export function getLastMarketHost() {
   return lastMarketHost;
 }
 
-export async function openAffiliateBrowser(marketHost?: string): Promise<{ marketHost: string; offerUrl: string }> {
+export async function openAffiliateBrowser(marketHost?: string): Promise<{
+  marketHost: string;
+  offerUrl: string;
+  openedOnServer: boolean;
+}> {
   const host = String(marketHost || lastMarketHost || "affiliate.shopee.vn").trim();
   lastMarketHost = host;
   const offerUrl = defaultOfferUrl(host);
-  await openNormalChrome({ startUrl: offerUrl });
-  return { marketHost: host, offerUrl };
+  const openedOnServer = await openNormalChrome({ startUrl: offerUrl });
+  return { marketHost: host, offerUrl, openedOnServer };
 }
 
 export function pushExtensionCsv(input: {

@@ -21,6 +21,7 @@ async function parseJson(res: Response) {
 export async function openShopeeAffiliateBrowser(marketHost?: string): Promise<{
   marketHost: string;
   offerUrl: string;
+  openedOnServer: boolean;
 }> {
   const res = await fetch("/api/app/scrape-shopee-affiliate/open-browser", {
     method: "POST",
@@ -32,9 +33,15 @@ export async function openShopeeAffiliateBrowser(marketHost?: string): Promise<{
   if (!res.ok || !json?.ok) {
     throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
   }
+  const offerUrl = String(json.offerUrl || "");
+  // Luôn mở trên máy user (nơi có extension). Server spawn Chrome chỉ khi API chạy local.
+  if (offerUrl && typeof window !== "undefined") {
+    window.open(offerUrl, "_blank", "noopener,noreferrer");
+  }
   return {
     marketHost: String(json.marketHost || marketHost || ""),
-    offerUrl: String(json.offerUrl || ""),
+    offerUrl,
+    openedOnServer: Boolean(json.openedOnServer),
   };
 }
 
