@@ -32,16 +32,16 @@ import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../co
 import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
-import { resolveSidebarProductImages } from "../../shared/product-images-upload";
-import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button";
-import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
-import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { fileToGenerationImageBase64 } from "../../shared/compressGenerationImage";
 import {
   getGeneratedImagePreviewSrc,
   hasGeneratedImageData,
   toUiGeneratedImage,
 } from "../../shared/generatedMediaUtils";
+import { resolveSidebarProductImages } from "../../shared/product-images-upload";
+import { SceneAutoDownloadButton } from "../../shared/scene-auto-download-button";
+import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-tab";
+import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
@@ -311,13 +311,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             {labelEl}
             {text}
           </span>
-          {/* Action icons – visible on hover */}
+          {/* Action icons – always visible on mobile, hover on desktop */}
           <div
-            className="absolute top-0 right-2 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity"
-            style={{
-              opacity: hoveredField === field ? 1 : 0,
-              pointerEvents: hoveredField === field ? "auto" : "none",
-            }}
+            className={`absolute -top-3 -right-1.5 sm:-right-2.5 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity opacity-100 pointer-events-auto ${
+              hoveredField === field
+                ? "md:opacity-100 md:pointer-events-auto"
+                : "md:opacity-0 md:pointer-events-none"
+            }`}
           >
             {/* Toggle view prompt button */}
             <button
