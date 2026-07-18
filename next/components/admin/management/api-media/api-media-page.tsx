@@ -22,10 +22,20 @@ const PLAN_LABELS: Record<string, string> = {
   [ApiMediaSubscriptionPlanEnum.UNLIMITED]: "Unlimited",
 };
 
+const PLAN_FILTER_OPTIONS = Object.entries(PLAN_LABELS).map(([value, label]) => ({
+  value,
+  label,
+}));
+
 export function ApiMediaAdminPage() {
   const { t } = useTranslation();
   const toast = useToast();
   const { userPermission } = useAuth();
+
+  const activeFilterOptions = [
+    { value: true, label: t("Đang kích hoạt") },
+    { value: false, label: t("Đã tắt") },
+  ];
 
   return (
     <Card>
@@ -66,14 +76,16 @@ export function ApiMediaAdminPage() {
                 className="w-48"
                 clearable
                 placeholder={t("Lọc theo gói")}
-                options={Object.entries(PLAN_LABELS).map(([value, label]) => ({
-                  value,
-                  label,
-                }))}
+                options={PLAN_FILTER_OPTIONS}
               />
             </Field>
             <Field name="active" noError>
-              <Switch placeholder={t("Lọc kích hoạt")} />
+              <Select
+                className="w-48"
+                clearable
+                placeholder={t("Lọc kích hoạt")}
+                options={activeFilterOptions}
+              />
             </Field>
           </DataTable.Filter>
         </DataTable.Toolbar>
