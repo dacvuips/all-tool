@@ -204,6 +204,24 @@ function throwHttpError(label: string, status: number, url: string, rawBody: str
   throw err;
 }
 
+/** Lỗi khi poll — throw message thân thiện, log chi tiết server, không retry. */
+function throwServerPollError(
+  label: string,
+  statusCode: number,
+  serverDetail?: string
+): never {
+  const detail = (serverDetail || "").trim().slice(0, 400);
+  if (detail) {
+    logger.warn(`[${label}] ChatGPT poll error (${statusCode}): ${detail}`);
+  } else {
+    logger.warn(`[${label}] ChatGPT poll error (${statusCode})`);
+  }
+  const err: any = new Error(`Hệ thống đang bận (${statusCode}). Liên hệ Admin`);
+  err.statusCode = statusCode;
+  err.retryable = false;
+  throw err;
+}
+
 type ChatGPTJobStatus = "queued" | "running" | "done" | "failed" | string;
 
 function normalizeJobStatus(value: unknown): ChatGPTJobStatus {
@@ -351,8 +369,25 @@ function pickJobError(data: Record<string, unknown>): string {
   ];
   for (const c of candidates) {
     if (typeof c === "string" && c.trim()) return c.trim();
+    if (c && typeof c === "object") {
+      const rec = c as Record<string, unknown>;
+      if (typeof rec.message === "string" && rec.message.trim()) return rec.message.trim();
+      if (typeof rec.error === "string" && rec.error.trim()) return rec.error.trim();
+    }
   }
   return JSON.stringify(data).slice(0, 300);
+}
+
+/** Lấy message lỗi từ body HTTP poll (ưu tiên field error/message của server). */
+function pickServerErrorMessage(rawBody: string, status: number): string {
+  const trimmed = (rawBody || "").trim();
+  if (!trimmed) return `Flow2 ChatGPT poll error (${status})`;
+  try {
+    const data = JSON.parse(trimmed) as Record<string, unknown>;
+    return pickJobError(data);
+  } catch {
+    return trimmed.slice(0, 500);
+  }
 }
 
 function normalizeBase64Data(value: string): string {
@@ -651,17 +686,17 @@ async function pollChatGPTPictureJob(params: {
       },
     });
     const rawBody = await resp.text();
+
+    // Lỗi HTTP từ server → dừng ngay, hiện message thân thiện
     if (!resp.ok) {
-      throwHttpError(params.label, resp.status, pollUrl, rawBody);
+      throwServerPollError(params.label, resp.status, pickServerErrorMessage(rawBody, resp.status));
     }
 
     let data: Record<string, unknown>;
     try {
       data = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      const err: any = new Error(`Flow2 ChatGPT poll JSON không hợp lệ: ${rawBody.slice(0, 200)}`);
-      err.statusCode = 502;
-      throw err;
+      throwServerPollError(params.label, 502, rawBody.slice(0, 500) || "Poll trả về không phải JSON");
     }
 
     const status = normalizeJobStatus(data.status);
@@ -670,13 +705,9 @@ async function pollChatGPTPictureJob(params: {
       logger.info(`[${params.label}] ChatGPT job ${params.jobId} status=${status}`);
     }
 
+    // Job fail → dừng ngay
     if (status === "failed" || status === "error") {
-      const err: any = new Error(
-        `Flow2 ChatGPT job failed (${params.jobId}): ${pickJobError(data)}`
-      );
-      err.statusCode = 502;
-      err.retryable = true;
-      throw err;
+      throwServerPollError(params.label, 502, pickJobError(data));
     }
 
     const isPending =
@@ -685,6 +716,7 @@ async function pollChatGPTPictureJob(params: {
       status === "pending" ||
       status === "processing";
 
+    // Thành công → xuất kết quả
     if (status === "done" || status === "succeeded" || status === "success") {
       await emitProgress(88, "Đang tải ảnh kết quả...");
       return parseChatGPTPictureResult(data, {
@@ -708,7 +740,6 @@ async function pollChatGPTPictureJob(params: {
       }
     }
 
-    // Heartbeat SSE — tránh proxy/Cloudflare 504 khi chờ lâu
     tick += 1;
     const elapsedSec = Math.round((Date.now() - startedAt) / 1000);
     const progress = Math.min(85, 15 + tick * 2);
@@ -722,12 +753,11 @@ async function pollChatGPTPictureJob(params: {
     await sleep(pollIntervalMs);
   }
 
-  const err: any = new Error(
-    `Flow2 ChatGPT job timeout (${timeoutMs}ms) jobId=${params.jobId} lastStatus=${lastStatus || "unknown"}`
+  throwServerPollError(
+    params.label,
+    504,
+    `timeout jobId=${params.jobId} lastStatus=${lastStatus || "unknown"}`
   );
-  err.statusCode = 504;
-  err.retryable = true;
-  throw err;
 }
 
 /**
@@ -873,17 +903,17 @@ async function pollChatGPTJob(params: {
       },
     });
     const rawBody = await resp.text();
+
+    // Lỗi HTTP từ server → dừng ngay, hiện message thân thiện
     if (!resp.ok) {
-      throwHttpError(params.label, resp.status, pollUrl, rawBody);
+      throwServerPollError(params.label, resp.status, pickServerErrorMessage(rawBody, resp.status));
     }
 
     let data: Record<string, unknown>;
     try {
       data = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      const err: any = new Error(`Flow2 ChatGPT poll JSON không hợp lệ: ${rawBody.slice(0, 200)}`);
-      err.statusCode = 502;
-      throw err;
+      throwServerPollError(params.label, 502, rawBody.slice(0, 500) || "Poll trả về không phải JSON");
     }
 
     const status = normalizeJobStatus(data.status);
@@ -892,13 +922,9 @@ async function pollChatGPTJob(params: {
       logger.info(`[${params.label}] ChatGPT job ${params.jobId} status=${status}`);
     }
 
+    // Job fail → dừng ngay
     if (status === "failed" || status === "error") {
-      const err: any = new Error(
-        `Flow2 ChatGPT job failed (${params.jobId}): ${pickJobError(data)}`
-      );
-      err.statusCode = 502;
-      err.retryable = true;
-      throw err;
+      throwServerPollError(params.label, 502, pickJobError(data));
     }
 
     const isPending =
@@ -907,7 +933,7 @@ async function pollChatGPTJob(params: {
       status === "pending" ||
       status === "processing";
 
-    // Chỉ coi xong khi status = done (KHÔNG dùng data.ok — ok=true thường xuất hiện cả lúc running)
+    // Thành công → xuất kết quả
     if (status === "done" || status === "succeeded" || status === "success") {
       return parseChatGPTV1Result(data);
     }
@@ -921,18 +947,19 @@ async function pollChatGPTJob(params: {
     await sleep(pollIntervalMs);
   }
 
-  const err: any = new Error(
-    `Flow2 ChatGPT job timeout (${timeoutMs}ms) jobId=${params.jobId} lastStatus=${lastStatus || "unknown"}`
+  throwServerPollError(
+    params.label,
+    504,
+    `timeout jobId=${params.jobId} lastStatus=${lastStatus || "unknown"}`
   );
-  err.statusCode = 504;
-  err.retryable = true;
-  throw err;
 }
 
 /**
  * Gọi ChatGPT qua Flow2 public API (async + poll — tránh Cloudflare 524):
  * POST /api/v1/chatgpt/chat?async=true → { id, status, poll_url }
- * GET  /api/v1/chatgpt/chat/{id} đến done|failed
+ * GET  /api/v1/chatgpt/chat/{id} mỗi 2.5s:
+ *   - done → trả kết quả
+ *   - failed / HTTP lỗi → throw "Hệ thống đang bận (mã lỗi). Liên hệ Admin"
  */
 export async function callChatGPTGateway(params: {
   text: string;

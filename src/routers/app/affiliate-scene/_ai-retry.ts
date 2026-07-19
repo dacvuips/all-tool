@@ -19,6 +19,7 @@ export async function retryAICall<T>(fn: () => Promise<T>, label: string): Promi
 
       const errStatus = err?.statusCode || err?.status;
       const isNonRetryable =
+        err?.retryable === false ||
         errStatus === 403 ||
         errStatus === 401 ||
         (errStatus === 429 && !err?.retryable);
