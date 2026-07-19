@@ -30,6 +30,11 @@ export type PersistedUploadThread = {
   proxy: string;
   error: string;
   status: "stopped" | "running" | "success" | "error";
+  /** Thời điểm chạy tiếp (unix giây) — không bắt buộc với phiên cũ */
+  nextRunAt?: number;
+  jobId?: string;
+  postId?: string;
+  postLink?: string;
 };
 
 export type UploadSessionData = {
@@ -70,6 +75,7 @@ export function sanitizeUploadThreadForPersist(t: PersistedUploadThread): Persis
     videoFile: cleaned,
     status: t.status === "running" ? "stopped" : t.status,
     error: t.error || "-",
+    nextRunAt: 0,
   };
 }
 

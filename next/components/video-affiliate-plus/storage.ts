@@ -27,6 +27,11 @@ import {
   createEmptyItem,
   migrateToCharacterProfile,
   parseProxyLine,
+  parseCompoundMailKpCookie,
+  resolveUserCookie,
+  normalizeShopeeAccountDomain,
+  normalizeMailKp,
+  extractSpcFFromCookie,
 } from "./types";
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -167,12 +172,49 @@ function normalizeGenerateItems(raw: Partial<AffiliatePlusUser>): AffiliatePlusU
 }
 
 function normalizeUser(raw: Partial<AffiliatePlusUser>): AffiliatePlusUser {
+  const email = String(raw.mail || raw.email || "").trim();
+  let mailKp = normalizeMailKp(
+    raw.mailKp || (raw as { mail_kp?: string }).mail_kp || ""
+  );
+  let cookie = String(raw.cookie || "").trim();
+  const legacyCompound = String((raw as { mailCookie?: string }).mailCookie || "").trim();
+  if (legacyCompound) {
+    const parsed = parseCompoundMailKpCookie(legacyCompound);
+    if (parsed) {
+      mailKp = mailKp || parsed.mailKp;
+      cookie = cookie || parsed.cookie;
+    } else if (!cookie) {
+      cookie = legacyCompound;
+    }
+  }
+  mailKp = normalizeMailKp(mailKp);
+  const password = String((raw as AffiliatePlusUser).password || "").trim();
+  const cookieApp = String(
+    (raw as AffiliatePlusUser).cookieApp || (raw as any).cookie_app || ""
+  ).trim();
+  let spcF = String((raw as AffiliatePlusUser).spcF || (raw as any).spc_f || "").trim();
+  if (!spcF && cookieApp) {
+    spcF = extractSpcFFromCookie(cookieApp);
+  }
+  if (!spcF && cookie) {
+    spcF = extractSpcFFromCookie(cookie);
+  }
+  const cookieFetchedAt = String(
+    (raw as AffiliatePlusUser).cookieFetchedAt || (raw as any).cookie_fetched_at || ""
+  ).trim();
   return {
     id: String(raw.id || crypto.randomUUID()),
     username: String(raw.username || "").trim(),
-    email: String(raw.email || ""),
+    email,
+    mail: email,
     role: String(raw.role || "user"),
-    cookie: String(raw.cookie || ""),
+    mailKp,
+    cookie,
+    cookieApp,
+    password,
+    spcF,
+    domain: normalizeShopeeAccountDomain((raw as AffiliatePlusUser).domain || (raw as any).country),
+    cookieFetchedAt: cookieFetchedAt || undefined,
     proxy: String(raw.proxy || ""),
     error: String(raw.error || ""),
     active: raw.active !== false,

@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Viet-Theo-Bridge",
-  "version": "1.4.4",
-  "description": "Gửi CSV Shopee Affiliate về Viet-Theo-Bridge (domain tự bắt / Số SP / Delay / link short).",
-  "permissions": ["storage", "tabs"],
+  "version": "1.6.4",
+  "description": "Gửi CSV Affiliate + lấy cookie đăng nhập Shopee về Viet-Theo-Bridge.",
+  "permissions": ["storage", "tabs", "cookies"],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
@@ -12,7 +12,19 @@
     "https://affiliate.shopee.sg/*",
     "https://affiliate.shopee.co.th/*",
     "https://affiliate.shopee.com.my/*",
-    "https://affiliate.shopee.co.id/*"
+    "https://affiliate.shopee.co.id/*",
+    "https://shopee.vn/*",
+    "https://*.shopee.vn/*",
+    "https://shopee.ph/*",
+    "https://*.shopee.ph/*",
+    "https://shopee.sg/*",
+    "https://*.shopee.sg/*",
+    "https://shopee.co.th/*",
+    "https://*.shopee.co.th/*",
+    "https://shopee.com.my/*",
+    "https://*.shopee.com.my/*",
+    "https://shopee.co.id/*",
+    "https://*.shopee.co.id/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -31,6 +43,18 @@
     {
       "matches": ["http://127.0.0.1/*", "http://localhost/*"],
       "js": ["app-bridge.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://shopee.vn/*",
+        "https://shopee.ph/*",
+        "https://shopee.sg/*",
+        "https://shopee.co.th/*",
+        "https://shopee.com.my/*",
+        "https://shopee.co.id/*"
+      ],
+      "js": ["login-content.js"],
       "run_at": "document_idle"
     },
     {

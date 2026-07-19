@@ -21,7 +21,8 @@ import { LogsPanel } from "./panels/logs-panel";
 import { ProxiesPanel } from "./panels/proxies-panel";
 import { ScrapeDataPanel } from "./panels/scrape-data-panel";
 import { SettingsPanel } from "./panels/settings-panel";
-import { ShopeeVideoUploadPanel } from "./panels/shopee-video-upload-panel";
+import { ShopeeUploadFlowPanel } from "../shopee-video-upload/panels/upload-flow-panel";
+import { SignerSettingsPanel } from "../shopee-video-upload/panels/signer-settings";
 import { ThreadManagementPanel } from "./panels/thread-management-panel";
 import { UsersPanel } from "./panels/users-panel";
 import {
@@ -463,14 +464,21 @@ export default function VideoAffiliatePlusPage() {
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Đăng video Shope")}>
-            <ShopeeVideoUploadPanel
+            <ShopeeUploadFlowPanel
               users={users}
+              proxies={proxies}
+              settings={settings}
               importHistory={importHistory}
               selectedHistoryId={selectedHistoryId}
               onUpdateUsers={async (next) => {
                 setUsers(next);
                 await saveUsers(next);
               }}
+              onUpdateSettings={(next) => {
+                setSettings(next);
+                void saveSettings(next);
+              }}
+              onAddLog={handleAddLog}
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
@@ -502,13 +510,16 @@ export default function VideoAffiliatePlusPage() {
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Cài Đặt")}>
-            <SettingsPanel
-              settings={settings}
-              onUpdateSettings={(next) => {
-                setSettings(next);
-                saveSettings(next);
-              }}
-            />
+            <div className="space-y-5">
+              <SettingsPanel
+                settings={settings}
+                onUpdateSettings={(next) => {
+                  setSettings(next);
+                  saveSettings(next);
+                }}
+              />
+              <SignerSettingsPanel />
+            </div>
           </TabGroup.Tab>
         </TabGroup>
       </div>

@@ -11,10 +11,11 @@
  * - users (danh sách tài khoản + item Generate đã gắn)
  * - proxies (danh sách proxy host:port:user:pass)
  * - upload-history (phiên Đăng video Shope)
+ * - cookie-fetch-history (lịch sử lấy / gắn cookie)
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
@@ -25,6 +26,7 @@ const STORE_THREAD_META = "thread-meta";
 const STORE_USERS = "users";
 const STORE_PROXIES = "proxies";
 const STORE_UPLOAD_HISTORY = "upload-history";
+const STORE_COOKIE_FETCH_HISTORY = "cookie-fetch-history";
 const CONFIG_KEY = "config";
 const IMPORT_HISTORY_KEY = "list";
 const SELECTED_HISTORY_KEY = "selectedId";
@@ -32,6 +34,7 @@ const USERS_LIST_KEY = "list";
 const PROXIES_LIST_KEY = "list";
 const UPLOAD_HISTORY_KEY = "list";
 const SELECTED_UPLOAD_HISTORY_KEY = "selectedId";
+const COOKIE_FETCH_HISTORY_KEY = "list";
 
 /** Bản ghi video theo mã sản phẩm — giống pattern affiliate-video (link → base64). */
 export type ProductVideoRecord = {
@@ -94,13 +97,15 @@ export type ThreadMetaRecord = {
 };
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let openedDbVersion = 0;
 
 function openDB(): Promise<IDBDatabase> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("IndexedDB unavailable on server"));
   }
-  if (dbPromise) return dbPromise;
+  if (dbPromise && openedDbVersion === DB_VERSION) return dbPromise;
 
+  openedDbVersion = DB_VERSION;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(VIDEO_AFFILIATE_MANAGER_DB, DB_VERSION);
 
@@ -147,6 +152,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_UPLOAD_HISTORY)) {
         db.createObjectStore(STORE_UPLOAD_HISTORY);
+      }
+      if (!db.objectStoreNames.contains(STORE_COOKIE_FETCH_HISTORY)) {
+        db.createObjectStore(STORE_COOKIE_FETCH_HISTORY);
       }
     };
 
@@ -652,4 +660,36 @@ export async function idbSetSelectedUploadHistoryId(id: string | null): Promise<
   await withStore(STORE_UPLOAD_HISTORY, "readwrite", (s) =>
     s.put(id, SELECTED_UPLOAD_HISTORY_KEY)
   );
+}
+
+/** ==================== COOKIE FETCH HISTORY ==================== */
+
+export async function idbGetCookieFetchHistoryList<T>(): Promise<T[]> {
+  try {
+    const list = await withStore<T[] | undefined>(
+      STORE_COOKIE_FETCH_HISTORY,
+      "readonly",
+      (s) => s.get(COOKIE_FETCH_HISTORY_KEY) as IDBRequest<T[] | undefined>
+    );
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get cookie-fetch history failed", err);
+    return [];
+  }
+}
+
+export async function idbSetCookieFetchHistoryList<T>(list: T[]): Promise<void> {
+  await withStore(STORE_COOKIE_FETCH_HISTORY, "readwrite", (s) =>
+    s.put(list, COOKIE_FETCH_HISTORY_KEY)
+  );
+}
+
+export async function idbClearCookieFetchHistory(): Promise<void> {
+  try {
+    await withStore(STORE_COOKIE_FETCH_HISTORY, "readwrite", (s) =>
+      s.delete(COOKIE_FETCH_HISTORY_KEY)
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] clear cookie-fetch history failed", err);
+  }
 }
