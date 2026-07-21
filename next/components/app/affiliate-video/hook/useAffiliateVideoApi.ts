@@ -771,7 +771,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/generation-scene/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as ScriptData };
       } catch (err: any) {
@@ -792,7 +792,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/generation-trending/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as TrendingScriptData };
       } catch (err: any) {
@@ -1013,7 +1013,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/copy-video-analysis/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as CopyVideoAnalysisData };
       } catch (err: any) {
@@ -1155,7 +1155,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/storyboard-analysis/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as StoryboardAnalysisData };
       } catch (err: any) {
@@ -1640,7 +1640,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             mood: params.mood,
             language: params.language,
           },
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {

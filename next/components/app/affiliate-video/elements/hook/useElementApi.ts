@@ -752,7 +752,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
             mood: params.mood,
             language: params.language,
           },
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {

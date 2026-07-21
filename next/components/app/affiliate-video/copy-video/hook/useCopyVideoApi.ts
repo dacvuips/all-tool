@@ -384,7 +384,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/copy-video-analysis/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as CopyVideoAnalysisData };
       } catch (err: any) {
@@ -742,7 +742,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
             mood: params.mood,
             language: params.language,
           },
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {

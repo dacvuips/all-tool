@@ -429,7 +429,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         const { data } = await aiTextJob.run({
           url: "/api/app/generation-review-scene/",
           body,
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return { success: true, data: data.data as unknown as ReviewAnalysisData };
       } catch (err: any) {
@@ -874,7 +874,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
             mood: params.mood,
             language: params.language,
           },
-          pollIntervalMs: 3000,
+          pollIntervalMs: 1000,
         });
         return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
