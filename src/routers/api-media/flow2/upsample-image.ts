@@ -5,6 +5,7 @@ import {
   throwFlow2HttpError,
 } from "./_shared";
 import {
+  extractUpsampleImageBytesFromStatus,
   pickUpsampleJobId,
   resolveUpsampleImageUrl,
   waitForUpsampleJobDone,
@@ -19,9 +20,12 @@ export type UpsampleImageWithFlow2Params = {
 };
 
 export type UpsampledImageResult = {
+  /** HTTP URL (nếu Flow2 trả) — có thể rỗng khi chỉ có data_url */
   imageUrl: string;
   mimeType: string;
   upsampleJobId: string;
+  /** Base64 thuần từ result.data_url — ưu tiên dùng, không cần fetch HTTP */
+  imageBytes?: string;
 };
 
 const UPSAMPLE_TARGET_RESOLUTION: Record<UpsampleResolution, string> = {
@@ -37,10 +41,10 @@ function buildUpsampleBody(params: UpsampleImageWithFlow2Params): Record<string,
 }
 
 /**
- * Flow2 upsample-image (async):
- * 1) POST /api/requests/upsample-image — enqueue
+ * Flow2 upsample-image (async) — đúng flow docs:
+ * 1) POST /api/requests/upsample-image — enqueue (tránh CF 504)
  * 2) Poll GET /api/requests/{upsampleJobId} đến status=done
- * 3) Trả URL ảnh (không tải base64)
+ * 3) Lấy ảnh từ result.data_url (base64) hoặc HTTP URL nếu có
  */
 export async function upsampleImageWithFlow2(
   params: UpsampleImageWithFlow2Params
@@ -88,17 +92,33 @@ export async function upsampleImageWithFlow2(
   });
 
   if (onProgress) {
-    await onProgress(90, "Đang lấy link ảnh upscale...");
+    await onProgress(90, "Đang lấy ảnh upscale...");
+  }
+
+  // Flow2 upsample thường trả result.data_url (data:image/jpeg;base64,...) — không có /image/{id}
+  const fromDataUrl = extractUpsampleImageBytesFromStatus(statusData);
+  if (fromDataUrl) {
+    logger.info(
+      `[flow2-upsample-image] Lấy từ data_url ${resolution} source=${sourceRequestId} job=${upsampleJobId} bytes=${fromDataUrl.imageBytes.length}`
+    );
+    if (onProgress) {
+      await onProgress(92, `Đã nhận ảnh upscale ${resolution}`);
+    }
+    return {
+      imageUrl: "",
+      mimeType: fromDataUrl.mimeType || "image/jpeg",
+      upsampleJobId,
+      imageBytes: fromDataUrl.imageBytes,
+    };
   }
 
   const imageUrl = await resolveUpsampleImageUrl(upsampleJobId, statusData);
-
   logger.info(
     `[flow2-upsample-image] Hoàn tất ${resolution} source=${sourceRequestId} job=${upsampleJobId} url=${imageUrl}`
   );
 
   if (onProgress) {
-    await onProgress(100, `Hoàn tất upscale ảnh ${resolution}`);
+    await onProgress(92, `Đã có link upscale ảnh ${resolution}`);
   }
 
   return {

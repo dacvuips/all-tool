@@ -116,6 +116,8 @@ export type MediaGenerationUpsampleImageResult = {
   fifeUrl?: string;
   mimeType: string;
   upsampleJobId?: string;
+  /** Base64 từ Flow2 result.data_url khi không có HTTP URL */
+  imageBytes?: string;
 };
 
 /** Output upscale video API Media */

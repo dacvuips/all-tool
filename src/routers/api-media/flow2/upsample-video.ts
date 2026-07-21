@@ -78,7 +78,7 @@ export async function upsampleVideoWithFlow2(params: {
   );
 
   if (onProgress) {
-    await onProgress(100, "Hoàn tất upscale 1080p");
+    await onProgress(92, "Đã có link upscale video 1080p");
   }
 
   return {

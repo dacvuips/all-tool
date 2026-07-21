@@ -7,6 +7,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { upsampleVideoWithFlow2 } from "../../api-media/flow2/upsample-video";
+import { fetchFlow2UpsampleMediaBytes } from "../../api-media/flow2/upsample-poll";
 import {
   initGenerationSSE,
   sendGenerationSSEError,
@@ -74,15 +75,13 @@ export default [
 
         send({ type: "progress", progress: 96, message: "Đang chuẩn bị tải xuống..." });
 
-        const downloadResp = await fetch(result.videoUri);
-        if (!downloadResp.ok) {
-          throw Object.assign(new Error("Không tải được video upscale từ Flow2"), {
-            statusCode: 502,
-          });
-        }
-        const videoBytes = Buffer.from(await downloadResp.arrayBuffer()).toString("base64");
-        const mimeType =
-          downloadResp.headers.get("content-type")?.split(";")[0]?.trim() || result.mimeType;
+        const downloaded = await fetchFlow2UpsampleMediaBytes({
+          url: result.videoUri,
+          jobId: result.upsampleJobId,
+          kind: "video",
+        });
+        const videoBytes = downloaded.buffer.toString("base64");
+        const mimeType = downloaded.mimeType || result.mimeType;
 
         const downloadToken = createUpsampleVideoDownloadToken();
         await saveUpsampleVideoTemp(downloadToken, {
@@ -99,7 +98,7 @@ export default [
           downloadToken,
           mimeType,
           fileName: downloadName,
-          videoUri: result.videoUri,
+          videoUri: downloaded.finalUrl || result.videoUri,
         });
         res.end();
       } catch (err: any) {

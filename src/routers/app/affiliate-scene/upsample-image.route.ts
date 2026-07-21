@@ -10,6 +10,7 @@ import {
   upsampleImageWithFlow2,
   UpsampleResolution,
 } from "../../api-media/flow2/upsample-image";
+import { fetchFlow2UpsampleMediaBytes } from "../../api-media/flow2/upsample-poll";
 import {
   initGenerationSSE,
   sendGenerationSSEError,
@@ -95,21 +96,26 @@ export default [
 
         send({ type: "progress", progress: 96, message: "Đang chuẩn bị tải xuống..." });
 
-        const downloadResp = await fetch(result.imageUrl);
-        if (!downloadResp.ok) {
-          throw Object.assign(new Error("Không tải được ảnh upscale từ Flow2"), {
-            statusCode: 502,
+        let imageBytes = (result.imageBytes || "").trim();
+        let mimeType = result.mimeType;
+        let imageUrl = result.imageUrl || "";
+
+        if (!imageBytes) {
+          const downloaded = await fetchFlow2UpsampleMediaBytes({
+            url: result.imageUrl,
+            jobId: result.upsampleJobId,
+            kind: "image",
           });
+          imageBytes = downloaded.buffer.toString("base64");
+          mimeType = downloaded.mimeType || result.mimeType;
+          imageUrl = downloaded.finalUrl || result.imageUrl;
         }
-        const imageBytes = Buffer.from(await downloadResp.arrayBuffer()).toString("base64");
+
         if (!imageBytes.length) {
           throw Object.assign(new Error("Ảnh upscale trả về rỗng"), { statusCode: 502 });
         }
 
-        const mimeType =
-          downloadResp.headers.get("content-type")?.split(";")[0]?.trim() || result.mimeType;
-
-        // Chỉ trừ lượt sau khi tải file thành công — tránh trừ oan khi URL lỗi
+        // Chỉ trừ lượt sau khi có file thành công — tránh trừ oan khi URL lỗi
         await incrementImageCount(context.id);
 
         const downloadToken = createUpsampleImageDownloadToken();
@@ -127,7 +133,7 @@ export default [
           downloadToken,
           mimeType,
           fileName: downloadName,
-          imageUrl: result.imageUrl,
+          imageUrl: imageUrl || undefined,
         });
         res.end();
       } catch (err: any) {

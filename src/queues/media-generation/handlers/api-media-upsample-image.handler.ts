@@ -48,5 +48,6 @@ export async function handleApiMediaUpsampleImage(
     fifeUrl: result.imageUrl,
     mimeType: result.mimeType,
     upsampleJobId: result.upsampleJobId,
+    imageBytes: result.imageBytes,
   };
 }
