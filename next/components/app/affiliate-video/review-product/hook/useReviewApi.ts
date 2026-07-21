@@ -431,7 +431,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as ReviewAnalysisData };
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         return undefined;
@@ -876,7 +876,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           },
           pollIntervalMs: 3000,
         });
-        return data.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);

@@ -386,7 +386,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as CopyVideoAnalysisData };
       } catch (err: any) {
         const message = err?.message || "Lỗi server";
         console.error(message);
@@ -744,7 +744,7 @@ export function useCopyVideoApi(): UseAffiliateVideoApiReturn {
           },
           pollIntervalMs: 3000,
         });
-        return data.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);

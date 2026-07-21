@@ -754,7 +754,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
           },
           pollIntervalMs: 3000,
         });
-        return data.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);

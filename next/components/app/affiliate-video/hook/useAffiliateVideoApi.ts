@@ -773,7 +773,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as ScriptData };
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         return undefined;
@@ -794,7 +794,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as TrendingScriptData };
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         return undefined;
@@ -1015,7 +1015,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as CopyVideoAnalysisData };
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         return undefined;
@@ -1157,7 +1157,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           body,
           pollIntervalMs: 3000,
         });
-        return { success: true, data: data.data };
+        return { success: true, data: data.data as unknown as StoryboardAnalysisData };
       } catch (err: any) {
         if (!options?.suppressToast) {
           toast.error(err?.message || "Lỗi server");
@@ -1642,7 +1642,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           },
           pollIntervalMs: 3000,
         });
-        return data.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
         toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);
