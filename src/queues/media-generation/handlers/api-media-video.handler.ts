@@ -8,7 +8,6 @@ import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import {
   assertApiMediaTokenRequestQuota,
-  incrementApiMediaTokenUsage,
 } from "./_api-media-quota";
 import { registerApiMediaFlow2RequestOwner } from "../../../routers/api-media/api-media-upscale-registry";
 
@@ -40,8 +39,6 @@ export async function handleApiMediaVideo(
       await emitter.setFlow2RequestId(flow2RequestId);
     },
   });
-
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
 
   if (result.flow2RequestId) {
     await registerApiMediaFlow2RequestOwner(apiMediaTokenId, result.flow2RequestId);

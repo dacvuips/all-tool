@@ -197,17 +197,13 @@ export async function extractFlow2Videos(
       return normalizedUrls.map((url) => ({ videoUri: url, mimeType: "video/mp4" }));
     }
 
-    const canDeriveVideoUrl =
-      requestId &&
-      (resultPayload.poll_mode === "media" || resultPayload.poll_mode === "get_media_fallback");
-
-    if (canDeriveVideoUrl) {
+    if (requestId) {
       const { baseUrl } = await getFlow2Config();
       const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
       logger.info(
-        `[flow2-video] poll_mode=${resultPayload.poll_mode}, derive video URL requestId=${requestId} media_ids=${JSON.stringify(
-          resultPayload.media_ids ?? []
-        )} url=${derivedUrl}`
+        `[flow2-video] Không có video_urls — derive link requestId=${requestId} poll_mode=${
+          resultPayload.poll_mode ?? "n/a"
+        } url=${derivedUrl}`
       );
       return [{ videoUri: derivedUrl, mimeType: "video/mp4" }];
     }
@@ -226,6 +222,24 @@ export async function extractFlow2Videos(
     );
     return [];
   }
+
+  const httpCandidates = deduped.filter((value) => isHttpUrl(value.trim()));
+  if (httpCandidates.length > 0) {
+    return httpCandidates.map((url) => ({
+      videoUri: normalizeFlow2MediaUrl(url.trim()),
+      mimeType: "video/mp4",
+    }));
+  }
+
+  if (requestId) {
+    const { baseUrl } = await getFlow2Config();
+    const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
+    logger.info(
+      `[flow2-video] Flow2 trả base64/data URL — dùng link derive requestId=${requestId} url=${derivedUrl}`
+    );
+    return [{ videoUri: derivedUrl, mimeType: "video/mp4" }];
+  }
+
   return Promise.all(deduped.map(normalizeResultVideo));
 }
 

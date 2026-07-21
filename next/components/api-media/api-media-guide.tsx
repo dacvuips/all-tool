@@ -511,16 +511,17 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
     "status": "SUCCEEDED",
     "progress": 100,
     "resultData": {
-      "images": [{ "flow2RequestId": "..." }],
+      "images": [{ "imageUrl": "https://flow2.../image/...", "flow2RequestId": "..." }],
+      "videoUri": "https://flow2.../video/...",
       "flow2RequestId": "...",
-      "imageBytes": "...",
-      "videoBytes": "..."
+      "imageUrl": "https://flow2.../image/...",
+      "mimeType": "image/jpeg"
     }
   }
 }`}</pre>
               <p className="mt-2 text-[10px] text-gray-500 leading-snug">
                 {t(
-                  "Gen ảnh: resultData.images[].flow2RequestId — Gen video: resultData.flow2RequestId — Upscale: imageBytes/videoBytes + mimeType"
+                  "Gen ảnh: images[].imageUrl + flow2RequestId — Gen video: videoUri + flow2RequestId — Upscale ảnh: imageUrl — Upscale video: videoUri"
                 )}
               </p>
             </div>

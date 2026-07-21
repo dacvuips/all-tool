@@ -1,5 +1,6 @@
 /**
  * Handler API_MEDIA_UPSAMPLE_IMAGE — upscale ảnh Flow2 (async job, tránh 504).
+ * Không trừ usedQuantity (upsample miễn phí theo lượt request).
  */
 import {
   IMediaGenerationJob,
@@ -9,10 +10,6 @@ import {
   upsampleImageWithFlow2,
   UpsampleResolution,
 } from "../../../routers/api-media/flow2/upsample-image";
-import {
-  assertApiMediaTokenRequestQuota,
-  incrementApiMediaTokenUsage,
-} from "./_api-media-quota";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 
@@ -35,7 +32,6 @@ export async function handleApiMediaUpsampleImage(
     throw Object.assign(new Error("Thiếu flow2RequestId"), { statusCode: 400 });
   }
 
-  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
   await emitter.progress(5, `Đang upscale ảnh ${payload.resolution}...`);
 
   const result = await upsampleImageWithFlow2({
@@ -46,10 +42,11 @@ export async function handleApiMediaUpsampleImage(
     },
   });
 
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
   await emitter.progress(100, "Hoàn tất upscale ảnh");
   return {
-    imageBytes: result.imageBytes,
+    imageUrl: result.imageUrl,
+    fifeUrl: result.imageUrl,
     mimeType: result.mimeType,
+    upsampleJobId: result.upsampleJobId,
   };
 }

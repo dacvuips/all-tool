@@ -116,7 +116,8 @@ async function getApiMediaJob(req: Request, res: Response): Promise<void> {
 }
 
 async function enqueueUpsampleImage(req: Request, res: Response): Promise<void> {
-  const token = await resolveApiMediaTokenFromRequest(req);
+  // Upsample không trừ requestQuantity — chỉ cần token active/còn hạn
+  const token = await resolveApiMediaTokenFromRequest(req, { skipRequestQuota: true });
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
 
@@ -159,7 +160,8 @@ async function enqueueUpsampleImage(req: Request, res: Response): Promise<void> 
 }
 
 async function enqueueUpsampleVideo(req: Request, res: Response): Promise<void> {
-  const token = await resolveApiMediaTokenFromRequest(req);
+  // Upsample không trừ requestQuantity — chỉ cần token active/còn hạn
+  const token = await resolveApiMediaTokenFromRequest(req, { skipRequestQuota: true });
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
 

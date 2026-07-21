@@ -102,14 +102,14 @@ export function buildUpsampleImageSnippet(
   };
 
   if (lang === "curl") {
-    return `# Upscale ảnh — async (202 jobId), poll GET /api/api-media/job/:jobId
+    return `# Upscale ảnh ${resolution} — async (202 jobId), poll GET /api/api-media/job/:jobId
 # flow2RequestId lấy từ resultData.images[].flow2RequestId sau gen_image
 curl -X POST "${base}/api/api-media/upsample-image" \\
   -H "x-api-key: ${apiKey}" \\
   -H "Content-Type: application/json" \\
   -d '${JSON.stringify(body)}'
 # → {"success":true,"jobId":"...","status":"QUEUED"}
-# Poll đến SUCCEEDED → resultData.imageBytes / mimeType`;
+# Poll đến SUCCEEDED → resultData.imageUrl (link HTTP)`;
   }
 
   return `import requests
@@ -125,7 +125,7 @@ res = requests.post(
 res.raise_for_status()
 job_id = res.json()["jobId"]
 
-# Bước 2 — Poll đến SUCCEEDED / FAILED
+# Bước 2 — Poll đến SUCCEEDED / FAILED → resultData.imageUrl
 while True:
     job = requests.get(
         f"${base}/api/api-media/job/{job_id}",
@@ -134,7 +134,8 @@ while True:
     ).json()["data"]
     print(job["status"], job.get("progress"), job.get("message"))
     if job["status"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
-        print(job.get("resultData") or job.get("errorMessage"))
+        result = job.get("resultData") or {}
+        print(result.get("imageUrl") or job.get("errorMessage"))
         break
     time.sleep(3)`;
 }
@@ -151,7 +152,7 @@ curl -X POST "${base}/api/api-media/upsample-video" \\
   -H "Content-Type: application/json" \\
   -d '${JSON.stringify(body)}'
 # → {"success":true,"jobId":"...","status":"QUEUED"}
-# Poll đến SUCCEEDED → resultData.videoBytes / mimeType`;
+# Poll đến SUCCEEDED → resultData.videoUri (link HTTP)`;
   }
 
   return `import requests
@@ -167,7 +168,7 @@ res = requests.post(
 res.raise_for_status()
 job_id = res.json()["jobId"]
 
-# Bước 2 — Poll đến SUCCEEDED / FAILED
+# Bước 2 — Poll đến SUCCEEDED / FAILED → resultData.videoUri
 while True:
     job = requests.get(
         f"${base}/api/api-media/job/{job_id}",
@@ -176,7 +177,8 @@ while True:
     ).json()["data"]
     print(job["status"], job.get("progress"), job.get("message"))
     if job["status"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
-        print(job.get("resultData") or job.get("errorMessage"))
+        result = job.get("resultData") or {}
+        print(result.get("videoUri") or job.get("errorMessage"))
         break
     time.sleep(3)`;
 }

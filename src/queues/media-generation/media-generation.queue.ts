@@ -48,6 +48,7 @@ import {
   canStartApiMediaJobProcessing,
   isApiMediaJobType,
 } from "./api-media-job-concurrency";
+import { incrementApiMediaTokenUsage } from "./handlers/_api-media-quota";
 import { isAiTextJobType } from "./ai-text-job-types";
 import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
 
@@ -167,7 +168,25 @@ class MediaGenerationQueue extends BaseQueue {
     try {
       const handler = getMediaJobHandler((jobDoc as any).type);
       const result = await handler(jobDoc, emitter);
-      await emitter.succeed(result as Record<string, unknown>);
+      const succeeded = await emitter.succeed(result as Record<string, unknown>);
+
+      // API Media gen image/video: trừ usedQuantity chỉ khi SUCCEEDED. Upsample không trừ.
+      if (
+        succeeded &&
+        ((jobDoc as any).type === MediaGenerationJobType.API_MEDIA_IMAGE ||
+          (jobDoc as any).type === MediaGenerationJobType.API_MEDIA_VIDEO)
+      ) {
+        const apiMediaTokenId = (jobDoc as any).metadata?.apiMediaTokenId as string | undefined;
+        if (apiMediaTokenId) {
+          try {
+            await incrementApiMediaTokenUsage(apiMediaTokenId);
+          } catch (quotaErr: any) {
+            this.logger.error(
+              `[MediaGenerationJob] Trừ quota API Media thất bại jobId=${jobId}: ${quotaErr?.message}`
+            );
+          }
+        }
+      }
     } catch (err: any) {
       if (err instanceof MediaJobCancelledError) {
         this.logger.info(`MediaGenerationJob ${jobId} bị huỷ giữa chừng.`);
@@ -180,7 +199,7 @@ class MediaGenerationQueue extends BaseQueue {
       this.logger.error(`MediaGenerationJob ${jobId} thất bại: ${message}`, err);
 
       await emitter.fail(message, statusCode);
-      // KHÔNG throw — đã capture vào job state.
+      // KHÔNG throw — đã capture vào job state. KHÔNG trừ usedQuantity.
     }
   }
 }

@@ -1,15 +1,12 @@
 /**
  * Handler API_MEDIA_UPSAMPLE_VIDEO — upscale video 1080p Flow2 (async job, tránh 504).
+ * Không trừ usedQuantity (upsample miễn phí theo lượt request).
  */
 import {
   IMediaGenerationJob,
   MediaGenerationUpsampleVideoResult,
 } from "../../../libs/dal/mediaGenerationJob";
 import { upsampleVideoWithFlow2 } from "../../../routers/api-media/flow2/upsample-video";
-import {
-  assertApiMediaTokenRequestQuota,
-  incrementApiMediaTokenUsage,
-} from "./_api-media-quota";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 
@@ -31,7 +28,6 @@ export async function handleApiMediaUpsampleVideo(
     throw Object.assign(new Error("Thiếu requestId / flow2RequestId"), { statusCode: 400 });
   }
 
-  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
   await emitter.progress(5, "Đang upscale video 1080p...");
 
   const result = await upsampleVideoWithFlow2({
@@ -41,10 +37,10 @@ export async function handleApiMediaUpsampleVideo(
     },
   });
 
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
   await emitter.progress(100, "Hoàn tất upscale video");
   return {
-    videoBytes: result.videoBytes,
+    videoUri: result.videoUri,
     mimeType: result.mimeType,
+    upsampleJobId: result.upsampleJobId,
   };
 }

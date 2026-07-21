@@ -58,14 +58,26 @@ export default [
         await checkImageLimit(context.id);
 
         const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
-        await incrementImageCount(context.id);
 
         const ext = mimeTypeToFileExtension(result.mimeType, "jpg");
         const defaultName = `image-${resolution.toLowerCase()}.${ext}`;
         const downloadName = (body.fileName || defaultName).replace(/[^\w.\-]+/g, "_");
 
-        const buffer = Buffer.from(result.imageBytes, "base64");
-        res.setHeader("Content-Type", result.mimeType);
+        const downloadResp = await fetch(result.imageUrl);
+        if (!downloadResp.ok) {
+          return res.status(502).json({ message: "Không tải được ảnh upscale từ Flow2" });
+        }
+        const buffer = Buffer.from(await downloadResp.arrayBuffer());
+        if (!buffer.length) {
+          return res.status(502).json({ message: "Ảnh upscale trả về rỗng" });
+        }
+
+        // Chỉ trừ lượt sau khi tải file thành công — tránh trừ oan khi URL lỗi
+        await incrementImageCount(context.id);
+
+        const contentType =
+          downloadResp.headers.get("content-type")?.split(";")[0]?.trim() || result.mimeType;
+        res.setHeader("Content-Type", contentType);
         res.setHeader("Content-Disposition", `attachment; filename="${downloadName}"`);
         res.setHeader("Content-Length", String(buffer.length));
         res.send(buffer);

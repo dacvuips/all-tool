@@ -165,7 +165,7 @@ console.log(data.status, data.progress);
 });
 const { jobId } = await enqueue.json();
 
-// Poll GET /api/api-media/job/:jobId → resultData.imageBytes`;
+// Poll GET /api/api-media/job/:jobId → resultData.imageUrl`;
   }
 
   if (routeId === "upsample_video") {
@@ -181,7 +181,7 @@ const { jobId } = await enqueue.json();
 });
 const { jobId } = await enqueue.json();
 
-// Poll GET /api/api-media/job/:jobId → resultData.videoBytes`;
+// Poll GET /api/api-media/job/:jobId → resultData.videoUri`;
   }
 
   const config = ROUTE_CONFIG[routeId];

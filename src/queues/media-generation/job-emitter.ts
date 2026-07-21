@@ -334,8 +334,9 @@ export class MediaJobEmitter {
    * Không xóa ngay document Mongo: cần giữ một khoảng retention để client poll fallback
    * vẫn đọc được result khi subscription/websocket bị lỗi trên production.
    */
-  async succeed(resultData: Record<string, unknown>, finalMessage = "Hoàn tất!"): Promise<void> {
-    if (this.terminated) return;
+  /** @returns true nếu đã ghi SUCCEEDED thành công (còn giữ lock). */
+  async succeed(resultData: Record<string, unknown>, finalMessage = "Hoàn tất!"): Promise<boolean> {
+    if (this.terminated) return false;
     const model = mediaGenerationJobService.model;
     const doc = await model.findOneAndUpdate(
       {
@@ -374,9 +375,10 @@ export class MediaJobEmitter {
         completedAt,
         SUCCESS_JOB_RETENTION_MS
       );
-    } else {
-      logger.warn(`[MediaJobEmitter] succeed jobId=${this.jobId} nhưng không còn giữ lock`);
+      return true;
     }
+    logger.warn(`[MediaJobEmitter] succeed jobId=${this.jobId} nhưng không còn giữ lock`);
+    return false;
   }
 
   /** Đánh dấu thất bại. Chỉ ghi khi *vẫn* giữ lock. */

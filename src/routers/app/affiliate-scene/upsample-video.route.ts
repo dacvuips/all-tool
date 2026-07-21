@@ -74,10 +74,20 @@ export default [
 
         send({ type: "progress", progress: 96, message: "Đang chuẩn bị tải xuống..." });
 
+        const downloadResp = await fetch(result.videoUri);
+        if (!downloadResp.ok) {
+          throw Object.assign(new Error("Không tải được video upscale từ Flow2"), {
+            statusCode: 502,
+          });
+        }
+        const videoBytes = Buffer.from(await downloadResp.arrayBuffer()).toString("base64");
+        const mimeType =
+          downloadResp.headers.get("content-type")?.split(";")[0]?.trim() || result.mimeType;
+
         const downloadToken = createUpsampleVideoDownloadToken();
         await saveUpsampleVideoTemp(downloadToken, {
-          videoBytes: result.videoBytes,
-          mimeType: result.mimeType,
+          videoBytes,
+          mimeType,
           customerId: context.id,
           fileName: downloadName,
         });
@@ -87,8 +97,9 @@ export default [
           progress: 100,
           message: "Hoàn tất upscale 1080p",
           downloadToken,
-          mimeType: result.mimeType,
+          mimeType,
           fileName: downloadName,
+          videoUri: result.videoUri,
         });
         res.end();
       } catch (err: any) {

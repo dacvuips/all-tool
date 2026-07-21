@@ -37,7 +37,10 @@ export function generateApiMediaKeyPair(): {
   };
 }
 
-function assertTokenUsable(token: IApiMediaToken): void {
+function assertTokenUsable(
+  token: IApiMediaToken,
+  options?: { skipRequestQuota?: boolean }
+): void {
   if (!token.active) {
     const err: any = new Error("API Key đã bị vô hiệu hóa");
     err.statusCode = 403;
@@ -48,6 +51,7 @@ function assertTokenUsable(token: IApiMediaToken): void {
     err.statusCode = 403;
     throw err;
   }
+  if (options?.skipRequestQuota) return;
   if (
     token.requestQuantity != null &&
     token.requestQuantity >= 0 &&
@@ -73,7 +77,10 @@ async function migrateLegacyPlainKey(token: IApiMediaToken, plainKey: string): P
 }
 
 /** Resolve token từ x-api-key (hash lookup + legacy plaintext migrate). */
-export async function resolveApiMediaTokenFromRequest(req: Request): Promise<IApiMediaToken> {
+export async function resolveApiMediaTokenFromRequest(
+  req: Request,
+  options?: { skipRequestQuota?: boolean }
+): Promise<IApiMediaToken> {
   const apiKey = req.headers["x-api-key"] as string | undefined;
   if (!apiKey?.trim()) {
     const err: any = new Error("Thiếu x-api-key");
@@ -98,7 +105,7 @@ export async function resolveApiMediaTokenFromRequest(req: Request): Promise<IAp
     throw err;
   }
 
-  assertTokenUsable(token);
+  assertTokenUsable(token, options);
   return token;
 }
 

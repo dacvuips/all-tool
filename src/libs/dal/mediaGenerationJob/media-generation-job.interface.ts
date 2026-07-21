@@ -110,16 +110,19 @@ export type MediaGenerationJsonResult = {
   data: Record<string, unknown>;
 };
 
-/** Output upscale ảnh API Media (khớp response cũ `data`) */
+/** Output upscale ảnh API Media */
 export type MediaGenerationUpsampleImageResult = {
-  imageBytes: string;
+  imageUrl: string;
+  fifeUrl?: string;
   mimeType: string;
+  upsampleJobId?: string;
 };
 
-/** Output upscale video API Media (khớp response cũ `data`) */
+/** Output upscale video API Media */
 export type MediaGenerationUpsampleVideoResult = {
-  videoBytes: string;
+  videoUri: string;
   mimeType: string;
+  upsampleJobId?: string;
 };
 
 /** Output chung — union, cho phép resultData mềm dẻo */

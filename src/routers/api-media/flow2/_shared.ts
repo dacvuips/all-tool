@@ -179,6 +179,34 @@ export function buildFlow2DerivedVideoUrl(apiBaseUrl: string, requestId: string)
   return `${mediaBase.replace(/\/+$/, "")}/video/${requestId}`;
 }
 
+/** URL ảnh upsample/gen — `{mediaBaseUrl}/image/{requestId}`. */
+export function buildFlow2DerivedImageUrl(apiBaseUrl: string, requestId: string): string {
+  const mediaBase = resolveFlow2MediaBaseUrl(apiBaseUrl);
+  return `${mediaBase.replace(/\/+$/, "")}/image/${requestId}`;
+}
+
+/**
+ * Luôn trả link HTTP cho video Flow2.
+ * Nếu Flow2 trả base64 / data URL → derive `{mediaHost}/video/{requestId}`.
+ */
+export async function resolveFlow2VideoHttpUrl(
+  videoUri: string,
+  requestId: string
+): Promise<string> {
+  const trimmed = videoUri.trim();
+  if (isHttpUrl(trimmed)) {
+    return normalizeFlow2MediaUrl(trimmed);
+  }
+
+  const id = requestId.trim();
+  if (!id) {
+    throw new Error("Không có link video và thiếu requestId để tạo URL tải");
+  }
+
+  const { baseUrl } = await getFlow2Config();
+  return buildFlow2DerivedVideoUrl(baseUrl, id);
+}
+
 function summarizeFlow2ResultForLog(statusData: Flow2StatusResponse): string {
   const resultPayload = pickFlow2ResultPayload(statusData);
   const requestId = pickFlow2RequestId(statusData);
