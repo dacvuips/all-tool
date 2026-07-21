@@ -1,40 +1,13 @@
+/**
+ * POST /api/app/generation-review-scene/ — enqueue → 202 { jobId }.
+ */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
-import { ReviewOpenAIJsonSchema } from "./_chatgpt.constants";
-import {
-  assertNonEmptyScenesArray,
-  buildImageReferenceNotes,
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
-  checkRequestLimit,
-  collectOrderedReviewReferenceImages,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
-  getImageDisplayName,
-  incrementRequestCount,
-  interpolateTemplate,
-  normalizeSceneAudioField,
-  parseGeminiJsonResponse,
-  resolveAiSceneProvider,
-  resolveArtStylePrompt,
-  resolveReferenceImagesForGemini,
-  ReviewFormConfig,
-} from "./_shared";
-import { ReviewResponseSchema } from "../constanst";
-
-interface ReviewPromptScene {
-  id: string;
-  timestamp: string;
-  scene_type: "CHARACTER" | "OBJECT";
-  sceneNumber: number;
-  visual_prompt: string;
-  motion_description: string;
-  audio_description: string;
-  original_content: string;
-  translated_content: string | null;
-}
+import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { checkRequestLimit, ReviewFormConfig } from "./_shared";
 
 export default [
   {
@@ -48,10 +21,8 @@ export default [
 
         const body = req.body as {
           config: ReviewFormConfig;
+          _metadata?: Record<string, unknown>;
         };
-        body.config.artStyleImgNames = body.config.artStyleImg?.map((img) => {
-          return getImageDisplayName(img);
-        });
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
@@ -59,116 +30,22 @@ export default [
 
         await checkRequestLimit(context.id);
 
-        const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
-          artStyleId: body.config.artStyleId,
-          artStyle: body.config.artStyle,
-        });
+        const { _metadata, ...requestPayload } = body;
+        const { jobId, status } = await createAndEnqueueMediaJob(
+          {
+            customerId: context.id,
+            type: MediaGenerationJobType.GENERATION_REVIEW_SCENE,
+            requestPayload: requestPayload as unknown as Record<string, unknown>,
+            metadata: _metadata,
+          },
+          { skipStreamCheck: true }
+        );
 
-        if (resolvedArtStylePrompt) {
-          body.config.artStyle = resolvedArtStylePrompt;
-        }
-        const artStyleImgNames = body.config.artStyleImgNames?.join(", ");
-
-        const prompt = `You are a specialist in product photography and videography.
-Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.  
-Use the following contextual settings: {{objectToPersonify}},  {{language}}, {{prompt}}.
-Return valid JSON only with this structure:
-{
-  "scenes": [
-   {
-  "topicTitle": "a short title for each s cene in {{language}}",
-  "artStyle": "{{artStyle}}", 
-  "visualPrompt":"English Use exactly ONE reference image name from ${
-    artStyleImgNames || "none"
-  } as the main product reference image for this scene. Assign reference images sequentially across all {{batchSize}} scenes in list order: Scene 1 uses the first image name, Scene 2 uses the second, and so on. When all image names have been used, restart from the first image and continue cycling in order until every scene has been assigned exactly one reference image. Select only ONE reference image by name per scene. - Analyze the uploaded product image and generate new actions for the product shown in the image based on the exact sequentially assigned name (for example: holding and rotating left or right, moving, opening and closing, etc.). - from a realistic POV (Point of View) perspective. - Maintain realistic lighting and accurate surface textures that match the actual product. - Based on the product’s characteristics, the product must interact naturally with relevant surrounding objects (for example: a mop should interact with the floor, etc.).",
-  "environment": "Accurately and thoroughly describe the environment shown in the image.",
-  "voiceGender": "male or female",
-  "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "motionPrompt": "from a realistic POV (Point of View) perspective",   
-  "audio": "voice metada  ta in {{language}}",
-  "dialogue": " dialogue/narration in {{language}}"
-  "camera": "English one exact value from CAMERA_TYPE ",
-}
-  ]
-}
-CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
-`;
-
-        const referenceInputs = collectOrderedReviewReferenceImages(body.config);
-        const imageBase64List = await resolveReferenceImagesForGemini(referenceInputs);
-        const imageReferenceNote = buildImageReferenceNotes({
-          productImages: body.config.artStyleImg,
-          personifyImages: body.config.objectToPersonifyImage
-            ? [body.config.objectToPersonifyImage]
-            : undefined,
-        });
-
-        const interpolatedText = interpolateTemplate(prompt, body.config) + imageReferenceNote;
-
-        const aiProvider = await resolveAiSceneProvider();
-        let responseText: string;
-
-        if (aiProvider === "gemini") {
-          responseText = await callGeminiJsonGenerate({
-            model: await getGeminiSceneModel("REVIEW_SCENE"),
-            text: interpolatedText,
-            media: imageBase64List.length > 0 ? imageBase64List : undefined,
-            label: "generation-review",
-            responseSchema: ReviewResponseSchema,
-          });
-        } else {
-          responseText = await callChatGPTGateway({
-            text: interpolatedText,
-            images: imageBase64List.map((img, index) => ({
-              ...img,
-              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-            })),
-            label: "generation-review",
-            model: await getChatGPTSceneModel("REVIEW_SCENE"),
-            jsonSchema: ReviewOpenAIJsonSchema,
-            jsonSchemaName: "review_scene_response",
-          });
-        }
-        const rawParsed = parseGeminiJsonResponse(responseText) as any;
-        assertNonEmptyScenesArray(rawParsed.scenes);
-
-        const parsed = {
-          artStyle: rawParsed.artStyle || "",
-          environment: rawParsed.environment || "",
-          voiceGender: rawParsed.voiceGender || "",
-          voiceTone: rawParsed.voiceTone || "",
-          voiceStyle: rawParsed.voiceStyle || "",
-          audioPrompt: rawParsed.audioPrompt || "",
-          cast: rawParsed.cast?.length
-            ? rawParsed.cast
-            : [
-                {
-                  name: rawParsed.characterName || "",
-                  tag: "main",
-                },
-              ],
-          scenes: rawParsed.scenes.map((scene: any) => ({
-            visualPrompt: scene.visualPrompt || "",
-            topicTitle: scene.topicTitle || "",
-            sceneNumber: scene.sceneNumber,
-            camera: scene.camera || "",
-            motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
-              scene.visualEffects || ""
-            }`,
-            imageGenPrompt: `[${scene.camera}] POV shot: ${scene.visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
-            audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
-              "",
-            dialogue: scene.dialogue || "",
-          })),
-        };
-
-        await incrementRequestCount(context.id);
-        return res.json({ success: true, data: parsed });
+        res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
-        logger.error(`[generation-review] Lỗi: ${err?.message}`);
+        logger.error(`[generation-review] Lỗi enqueue: ${err?.message}`);
         const status = err?.statusCode || 500;
-        return res.status(status).json({ message: err?.message || "Lỗi server" });
+        res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
   },

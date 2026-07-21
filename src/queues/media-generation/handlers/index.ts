@@ -10,24 +10,34 @@ import {
   IMediaGenerationJob,
   MediaGenerationImageResult,
   MediaGenerationJobType,
+  MediaGenerationJsonResult,
   MediaGenerationVideoResult,
 } from "../../../libs/dal/mediaGenerationJob";
 import { MediaJobEmitter } from "../job-emitter";
 import { handleCopyVideoGenerateImage } from "./copy-video-generate-image.handler";
+import { handleCopyVideoAnalysis } from "./copy-video-analysis.handler";
 import { handleGenerationElementImage } from "./generation-element-image.handler";
 import { handleGenerationElementVideoToVideo } from "./generation-element-video-to-video.handler";
 import { handleGenerationElementVideo } from "./generation-element-video.handler";
 import { handleGenerationImage } from "./generation-image.handler";
 import { handleGenerationReviewImage } from "./generation-review-image.handler";
+import { handleGenerationReviewScene } from "./generation-review-scene.handler";
 import { handleGenerationReviewVideo } from "./generation-review-video.handler";
+import { handleGenerationScene } from "./generation-scene.handler";
+import { handleGenerationTrending } from "./generation-trending.handler";
 import { handleGenerationVideo } from "./generation-video.handler";
 import { handleGenerationWolfImage } from "./generation-wolf-image.handler";
 import { handleGenerationWolfVideo } from "./generation-wolf-video.handler";
 import { handleGenerationShopeeVideo } from "./generation-shopee-video.handler";
 import { handleApiMediaImage } from "./api-media-image.handler";
 import { handleApiMediaVideo } from "./api-media-video.handler";
+import { handleStoryboardAnalysis } from "./storyboard-analysis.handler";
+import { handleSuggestConfig } from "./suggest-config.handler";
 
-export type MediaJobHandlerResult = MediaGenerationImageResult | MediaGenerationVideoResult;
+export type MediaJobHandlerResult =
+  | MediaGenerationImageResult
+  | MediaGenerationVideoResult
+  | MediaGenerationJsonResult;
 
 export type MediaJobHandler = (
   job: IMediaGenerationJob,
@@ -49,6 +59,12 @@ export const HANDLER_REGISTRY: Record<MediaGenerationJobType, MediaJobHandler> =
   [MediaGenerationJobType.GENERATION_SHOPEE_VIDEO]: handleGenerationShopeeVideo,
   [MediaGenerationJobType.API_MEDIA_IMAGE]: handleApiMediaImage,
   [MediaGenerationJobType.API_MEDIA_VIDEO]: handleApiMediaVideo,
+  [MediaGenerationJobType.GENERATION_SCENE]: handleGenerationScene,
+  [MediaGenerationJobType.GENERATION_REVIEW_SCENE]: handleGenerationReviewScene,
+  [MediaGenerationJobType.STORYBOARD_ANALYSIS]: handleStoryboardAnalysis,
+  [MediaGenerationJobType.SUGGEST_CONFIG]: handleSuggestConfig,
+  [MediaGenerationJobType.COPY_VIDEO_ANALYSIS]: handleCopyVideoAnalysis,
+  [MediaGenerationJobType.GENERATION_TRENDING]: handleGenerationTrending,
 };
 
 /**

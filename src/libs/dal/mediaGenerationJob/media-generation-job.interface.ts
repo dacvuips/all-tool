@@ -59,6 +59,18 @@ export enum MediaGenerationJobType {
   API_MEDIA_IMAGE = "API_MEDIA_IMAGE",
   /** POST /api/api-media?type=VIDEO_GENERATION — API Media generate video */
   API_MEDIA_VIDEO = "API_MEDIA_VIDEO",
+  /** POST /api/app/generation-scene/ — AI tạo kịch bản scene (JSON) */
+  GENERATION_SCENE = "GENERATION_SCENE",
+  /** POST /api/app/generation-review-scene/ — AI tạo kịch bản review (JSON) */
+  GENERATION_REVIEW_SCENE = "GENERATION_REVIEW_SCENE",
+  /** POST /api/app/storyboard-analysis/ — AI phân tích ảnh storyboard (JSON) */
+  STORYBOARD_ANALYSIS = "STORYBOARD_ANALYSIS",
+  /** POST /api/app/suggest-config/ — AI gợi ý objectToPersonify + tipContent */
+  SUGGEST_CONFIG = "SUGGEST_CONFIG",
+  /** POST /api/app/copy-video-analysis/ — AI phân tích video copy (JSON) */
+  COPY_VIDEO_ANALYSIS = "COPY_VIDEO_ANALYSIS",
+  /** POST /api/app/generation-trending/ — AI tạo kịch bản trending (JSON) */
+  GENERATION_TRENDING = "GENERATION_TRENDING",
 }
 
 /** Output cuối khi job tạo ảnh thành công (1 hoặc nhiều ảnh base64/url) */
@@ -88,8 +100,17 @@ export type MediaGenerationVideoResult = {
   videoUris?: string[];
 };
 
+/** Output JSON (kịch bản / phân tích / suggest) — tránh treo HTTP sync → 504 */
+export type MediaGenerationJsonResult = {
+  /** Payload tương thích response cũ `{ success, data }` */
+  data: Record<string, unknown>;
+};
+
 /** Output chung — union, cho phép resultData mềm dẻo */
-export type MediaGenerationResult = MediaGenerationImageResult | MediaGenerationVideoResult;
+export type MediaGenerationResult =
+  | MediaGenerationImageResult
+  | MediaGenerationVideoResult
+  | MediaGenerationJsonResult;
 
 /**
  * Bản ghi MongoDB cho một Job tạo media.

@@ -23,6 +23,7 @@ import { pubsub } from "../../libs/graphql/pub-sub";
 import { MediaJobCancelledError } from "./job-errors";
 import { clearMediaJobPayload } from "./media-job-data";
 import { cancelFlow2Request } from "../../routers/api-media/flow2/_shared";
+import { releaseStoryboardAnalysisQuotaIfNeeded } from "./storyboard-analysis-quota";
 
 /**
  * UUID duy nhất cho mỗi process Node. Nodemon restart → ID mới.
@@ -459,6 +460,7 @@ export async function markMediaJobCancelled(jobId: string, customerId: string): 
     { new: true }
   );
   if (!doc) return false;
+  await releaseStoryboardAnalysisQuotaIfNeeded(existing || (doc as unknown as IMediaGenerationJob));
   await publishChange(doc as unknown as IMediaGenerationJob);
   await clearMediaJobPayload((doc as any).dataRedisKey);
   return true;
@@ -473,6 +475,9 @@ export async function failUnrecoverableMediaJob(
   errorCode = 410
 ): Promise<boolean> {
   const model = mediaGenerationJobService.model;
+  const existing = (await mediaGenerationJobService.findOne({
+    _id: jobId,
+  })) as IMediaGenerationJob | null;
   const doc = await model.findOneAndUpdate(
     {
       _id: jobId,
@@ -495,6 +500,7 @@ export async function failUnrecoverableMediaJob(
   );
   if (!doc) return false;
   logger.warn(`[MediaJobEmitter] FAIL unrecoverable jobId=${jobId}: ${errorMessage}`);
+  await releaseStoryboardAnalysisQuotaIfNeeded(existing || (doc as unknown as IMediaGenerationJob));
   await publishChange(doc as unknown as IMediaGenerationJob);
   await clearMediaJobPayload((doc as any).dataRedisKey);
   const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();
@@ -536,6 +542,7 @@ export async function failOrphanedProcessingMediaJob(
   );
   if (!doc) return false;
   logger.warn(`[MediaJobEmitter] FAIL orphaned jobId=${jobId}: ${errorMessage}`);
+  await releaseStoryboardAnalysisQuotaIfNeeded(doc as unknown as IMediaGenerationJob);
   await publishChange(doc as unknown as IMediaGenerationJob);
   await clearMediaJobPayload((doc as any).dataRedisKey);
   const completedAt = (doc as any).completedAt ? new Date((doc as any).completedAt) : new Date();

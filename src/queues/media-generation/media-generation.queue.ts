@@ -48,6 +48,7 @@ import {
   canStartApiMediaJobProcessing,
   isApiMediaJobType,
 } from "./api-media-job-concurrency";
+import { isAiTextJobType } from "./ai-text-job-types";
 import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
 
 /** Tối đa 30 phút cho 1 job trước khi bị coi là stalled. */
@@ -143,7 +144,9 @@ class MediaGenerationQueue extends BaseQueue {
         ? apiMediaTokenId
           ? await canStartApiMediaJobProcessing(apiMediaTokenId)
           : false
-        : await canStartMediaJobProcessing((jobDoc as any).customerId, jobType);
+        : isAiTextJobType(jobType)
+          ? true
+          : await canStartMediaJobProcessing((jobDoc as any).customerId, jobType);
 
       if (!canStart) {
         this.logger.info(
@@ -602,13 +605,13 @@ export async function retryMediaGenerationJob(jobId: string): Promise<boolean> {
   const customerId = (job as any).customerId as string;
   const jobType = (job as any).type as MediaGenerationJobType;
 
-  // Kiểm tra lại giới hạn luồng trước khi retry
+  // Kiểm tra lại giới hạn luồng trước khi retry (AI text dùng quota request, không đếm stream)
   if (isApiMediaJobType(jobType)) {
     const apiMediaTokenId = (job as any).metadata?.apiMediaTokenId as string | undefined;
     if (apiMediaTokenId) {
       await assertApiMediaStreamAvailable(apiMediaTokenId);
     }
-  } else {
+  } else if (!isAiTextJobType(jobType)) {
     await assertMediaStreamAvailable(customerId, jobType);
   }
 
