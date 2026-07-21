@@ -153,8 +153,6 @@ async function callStoryboardAnalysisAi(params: {
   });
 }
 
-}
-
 export async function handleStoryboardAnalysis(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
