@@ -152,7 +152,7 @@ console.log(data.status, data.progress);
   }
 
   if (routeId === "upsample_image") {
-    return `const res = await fetch("${base}/api/api-media/upsample-image", {
+    return `const enqueue = await fetch("${base}/api/api-media/upsample-image", {
   method: "POST",
   headers: {
     "x-api-key": API_MEDIA_KEY,
@@ -163,11 +163,13 @@ console.log(data.status, data.progress);
     flow2RequestId: "FLOW2_REQUEST_ID_FROM_JOB_RESULT",
   }),
 });
-console.log(await res.json());`;
+const { jobId } = await enqueue.json();
+
+// Poll GET /api/api-media/job/:jobId → resultData.imageBytes`;
   }
 
   if (routeId === "upsample_video") {
-    return `const res = await fetch("${base}/api/api-media/upsample-video", {
+    return `const enqueue = await fetch("${base}/api/api-media/upsample-video", {
   method: "POST",
   headers: {
     "x-api-key": API_MEDIA_KEY,
@@ -177,7 +179,9 @@ console.log(await res.json());`;
     requestId: "FLOW2_REQUEST_ID_FROM_JOB_RESULT",
   }),
 });
-console.log(await res.json());`;
+const { jobId } = await enqueue.json();
+
+// Poll GET /api/api-media/job/:jobId → resultData.videoBytes`;
   }
 
   const config = ROUTE_CONFIG[routeId];

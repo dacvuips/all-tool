@@ -11,7 +11,11 @@ import {
 export type CreateAndEnqueueApiMediaArgs = {
   customerId: string;
   apiMediaTokenId: string;
-  type: MediaGenerationJobType.API_MEDIA_IMAGE | MediaGenerationJobType.API_MEDIA_VIDEO;
+  type:
+    | MediaGenerationJobType.API_MEDIA_IMAGE
+    | MediaGenerationJobType.API_MEDIA_VIDEO
+    | MediaGenerationJobType.API_MEDIA_UPSAMPLE_IMAGE
+    | MediaGenerationJobType.API_MEDIA_UPSAMPLE_VIDEO;
   requestPayload: Record<string, unknown>;
 };
 

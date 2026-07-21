@@ -59,6 +59,10 @@ export enum MediaGenerationJobType {
   API_MEDIA_IMAGE = "API_MEDIA_IMAGE",
   /** POST /api/api-media?type=VIDEO_GENERATION — API Media generate video */
   API_MEDIA_VIDEO = "API_MEDIA_VIDEO",
+  /** POST /api/api-media/upsample-image — API Media upscale ảnh */
+  API_MEDIA_UPSAMPLE_IMAGE = "API_MEDIA_UPSAMPLE_IMAGE",
+  /** POST /api/api-media/upsample-video — API Media upscale video 1080p */
+  API_MEDIA_UPSAMPLE_VIDEO = "API_MEDIA_UPSAMPLE_VIDEO",
   /** POST /api/app/generation-scene/ — AI tạo kịch bản scene (JSON) */
   GENERATION_SCENE = "GENERATION_SCENE",
   /** POST /api/app/generation-review-scene/ — AI tạo kịch bản review (JSON) */
@@ -106,11 +110,25 @@ export type MediaGenerationJsonResult = {
   data: Record<string, unknown>;
 };
 
+/** Output upscale ảnh API Media (khớp response cũ `data`) */
+export type MediaGenerationUpsampleImageResult = {
+  imageBytes: string;
+  mimeType: string;
+};
+
+/** Output upscale video API Media (khớp response cũ `data`) */
+export type MediaGenerationUpsampleVideoResult = {
+  videoBytes: string;
+  mimeType: string;
+};
+
 /** Output chung — union, cho phép resultData mềm dẻo */
 export type MediaGenerationResult =
   | MediaGenerationImageResult
   | MediaGenerationVideoResult
-  | MediaGenerationJsonResult;
+  | MediaGenerationJsonResult
+  | MediaGenerationUpsampleImageResult
+  | MediaGenerationUpsampleVideoResult;
 
 /**
  * Bản ghi MongoDB cho một Job tạo media.

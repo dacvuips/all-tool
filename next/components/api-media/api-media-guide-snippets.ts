@@ -61,7 +61,8 @@ export function buildPollJobSnippet(apiKey: string, lang: CodeLang): string {
   const base = getApiBaseUrl();
 
   if (lang === "curl") {
-    return `# Poll đến khi status=SUCCEEDED hoặc FAILED; dùng resultData.flow2RequestId để upscale
+    return `# Poll đến khi status=SUCCEEDED hoặc FAILED
+# Ảnh: resultData.images[0].flow2RequestId — Video: resultData.flow2RequestId
 curl -X GET "${base}/api/api-media/job/JOB_ID" \\
   -H "x-api-key: ${apiKey}"`;
   }
@@ -101,23 +102,41 @@ export function buildUpsampleImageSnippet(
   };
 
   if (lang === "curl") {
-    return `# Sau khi gen_image status=SUCCEEDED (lấy flow2RequestId từ resultData.images)
+    return `# Upscale ảnh — async (202 jobId), poll GET /api/api-media/job/:jobId
+# flow2RequestId lấy từ resultData.images[].flow2RequestId sau gen_image
 curl -X POST "${base}/api/api-media/upsample-image" \\
   -H "x-api-key: ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify(body)}'`;
+  -d '${JSON.stringify(body)}'
+# → {"success":true,"jobId":"...","status":"QUEUED"}
+# Poll đến SUCCEEDED → resultData.imageBytes / mimeType`;
   }
 
   return `import requests
+import time
 
+# Bước 1 — Enqueue upscale (trả ngay jobId)
 res = requests.post(
     "${base}/api/api-media/upsample-image",
     headers={"x-api-key": "${apiKey}", "Content-Type": "application/json"},
     json=${jsonStringify(body).replace(/\n/g, "\n    ")},
-    timeout=600,
+    timeout=30,
 )
 res.raise_for_status()
-print(res.json())`;
+job_id = res.json()["jobId"]
+
+# Bước 2 — Poll đến SUCCEEDED / FAILED
+while True:
+    job = requests.get(
+        f"${base}/api/api-media/job/{job_id}",
+        headers={"x-api-key": "${apiKey}"},
+        timeout=30,
+    ).json()["data"]
+    print(job["status"], job.get("progress"), job.get("message"))
+    if job["status"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
+        print(job.get("resultData") or job.get("errorMessage"))
+        break
+    time.sleep(3)`;
 }
 
 export function buildUpsampleVideoSnippet(apiKey: string, lang: CodeLang): string {
@@ -125,23 +144,41 @@ export function buildUpsampleVideoSnippet(apiKey: string, lang: CodeLang): strin
   const body = { requestId: "FLOW2_REQUEST_ID_FROM_JOB_RESULT" };
 
   if (lang === "curl") {
-    return `# Bước 1 — enqueue upscale 1080p (poll nội bộ, tránh timeout)
+    return `# Upscale video 1080p — async (202 jobId), poll GET /api/api-media/job/:jobId
+# requestId = resultData.flow2RequestId sau gen video
 curl -X POST "${base}/api/api-media/upsample-video" \\
   -H "x-api-key: ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify(body)}'`;
+  -d '${JSON.stringify(body)}'
+# → {"success":true,"jobId":"...","status":"QUEUED"}
+# Poll đến SUCCEEDED → resultData.videoBytes / mimeType`;
   }
 
   return `import requests
+import time
 
+# Bước 1 — Enqueue upscale (trả ngay jobId)
 res = requests.post(
     "${base}/api/api-media/upsample-video",
     headers={"x-api-key": "${apiKey}", "Content-Type": "application/json"},
     json=${jsonStringify(body).replace(/\n/g, "\n    ")},
-    timeout=900,
+    timeout=30,
 )
 res.raise_for_status()
-print(res.json())`;
+job_id = res.json()["jobId"]
+
+# Bước 2 — Poll đến SUCCEEDED / FAILED
+while True:
+    job = requests.get(
+        f"${base}/api/api-media/job/{job_id}",
+        headers={"x-api-key": "${apiKey}"},
+        timeout=30,
+    ).json()["data"]
+    print(job["status"], job.get("progress"), job.get("message"))
+    if job["status"] in ("SUCCEEDED", "FAILED", "CANCELLED"):
+        print(job.get("resultData") or job.get("errorMessage"))
+        break
+    time.sleep(3)`;
 }
 
 export { getCreateJobTitle, getVideoModeHint, showUpsampleImageCard, showUpsampleVideoCard };
