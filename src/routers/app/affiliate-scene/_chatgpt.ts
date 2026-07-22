@@ -1,6 +1,6 @@
 import logger from "../../../helpers/logger";
-import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { getFlow2Config } from "../../api-media/flow2/_shared";
+import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { getAiSceneMoreSetting } from "./_ai-scene";
 import {
   AffiliateVideoOpenAIJsonSchema,
@@ -23,8 +23,8 @@ export type ChatGPTPictureResult = {
   messageId?: string;
 };
 
-/** Timeout poll ChatGPT async — tối đa 5 phút. */
-const CHATGPT_ASYNC_TIMEOUT_MS = 5 * 60 * 1000;
+/** Timeout poll ChatGPT async — tối đa 10 phút. */
+const CHATGPT_ASYNC_TIMEOUT_MS = 10 * 60 * 1000;
 /** Poll Flow2 mỗi 5s — chỉ GET cùng jobId, không POST lại. */
 const CHATGPT_ASYNC_POLL_INTERVAL_MS = 5_000;
 
@@ -94,10 +94,7 @@ export async function getChatGPTGatewayToken(): Promise<string> {
   return token.trim();
 }
 
-function buildChatPrompt(params: {
-  text: string;
-  jsonSchema?: Record<string, unknown>;
-}): string {
+function buildChatPrompt(params: { text: string; jsonSchema?: Record<string, unknown> }): string {
   const parts = [CHATGPT_GATEWAY_SYSTEM_MESSAGE, params.text.trim()];
   if (params.jsonSchema) {
     parts.push(
@@ -153,10 +150,10 @@ function toPublicChatImages(
     const ext = mimeType.includes("png")
       ? "png"
       : mimeType.includes("webp")
-        ? "webp"
-        : mimeType.includes("gif")
-          ? "gif"
-          : "jpg";
+      ? "webp"
+      : mimeType.includes("gif")
+      ? "gif"
+      : "jpg";
     const data = image.imageBytes.startsWith("data:")
       ? image.imageBytes
       : `data:${mimeType};base64,${image.imageBytes}`;
@@ -205,11 +202,7 @@ function throwHttpError(label: string, status: number, url: string, rawBody: str
 }
 
 /** Lỗi khi poll — throw message thân thiện, log chi tiết server, không retry. */
-function throwServerPollError(
-  label: string,
-  statusCode: number,
-  serverDetail?: string
-): never {
+function throwServerPollError(label: string, statusCode: number, serverDetail?: string): never {
   const detail = (serverDetail || "").trim().slice(0, 400);
   if (detail) {
     logger.warn(`[${label}] ChatGPT poll error (${statusCode}): ${detail}`);
@@ -340,7 +333,9 @@ async function fetchChatGPTImageAsBase64(
     url.match(/[?&]id=(file_[a-zA-Z0-9]+)/i) || url.match(/\b(file_[a-f0-9]{10,})\b/i);
 
   if (opts?.baseUrl && opts?.apiKey && fileIdMatch?.[1]) {
-    const mediaUrl = `${opts.baseUrl.replace(/\/$/, "")}/media/${encodeURIComponent(fileIdMatch[1])}`;
+    const mediaUrl = `${opts.baseUrl.replace(/\/$/, "")}/media/${encodeURIComponent(
+      fileIdMatch[1]
+    )}`;
     try {
       return await fetchImageWithAuth(mediaUrl, opts.apiKey);
     } catch (err: any) {
@@ -463,7 +458,10 @@ async function collectChatGPTResultImages(
     if (!/^https?:\/\//i.test(trimmed)) return;
     try {
       const fetched = await fetchChatGPTImageAsBase64(trimmed, opts);
-      pushBytes(fetched.imageBytes, fetched.mimeType || mimeType || guessMimeFromUrlOrName(trimmed));
+      pushBytes(
+        fetched.imageBytes,
+        fetched.mimeType || mimeType || guessMimeFromUrlOrName(trimmed)
+      );
     } catch (err: any) {
       logger.warn(`[chatgpt-picture] Không tải được ảnh URL: ${err?.message}`);
     }
@@ -523,7 +521,8 @@ async function collectChatGPTResultImages(
       (typeof obj.mimeType === "string" && obj.mimeType) ||
       undefined;
     if (bytesCandidate && looksLikeImagePayload(bytesCandidate, mimeCandidate || undefined)) {
-      if (bytesCandidate.startsWith("http")) await pushUrl(bytesCandidate, mimeCandidate || undefined);
+      if (bytesCandidate.startsWith("http"))
+        await pushUrl(bytesCandidate, mimeCandidate || undefined);
       else pushBytes(bytesCandidate, mimeCandidate || undefined);
     }
 
@@ -643,9 +642,7 @@ function parseEnqueueResponse(raw: string): { jobId?: string; immediateText?: st
     return { immediateText: parseChatGPTV1Result(data) };
   }
 
-  const err: any = new Error(
-    `Flow2 ChatGPT async thiếu job id: ${trimmed.slice(0, 300)}`
-  );
+  const err: any = new Error(`Flow2 ChatGPT async thiếu job id: ${trimmed.slice(0, 300)}`);
   err.statusCode = 502;
   throw err;
 }
@@ -696,7 +693,11 @@ async function pollChatGPTPictureJob(params: {
     try {
       data = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      throwServerPollError(params.label, 502, rawBody.slice(0, 500) || "Poll trả về không phải JSON");
+      throwServerPollError(
+        params.label,
+        502,
+        rawBody.slice(0, 500) || "Poll trả về không phải JSON"
+      );
     }
 
     const status = normalizeJobStatus(data.status);
@@ -821,7 +822,9 @@ export async function callChatGPTPictureSuggest(params: {
   }
 
   logger.info(
-    `[${params.label}] Flow2 ChatGPT Conversation image ${isFollowUp ? "follow-up" : "new"} model=${model} refImages=${publicImages?.length || 0}`
+    `[${params.label}] Flow2 ChatGPT Conversation image ${
+      isFollowUp ? "follow-up" : "new"
+    } model=${model} refImages=${publicImages?.length || 0}`
   );
 
   await emitProgress(8, "Đang gửi yêu cầu tạo ảnh...");
@@ -873,7 +876,9 @@ export async function callChatGPTPictureSuggest(params: {
   });
   if (result.conversationId || result.messageId) {
     logger.info(
-      `[${params.label}] conversation_id=${result.conversationId || "-"} message_id=${result.messageId || "-"}`
+      `[${params.label}] conversation_id=${result.conversationId || "-"} message_id=${
+        result.messageId || "-"
+      }`
     );
   }
   await emitProgress(98, "Hoàn tất");
@@ -913,7 +918,11 @@ async function pollChatGPTJob(params: {
     try {
       data = JSON.parse(rawBody) as Record<string, unknown>;
     } catch {
-      throwServerPollError(params.label, 502, rawBody.slice(0, 500) || "Poll trả về không phải JSON");
+      throwServerPollError(
+        params.label,
+        502,
+        rawBody.slice(0, 500) || "Poll trả về không phải JSON"
+      );
     }
 
     const status = normalizeJobStatus(data.status);
