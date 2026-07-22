@@ -28,6 +28,8 @@ export type StartThreadPayload = {
   productId?: string;
   videoUrl?: string;
   videoFile?: string;
+  /** base64 raw (không data: prefix) — dùng khi video chỉ có blob:/data: trên browser */
+  videoBase64?: string;
 };
 
 export async function startUploadThreads(threads: StartThreadPayload[]) {
@@ -95,14 +97,46 @@ export async function check24hApi(params: {
   });
 }
 
-export async function getSignerBalance() {
+export async function getSignerBalance(creds?: {
+  signerBaseUrl?: string;
+  signerMeBaseUrl?: string;
+  signerApiKey?: string;
+}) {
+  const hasCreds = Boolean(
+    String(creds?.signerBaseUrl || "").trim() ||
+      String(creds?.signerMeBaseUrl || "").trim() ||
+      String(creds?.signerApiKey || "").trim()
+  );
+  if (hasCreds) {
+    return apiFetch<{
+      success: boolean;
+      username?: string;
+      credits?: number;
+      is_active?: boolean;
+      adapter?: string;
+      signerBaseUrl?: string;
+      source?: string;
+      error?: string;
+      code?: number;
+    }>("/api/app/shopee-video-upload/signer/balance", {
+      method: "POST",
+      body: JSON.stringify({
+        signerBaseUrl: creds?.signerBaseUrl,
+        signerMeBaseUrl: creds?.signerMeBaseUrl,
+        signerApiKey: creds?.signerApiKey,
+      }),
+    });
+  }
   return apiFetch<{
     success: boolean;
     username?: string;
     credits?: number;
     is_active?: boolean;
     adapter?: string;
+    signerBaseUrl?: string;
+    source?: string;
     error?: string;
+    code?: number;
   }>("/api/app/shopee-video-upload/signer/balance");
 }
 
@@ -113,5 +147,6 @@ export async function getSignerConfig() {
     adapter?: string;
     dryRun?: boolean;
     apiKeySet?: boolean;
+    source?: string;
   }>("/api/app/shopee-video-upload/signer/config");
 }

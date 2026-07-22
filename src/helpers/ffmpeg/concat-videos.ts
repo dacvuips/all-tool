@@ -21,6 +21,20 @@ const unlink = promisify(fs.unlink);
 
 const REMOTE_URL = /^https?:\/\//i;
 
+/** Server không tải được URL nguồn — client có thể fallback upload blob. */
+export class ConcatUrlDownloadError extends Error {
+  readonly code = "URL_DOWNLOAD_FAILED" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "ConcatUrlDownloadError";
+  }
+}
+
+export function isConcatUrlDownloadError(err: unknown): err is ConcatUrlDownloadError {
+  return err instanceof ConcatUrlDownloadError;
+}
+
 export type ConcatVideosMode = "copy" | "reencode";
 
 export type ConcatVideosOptions = {
@@ -41,14 +55,29 @@ function escapeConcatPath(p: string): string {
 }
 
 async function downloadToTemp(url: string): Promise<string> {
-  const res = await axios.get<ArrayBuffer>(url, {
-    responseType: "arraybuffer",
-    timeout: 10 * 60 * 1000,
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-  });
+  let res: Awaited<ReturnType<typeof axios.get<ArrayBuffer>>>;
+  try {
+    res = await axios.get<ArrayBuffer>(url, {
+      responseType: "arraybuffer",
+      timeout: 10 * 60 * 1000,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+      validateStatus: () => true,
+    });
+  } catch (err: any) {
+    throw new ConcatUrlDownloadError(
+      `concatVideos: không tải được video (${err?.message || err}) — URL: ${url.slice(0, 120)}`
+    );
+  }
+  if (res.status === 404) {
+    throw new ConcatUrlDownloadError(
+      `concatVideos: URL video không tồn tại (404) — có thể link CDN đã hết hạn. URL: ${url.slice(0, 120)}`
+    );
+  }
   if (res.status < 200 || res.status >= 300) {
-    throw new Error(`concatVideos: download failed (${res.status}) for ${url.slice(0, 80)}`);
+    throw new ConcatUrlDownloadError(
+      `concatVideos: tải video thất bại (HTTP ${res.status}) — URL: ${url.slice(0, 120)}`
+    );
   }
   const file = path.join(tmpdir(), `ff_seg_${id12()}.mp4`);
   await writeFile(file, Buffer.from(res.data));

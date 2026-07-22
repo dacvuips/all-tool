@@ -33,6 +33,8 @@ function pickPayload(body: any, customerId: string): ShopeeUploadJobPayload {
     username: body?.username,
     threadId: body?.threadId,
     customerId,
+    signerBaseUrl: body?.signerBaseUrl,
+    signerApiKey: body?.signerApiKey,
   };
 }
 

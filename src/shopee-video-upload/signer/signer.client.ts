@@ -1,58 +1,42 @@
 /**
- * Client gọi signer qua HTTP nội bộ (dễ tách process sau).
- * Không hardcode credit.toolshopee.vn.
+ * Client gọi signer — ưu tiên adapter in-process (native → credit.toolshopee.vn).
+ * Không hardcode URL; đọc từ env qua getSignerAdapter / config.
  */
-import axios from "axios";
-import { shopeeUploadConfig } from "../config";
+import { getSignerAdapter } from "./get-adapter";
 import {
+  SignerCreatePostRequest,
+  SignerCreatePostResult,
   SignerMeResult,
   SignerSignRequest,
   SignerSignResult,
   SignerTokenResult,
 } from "./signer.interface";
 
-function headers() {
-  return {
-    "Content-Type": "application/json",
-    "X-API-Key": shopeeUploadConfig.signerApiKey,
-  };
-}
-
 export class SignerClient {
-  constructor(private readonly baseUrl = shopeeUploadConfig.signerBaseUrl) {}
-
   async sign(req: SignerSignRequest): Promise<SignerSignResult> {
-    const { data } = await axios.post<SignerSignResult>(`${this.baseUrl}/sign`, req, {
-      headers: headers(),
-      timeout: 20000,
-      validateStatus: () => true,
-    });
-    return data;
+    return getSignerAdapter().sign(req);
   }
 
   async generateToken(opts?: {
     cookie?: string;
     country?: string;
   }): Promise<SignerTokenResult> {
-    const { data } = await axios.post<SignerTokenResult>(
-      `${this.baseUrl}/generate-token`,
-      opts || {},
-      {
-        headers: headers(),
-        timeout: 20000,
-        validateStatus: () => true,
-      }
-    );
-    return data;
+    return getSignerAdapter().generateToken(opts);
   }
 
   async me(): Promise<SignerMeResult> {
-    const { data } = await axios.get<SignerMeResult>(`${this.baseUrl}/me`, {
-      headers: headers(),
-      timeout: 10000,
-      validateStatus: () => true,
-    });
-    return data;
+    return getSignerAdapter().me();
+  }
+
+  /**
+   * createPost qua credit proxy nếu adapter hỗ trợ; không thì trả code 501.
+   */
+  async createPost(req: SignerCreatePostRequest): Promise<SignerCreatePostResult> {
+    const adapter = getSignerAdapter();
+    if (typeof adapter.createPost === "function") {
+      return adapter.createPost(req);
+    }
+    return { code: 501, message: "createPost proxy không hỗ trợ trên adapter này" };
   }
 }
 

@@ -1,11 +1,9 @@
 /**
- * Persist video kết quả theo mã sản phẩm:
- * 1) Lưu link vào IndexedDB ngay
- * 2) Hiển thị qua download-proxy
- * 3) Chạy ngầm fetch → base64 → ghi lại IndexedDB
- * (Cùng pattern affiliate-video `persistGeneratedVideoWithEnrichment`)
+ * Persist video kết quả theo mã sản phẩm — giống scene generate image/video:
+ * - Thread/UI: chỉ lưu tên/marker (merged.mp4), không nhét binary
+ * - IndexedDB: lưu Blob (giống mediaBlob), không nhét base64
+ * - Variant: lưu link ngay + enrich binary ngầm
  */
-import { fetchUrlToBase64Payload } from "../app/affiliate-video/shared/generatedMediaUtils";
 import {
   base64ToBlob,
   dataUrlToBlob,
@@ -13,12 +11,13 @@ import {
   uriToBlob,
 } from "../app/affiliate-video/shared/videoDownloadUtils";
 import { extractShopeeProductId } from "./csv-parser";
+import { mergeVideosInBrowser } from "./ffmpeg-browser";
 import {
   idbDeleteMergedVideo,
   idbDeleteProductVideo,
   idbGetMergedVideo,
-  idbGetMergedVideoObjectUrl,
   idbGetProductVideo,
+  idbPutMergedVideo,
   idbPutProductVideo,
   ProductVideoRecord,
 } from "./idb";
@@ -32,20 +31,34 @@ export type ProductVideoKeySource = {
   videoDisabled?: boolean[];
 };
 
-/** Marker persist trên thread: video nối thật nằm ở product-videos IndexedDB. */
+/**
+ * Tên file nhẹ persist trên thread/UI — giống scene-N-video.mp4.
+ * Binary thật nằm product-videos IndexedDB.
+ */
+export const MERGED_VIDEO_FILE_NAME = "merged.mp4";
+
+/** @deprecated Alias cũ — vẫn nhận khi đọc bản ghi legacy */
 export const MERGED_VIDEO_IDB_MARKER = "indexeddb";
 
 export function isMergedVideoIdbMarker(url?: string): boolean {
-  return String(url || "").trim() === MERGED_VIDEO_IDB_MARKER;
+  const u = String(url || "").trim();
+  return u === MERGED_VIDEO_FILE_NAME || u === MERGED_VIDEO_IDB_MARKER;
 }
 
-/** Có ref video nối (blob/data/http/marker) — dùng cho UI hasMerged. */
+/** Có ref video nối (tên file / blob / http) — dùng cho UI hasMerged. */
 export function hasMergedVideoRef(url?: string): boolean {
   return Boolean(String(url || "").trim());
 }
 
+function recordHasMergedBinary(rec?: ProductVideoRecord | null): boolean {
+  if (!rec) return false;
+  if (rec.mergedVideoBlob && rec.mergedVideoBlob.size > 0) return true;
+  if ((rec.mergedVideoBytes || "").trim()) return true;
+  return false;
+}
+
 /**
- * Đã có file video nối thật (ref trên item / bytes IndexedDB / legacy blob).
+ * Đã có file video nối thật (ref trên item / Blob IndexedDB / legacy).
  * Không decode full base64 — chỉ kiểm tra tồn tại.
  */
 export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<boolean> {
@@ -72,7 +85,7 @@ export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<b
   const key = getMergedVideoStorageKey(item);
   if (key) {
     const rec = await idbGetProductVideo(key);
-    if (rec?.mergedVideoBytes) return true;
+    if (recordHasMergedBinary(rec)) return true;
     const legacy = await idbGetMergedVideo(key);
     if (legacy?.blob && legacy.blob.size > 0) return true;
   }
@@ -84,12 +97,15 @@ export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<b
   return isMergedVideoIdbMarker(url);
 }
 
-/** Chuẩn hóa URL trước khi ghi thread store (không lưu blob/data). */
+/**
+ * Chuẩn hóa trước khi ghi thread store — chỉ giữ tên file (giống scene chỉ lưu name).
+ * Không persist blob:/data:.
+ */
 export function toPersistedMergedVideoUrl(url?: string): string {
   const u = String(url || "").trim();
   if (!u) return "";
   if (u.startsWith("blob:") || u.startsWith("data:") || isMergedVideoIdbMarker(u)) {
-    return MERGED_VIDEO_IDB_MARKER;
+    return MERGED_VIDEO_FILE_NAME;
   }
   return u;
 }
@@ -107,10 +123,12 @@ function isHttpUrl(url: string): boolean {
 }
 
 function isDataUrl(url: string): boolean {
-  return String(url || "").trim().startsWith("data:");
+  return String(url || "")
+    .trim()
+    .startsWith("data:");
 }
 
-/** Preview variant: ưu tiên base64, fallback link qua proxy. Giữ index slot. */
+/** Preview variant: ưu tiên base64 legacy → link qua proxy. Blob → resolveVariantPreviewUrls. */
 export function getVariantPreviewUrls(record: ProductVideoRecord): string[] {
   const mime = record.mimeType || "video/mp4";
   return (record.videoUris || []).map((uri, idx) => {
@@ -119,11 +137,42 @@ export function getVariantPreviewUrls(record: ProductVideoRecord): string[] {
     const trimmed = String(uri || "").trim();
     if (!trimmed) return "";
     if (isDataUrl(trimmed)) return trimmed;
+    // Có Blob local → placeholder; resolveVariantPreviewUrls tạo object URL
+    if (record.videoBlobList?.[idx] && record.videoBlobList[idx]!.size > 0) {
+      return `__idb_blob__:${idx}`;
+    }
     return toDownloadProxyUrl(trimmed, true);
   });
 }
 
+function urlsLooselyMatch(a: string, b: string): boolean {
+  const x = String(a || "").trim();
+  const y = String(b || "").trim();
+  if (!x || !y) return false;
+  if (x === y) return true;
+  // flow2: .../video/ID và .../video/ID/1
+  const norm = (u: string) => u.replace(/\/+$/, "").replace(/\/\d+$/, "");
+  return norm(x) === norm(y);
+}
+
+function slotHasBinary(record: ProductVideoRecord, idx: number): boolean {
+  const blob = record.videoBlobList?.[idx];
+  if (blob && blob.size > 0) return true;
+  return Boolean((record.videoBytesList?.[idx] || "").trim());
+}
+
+function isQuotaExceeded(err: unknown): boolean {
+  const e = err as { name?: string; message?: string; code?: number } | null;
+  if (!e) return false;
+  if (e.name === "QuotaExceededError" || e.code === 22) return true;
+  return /quota|storage/i.test(String(e.message || ""));
+}
+
+/** @deprecated Dùng resolveMergedPreviewUrl — tránh data: quá lớn */
 export function getMergedPreviewUrl(record: ProductVideoRecord): string {
+  if (record.mergedVideoBlob && record.mergedVideoBlob.size > 0) {
+    return URL.createObjectURL(record.mergedVideoBlob);
+  }
   if (record.mergedVideoBytes) {
     return `data:${record.mimeType || "video/mp4"};base64,${record.mergedVideoBytes}`;
   }
@@ -133,7 +182,7 @@ export function getMergedPreviewUrl(record: ProductVideoRecord): string {
 export function hasPendingVariantBase64(record: ProductVideoRecord): boolean {
   return (record.videoUris || []).some((uri, idx) => {
     if (!isHttpUrl(uri)) return false;
-    return !(record.videoBytesList?.[idx] || "").trim();
+    return !slotHasBinary(record, idx);
   });
 }
 
@@ -153,21 +202,44 @@ export async function persistProductVideoLinks(
     videoUris: uris,
     videoBytesList: uris.map((uri, idx) => {
       if (!uri) return null;
-      // Giữ base64 cũ nếu cùng URL
-      if (existing?.videoUris?.[idx] === uri && existing.videoBytesList?.[idx]) {
-        return existing.videoBytesList[idx];
+      if (
+        existing?.videoUris?.[idx] === uri &&
+        (existing.videoBytesList?.[idx] || "").trim()
+      ) {
+        return existing.videoBytesList![idx];
       }
       return null;
     }),
+    videoBlobList: uris.map((uri, idx) => {
+      if (!uri) return null;
+      const prev = existing?.videoBlobList?.[idx];
+      if (existing?.videoUris?.[idx] === uri && prev && prev.size > 0) return prev;
+      return null;
+    }),
     mimeType,
-    mergedVideoBytes: existing?.mergedVideoBytes || null,
+    mergedVideoBytes: existing?.mergedVideoBlob ? null : existing?.mergedVideoBytes || null,
+    mergedVideoBlob: existing?.mergedVideoBlob || null,
+    mergedVideoName: existing?.mergedVideoName || undefined,
     updatedAt: Date.now(),
   };
   await idbPutProductVideo(record);
   return record;
 }
 
-/** Bước 2 (ngầm): chuyển từng link → base64 và ghi lại IDB. */
+/** Giữ field video đã nối khi ghi đè bản ghi product-videos (tránh race với enrich). */
+function preserveMergedFields(
+  base: ProductVideoRecord,
+  latest?: ProductVideoRecord | null
+): Pick<ProductVideoRecord, "mergedVideoBytes" | "mergedVideoBlob" | "mergedVideoName"> {
+  const src = latest || base;
+  return {
+    mergedVideoBytes: src.mergedVideoBlob ? null : src.mergedVideoBytes || null,
+    mergedVideoBlob: src.mergedVideoBlob || null,
+    mergedVideoName: src.mergedVideoName || undefined,
+  };
+}
+
+/** Bước 2 (ngầm): tải từng link → Blob và ghi IDB (không nhét base64 — tránh QuotaExceeded). */
 export async function enrichProductVideoBase64(
   productId: string,
   options?: { onUpdate?: (record: ProductVideoRecord) => void }
@@ -178,39 +250,82 @@ export async function enrichProductVideoBase64(
   const current = await idbGetProductVideo(key);
   if (!current || !hasPendingVariantBase64(current)) return current;
 
+  const videoBlobList = [...(current.videoBlobList || [])];
+  while (videoBlobList.length < current.videoUris.length) {
+    videoBlobList.push(null);
+  }
+  // Giữ base64 cũ nếu có; không tạo thêm base64 mới
   const videoBytesList = [...(current.videoBytesList || [])];
   while (videoBytesList.length < current.videoUris.length) {
     videoBytesList.push(null);
   }
 
   let changed = false;
+  let lastWritten: ProductVideoRecord = current;
+
   for (let i = 0; i < current.videoUris.length; i++) {
-    if ((videoBytesList[i] || "").trim()) continue;
+    if (slotHasBinary({ ...current, videoBlobList, videoBytesList }, i)) continue;
     const uri = current.videoUris[i];
     if (!isHttpUrl(uri)) continue;
-    const fetched = await fetchUrlToBase64Payload(uri, current.mimeType || "video/mp4");
-    if (!fetched?.bytes) continue;
-    videoBytesList[i] = fetched.bytes;
+
+    let blob: Blob | null = null;
+    try {
+      blob = await uriToBlob(uri);
+    } catch (err) {
+      console.warn("[enrichProductVideoBase64] fetch failed", uri, err);
+      continue;
+    }
+    if (!blob || blob.size <= 0) continue;
+
+    videoBlobList[i] = blob;
+    // Không ghi base64 mới — giảm dung lượng IDB
+    videoBytesList[i] = null;
     changed = true;
-    const partial: ProductVideoRecord = {
-      ...current,
-      videoBytesList: [...videoBytesList],
-      mimeType: fetched.mimeType || current.mimeType,
-      updatedAt: Date.now(),
-    };
-    await idbPutProductVideo(partial);
-    options?.onUpdate?.(partial);
+
+    try {
+      const latest = await idbGetProductVideo(key);
+      const partial: ProductVideoRecord = {
+        ...(latest || current),
+        videoUris: (latest || current).videoUris,
+        videoBlobList: [...videoBlobList],
+        videoBytesList: [...videoBytesList],
+        mimeType: blob.type || (latest || current).mimeType || "video/mp4",
+        ...preserveMergedFields(current, latest),
+        updatedAt: Date.now(),
+      };
+      await idbPutProductVideo(partial);
+      lastWritten = partial;
+      options?.onUpdate?.(partial);
+    } catch (err) {
+      if (isQuotaExceeded(err)) {
+        console.warn("[enrichProductVideoBase64] QuotaExceeded — bỏ lưu variant, merge vẫn tải URL", err);
+        break;
+      }
+      throw err;
+    }
   }
 
   if (!changed) return current;
-  const enriched: ProductVideoRecord = {
-    ...current,
-    videoBytesList,
-    updatedAt: Date.now(),
-  };
-  await idbPutProductVideo(enriched);
-  options?.onUpdate?.(enriched);
-  return enriched;
+
+  try {
+    const latest = await idbGetProductVideo(key);
+    const enriched: ProductVideoRecord = {
+      ...(latest || lastWritten),
+      videoBlobList,
+      videoBytesList,
+      ...preserveMergedFields(lastWritten, latest),
+      updatedAt: Date.now(),
+    };
+    await idbPutProductVideo(enriched);
+    options?.onUpdate?.(enriched);
+    return enriched;
+  } catch (err) {
+    if (isQuotaExceeded(err)) {
+      console.warn("[enrichProductVideoBase64] QuotaExceeded on final put", err);
+      return lastWritten;
+    }
+    throw err;
+  }
 }
 
 /** Lưu link trước + enrich ngầm (giống persistGeneratedVideoWithEnrichment). */
@@ -238,26 +353,81 @@ export async function persistProductVideosWithEnrichment(
   return preview;
 }
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.slice(comma + 1) : result);
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
+function resolveVariantBlobFromRecord(
+  record: ProductVideoRecord | undefined,
+  url: string,
+  index: number,
+  mime: string
+): Blob | null {
+  if (!record?.videoUris?.length) return null;
+
+  let idx = record.videoUris.findIndex((u) => urlsLooselyMatch(u, url));
+  if (idx < 0 && index < record.videoUris.length) {
+    const sameOrderUri = String(record.videoUris[index] || "").trim();
+    if (!sameOrderUri || urlsLooselyMatch(sameOrderUri, url)) idx = index;
+  }
+  if (idx < 0) return null;
+
+  const blob = record.videoBlobList?.[idx];
+  if (blob && blob.size > 0) return blob;
+
+  const bytes = (record.videoBytesList?.[idx] || "").trim();
+  if (bytes) return base64ToBlob(bytes, mime);
+  return null;
+}
+
+async function putMergedVideoWithVerify(
+  key: string,
+  blob: Blob,
+  mimeType: string
+): Promise<void> {
+  const tryPut = async () => {
+    await idbPutMergedVideo(key, blob, mimeType);
+    const verify = await idbGetMergedVideo(key);
+    if (!verify?.blob || verify.blob.size <= 0) {
+      throw new Error("verify-empty");
+    }
+  };
+
+  try {
+    await tryPut();
+  } catch (err) {
+    if (isQuotaExceeded(err)) {
+      throw new Error(
+        "IndexedDB đầy — không lưu được video nối. Xóa bớt phiên/CSV cũ rồi thử Nối lại."
+      );
+    }
+    // Retry 1 lần (race / transaction)
+    try {
+      await new Promise((r) => setTimeout(r, 80));
+      await tryPut();
+    } catch (retryErr) {
+      if (isQuotaExceeded(retryErr)) {
+        throw new Error(
+          "IndexedDB đầy — không lưu được video nối. Xóa bớt phiên/CSV cũ rồi thử Nối lại."
+        );
+      }
+      throw new Error(
+        `Lưu video nối vào IndexedDB thất bại — thử Nối lại (${
+          (retryErr as Error)?.message || retryErr
+        })`
+      );
+    }
+  }
 }
 
 /**
- * Nối video (ffmpeg API) → hiện blob URL ngay → ngầm lưu base64 vào IndexedDB.
+ * Nối video bằng ffmpeg.wasm trong browser → lưu Blob vào IndexedDB.
+ * Thread/UI chỉ giữ tên `merged.mp4`.
+ *
+ * - Ưu tiên Blob/base64 đã enrich trong IndexedDB (tránh URL flow2 hết hạn)
+ * - Thiếu binary → tải URL (direct browser → proxy) rồi cache Blob
+ * - Queue nội bộ: 1 job tại 1 lúc
  */
 export async function mergeVideosToIndexedDb(
   storageKey: string,
   urls: string[],
-  options?: { onBase64Ready?: (dataUrl: string) => void }
+  options?: { onProgress?: (ratio: number, message: string) => void }
 ): Promise<string> {
   const key = String(storageKey || "").trim();
   if (!key) throw new Error("Thiếu mã sản phẩm để lưu video nối");
@@ -265,51 +435,126 @@ export async function mergeVideosToIndexedDb(
   const clean = urls.map((u) => String(u || "").trim()).filter(Boolean);
   if (clean.length < 2) throw new Error("Cần ít nhất 2 video để nối");
 
-  const res = await fetch("/api/app/merge-videos/", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ urls: clean }),
+  options?.onProgress?.(0.02, "Đang lấy video từ IndexedDB...");
+
+  // Enrich Blob ngầm nếu còn thiếu — không chặn cứng nếu fail (vẫn tải URL)
+  let record = await idbGetProductVideo(key);
+  if (!record || hasPendingVariantBase64(record)) {
+    try {
+      await enrichProductVideoBase64(key);
+      record = await idbGetProductVideo(key);
+    } catch (err) {
+      console.warn("[mergeVideosToIndexedDb] enrich trước merge thất bại", err);
+    }
+  }
+
+  const mime = record?.mimeType || "video/mp4";
+  const blobs: Blob[] = [];
+  const cachedBlobs = [...(record?.videoBlobList || [])];
+  while (cachedBlobs.length < clean.length) cachedBlobs.push(null);
+  let cacheDirty = false;
+
+  for (let i = 0; i < clean.length; i++) {
+    const url = clean[i];
+    options?.onProgress?.(
+      0.05 + (i / clean.length) * 0.2,
+      `Đang lấy video ${i + 1}/${clean.length}...`
+    );
+
+    let blob = resolveVariantBlobFromRecord(record, url, i, mime);
+    if (!blob) {
+      try {
+        blob = await uriToBlob(url);
+      } catch (err: any) {
+        throw new Error(
+          `Không tải được video số ${i + 1} (${url.slice(0, 80)}…). Link flow2 có thể đã hết hạn và chưa kịp lưu IndexedDB — hãy generate lại.\n(${
+            err?.message || err
+          })`
+        );
+      }
+    }
+
+    if (!blob || blob.size <= 0) {
+      throw new Error(`Video số ${i + 1} rỗng — hãy generate lại`);
+    }
+
+    blobs.push(blob);
+    if (!cachedBlobs[i] || cachedBlobs[i]!.size <= 0) {
+      cachedBlobs[i] = blob;
+      cacheDirty = true;
+    }
+  }
+
+  // Cache Blob nguồn (không base64) — để Nối lại không phụ thuộc flow2
+  if (cacheDirty) {
+    try {
+      const existing = await idbGetProductVideo(key);
+      await idbPutProductVideo({
+        productId: key,
+        videoUris: existing?.videoUris?.length ? existing.videoUris : clean,
+        videoBlobList: cachedBlobs,
+        // Không giữ base64 nặng song song với Blob
+        videoBytesList: (existing?.videoUris || clean).map(() => null),
+        mimeType: existing?.mimeType || mime,
+        ...preserveMergedFields(
+          existing || {
+            productId: key,
+            videoUris: clean,
+            videoBytesList: clean.map(() => null),
+            mimeType: mime,
+            mergedVideoBytes: null,
+            updatedAt: Date.now(),
+          },
+          existing
+        ),
+        updatedAt: Date.now(),
+      });
+    } catch (err) {
+      console.warn("[mergeVideosToIndexedDb] cache variant blobs failed", err);
+    }
+  }
+
+  const blob = await mergeVideosInBrowser(blobs, {
+    onProgress: options?.onProgress
+      ? ({ ratio, message }) => options.onProgress!(0.25 + ratio * 0.75, message)
+      : undefined,
   });
 
-  if (!res.ok) {
-    let message = `Nối video thất bại (${res.status})`;
-    try {
-      const json = await res.json();
-      if (json?.message) message = String(json.message);
-    } catch {
-      // ignore
-    }
-    throw new Error(message);
-  }
-
-  const blob = await res.blob();
   const mimeType = blob.type || "video/mp4";
-  const objectUrl = URL.createObjectURL(blob);
 
-  // Đợi ghi IndexedDB xong — tránh F5 mất video / auto-merge chạy lại
+  /**
+   * Lưu Blob vào store `merged-videos` (riêng) — không phụ thuộc product-videos.
+   * Tránh race: enrich ghi đè product-videos làm mất mergedVideoBlob.
+   */
+  await putMergedVideoWithVerify(key, blob, mimeType);
+
+  // Marker nhẹ trên product-videos (không nhét Blob nối vào đây)
   try {
-    const bytes = await blobToBase64(blob);
-    if (bytes) {
-      const existing = await idbGetProductVideo(key);
-      const record: ProductVideoRecord = {
-        productId: key,
-        videoUris: existing?.videoUris || clean,
-        videoBytesList: existing?.videoBytesList || clean.map(() => null),
-        mimeType,
-        mergedVideoBytes: bytes,
-        updatedAt: Date.now(),
-      };
-      await idbPutProductVideo(record);
-      options?.onBase64Ready?.(`data:${mimeType};base64,${bytes}`);
-    }
+    const existing = await idbGetProductVideo(key);
+    const next: ProductVideoRecord = {
+      productId: key,
+      videoUris: existing?.videoUris || clean,
+      videoBytesList: existing?.videoBytesList || clean.map(() => null),
+      videoBlobList: existing?.videoBlobList || cachedBlobs,
+      mimeType: existing?.mimeType || mimeType,
+      mergedVideoBytes: null,
+      mergedVideoBlob: null,
+      mergedVideoName: MERGED_VIDEO_FILE_NAME,
+      updatedAt: Date.now(),
+    };
+    await idbPutProductVideo(next);
   } catch (err) {
-    console.warn("[mergeVideosToIndexedDb] base64 persist failed", err);
+    // Marker fail không sao — Blob đã nằm ở merged-videos
+    console.warn("[mergeVideosToIndexedDb] product marker persist failed", err);
   }
 
-  return objectUrl;
+  return MERGED_VIDEO_FILE_NAME;
 }
 
+/**
+ * Hydrate list: chỉ gắn tên file `merged.mp4` nếu IDB có binary.
+ * Không tạo Object URL hàng loạt (tránh decode base64 / leak blob) — resolve khi mở preview.
+ */
 export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
   items: T[]
 ): Promise<T[]> {
@@ -318,29 +563,33 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
       const key = getMergedVideoStorageKey(item);
       const rec = key ? await idbGetProductVideo(key) : undefined;
 
-      // Giữ http link trên item (UI); base64 chỉ nằm trong IndexedDB — giữ index slot
       const videoUrls = rec?.videoUris?.length
         ? rec.videoUris.map((u) => String(u || "").trim())
         : item.videoUrls || [];
       const videoDisabled = videoUrls.map((_, idx) => Boolean(item.videoDisabled?.[idx]));
-      let mergedUrl = "";
-      if (rec?.mergedVideoBytes) {
-        const blob = base64ToBlob(rec.mergedVideoBytes, rec.mimeType || "video/mp4");
-        mergedUrl = URL.createObjectURL(blob);
-      } else {
-        // Legacy blob store
-        mergedUrl =
-          (key ? await idbGetMergedVideoObjectUrl(key) : "") ||
-          (item.id && item.id !== key ? await idbGetMergedVideoObjectUrl(item.id) : "");
+
+      // Migrate legacy base64 → Blob (một lần, nền)
+      if (rec && (rec.mergedVideoBytes || "").trim() && !rec.mergedVideoBlob) {
+        void migrateMergedBytesToBlob(key, rec);
       }
 
-      // Resume enrich nền nếu còn link chưa base64
+      let hasFile = recordHasMergedBinary(rec);
+      if (!hasFile && key) {
+        const legacy = await idbGetMergedVideo(key);
+        hasFile = Boolean(legacy?.blob && legacy.blob.size > 0);
+      }
+      if (!hasFile && item.id && item.id !== key) {
+        const legacyById = await idbGetMergedVideo(item.id);
+        hasFile = Boolean(legacyById?.blob && legacyById.blob.size > 0);
+      }
+
       if (rec && hasPendingVariantBase64(rec)) {
         void enrichProductVideoBase64(key);
       }
 
       const prevMerged = String(item.mergedVideoUrl || "").trim();
-      if (prevMerged.startsWith("blob:") && mergedUrl && prevMerged !== mergedUrl) {
+      // Thu hồi blob URL cũ trên item (nếu hydrate từng gắn object URL)
+      if (prevMerged.startsWith("blob:")) {
         try {
           URL.revokeObjectURL(prevMerged);
         } catch {
@@ -348,14 +597,14 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
         }
       }
 
-      // Đã có trong IDB hoặc marker → giữ marker nếu chưa tạo được object URL
-      const nextMerged =
-        mergedUrl ||
-        (rec?.mergedVideoBytes || isMergedVideoIdbMarker(prevMerged)
-          ? MERGED_VIDEO_IDB_MARKER
-          : prevMerged.startsWith("blob:") || prevMerged.startsWith("data:")
-          ? ""
-          : prevMerged);
+      // UI/thread: chỉ tên — giống scene chỉ lưu name
+      const nextMerged = hasFile
+        ? MERGED_VIDEO_FILE_NAME
+        : isMergedVideoIdbMarker(prevMerged)
+        ? MERGED_VIDEO_FILE_NAME
+        : prevMerged.startsWith("blob:") || prevMerged.startsWith("data:")
+        ? ""
+        : prevMerged;
 
       return {
         ...item,
@@ -367,6 +616,26 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
   );
 }
 
+async function migrateMergedBytesToBlob(key: string, rec: ProductVideoRecord): Promise<void> {
+  try {
+    const bytes = (rec.mergedVideoBytes || "").trim();
+    if (!bytes) return;
+    const existing = await idbGetMergedVideo(key);
+    if (existing?.blob && existing.blob.size > 0) return;
+    const blob = base64ToBlob(bytes, rec.mimeType || "video/mp4");
+    await idbPutMergedVideo(key, blob, rec.mimeType || "video/mp4");
+    await idbPutProductVideo({
+      ...rec,
+      mergedVideoBlob: null,
+      mergedVideoBytes: null,
+      mergedVideoName: rec.mergedVideoName || MERGED_VIDEO_FILE_NAME,
+      updatedAt: Date.now(),
+    });
+  } catch (err) {
+    console.warn("[migrateMergedBytesToBlob]", err);
+  }
+}
+
 /** Resolve URL xem preview theo slot (giữ index; slot trống = ""). */
 export async function resolveVariantPreviewUrls(
   item: ProductVideoKeySource,
@@ -375,22 +644,39 @@ export async function resolveVariantPreviewUrls(
   const key = getMergedVideoStorageKey(item);
   const rec = key ? await idbGetProductVideo(key) : undefined;
   const fromItem = item.videoUrls || [];
-  const count = Math.max(
-    slotCount || 0,
-    rec?.videoUris?.length || 0,
-    fromItem.length,
-    1
-  );
+  const count = Math.max(slotCount || 0, rec?.videoUris?.length || 0, fromItem.length, 1);
 
   if (rec?.videoUris?.length) {
-    const fromRec = getVariantPreviewUrls(rec);
-    return Array.from({ length: count }, (_, i) => fromRec[i] || "");
+    const previews = getVariantPreviewUrls(rec);
+    return Array.from({ length: count }, (_, i) => {
+      const p = previews[i] || "";
+      if (p.startsWith("__idb_blob__:")) {
+        const blob = rec.videoBlobList?.[i];
+        if (blob && blob.size > 0) {
+          try {
+            return URL.createObjectURL(blob);
+          } catch {
+            return "";
+          }
+        }
+        return "";
+      }
+      return p;
+    });
   }
 
   return Array.from({ length: count }, (_, i) => {
     const trimmed = String(fromItem[i] || "").trim();
     if (!trimmed) return "";
     if (isDataUrl(trimmed) || trimmed.startsWith("blob:")) return trimmed;
+    const blob = rec?.videoBlobList?.[i];
+    if (blob && blob.size > 0) {
+      try {
+        return URL.createObjectURL(blob);
+      } catch {
+        // fall through
+      }
+    }
     return toDownloadProxyUrl(trimmed, true);
   });
 }
@@ -410,21 +696,30 @@ export async function resolveMergedPreviewUrl(item: ProductVideoKeySource): Prom
   return url;
 }
 
-/** Lấy Blob video đã nối từ IndexedDB (base64 / legacy) hoặc URL trên item. */
-export async function getMergedVideoBlob(
-  item: ProductVideoKeySource
-): Promise<Blob | null> {
+/** Lấy Blob video đã nối từ IndexedDB (Blob / base64 legacy) hoặc URL trên item. */
+export async function getMergedVideoBlob(item: ProductVideoKeySource): Promise<Blob | null> {
   const key = getMergedVideoStorageKey(item);
-  const rec = key ? await idbGetProductVideo(key) : undefined;
-  if (rec?.mergedVideoBytes) {
-    return base64ToBlob(rec.mergedVideoBytes, rec.mimeType || "video/mp4");
+
+  // Store riêng `merged-videos` là nguồn chính (không bị enrich ghi đè)
+  if (key) {
+    const primary = await idbGetMergedVideo(key);
+    if (primary?.blob && primary.blob.size > 0) return primary.blob;
+  }
+  if (item.id && item.id !== key) {
+    const byId = await idbGetMergedVideo(item.id);
+    if (byId?.blob && byId.blob.size > 0) return byId.blob;
   }
 
-  const legacy = key ? await idbGetMergedVideo(key) : undefined;
-  if (legacy?.blob && legacy.blob.size > 0) return legacy.blob;
-  if (item.id && item.id !== key) {
-    const legacyById = await idbGetMergedVideo(item.id);
-    if (legacyById?.blob && legacyById.blob.size > 0) return legacyById.blob;
+  const rec = key ? await idbGetProductVideo(key) : undefined;
+
+  if (rec?.mergedVideoBlob && rec.mergedVideoBlob.size > 0) {
+    return rec.mergedVideoBlob;
+  }
+
+  if (rec?.mergedVideoBytes) {
+    const blob = base64ToBlob(rec.mergedVideoBytes, rec.mimeType || "video/mp4");
+    if (key) void migrateMergedBytesToBlob(key, rec);
+    return blob;
   }
 
   const url = String(item.mergedVideoUrl || "").trim();
@@ -454,11 +749,21 @@ export async function removeMergedVideoFromIndexedDb(
   }
   const key = getMergedVideoStorageKey(item);
   if (key) {
-    await idbDeleteProductVideo(key);
+    const rec = await idbGetProductVideo(key);
+    if (rec) {
+      await idbPutProductVideo({
+        ...rec,
+        mergedVideoBytes: null,
+        mergedVideoBlob: null,
+        mergedVideoName: undefined,
+        updatedAt: Date.now(),
+      });
+    } else {
+      await idbDeleteProductVideo(key);
+    }
     await idbDeleteMergedVideo(key);
   }
   if (item.id && item.id !== key) {
-    await idbDeleteProductVideo(item.id);
     await idbDeleteMergedVideo(item.id);
   }
 }

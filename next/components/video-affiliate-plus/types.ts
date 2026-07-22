@@ -37,7 +37,7 @@ export interface AffiliatePlusItem {
   videoUrls: string[];
   /** Slot bị tắt — bỏ qua khi nối video */
   videoDisabled: boolean[];
-  /** Video đã nối (ffmpeg) — runtime có thể là blob URL; persist dùng marker "indexeddb". */
+  /** Video đã nối — UI/thread chỉ lưu tên `merged.mp4`; binary ở IndexedDB (Blob). */
   mergedVideoUrl: string;
   hostPort: string;
   country: string;
@@ -154,7 +154,7 @@ export interface AffiliatePlusUserGenerateLink {
   productName: string;
   productLink: string;
   caption: string;
-  /** Link/key video đã nối — blob/data không persist; dùng marker "indexeddb". */
+  /** Tên/key video đã nối — chỉ `merged.mp4`; binary ở IndexedDB. */
   mergedVideoUrl: string;
   assignedAt: number;
 }

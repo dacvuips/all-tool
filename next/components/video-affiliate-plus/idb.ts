@@ -36,16 +36,31 @@ const UPLOAD_HISTORY_KEY = "list";
 const SELECTED_UPLOAD_HISTORY_KEY = "selectedId";
 const COOKIE_FETCH_HISTORY_KEY = "list";
 
-/** Bản ghi video theo mã sản phẩm — giống pattern affiliate-video (link → base64). */
+/** Bản ghi video theo mã sản phẩm — giống pattern scene generate (link/tên + binary local). */
 export type ProductVideoRecord = {
   productId: string;
-  /** Link gốc từ Flow2 */
+  /** Link gốc từ Flow2 / generate */
   videoUris: string[];
-  /** base64 từng variant (null = chưa enrich) */
+  /**
+   * @deprecated base64 từng variant — nặng, dễ QuotaExceeded.
+   * Ưu tiên `videoBlobList`. Giữ để đọc bản ghi cũ.
+   */
   videoBytesList: Array<string | null>;
+  /** Blob từng variant (giống mediaBlob) — dùng khi nối / preview */
+  videoBlobList?: Array<Blob | null>;
   mimeType: string;
-  /** base64 video đã nối (null = chưa có) */
+  /**
+   * @deprecated Base64 video nối — nặng. Binary nối nằm store `merged-videos`.
+   * Giữ để đọc bản ghi cũ.
+   */
   mergedVideoBytes: string | null;
+  /**
+   * @deprecated Blob video nối trên product-videos — dễ bị enrich ghi đè.
+   * Nguồn chính: store `merged-videos`.
+   */
+  mergedVideoBlob?: Blob | null;
+  /** Tên file nhẹ trên UI/thread (vd. merged.mp4) — không chứa binary */
+  mergedVideoName?: string;
   updatedAt: number;
 };
 
@@ -179,13 +194,27 @@ async function withStore<T>(
 ): Promise<T> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
+    let result: T;
+    let reqDone = false;
     try {
       const tx = db.transaction(storeName, mode);
       const store = tx.objectStore(storeName);
       const req = fn(store);
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        result = req.result;
+        reqDone = true;
+        // readonly: có thể resolve sớm; readwrite đợi oncomplete để chắc đã commit
+        if (mode === "readonly") resolve(result);
+      };
       req.onerror = () => reject(req.error);
-      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => {
+        if (mode !== "readonly") {
+          if (!reqDone) reject(new Error(`IDB request incomplete: ${storeName}`));
+          else resolve(result);
+        }
+      };
+      tx.onerror = () => reject(tx.error || new Error(`IDB transaction error: ${storeName}`));
+      tx.onabort = () => reject(tx.error || new Error(`IDB transaction aborted: ${storeName}`));
     } catch (err) {
       reject(err);
     }
@@ -236,6 +265,22 @@ export async function idbDeleteProductVideo(productId: string): Promise<void> {
   }
 }
 
+/** Xóa toàn bộ variant video (Blob/base64) — giải phóng bộ nhớ Generate Video. */
+export async function idbClearProductVideos(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_PRODUCT_VIDEOS, "readwrite");
+      tx.objectStore(STORE_PRODUCT_VIDEOS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 /** @deprecated */
 export async function idbPutMergedVideo(
   itemId: string,
@@ -271,6 +316,22 @@ export async function idbDeleteMergedVideo(itemId: string): Promise<void> {
   } catch (err) {
     console.warn("[video-affiliate-manager] delete merged video failed", err);
   }
+}
+
+/** Xóa toàn bộ video đã nối — giải phóng bộ nhớ Generate Video. */
+export async function idbClearMergedVideos(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_MERGED_VIDEOS, "readwrite");
+      tx.objectStore(STORE_MERGED_VIDEOS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 export async function idbGetMergedVideoObjectUrl(itemId: string): Promise<string | ""> {
@@ -485,6 +546,38 @@ export async function idbClearThreadsBySession(sessionId: string): Promise<void>
       };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Xóa toàn bộ threads (mọi phiên Generate Video). */
+export async function idbClearAllThreads(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_THREADS, "readwrite");
+      tx.objectStore(STORE_THREADS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Xóa toàn bộ thread-meta (stats mọi phiên). */
+export async function idbClearAllThreadMeta(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_THREAD_META, "readwrite");
+      tx.objectStore(STORE_THREAD_META).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
     } catch (err) {
       reject(err);
     }

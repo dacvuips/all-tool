@@ -35,6 +35,7 @@ import {
   panelListRowClass,
 } from "../shared/panel-list-ui";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { ImageDialog } from "../../shared/utilities/dialog/image-dialog";
 import { Button, Field, Form, Input } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
@@ -111,6 +112,8 @@ type VideoPreviewState =
       itemId: string;
       urls: string[];
       index: number;
+      /** Có URL nhưng không play được / không resolve được blob */
+      error?: string;
     };
 
 const EDIT_FIELD_LABELS: Record<Exclude<EditField, null>, string> = {
@@ -150,6 +153,7 @@ interface ThreadManagementPanelProps {
   onUpdateItems: (items: AffiliatePlusItem[]) => void;
   onImportComplete: (fileName: string, items: AffiliatePlusItem[]) => void | Promise<void>;
   onSelectHistory: (id: string) => void | Promise<void>;
+  onDeleteHistorySession: (id: string) => void | Promise<void>;
   onClearHistory: () => void | Promise<void>;
   onAddLog: (message: string, level?: AffiliatePlusLog["level"], threadId?: string) => void;
 }
@@ -163,6 +167,7 @@ export function ThreadManagementPanel({
   onUpdateItems,
   onImportComplete,
   onSelectHistory,
+  onDeleteHistorySession,
   onClearHistory,
   onAddLog,
 }: ThreadManagementPanelProps) {
@@ -176,6 +181,8 @@ export function ThreadManagementPanel({
   itemsRef.current = items;
 
   const sessionId = selectedHistoryId || DEFAULT_SESSION_ID;
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
   const runnerRef = useRef<ThreadRunner | null>(null);
   const parentSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -205,10 +212,15 @@ export function ThreadManagementPanel({
     name: "",
   });
   const [videoPreview, setVideoPreview] = useState<VideoPreviewState | null>(null);
+  const [zoomImage, setZoomImage] = useState("");
   const [generatingIds, setGeneratingIds] = useState<Record<string, boolean>>({});
   const [mergingIds, setMergingIds] = useState<Record<string, boolean>>({});
+  const [batchRunning, setBatchRunning] = useState(false);
   const [downloadingMerged, setDownloadingMerged] = useState(false);
+  const [clearingIdb, setClearingIdb] = useState(false);
   const pauseAllRef = useRef(false);
+  /** ThreadRunner đang chạy batch — tránh auto-merge effect tranh ffmpeg với generate. */
+  const batchRunningRef = useRef(false);
   const shopeeVideoJob = useMediaGenerationJob<{
     videoUri?: string | null;
     videoUris?: string[];
@@ -216,13 +228,17 @@ export function ThreadManagementPanel({
   }>();
 
   const scheduleParentSync = useCallback(() => {
+    const scheduledSessionId = sessionIdRef.current;
     if (parentSyncTimerRef.current) clearTimeout(parentSyncTimerRef.current);
     parentSyncTimerRef.current = setTimeout(() => {
-      void getSessionItems(sessionId)
+      const activeSessionId = sessionIdRef.current;
+      // Bỏ qua sync cũ sau import / đổi phiên — tránh ghi đè items & số luồng về 0
+      if (activeSessionId !== scheduledSessionId) return;
+      void getSessionItems(activeSessionId)
         .then(onUpdateItems)
         .catch((err) => console.warn("[thread-panel] parent sync failed", err));
     }, 400);
-  }, [sessionId, onUpdateItems]);
+  }, [onUpdateItems]);
 
   const totalPages = Math.max(1, Math.ceil(listTotalMatched / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -268,6 +284,10 @@ export function ThreadManagementPanel({
     })();
     return () => {
       cancelled = true;
+      if (parentSyncTimerRef.current) {
+        clearTimeout(parentSyncTimerRef.current);
+        parentSyncTimerRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
@@ -304,10 +324,21 @@ export function ThreadManagementPanel({
     };
   }, []);
 
-  const openVideoPreviewMerged = (title: string, itemId: string, urls: string[]) => {
+  const openVideoPreviewMerged = (
+    title: string,
+    itemId: string,
+    urls: string[],
+    error?: string
+  ) => {
     const clean = urls.map((u) => String(u || "").trim()).filter(Boolean);
-    if (!clean.length) return;
-    setVideoPreview({ kind: "merged", title, itemId, urls: clean, index: 0 });
+    setVideoPreview({
+      kind: "merged",
+      title,
+      itemId,
+      urls: clean,
+      index: 0,
+      error: error || (clean.length ? undefined : t("Không có file video nối")),
+    });
   };
 
   /** Preview variant: đủ số tab = config; slot trống = lỗi (tab đỏ). */
@@ -328,76 +359,125 @@ export function ThreadManagementPanel({
     });
   };
 
-  /** Preview video đã nối: luôn resolve Blob mới từ IndexedDB / URL còn sống. */
+  /** Preview video nối file: luôn mở dialog; lỗi thì không render <video>. */
   const openMergedPreview = async (item: AffiliatePlusItem) => {
+    const title = t("Video nối file");
     try {
-      const url = await resolveMergedPreviewUrl(item);
+      let url = await resolveMergedPreviewUrl(item);
+      // Race ngắn: blob vừa ghi / enrich vừa ghi đè — thử lại 1 lần
+      if (!url && hasMergedVideoRef(item.mergedVideoUrl)) {
+        await new Promise((r) => setTimeout(r, 120));
+        url = await resolveMergedPreviewUrl(item);
+      }
       if (!url) {
-        toast.warn(t("Không mở được video — thử Nối lại"));
+        openVideoPreviewMerged(title, item.id, [], t("Không mở được video — thử Nối lại"));
         return;
       }
-      openVideoPreviewMerged(t("Video đã nối"), item.id, [url]);
+      openVideoPreviewMerged(title, item.id, [url]);
     } catch (err: any) {
       console.warn("[openMergedPreview]", err);
-      toast.error(err?.message || t("Không mở được video"));
+      openVideoPreviewMerged(
+        title,
+        item.id,
+        [],
+        err?.message || t("Không mở được video")
+      );
     }
   };
 
   const autoMergeAttemptedRef = useRef<Record<string, boolean>>({});
 
-  // Tự nối lại các item đã có ≥2 video nhưng chưa có merged (và chưa có trong IDB)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const all = await getSessionItems(sessionId);
-      if (cancelled) return;
-      // Hydrate từ product-videos trước — tránh F5 tưởng chưa nối rồi chạy spinner lại
-      const hydrated = await hydrateMergedVideoUrls(all);
-      if (cancelled) return;
+  /** Hoãn merge ffmpeg — nhường event loop để worker enqueue/poll job generate tiếp theo. */
+  const MERGE_DEFER_MS = 400;
 
-      const pending = hydrated.filter((i) => {
-        const mergeUrls = getMergeableVideoUrls(i);
-        return (
-          mergeUrls.length >= 2 &&
-          !hasMergedVideoRef(i.mergedVideoUrl) &&
-          !mergingIds[i.id] &&
-          !generatingIds[i.id] &&
-          !autoMergeAttemptedRef.current[i.id]
-        );
-      });
-      if (!pending.length) {
-        // Đồng bộ URL đã hydrate lên UI nếu chưa có
-        if (hydrated.some((i, idx) => i.mergedVideoUrl !== all[idx]?.mergedVideoUrl)) {
-          void loadPage();
-        }
-        return;
-      }
+  const scheduleBackgroundMerge = useCallback(
+    (mergeItemId: string, mergeKey: string, mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
+      autoMergeAttemptedRef.current[mergeItemId] = true;
+      setMergingIds((prev) => ({ ...prev, [mergeItemId]: true }));
+      onAddLog(
+        t("Đang nối {{count}} video...", { count: mergeUrls.length }),
+        "info",
+        mergeItemId
+      );
 
-      for (const item of pending) {
-        if (cancelled) return;
-        autoMergeAttemptedRef.current[item.id] = true;
-        setMergingIds((prev) => ({ ...prev, [item.id]: true }));
-        try {
-          const urls = getMergeableVideoUrls(item);
-          const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item), urls);
-          if (cancelled) return;
-          await patchThread(sessionId, item.id, { mergedVideoUrl: mergedUrl, error: "" });
-          scheduleParentSync();
-          onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
-        } catch (err: any) {
-          if (cancelled) return;
-          const msg = err?.message || t("Nối video thất bại");
-          await patchThread(sessionId, item.id, { error: msg });
-          scheduleParentSync();
-          onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
-        } finally {
+      window.setTimeout(() => {
+        if (pauseAllRef.current) {
           setMergingIds((prev) => {
             const next = { ...prev };
-            delete next[item.id];
+            delete next[mergeItemId];
             return next;
           });
+          return;
         }
+
+        void (async () => {
+          try {
+            const mergedUrl = await mergeVideosToIndexedDb(mergeKey, mergeUrls);
+            if (pauseAllRef.current) return;
+            await patchThread(sessionId, mergeItemId, { mergedVideoUrl: mergedUrl, error: "" });
+            onAddLog(t("Đã nối video và lưu IndexedDB"), "success", mergeItemId);
+            scheduleParentSync();
+          } catch (mergeErr: any) {
+            console.error(mergeErr);
+            const msg = mergeErr?.message || t("Nối video thất bại");
+            await patchThread(sessionId, mergeItemId, { error: msg });
+            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", mergeItemId);
+            scheduleParentSync();
+          } finally {
+            setMergingIds((prev) => {
+              const next = { ...prev };
+              delete next[mergeItemId];
+              return next;
+            });
+          }
+        })();
+      }, deferMs);
+    },
+    [MERGE_DEFER_MS, onAddLog, scheduleParentSync, sessionId, t]
+  );
+
+  const runPendingAutoMerge = useCallback(async () => {
+    if (batchRunningRef.current) return;
+
+    const all = await getSessionItems(sessionId);
+    const hydrated = await hydrateMergedVideoUrls(all);
+
+    const pending = hydrated.filter((i) => {
+      const mergeUrls = getMergeableVideoUrls(i);
+      return (
+        mergeUrls.length >= 2 &&
+        !hasMergedVideoRef(i.mergedVideoUrl) &&
+        !mergingIds[i.id] &&
+        !generatingIds[i.id] &&
+        !autoMergeAttemptedRef.current[i.id]
+      );
+    });
+
+    if (!pending.length) {
+      if (hydrated.some((i, idx) => i.mergedVideoUrl !== all[idx]?.mergedVideoUrl)) {
+        void loadPage();
       }
+      return;
+    }
+
+    for (const item of pending) {
+      if (batchRunningRef.current) return;
+      scheduleBackgroundMerge(
+        item.id,
+        getMergedVideoStorageKey(item),
+        getMergeableVideoUrls(item),
+        0
+      );
+    }
+  }, [generatingIds, loadPage, mergingIds, scheduleBackgroundMerge, sessionId]);
+
+  // Tự nối lại các item đã có ≥2 video nhưng chưa có merged (và chưa có trong IDB)
+  useEffect(() => {
+    if (batchRunningRef.current) return;
+
+    let cancelled = false;
+    void (async () => {
+      await runPendingAutoMerge();
       if (!cancelled) void loadPage();
     })();
 
@@ -405,7 +485,7 @@ export function ThreadManagementPanel({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId, listMeta?.success, generatingIds, mergingIds]);
+  }, [sessionId, listMeta?.success, generatingIds, mergingIds, batchRunning]);
 
   useEffect(() => {
     let cancelled = false;
@@ -510,8 +590,7 @@ export function ThreadManagementPanel({
     }));
 
     await onImportComplete(fileName, withPrompt);
-    await loadPage();
-    scheduleParentSync();
+    // loadPage + parent sync chạy qua useEffect [sessionId] sau khi parent cập nhật phiên mới
     onAddLog(t("Đã import {{count}} luồng từ file", { count: withPrompt.length }), "success");
     toast.success(t("Đã import {{count}} sản phẩm", { count: withPrompt.length }));
     return true;
@@ -614,6 +693,90 @@ export function ThreadManagementPanel({
     onAddLog(t("Đã xóa {{count}} task lỗi", { count: errorItems.length }), "warning");
   };
 
+  const handleDeleteSelectedHistory = async (opts?: { skipConfirm?: boolean }) => {
+    const id = selectedHistoryId;
+    if (!id || clearingIdb || batchRunning) return;
+    if (!opts?.skipConfirm) {
+      const entry = importHistory.find((h) => h.id === id);
+      const label = entry?.label || id;
+      const ok = window.confirm(
+        t(
+          "Xóa phiên \"{{label}}\"?\n\n• Lịch sử + luồng của phiên này\n• Video variant + video nối trong IndexedDB (nếu không còn phiên khác dùng)\n\nCấu hình Generate Video vẫn giữ.",
+          { label }
+        ) as string
+      );
+      if (!ok) return;
+    }
+
+    setClearingIdb(true);
+    try {
+      if (id === sessionId) {
+        pauseAllRef.current = true;
+        runnerRef.current?.pause();
+        setVideoPreview(null);
+        autoMergeAttemptedRef.current = {};
+        setMergingIds({});
+        setGeneratingIds({});
+      }
+      await onDeleteHistorySession(id);
+      if (id === sessionId) {
+        setVisibleItems([]);
+        setListTotal(0);
+        setListTotalMatched(0);
+        setListMeta(null);
+        setSelectedCount(0);
+        setHasMergedVideos(false);
+        await loadPage();
+      }
+      onAddLog(t("Đã xóa phiên lịch sử + video cache"), "warning");
+      toast.success(t("Đã xóa phiên và giải phóng video cache"));
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || t("Xóa phiên thất bại"));
+    } finally {
+      pauseAllRef.current = false;
+      setClearingIdb(false);
+    }
+  };
+
+  const handleClearGenerateVideoIdb = async (opts?: { skipConfirm?: boolean }) => {
+    if (clearingIdb || batchRunning) return;
+    if (!opts?.skipConfirm) {
+      const ok = window.confirm(
+        t(
+          "Xóa toàn bộ dữ liệu Generate Video trong IndexedDB?\n\n• Lịch sử phiên / luồng\n• Video variant + video nối đã lưu\n→ Giải phóng bộ nhớ trình duyệt.\n\nCấu hình Generate Video (prompt) vẫn giữ."
+        ) as string
+      );
+      if (!ok) return;
+    }
+
+    setClearingIdb(true);
+    try {
+      pauseAllRef.current = true;
+      runnerRef.current?.pause();
+      setVideoPreview(null);
+      await onClearHistory();
+      autoMergeAttemptedRef.current = {};
+      setMergingIds({});
+      setGeneratingIds({});
+      setVisibleItems([]);
+      setListTotal(0);
+      setListTotalMatched(0);
+      setListMeta(null);
+      setSelectedCount(0);
+      setHasMergedVideos(false);
+      await loadPage();
+      onAddLog(t("Đã xóa IndexedDB Generate Video (kèm video cache)"), "warning");
+      toast.success(t("Đã xóa cache video / IndexedDB — đã giải phóng bộ nhớ"));
+    } catch (err: any) {
+      console.error(err);
+      toast.error(err?.message || t("Xóa IndexedDB thất bại"));
+    } finally {
+      pauseAllRef.current = false;
+      setClearingIdb(false);
+    }
+  };
+
   const safeDownloadName = (raw: string, fallback: string) => {
     const cleaned = String(raw || "")
       .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
@@ -673,6 +836,11 @@ export function ThreadManagementPanel({
   };
 
   const handleStart = async (ids?: string[]) => {
+    if (batchRunningRef.current) {
+      toast.warn(t("Batch đang chạy — đợi hoàn tất hoặc bấm Tạm dừng"));
+      return;
+    }
+
     const allItems = await getSessionItems(sessionId);
     const candidates = ids?.length
       ? allItems.filter((i) => ids.includes(i.id))
@@ -897,33 +1065,7 @@ export function ThreadManagementPanel({
           .map((x) => x.u);
         const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
         if (willMerge) {
-          // Chặn effect auto-merge trùng trong lúc nối nền
-          autoMergeAttemptedRef.current[fresh.id] = true;
-          setMergingIds((prev) => ({ ...prev, [fresh.id]: true }));
-          onAddLog(t("Đang nối {{count}} video...", { count: mergeUrls.length }), "info", fresh.id);
-          const mergeItemId = fresh.id;
-          const mergeKey = getMergedVideoStorageKey(fresh);
-          void (async () => {
-            try {
-              const mergedUrl = await mergeVideosToIndexedDb(mergeKey, mergeUrls);
-              if (pauseAllRef.current) return;
-              await patchThread(sessionId, mergeItemId, { mergedVideoUrl: mergedUrl, error: "" });
-              onAddLog(t("Đã nối video và lưu IndexedDB"), "success", mergeItemId);
-              scheduleParentSync();
-            } catch (mergeErr: any) {
-              console.error(mergeErr);
-              const msg = mergeErr?.message || t("Nối video thất bại");
-              await patchThread(sessionId, mergeItemId, { error: msg });
-              onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", mergeItemId);
-              scheduleParentSync();
-            } finally {
-              setMergingIds((prev) => {
-                const next = { ...prev };
-                delete next[mergeItemId];
-                return next;
-              });
-            }
-          })();
+          scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh), mergeUrls);
         }
 
         if (!ctx.isPaused() && !pauseAllRef.current) {
@@ -971,12 +1113,31 @@ export function ThreadManagementPanel({
       autoPatchStatus: false,
       runJob,
       onEvent: (ev) => {
-        if (ev.type === "finished") scheduleParentSync();
+        if (ev.type === "finished") {
+          scheduleParentSync();
+          const total = ev.success + ev.error + ev.cancelled;
+          onAddLog(
+            t("Batch xong: {{ok}}/{{total}} thành công, {{err}} lỗi{{cancel}}", {
+              ok: ev.success,
+              total,
+              err: ev.error,
+              cancel: ev.cancelled ? `, ${ev.cancelled} huỷ` : "",
+            }),
+            ev.error ? "warning" : "success"
+          );
+        }
       },
     });
     runnerRef.current = runner;
-    await runner.run(targets);
-    runnerRef.current = null;
+    batchRunningRef.current = true;
+    setBatchRunning(true);
+    try {
+      await runner.run(targets);
+    } finally {
+      batchRunningRef.current = false;
+      setBatchRunning(false);
+      runnerRef.current = null;
+    }
     await loadPage();
   };
 
@@ -1101,17 +1262,39 @@ export function ThreadManagementPanel({
       toast.success(t("Đã nối lại video"));
 
       // Cập nhật dialog nếu đang mở preview merged của item này
-      setVideoPreview((prev) =>
-        prev?.kind === "merged" && prev.itemId === item.id
-          ? { ...prev, urls: [mergedUrl], index: 0 }
-          : prev
-      );
+      try {
+        const previewUrl = await resolveMergedPreviewUrl({
+          ...item,
+          mergedVideoUrl: mergedUrl,
+        });
+        setVideoPreview((prev) =>
+          prev?.kind === "merged" && prev.itemId === item.id
+            ? {
+                ...prev,
+                urls: previewUrl ? [previewUrl] : [],
+                index: 0,
+                error: previewUrl ? undefined : t("Không mở được video — thử Nối lại"),
+              }
+            : prev
+        );
+      } catch {
+        setVideoPreview((prev) =>
+          prev?.kind === "merged" && prev.itemId === item.id
+            ? { ...prev, urls: [], index: 0, error: t("Không mở được video — thử Nối lại") }
+            : prev
+        );
+      }
     } catch (err: any) {
       const msg = err?.message || t("Nối video thất bại");
       await patchThread(sessionId, item.id, { error: msg });
       scheduleParentSync();
       onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
       toast.error(msg);
+      setVideoPreview((prev) =>
+        prev?.kind === "merged" && prev.itemId === item.id
+          ? { ...prev, urls: [], error: msg }
+          : prev
+      );
     } finally {
       setMergingIds((prev) => {
         const next = { ...prev };
@@ -1390,8 +1573,13 @@ export function ThreadManagementPanel({
           items={importHistory}
           selectedId={selectedHistoryId}
           onSelect={(id) => void onSelectHistory(id)}
-          onClear={() => onClearHistory()}
+          onDeleteSelected={() => void handleDeleteSelectedHistory({ skipConfirm: true })}
+          onClear={() => void handleClearGenerateVideoIdb({ skipConfirm: true })}
           formatOptionLabel={formatImportHistoryOption}
+          deleteSelectedTitle={t("Xóa phiên đang chọn + video IndexedDB") as string}
+          deleteSelectedConfirmLabel={t("Xóa phiên") as string}
+          clearTitle={t("Xóa tất cả lịch sử + video IndexedDB (giải phóng bộ nhớ)") as string}
+          clearConfirmLabel={t("Xóa hết") as string}
           className="px-2 py-2 mb-3 rounded-lg"
         />
         <div className="flex flex-col gap-3 justify-between lg:flex-row lg:items-center">
@@ -1519,6 +1707,48 @@ export function ThreadManagementPanel({
               )}
               {downloadingMerged ? t("Đang tải...") : t("Tải tất cả video nối")}
             </button>
+            <button
+              type="button"
+              onClick={() => void handleDeleteSelectedHistory()}
+              disabled={clearingIdb || batchRunning || !selectedHistoryId}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                clearingIdb || batchRunning || !selectedHistoryId
+                  ? undefined
+                  : { backgroundColor: "#fffbeb", borderColor: "#fbbf24", color: "#b45309" }
+              }
+              title={t("Xóa phiên đang chọn + video IndexedDB") as string}
+            >
+              {clearingIdb ? (
+                <RiLoader4Line className="text-base animate-spin" />
+              ) : (
+                <HiOutlineTrash className="text-base" />
+              )}
+              {clearingIdb ? t("Đang xóa...") : t("Xóa phiên")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleClearGenerateVideoIdb()}
+              disabled={clearingIdb || batchRunning}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                clearingIdb || batchRunning
+                  ? undefined
+                  : { backgroundColor: "#fff7ed", borderColor: "#fb923c", color: "#c2410c" }
+              }
+              title={
+                t(
+                  "Xóa tất cả lịch sử phiên, luồng và video đã lưu trong IndexedDB để giải phóng bộ nhớ"
+                ) as string
+              }
+            >
+              {clearingIdb ? (
+                <RiLoader4Line className="text-base animate-spin" />
+              ) : (
+                <HiOutlineTrash className="text-base" />
+              )}
+              {clearingIdb ? t("Đang xóa...") : t("Xóa hết cache")}
+            </button>
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
@@ -1544,16 +1774,16 @@ export function ThreadManagementPanel({
             <button
               type="button"
               onClick={() => handleStart()}
-              disabled={selectedCount === 0}
+              disabled={selectedCount === 0 || batchRunning}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               style={
-                selectedCount === 0
+                selectedCount === 0 || batchRunning
                   ? undefined
                   : { backgroundColor: "#dbeafe", borderColor: "#60a5fa", color: "#1d4ed8" }
               }
             >
               <HiPlay className="text-base" />
-              {t("Bắt Đầu")}
+              {batchRunning ? t("Đang chạy...") : t("Bắt Đầu")}
             </button>
             <button
               type="button"
@@ -1714,18 +1944,18 @@ export function ThreadManagementPanel({
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
                             {item.imageUrl ? (
-                              <a
-                                href={item.imageUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => setZoomImage(item.imageUrl)}
                                 title={t("Xem ảnh sản phẩm")}
+                                className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
                               >
                                 <img
                                   src={item.imageUrl}
                                   alt={item.productName || t("Ảnh sản phẩm")}
-                                  className="object-cover w-16 h-16 rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                                  className="object-cover w-16 h-16 rounded-lg cursor-zoom-in"
                                 />
-                              </a>
+                              </button>
                             ) : (
                               <div className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200">
                                 <HiOutlinePhotograph className="text-xl" />
@@ -1743,12 +1973,18 @@ export function ThreadManagementPanel({
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
                             {characterPreview.url ? (
-                              <img
-                                src={characterPreview.url}
-                                alt={characterPreview.name || t("Ảnh nhân vật")}
+                              <button
+                                type="button"
+                                onClick={() => setZoomImage(characterPreview.url)}
                                 title={characterPreview.name || t("Ảnh nhân vật từ config")}
-                                className="object-cover w-16 h-16 rounded-lg border border-gray-200"
-                              />
+                                className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                              >
+                                <img
+                                  src={characterPreview.url}
+                                  alt={characterPreview.name || t("Ảnh nhân vật")}
+                                  className="object-cover w-16 h-16 rounded-lg cursor-zoom-in"
+                                />
+                              </button>
                             ) : (
                               <div
                                 className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
@@ -1857,7 +2093,7 @@ export function ThreadManagementPanel({
                                       type="button"
                                       onClick={() => void openMergedPreview(item)}
                                       className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
-                                      title={t("Xem video đã nối")}
+                                      title={t("Video nối file")}
                                     >
                                       <RiVideoFill className="text-lg text-white" />
                                       <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
@@ -2169,37 +2405,67 @@ export function ThreadManagementPanel({
         <Dialog.Body>
           {videoPreview?.kind === "merged" ? (
             <div className="space-y-3">
-              <div className="overflow-hidden bg-black rounded-lg">
-                <video
-                  key={`${videoPreview.urls[videoPreview.index]}-${videoPreview.index}`}
-                  src={videoPreview.urls[videoPreview.index]}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="mx-auto max-h-[70vh] w-full object-contain"
-                />
-              </div>
               {(() => {
+                const src = String(videoPreview.urls[videoPreview.index] || "").trim();
+                const showPlayer = Boolean(src) && !videoPreview.error;
                 const mergedItem = items.find((i) => i.id === videoPreview.itemId);
                 const canRetry = mergedItem && getMergeableVideoUrls(mergedItem).length >= 2;
                 const isRetrying = Boolean(mergingIds[videoPreview.itemId]);
-                if (!canRetry) return null;
+
                 return (
-                  <div className="flex justify-center">
-                    <button
-                      type="button"
-                      disabled={isRetrying}
-                      onClick={() => mergedItem && void handleRetryMerge(mergedItem)}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-warning bg-warning/10 px-3 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:opacity-50"
-                    >
-                      {isRetrying ? (
-                        <RiLoader4Line className="text-sm animate-spin" />
+                  <>
+                    <div className="overflow-hidden bg-black rounded-lg min-h-[220px] flex items-center justify-center">
+                      {showPlayer ? (
+                        <video
+                          key={`${src}-${videoPreview.index}`}
+                          src={src}
+                          controls
+                          autoPlay
+                          playsInline
+                          className="mx-auto max-h-[70vh] w-full object-contain"
+                          onError={() => {
+                            setVideoPreview((prev) =>
+                              prev?.kind === "merged"
+                                ? {
+                                    ...prev,
+                                    error: t("File video lỗi / không phát được"),
+                                  }
+                                : prev
+                            );
+                          }}
+                        />
                       ) : (
-                        <HiRefresh className="text-sm" />
+                        <div className="flex flex-col gap-2 items-center px-6 py-12 text-center">
+                          <div className="flex justify-center items-center w-12 h-12 rounded-full bg-danger/20 text-danger">
+                            <RiVideoFill className="text-xl" />
+                          </div>
+                          <p className="m-0 text-sm font-semibold text-white">
+                            {videoPreview.error || t("Không có file video nối")}
+                          </p>
+                          <p className="m-0 text-xs text-white/60">
+                            {t("Dialog vẫn mở — thử Nối lại nếu còn đủ video nguồn")}
+                          </p>
+                        </div>
                       )}
-                      {isRetrying ? t("Đang nối lại...") : t("Nối lại")}
-                    </button>
-                  </div>
+                    </div>
+                    {canRetry ? (
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          disabled={isRetrying}
+                          onClick={() => mergedItem && void handleRetryMerge(mergedItem)}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-warning bg-warning/10 px-3 text-xs font-semibold text-warning transition-colors hover:bg-warning/20 disabled:opacity-50"
+                        >
+                          {isRetrying ? (
+                            <RiLoader4Line className="text-sm animate-spin" />
+                          ) : (
+                            <HiRefresh className="text-sm" />
+                          )}
+                          {isRetrying ? t("Đang nối lại...") : t("Nối lại")}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
                 );
               })()}
             </div>
@@ -2368,6 +2634,13 @@ export function ThreadManagementPanel({
           ) : null}
         </Dialog.Body>
       </Dialog>
+
+      <ImageDialog
+        isOpen={!!zoomImage}
+        image={zoomImage}
+        onClose={() => setZoomImage("")}
+        imageDialogClassName="object-contain max-w-full max-h-[80vh]"
+      />
     </div>
   );
 }

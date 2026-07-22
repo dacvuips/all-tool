@@ -30,6 +30,8 @@ import {
 } from "../../video-affiliate-plus/import-history";
 import {
   hydrateMergedVideoUrls,
+  isMergedVideoIdbMarker,
+  getMergedVideoBlob,
   removeMergedVideoFromIndexedDb,
   resolveMergedPreviewUrl,
 } from "../../video-affiliate-plus/merged-video";
@@ -85,6 +87,75 @@ import {
   statusLabel,
 } from "../types";
 
+/** Convert video trên browser (http / blob / data / IndexedDB marker) → payload backend */
+async function resolveVideoForUpload(
+  thread: Pick<
+    ShopeeUploadThread,
+    "id" | "generateItemId" | "productId" | "productLink" | "videoFile"
+  >
+): Promise<{ videoUrl?: string; videoBase64?: string }> {
+  const v = String(thread.videoFile || "").trim();
+
+  if (v.startsWith("http://") || v.startsWith("https://")) {
+    return { videoUrl: v };
+  }
+
+  const keySource = {
+    id: thread.generateItemId || thread.id,
+    productId: thread.productId,
+    productLink: thread.productLink,
+    mergedVideoUrl: thread.videoFile,
+  };
+
+  // Ưu tiên Blob IndexedDB (thread chỉ lưu tên merged.mp4)
+  const blob = await getMergedVideoBlob(keySource);
+  if (blob && blob.size > 0) {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("FileReader failed"));
+      reader.readAsDataURL(blob);
+    });
+    const comma = dataUrl.indexOf(",");
+    const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    if (!b64) throw new Error("Video IndexedDB rỗng");
+    return { videoBase64: b64 };
+  }
+
+  if (v.startsWith("data:")) {
+    const m = v.match(/^data:[^;]+;base64,(.+)$/);
+    if (!m?.[1]) throw new Error("data URI video không hợp lệ");
+    return { videoBase64: m[1] };
+  }
+
+  if (v.startsWith("blob:")) {
+    const res = await fetch(v);
+    if (!res.ok) throw new Error(`Không đọc được blob video: HTTP ${res.status}`);
+    const live = await res.blob();
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("FileReader failed"));
+      reader.readAsDataURL(live);
+    });
+    const comma = dataUrl.indexOf(",");
+    const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    if (!b64) throw new Error("Blob video rỗng");
+    return { videoBase64: b64 };
+  }
+
+  if (!v || isMergedVideoIdbMarker(v)) {
+    throw new Error(
+      "Không tìm thấy video nối trong IndexedDB — mở lại phiên Generate hoặc tạo lại luồng"
+    );
+  }
+
+  // Không gửi marker/path lạ lên server
+  throw new Error(
+    `videoUrl không hỗ trợ (${v.slice(0, 40)}) — cần http(s), blob, data URI hoặc video trong IndexedDB`
+  );
+}
+
 async function hydrateUploadThreads(
   list: PersistedUploadThread[]
 ): Promise<ShopeeUploadThread[]> {
@@ -105,6 +176,7 @@ async function hydrateUploadThreads(
       String(hydrated[index]?.mergedVideoUrl || "").trim() || String(row.videoFile || "").trim();
     return {
       ...row,
+      selected: row.selected !== false, // mặc định true nếu thiếu field (phiên cũ)
       videoFile: merged,
       status: row.status === "running" ? "stopped" : row.status,
       nextRunAt: 0,
@@ -409,20 +481,24 @@ export function ShopeeUploadFlowPanel({
 
   const fireEnqueue = async (ready: ShopeeUploadThread[]) => {
     try {
-      const res = await startUploadThreads(
-        ready.map((t) => ({
-          id: t.id,
-          username: t.username,
-          cookie: t.cookie,
-          country: t.country,
-          proxy: t.proxy,
-          caption: t.caption,
-          productLink: t.productLink,
-          productId: t.productId,
-          videoUrl: t.videoFile?.startsWith("http") ? t.videoFile : undefined,
-          videoFile: t.videoFile,
-        }))
+      const threads = await Promise.all(
+        ready.map(async (t) => {
+          const video = await resolveVideoForUpload(t);
+          return {
+            id: t.id,
+            username: t.username,
+            cookie: t.cookie,
+            country: t.country,
+            proxy: t.proxy,
+            caption: t.caption,
+            productLink: t.productLink,
+            productId: t.productId,
+            videoUrl: video.videoUrl,
+            videoBase64: video.videoBase64,
+          };
+        })
       );
+      const res = await startUploadThreads(threads);
       const jobs = res.jobs || [];
       setThreads((prev) =>
         prev.map((row) => {
@@ -457,23 +533,30 @@ export function ShopeeUploadFlowPanel({
   }, [nowSec]);
 
   const startThreads = (ids?: string[]) => {
-    // Chỉ chạy item đã checked (trừ khi gọi tường minh 1 id từ nút Play từng video)
+    // Chỉ chạy item đã checked (trừ khi gọi tường minh ids từ nút Play từng luồng)
+    // Cho phép chạy lại success/error; chỉ bỏ qua đang running
     const targetIds = ids?.length
       ? new Set(ids)
       : new Set(
           threads
-            .filter((i) => i.selected && i.status !== "running" && i.status !== "success")
+            .filter((i) => i.selected && i.status !== "running")
             .map((i) => i.id)
         );
     const targets = threads.filter(
       (t) =>
         targetIds.has(t.id) &&
         t.status !== "running" &&
-        t.status !== "success" &&
         (ids?.length ? true : t.selected)
     );
     if (!targets.length) {
-      toast.warn(t("Chọn ít nhất một video để bắt đầu"));
+      const anySelected = threads.some((t) => t.selected);
+      const allRunning =
+        anySelected && threads.filter((t) => t.selected).every((t) => t.status === "running");
+      toast.warn(
+        allRunning
+          ? t("Các video đã chọn đang chạy — hãy tạm dừng trước")
+          : t("Chọn ít nhất một video để bắt đầu")
+      );
       return;
     }
     void enqueueThreads(targets);
@@ -582,20 +665,24 @@ export function ShopeeUploadFlowPanel({
       )
     );
     try {
-      const res = await retryUploadThreads(
-        errors.map((t) => ({
-          id: t.id,
-          username: t.username,
-          cookie: t.cookie,
-          country: t.country,
-          proxy: t.proxy,
-          caption: t.caption,
-          productLink: t.productLink,
-          productId: t.productId,
-          videoUrl: t.videoFile?.startsWith("http") ? t.videoFile : undefined,
-          videoFile: t.videoFile,
-        }))
+      const threads = await Promise.all(
+        errors.map(async (t) => {
+          const video = await resolveVideoForUpload(t);
+          return {
+            id: t.id,
+            username: t.username,
+            cookie: t.cookie,
+            country: t.country,
+            proxy: t.proxy,
+            caption: t.caption,
+            productLink: t.productLink,
+            productId: t.productId,
+            videoUrl: video.videoUrl,
+            videoBase64: video.videoBase64,
+          };
+        })
       );
+      const res = await retryUploadThreads(threads);
       const jobs = res.jobs || [];
       setThreads((prev) =>
         prev.map((row) => {
@@ -733,11 +820,15 @@ export function ShopeeUploadFlowPanel({
       );
       return;
     }
-    const targets = group.videos.filter(
-      (v) => v.selected && v.status !== "success" && v.status !== "running"
-    );
+    // Cho phép chạy lại video đã success/error; chỉ bỏ đang running
+    const targets = group.videos.filter((v) => v.selected && v.status !== "running");
     if (!targets.length) {
-      toast.warn(t("Chọn ít nhất một video trong luồng để chạy"));
+      const anySelected = group.videos.some((v) => v.selected);
+      toast.warn(
+        anySelected
+          ? t("Các video đã chọn đang chạy — hãy tạm dừng trước")
+          : t("Chọn ít nhất một video trong luồng để chạy")
+      );
       return;
     }
     startThreads(targets.map((v) => v.id));

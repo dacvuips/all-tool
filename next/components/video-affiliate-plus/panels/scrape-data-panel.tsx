@@ -49,14 +49,14 @@ const GUIDE_STEPS = [
   },
   {
     step: "02",
-    titleKey: "Mở trình duyệt",
-    descKey: "Bấm Mở Trình duyệt để gắn API và mở trang Affiliate (đăng nhập nếu cần).",
+    titleKey: "Chọn quốc gia & mở trình duyệt",
+    descKey: "Chọn market (VN, PH…) rồi bấm Mở Trình duyệt — mở đúng trang product_offer của quốc gia đó.",
     Icon: RiChromeLine,
   },
   {
     step: "03",
     titleKey: "Bắt list API",
-    descKey: "Trên Affiliate: tìm kiếm / lọc / lật trang. Domain (VN, PH…) tự nhận từ tab.",
+    descKey: "Trên Affiliate: tìm kiếm / lọc / lật trang. Domain tự nhận từ tab đang mở.",
     Icon: HiOutlineSearch,
   },
   {
@@ -68,7 +68,7 @@ const GUIDE_STEPS = [
   {
     step: "05",
     titleKey: "Lọc & tải",
-    descKey: "Select Domain / Ngày / Tháng / Năm chỉ để lọc danh sách — không đổi market cào.",
+    descKey: "Select Domain / Ngày / Tháng / Năm bên dưới chỉ lọc danh sách CSV đã lưu.",
     Icon: HiOutlineFilter,
   },
 ];
@@ -95,6 +95,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [opening, setOpening] = useState(false);
   const [downloadingExt, setDownloadingExt] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  /** Market dùng khi Mở trình duyệt → /offer/product_offer */
+  const [openMarketHost, setOpenMarketHost] = useState(MARKET_OPTIONS[0].value);
   const [filterDomain, setFilterDomain] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
@@ -192,8 +194,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         },
         "*"
       );
-      await openShopeeAffiliateBrowser();
-      toast.success(t("Đã mở trình duyệt Affiliate — dùng extension để Gửi CSV"));
+      const { offerUrl } = await openShopeeAffiliateBrowser(openMarketHost);
+      toast.success(
+        t("Đã mở {{url}} — dùng extension để Gửi CSV", {
+          url: offerUrl || `https://${openMarketHost}/offer/product_offer`,
+        })
+      );
     } catch (err: any) {
       toast.error(err?.message || t("Không mở được trình duyệt"));
     } finally {
@@ -248,7 +254,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <div>
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Cào dữ liệu")}</h3>
             <p className="m-0 mt-0.5 text-xs text-gray-500">
-              {t("Mở trình duyệt · Extension bắt domain + gửi CSV")}
+              {t("Chọn quốc gia · Mở product_offer · Extension gửi CSV")}
             </p>
           </div>
         </div>
@@ -285,7 +291,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {guideOpen ? (
                   <span className="block max-w-3xl text-[12px] leading-relaxed text-[#5b7190]">
                     {t(
-                      "Domain tự bắt từ tab Affiliate khi Gửi. Select bên dưới chỉ lọc danh sách CSV — không chọn market để cào."
+                      "Chọn quốc gia trước khi Mở trình duyệt (mở /offer/product_offer). Extension bắt domain từ tab khi Gửi. Select Domain bên dưới chỉ lọc danh sách CSV."
                     )}
                   </span>
                 ) : null}
@@ -295,7 +301,25 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               {t("Quy trình cào Shopee Affiliate")}
             </h4>
 
-            <div className="flex flex-wrap gap-2 shrink-0 sm:justify-end">
+            <div className="flex flex-wrap gap-2 items-center shrink-0 sm:justify-end">
+              <label className="inline-flex items-center gap-1.5">
+                <span className="text-[11px] font-semibold text-[#1e3a5f] whitespace-nowrap">
+                  {t("Quốc gia")}
+                </span>
+                <select
+                  value={openMarketHost}
+                  onChange={(e) => setOpenMarketHost(e.target.value)}
+                  disabled={opening}
+                  className="h-9 min-w-[148px] text-xs font-semibold rounded-lg border border-[#b8cce6] bg-white px-2 text-[#1e3a5f] disabled:opacity-50"
+                  aria-label={t("Quốc gia Affiliate")}
+                >
+                  {MARKET_OPTIONS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label} — {m.value}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 disabled={downloadingExt}
@@ -360,7 +384,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 <p className="m-0 text-[11px] leading-relaxed text-[#5b7190]">
                   <span className="font-semibold text-[#1e3a5f]">{t("Mẹo")}:</span>{" "}
                   {t(
-                    "Đổi market Shopee trên tab Affiliate (vd. .ph / .vn) — extension sẽ gửi đúng domain đang mở."
+                    "Mặc định VN mở https://affiliate.shopee.vn/offer/product_offer. Chọn PH/SG/… để mở đúng market trước khi gắn extension."
                   )}
                 </p>
               </div>

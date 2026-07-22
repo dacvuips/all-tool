@@ -1,5 +1,6 @@
 /**
- * Internal signer routes — tương thích credit.toolshopee.vn.
+ * Internal signer routes — debug / tách process.
+ * Pipeline chính gọi adapter in-process (native → credit.toolshopee.vn).
  * POST /api/internal/shopee-signer/sign
  * POST /api/internal/shopee-signer/generate-token
  * GET  /api/internal/shopee-signer/me
@@ -10,7 +11,10 @@ import { getSignerAdapter } from "../../../shopee-video-upload/signer/get-adapte
 
 function checkApiKey(req: Request, res: Response): boolean {
   const key = String(req.header("X-API-Key") || "").trim();
-  if (!key || key !== shopeeUploadConfig.signerApiKey) {
+  const allowed = new Set(
+    [shopeeUploadConfig.internalApiKey, shopeeUploadConfig.creditApiKey].filter(Boolean)
+  );
+  if (!key || !allowed.has(key)) {
     res.status(401).json({ code: 401, message: "API Key không hợp lệ" });
     return false;
   }

@@ -5,8 +5,10 @@ import { HiArrowLeft } from "react-icons/hi";
 import { RiVideoAddLine } from "react-icons/ri";
 import { useScreen } from "../../lib/hooks/useScreen";
 import { TabGroup } from "../shared/utilities/tab/tab-group";
+import { ShopeeUploadFlowPanel } from "../shopee-video-upload/panels/upload-flow-panel";
 import {
-  clearImportHistory,
+  clearGenerateVideoIndexedDb,
+  deleteImportHistorySession,
   ensureImportHistoryFromItems,
   getImportHistory,
   getSelectedImportHistoryId,
@@ -21,8 +23,6 @@ import { LogsPanel } from "./panels/logs-panel";
 import { ProxiesPanel } from "./panels/proxies-panel";
 import { ScrapeDataPanel } from "./panels/scrape-data-panel";
 import { SettingsPanel } from "./panels/settings-panel";
-import { ShopeeUploadFlowPanel } from "../shopee-video-upload/panels/upload-flow-panel";
-import { SignerSettingsPanel } from "../shopee-video-upload/panels/signer-settings";
 import { ThreadManagementPanel } from "./panels/thread-management-panel";
 import { UsersPanel } from "./panels/users-panel";
 import {
@@ -32,6 +32,7 @@ import {
   loadProxies,
   loadSettings,
   loadUsers,
+  saveItems,
   saveLogs,
   saveProxies,
   saveSettings,
@@ -298,6 +299,11 @@ export default function VideoAffiliatePlusPage() {
         }
       });
 
+      if (countSyncTimerRef.current) {
+        clearTimeout(countSyncTimerRef.current);
+        countSyncTimerRef.current = null;
+      }
+      skipCountSyncRef.current = true;
       try {
         const entry = await pushImportHistory({
           fileName,
@@ -307,10 +313,13 @@ export default function VideoAffiliatePlusPage() {
         setSelectedHistoryId(entry.id);
         await replaceSessionThreads(entry.id, nextItems);
         await refreshImportHistory();
+        setItems(nextItems);
       } catch (err) {
         console.warn("[video-affiliate-plus] push import history failed", err);
+        setItems(nextItems);
+      } finally {
+        skipCountSyncRef.current = false;
       }
-      setItems(nextItems);
     },
     [refreshImportHistory]
   );
@@ -345,11 +354,71 @@ export default function VideoAffiliatePlusPage() {
   );
 
   const handleClearHistory = useCallback(async () => {
-    await clearImportHistory();
+    // Revoke blob URL đang giữ trên UI
+    itemsRef.current.forEach((item) => {
+      if (item.mergedVideoUrl?.startsWith("blob:")) {
+        try {
+          URL.revokeObjectURL(item.mergedVideoUrl);
+        } catch {
+          // ignore
+        }
+      }
+    });
+
+    skipCountSyncRef.current = true;
+    await clearGenerateVideoIndexedDb();
+    try {
+      saveItems([]);
+    } catch {
+      // ignore
+    }
     setImportHistory([]);
     setSelectedHistoryId(null);
     selectedHistoryIdRef.current = null;
+    setItems([]);
+    skipCountSyncRef.current = false;
   }, []);
+
+  const handleDeleteHistorySession = useCallback(
+    async (sessionId: string) => {
+      const deletingCurrent = selectedHistoryIdRef.current === sessionId;
+      if (deletingCurrent) {
+        itemsRef.current.forEach((item) => {
+          if (item.mergedVideoUrl?.startsWith("blob:")) {
+            try {
+              URL.revokeObjectURL(item.mergedVideoUrl);
+            } catch {
+              // ignore
+            }
+          }
+        });
+      }
+
+      skipCountSyncRef.current = true;
+      try {
+        const { history, nextSelectedId } = await deleteImportHistorySession(sessionId);
+        setImportHistory(history);
+        setSelectedHistoryId(nextSelectedId);
+        selectedHistoryIdRef.current = nextSelectedId;
+
+        if (deletingCurrent) {
+          if (nextSelectedId) {
+            const sessionItems = await getSessionItems(nextSelectedId);
+            const hydrated = await hydrateMergedVideoUrls(sessionItems);
+            setItems(hydrated);
+          } else {
+            setItems([]);
+          }
+        }
+      } catch (err) {
+        console.warn("[video-affiliate-plus] delete history session failed", err);
+        throw err;
+      } finally {
+        skipCountSyncRef.current = false;
+      }
+    },
+    []
+  );
 
   const handleAddLog = useCallback(
     (message: string, level: AffiliatePlusLog["level"] = "info", threadId?: string) => {
@@ -459,8 +528,20 @@ export default function VideoAffiliatePlusPage() {
               onUpdateItems={handleUpdateItems}
               onImportComplete={handleImportComplete}
               onSelectHistory={handleSelectHistory}
+              onDeleteHistorySession={handleDeleteHistorySession}
               onClearHistory={handleClearHistory}
               onAddLog={handleAddLog}
+            />
+          </TabGroup.Tab>
+
+          <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
+            <UsersPanel
+              users={users}
+              proxies={proxies}
+              onUpdateUsers={(next) => {
+                setUsers(next);
+                void saveUsers(next);
+              }}
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Đăng video Shope")}>
@@ -479,16 +560,6 @@ export default function VideoAffiliatePlusPage() {
                 void saveSettings(next);
               }}
               onAddLog={handleAddLog}
-            />
-          </TabGroup.Tab>
-          <TabGroup.Tab label={t("Quản Lý Người Dùng")}>
-            <UsersPanel
-              users={users}
-              proxies={proxies}
-              onUpdateUsers={(next) => {
-                setUsers(next);
-                void saveUsers(next);
-              }}
             />
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Quản lý Proxy")}>
@@ -518,7 +589,6 @@ export default function VideoAffiliatePlusPage() {
                   saveSettings(next);
                 }}
               />
-              <SignerSettingsPanel />
             </div>
           </TabGroup.Tab>
         </TabGroup>

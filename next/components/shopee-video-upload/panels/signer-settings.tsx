@@ -1,5 +1,5 @@
 /**
- * Cài đặt Shopee Signer (self-host) — tách khỏi settings Generate Video.
+ * Panel trạng thái Credit / Signer — chỉ xem (cấu hình ở Admin Settings).
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,6 +16,7 @@ export function SignerSettingsPanel() {
     adapter?: string;
     dryRun?: boolean;
     apiKeySet?: boolean;
+    source?: string;
   } | null>(null);
   const [balance, setBalance] = useState<{
     username?: string;
@@ -52,7 +53,9 @@ export function SignerSettingsPanel() {
   return (
     <div className="p-4 max-w-lg space-y-3 bg-white rounded-xl border border-gray-200">
       <div className="flex gap-2 justify-between items-center">
-        <h3 className="m-0 text-sm font-bold text-gray-800">{t("Shopee Signer (self-host)")}</h3>
+        <h3 className="m-0 text-sm font-bold text-gray-800">
+          {t("Credit Shopee (Signer)")}
+        </h3>
         <button
           type="button"
           onClick={() => void refresh()}
@@ -65,13 +68,17 @@ export function SignerSettingsPanel() {
       </div>
       <p className="m-0 text-xs text-gray-500">
         {t(
-          "Signer nội bộ thay credit.toolshopee.vn. Cấu hình qua env SHOPEE_SIGNER_* trên server."
+          "Base URL và API Key cấu hình tại Admin → Settings → Shopee Video Upload. Không chỉnh ở đây."
         )}
       </p>
       <dl className="space-y-1 text-xs text-gray-700">
         <div className="flex gap-2">
           <dt className="w-28 text-gray-500">Base URL</dt>
           <dd className="font-mono break-all">{config?.signerBaseUrl || "—"}</dd>
+        </div>
+        <div className="flex gap-2">
+          <dt className="w-28 text-gray-500">Nguồn</dt>
+          <dd>{config?.source || "—"}</dd>
         </div>
         <div className="flex gap-2">
           <dt className="w-28 text-gray-500">Adapter</dt>

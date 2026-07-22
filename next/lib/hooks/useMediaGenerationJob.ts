@@ -198,6 +198,17 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           }
           const idx = activeHandlesRef.current.indexOf(handle);
           if (idx >= 0) activeHandlesRef.current.splice(idx, 1);
+          // Tránh Promise treo vô hạn khi component unmount / cleanup giữa chừng
+          if (!settled) {
+            settled = true;
+            reject(
+              new MediaGenerationJobError(
+                "Đã dừng theo dõi job (tab đóng hoặc huỷ batch)",
+                "JOB_CANCELLED",
+                jobId
+              )
+            );
+          }
         };
         handle.cleanup = cleanup;
 

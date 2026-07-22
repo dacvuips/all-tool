@@ -33,10 +33,25 @@ export default [
         // Fetch media from external URL (supports Range for video preview)
         const response = await axios.get(url, {
           responseType: "arraybuffer",
-          timeout: 30000, // 30 seconds timeout
+          timeout: 120000, // video có thể lớn / chậm
+          maxContentLength: 500 * 1024 * 1024,
           headers: requestHeaders,
-          validateStatus: (status) => (status >= 200 && status < 300) || status === 206,
+          validateStatus: () => true,
         });
+
+        if (response.status === 404 || response.status === 410) {
+          return res.status(response.status).json({
+            error: "Video URL không tồn tại hoặc đã hết hạn",
+            details: `Upstream HTTP ${response.status}`,
+          });
+        }
+
+        if (response.status < 200 || (response.status >= 300 && response.status !== 206)) {
+          return res.status(502).json({
+            error: "Upstream trả lỗi khi tải video",
+            details: `Upstream HTTP ${response.status}`,
+          });
+        }
 
         const contentType = response.headers["content-type"] || "application/octet-stream";
         res.setHeader("Content-Type", contentType);
@@ -57,6 +72,13 @@ export default [
         res.status(response.status).send(Buffer.from(response.data));
       } catch (error: any) {
         console.error("Download proxy error:", error.message);
+        const upstreamStatus = error?.response?.status;
+        if (upstreamStatus === 404 || upstreamStatus === 410) {
+          return res.status(upstreamStatus).json({
+            error: "Video URL không tồn tại hoặc đã hết hạn",
+            details: error.message,
+          });
+        }
         res.status(500).json({
           error: "Failed to download file",
           details: error.message,

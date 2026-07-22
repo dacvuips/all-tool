@@ -37,7 +37,9 @@ export async function resolveVideoToTempFile(params: {
     } else if (fs.existsSync(url)) {
       fs.copyFileSync(url, filePath);
     } else {
-      throw new Error("videoUrl không hỗ trợ (cần http(s), data URI, hoặc đường dẫn local)");
+      throw new Error(
+        `videoUrl không hỗ trợ (${url.slice(0, 60)}) — cần http(s), data URI, base64, hoặc đường dẫn local`
+      );
     }
   } else {
     throw new Error("Thiếu videoUrl hoặc videoBase64");

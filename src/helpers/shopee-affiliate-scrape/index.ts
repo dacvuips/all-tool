@@ -9,6 +9,8 @@ export type { ShopeeAffiliateMarket } from "./domains";
 
 export {
   CSV_COLUMNS,
+  PREFERRED_CSV_KEYS,
+  collectCsvKeys,
   flattenProduct,
   productsToCsv,
   toImportRows,

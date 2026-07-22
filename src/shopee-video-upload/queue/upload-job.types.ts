@@ -21,6 +21,9 @@ export type ShopeeUploadJobPayload = {
   username?: string;
   threadId?: string;
   customerId?: string;
+  /** Per-customer credit server (ưu tiên hơn env) */
+  signerBaseUrl?: string;
+  signerApiKey?: string;
 };
 
 export type ShopeeUploadJob = {

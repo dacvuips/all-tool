@@ -3,15 +3,25 @@
  * Items thực tế nằm ở store `threads` (keyed by sessionId = history id).
  */
 import {
+  idbClearAllThreadMeta,
+  idbClearAllThreads,
   idbClearImportHistory,
+  idbClearMergedVideos,
+  idbClearProductVideos,
+  idbDeleteMergedVideo,
+  idbDeleteProductVideo,
   idbGetImportHistoryList,
   idbGetSelectedImportHistoryId,
   idbSetImportHistoryList,
   idbSetSelectedImportHistoryId,
 } from "./idb";
-import { replaceSessionThreads } from "./thread-store";
+import {
+  getMergedVideoStorageKey,
+  toPersistedMergedVideoUrl,
+} from "./merged-video";
+import { clearSession, getSessionItems, replaceSessionThreads } from "./thread-store";
 import { AffiliatePlusItem } from "./types";
-import { toPersistedMergedVideoUrl } from "./merged-video";
+import { destroyFFmpegInstance } from "./ffmpeg-browser";
 
 function isEphemeralMediaUrl(url: string): boolean {
   const u = String(url || "").trim();
@@ -172,6 +182,97 @@ export async function updateImportHistoryCount(id: string, itemCount: number): P
 
 export async function clearImportHistory(): Promise<void> {
   await idbClearImportHistory();
+}
+
+/** Thu thập key video (productId / item id) còn được phiên khác tham chiếu. */
+async function collectReservedVideoKeys(excludeSessionId: string): Promise<Set<string>> {
+  const reserved = new Set<string>();
+  const history = await getImportHistory();
+  for (const entry of history) {
+    if (entry.id === excludeSessionId) continue;
+    const items = await getSessionItems(entry.id);
+    for (const item of items) {
+      const key = getMergedVideoStorageKey(item);
+      if (key) reserved.add(key);
+      if (item.id) reserved.add(item.id);
+    }
+  }
+  return reserved;
+}
+
+/** Xóa video IndexedDB của các item thuộc phiên (bỏ qua key còn dùng ở phiên khác). */
+async function purgeSessionVideos(
+  sessionItems: AffiliatePlusItem[],
+  reservedKeys: Set<string>
+): Promise<void> {
+  const purged = new Set<string>();
+  for (const item of sessionItems) {
+    const key = getMergedVideoStorageKey(item);
+    if (!key || reservedKeys.has(key) || purged.has(key)) continue;
+    purged.add(key);
+    await idbDeleteProductVideo(key);
+    await idbDeleteMergedVideo(key);
+    if (item.id && item.id !== key && !reservedKeys.has(item.id)) {
+      await idbDeleteMergedVideo(item.id);
+    }
+  }
+}
+
+export type DeleteImportHistoryResult = {
+  history: ImportHistoryItem[];
+  nextSelectedId: string | null;
+};
+
+/**
+ * Xóa một phiên import: metadata + threads + video cache (nếu không còn phiên khác dùng).
+ */
+export async function deleteImportHistorySession(
+  sessionId: string
+): Promise<DeleteImportHistoryResult> {
+  const history = await getImportHistory();
+  if (!sessionId || !history.some((h) => h.id === sessionId)) {
+    return {
+      history,
+      nextSelectedId: await getSelectedImportHistoryId(),
+    };
+  }
+
+  const sessionItems = await getSessionItems(sessionId);
+  const reservedKeys = await collectReservedVideoKeys(sessionId);
+  await purgeSessionVideos(sessionItems, reservedKeys);
+  await clearSession(sessionId);
+
+  const next = history.filter((h) => h.id !== sessionId);
+  await idbSetImportHistoryList(next);
+
+  const currentSelected = await getSelectedImportHistoryId();
+  let nextSelectedId = currentSelected;
+  if (currentSelected === sessionId) {
+    nextSelectedId = next[0]?.id ?? null;
+    await idbSetSelectedImportHistoryId(nextSelectedId);
+  }
+
+  return { history: next, nextSelectedId };
+}
+
+/**
+ * Xóa toàn bộ dữ liệu Generate Video trong IndexedDB (kèm video Blob)
+ * để giải phóng bộ nhớ trình duyệt.
+ *
+ * Giữ lại: generate-video-config (prompt / cấu hình).
+ * Xóa: import-history, threads, thread-meta, product-videos, merged-videos.
+ */
+export async function clearGenerateVideoIndexedDb(): Promise<void> {
+  await idbClearImportHistory();
+  await idbClearAllThreads();
+  await idbClearAllThreadMeta();
+  await idbClearProductVideos();
+  await idbClearMergedVideos();
+  try {
+    destroyFFmpegInstance();
+  } catch {
+    // ignore
+  }
 }
 
 /**

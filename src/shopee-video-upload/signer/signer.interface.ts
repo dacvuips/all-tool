@@ -40,9 +40,30 @@ export type SignerMeResult = {
   };
 };
 
+export type SignerCreatePostRequest = {
+  /** URL Shopee CREATE_POST — MLS gửi field `url` */
+  url: string;
+  cookie: string;
+  country?: string;
+  proxy?: string;
+  payload: unknown;
+};
+
+export type SignerCreatePostResult = {
+  code: number;
+  message?: string;
+  data?: {
+    post_id?: string;
+    postId?: string;
+    id?: string;
+  };
+};
+
 export interface ISignerAdapter {
   readonly name: string;
   sign(req: SignerSignRequest): Promise<SignerSignResult>;
   generateToken(opts?: { cookie?: string; country?: string }): Promise<SignerTokenResult>;
   me(): Promise<SignerMeResult>;
+  /** Proxy createPost qua credit (optional — stub không có) */
+  createPost?(req: SignerCreatePostRequest): Promise<SignerCreatePostResult>;
 }

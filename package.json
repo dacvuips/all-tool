@@ -36,6 +36,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.10.6",
     "@emotion/styled": "^11.10.6",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@google/genai": "^1.43.0",
     "@goongmaps/goong-map-react": "^1.1.0",
     "@lottiefiles/react-lottie-player": "^3.5.2",
