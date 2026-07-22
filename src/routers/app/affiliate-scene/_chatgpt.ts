@@ -1,7 +1,6 @@
 import logger from "../../../helpers/logger";
 import { fetchImageAsBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { getFlow2Config } from "../../api-media/flow2/_shared";
-import { retryAICall } from "./_ai-retry";
 import { getAiSceneMoreSetting } from "./_ai-scene";
 import {
   AffiliateVideoOpenAIJsonSchema,
@@ -24,9 +23,10 @@ export type ChatGPTPictureResult = {
   messageId?: string;
 };
 
-/** Timeout poll ChatGPT async (ảnh + JSON dài có thể > 2 phút — vượt Cloudflare sync 524). */
-const CHATGPT_ASYNC_TIMEOUT_MS = 15 * 60 * 1000;
-const CHATGPT_ASYNC_POLL_INTERVAL_MS = 2_500;
+/** Timeout poll ChatGPT async — tối đa 5 phút. */
+const CHATGPT_ASYNC_TIMEOUT_MS = 5 * 60 * 1000;
+/** Poll Flow2 mỗi 5s — chỉ GET cùng jobId, không POST lại. */
+const CHATGPT_ASYNC_POLL_INTERVAL_MS = 5_000;
 
 function normalizeGatewayBaseUrl(url: string): string {
   return url.trim().replace(/\/$/, "");
@@ -139,7 +139,7 @@ function extractPureJsonText(text: string): string {
   } catch {
     const err: any = new Error("AI trả kết quả không phải JSON thuần");
     err.statusCode = 502;
-    err.retryable = true;
+    err.retryable = false;
     throw err;
   }
 }
@@ -600,7 +600,7 @@ function parseChatGPTV1Result(data: Record<string, unknown>): string {
   if (data.ok === false || data.requirements_error) {
     const err: any = new Error(`Flow2 ChatGPT error: ${pickJobError(data)}`);
     err.statusCode = 502;
-    err.retryable = true;
+    err.retryable = false;
     throw err;
   }
 
@@ -609,7 +609,7 @@ function parseChatGPTV1Result(data: Record<string, unknown>): string {
 
   const err: any = new Error("AI không trả kết quả text");
   err.statusCode = 502;
-  err.retryable = true;
+  err.retryable = false;
   throw err;
 }
 
@@ -812,72 +812,72 @@ export async function callChatGPTPictureSuggest(params: {
     }
   };
 
-  return retryAICall(async () => {
-    await emitProgress(5, "Đang kiểm tra ChatGPT...");
+  await emitProgress(5, "Đang kiểm tra ChatGPT...");
 
-    if (publicImages?.length) {
-      await ensureChatGPTReadyForImages(params.label);
-    } else {
-      await ensureChatGPTReady(params.label);
-    }
+  if (publicImages?.length) {
+    await ensureChatGPTReadyForImages(params.label);
+  } else {
+    await ensureChatGPTReady(params.label);
+  }
 
+  logger.info(
+    `[${params.label}] Flow2 ChatGPT Conversation image ${isFollowUp ? "follow-up" : "new"} model=${model} refImages=${publicImages?.length || 0}`
+  );
+
+  await emitProgress(8, "Đang gửi yêu cầu tạo ảnh...");
+
+  // POST đúng 1 lần — tuyệt đối không retry query; chỉ GET poll cùng jobId
+  const resp = await fetch(enqueueUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  const rawBody = await resp.text();
+  if (!resp.ok) {
+    throwHttpError(params.label, resp.status, enqueueUrl, rawBody);
+  }
+
+  let data: Record<string, unknown>;
+  try {
+    data = JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    const err: any = new Error("Flow2 ChatGPT async trả JSON không hợp lệ");
+    err.statusCode = 502;
+    err.retryable = false;
+    throw err;
+  }
+
+  const jobId =
+    (typeof data.id === "string" && data.id.trim()) ||
+    (typeof data.job_id === "string" && data.job_id.trim()) ||
+    undefined;
+
+  if (!jobId) {
+    logger.info(`[${params.label}] Flow2 ChatGPT trả kết quả sync`);
+    await emitProgress(90, "Đang xử lý kết quả...");
+    return parseChatGPTPictureResult(data, { baseUrl, apiKey });
+  }
+
+  logger.info(`[${params.label}] Flow2 ChatGPT async queued jobId=${jobId}`);
+  const result = await pollChatGPTPictureJob({
+    baseUrl,
+    apiKey,
+    jobId,
+    label: params.label,
+    onProgress: params.onProgress,
+  });
+  if (result.conversationId || result.messageId) {
     logger.info(
-      `[${params.label}] Flow2 ChatGPT Conversation image ${isFollowUp ? "follow-up" : "new"} model=${model} refImages=${publicImages?.length || 0}`
+      `[${params.label}] conversation_id=${result.conversationId || "-"} message_id=${result.messageId || "-"}`
     );
-
-    await emitProgress(8, "Đang gửi yêu cầu tạo ảnh...");
-
-    const resp = await fetch(enqueueUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    const rawBody = await resp.text();
-    if (!resp.ok) {
-      throwHttpError(params.label, resp.status, enqueueUrl, rawBody);
-    }
-
-    let data: Record<string, unknown>;
-    try {
-      data = JSON.parse(rawBody) as Record<string, unknown>;
-    } catch {
-      const err: any = new Error("Flow2 ChatGPT async trả JSON không hợp lệ");
-      err.statusCode = 502;
-      throw err;
-    }
-
-    const jobId =
-      (typeof data.id === "string" && data.id.trim()) ||
-      (typeof data.job_id === "string" && data.job_id.trim()) ||
-      undefined;
-
-    if (!jobId) {
-      logger.info(`[${params.label}] Flow2 ChatGPT trả kết quả sync`);
-      await emitProgress(90, "Đang xử lý kết quả...");
-      return parseChatGPTPictureResult(data, { baseUrl, apiKey });
-    }
-
-    logger.info(`[${params.label}] Flow2 ChatGPT async queued jobId=${jobId}`);
-    const result = await pollChatGPTPictureJob({
-      baseUrl,
-      apiKey,
-      jobId,
-      label: params.label,
-      onProgress: params.onProgress,
-    });
-    if (result.conversationId || result.messageId) {
-      logger.info(
-        `[${params.label}] conversation_id=${result.conversationId || "-"} message_id=${result.messageId || "-"}`
-      );
-    }
-    await emitProgress(98, "Hoàn tất");
-    return result;
-  }, params.label);
+  }
+  await emitProgress(98, "Hoàn tất");
+  return result;
 }
 
 async function pollChatGPTJob(params: {
@@ -956,10 +956,8 @@ async function pollChatGPTJob(params: {
 
 /**
  * Gọi ChatGPT qua Flow2 public API (async + poll — tránh Cloudflare 524):
- * POST /api/v1/chatgpt/chat?async=true → { id, status, poll_url }
- * GET  /api/v1/chatgpt/chat/{id} mỗi 2.5s:
- *   - done → trả kết quả
- *   - failed / HTTP lỗi → throw "Hệ thống đang bận (mã lỗi). Liên hệ Admin"
+ * POST /api/v1/chatgpt/chat?async=true → { id, status, poll_url }  (đúng 1 lần, không retry)
+ * GET  /api/v1/chatgpt/chat/{id} mỗi 5s đến done|failed|timeout
  */
 export async function callChatGPTGateway(params: {
   text: string;
@@ -996,46 +994,45 @@ export async function callChatGPTGateway(params: {
   const model = params.model?.trim() || DEFAULT_CHATGPT_MODEL;
   const enqueueUrl = `${baseUrl}/api/v1/chatgpt/chat?async=true`;
 
-  return retryAICall(async () => {
-    if (images?.length) {
-      await ensureChatGPTReadyForImages(params.label);
-    }
+  if (images?.length) {
+    await ensureChatGPTReadyForImages(params.label);
+  }
 
-    const resp = await fetch(enqueueUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        prompt,
-        model,
-        ...(params.conversationId ? { conversation_id: params.conversationId } : {}),
-        ...(params.parentMessageId ? { parent_message_id: params.parentMessageId } : {}),
-        ...(images ? { images } : {}),
-      }),
-    });
+  // POST đúng 1 lần — tuyệt đối không retry query
+  const resp = await fetch(enqueueUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      prompt,
+      model,
+      ...(params.conversationId ? { conversation_id: params.conversationId } : {}),
+      ...(params.parentMessageId ? { parent_message_id: params.parentMessageId } : {}),
+      ...(images ? { images } : {}),
+    }),
+  });
 
-    const rawBody = await resp.text();
-    if (!resp.ok) {
-      throwHttpError(params.label, resp.status, enqueueUrl, rawBody);
-    }
+  const rawBody = await resp.text();
+  if (!resp.ok) {
+    throwHttpError(params.label, resp.status, enqueueUrl, rawBody);
+  }
 
-    const enqueued = parseEnqueueResponse(rawBody);
-    if (enqueued.immediateText) {
-      logger.info(`[${params.label}] Flow2 ChatGPT trả kết quả sync (không cần poll)`);
-      return enqueued.immediateText;
-    }
+  const enqueued = parseEnqueueResponse(rawBody);
+  if (enqueued.immediateText) {
+    logger.info(`[${params.label}] Flow2 ChatGPT trả kết quả sync (không cần poll)`);
+    return enqueued.immediateText;
+  }
 
-    logger.info(`[${params.label}] Flow2 ChatGPT async queued jobId=${enqueued.jobId}`);
-    return pollChatGPTJob({
-      baseUrl,
-      apiKey,
-      jobId: enqueued.jobId!,
-      label: params.label,
-    });
-  }, params.label);
+  logger.info(`[${params.label}] Flow2 ChatGPT async queued jobId=${enqueued.jobId}`);
+  return pollChatGPTJob({
+    baseUrl,
+    apiKey,
+    jobId: enqueued.jobId!,
+    label: params.label,
+  });
 }
 
 /** Kiểm tra ChatGPT extension/session sẵn sàng: GET /api/v1/chatgpt/status */
