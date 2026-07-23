@@ -12,6 +12,7 @@ import { URL } from "url";
 import {
   exportCsvViaCdp,
   fetchProductPageViaCdp,
+  fetchAffiliateShortLinks,
   getCdpStatus,
   getGemLoginStatus,
   listGemLoginProfiles,
@@ -161,6 +162,19 @@ async function handle(
       });
       const session = buildCsvSession(exported);
       sendJson(res, 200, { ok: true, session });
+      return;
+    }
+
+    if (method === "POST" && (path === "/short-links" || path === "/api/short-links")) {
+      const body = await readBody(req);
+      const links = Array.isArray(body?.links)
+        ? body.links.map((l: unknown) => String(l || "").trim())
+        : [];
+      const shortLinks = await fetchAffiliateShortLinks(
+        links,
+        Number(body?.delayMs) > 0 ? Number(body.delayMs) : 400
+      );
+      sendJson(res, 200, { ok: true, shortLinks });
       return;
     }
 

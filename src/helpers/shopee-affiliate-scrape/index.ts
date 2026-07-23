@@ -57,6 +57,7 @@ export type { AffiliateHttpSession } from "./session-store";
 
 export {
   exportCsvViaCdp,
+  fetchAffiliateShortLinks,
   fetchProductPageViaCdp,
   getCdpStatus,
   openAffiliateBrowserCdp,

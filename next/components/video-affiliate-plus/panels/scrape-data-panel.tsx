@@ -7,12 +7,13 @@ import {
   HiChevronRight,
   HiChevronUp,
   HiDownload,
+  HiEye,
   HiOutlineFilter,
   HiOutlineSearch,
   HiOutlineTrash,
   HiPlay,
 } from "react-icons/hi";
-import { RiChromeLine, RiDatabase2Line, RiLoader4Line } from "react-icons/ri";
+import { RiChromeLine, RiDatabase2Line, RiLoader4Line, RiRefreshLine } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
@@ -36,13 +37,19 @@ import {
   removeAllScrapeCsvSessions,
   removeScrapeCsvSession,
   SCRAPE_AGENT_BASE,
+  shortenAffiliateLinks,
 } from "../scrape/api";
 import {
   fetchAffiliateProductPage,
   mapRawToScrapeRow,
   probeCdpBridge,
 } from "../scrape/product-page-fetch";
-import { PanelListCard, panelListClasses, panelListRowClass } from "../shared/panel-list-ui";
+import {
+  PanelListCard,
+  PanelListPagination,
+  panelListClasses,
+  panelListRowClass,
+} from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
 
 const MARKET_OPTIONS = [
@@ -56,6 +63,7 @@ const MARKET_OPTIONS = [
 
 const SCRAPE_AGENT_ZIP_URL = "/downloads/ShopeeScrapeAgent.zip";
 const SCRAPE_AGENT_ZIP_NAME = "ShopeeScrapeAgent.zip";
+const GEMLOGIN_DOWNLOAD_URL = "https://app.gemlogin.vn/download-auth";
 
 const GUIDE_STEPS = [
   {
@@ -68,13 +76,13 @@ const GUIDE_STEPS = [
   {
     step: "02",
     titleKey: "Mở GemLogin Desktop",
-    descKey: "Cài và mở GemLogin. Profile đã đăng nhập Shopee Affiliate.",
+    descKey: "Cài và mở GemLogin → Tạo profile mới → Profile đã đăng nhập Shopee Affiliate.",
     Icon: RiChromeLine,
   },
   {
     step: "03",
     titleKey: "Mở trình duyệt & cào",
-    descKey: "Chọn profile → Mở Trình duyệt → nhập từ khóa → Bắt đầu cào hoặc Xuất CSV.",
+    descKey: "Mở Trình duyệt → nhập từ khóa → nhập thông tin cần lọc → Bắt đầu cào hoặc Xuất CSV.",
     Icon: HiOutlineSearch,
   },
   {
@@ -156,12 +164,62 @@ function escapeCsvValue(value: unknown): string {
   return text;
 }
 
+/** Parse 1 dòng CSV (có quote). */
+function parseCsvLineLocal(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === "," && !inQuotes) {
+      result.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+/** CSV scrape (header = field gốc) → raw rows để hiện lại bảng SP. */
+function parseScrapedCsvToRaws(csv: string): Record<string, unknown>[] {
+  const text = String(csv || "")
+    .replace(/^\uFEFF/, "")
+    .trim();
+  if (!text) return [];
+  const lines = text.split(/\r\n|\n|\r/).filter((l) => l.length > 0);
+  if (lines.length < 2) return [];
+  const headers = parseCsvLineLocal(lines[0]);
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = parseCsvLineLocal(lines[i]);
+    const obj: Record<string, unknown> = {};
+    headers.forEach((h, idx) => {
+      const key = String(h || "").trim();
+      if (!key) return;
+      obj[key] = vals[idx] ?? "";
+    });
+    rows.push(obj);
+  }
+  return rows;
+}
+
 /** CSV đầy đủ mọi field cào được — UI chỉ hiện cột gọn. */
 function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   const raws = rows.map((r, idx) => {
-    const base = { ...(r.raw || {}) };
+    const base = { ...(r.raw || {}) } as Record<string, unknown>;
     if (base.stt == null) base.stt = idx + 1;
     if (!base.id && r.id) base.id = r.id;
+    if (base.affiliate_link_short == null) base.affiliate_link_short = "";
+    if (base.long_link == null) base.long_link = "";
     return base;
   });
 
@@ -244,6 +302,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   /** Đơn vị: nghìn đồng (k). Mặc định 0 = không lọc HH nhận về. */
   const [commissionReceivedK, setCommissionReceivedK] = useState(0);
   const [products, setProducts] = useState<ScrapeProductRow[]>([]);
+  const [productPage, setProductPage] = useState(1);
+  const [productPageSize, setProductPageSize] = useState(10);
   const [crawling, setCrawling] = useState(false);
   const [crawlStatus, setCrawlStatus] = useState("");
   /** Tổng SP API đã quét (raw). */
@@ -321,6 +381,17 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     const start = (safePage - 1) * pageSize;
     return filteredSessions.slice(start, start + pageSize);
   }, [filteredSessions, safePage, pageSize]);
+
+  const productTotalPages = Math.max(1, Math.ceil(products.length / productPageSize));
+  const safeProductPage = Math.min(productPage, productTotalPages);
+  const pagedProducts = useMemo(() => {
+    const start = (safeProductPage - 1) * productPageSize;
+    return products.slice(start, start + productPageSize);
+  }, [products, safeProductPage, productPageSize]);
+
+  useEffect(() => {
+    setProductPage(1);
+  }, [products.length]);
 
   const domainLabel = (host: string) => {
     const known = MARKET_OPTIONS.find((m) => m.value === host);
@@ -413,6 +484,41 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       toast.warn(t("Đã xóa phiên CSV"));
     } catch (err: any) {
       toast.error(err?.message || t("Xóa thất bại"));
+    }
+  };
+
+  const handleViewSession = (session: ScrapeCsvSession) => {
+    try {
+      const raws = parseScrapedCsvToRaws(session.csv);
+      if (!raws.length) {
+        toast.warn(t("File CSV trống hoặc không đọc được"));
+        return;
+      }
+      const mapped: ScrapeProductRow[] = raws.map((raw, index) => {
+        const row = mapRawToScrapeRow(raw, index);
+        return { ...row, raw };
+      });
+      setProducts(mapped);
+      setCrawledCount(mapped.length);
+      setCrawlStatus("view");
+      if (session.marketHost) setOpenMarketHost(session.marketHost);
+      if (keywordsInputRef.current) {
+        keywordsInputRef.current.value = session.keyword || "";
+      }
+      toast.success(
+        t("Đã mở «{{name}}» · {{count}} SP", {
+          name: sessionDisplayName(session),
+          count: mapped.length,
+        })
+      );
+      window.requestAnimationFrame(() => {
+        document.getElementById("scrape-product-list")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+    } catch (err: any) {
+      toast.error(err?.message || t("Không mở được file CSV"));
     }
   };
 
@@ -634,29 +740,64 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     const name = saveProjectName.trim() || nextCrawlProjectName(sessions);
     try {
       setSavingProject(true);
-      const csv = productsToFullScrapedCsv(products);
-      const keywordsText = getKeywordsText().trim();
-      const safeName =
-        name
-          .replace(/[^\w\u00C0-\u024F\s-]+/gi, "_")
-          .trim()
-          .slice(0, 60) || "project";
-      const filename = `${safeName.replace(/\s+/g, "-")}-${Date.now()}.csv`;
 
-      downloadCsvText(csv, filename);
+      // long_link → affiliate_link_short trước khi ghi CSV
+      const linkRows = products
+        .map((p, index) => ({
+          index,
+          link: String(
+            (p.raw as any)?.long_link ||
+              (p.raw as any)?.affiliate_link ||
+              (p.raw as any)?.product_link ||
+              ""
+          ).trim(),
+        }))
+        .filter((r) => !!r.link);
+
+      let productsWithShort = products.map((p) => ({
+        ...p,
+        raw: {
+          ...(p.raw || {}),
+          affiliate_link_short: String((p.raw as any)?.affiliate_link_short || ""),
+        },
+      }));
+
+      if (linkRows.length) {
+        const bridgeOk = await probeCdpBridge();
+        if (!bridgeOk) {
+          throw new Error(
+            t(
+              "Chưa có cookie. Bấm «Mở Trình duyệt» trước khi lưu (cần để tạo short link)."
+            ) as string
+          );
+        }
+        const shorts = await shortenAffiliateLinks(
+          linkRows.map((r) => r.link),
+          400
+        );
+        productsWithShort = productsWithShort.map((p) => ({ ...p, raw: { ...p.raw } }));
+        linkRows.forEach((row, i) => {
+          const raw = productsWithShort[row.index].raw as Record<string, unknown>;
+          raw.affiliate_link_short = shorts[i] || "";
+        });
+        setProducts(productsWithShort);
+      }
+
+      const csv = productsToFullScrapedCsv(productsWithShort);
+      const keywordsText = getKeywordsText().trim();
 
       await saveScrapeCsvSession({
         name,
         keyword: keywordsText || name,
         marketHost: openMarketHost,
         marketCode: "",
-        productCount: products.length,
+        productCount: productsWithShort.length,
         csv,
         durationMs: 0,
       });
       setSessions(await loadScrapeCsvSessions());
       setSaveDialogOpen(false);
-      toast.success(t("Đã lưu «{{name}}» · {{count}} SP", { name, count: products.length }));
+      toast.success(t("Đã lưu «{{name}}» · {{count}} SP", { name, count: productsWithShort.length }));
     } catch (err: any) {
       toast.error(err?.message || t("Lưu project thất bại"));
     } finally {
@@ -888,8 +1029,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   );
 
   const productListPanel = (
-    <div className="flex min-w-0 min-h-96 flex-col">
-      <div className="grid grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
         <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
           <p className="m-0 text-10 font-semibold uppercase tracking-wide text-blue-600">
             {t("Đã cào")}
@@ -915,7 +1056,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 justify-between items-center  px-4 py-2 border-b border-gray-100">
+      <div
+        id="scrape-product-list"
+        className="flex shrink-0 flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100"
+      >
         <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
           {t("Danh sách sản phẩm")}
         </p>
@@ -931,55 +1075,76 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           {t("Chưa có sản phẩm. Cấu hình filter rồi chạy crawl.")}
         </div>
       ) : (
-        <div className="max-h-[28.75rem] overflow-y-auto overflow-x-auto">
-          <table className={panelListClasses.table}>
-            <thead className="sticky top-0 z-10">
-              <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
-                <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
-                <th className={`${panelListClasses.th} text-left max-w-xs`}>{t("Sản phẩm gốc")}</th>
-                <th className={`${panelListClasses.th} text-center`}>{t("HH")}</th>
-                <th className={`${panelListClasses.th} text-center`}>{t("Lượt Bán")}</th>
-                <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
-                <th className={`${panelListClasses.th} text-right`}>{t("HH nhận về")}</th>
-                <th className={`${panelListClasses.th} text-center`}>{t("Ngày đăng")}</th>
-              </tr>
-            </thead>
-            <tbody className={panelListClasses.tbody}>
-              {products.map((row, idx) => (
-                <tr key={row.id} className={panelListRowClass()}>
-                  <td className={`${panelListClasses.td} text-center text-gray-600`}>{idx + 1}</td>
-                  <td
-                    className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
-                    title={row.productName}
-                  >
-                    {row.productName || "—"}
-                  </td>
-                  <td className={`${panelListClasses.td} text-center text-gray-700`}>
-                    {row.commissionPct}%
-                  </td>
-                  <td className={`${panelListClasses.td} text-center text-gray-700`}>
-                    {row.sales.toLocaleString("vi-VN")}
-                  </td>
-                  <td
-                    className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
-                  >
-                    {formatVnd(row.price)}
-                  </td>
-                  <td
-                    className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
-                  >
-                    {formatVnd(row.commissionReceived)}
-                  </td>
-                  <td
-                    className={`${panelListClasses.td} text-center text-gray-600 whitespace-nowrap`}
-                  >
-                    {formatPostedDate(row.postedAt)}
-                  </td>
+        <>
+          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+            <table className={panelListClasses.table}>
+              <thead className="sticky top-0 z-10">
+                <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
+                  <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
+                  <th className={`${panelListClasses.th} text-left max-w-xs`}>{t("Sản phẩm gốc")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("HH")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("Lượt Bán")}</th>
+                  <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
+                  <th className={`${panelListClasses.th} text-right`}>{t("HH nhận về")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("Ngày đăng")}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className={panelListClasses.tbody}>
+                {pagedProducts.map((row, idx) => {
+                  const stt = (safeProductPage - 1) * productPageSize + idx + 1;
+                  return (
+                    <tr key={row.id} className={panelListRowClass()}>
+                      <td className={`${panelListClasses.td} text-center text-gray-600`}>{stt}</td>
+                      <td
+                        className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
+                        title={row.productName}
+                      >
+                        {row.productName || "—"}
+                      </td>
+                      <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                        {row.commissionPct}%
+                      </td>
+                      <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                        {row.sales.toLocaleString("vi-VN")}
+                      </td>
+                      <td
+                        className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
+                      >
+                        {formatVnd(row.price)}
+                      </td>
+                      <td
+                        className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
+                      >
+                        {formatVnd(row.commissionReceived)}
+                      </td>
+                      <td
+                        className={`${panelListClasses.td} text-center text-gray-600 whitespace-nowrap`}
+                      >
+                        {formatPostedDate(row.postedAt)}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="shrink-0 border-t border-gray-100">
+            <PanelListPagination
+              page={safeProductPage}
+              totalPages={productTotalPages}
+              pageSize={productPageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              from={(safeProductPage - 1) * productPageSize + 1}
+              to={Math.min(safeProductPage * productPageSize, products.length)}
+              total={products.length}
+              onPageChange={setProductPage}
+              onPageSizeChange={(size) => {
+                setProductPageSize(size);
+                setProductPage(1);
+              }}
+            />
+          </div>
+        </>
       )}
     </div>
   );
@@ -993,19 +1158,33 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </div>
           <div>
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Cào dữ liệu")}</h3>
-            <p className="m-0 mt-0.5 text-xs text-gray-500">
-              {t("Local Agent · GemLogin · Cào / Xuất CSV")}
+            <p className="m-0 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500">
+              <span>{t("Local Agent · GemLogin · Cào / Xuất CSV")}</span>
               {agentOnline === false ? (
-                <span className="ml-2 text-danger-dark">
+                <span className="text-danger-dark">
                   {t("(Agent offline — tải & mở BatDau.bat)")}
                 </span>
               ) : agentOnline === true && gemOnline === false ? (
-                <span className="ml-2 text-danger-dark">{t("(Agent OK · GemLogin offline)")}</span>
+                <span className="text-danger-dark">{t("(Agent OK · GemLogin offline)")}</span>
               ) : agentOnline === true && gemOnline === true ? (
-                <span className="ml-2 text-success-dark">
+                <span className="text-success-dark">
                   {t("(Agent + GemLogin · {{n}} profile)", { n: gemProfiles.length })}
                 </span>
-              ) : null}
+              ) : (
+                <span className="text-gray-400">{t("(Đang kiểm tra…)")}</span>
+              )}
+              <button
+                type="button"
+                disabled={loadingGemProfiles}
+                onClick={() => void refreshAgentAndGem()}
+                className="inline-flex h-5 w-5 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-teal-700 disabled:opacity-50"
+                title={t("Kiểm tra lại Agent + GemLogin") as string}
+                aria-label={t("Kiểm tra lại Agent + GemLogin") as string}
+              >
+                <RiRefreshLine
+                  className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`}
+                />
+              </button>
             </p>
           </div>
         </div>
@@ -1032,7 +1211,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 )}
               </span>
               <span className="min-w-0 space-y-1">
-                <span className="block text-10 font-semibold tracking-wider uppercase text-accent">
+                <span className="block text-16 font-semibold tracking-wider uppercase text-accent">
                   {t("Hướng dẫn")}
                   <span className="mx-1.5 font-normal text-bluegray-400">·</span>
                   <span className="tracking-normal text-accent">
@@ -1106,19 +1285,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   ))}
                 </select>
               </label>
-              <button
-                type="button"
-                disabled={exportingCsv || opening}
-                onClick={() => void handleExportCsv()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-bluegray-300 bg-white px-3 text-10 font-semibold text-accent shadow-sm transition-colors hover:bg-bluegray-50 disabled:opacity-50"
-              >
-                {exportingCsv ? (
-                  <RiLoader4Line className="text-sm animate-spin" />
-                ) : (
-                  <HiDownload className="text-sm" />
-                )}
-                {t("Xuất CSV")}
-              </button>
+
               <button
                 type="button"
                 disabled={opening || !gemProfileId}
@@ -1141,12 +1308,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {GUIDE_STEPS.map((item) => {
                   const Icon = item.Icon;
                   const isDownloadStep = item.step === "01";
+                  const isGemLoginStep = item.step === "02";
                   return (
                     <li
                       key={item.step}
                       className={`relative flex min-h-32 flex-col rounded-xl border p-3.5 shadow-sm transition-colors ${
                         isDownloadStep
                           ? "border-teal-300 bg-teal-50/70 hover:border-teal-400 hover:bg-teal-50"
+                          : isGemLoginStep
+                          ? "border-indigo-200 bg-indigo-50/50 hover:border-indigo-300 hover:bg-indigo-50"
                           : "border-bluegray-200 bg-bluegray-50 hover:border-bluegray-300 hover:bg-white"
                       }`}
                     >
@@ -1154,7 +1324,11 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                         <div className="flex min-w-0 items-center gap-2">
                           <span
                             className={`shrink-0 text-16 font-semibold leading-none tracking-tight ${
-                              isDownloadStep ? "text-teal-400" : "text-bluegray-300"
+                              isDownloadStep
+                                ? "text-teal-400"
+                                : isGemLoginStep
+                                ? "text-indigo-300"
+                                : "text-bluegray-300"
                             }`}
                           >
                             {item.step}
@@ -1167,6 +1341,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
                             isDownloadStep
                               ? "border-teal-200 text-teal-700"
+                              : isGemLoginStep
+                              ? "border-indigo-200 text-indigo-700"
                               : "border-bluegray-200 text-bluegray-600"
                           }`}
                         >
@@ -1188,6 +1364,17 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                             {t("Tải file ZIP")}
                           </Link>
                         ) : null}
+                        {isGemLoginStep ? (
+                          <a
+                            href={GEMLOGIN_DOWNLOAD_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
+                          >
+                            <HiDownload className="text-sm" />
+                            {t("Tải GemLogin")}
+                          </a>
+                        ) : null}
                       </div>
                     </li>
                   );
@@ -1198,7 +1385,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 <p className="m-0 text-10 leading-relaxed text-bluegray-500">
                   <span className="font-semibold text-accent">{t("Mẹo")}:</span>{" "}
                   {t(
-                    "UI báo Agent offline → mở lại BatDau.bat. Chưa có cookie → bấm «Mở Trình duyệt» trước khi cào."
+                    "UI báo Agent offline → mở lại BatDau.bat. bấm «Mở Trình duyệt» trước khi cào."
                   )}
                 </p>
               </div>
@@ -1220,21 +1407,21 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           bodyClassName="border-t border-gray-200 bg-white"
         >
           <TabGroup.Tab label={t("Crawl Project")}>
-            <div className="flex min-h-96">
+            <div className="flex min-h-96 overflow-hidden">
               <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
                 {crawlProjectForm}
               </div>
-              <div className="min-w-0 flex-1">{productListPanel}</div>
+              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
             </div>
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Crawl Giỏ Video")}>
-            <div className="flex min-h-96">
+            <div className="flex min-h-96 overflow-hidden">
               <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
                 <div className={panelListClasses.empty}>
                   {t("Crawl Giỏ Video — đang phát triển.")}
                 </div>
               </div>
-              <div className="min-w-0 flex-1">{productListPanel}</div>
+              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
             </div>
           </TabGroup.Tab>
         </TabGroup>
@@ -1401,6 +1588,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           <div className="flex gap-1 justify-end">
                             <button
                               type="button"
+                              onClick={() => handleViewSession(s)}
+                              className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
+                              title={t("Xem trong Danh sách sản phẩm") as string}
+                            >
+                              <HiEye />
+                              {t("Xem")}
+                            </button>
+                            <button
+                              type="button"
                               onClick={() =>
                                 downloadCsvText(
                                   s.csv,
@@ -1555,7 +1751,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-green-600 px-4 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {savingProject ? <RiLoader4Line className="animate-spin" /> : null}
-                {t("Lưu")}
+                {savingProject ? t("Đang tạo short link…") : t("Lưu")}
               </button>
             </div>
           </div>

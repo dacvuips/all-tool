@@ -107,6 +107,31 @@ export async function openShopeeAffiliateBrowser(input?: {
   };
 }
 
+/** long_link → short link qua Local Agent (GraphQL batchCustomLink). */
+export async function shortenAffiliateLinks(
+  links: string[],
+  delayMs = 400
+): Promise<string[]> {
+  await ensureAgentOnline();
+  const clean = links.map((l) => String(l || "").trim());
+  if (!clean.some(Boolean)) return clean.map(() => "");
+  const timeoutMs = Math.min(600000, Math.max(90000, clean.filter(Boolean).length * 800));
+  const { res, json } = await agentFetch("/short-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ links: clean, delayMs }),
+    timeoutMs,
+  });
+  if (!res.ok || !json?.ok) {
+    throw new Error(
+      json?.message ||
+        "Không tạo được short link. Bấm «Mở Trình duyệt» rồi thử lại."
+    );
+  }
+  const shorts = Array.isArray(json.shortLinks) ? json.shortLinks : [];
+  return clean.map((_, i) => String(shorts[i] || ""));
+}
+
 /** Xuất CSV qua Local Agent → lưu thẳng IndexedDB. */
 export async function exportShopeeAffiliateCsv(input: {
   marketHost: string;

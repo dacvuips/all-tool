@@ -221,6 +221,17 @@ async function fetchShortLinksHttp(originalLinks: string[], delayMs: number): Pr
   return out;
 }
 
+/** Public: long affiliate links → short links (cần session cookie sau Mở Trình duyệt). */
+export async function fetchAffiliateShortLinks(
+  originalLinks: string[],
+  delayMs = 400
+): Promise<string[]> {
+  return fetchShortLinksHttp(
+    originalLinks.map((l) => String(l || "").trim()),
+    delayMs
+  );
+}
+
 /**
  * PeeCrawl-inspired:
  * - Mở: GemLogin start → navigate → capture session (cookie/UA/LS) → GIỮ profile mở

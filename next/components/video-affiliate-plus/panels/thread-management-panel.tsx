@@ -1734,48 +1734,6 @@ export function ThreadManagementPanel({
               )}
               {downloadingMerged ? t("Đang tải...") : t("Tải tất cả video nối")}
             </button>
-            <button
-              type="button"
-              onClick={() => void handleDeleteSelectedHistory()}
-              disabled={clearingIdb || batchRunning || !selectedHistoryId}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-              style={
-                clearingIdb || batchRunning || !selectedHistoryId
-                  ? undefined
-                  : { backgroundColor: "#fffbeb", borderColor: "#fbbf24", color: "#b45309" }
-              }
-              title={t("Xóa phiên đang chọn + video IndexedDB") as string}
-            >
-              {clearingIdb ? (
-                <RiLoader4Line className="text-base animate-spin" />
-              ) : (
-                <HiOutlineTrash className="text-base" />
-              )}
-              {clearingIdb ? t("Đang xóa...") : t("Xóa phiên")}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleClearGenerateVideoIdb()}
-              disabled={clearingIdb || batchRunning}
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-              style={
-                clearingIdb || batchRunning
-                  ? undefined
-                  : { backgroundColor: "#fff7ed", borderColor: "#fb923c", color: "#c2410c" }
-              }
-              title={
-                t(
-                  "Xóa tất cả lịch sử phiên, luồng và video đã lưu trong IndexedDB để giải phóng bộ nhớ"
-                ) as string
-              }
-            >
-              {clearingIdb ? (
-                <RiLoader4Line className="text-base animate-spin" />
-              ) : (
-                <HiOutlineTrash className="text-base" />
-              )}
-              {clearingIdb ? t("Đang xóa...") : t("Xóa hết cache")}
-            </button>
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
