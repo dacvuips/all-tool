@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -11,7 +12,7 @@ import {
   HiOutlineTrash,
   HiPlay,
 } from "react-icons/hi";
-import { RiChromeLine, RiDatabase2Line, RiLoader4Line, RiSendPlaneLine } from "react-icons/ri";
+import { RiChromeLine, RiDatabase2Line, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
@@ -27,22 +28,21 @@ import {
   downloadCsvText,
   exportShopeeAffiliateCsv,
   fetchGemLoginProfiles,
+  fetchGemLoginStatus,
   GemLoginProfileOption,
   loadScrapeCsvSessions,
   openShopeeAffiliateBrowser,
+  probeScrapeAgent,
   removeAllScrapeCsvSessions,
   removeScrapeCsvSession,
+  SCRAPE_AGENT_BASE,
 } from "../scrape/api";
 import {
   fetchAffiliateProductPage,
   mapRawToScrapeRow,
   probeCdpBridge,
 } from "../scrape/product-page-fetch";
-import {
-  PanelListCard,
-  panelListClasses,
-  panelListRowClass,
-} from "../shared/panel-list-ui";
+import { PanelListCard, panelListClasses, panelListRowClass } from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
 
 const MARKET_OPTIONS = [
@@ -54,30 +54,33 @@ const MARKET_OPTIONS = [
   { value: "affiliate.shopee.co.id", label: "ID" },
 ];
 
+const SCRAPE_AGENT_ZIP_URL = "/downloads/ShopeeScrapeAgent.zip";
+const SCRAPE_AGENT_ZIP_NAME = "ShopeeScrapeAgent.zip";
+
 const GUIDE_STEPS = [
   {
     step: "01",
-    titleKey: "Mở GemLogin Desktop",
-    descKey: "Cài và mở GemLogin (API localhost:1010). Profile đã login Affiliate.",
-    Icon: RiChromeLine,
+    titleKey: "Tải & chạy Agent",
+    descKey:
+      "Bấm «Tải Shopee Scrape Agent», giải nén zip → chạy BatDau.bat (hoặc .exe). Giữ cửa sổ mở.",
+    Icon: RiDatabase2Line,
   },
   {
     step: "02",
-    titleKey: "Capture session (PeeCrawl hybrid)",
-    descKey:
-      "Mở Trình duyệt: start profile → CDP lấy cookie/UA/localStorage → ghi disk → tắt GemLogin.",
-    Icon: HiOutlineSearch,
+    titleKey: "Mở GemLogin Desktop",
+    descKey: "Cài và mở GemLogin. Profile đã đăng nhập Shopee Affiliate.",
+    Icon: RiChromeLine,
   },
   {
     step: "03",
-    titleKey: "Cào / Xuất CSV bằng HTTP",
-    descKey: "Web gọi API — server request Affiliate bằng session đã lưu (không Playwright).",
-    Icon: RiSendPlaneLine,
+    titleKey: "Mở trình duyệt & cào",
+    descKey: "Chọn profile → Mở Trình duyệt → nhập từ khóa → Bắt đầu cào hoặc Xuất CSV.",
+    Icon: HiOutlineSearch,
   },
   {
     step: "04",
-    titleKey: "Lọc & tải",
-    descKey: "Select Domain / Ngày / Tháng / Năm bên dưới chỉ lọc danh sách CSV đã lưu.",
+    titleKey: "Lọc & tải CSV",
+    descKey: "Lọc Domain / Ngày / Tháng / Năm bên dưới, tải file CSV đã lưu về máy.",
     Icon: HiOutlineFilter,
   },
 ];
@@ -216,6 +219,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [gemProfiles, setGemProfiles] = useState<GemLoginProfileOption[]>([]);
   const [gemProfileId, setGemProfileId] = useState("");
   const [loadingGemProfiles, setLoadingGemProfiles] = useState(false);
+  const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
   const [gemOnline, setGemOnline] = useState<boolean | null>(null);
   const [filterDomain, setFilterDomain] = useState("");
   const [filterYear, setFilterYear] = useState("");
@@ -223,7 +227,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [filterDay, setFilterDay] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [guideOpen, setGuideOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(true);
   /** Uncontrolled — tránh IME tiếng Việt bị đúp dấu khi re-render. */
   const keywordsInputRef = useRef<HTMLInputElement>(null);
   const getKeywordsText = () => String(keywordsInputRef.current?.value || "");
@@ -250,19 +254,32 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setSessions(await loadScrapeCsvSessions());
   };
 
-  const refreshGemProfiles = async () => {
+  const refreshAgentAndGem = async () => {
     setLoadingGemProfiles(true);
     try {
+      const agent = await probeScrapeAgent(2500);
+      setAgentOnline(agent.online);
+      if (!agent.online) {
+        setGemOnline(false);
+        setGemProfiles([]);
+        return;
+      }
+      const status = await fetchGemLoginStatus();
+      setGemOnline(Boolean(status.online));
+      if (!status.online) {
+        setGemProfiles([]);
+        return;
+      }
       const list = await fetchGemLoginProfiles();
       setGemProfiles(list);
-      setGemOnline(true);
       setGemProfileId((prev) => {
         if (prev && list.some((p) => p.id === prev)) return prev;
         return list[0]?.id || "";
       });
     } catch {
-      setGemProfiles([]);
+      setAgentOnline(false);
       setGemOnline(false);
+      setGemProfiles([]);
     } finally {
       setLoadingGemProfiles(false);
     }
@@ -270,7 +287,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
   useEffect(() => {
     void refreshLocal();
-    void refreshGemProfiles();
+    void refreshAgentAndGem();
   }, []);
 
   const domainOptions = useMemo(() => {
@@ -305,7 +322,6 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     return filteredSessions.slice(start, start + pageSize);
   }, [filteredSessions, safePage, pageSize]);
 
-
   const domainLabel = (host: string) => {
     const known = MARKET_OPTIONS.find((m) => m.value === host);
     return known ? `${known.label} — ${host}` : host;
@@ -320,9 +336,19 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   };
 
   const handleOpenBrowser = async () => {
+    const agent = await probeScrapeAgent(2500);
+    setAgentOnline(agent.online);
+    if (!agent.online) {
+      toast.error(
+        t("Chưa thấy Local Agent ({{url}}). Mở Shopee Scrape Agent (BatDau.bat / .exe).", {
+          url: SCRAPE_AGENT_BASE,
+        })
+      );
+      return;
+    }
     if (!gemProfileId) {
       toast.warn(t("Chọn profile GemLogin trước. Bấm làm mới nếu danh sách trống."));
-      void refreshGemProfiles();
+      void refreshAgentAndGem();
       return;
     }
     try {
@@ -338,7 +364,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       );
     } catch (err: any) {
       toast.error(err?.message || t("Không mở được trình duyệt"));
-      void refreshGemProfiles();
+      void refreshAgentAndGem();
     } finally {
       setOpening(false);
     }
@@ -355,7 +381,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       setExportingCsv(true);
       const bridgeOk = await probeCdpBridge();
       if (!bridgeOk) {
-        toast.error(t("Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin) trước."));
+        const agent = await probeScrapeAgent(2000);
+        toast.error(
+          agent.online
+            ? t("Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin) trước.")
+            : t("Chưa thấy Local Agent. Mở Shopee Scrape Agent (BatDau.bat / .exe).")
+        );
         return;
       }
       const session = await exportShopeeAffiliateCsv({
@@ -368,9 +399,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         filterShopTypes: orderedShopTypes(),
       });
       setSessions(await loadScrapeCsvSessions());
-      toast.success(
-        t("Đã xuất CSV: {{count}} SP", { count: session.productCount })
-      );
+      toast.success(t("Đã xuất CSV: {{count}} SP", { count: session.productCount }));
     } catch (err: any) {
       toast.error(err?.message || t("Xuất CSV thất bại"));
     } finally {
@@ -451,10 +480,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
     const bridgeOk = await probeCdpBridge();
     if (!bridgeOk) {
+      const agent = await probeScrapeAgent(2000);
       toast.error(
-        t(
-          "Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin), đăng nhập Affiliate nếu cần, rồi thử lại."
-        )
+        agent.online
+          ? t(
+              "Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin), đăng nhập Affiliate nếu cần, rồi thử lại."
+            )
+          : t("Chưa thấy Local Agent. Mở Shopee Scrape Agent (BatDau.bat / .exe).")
       );
       return;
     }
@@ -605,7 +637,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       const csv = productsToFullScrapedCsv(products);
       const keywordsText = getKeywordsText().trim();
       const safeName =
-        name.replace(/[^\w\u00C0-\u024F\s-]+/gi, "_").trim().slice(0, 60) || "project";
+        name
+          .replace(/[^\w\u00C0-\u024F\s-]+/gi, "_")
+          .trim()
+          .slice(0, 60) || "project";
       const filename = `${safeName.replace(/\s+/g, "-")}-${Date.now()}.csv`;
 
       downloadCsvText(csv, filename);
@@ -901,9 +936,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             <thead className="sticky top-0 z-10">
               <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
                 <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
-                <th className={`${panelListClasses.th} text-left max-w-xs`}>
-                  {t("Sản phẩm gốc")}
-                </th>
+                <th className={`${panelListClasses.th} text-left max-w-xs`}>{t("Sản phẩm gốc")}</th>
                 <th className={`${panelListClasses.th} text-center`}>{t("HH")}</th>
                 <th className={`${panelListClasses.th} text-center`}>{t("Lượt Bán")}</th>
                 <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
@@ -961,12 +994,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <div>
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Cào dữ liệu")}</h3>
             <p className="m-0 mt-0.5 text-xs text-gray-500">
-              {t("GemLogin profile · Quốc gia · Cào / Xuất CSV")}
-              {gemOnline === false ? (
-                <span className="ml-2 text-danger-dark">{t("(GemLogin offline)")}</span>
-              ) : gemOnline === true ? (
+              {t("Local Agent · GemLogin · Cào / Xuất CSV")}
+              {agentOnline === false ? (
+                <span className="ml-2 text-danger-dark">
+                  {t("(Agent offline — tải & mở BatDau.bat)")}
+                </span>
+              ) : agentOnline === true && gemOnline === false ? (
+                <span className="ml-2 text-danger-dark">{t("(Agent OK · GemLogin offline)")}</span>
+              ) : agentOnline === true && gemOnline === true ? (
                 <span className="ml-2 text-success-dark">
-                  {t("(GemLogin online · {{n}} profile)", { n: gemProfiles.length })}
+                  {t("(Agent + GemLogin · {{n}} profile)", { n: gemProfiles.length })}
                 </span>
               ) : null}
             </p>
@@ -1005,7 +1042,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {guideOpen ? (
                   <span className="block max-w-3xl text-12 leading-relaxed text-bluegray-500">
                     {t(
-                      "Giống PeeCrawl: Mở Trình duyệt = capture session rồi tắt GemLogin. Cào/Xuất CSV dùng HTTP + session trên disk."
+                      "Tải Agent về máy → mở GemLogin → Mở Trình duyệt → cào / xuất CSV. Web chỉ nói chuyện với Agent localhost, không cần source code."
                     )}
                   </span>
                 ) : null}
@@ -1041,9 +1078,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               <button
                 type="button"
                 disabled={loadingGemProfiles || opening}
-                onClick={() => void refreshGemProfiles()}
+                onClick={() => void refreshAgentAndGem()}
                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-bluegray-300 bg-white px-2.5 text-10 font-semibold text-accent shadow-sm transition-colors hover:bg-bluegray-50 disabled:opacity-50"
-                title={t("Làm mới danh sách profile GemLogin") as string}
+                title={t("Làm mới Local Agent + profile GemLogin") as string}
               >
                 {loadingGemProfiles ? (
                   <RiLoader4Line className="text-sm animate-spin" />
@@ -1103,24 +1140,54 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 m-0 p-0 list-none">
                 {GUIDE_STEPS.map((item) => {
                   const Icon = item.Icon;
+                  const isDownloadStep = item.step === "01";
                   return (
                     <li
                       key={item.step}
-                      className="relative flex min-h-32 flex-col rounded-xl border border-bluegray-200 bg-bluegray-50 p-3.5 shadow-sm transition-colors hover:border-bluegray-300 hover:bg-white"
+                      className={`relative flex min-h-32 flex-col rounded-xl border p-3.5 shadow-sm transition-colors ${
+                        isDownloadStep
+                          ? "border-teal-300 bg-teal-50/70 hover:border-teal-400 hover:bg-teal-50"
+                          : "border-bluegray-200 bg-bluegray-50 hover:border-bluegray-300 hover:bg-white"
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <span className="text-20 font-semibold leading-none tracking-tight text-bluegray-300">
-                          {item.step}
-                        </span>
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-bluegray-200 bg-white text-bluegray-600">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span
+                            className={`shrink-0 text-16 font-semibold leading-none tracking-tight ${
+                              isDownloadStep ? "text-teal-400" : "text-bluegray-300"
+                            }`}
+                          >
+                            {item.step}
+                          </span>
+                          <p className="m-0 truncate text-13 font-bold text-accent">
+                            {t(item.titleKey)}
+                          </p>
+                        </div>
+                        <span
+                          className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
+                            isDownloadStep
+                              ? "border-teal-200 text-teal-700"
+                              : "border-bluegray-200 text-bluegray-600"
+                          }`}
+                        >
                           <Icon className="text-15" />
                         </span>
                       </div>
-                      <div className="space-y-1 pt-2">
-                        <p className="m-0 text-13 font-bold text-accent">{t(item.titleKey)}</p>
-                        <p className="m-0 text-10 leading-relaxed text-bluegray-500">
+                      <div className="flex flex-1 flex-col gap-2 pt-2">
+                        <p className="m-0 text-12 leading-relaxed text-bluegray-500">
                           {t(item.descKey)}
                         </p>
+                        {isDownloadStep ? (
+                          <Link
+                            href={SCRAPE_AGENT_ZIP_URL}
+                            target="_blank"
+                            download={SCRAPE_AGENT_ZIP_NAME}
+                            className="mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-bluegray-600 px-3 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-bluegray-700"
+                          >
+                            <HiDownload className="text-sm" />
+                            {t("Tải file ZIP")}
+                          </Link>
+                        ) : null}
                       </div>
                     </li>
                   );
@@ -1131,7 +1198,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 <p className="m-0 text-10 leading-relaxed text-bluegray-500">
                   <span className="font-semibold text-accent">{t("Mẹo")}:</span>{" "}
                   {t(
-                    "Hybrid PeeCrawl: capture cookie/UA/localStorage → tắt profile → Cào bằng HTTP. Chưa có CloakSigner (module PeeCrawl riêng)."
+                    "UI báo Agent offline → mở lại BatDau.bat. Chưa có cookie → bấm «Mở Trình duyệt» trước khi cào."
                   )}
                 </p>
               </div>

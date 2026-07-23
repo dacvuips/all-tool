@@ -1,4 +1,4 @@
-/** Client API — GemLogin local → CDP + CSV sessions (IndexedDB). */
+/** Client API — ưu tiên Local Agent (máy user), fallback thông báo rõ khi offline. */
 
 import {
   clearScrapeCsvSessions,
@@ -7,48 +7,60 @@ import {
   saveScrapeCsvSession,
   ScrapeCsvSession,
 } from "../scrape-csv-history";
+import { agentFetch, probeScrapeAgent, SCRAPE_AGENT_BASE } from "./agent-client";
 
 export type { ScrapeCsvSession };
+export { SCRAPE_AGENT_BASE, probeScrapeAgent };
 
 export type GemLoginProfileOption = {
   id: string;
   name: string;
 };
 
-async function parseJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
+async function ensureAgentOnline() {
+  const st = await probeScrapeAgent(2500);
+  if (!st.online) {
+    throw new Error(
+      st.message ||
+        `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
+    );
   }
+  return st;
 }
 
 export async function fetchGemLoginStatus(): Promise<{
   online: boolean;
   apiBase: string;
   profileCount?: number;
+  agentOnline?: boolean;
 }> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/gemlogin-status", {
-    method: "GET",
-    credentials: "include",
-  });
-  const json = await parseJson(res);
+  const agent = await probeScrapeAgent(2500);
+  if (!agent.online) {
+    return {
+      online: false,
+      agentOnline: false,
+      apiBase: SCRAPE_AGENT_BASE,
+    };
+  }
+  const { res, json } = await agentFetch("/gemlogin-status", { method: "GET", timeoutMs: 8000 });
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || `GemLogin status lỗi (${res.status})`);
+    return {
+      online: false,
+      agentOnline: true,
+      apiBase: String(json?.apiBase || "http://127.0.0.1:1010"),
+    };
   }
   return {
     online: Boolean(json.online),
+    agentOnline: true,
     apiBase: String(json.apiBase || "http://127.0.0.1:1010"),
     profileCount: typeof json.profileCount === "number" ? json.profileCount : undefined,
   };
 }
 
 export async function fetchGemLoginProfiles(): Promise<GemLoginProfileOption[]> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/gemlogin-profiles", {
-    method: "GET",
-    credentials: "include",
-  });
-  const json = await parseJson(res);
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/gemlogin-profiles", { method: "GET", timeoutMs: 15000 });
   if (!res.ok || !json?.ok) {
     throw new Error(json?.message || `Không lấy được profile GemLogin (${res.status})`);
   }
@@ -73,13 +85,13 @@ export async function openShopeeAffiliateBrowser(input?: {
   cookieCount?: number;
   profileStopped?: boolean;
 }> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/open-browser", {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/open-browser", {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input || {}),
+    timeoutMs: 120000,
   });
-  const json = await parseJson(res);
   if (!res.ok || !json?.ok) {
     throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
   }
@@ -95,7 +107,7 @@ export async function openShopeeAffiliateBrowser(input?: {
   };
 }
 
-/** Xuất CSV qua GemLogin CDP → lưu thẳng IndexedDB (không qua extension). */
+/** Xuất CSV qua Local Agent → lưu thẳng IndexedDB. */
 export async function exportShopeeAffiliateCsv(input: {
   marketHost: string;
   keyword?: string;
@@ -105,13 +117,13 @@ export async function exportShopeeAffiliateCsv(input: {
   listType?: number;
   filterShopTypes?: number[];
 }): Promise<ScrapeCsvSession> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/export-csv", {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/export-csv", {
     method: "POST",
-    credentials: "include",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    timeoutMs: 600000,
   });
-  const json = await parseJson(res);
   if (!res.ok || !json?.ok || !json.session) {
     throw new Error(json?.message || `Xuất CSV thất bại (${res.status})`);
   }
@@ -120,7 +132,7 @@ export async function exportShopeeAffiliateCsv(input: {
   return saveScrapeCsvSession({
     id: String(raw.id),
     createdAt: Number(raw.createdAt) || Date.now(),
-    name: keyword.trim() || "Xuất CSV",
+    name: String(raw.name || keyword.trim() || "Xuất CSV"),
     keyword,
     marketHost: String(raw.marketHost || ""),
     marketCode: String(raw.marketCode || ""),

@@ -1,0 +1,3 @@
+[scrape-agent] listening http://127.0.0.1:17890
+[scrape-agent] GemLogin expected at http://127.0.0.1:1010
+[scrape-agent] Keep this process running while using Cào dữ liệu on the web.

@@ -1,6 +1,8 @@
 /**
- * Web → Chrome CDP (qua API server): lấy 1 trang product list.
+ * Web → Local Agent (máy user): lấy 1 trang product list qua GemLogin CDP.
  */
+
+import { agentFetch, probeScrapeAgent, SCRAPE_AGENT_BASE } from "./agent-client";
 
 export type AffiliateProductPageRequest = {
   marketHost: string;
@@ -25,30 +27,19 @@ export type AffiliateProductPageResult = {
   marketHost: string;
 };
 
-async function parseJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-/** Kiểm tra đã có cookie session (sau Mở Trình duyệt GemLogin). */
+/** Kiểm tra Local Agent + đã có cookie session (sau Mở Trình duyệt GemLogin). */
 export async function probeCdpBridge(timeoutMs = 5000): Promise<boolean> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const agent = await probeScrapeAgent(Math.min(2500, timeoutMs));
+  if (!agent.online) return false;
+  if (agent.hasCookies) return true;
   try {
-    const res = await fetch("/api/app/scrape-shopee-affiliate/cdp-status", {
+    const { res, json } = await agentFetch("/cdp-status", {
       method: "GET",
-      credentials: "include",
-      signal: controller.signal,
+      timeoutMs,
     });
-    const json = await parseJson(res);
     return Boolean(res.ok && json?.ok && (json?.hasCookies || json?.connected || json?.cdpAlive));
   } catch {
     return false;
-  } finally {
-    window.clearTimeout(timer);
   }
 }
 
@@ -56,14 +47,18 @@ export async function fetchAffiliateProductPage(
   input: AffiliateProductPageRequest,
   timeoutMs = 90000
 ): Promise<AffiliateProductPageResult> {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const agent = await probeScrapeAgent(2500);
+  if (!agent.online) {
+    throw new Error(
+      agent.message ||
+        `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
+    );
+  }
   try {
-    const res = await fetch("/api/app/scrape-shopee-affiliate/product-page", {
+    const { res, json } = await agentFetch("/product-page", {
       method: "POST",
-      credentials: "include",
       headers: { "Content-Type": "application/json" },
-      signal: controller.signal,
+      timeoutMs,
       body: JSON.stringify({
         marketHost: input.marketHost,
         keyword: input.keyword,
@@ -74,11 +69,10 @@ export async function fetchAffiliateProductPage(
         filterShopTypes: input.filterShopTypes || [],
       }),
     });
-    const json = await parseJson(res);
     if (!res.ok || !json?.ok) {
       throw new Error(
         json?.message ||
-          "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GemLogin) để lấy cookie, rồi thử lại."
+          "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GemLogin qua Agent) rồi thử lại."
       );
     }
     return {
@@ -90,12 +84,8 @@ export async function fetchAffiliateProductPage(
       marketHost: String(json.marketHost || input.marketHost || ""),
     };
   } catch (err: any) {
-    if (err?.name === "AbortError") {
-      throw new Error("Hết thời gian chờ. Kiểm tra cookie GemLogin còn hạn và thử lại.");
-    }
-    throw err;
-  } finally {
-    window.clearTimeout(timer);
+    if (err?.message) throw err;
+    throw new Error("Hết thời gian chờ. Kiểm tra Agent + GemLogin còn mở và thử lại.");
   }
 }
 

@@ -24,6 +24,8 @@
     "watch": "concurrently -k -p \"[{name}]\" -n \"Sass,TypeScript,Node\" -c \"yellow.bold,cyan.bold,green.bold\" \"npm run watch-sass\" \"npm run watch-ts\" \"npm run watch-node\"",
     "watch-sass": "node-sass -w src/public/css/main.scss dist/public/css/main.css",
     "build-sass": "node-sass src/public/css/main.scss dist/public/css/main.css",
+    "scrape-agent": "node dist/tools/shopee-scrape-agent/server.js",
+    "build-scrape-agent": "node scripts/build-scrape-agent.js",
     "next:parser": "i18next '{src,next}/**/*.{jsx,ts,tsx}' --config next/i18next-parser.config.js",
     "next:parser:win": "i18next '{src,next}\\**\\*.{jsx,ts,tsx}' --config next\\i18next-parser.config.js"
   },

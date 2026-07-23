@@ -62,4 +62,8 @@ tmp
 
 data/shopee-affiliate-sessions/
 
+# Bản đóng gói agent cho khách (build bằng yarn build-scrape-agent)
+release/shopee-scrape-agent/
+release/ShopeeScrapeAgent.zip
+
 config/**/*.yml
