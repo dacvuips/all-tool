@@ -60,6 +60,7 @@
     "apollo-server-express": "^2.14.1",
     "autoloader-ts": "^2.2.1",
     "axios": "^0.21.1",
+    "ws": "^8.18.0",
     "bee-queue": "^1.4.0",
     "body-parser": "^1.19.0",
     "chart.js": "^2.9.4",

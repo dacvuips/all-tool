@@ -29,6 +29,20 @@
       return;
     }
 
+    if (data.type === "EXTENSION_PING") {
+      if (data.apiBase) saveApiBase(data.apiBase);
+      window.postMessage(
+        {
+          source: EXT_SOURCE,
+          type: "EXTENSION_PING_RESULT",
+          requestId: data.requestId,
+          ok: true,
+        },
+        "*"
+      );
+      return;
+    }
+
     if (data.type === "START_COOKIE_FETCH") {
       if (data.apiBase) saveApiBase(data.apiBase);
       chrome.runtime.sendMessage(
@@ -108,6 +122,66 @@
           );
         }
       );
+      return;
+    }
+
+    if (data.type === "START_PRODUCT_PAGE_FETCH") {
+      if (data.apiBase) saveApiBase(data.apiBase);
+      chrome.runtime.sendMessage(
+        {
+          type: "START_PRODUCT_PAGE_FETCH",
+          requestId: data.requestId,
+          marketHost: data.marketHost || "",
+          keyword: data.keyword || "",
+          sortType: data.sortType,
+          pageOffset: data.pageOffset,
+          pageLimit: data.pageLimit,
+          listType: data.listType,
+        },
+        (res) => {
+          const errMsg = chrome.runtime.lastError?.message || "";
+          // started:true → chờ PRODUCT_PAGE_RESULT qua onMessage
+          if (/message channel closed|asynchronous response/i.test(errMsg)) {
+            return;
+          }
+          if (errMsg) {
+            window.postMessage(
+              {
+                source: EXT_SOURCE,
+                type: "PRODUCT_PAGE_RESULT",
+                requestId: data.requestId,
+                ok: false,
+                products: [],
+                hasMore: false,
+                totalCount: null,
+                keyword: data.keyword || "",
+                marketHost: data.marketHost || "",
+                error: errMsg,
+              },
+              "*"
+            );
+            return;
+          }
+          // res.started === true là bình thường — không post kết quả ở đây
+          if (res && res.ok === false && !res.started) {
+            window.postMessage(
+              {
+                source: EXT_SOURCE,
+                type: "PRODUCT_PAGE_RESULT",
+                requestId: data.requestId,
+                ok: false,
+                products: [],
+                hasMore: false,
+                totalCount: null,
+                keyword: data.keyword || "",
+                marketHost: data.marketHost || "",
+                error: res.error || "Extension lỗi",
+              },
+              "*"
+            );
+          }
+        }
+      );
     }
   });
   chrome.runtime.onMessage.addListener((message) => {
@@ -121,6 +195,24 @@
           status: message.status,
           cookie: message.cookie || "",
           spcF: message.spcF || "",
+          error: message.error || "",
+        },
+        "*"
+      );
+      return;
+    }
+    if (message?.type === "PRODUCT_PAGE_RESULT") {
+      window.postMessage(
+        {
+          source: EXT_SOURCE,
+          type: "PRODUCT_PAGE_RESULT",
+          requestId: message.requestId,
+          ok: Boolean(message.ok),
+          products: message.products || [],
+          hasMore: Boolean(message.hasMore),
+          totalCount: message.totalCount ?? null,
+          keyword: message.keyword || "",
+          marketHost: message.marketHost || "",
           error: message.error || "",
         },
         "*"

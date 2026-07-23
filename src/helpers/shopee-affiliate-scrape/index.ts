@@ -18,13 +18,54 @@ export {
 export type { ScrapeImportRow, ScrapedAffiliateProduct } from "./product-mapper";
 
 export {
-  ackExtensionSessions,
+  buildCsvSession,
   getLastMarketHost,
-  listAllExtensionSessions,
-  listPendingExtensionSessions,
-  openAffiliateBrowser,
-  pushExtensionCsv,
+  setLastMarketHost,
 } from "./extension-push";
 export type { ExtensionPushSession } from "./extension-push";
 
-export { buildExtensionZipBuffer, getExtensionSourceDir } from "./extension-package";
+export {
+  DEFAULT_CDP_PORT,
+  ensureChromeCdp,
+  findChromeExecutable,
+  getCdpEndpoint,
+  getCdpUserDataDir,
+  openNormalChrome,
+  probeCdpEndpoint,
+} from "./open-chrome";
+
+export {
+  closeGemLoginProfile,
+  DEFAULT_GEMLOGIN_API,
+  getGemLoginRawProxy,
+  getGemLoginStatus,
+  listGemLoginProfiles,
+  parseDebugAddr,
+  probeGemLoginApi,
+  startGemLoginProfile,
+} from "./gemlogin-client";
+export type { GemLoginProfile, GemLoginStartResult } from "./gemlogin-client";
+
+export {
+  clearAffiliateHttpSession,
+  getAffiliateHttpSession,
+  loadAffiliateHttpSession,
+  requireAffiliateHttpSession,
+  setAffiliateHttpSession,
+} from "./session-store";
+export type { AffiliateHttpSession } from "./session-store";
+
+export {
+  exportCsvViaCdp,
+  fetchProductPageViaCdp,
+  getCdpStatus,
+  openAffiliateBrowserCdp,
+} from "./cdp-browser";
+export type {
+  CdpExportInput,
+  CdpProductPageInput,
+  CdpProductPageResult,
+} from "./cdp-browser";
+
+/** Alias — GemLogin + lấy cookie → HTTP/CDP scrape. */
+export { openAffiliateBrowserCdp as openAffiliateBrowser } from "./cdp-browser";

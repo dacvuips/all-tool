@@ -7,23 +7,37 @@ import {
   HiChevronUp,
   HiDownload,
   HiOutlineFilter,
-  HiOutlinePuzzle,
   HiOutlineSearch,
   HiOutlineTrash,
   HiPlay,
 } from "react-icons/hi";
 import { RiChromeLine, RiDatabase2Line, RiLoader4Line, RiSendPlaneLine } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
-import { formatDuration, formatSessionTime, ScrapeCsvSession } from "../scrape-csv-history";
+import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { TabGroup } from "../../shared/utilities/tab/tab-group";
+import {
+  formatDuration,
+  formatSessionTime,
+  nextCrawlProjectName,
+  saveScrapeCsvSession,
+  ScrapeCsvSession,
+  sessionDisplayName,
+} from "../scrape-csv-history";
 import {
   downloadCsvText,
-  downloadShopeeExtensionPackage,
+  exportShopeeAffiliateCsv,
+  fetchGemLoginProfiles,
+  GemLoginProfileOption,
   loadScrapeCsvSessions,
   openShopeeAffiliateBrowser,
   removeAllScrapeCsvSessions,
   removeScrapeCsvSession,
-  syncExtensionCsvToIdb,
 } from "../scrape/api";
+import {
+  fetchAffiliateProductPage,
+  mapRawToScrapeRow,
+  probeCdpBridge,
+} from "../scrape/product-page-fetch";
 import {
   PanelListCard,
   panelListClasses,
@@ -43,35 +57,63 @@ const MARKET_OPTIONS = [
 const GUIDE_STEPS = [
   {
     step: "01",
-    titleKey: "Cài extension",
-    descKey: "Tải ZIP → chrome://extensions → Load unpacked → bật Viet-Theo-Bridge.",
-    Icon: HiOutlinePuzzle,
-  },
-  {
-    step: "02",
-    titleKey: "Chọn quốc gia & mở trình duyệt",
-    descKey: "Chọn market (VN, PH…) rồi bấm Mở Trình duyệt — mở đúng trang product_offer của quốc gia đó.",
+    titleKey: "Mở GemLogin Desktop",
+    descKey: "Cài và mở GemLogin (API localhost:1010). Profile đã login Affiliate.",
     Icon: RiChromeLine,
   },
   {
-    step: "03",
-    titleKey: "Bắt list API",
-    descKey: "Trên Affiliate: tìm kiếm / lọc / lật trang. Domain tự nhận từ tab đang mở.",
+    step: "02",
+    titleKey: "Capture session (PeeCrawl hybrid)",
+    descKey:
+      "Mở Trình duyệt: start profile → CDP lấy cookie/UA/localStorage → ghi disk → tắt GemLogin.",
     Icon: HiOutlineSearch,
   },
   {
-    step: "04",
-    titleKey: "Gửi CSV",
-    descKey: "Mở popup extension → chọn Số SP / Delay → Gửi. Web lưu phiên vào data.",
+    step: "03",
+    titleKey: "Cào / Xuất CSV bằng HTTP",
+    descKey: "Web gọi API — server request Affiliate bằng session đã lưu (không Playwright).",
     Icon: RiSendPlaneLine,
   },
   {
-    step: "05",
+    step: "04",
     titleKey: "Lọc & tải",
     descKey: "Select Domain / Ngày / Tháng / Năm bên dưới chỉ lọc danh sách CSV đã lưu.",
     Icon: HiOutlineFilter,
   },
 ];
+
+/** sort_type trên /api/v3/offer/product/list */
+const SORT_TABS = [
+  { value: 1, label: "Liên quan" },
+  { value: 5, label: "Hoa hồng (%)" },
+  { value: 2, label: "Bán chạy" },
+] as const;
+
+const PRICE_SORT_OPTIONS = [
+  { value: 4, label: "Giá thấp → cao" },
+  { value: 3, label: "Giá cao → thấp" },
+] as const;
+
+/** filter_shop_types trên product/list — chọn nhiều */
+const SHOP_TYPE_TABS = [
+  { value: 1, label: "Shopee Mall" },
+  { value: 4, label: "Yêu Thích+" },
+  { value: 2, label: "Yêu Thích" },
+] as const;
+
+export type ScrapeProductRow = {
+  id: string;
+  productName: string;
+  /** Hoa hồng % */
+  commissionPct: number;
+  sales: number;
+  price: number;
+  commissionReceived: number;
+  /** timestamp ms */
+  postedAt: number;
+  /** Bản ghi đầy đủ từ API — chỉ dùng khi xuất CSV */
+  raw?: Record<string, unknown>;
+};
 
 interface ScrapeDataPanelProps {
   onImportItems?: (fileName: string, items: AffiliatePlusItem[]) => void | Promise<void>;
@@ -86,17 +128,95 @@ function sessionLocalParts(ts: number) {
   };
 }
 
-/** Tab Cào dữ liệu — mở browser + danh sách CSV từ extension (IndexedDB). */
+function formatVnd(value: number) {
+  return `${Math.round(value).toLocaleString("vi-VN")}đ`;
+}
+
+function formatPostedDate(ts: number) {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function serializeCsvCell(value: unknown): string {
+  if (value == null) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function escapeCsvValue(value: unknown): string {
+  const text = serializeCsvCell(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+/** CSV đầy đủ mọi field cào được — UI chỉ hiện cột gọn. */
+function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
+  const raws = rows.map((r, idx) => {
+    const base = { ...(r.raw || {}) };
+    if (base.stt == null) base.stt = idx + 1;
+    if (!base.id && r.id) base.id = r.id;
+    return base;
+  });
+
+  const preferred = [
+    "stt",
+    "item_id",
+    "itemid",
+    "shopid",
+    "name",
+    "shop_name",
+    "seller_commission_rate",
+    "default_commission_rate",
+    "max_commission_rate",
+    "long_link",
+    "affiliate_link_short",
+    "product_link",
+    "image",
+    "image_url",
+    "price",
+    "price_min",
+    "price_max",
+    "historical_sold",
+    "sold",
+    "ctime",
+    "is_official_shop",
+    "id",
+  ];
+
+  const seen = new Set<string>();
+  for (const row of raws) {
+    for (const key of Object.keys(row)) seen.add(key);
+  }
+  const keys = [
+    ...preferred.filter((k) => seen.has(k)),
+    ...Array.from(seen).filter((k) => !preferred.includes(k)),
+  ];
+
+  const lines = [keys.map((k) => escapeCsvValue(k)).join(",")];
+  for (const row of raws) {
+    lines.push(keys.map((k) => escapeCsvValue(row[k])).join(","));
+  }
+  return "\uFEFF" + lines.join("\n");
+}
+
+/** Tab Cào dữ liệu — GemLogin CDP + danh sách SP / CSV. */
 export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const { t } = useTranslation();
   const toast = useToast();
 
   const [sessions, setSessions] = useState<ScrapeCsvSession[]>([]);
   const [opening, setOpening] = useState(false);
-  const [downloadingExt, setDownloadingExt] = useState(false);
-  const [syncing, setSyncing] = useState(false);
+  const [exportingCsv, setExportingCsv] = useState(false);
   /** Market dùng khi Mở trình duyệt → /offer/product_offer */
   const [openMarketHost, setOpenMarketHost] = useState(MARKET_OPTIONS[0].value);
+  const [gemProfiles, setGemProfiles] = useState<GemLoginProfileOption[]>([]);
+  const [gemProfileId, setGemProfileId] = useState("");
+  const [loadingGemProfiles, setLoadingGemProfiles] = useState(false);
+  const [gemOnline, setGemOnline] = useState<boolean | null>(null);
   const [filterDomain, setFilterDomain] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
@@ -104,30 +224,53 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [guideOpen, setGuideOpen] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Uncontrolled — tránh IME tiếng Việt bị đúp dấu khi re-render. */
+  const keywordsInputRef = useRef<HTMLInputElement>(null);
+  const getKeywordsText = () => String(keywordsInputRef.current?.value || "");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveProjectName, setSaveProjectName] = useState("Crawl Project 1");
+  const [savingProject, setSavingProject] = useState(false);
+  /** sort_type API: 1 liên quan, 2 bán chạy, 3 giá↓, 4 giá↑, 5 hoa hồng */
+  const [sortType, setSortType] = useState(1);
+  /** filter_shop_types: 1=Mall, 4=Yêu thích+, 2=Yêu thích — multi-select */
+  const [shopTypes, setShopTypes] = useState<number[]>([]);
+  const [productLimit, setProductLimit] = useState(20);
+  const [minCommissionPct, setMinCommissionPct] = useState(2);
+  const [minSales, setMinSales] = useState(10);
+  /** Đơn vị: nghìn đồng (k). Mặc định 0 = không lọc HH nhận về. */
+  const [commissionReceivedK, setCommissionReceivedK] = useState(0);
+  const [products, setProducts] = useState<ScrapeProductRow[]>([]);
+  const [crawling, setCrawling] = useState(false);
+  const [crawlStatus, setCrawlStatus] = useState("");
+  /** Tổng SP API đã quét (raw). */
+  const [crawledCount, setCrawledCount] = useState(0);
+  const crawlAbortRef = useRef(false);
 
   const refreshLocal = async () => {
     setSessions(await loadScrapeCsvSessions());
   };
 
+  const refreshGemProfiles = async () => {
+    setLoadingGemProfiles(true);
+    try {
+      const list = await fetchGemLoginProfiles();
+      setGemProfiles(list);
+      setGemOnline(true);
+      setGemProfileId((prev) => {
+        if (prev && list.some((p) => p.id === prev)) return prev;
+        return list[0]?.id || "";
+      });
+    } catch {
+      setGemProfiles([]);
+      setGemOnline(false);
+    } finally {
+      setLoadingGemProfiles(false);
+    }
+  };
+
   useEffect(() => {
     void refreshLocal();
-    pollRef.current = setInterval(() => {
-      void (async () => {
-        try {
-          setSyncing(true);
-          const list = await syncExtensionCsvToIdb();
-          setSessions(list);
-        } catch {
-          // ignore poll errors
-        } finally {
-          setSyncing(false);
-        }
-      })();
-    }, 2000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+    void refreshGemProfiles();
   }, []);
 
   const domainOptions = useMemo(() => {
@@ -162,13 +305,6 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     return filteredSessions.slice(start, start + pageSize);
   }, [filteredSessions, safePage, pageSize]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [filterDomain, filterYear, filterMonth, filterDay, pageSize]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
 
   const domainLabel = (host: string) => {
     const known = MARKET_OPTIONS.find((m) => m.value === host);
@@ -184,39 +320,61 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   };
 
   const handleOpenBrowser = async () => {
+    if (!gemProfileId) {
+      toast.warn(t("Chọn profile GemLogin trước. Bấm làm mới nếu danh sách trống."));
+      void refreshGemProfiles();
+      return;
+    }
     try {
       setOpening(true);
-      window.postMessage(
-        {
-          source: "viet-theo-bridge-app",
-          type: "SET_API_BASE",
-          apiBase: window.location.origin,
-        },
-        "*"
-      );
-      const { offerUrl } = await openShopeeAffiliateBrowser(openMarketHost);
+      const result = await openShopeeAffiliateBrowser({
+        marketHost: openMarketHost,
+        gemloginProfileId: gemProfileId,
+      });
       toast.success(
-        t("Đã mở {{url}} — dùng extension để Gửi CSV", {
-          url: offerUrl || `https://${openMarketHost}/offer/product_offer`,
+        t("Đã mở GemLogin + capture session ({{n}} cookie). Giữ cửa sổ mở rồi Bắt đầu cào.", {
+          n: result.cookieCount ?? 0,
         })
       );
     } catch (err: any) {
       toast.error(err?.message || t("Không mở được trình duyệt"));
+      void refreshGemProfiles();
     } finally {
       setOpening(false);
     }
   };
 
-  const handleDownloadExtension = async () => {
-    if (downloadingExt) return;
-    setDownloadingExt(true);
+  const handleExportCsv = async () => {
+    if (exportingCsv) return;
+    const keywordList = getKeywordsText()
+      .split(/[,;\n]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    const keyword = keywordList[0] || "";
     try {
-      await downloadShopeeExtensionPackage();
-      toast.success(t("Đã tải ZIP extension — giải nén rồi Load unpacked"));
+      setExportingCsv(true);
+      const bridgeOk = await probeCdpBridge();
+      if (!bridgeOk) {
+        toast.error(t("Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin) trước."));
+        return;
+      }
+      const session = await exportShopeeAffiliateCsv({
+        marketHost: openMarketHost,
+        keyword,
+        sortType,
+        maxProducts: Math.max(1, productLimit),
+        delayMs: 400,
+        listType: 0,
+        filterShopTypes: orderedShopTypes(),
+      });
+      setSessions(await loadScrapeCsvSessions());
+      toast.success(
+        t("Đã xuất CSV: {{count}} SP", { count: session.productCount })
+      );
     } catch (err: any) {
-      toast.error(err?.message || t("Tải extension thất bại"));
+      toast.error(err?.message || t("Xuất CSV thất bại"));
     } finally {
-      setDownloadingExt(false);
+      setExportingCsv(false);
     }
   };
 
@@ -241,8 +399,557 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     }
   };
 
+  const handleResetFilters = () => {
+    if (keywordsInputRef.current) keywordsInputRef.current.value = "";
+    setSortType(1);
+    setShopTypes([]);
+    setProductLimit(20);
+    setMinCommissionPct(2);
+    setMinSales(10);
+    setCommissionReceivedK(0);
+    setProducts([]);
+    setCrawlStatus("");
+    setCrawledCount(0);
+    toast.info(t("Đã lọc lại bộ lọc mặc định"));
+  };
+
+  const orderedShopTypes = () =>
+    SHOP_TYPE_TABS.map((t) => t.value).filter((v) => shopTypes.includes(v));
+
+  const toggleShopType = (value: number) => {
+    setShopTypes((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
+    );
+  };
+
+  const passesFilters = (row: ReturnType<typeof mapRawToScrapeRow>) => {
+    if (row.commissionPct < minCommissionPct) return false;
+    if (row.sales < minSales) return false;
+    if (commissionReceivedK > 0 && row.commissionReceived < commissionReceivedK * 1000) {
+      return false;
+    }
+    return true;
+  };
+
+  const handleStartCrawl = async () => {
+    if (crawling) {
+      crawlAbortRef.current = true;
+      setCrawlStatus(t("Đang dừng..."));
+      return;
+    }
+
+    const keywordList = getKeywordsText()
+      .split(/[,;\n]+/)
+      .map((k) => k.trim())
+      .filter(Boolean);
+    // Không có từ khóa → cào list mặc định (không gửi param keyword)
+    const crawlKeywords = keywordList.length ? keywordList : [""];
+    if (productLimit < 1) {
+      toast.warn(t("Số lượng SP cần lấy phải > 0"));
+      return;
+    }
+
+    const bridgeOk = await probeCdpBridge();
+    if (!bridgeOk) {
+      toast.error(
+        t(
+          "Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin), đăng nhập Affiliate nếu cần, rồi thử lại."
+        )
+      );
+      return;
+    }
+
+    crawlAbortRef.current = false;
+    setCrawling(true);
+    setProducts([]);
+    setCrawledCount(0);
+
+    const accepted: ScrapeProductRow[] = [];
+    const seen = new Set<string>();
+    const pageLimit = 20;
+    const delayMs = 450;
+    const maxPagesPerKeyword = 250;
+    let scannedRaw = 0;
+
+    try {
+      for (const keyword of crawlKeywords) {
+        if (crawlAbortRef.current || accepted.length >= productLimit) break;
+        let pageOffset = 0;
+        let pageNo = 0;
+        const keywordLabel = keyword || t("(không từ khóa)");
+
+        // Cào tiếp từng trang cho tới khi đủ số lượng hoặc hết data API
+        while (
+          !crawlAbortRef.current &&
+          accepted.length < productLimit &&
+          pageNo < maxPagesPerKeyword
+        ) {
+          pageNo += 1;
+          setCrawlStatus(
+            t(
+              'Đang cào "{{keyword}}" · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+              {
+                keyword: keywordLabel,
+                page: pageNo,
+                scanned: scannedRaw,
+                count: accepted.length,
+                limit: productLimit,
+              }
+            )
+          );
+
+          const page = await fetchAffiliateProductPage({
+            marketHost: openMarketHost,
+            keyword,
+            sortType,
+            pageOffset,
+            pageLimit,
+            listType: 0,
+            filterShopTypes: orderedShopTypes(),
+          });
+
+          if (!page.products.length) break;
+
+          scannedRaw += page.products.length;
+          setCrawledCount(scannedRaw);
+
+          for (const raw of page.products) {
+            if (accepted.length >= productLimit) break;
+            const mapped = mapRawToScrapeRow(raw, accepted.length);
+            if (!mapped.id || seen.has(mapped.id)) continue;
+            if (!passesFilters(mapped)) continue;
+            seen.add(mapped.id);
+            accepted.push({
+              id: mapped.id,
+              productName: mapped.productName,
+              commissionPct: mapped.commissionPct,
+              sales: mapped.sales,
+              price: mapped.price,
+              commissionReceived: mapped.commissionReceived,
+              postedAt: mapped.postedAt,
+              raw: raw as Record<string, unknown>,
+            });
+            setProducts([...accepted]);
+          }
+
+          setCrawlStatus(
+            t(
+              'Đang cào "{{keyword}}" · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+              {
+                keyword: keywordLabel,
+                page: pageNo,
+                scanned: scannedRaw,
+                count: accepted.length,
+                limit: productLimit,
+              }
+            )
+          );
+
+          if (accepted.length >= productLimit) break;
+          if (!page.hasMore) break;
+          pageOffset += pageLimit;
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      }
+
+      setCrawledCount(scannedRaw);
+      const doneMsg = crawlAbortRef.current
+        ? t("Đã dừng · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
+            count: accepted.length,
+            limit: productLimit,
+            scanned: scannedRaw,
+          })
+        : accepted.length >= productLimit
+        ? t("Hoàn tất · đã cào {{scanned}} · khớp {{count}}", {
+            count: accepted.length,
+            scanned: scannedRaw,
+          })
+        : t("Hết data API · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
+            count: accepted.length,
+            limit: productLimit,
+            scanned: scannedRaw,
+          });
+      setCrawlStatus(doneMsg);
+      toast.success(
+        t("Cào xong: đã cào {{scanned}} · khớp {{count}}", {
+          count: accepted.length,
+          scanned: scannedRaw,
+        })
+      );
+    } catch (err: any) {
+      setCrawlStatus("");
+      toast.error(err?.message || t("Cào thất bại"));
+    } finally {
+      setCrawling(false);
+      crawlAbortRef.current = false;
+    }
+  };
+
+  const openSaveProjectDialog = () => {
+    if (!products.length) {
+      toast.warn(t("Chưa có sản phẩm để lưu"));
+      return;
+    }
+    setSaveProjectName(nextCrawlProjectName(sessions));
+    setSaveDialogOpen(true);
+  };
+
+  const handleSaveProject = async () => {
+    if (!products.length) {
+      toast.warn(t("Chưa có sản phẩm để lưu"));
+      return;
+    }
+    const name = saveProjectName.trim() || nextCrawlProjectName(sessions);
+    try {
+      setSavingProject(true);
+      const csv = productsToFullScrapedCsv(products);
+      const keywordsText = getKeywordsText().trim();
+      const safeName =
+        name.replace(/[^\w\u00C0-\u024F\s-]+/gi, "_").trim().slice(0, 60) || "project";
+      const filename = `${safeName.replace(/\s+/g, "-")}-${Date.now()}.csv`;
+
+      downloadCsvText(csv, filename);
+
+      await saveScrapeCsvSession({
+        name,
+        keyword: keywordsText || name,
+        marketHost: openMarketHost,
+        marketCode: "",
+        productCount: products.length,
+        csv,
+        durationMs: 0,
+      });
+      setSessions(await loadScrapeCsvSessions());
+      setSaveDialogOpen(false);
+      toast.success(t("Đã lưu «{{name}}» · {{count}} SP", { name, count: products.length }));
+    } catch (err: any) {
+      toast.error(err?.message || t("Lưu project thất bại"));
+    } finally {
+      setSavingProject(false);
+    }
+  };
+
+  const isPriceSort = sortType === 3 || sortType === 4;
+  const priceSortLabel = PRICE_SORT_OPTIONS.find((o) => o.value === sortType)?.label || t("Giá");
+
   const selectClass =
-    "h-8 min-w-[120px] text-xs rounded-lg border border-gray-200 bg-white px-2 disabled:opacity-50";
+    "h-8 min-w-28 text-xs rounded-lg border border-gray-200 bg-white px-2 disabled:opacity-50";
+  const fieldLabelClass = "m-0 mb-1.5 block text-sm font-semibold text-gray-800";
+  const fieldInputClass =
+    "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-800 outline-none transition-colors focus:border-teal-400";
+  const splitRowClass = "flex overflow-hidden rounded-lg border border-gray-300";
+  const splitLabelClass =
+    "flex min-w-0 flex-1 items-center bg-gray-50 px-3 text-sm font-medium text-gray-700";
+  const splitInputWrapClass =
+    "flex w-32 shrink-0 items-center gap-1 border-l border-gray-300 bg-white px-2";
+  const splitInputClass =
+    "h-10 w-full min-w-0 border-0 bg-transparent text-sm text-gray-800 outline-none";
+  const sortTabBase =
+    "inline-flex h-9 items-center justify-center px-2 text-xs font-semibold border-r border-gray-300 last:border-r-0 transition-colors";
+  const sortTabIdle = "bg-white text-gray-700 hover:bg-gray-50";
+  const sortTabActive =
+    "relative z-10 bg-orange-light text-orange-dark ring-2 ring-inset ring-none ring-orange-light";
+
+  const crawlProjectForm = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="space-y-3">
+        <div>
+          <label className={fieldLabelClass} htmlFor="scrape-keywords">
+            {t("Từ khóa sản phẩm")}
+          </label>
+          <input
+            id="scrape-keywords"
+            ref={keywordsInputRef}
+            type="text"
+            defaultValue=""
+            autoComplete="off"
+            spellCheck={false}
+            lang="vi"
+            placeholder={t("Để trống = cào all · hoặc: túi xách, giày")}
+            className={fieldInputClass}
+          />
+        </div>
+
+        <div>
+          <label className={fieldLabelClass}>{t("Sắp xếp theo")}</label>
+          <div className="inline-flex w-full overflow-hidden rounded-lg border border-gray-300 bg-white">
+            {SORT_TABS.map((tab) => {
+              const active = sortType === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  disabled={crawling}
+                  aria-pressed={active}
+                  onClick={() => setSortType(tab.value)}
+                  className={`${sortTabBase} flex-1 whitespace-nowrap ${
+                    active ? sortTabActive : sortTabIdle
+                  } disabled:opacity-50`}
+                >
+                  {t(tab.label)}
+                </button>
+              );
+            })}
+            <label
+              className={`${sortTabBase} relative flex-1 cursor-pointer ${
+                isPriceSort ? sortTabActive : sortTabIdle
+              } ${crawling ? "opacity-50 pointer-events-none" : ""}`}
+            >
+              <span
+                className={`inline-flex items-center gap-1 pointer-events-none ${
+                  isPriceSort ? "text-orange-dark" : "text-gray-700"
+                }`}
+              >
+                {isPriceSort ? t(priceSortLabel) : t("Giá")}
+                <HiChevronDown className="text-sm" />
+              </span>
+              <select
+                aria-label={t("Sắp xếp theo giá")}
+                disabled={crawling}
+                value={isPriceSort ? String(sortType) : ""}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  if (v === 3 || v === 4) setSortType(v);
+                }}
+                className="absolute inset-0 cursor-pointer opacity-0"
+              >
+                <option value="" disabled>
+                  {t("Giá")}
+                </option>
+                {PRICE_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {t(opt.label)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label className={fieldLabelClass}>{t("Loại shop")}</label>
+          <div className="inline-flex w-full overflow-hidden rounded-lg border border-gray-300 bg-white">
+            {SHOP_TYPE_TABS.map((tab) => {
+              const active = shopTypes.includes(tab.value);
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  disabled={crawling}
+                  aria-pressed={active}
+                  onClick={() => toggleShopType(tab.value)}
+                  className={`${sortTabBase} flex-1 whitespace-nowrap ${
+                    active ? sortTabActive : sortTabIdle
+                  } disabled:opacity-50`}
+                >
+                  {t(tab.label)}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className={fieldLabelClass} htmlFor="scrape-product-limit">
+            {t("Số lượng SP cần lấy")}
+          </label>
+          <input
+            id="scrape-product-limit"
+            type="number"
+            min={1}
+            value={productLimit}
+            onChange={(e) => setProductLimit(Number(e.target.value) || 0)}
+            className={fieldInputClass}
+          />
+        </div>
+
+        <div className={splitRowClass}>
+          <div className={splitLabelClass}>{t("Hoa hồng tối thiểu")}</div>
+          <div className={splitInputWrapClass}>
+            <input
+              type="number"
+              min={0}
+              value={minCommissionPct}
+              onChange={(e) => setMinCommissionPct(Number(e.target.value) || 0)}
+              className={splitInputClass}
+              aria-label={t("Hoa hồng tối thiểu")}
+            />
+            <span className="shrink-0 text-sm text-gray-500">%</span>
+          </div>
+        </div>
+
+        <div className={splitRowClass}>
+          <div className={splitLabelClass}>{t("Lượt bán tối thiểu")}</div>
+          <div className={splitInputWrapClass}>
+            <input
+              type="number"
+              min={0}
+              value={minSales}
+              onChange={(e) => setMinSales(Number(e.target.value) || 0)}
+              className={splitInputClass}
+              aria-label={t("Lượt bán tối thiểu")}
+            />
+          </div>
+        </div>
+
+        <div className={splitRowClass}>
+          <div className={splitLabelClass}>{t("Hoa hồng nhận về")}</div>
+          <div className={splitInputWrapClass}>
+            <input
+              type="number"
+              min={0}
+              value={commissionReceivedK}
+              onChange={(e) => setCommissionReceivedK(Number(e.target.value) || 0)}
+              className={splitInputClass}
+              aria-label={t("Hoa hồng nhận về")}
+            />
+            <span className="shrink-0 text-sm text-gray-500">k</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2 pt-3 border-t border-gray-100">
+        {crawlStatus ? (
+          <p className="m-0 text-10 leading-relaxed text-gray-500">{crawlStatus}</p>
+        ) : null}
+        <div className="flex flex-nowrap gap-2">
+          <button
+            type="button"
+            disabled={crawling}
+            onClick={handleResetFilters}
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 px-2 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-300 disabled:opacity-50"
+          >
+            {t("Lọc lại")}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleStartCrawl()}
+            className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg border px-2 text-xs font-bold text-white transition-colors ${
+              crawling
+                ? "border-rose-600 bg-rose-600 hover:bg-rose-700"
+                : "border-blue-600 bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {crawling ? (
+              <>
+                <RiLoader4Line className="mr-1 animate-spin" />
+                {t("Dừng")}
+              </>
+            ) : (
+              t("Bắt đầu cào")
+            )}
+          </button>
+          <button
+            type="button"
+            disabled={crawling || !products.length}
+            onClick={openSaveProjectDialog}
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-green-600 bg-green-600 px-2 text-xs font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+          >
+            {t("Lưu project")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const productListPanel = (
+    <div className="flex min-w-0 min-h-96 flex-col">
+      <div className="grid grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
+        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-blue-600">
+            {t("Đã cào")}
+          </p>
+          <p className="m-0 text-lg font-bold tabular-nums text-blue-800">{crawledCount}</p>
+        </div>
+        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-pink-300 bg-pink-100 px-3 py-2">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-pink-700">
+            {t("Khớp lọc")}
+          </p>
+          <p className="m-0 text-lg font-bold tabular-nums text-pink-900">
+            {products.length}
+            <span className="ml-1 text-xs font-semibold text-pink-600">/ {productLimit}</span>
+          </p>
+        </div>
+        <div className="col-span-2 flex flex-row items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 sm:col-span-1">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-purple-600">
+            {t("Trạng thái")}
+          </p>
+          <p className="m-0 truncate text-sm font-semibold text-purple-800">
+            {crawling ? t("Đang cào...") : crawlStatus ? t("Hoàn tất") : t("Chưa chạy")}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 justify-between items-center  px-4 py-2 border-b border-gray-100">
+        <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+          {t("Danh sách sản phẩm")}
+        </p>
+        <span className="text-xs text-gray-400">
+          {t("Đã cào")}: <b className="text-gray-700">{crawledCount}</b>
+          <span className="mx-1 text-gray-300">·</span>
+          {t("Khớp")}: <b className="text-teal-700">{products.length}</b>
+        </span>
+      </div>
+
+      {!products.length ? (
+        <div className={`flex-1 ${panelListClasses.empty}`}>
+          {t("Chưa có sản phẩm. Cấu hình filter rồi chạy crawl.")}
+        </div>
+      ) : (
+        <div className="max-h-[28.75rem] overflow-y-auto overflow-x-auto">
+          <table className={panelListClasses.table}>
+            <thead className="sticky top-0 z-10">
+              <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
+                <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
+                <th className={`${panelListClasses.th} text-left max-w-xs`}>
+                  {t("Sản phẩm gốc")}
+                </th>
+                <th className={`${panelListClasses.th} text-center`}>{t("HH")}</th>
+                <th className={`${panelListClasses.th} text-center`}>{t("Lượt Bán")}</th>
+                <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
+                <th className={`${panelListClasses.th} text-right`}>{t("HH nhận về")}</th>
+                <th className={`${panelListClasses.th} text-center`}>{t("Ngày đăng")}</th>
+              </tr>
+            </thead>
+            <tbody className={panelListClasses.tbody}>
+              {products.map((row, idx) => (
+                <tr key={row.id} className={panelListRowClass()}>
+                  <td className={`${panelListClasses.td} text-center text-gray-600`}>{idx + 1}</td>
+                  <td
+                    className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
+                    title={row.productName}
+                  >
+                    {row.productName || "—"}
+                  </td>
+                  <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                    {row.commissionPct}%
+                  </td>
+                  <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                    {row.sales.toLocaleString("vi-VN")}
+                  </td>
+                  <td
+                    className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
+                  >
+                    {formatVnd(row.price)}
+                  </td>
+                  <td
+                    className={`${panelListClasses.td} text-right text-gray-700 whitespace-nowrap`}
+                  >
+                    {formatVnd(row.commissionReceived)}
+                  </td>
+                  <td
+                    className={`${panelListClasses.td} text-center text-gray-600 whitespace-nowrap`}
+                  >
+                    {formatPostedDate(row.postedAt)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-4">
@@ -254,7 +961,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <div>
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Cào dữ liệu")}</h3>
             <p className="m-0 mt-0.5 text-xs text-gray-500">
-              {t("Chọn quốc gia · Mở product_offer · Extension gửi CSV")}
+              {t("GemLogin profile · Quốc gia · Cào / Xuất CSV")}
+              {gemOnline === false ? (
+                <span className="ml-2 text-danger-dark">{t("(GemLogin offline)")}</span>
+              ) : gemOnline === true ? (
+                <span className="ml-2 text-success-dark">
+                  {t("(GemLogin online · {{n}} profile)", { n: gemProfiles.length })}
+                </span>
+              ) : null}
             </p>
           </div>
         </div>
@@ -262,7 +976,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
       <section
         aria-labelledby="scrape-guide-title"
-        className="overflow-hidden rounded-2xl border  bg-white"
+        className="overflow-hidden rounded-2xl border bg-white"
       >
         <div className={`px-4 sm:px-5 ${guideOpen ? "py-4 sm:py-5 space-y-4" : "py-3"}`}>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -273,7 +987,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               aria-expanded={guideOpen}
               aria-controls="scrape-guide-body"
             >
-              <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-[#c5d6ec] bg-white text-[#1e3a5f]">
+              <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-bluegray-200 bg-white text-accent">
                 {guideOpen ? (
                   <HiChevronUp className="text-sm" />
                 ) : (
@@ -281,17 +995,17 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 )}
               </span>
               <span className="min-w-0 space-y-1">
-                <span className="block text-[11px] font-semibold tracking-[0.14em] uppercase text-[#1e3a5f]">
+                <span className="block text-10 font-semibold tracking-wider uppercase text-accent">
                   {t("Hướng dẫn")}
-                  <span className="mx-1.5 font-normal text-[#8aa0bc]">·</span>
-                  <span className="tracking-normal text-[#1e3a5f]">
+                  <span className="mx-1.5 font-normal text-bluegray-400">·</span>
+                  <span className="tracking-normal text-accent">
                     {t("Quy trình cào Shopee Affiliate")}
                   </span>
                 </span>
                 {guideOpen ? (
-                  <span className="block max-w-3xl text-[12px] leading-relaxed text-[#5b7190]">
+                  <span className="block max-w-3xl text-12 leading-relaxed text-bluegray-500">
                     {t(
-                      "Chọn quốc gia trước khi Mở trình duyệt (mở /offer/product_offer). Extension bắt domain từ tab khi Gửi. Select Domain bên dưới chỉ lọc danh sách CSV."
+                      "Giống PeeCrawl: Mở Trình duyệt = capture session rồi tắt GemLogin. Cào/Xuất CSV dùng HTTP + session trên disk."
                     )}
                   </span>
                 ) : null}
@@ -303,14 +1017,49 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
             <div className="flex flex-wrap gap-2 items-center shrink-0 sm:justify-end">
               <label className="inline-flex items-center gap-1.5">
-                <span className="text-[11px] font-semibold text-[#1e3a5f] whitespace-nowrap">
+                <span className="text-10 font-semibold text-accent whitespace-nowrap">
+                  {t("GemLogin")}
+                </span>
+                <select
+                  value={gemProfileId}
+                  onChange={(e) => setGemProfileId(e.target.value)}
+                  disabled={opening || loadingGemProfiles}
+                  className="h-9 min-w-40 max-w-56 text-xs font-semibold rounded-lg border border-bluegray-300 bg-white px-2 text-accent disabled:opacity-50"
+                  aria-label={t("Profile GemLogin")}
+                >
+                  {!gemProfiles.length ? (
+                    <option value="">{t("— Không có profile —")}</option>
+                  ) : (
+                    gemProfiles.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <button
+                type="button"
+                disabled={loadingGemProfiles || opening}
+                onClick={() => void refreshGemProfiles()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-bluegray-300 bg-white px-2.5 text-10 font-semibold text-accent shadow-sm transition-colors hover:bg-bluegray-50 disabled:opacity-50"
+                title={t("Làm mới danh sách profile GemLogin") as string}
+              >
+                {loadingGemProfiles ? (
+                  <RiLoader4Line className="text-sm animate-spin" />
+                ) : (
+                  t("Làm mới")
+                )}
+              </button>
+              <label className="inline-flex items-center gap-1.5">
+                <span className="text-10 font-semibold text-accent whitespace-nowrap">
                   {t("Quốc gia")}
                 </span>
                 <select
                   value={openMarketHost}
                   onChange={(e) => setOpenMarketHost(e.target.value)}
                   disabled={opening}
-                  className="h-9 min-w-[148px] text-xs font-semibold rounded-lg border border-[#b8cce6] bg-white px-2 text-[#1e3a5f] disabled:opacity-50"
+                  className="h-9 min-w-28 text-xs font-semibold rounded-lg border border-bluegray-300 bg-white px-2 text-accent disabled:opacity-50"
                   aria-label={t("Quốc gia Affiliate")}
                 >
                   {MARKET_OPTIONS.map((m) => (
@@ -322,20 +1071,20 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </label>
               <button
                 type="button"
-                disabled={downloadingExt}
-                onClick={() => void handleDownloadExtension()}
-                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#b8cce6] bg-white px-3 text-[11px] font-semibold text-[#1e3a5f] shadow-sm transition-colors hover:bg-[#f4f8fd] disabled:opacity-50"
+                disabled={exportingCsv || opening}
+                onClick={() => void handleExportCsv()}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-bluegray-300 bg-white px-3 text-10 font-semibold text-accent shadow-sm transition-colors hover:bg-bluegray-50 disabled:opacity-50"
               >
-                {downloadingExt ? (
+                {exportingCsv ? (
                   <RiLoader4Line className="text-sm animate-spin" />
                 ) : (
                   <HiDownload className="text-sm" />
                 )}
-                {t("Tải extension")}
+                {t("Xuất CSV")}
               </button>
               <button
                 type="button"
-                disabled={opening}
+                disabled={opening || !gemProfileId}
                 onClick={() => void handleOpenBrowser()}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 disabled:opacity-50"
               >
@@ -351,27 +1100,25 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
           {guideOpen ? (
             <div id="scrape-guide-body" className="space-y-4">
-              <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 m-0 p-0 list-none">
+              <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 m-0 p-0 list-none">
                 {GUIDE_STEPS.map((item) => {
                   const Icon = item.Icon;
                   return (
                     <li
                       key={item.step}
-                      className="relative flex min-h-[132px] flex-col rounded-xl border border-[#d5e2f2] bg-[#f7faff]/95 p-3.5 shadow-[0_1px_0_rgba(30,58,95,0.03)] transition-colors hover:border-[#b8cce6] hover:bg-white"
+                      className="relative flex min-h-32 flex-col rounded-xl border border-bluegray-200 bg-bluegray-50 p-3.5 shadow-sm transition-colors hover:border-bluegray-300 hover:bg-white"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="text-[22px] font-semibold leading-none tracking-tight text-[#c5d4e8]">
+                        <span className="text-20 font-semibold leading-none tracking-tight text-bluegray-300">
                           {item.step}
                         </span>
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d9e6f5] bg-white text-[#4a6a8f]">
-                          <Icon className="text-[15px]" />
+                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-bluegray-200 bg-white text-bluegray-600">
+                          <Icon className="text-15" />
                         </span>
                       </div>
                       <div className="space-y-1 pt-2">
-                        <p className="m-0 text-[13px] font-bold text-[#1a2b4b]">
-                          {t(item.titleKey)}
-                        </p>
-                        <p className="m-0 text-[11px] leading-relaxed text-[#6b809c]">
+                        <p className="m-0 text-13 font-bold text-accent">{t(item.titleKey)}</p>
+                        <p className="m-0 text-10 leading-relaxed text-bluegray-500">
                           {t(item.descKey)}
                         </p>
                       </div>
@@ -380,11 +1127,11 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 })}
               </ol>
 
-              <div className="border-t border-[#d5e2f2] pt-3">
-                <p className="m-0 text-[11px] leading-relaxed text-[#5b7190]">
-                  <span className="font-semibold text-[#1e3a5f]">{t("Mẹo")}:</span>{" "}
+              <div className="border-t border-bluegray-200 pt-3">
+                <p className="m-0 text-10 leading-relaxed text-bluegray-500">
+                  <span className="font-semibold text-accent">{t("Mẹo")}:</span>{" "}
                   {t(
-                    "Mặc định VN mở https://affiliate.shopee.vn/offer/product_offer. Chọn PH/SG/… để mở đúng market trước khi gắn extension."
+                    "Hybrid PeeCrawl: capture cookie/UA/localStorage → tắt profile → Cào bằng HTTP. Chưa có CloakSigner (module PeeCrawl riêng)."
                   )}
                 </p>
               </div>
@@ -393,13 +1140,46 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
       </section>
 
+      {/* Một thẻ: tabs + form trái (cố định) + danh sách SP phải (flex) */}
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <TabGroup
+          name="scrape-data-sub"
+          flex
+          hasInkBar={false}
+          className="!bg-transparent"
+          tabClassName="h-11 justify-center border-r border-gray-200 last:border-r-0 bg-gray-50"
+          activeClassName="!text-primary-dark bg-success-light"
+          titleClassName="text-sm font-bold whitespace-nowrap"
+          bodyClassName="border-t border-gray-200 bg-white"
+        >
+          <TabGroup.Tab label={t("Crawl Project")}>
+            <div className="flex min-h-96">
+              <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+                {crawlProjectForm}
+              </div>
+              <div className="min-w-0 flex-1">{productListPanel}</div>
+            </div>
+          </TabGroup.Tab>
+          <TabGroup.Tab label={t("Crawl Giỏ Video")}>
+            <div className="flex min-h-96">
+              <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+                <div className={panelListClasses.empty}>
+                  {t("Crawl Giỏ Video — đang phát triển.")}
+                </div>
+              </div>
+              <div className="min-w-0 flex-1">{productListPanel}</div>
+            </div>
+          </TabGroup.Tab>
+        </TabGroup>
+      </div>
+
+      {/* Danh sách cào CSV — giữ như cũ */}
       <div className="p-4 space-y-3 bg-white rounded-xl border border-gray-200 shadow-sm">
         <div className="flex flex-wrap gap-2 justify-between items-center">
           <div className="flex gap-2 items-center">
             <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
               {t("Danh sách cào (CSV)")}
             </p>
-            {syncing ? <RiLoader4Line className="text-teal-600 animate-spin text-sm" /> : null}
             <span className="text-10 text-gray-400">
               {filteredSessions.length}/{sessions.length}
             </span>
@@ -490,7 +1270,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         {!sessions.length ? (
           <PanelListCard>
             <div className={panelListClasses.empty}>
-              {t("Chưa có CSV. Mở trình duyệt → trên extension bấm Gửi.")}
+              {t("Chưa có CSV. Mở GemLogin → Xuất CSV hoặc Lưu Project.")}
             </div>
           </PanelListCard>
         ) : !filteredSessions.length ? (
@@ -500,65 +1280,85 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         ) : (
           <>
             <PanelListCard>
-              <div className="overflow-auto max-h-[420px]">
-              <table className={panelListClasses.table}>
-                <thead className="sticky top-0 z-10">
-                  <tr className={panelListClasses.theadTr}>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Thời gian")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Keyword")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Thực hiện")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("ID")}</th>
-                    <th className={`${panelListClasses.th} text-left`} />
-                  </tr>
-                </thead>
-                <tbody className={panelListClasses.tbody}>
-                  {pagedSessions.map((s) => (
-                    <tr key={s.id} className={panelListRowClass()}>
-                      <td className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}>
-                        {formatSessionTime(s.createdAt)}
-                      </td>
-                      <td className={`${panelListClasses.td} max-w-[160px] truncate`} title={s.marketHost}>
-                        {s.marketHost ? domainLabel(s.marketHost) : "—"}
-                      </td>
-                      <td className={`${panelListClasses.td} max-w-[140px] truncate`} title={s.keyword}>
-                        {s.keyword || "—"}
-                      </td>
-                      <td className={`${panelListClasses.td} font-semibold text-gray-800`}>{s.productCount}</td>
-                      <td className={`${panelListClasses.td} text-gray-600`}>{formatDuration(s.durationMs)}</td>
-                      <td
-                        className={`${panelListClasses.td} font-mono text-10 text-gray-400 max-w-[120px] truncate`}
-                        title={s.id}
-                      >
-                        {s.id}
-                      </td>
-                      <td className={panelListClasses.td}>
-                        <div className="flex gap-1 justify-end">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              downloadCsvText(s.csv, `scrape-${s.keyword || "export"}-${s.id}.csv`)
-                            }
-                            className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
-                          >
-                            <HiDownload />
-                            CSV
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void handleDeleteOne(s.id)}
-                            className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
-                          >
-                            <HiOutlineTrash />
-                          </button>
-                        </div>
-                      </td>
+              <div className="overflow-auto max-h-96">
+                <table className={panelListClasses.table}>
+                  <thead className="sticky top-0 z-10">
+                    <tr className={panelListClasses.theadTr}>
+                      <th className={`${panelListClasses.th} text-left`}>{t("Thời gian")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("Tên")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("Keyword")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("Thực hiện")}</th>
+                      <th className={`${panelListClasses.th} text-left`}>{t("ID")}</th>
+                      <th className={`${panelListClasses.th} text-left`} />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody className={panelListClasses.tbody}>
+                    {pagedSessions.map((s) => (
+                      <tr key={s.id} className={panelListRowClass()}>
+                        <td className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}>
+                          {formatSessionTime(s.createdAt)}
+                        </td>
+                        <td
+                          className={`${panelListClasses.td} max-w-2xs truncate font-semibold text-gray-800`}
+                          title={sessionDisplayName(s)}
+                        >
+                          {sessionDisplayName(s)}
+                        </td>
+                        <td
+                          className={`${panelListClasses.td} max-w-2xs truncate`}
+                          title={s.marketHost}
+                        >
+                          {s.marketHost ? domainLabel(s.marketHost) : "—"}
+                        </td>
+                        <td
+                          className={`${panelListClasses.td} max-w-2xs truncate`}
+                          title={s.keyword}
+                        >
+                          {s.keyword || "—"}
+                        </td>
+                        <td className={`${panelListClasses.td} font-semibold text-gray-800`}>
+                          {s.productCount}
+                        </td>
+                        <td className={`${panelListClasses.td} text-gray-600`}>
+                          {formatDuration(s.durationMs)}
+                        </td>
+                        <td
+                          className={`${panelListClasses.td} font-mono text-10 text-gray-400 max-w-28 truncate`}
+                          title={s.id}
+                        >
+                          {s.id}
+                        </td>
+                        <td className={panelListClasses.td}>
+                          <div className="flex gap-1 justify-end">
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadCsvText(
+                                  s.csv,
+                                  `scrape-${s.keyword || "export"}-${s.id}.csv`
+                                )
+                              }
+                              className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
+                            >
+                              <HiDownload />
+                              CSV
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteOne(s.id)}
+                              className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
+                            >
+                              <HiOutlineTrash />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </PanelListCard>
 
             <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
@@ -615,7 +1415,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                         key={p}
                         type="button"
                         onClick={() => setPage(p)}
-                        className={`inline-flex h-7 min-w-[1.75rem] items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
+                        className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
                           p === safePage
                             ? "border-teal-300 bg-teal-50 text-teal-800"
                             : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
@@ -639,6 +1439,61 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </>
         )}
       </div>
+
+      <Dialog
+        isOpen={saveDialogOpen}
+        onClose={() => {
+          if (!savingProject) setSaveDialogOpen(false);
+        }}
+        title={t("Lưu Project")}
+        width="420px"
+        maxWidth="95vw"
+      >
+        <Dialog.Body>
+          <div className="space-y-4 pt-1">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">
+                {t("Tên project")}
+              </span>
+              <input
+                autoFocus
+                value={saveProjectName}
+                onChange={(e) => setSaveProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !savingProject) {
+                    e.preventDefault();
+                    void handleSaveProject();
+                  }
+                }}
+                placeholder="Crawl Project 1"
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm outline-none focus:border-blue-400"
+              />
+              <span className="mt-1 block text-xs text-gray-500">
+                {t("Tên sẽ hiện trong Danh sách cào (CSV)")}
+              </span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={savingProject}
+                onClick={() => setSaveDialogOpen(false)}
+                className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50"
+              >
+                {t("Hủy")}
+              </button>
+              <button
+                type="button"
+                disabled={savingProject || !saveProjectName.trim()}
+                onClick={() => void handleSaveProject()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-green-600 px-4 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingProject ? <RiLoader4Line className="animate-spin" /> : null}
+                {t("Lưu")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Body>
+      </Dialog>
     </div>
   );
 }

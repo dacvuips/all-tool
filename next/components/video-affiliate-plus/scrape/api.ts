@@ -1,4 +1,4 @@
-/** Client API — mở browser + sync CSV từ extension. */
+/** Client API — GemLogin local → CDP + CSV sessions (IndexedDB). */
 
 import {
   clearScrapeCsvSessions,
@@ -10,6 +10,11 @@ import {
 
 export type { ScrapeCsvSession };
 
+export type GemLoginProfileOption = {
+  id: string;
+  name: string;
+};
+
 async function parseJson(res: Response) {
   try {
     return await res.json();
@@ -18,83 +23,111 @@ async function parseJson(res: Response) {
   }
 }
 
-export async function openShopeeAffiliateBrowser(marketHost?: string): Promise<{
+export async function fetchGemLoginStatus(): Promise<{
+  online: boolean;
+  apiBase: string;
+  profileCount?: number;
+}> {
+  const res = await fetch("/api/app/scrape-shopee-affiliate/gemlogin-status", {
+    method: "GET",
+    credentials: "include",
+  });
+  const json = await parseJson(res);
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || `GemLogin status lỗi (${res.status})`);
+  }
+  return {
+    online: Boolean(json.online),
+    apiBase: String(json.apiBase || "http://127.0.0.1:1010"),
+    profileCount: typeof json.profileCount === "number" ? json.profileCount : undefined,
+  };
+}
+
+export async function fetchGemLoginProfiles(): Promise<GemLoginProfileOption[]> {
+  const res = await fetch("/api/app/scrape-shopee-affiliate/gemlogin-profiles", {
+    method: "GET",
+    credentials: "include",
+  });
+  const json = await parseJson(res);
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || `Không lấy được profile GemLogin (${res.status})`);
+  }
+  const list = Array.isArray(json.profiles) ? json.profiles : [];
+  return list.map((p: any) => ({
+    id: String(p.id),
+    name: String(p.name || p.id),
+  }));
+}
+
+export async function openShopeeAffiliateBrowser(input?: {
+  marketHost?: string;
+  gemloginProfileId?: string;
+  allowChromeFallback?: boolean;
+}): Promise<{
   marketHost: string;
   offerUrl: string;
+  cdpEndpoint?: string;
+  source?: string;
+  gemloginProfileId?: string;
+  debugAddr?: string;
+  cookieCount?: number;
+  profileStopped?: boolean;
 }> {
   const res = await fetch("/api/app/scrape-shopee-affiliate/open-browser", {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(marketHost ? { marketHost } : {}),
+    body: JSON.stringify(input || {}),
   });
   const json = await parseJson(res);
   if (!res.ok || !json?.ok) {
     throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
   }
   return {
-    marketHost: String(json.marketHost || marketHost || ""),
+    marketHost: String(json.marketHost || input?.marketHost || ""),
     offerUrl: String(json.offerUrl || ""),
+    cdpEndpoint: json.cdpEndpoint ? String(json.cdpEndpoint) : undefined,
+    source: json.source ? String(json.source) : undefined,
+    gemloginProfileId: json.gemloginProfileId ? String(json.gemloginProfileId) : undefined,
+    debugAddr: json.debugAddr ? String(json.debugAddr) : undefined,
+    cookieCount: typeof json.cookieCount === "number" ? json.cookieCount : undefined,
+    profileStopped: Boolean(json.profileStopped),
   };
 }
 
-export async function downloadShopeeExtensionPackage(): Promise<void> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/extension-package", {
-    method: "GET",
+/** Xuất CSV qua GemLogin CDP → lưu thẳng IndexedDB (không qua extension). */
+export async function exportShopeeAffiliateCsv(input: {
+  marketHost: string;
+  keyword?: string;
+  sortType?: number;
+  maxProducts?: number;
+  delayMs?: number;
+  listType?: number;
+  filterShopTypes?: number[];
+}): Promise<ScrapeCsvSession> {
+  const res = await fetch("/api/app/scrape-shopee-affiliate/export-csv", {
+    method: "POST",
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
   });
-  if (!res.ok) {
-    const json = await parseJson(res);
-    throw new Error(json?.message || `Không tải được extension (${res.status})`);
-  }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "shopee-affiliate-bridge.zip";
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/** Poll server → lưu phiên mới vào IndexedDB video-affiliate-manager. */
-export async function syncExtensionCsvToIdb(): Promise<ScrapeCsvSession[]> {
-  const existing = await listScrapeCsvSessions();
-  const knownIds = existing.map((s) => s.id);
-  const res = await fetch(
-    `/api/app/scrape-shopee-affiliate/extension-pending?knownIds=${encodeURIComponent(knownIds.join(","))}`,
-    { method: "GET", credentials: "include" }
-  );
   const json = await parseJson(res);
-  if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || `Sync lỗi (${res.status})`);
+  if (!res.ok || !json?.ok || !json.session) {
+    throw new Error(json?.message || `Xuất CSV thất bại (${res.status})`);
   }
-
-  const incoming = Array.isArray(json.sessions) ? json.sessions : [];
-  const savedIds: string[] = [];
-  for (const raw of incoming) {
-    const session = await saveScrapeCsvSession({
-      id: String(raw.id),
-      createdAt: Number(raw.createdAt) || Date.now(),
-      keyword: String(raw.keyword || ""),
-      marketHost: String(raw.marketHost || ""),
-      marketCode: String(raw.marketCode || ""),
-      productCount: Number(raw.productCount) || 0,
-      csv: String(raw.csv || ""),
-      durationMs: Number(raw.durationMs) || 0,
-    });
-    savedIds.push(session.id);
-  }
-
-  if (savedIds.length) {
-    await fetch("/api/app/scrape-shopee-affiliate/extension-ack", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: savedIds }),
-    }).catch(() => undefined);
-  }
-
-  return listScrapeCsvSessions();
+  const raw = json.session;
+  const keyword = String(raw.keyword || "");
+  return saveScrapeCsvSession({
+    id: String(raw.id),
+    createdAt: Number(raw.createdAt) || Date.now(),
+    name: keyword.trim() || "Xuất CSV",
+    keyword,
+    marketHost: String(raw.marketHost || ""),
+    marketCode: String(raw.marketCode || ""),
+    productCount: Number(raw.productCount) || 0,
+    csv: String(raw.csv || ""),
+    durationMs: Number(raw.durationMs) || 0,
+  });
 }
 
 export async function loadScrapeCsvSessions(): Promise<ScrapeCsvSession[]> {

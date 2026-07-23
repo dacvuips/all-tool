@@ -182,6 +182,50 @@
     return json;
   }
 
+  function buildListUrl(options) {
+    const host = window.location.hostname;
+    const keyword = String(options.keyword || "").trim();
+    const sortType = Number(options.sortType);
+    const pageLimit = Number(options.pageLimit) > 0 ? Number(options.pageLimit) : DEFAULT_PAGE_LIMIT;
+    const listType = Number.isFinite(Number(options.listType)) ? Number(options.listType) : 0;
+    const pageOffset = Number(options.pageOffset) >= 0 ? Number(options.pageOffset) : 0;
+    const url = new URL(`https://${host}/api/v3/offer/product/list`);
+    url.searchParams.set("list_type", String(listType));
+    if (keyword) url.searchParams.set("keyword", keyword);
+    url.searchParams.set("sort_type", String(Number.isFinite(sortType) ? sortType : 1));
+    url.searchParams.set("page_offset", String(pageOffset));
+    url.searchParams.set("page_limit", String(pageLimit));
+    url.searchParams.set("client_type", "1");
+    return url.toString();
+  }
+
+  async function fetchOneProductPage(options) {
+    const market = getMarketConfig();
+    const pageOffset = Number(options.pageOffset) >= 0 ? Number(options.pageOffset) : 0;
+    const pageLimit = Number(options.pageLimit) > 0 ? Number(options.pageLimit) : DEFAULT_PAGE_LIMIT;
+    const templateUrl = buildListUrl({ ...options, pageOffset: 0 });
+    const payload = await fetchPage(templateUrl, pageOffset);
+    const list = extractList(payload);
+    const totalCount = extractTotal(payload);
+    const products = list.map((item, index) => flattenProduct(item, index, pageOffset, market));
+    const hasMore =
+      list.length >= pageLimit &&
+      (totalCount == null || pageOffset + list.length < totalCount);
+    let keyword = "";
+    try {
+      keyword = new URL(templateUrl).searchParams.get("keyword") || "";
+    } catch {}
+    return {
+      products,
+      hasMore,
+      totalCount,
+      keyword,
+      marketHost: market.host,
+      pageOffset,
+      pageLimit,
+    };
+  }
+
   const SHORT_LINK_QUERY = `
     query batchGetCustomLink($linkParams: [CustomLinkParam!], $sourceCaller: SourceCaller){
       batchCustomLink(linkParams: $linkParams, sourceCaller: $sourceCaller){
@@ -397,6 +441,47 @@
           {
             source: "viet-theo-bridge",
             action: "FETCH_ERROR",
+            requestId: data.requestId,
+            error: err?.message || String(err),
+          },
+          "*"
+        );
+      } finally {
+        running = false;
+      }
+      return;
+    }
+
+    if (data.action === "FETCH_PAGE") {
+      if (running) {
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_ERROR",
+            requestId: data.requestId,
+            error: "Đang chạy",
+          },
+          "*"
+        );
+        return;
+      }
+      running = true;
+      try {
+        const result = await fetchOneProductPage(data.options || {});
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_DONE",
+            requestId: data.requestId,
+            result,
+          },
+          "*"
+        );
+      } catch (err) {
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_ERROR",
             requestId: data.requestId,
             error: err?.message || String(err),
           },

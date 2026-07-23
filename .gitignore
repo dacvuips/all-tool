@@ -60,4 +60,6 @@ tmp
 
 .cache
 
+data/shopee-affiliate-sessions/
+
 config/**/*.yml

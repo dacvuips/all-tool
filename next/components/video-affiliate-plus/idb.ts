@@ -5,7 +5,7 @@
  * - product-videos (link → enrich base64; key = mã sản phẩm)
  * - merged-videos (legacy Blob — fallback đọc)
  * - import-history (phiên import / làm việc)
- * - scrape-csv-sessions (CSV do extension gửi)
+ * - scrape-csv-sessions (CSV scrape GemLogin/CDP)
  * - threads (per-item record; source of truth cho lazy list)
  * - thread-meta (aggregate stats theo sessionId)
  * - users (danh sách tài khoản + item Generate đã gắn)
@@ -72,10 +72,12 @@ export type MergedVideoRecord = {
   updatedAt: number;
 };
 
-/** CSV phiên cào từ extension — ID riêng trong DB video-affiliate-manager. */
+/** CSV phiên cào Affiliate — ID riêng trong DB video-affiliate-manager. */
 export type ScrapeCsvSessionRecord = {
   id: string;
   createdAt: number;
+  /** Tên project hiển thị (vd. Crawl Project 1) */
+  name?: string;
   keyword: string;
   marketHost: string;
   marketCode?: string;

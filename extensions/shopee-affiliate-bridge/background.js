@@ -42,16 +42,33 @@ function marketFromTab(tab) {
   }
 }
 
-async function findAffiliateTab() {
+async function findAffiliateTab(preferredHost) {
+  const wantHost = String(preferredHost || "").toLowerCase();
   const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
   const active = activeTabs[0];
   if (active?.url && isAffiliateProductOfferUrl(active.url)) {
-    return active;
+    if (!wantHost) return active;
+    try {
+      if (new URL(active.url).hostname.toLowerCase() === wantHost) return active;
+    } catch {
+      // fall through
+    }
   }
 
   const tabs = await chrome.tabs.query({});
   const affiliateTabs = tabs.filter((t) => t.url && isAffiliateProductOfferUrl(t.url));
   if (!affiliateTabs.length) return null;
+
+  if (wantHost) {
+    const match = affiliateTabs.find((t) => {
+      try {
+        return new URL(t.url).hostname.toLowerCase() === wantHost;
+      } catch {
+        return false;
+      }
+    });
+    if (match) return match;
+  }
 
   if (lastAffiliateHost) {
     const preferred = affiliateTabs.find((t) => {
@@ -110,13 +127,14 @@ async function pushToWeb(result, durationMs, tab) {
 }
 
 async function notifyAppTabs(payload) {
+  const type = payload?.type || "COOKIE_FETCH_RESULT";
   const tabs = await chrome.tabs.query({});
   for (const tab of tabs) {
     const url = String(tab.url || "");
     if (!url.startsWith("http://127.0.0.1") && !url.startsWith("http://localhost")) continue;
     if (!tab.id) continue;
     try {
-      await chrome.tabs.sendMessage(tab.id, { type: "COOKIE_FETCH_RESULT", ...payload });
+      await chrome.tabs.sendMessage(tab.id, { ...payload, type });
     } catch {
       // tab chưa có content script
     }
@@ -913,31 +931,8 @@ chrome.tabs.onRemoved.addListener((removedTabId) => {
   active.tabId = removedTabId;
 });
 
-async function pollPendingCookieJobs() {
-  if (cookieJobRunning) return;
-  try {
-    const base = await getApiBase();
-    const json = await fetchJson(`${base}/api/app/shopee-cookie-fetch/pending`, { method: "GET" });
-    const jobs = Array.isArray(json?.jobs) ? json.jobs : [];
-    const next = jobs.find((j) => j.status === "pending" && !claimedJobIds.has(j.id));
-    if (!next) return;
-    claimedJobIds.add(next.id);
-    await runCookieFetchJob({
-      jobId: next.id,
-      userId: next.userId,
-      username: next.username,
-      password: next.password,
-      loginUrl: next.loginUrl,
-      spcF: next.spcF || "",
-    });
-  } catch {
-    // API chưa sẵn / chưa SET_API_BASE
-  }
-}
-
-setInterval(() => {
-  void pollPendingCookieJobs();
-}, 2000);
+/** Cookie-fetch qua extension đã bỏ — dùng GemLogin/CDP + cookie thủ công. */
+// (đã xóa poll setInterval → /api/app/shopee-cookie-fetch/pending)
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "PAGE_PROGRESS") {
@@ -1025,48 +1020,84 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
-  if (message?.type === "START_COOKIE_FETCH") {
-    claimedJobIds.add(message.jobId);
-    // Trả lời ngay — job chạy nền; kết quả về qua notifyAppTabs / COOKIE_FETCH_RESULT.
-    // Không await cả login (vài phút) rồi mới sendResponse → tránh lỗi
-    // "message channel closed before a response was received".
-    if (cookieJobRunning) {
-      sendResponse({ ok: false, error: "Đang chạy job cookie khác" });
-      return false;
-    }
+  if (message?.type === "START_PRODUCT_PAGE_FETCH") {
+    const requestId = message.requestId || "";
+    // Trả lời ngay — kết quả về qua notifyAppTabs / PRODUCT_PAGE_RESULT
+    // (tránh MV3 "message channel closed" khi await fetch lâu).
     sendResponse({ ok: true, started: true });
-    void runCookieFetchJob({
-      jobId: message.jobId,
-      userId: message.userId,
-      username: message.username,
-      password: message.password,
-      loginUrl: message.loginUrl,
-      spcF: message.spcF || "",
+    (async () => {
+      const reply = async (payload) => {
+        await notifyAppTabs({
+          type: "PRODUCT_PAGE_RESULT",
+          requestId,
+          ...payload,
+        });
+      };
+      try {
+        const marketHost = String(message.marketHost || "").trim();
+        let tab = await findAffiliateTab(marketHost);
+        if (!tab?.id && marketHost) {
+          const offerUrl = `https://${marketHost}/offer/product_offer`;
+          tab = await chrome.tabs.create({ url: offerUrl, active: true });
+          // Đợi content/inject sẵn sàng
+          for (let i = 0; i < 20; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            try {
+              const ping = await chrome.tabs.sendMessage(tab.id, { type: "PING" });
+              if (ping?.ok) break;
+            } catch {
+              // chưa inject
+            }
+          }
+        }
+        if (!tab?.id) {
+          await reply({
+            ok: false,
+            error: "Mở trang Affiliate product_offer (đúng quốc gia) trước khi cào",
+          });
+          return;
+        }
+        const response = await chrome.tabs.sendMessage(tab.id, {
+          type: "FETCH_PRODUCT_PAGE",
+          keyword: message.keyword || "",
+          sortType: message.sortType,
+          pageOffset: message.pageOffset,
+          pageLimit: message.pageLimit,
+          listType: message.listType,
+        });
+        if (!response?.ok) {
+          await reply({ ok: false, error: response?.error || "Content script lỗi" });
+          return;
+        }
+        await reply({
+          ok: true,
+          products: response.products || [],
+          hasMore: Boolean(response.hasMore),
+          totalCount: response.totalCount ?? null,
+          keyword: response.keyword || message.keyword || "",
+          marketHost: response.marketHost || marketHost || "",
+        });
+      } catch (err) {
+        await reply({ ok: false, error: err?.message || String(err) });
+      }
+    })();
+    return false;
+  }
+
+  if (message?.type === "START_COOKIE_FETCH") {
+    sendResponse({
+      ok: false,
+      error: "Đã bỏ lấy cookie qua extension — dùng GemLogin/CDP hoặc dán cookie thủ công",
     });
     return false;
   }
 
   if (message?.type === "APPLY_COOKIES_LOCAL") {
-    (async () => {
-      try {
-        const result = await applyCookiesToLocal(
-          message.cookie,
-          message.loginUrl || "https://shopee.vn/buyer/login"
-        );
-        try {
-          sendResponse({ ok: true, ...result });
-        } catch {
-          // channel đã đóng
-        }
-      } catch (err) {
-        try {
-          sendResponse({ ok: false, error: err?.message || String(err) });
-        } catch {
-          // channel đã đóng
-        }
-      }
-    })();
-    return true;
+    sendResponse({
+      ok: false,
+      error: "Đã bỏ gắn cookie qua extension — dùng GemLogin profile đã login",
+    });
+    return false;
   }
 
   return false;

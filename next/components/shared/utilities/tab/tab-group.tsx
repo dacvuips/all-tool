@@ -1,4 +1,4 @@
-import { Children, CSSProperties, Fragment, ReactNode, useEffect, useRef, useState } from "react";
+import { Children, CSSProperties, Fragment, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { RiArrowLeftSLine, RiArrowRightSLine } from "react-icons/ri";
 import { useUUID } from "../../../../lib/hooks/useUUID";
 import { Button } from "../form";
@@ -25,6 +25,30 @@ interface PropsType extends ReactProps {
   stickyHeader?: boolean;
   stickyHeaderClassName?: string;
 }
+
+type TabItem = {
+  label: ReactNode | string;
+  subtitle?: string;
+  count?: number | string;
+  child: JSX.Element;
+};
+
+function collectTabs(children: ReactNode): TabItem[] {
+  const tabs: TabItem[] = [];
+  Children.forEach(children, (child: any) => {
+    if (child?.type === Fragment) {
+      Children.forEach(child.props.children, (nested: any) => {
+        if (nested?.type?.displayName === "Tab") {
+          tabs.push({ ...nested.props, child: nested });
+        }
+      });
+    } else if (child?.type?.displayName === "Tab") {
+      tabs.push({ ...child.props, child });
+    }
+  });
+  return tabs;
+}
+
 export function TabGroup({
   index,
   flex = true,
@@ -49,9 +73,12 @@ export function TabGroup({
   const id = useUUID();
   const inkbarRef = useRef<HTMLDivElement>();
   const tabRef = useRef<HTMLDivElement>();
-  const [tabs, setTabs] = useState<
-    { label: string; subtitle?: string; count?: number; child: JSX.Element }[]
-  >([]);
+  /**
+   * Parse children mỗi render — KHÔNG cache vào useState.
+   * Cache qua setState làm body tab giữ child cũ 1 frame → input controlled bị reset,
+   * gõ tiếng Việt có dấu (IME) bị mất ký tự.
+   */
+  const tabs = useMemo(() => collectTabs(props.children), [props.children]);
   const isControlled = index !== undefined;
   const [selectedIndex, setSelectedIndex] = useState(index ?? 0);
   /** Optimistic index while controlled parent is catching up after click */
@@ -64,22 +91,6 @@ export function TabGroup({
     : selectedIndex;
 
   useEffect(() => {
-    const tabs = [];
-    Children.forEach(props.children, (child) => {
-      if (child?.type === Fragment) {
-        Children.forEach(child.props.children, (child) => {
-          if (child?.type?.displayName === "Tab") {
-            tabs.push({ ...child.props, child, index: tabs.length });
-          }
-        });
-      } else if (child?.type?.displayName === "Tab") {
-        tabs.push({ ...child.props, child, index: tabs.length });
-      }
-    });
-    setTabs(tabs);
-  }, [props.children]);
-
-  useEffect(() => {
     if (activeIndex !== undefined && inkbarRef.current && tabs[activeIndex]) {
       if (name && !isControlled) {
         sessionStorage.setItem("tab-group-" + name, activeIndex.toString());
@@ -90,7 +101,7 @@ export function TabGroup({
         inkbarRef.current.style.left = el.offsetLeft + 8 + "px";
       }
     }
-  }, [inkbarRef.current, tabs, activeIndex]);
+  }, [inkbarRef.current, tabs, activeIndex, id, name, isControlled]);
 
   useEffect(() => {
     if (index !== undefined) {
@@ -172,22 +183,22 @@ export function TabGroup({
                   hasArrow ? "px-4" : ""
                 } ${className}`}
               >
-                {tabs.map((tab, index) => (
+                {tabs.map((tab, tabIndex) => (
                   <a
-                    key={index}
-                    id={id + "-" + index}
+                    key={tabIndex}
+                    id={id + "-" + tabIndex}
                     className={`cursor-pointer relative flex flex-col items-center ${
-                      activeIndex == index
+                      activeIndex == tabIndex
                         ? `text-gray-800 ${activeClassName}`
                         : "text-gray-600 hover:text-gray-800"
                     } ${flex ? "flex-1" : ""} ${tabClassName}`}
                     onClick={() => {
                       if (isControlled) {
-                        setPendingIndex(index);
+                        setPendingIndex(tabIndex);
                       } else {
-                        setSelectedIndex(index);
+                        setSelectedIndex(tabIndex);
                       }
-                      if (props.onChange) props.onChange(index);
+                      if (props.onChange) props.onChange(tabIndex);
                     }}
                   >
                     {tab.count && tab.count != 0 ? (

@@ -3,30 +3,18 @@ import { useTranslation } from "react-i18next";
 import {
   HiClock,
   HiDownload,
-  HiKey,
-  HiOutlineDesktopComputer,
   HiOutlineTrash,
   HiPencil,
-  HiPlay,
   HiPlus,
   HiRefresh,
-  HiStop,
   HiUpload,
 } from "react-icons/hi";
-import { RiArrowDownSLine, RiFileTextLine, RiLoader4Line } from "react-icons/ri";
+import { RiArrowDownSLine, RiFileTextLine } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
-  CookieFetchJobPublic,
-  getCookieFetchJob,
-  notifyExtensionApplyCookiesLocal,
-  notifyExtensionStartCookieFetch,
-  startCookieFetchJob,
-} from "../cookie-fetch-api";
-import {
-  appendCookieFetchHistory,
   clearCookieFetchHistory,
   cookieFetchActionLabel,
   cookieFetchActionTone,
@@ -42,7 +30,7 @@ import {
   panelListClasses,
   panelListRowClass,
 } from "../shared/panel-list-ui";
-import { AffiliatePlusProxy, AffiliatePlusUser, extractSpcFFromCookie, filterShopeeCookieAppString, formatCookieRemaining, formatMaybeExcelDate, getCookieLifeColor, getCookieRemainingMs, getShopeeLoginUrlByDomain, normalizeMailKp, normalizeShopeeAccountDomain, parseBacVietTheoExcelColumns, parseCompoundMailKpCookie, parseUserImportLine, resolveUserCookie, resolveUserProxy, SHOPEE_ACCOUNT_DOMAINS } from "../types";
+import { AffiliatePlusProxy, AffiliatePlusUser, extractSpcFFromCookie, filterShopeeCookieAppString, formatCookieRemaining, formatMaybeExcelDate, getCookieLifeColor, getCookieRemainingMs, normalizeMailKp, normalizeShopeeAccountDomain, parseBacVietTheoExcelColumns, parseCompoundMailKpCookie, parseUserImportLine, resolveUserProxy, SHOPEE_ACCOUNT_DOMAINS } from "../types";
 
 interface UsersPanelProps {
   users: AffiliatePlusUser[];
@@ -238,25 +226,11 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [fetchingCookieIds, setFetchingCookieIds] = useState<Set<string>>(new Set());
-  const [batchRunning, setBatchRunning] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{
-    current: number;
-    total: number;
-    username: string;
-  } | null>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyFilterUserId, setHistoryFilterUserId] = useState<string>("");
   const [historyEntries, setHistoryEntries] = useState<CookieFetchHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const usersRef = useRef(users);
-  const settledCookieJobsRef = useRef<Set<string>>(new Set());
-  const appliedCookieJobsRef = useRef<Set<string>>(new Set());
-  const awaitingJobIdsRef = useRef<Set<string>>(new Set());
-  const batchRunningRef = useRef(false);
-  const batchStopRef = useRef(false);
-  usersRef.current = users;
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchTerm(searchQuery.trim()), 250);
@@ -268,34 +242,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
     const id = setInterval(() => setNowTick(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
-
-  /** Lưu cookie từ extension vào Cookies App (+ SPC_F + mốc 6 ngày). Không ghi đè cookie import. */
-  const saveCookieToUser = (userId: string, cookie: string, spcF: string) => {
-    const cookieApp = filterShopeeCookieAppString(cookie);
-    const fromCookie = extractSpcFFromCookie(cookieApp);
-    const nextSpcF = (fromCookie || spcF || "").trim();
-    const fetchedAt = new Date().toISOString();
-    const next = usersRef.current.map((u) =>
-      u.id === userId
-        ? {
-            ...u,
-            cookieApp: cookieApp || u.cookieApp,
-            spcF: nextSpcF || u.spcF || "",
-            cookieFetchedAt: fetchedAt,
-            error: "",
-          }
-        : u
-    );
-    onUpdateUsers(next);
-  };
-
-  const logCookieHistory = (
-    input: Parameters<typeof appendCookieFetchHistory>[0]
-  ) => {
-    void appendCookieFetchHistory(input).catch(() => {
-      // ignore IndexedDB errors
-    });
-  };
 
   const refreshCookieHistory = async (filterUserId?: string) => {
     setHistoryLoading(true);
@@ -314,479 +260,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
     setHistoryFilterUserId(userId);
     setHistoryOpen(true);
     void refreshCookieHistory(userId);
-  };
-
-  const handleApplyCookiesLocal = (user: AffiliatePlusUser) => {
-    const cookie = resolveUserCookie(user);
-    const spcF = String(user.spcF || "").trim();
-    const toApply = cookie || (spcF ? `spc_f=${spcF}` : "");
-    if (!toApply) {
-      toast.warn(t("User chưa có Cookies App — hãy Lấy cookie trước"));
-      return;
-    }
-    if (!toApply.includes("=")) {
-      toast.warn(t("Cookies App không đúng định dạng name=value — hãy Lấy cookie lại"));
-      return;
-    }
-    window.postMessage(
-      { source: "viet-theo-bridge-app", type: "SET_API_BASE", apiBase: window.location.origin },
-      "*"
-    );
-    notifyExtensionApplyCookiesLocal({
-      userId: user.id,
-      cookie: toApply,
-      loginUrl: getShopeeLoginUrlByDomain(user.domain),
-    });
-    toast.info(
-      t("Đang gắn cookie vào Chrome ({{domain}}) và mở Shopee...", {
-        domain: `.${normalizeShopeeAccountDomain(user.domain)}`,
-      })
-    );
-  };
-
-  useEffect(() => {
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== window) return;
-      const data = event.data;
-      if (!data || data.source !== "viet-theo-bridge-extension") return;
-      if (data.type === "APPLY_COOKIES_LOCAL_RESULT") {
-        const applyUserId = String(data.userId || "");
-        const applyUser = usersRef.current.find((u) => u.id === applyUserId);
-        if (data.ok) {
-          toast.success(
-            t("Đã gắn {{count}} cookie — đã mở {{domain}}", {
-              count: data.applied || 0,
-              domain: data.domain ? `https://${data.domain}/` : "Shopee",
-            })
-          );
-          logCookieHistory({
-            userId: applyUserId,
-            username: applyUser?.username || applyUserId,
-            domain: normalizeShopeeAccountDomain(applyUser?.domain || data.domain),
-            action: "apply_success",
-            message: `Gắn ${data.applied || 0} cookie vào Chrome`,
-            appliedCount: Number(data.applied || 0),
-          });
-        } else {
-          toast.error(String(data.error || t("Gắn cookie thất bại — kiểm tra extension")));
-          logCookieHistory({
-            userId: applyUserId,
-            username: applyUser?.username || applyUserId,
-            domain: normalizeShopeeAccountDomain(applyUser?.domain),
-            action: "apply_error",
-            message: String(data.error || "Gắn cookie thất bại"),
-          });
-        }
-        return;
-      }
-      if (data.type !== "COOKIE_FETCH_RESULT") return;
-
-      const userId = String(data.userId || "");
-      const jobId = String(data.jobId || "");
-      const status = String(data.status || "");
-
-      // Đang chờ giải captcha — chưa settle job, giữ spinner
-      if (status === "captcha_wait") {
-        if (jobId && settledCookieJobsRef.current.has(jobId)) return;
-        if (
-          !batchRunningRef.current &&
-          !(jobId && awaitingJobIdsRef.current.has(jobId))
-        ) {
-          toast.info(
-            t("Gặp captcha — hãy giải trên tab Shopee, đang chờ…")
-          );
-        }
-        onUpdateUsers(
-          usersRef.current.map((u) =>
-            u.id === userId
-              ? {
-                  ...u,
-                  error: String(
-                    data.error || "Đang chờ giải captcha trên tab Shopee"
-                  ),
-                }
-              : u
-          )
-        );
-        setFetchingCookieIds((prev) => {
-          const next = new Set(prev);
-          next.add(userId);
-          return next;
-        });
-        return;
-      }
-
-      if (jobId) {
-        if (settledCookieJobsRef.current.has(jobId)) return;
-        settledCookieJobsRef.current.add(jobId);
-      }
-      setFetchingCookieIds((prev) => {
-        const next = new Set(prev);
-        next.delete(userId);
-        return next;
-      });
-
-      if (status === "success") {
-        if (jobId && !appliedCookieJobsRef.current.has(jobId)) {
-          appliedCookieJobsRef.current.add(jobId);
-          saveCookieToUser(userId, String(data.cookie || ""), String(data.spcF || ""));
-        }
-        if (
-          !batchRunningRef.current &&
-          !(jobId && awaitingJobIdsRef.current.has(jobId))
-        ) {
-          toast.success(t("Đã lưu cookie cho {{name}}", { name: data.username || userId }));
-        }
-        return;
-      }
-      if (status === "captcha") {
-        if (
-          !batchRunningRef.current &&
-          !(jobId && awaitingJobIdsRef.current.has(jobId))
-        ) {
-          toast.warn(
-            t("Hết thời gian chờ captcha — giải xong rồi thử lại.")
-          );
-        }
-        onUpdateUsers(
-          usersRef.current.map((u) =>
-            u.id === userId
-              ? { ...u, error: "Hết thời gian chờ giải captcha" }
-              : u
-          )
-        );
-        return;
-      }
-      if (status === "cancelled") {
-        if (
-          !batchRunningRef.current &&
-          !(jobId && awaitingJobIdsRef.current.has(jobId))
-        ) {
-          toast.info(t("Đã đóng tab — dừng job lấy cookie"));
-        }
-        onUpdateUsers(
-          usersRef.current.map((u) =>
-            u.id === userId
-              ? { ...u, error: String(data.error || "Đã đóng tab — dừng job") }
-              : u
-          )
-        );
-        return;
-      }
-      if (
-        !batchRunningRef.current &&
-        !(jobId && awaitingJobIdsRef.current.has(jobId))
-      ) {
-        toast.error(String(data.error || t("Lấy cookie thất bại")));
-      }
-      onUpdateUsers(
-        usersRef.current.map((u) =>
-          u.id === userId ? { ...u, error: String(data.error || "Lấy cookie thất bại") } : u
-        )
-      );
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [onUpdateUsers, t, toast]);
-
-  const waitForCookieJob = async (
-    jobId: string,
-    timeoutMs = 360000
-  ): Promise<CookieFetchJobPublic> => {
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      if (batchStopRef.current) {
-        throw new Error("Đã dừng chạy tất cả");
-      }
-      try {
-        const latest = await getCookieFetchJob(jobId);
-        if (latest.status !== "pending" && latest.status !== "running") {
-          settledCookieJobsRef.current.add(jobId);
-          return latest;
-        }
-      } catch {
-        // tiếp tục poll
-      }
-      await new Promise((r) => setTimeout(r, 1500));
-    }
-    throw new Error("Timeout lấy cookie");
-  };
-
-  /** Chạy 1 user: mở tab → login → lấy cookie → tắt tab; resolve khi xong. */
-  const fetchCookieForUser = async (
-    user: AffiliatePlusUser
-  ): Promise<"success" | "captcha" | "error" | "skipped" | "cancelled"> => {
-    const password = String(user.password || "").trim();
-    if (!password) return "skipped";
-    if (fetchingCookieIds.has(user.id) && !batchRunningRef.current) return "skipped";
-
-    const domain = normalizeShopeeAccountDomain(user.domain);
-    setFetchingCookieIds((prev) => new Set(prev).add(user.id));
-    try {
-      window.postMessage(
-        {
-          source: "viet-theo-bridge-app",
-          type: "SET_API_BASE",
-          apiBase: window.location.origin,
-        },
-        "*"
-      );
-
-      const seedSpcF =
-        String(user.spcF || "").trim() ||
-        extractSpcFFromCookie(user.cookieApp) ||
-        extractSpcFFromCookie(user.cookie) ||
-        "";
-
-      const { job, credentials } = await startCookieFetchJob({
-        userId: user.id,
-        username: user.username,
-        password,
-        loginUrl: getShopeeLoginUrlByDomain(user.domain),
-        spcF: seedSpcF,
-      });
-
-      logCookieHistory({
-        userId: user.id,
-        username: user.username,
-        domain,
-        action: "fetch_start",
-        message: seedSpcF
-          ? `Clear cookie → gắn SPC_F → ${credentials.loginUrl}`
-          : `Mở ${credentials.loginUrl} (không có SPC_F)`,
-        jobId: job.id,
-        spcFPreview: seedSpcF || undefined,
-      });
-
-      awaitingJobIdsRef.current.add(job.id);
-      try {
-        notifyExtensionStartCookieFetch({
-          jobId: job.id,
-          userId: user.id,
-          username: credentials.username,
-          password: credentials.password,
-          loginUrl: credentials.loginUrl,
-          spcF: credentials.spcF || seedSpcF,
-        });
-
-        const latest = await waitForCookieJob(job.id);
-
-        if (latest.status === "success") {
-          if (!appliedCookieJobsRef.current.has(job.id)) {
-            appliedCookieJobsRef.current.add(job.id);
-            saveCookieToUser(user.id, latest.cookie, latest.spcF);
-          }
-          logCookieHistory({
-            userId: user.id,
-            username: user.username,
-            domain,
-            action: "fetch_success",
-            message: "Đã lưu cookie + SPC_F",
-            jobId: job.id,
-            cookiePreview: latest.cookie,
-            spcFPreview: latest.spcF || extractSpcFFromCookie(latest.cookie),
-          });
-          return "success";
-        }
-        if (latest.status === "captcha") {
-          onUpdateUsers(
-            usersRef.current.map((u) =>
-              u.id === user.id ? { ...u, error: "Captcha — đã dừng lấy cookie" } : u
-            )
-          );
-          logCookieHistory({
-            userId: user.id,
-            username: user.username,
-            domain,
-            action: "fetch_captcha",
-            message: latest.error || "Hết thời gian chờ giải captcha",
-            jobId: job.id,
-          });
-          return "captcha";
-        }
-        if (latest.status === "cancelled") {
-          onUpdateUsers(
-            usersRef.current.map((u) =>
-              u.id === user.id
-                ? { ...u, error: latest.error || "Đã đóng tab — dừng job" }
-                : u
-            )
-          );
-          logCookieHistory({
-            userId: user.id,
-            username: user.username,
-            domain,
-            action: "fetch_cancelled",
-            message: latest.error || "Đã đóng tab — dừng job",
-            jobId: job.id,
-          });
-          return "cancelled";
-        }
-
-        onUpdateUsers(
-          usersRef.current.map((u) =>
-            u.id === user.id
-              ? { ...u, error: latest.error || "Lấy cookie thất bại" }
-              : u
-          )
-        );
-        logCookieHistory({
-          userId: user.id,
-          username: user.username,
-          domain,
-          action: "fetch_error",
-          message: latest.error || "Lấy cookie thất bại",
-          jobId: job.id,
-        });
-        return "error";
-      } finally {
-        awaitingJobIdsRef.current.delete(job.id);
-      }
-    } catch (err: any) {
-      const msg = String(err?.message || t("Không bắt đầu được lấy cookie"));
-      if (!/Đã dừng chạy tất cả/i.test(msg)) {
-        onUpdateUsers(
-          usersRef.current.map((u) => (u.id === user.id ? { ...u, error: msg } : u))
-        );
-        logCookieHistory({
-          userId: user.id,
-          username: user.username,
-          domain,
-          action: "fetch_error",
-          message: msg,
-        });
-      }
-      return /Đã dừng chạy tất cả/i.test(msg) ? "skipped" : "error";
-    } finally {
-      setFetchingCookieIds((prev) => {
-        const next = new Set(prev);
-        next.delete(user.id);
-        return next;
-      });
-    }
-  };
-
-  const handleFetchCookie = async (user: AffiliatePlusUser) => {
-    if (batchRunning) {
-      toast.warn(t("Đang chạy tất cả — hãy đợi hoặc bấm Dừng"));
-      return;
-    }
-    const password = String(user.password || "").trim();
-    if (!password) {
-      toast.warn(t("Chưa có Mật khẩu — sửa user và nhập Mật khẩu trước"));
-      return;
-    }
-    toast.info(
-      t("Đang mở {{url}} để lấy cookie...", {
-        url: getShopeeLoginUrlByDomain(user.domain),
-      })
-    );
-    const result = await fetchCookieForUser(user);
-    if (result === "success") {
-      toast.success(t("Đã lưu cookie cho {{name}}", { name: user.username }));
-    } else if (result === "captcha") {
-      toast.warn(t("Hết thời gian chờ captcha — giải xong rồi thử lại."));
-    } else if (result === "cancelled") {
-      toast.info(t("Đã đóng tab — dừng job lấy cookie"));
-    } else if (result === "error") {
-      toast.error(t("Lấy cookie thất bại"));
-    }
-  };
-
-  const handleStopBatch = () => {
-    batchStopRef.current = true;
-    logCookieHistory({
-      userId: "",
-      username: "*",
-      domain: "",
-      action: "batch_stop",
-      message: "Người dùng bấm Dừng chạy tất cả",
-    });
-    toast.info(t("Sẽ dừng sau khi tài khoản hiện tại xong..."));
-  };
-
-  const handleFetchCookieAll = async () => {
-    if (batchRunning) return;
-
-    if (!selectedIds.size) {
-      toast.warn(t("Hãy chọn (check) các tài khoản cần chạy ở cột bên trái"));
-      return;
-    }
-
-    const pool = filteredUsers.filter((u) => selectedIds.has(u.id));
-    const queue = pool.filter((u) => String(u.password || "").trim());
-    const skippedNoPass = pool.length - queue.length;
-
-    if (!queue.length) {
-      toast.warn(t("Các tài khoản đang chọn chưa có Mật khẩu"));
-      return;
-    }
-
-    batchStopRef.current = false;
-    batchRunningRef.current = true;
-    setBatchRunning(true);
-
-    let ok = 0;
-    let captcha = 0;
-    let fail = 0;
-    let cancelled = 0;
-
-    logCookieHistory({
-      userId: "",
-      username: "*",
-      domain: "",
-      action: "batch_start",
-      message: `Chạy đã chọn ${queue.length} tài khoản`,
-    });
-
-    toast.info(
-      t("Chạy đã chọn: {{count}} tài khoản (lần lượt, tắt tab rồi mới sang cái sau)", {
-        count: queue.length,
-      })
-    );
-
-    for (let i = 0; i < queue.length; i++) {
-      if (batchStopRef.current) break;
-      const user = queue[i];
-      setBatchProgress({ current: i + 1, total: queue.length, username: user.username });
-
-      const result = await fetchCookieForUser(user);
-      if (result === "success") ok += 1;
-      else if (result === "captcha") captcha += 1;
-      else if (result === "cancelled") cancelled += 1;
-      else if (result === "error") fail += 1;
-
-      // Chờ extension đóng tab / nhả cookieJobRunning trước khi mở user tiếp
-      if (i < queue.length - 1 && !batchStopRef.current) {
-        await new Promise((r) => setTimeout(r, 2500));
-      }
-    }
-
-    batchRunningRef.current = false;
-    setBatchRunning(false);
-    setBatchProgress(null);
-
-    const stopped = batchStopRef.current;
-    batchStopRef.current = false;
-
-    logCookieHistory({
-      userId: "",
-      username: "*",
-      domain: "",
-      action: "batch_end",
-      message: `OK ${ok} / captcha ${captcha} / hủy ${cancelled} / lỗi ${fail}${
-        stopped ? " (đã dừng)" : ""
-      }`,
-    });
-
-    toast.success(
-      t(
-        stopped
-          ? "Đã dừng. OK {{ok}} / captcha {{captcha}} / hủy {{cancelled}} / lỗi {{fail}} / bỏ qua MK {{skip}}"
-          : "Xong tất cả. OK {{ok}} / captcha {{captcha}} / hủy {{cancelled}} / lỗi {{fail}} / bỏ qua MK {{skip}}",
-        { ok, captcha, cancelled, fail, skip: skippedNoPass }
-      )
-    );
   };
 
   const stats = useMemo(() => {
@@ -975,10 +448,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   };
 
   const handleDeleteAll = () => {
-    if (batchRunning) {
-      toast.warn(t("Đang chạy lấy cookie — hãy Dừng trước khi xóa"));
-      return;
-    }
     const toDelete =
       selectedIds.size > 0
         ? users.filter((u) => selectedIds.has(u.id))
@@ -1566,44 +1035,12 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
               </div>
             </Popover>
 
-            {!batchRunning ? (
-              <button
-                type="button"
-                onClick={() => void handleFetchCookieAll()}
-                disabled={!selectedIds.size}
-                className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ backgroundColor: "#d97706" }}
-                title={t("Lấy cookie lần lượt các tài khoản đang được chọn (check)") as string}
-              >
-                <HiPlay className="text-base" />
-                {t("Chạy tất cả")}
-                {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleStopBatch}
-                className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm"
-                style={{ backgroundColor: "#dc2626" }}
-                title={t("Dừng sau tài khoản hiện tại") as string}
-              >
-                <HiStop className="text-base" />
-                {batchProgress
-                  ? t("Dừng ({{current}}/{{total}} · {{name}})", {
-                      current: batchProgress.current,
-                      total: batchProgress.total,
-                      name: batchProgress.username,
-                    })
-                  : t("Dừng")}
-              </button>
-            )}
-
-            <button
+<button
               type="button"
               onClick={() => openCookieHistory("")}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border shadow-sm hover:opacity-90"
               style={{ backgroundColor: "#ecfeff", borderColor: "#22d3ee", color: "#0e7490" }}
-              title={t("Xem lịch sử lấy / gắn cookie (IndexedDB)") as string}
+              title={t("Xem lịch sử cookie (IndexedDB)") as string}
             >
               <HiClock className="text-base" />
               {t("Lịch sử cookie")}
@@ -1647,7 +1084,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             <button
               type="button"
               onClick={handleDeleteAll}
-              disabled={!selectedIds.size || batchRunning}
+              disabled={!selectedIds.size}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
               style={{ backgroundColor: "#e11d48" }}
               title={t("Xóa các tài khoản đang được chọn (check)") as string}
@@ -1886,27 +1323,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                             >
                               <HiClock className="text-sm" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleFetchCookie(user)}
-                              disabled={fetchingCookieIds.has(user.id) || batchRunning}
-                              className="flex justify-center items-center w-8 h-8 text-amber-700 bg-amber-50 rounded-full border border-amber-200 shadow-sm hover:bg-amber-100 disabled:opacity-50"
-                              title={t("Lấy cookie") as string}
-                            >
-                              {fetchingCookieIds.has(user.id) ? (
-                                <RiLoader4Line className="text-sm animate-spin" />
-                              ) : (
-                                <HiKey className="text-sm" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleApplyCookiesLocal(user)}
-                              className="flex justify-center items-center w-8 h-8 text-emerald-700 bg-emerald-50 rounded-full border border-emerald-200 shadow-sm hover:bg-emerald-100"
-                              title={t("Gắn cookie vào Chrome theo domain") as string}
-                            >
-                              <HiOutlineDesktopComputer className="text-sm" />
-                            </button>
+
                             <button
                               type="button"
                               onClick={() => openEdit(user)}
@@ -1993,11 +1410,11 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                 value={form.cookieApp}
                 onChange={(e) => setForm((f) => ({ ...f, cookieApp: e.target.value }))}
                 rows={3}
-                placeholder={t("Cookie lấy từ extension (Lấy cookie)") as string}
+                placeholder={t("Cookie App — dán thủ công hoặc nhập từ Excel/TXT") as string}
                 className="px-3 py-2 w-full text-sm rounded border border-teal-300 outline-none focus:border-teal-500 bg-teal-50/40"
               />
               <span className="block mt-1 text-xs text-gray-500">
-                {t("Cột này được cập nhật khi Lấy cookie / Chạy tất cả thành công")}
+                {t("Cookie dùng khi đăng video — chỉnh sửa thủ công nếu cần")}
               </span>
             </label>
 
@@ -2046,9 +1463,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                   </option>
                 ))}
               </select>
-              <span className="block mt-1 text-xs text-gray-500">
-                {t("Lấy cookie sẽ mở")}: {getShopeeLoginUrlByDomain(form.domain)}
-              </span>
+
             </label>
 
             <label className="block">
@@ -2162,7 +1577,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                       <td colSpan={5} className="px-3 py-8 text-center text-gray-400">
                         {historyLoading
                           ? t("Đang tải...")
-                          : t("Chưa có lịch sử — hãy Lấy cookie hoặc Gắn cookie trước")}
+                          : t("Chưa có lịch sử cookie")}
                       </td>
                     </tr>
                   ) : (

@@ -62,6 +62,7 @@ import {
   formatSessionTime,
   listScrapeCsvSessions,
   ScrapeCsvSession,
+  sessionDisplayName,
 } from "../scrape-csv-history";
 import { prepareShopeeImageInput } from "../shopee-image";
 import { loadGenerateVideoConfig } from "../storage";
@@ -206,6 +207,14 @@ export function ThreadManagementPanel({
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(100);
+  /** Tăng mỗi lần load — bỏ kết quả await cũ khi đổi phiên / search / trang. */
+  const loadGenRef = useRef(0);
+  const searchTermRef = useRef(searchTerm);
+  const pageRef = useRef(page);
+  const pageSizeRef = useRef(pageSize);
+  searchTermRef.current = searchTerm;
+  pageRef.current = page;
+  pageSizeRef.current = pageSize;
   const [genConfig, setGenConfig] = useState<GenerateVideoConfig | null>(null);
   const [characterPreview, setCharacterPreview] = useState<{ url: string; name: string }>({
     url: "",
@@ -243,18 +252,27 @@ export function ThreadManagementPanel({
   const totalPages = Math.max(1, Math.ceil(listTotalMatched / pageSize));
   const safePage = Math.min(page, totalPages);
   const pageStartIndex = (safePage - 1) * pageSize;
+  const safePageRef = useRef(safePage);
+  safePageRef.current = safePage;
 
-  const loadPage = useCallback(async () => {
+  const loadPage = useCallback(async (override?: { page?: number; q?: string }) => {
+    const gen = ++loadGenRef.current;
+    const requestedSessionId = sessionIdRef.current;
+    const pageNum = override?.page ?? safePageRef.current;
+    const q = override?.q ?? searchTermRef.current;
+    const limit = pageSizeRef.current;
+    const offset = (Math.max(1, pageNum) - 1) * limit;
     setListLoading(true);
     try {
-      const offset = (safePage - 1) * pageSize;
       const [pageResult, meta, selected, hasMerged] = await Promise.all([
-        queryThreadPage(sessionId, { offset, limit: pageSize, q: searchTerm }),
-        getSessionMeta(sessionId),
-        countSelectedInSession(sessionId),
-        sessionHasMergedVideos(sessionId),
+        queryThreadPage(requestedSessionId, { offset, limit, q }),
+        getSessionMeta(requestedSessionId),
+        countSelectedInSession(requestedSessionId),
+        sessionHasMergedVideos(requestedSessionId),
       ]);
+      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
       const hydrated = await hydrateMergedVideoUrls(pageResult.items);
+      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
       setVisibleItems(hydrated);
       setListTotalMatched(pageResult.totalMatched);
       setListTotal(pageResult.total);
@@ -262,39 +280,46 @@ export function ThreadManagementPanel({
       setSelectedCount(selected);
       setHasMergedVideos(hasMerged);
     } catch (err) {
+      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
       console.error("[thread-panel] loadPage failed", err);
     } finally {
-      setListLoading(false);
+      if (gen === loadGenRef.current && sessionIdRef.current === requestedSessionId) {
+        setListLoading(false);
+      }
     }
-  }, [sessionId, safePage, pageSize, searchTerm]);
+  }, []);
 
   useEffect(() => {
+    // Reset UI ngay khi đổi phiên — tránh giữ list/search của phiên cũ
+    pageRef.current = 1;
+    searchTermRef.current = "";
+    setPage(1);
+    setSearchQuery("");
+    setSearchTerm("");
+    setVisibleItems([]);
+    setListTotal(0);
+    setListTotalMatched(0);
+    setListMeta(null);
+    setSelectedCount(0);
+    setHasMergedVideos(false);
+
     let cancelled = false;
     (async () => {
-      try {
-        const existing = await getSessionItems(sessionId);
-        if (cancelled) return;
-        if (!existing.length && items.length) {
-          await replaceSessionThreads(sessionId, items);
-        }
-      } catch (err) {
-        console.warn("[thread-panel] seed IDB failed", err);
-      }
-      if (!cancelled) await loadPage();
+      if (!cancelled) await loadPage({ page: 1, q: "" });
     })();
     return () => {
       cancelled = true;
+      loadGenRef.current += 1;
       if (parentSyncTimerRef.current) {
         clearTimeout(parentSyncTimerRef.current);
         parentSyncTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, loadPage]);
 
   useEffect(() => {
-    void loadPage();
-  }, [loadPage]);
+    void loadPage({ page: safePage, q: searchTerm });
+  }, [loadPage, safePage, pageSize, searchTerm]);
 
   useEffect(() => {
     return subscribeThreadEvents((ev) => {
@@ -524,7 +549,7 @@ export function ThreadManagementPanel({
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, pageSize, sessionId]);
+  }, [searchTerm, pageSize]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -626,9 +651,11 @@ export function ThreadManagementPanel({
     setImportingSessionId(session.id);
     try {
       const parsed = parseAffiliatePlusCSV(session.csv || "");
-      const fileName = session.keyword?.trim()
-        ? `scrape-${session.keyword.trim()}-${session.id}.csv`
-        : `scrape-${session.id}.csv`;
+      const display = sessionDisplayName(session);
+      const fileName =
+        display && display !== "—"
+          ? `scrape-${display.replace(/[^\w\u00C0-\u024F\s-]+/gi, "_").trim()}-${session.id}.csv`
+          : `scrape-${session.id}.csv`;
       const ok = await handleImportParsed(fileName, parsed);
       if (ok) setScrapeImportOpen(false);
     } catch (err) {
@@ -2350,6 +2377,7 @@ export function ThreadManagementPanel({
                 <thead className="sticky top-0 text-gray-500 bg-gray-50">
                   <tr>
                     <th className="px-3 py-2 font-semibold">{t("Thời gian")}</th>
+                    <th className="px-3 py-2 font-semibold">{t("Tên")}</th>
                     <th className="px-3 py-2 font-semibold">{t("Domain")}</th>
                     <th className="px-3 py-2 font-semibold">{t("Keyword")}</th>
                     <th className="px-3 py-2 font-semibold">{t("SP")}</th>
@@ -2364,6 +2392,12 @@ export function ThreadManagementPanel({
                       <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                           {formatSessionTime(s.createdAt)}
+                        </td>
+                        <td
+                          className="px-3 py-2 max-w-[160px] truncate font-semibold text-gray-800"
+                          title={sessionDisplayName(s)}
+                        >
+                          {sessionDisplayName(s)}
                         </td>
                         <td className="px-3 py-2 max-w-[140px] truncate" title={s.marketHost}>
                           {domainLabel(s.marketHost)}

@@ -309,11 +309,13 @@ export default function VideoAffiliatePlusPage() {
           fileName,
           itemCount: nextItems.length,
         });
+        // Ghi threads TRƯỚC khi đổi selectedHistoryId — tránh effect panel seed/load phiên trống
+        await replaceSessionThreads(entry.id, nextItems);
         selectedHistoryIdRef.current = entry.id;
         setSelectedHistoryId(entry.id);
-        await replaceSessionThreads(entry.id, nextItems);
-        await refreshImportHistory();
+        await setSelectedImportHistoryId(entry.id);
         setItems(nextItems);
+        await refreshImportHistory();
       } catch (err) {
         console.warn("[video-affiliate-plus] push import history failed", err);
         setItems(nextItems);
