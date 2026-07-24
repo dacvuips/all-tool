@@ -164,7 +164,8 @@ export class RawCdpClient {
     throw lastErr || new Error(`Không kết nối CDP port ${port}`);
   }
 
-  private open(wsUrl: string): Promise<void> {
+  /** Mở WebSocket CDP (page hoặc browser). */
+  open(wsUrl: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(wsUrl);
       this.ws = ws;
@@ -425,6 +426,38 @@ export class RawCdpClient {
     return result?.result?.value as T;
   }
 
+  /**
+   * Đặt kích thước/vị trí cửa sổ Chrome qua Browser domain.
+   * Cần kết nối browser-level WS (không phải page WS).
+   */
+  async setWindowBounds(bounds: {
+    width: number;
+    height: number;
+    left?: number;
+    top?: number;
+  }): Promise<void> {
+    const width = Math.max(100, Math.floor(bounds.width));
+    const height = Math.max(100, Math.floor(bounds.height));
+    const left = Math.floor(bounds.left ?? 0);
+    const top = Math.floor(bounds.top ?? 0);
+
+    const win = await this.sendRaw("Browser.getWindowForTarget", {});
+    const windowId = win?.windowId;
+    if (windowId == null) {
+      throw new Error("Browser.getWindowForTarget không trả windowId");
+    }
+    await this.sendRaw("Browser.setWindowBounds", {
+      windowId,
+      bounds: {
+        left,
+        top,
+        width,
+        height,
+        windowState: "normal",
+      },
+    });
+  }
+
   close(): void {
     try {
       this.ws?.close();
@@ -433,6 +466,43 @@ export class RawCdpClient {
     }
     this.ws = null;
     this.sessionId = null;
+  }
+}
+
+/** Kích thước cửa sổ GemLogin mặc định khi mở CDP. */
+export const CDP_WINDOW_SIZE = { width: 400, height: 400, left: 0, top: 0 } as const;
+
+/**
+ * Ép resize cửa sổ Chrome qua CDP browser WS.
+ * Dùng khi GemLogin `win_size` bị bỏ qua (profile đã mở sẵn).
+ */
+export async function setCdpWindowBounds(
+  port: number,
+  bounds: {
+    width: number;
+    height: number;
+    left?: number;
+    top?: number;
+  } = CDP_WINDOW_SIZE
+): Promise<boolean> {
+  let browserWsUrl = "";
+  try {
+    const version = await httpGetJson(`http://127.0.0.1:${port}/json/version`);
+    browserWsUrl = String(version?.webSocketDebuggerUrl || "").trim();
+  } catch {
+    return false;
+  }
+  if (!browserWsUrl) return false;
+
+  const client = new RawCdpClient();
+  try {
+    await client.open(browserWsUrl);
+    await client.setWindowBounds(bounds);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    client.close();
   }
 }
 

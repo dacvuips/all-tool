@@ -20,9 +20,11 @@ import {
   startGemLoginProfile,
 } from "./gemlogin-client";
 import {
+  CDP_WINDOW_SIZE,
   cookiesToHeader,
   filterShopeeCookies,
   RawCdpClient,
+  setCdpWindowBounds,
 } from "./raw-cdp";
 import {
   getAffiliateHttpSession,
@@ -503,7 +505,20 @@ export async function openAffiliateBrowserCdp(options?: {
 
   logger.info(`[scrape-hybrid] GemLogin start profileId=${profileId}`);
   const rawProxy = await getGemLoginRawProxy(profileId);
-  const started = await startGemLoginProfile(profileId, { winPos: "0,0" });
+  // Đóng trước để win_size được áp dụng (GemLogin bỏ qua size nếu profile đang mở)
+  try {
+    await closeGemLoginProfile(profileId);
+    await new Promise((r) => setTimeout(r, 600));
+  } catch {
+    // ignore
+  }
+  const winW = CDP_WINDOW_SIZE.width;
+  const winH = CDP_WINDOW_SIZE.height;
+  const started = await startGemLoginProfile(profileId, {
+    winPos: `${CDP_WINDOW_SIZE.left},${CDP_WINDOW_SIZE.top}`,
+    winSize: `${winW},${winH}`,
+    additionalArgs: `--window-size=${winW},${winH}`,
+  });
   const port = started.port;
   const endpoint = started.endpoint;
   const debugAddr = started.debugAddr;
@@ -518,6 +533,10 @@ export async function openAffiliateBrowserCdp(options?: {
       `GemLogin đã start nhưng CDP ${debugAddr} chưa sẵn sàng. Đóng profile trong GemLogin rồi mở lại.`
     );
   }
+
+  // Ép resize qua CDP — chắc chắn kể cả khi win_size bị GemLogin bỏ qua
+  const resized = await setCdpWindowBounds(port, CDP_WINDOW_SIZE);
+  logger.info(`[scrape-hybrid] window ${winW}x${winH} cdpResize=${resized}`);
 
   let client: RawCdpClient | null = null;
   try {
@@ -604,7 +623,19 @@ async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
       );
     }
     logger.info(`[scrape-cdp] CDP down → restart GemLogin profile ${profileId}`);
-    const started = await startGemLoginProfile(profileId, { winPos: "0,0" });
+    try {
+      await closeGemLoginProfile(profileId);
+      await new Promise((r) => setTimeout(r, 600));
+    } catch {
+      // ignore
+    }
+    const winW = CDP_WINDOW_SIZE.width;
+    const winH = CDP_WINDOW_SIZE.height;
+    const started = await startGemLoginProfile(profileId, {
+      winPos: `${CDP_WINDOW_SIZE.left},${CDP_WINDOW_SIZE.top}`,
+      winSize: `${winW},${winH}`,
+      additionalArgs: `--window-size=${winW},${winH}`,
+    });
     port = started.port;
     const deadline = Date.now() + 25000;
     while (Date.now() < deadline) {
@@ -614,6 +645,7 @@ async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
     if (!(await probeCdpEndpoint(port, 800))) {
       throw new Error(`Không mở lại được CDP ${started.debugAddr}`);
     }
+    await setCdpWindowBounds(port, CDP_WINDOW_SIZE);
     session = {
       ...session,
       debugAddr: started.debugAddr,
