@@ -2,8 +2,12 @@ Shopee Scrape Agent — Windows
 =============================
 
 1. Cài và mở GemLogin Desktop (API localhost:1010).
-2. Double-click BatDau.bat (hoặc ShopeeScrapeAgent.exe).
+2. Double-click BatDau.bat
+   - Đã có Node.js trên máy → chạy Agent ngay.
+   - Chưa có → BatDau tự tải Node portable vào thư mục .runtime (chỉ lần đầu).
 3. Giữ cửa sổ Agent mở.
 4. Web → tab Cào dữ liệu → thấy Agent + GemLogin.
 
 http://127.0.0.1:17890
+
+Lưu ý: cần mạng khi lần đầu tải Node. Không cần cài Node thủ công.

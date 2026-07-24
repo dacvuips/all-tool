@@ -48,8 +48,9 @@ import { formatImportHistoryOption, ImportHistoryItem } from "../import-history"
 import {
   getMergedVideoBlob,
   getMergedVideoStorageKey,
-  hasMergedVideoFile,
+  hasExistingGeneratedVideo,
   hasMergedVideoRef,
+  hasVariantVideoUrls,
   hydrateMergedVideoUrls,
   mergeVideosToIndexedDb,
   persistProductVideosWithEnrichment,
@@ -695,31 +696,6 @@ export function ThreadManagementPanel({
     void handleStart(ids);
   };
 
-  const handleDeleteErrorTasks = async () => {
-    const all = await getSessionItems(sessionId);
-    const errorItems = getErrorItems(all);
-    if (!errorItems.length) {
-      toast.warn(t("Không có task lỗi"));
-      return;
-    }
-    if (!confirm(t("Xóa {{count}} task lỗi?", { count: errorItems.length }))) return;
-    const ids = errorItems.map((i) => i.id);
-    for (const item of errorItems) {
-      if (item.mergedVideoUrl?.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(item.mergedVideoUrl);
-        } catch {
-          // ignore
-        }
-      }
-      void removeMergedVideoFromIndexedDb(item);
-    }
-    await removeThreads(sessionId, ids);
-    await loadPage();
-    scheduleParentSync();
-    onAddLog(t("Đã xóa {{count}} task lỗi", { count: errorItems.length }), "warning");
-  };
-
   const handleDeleteSelectedHistory = async (opts?: { skipConfirm?: boolean }) => {
     const id = selectedHistoryId;
     if (!id || clearingIdb || batchRunning) return;
@@ -877,21 +853,20 @@ export function ThreadManagementPanel({
       return;
     }
 
-    // Bỏ qua luồng đã có file video nối (UI ref / IndexedDB)
+    // Bỏ qua luồng đã có video (variant / video nối / IndexedDB) — không generate lại
     const presence = await Promise.all(
       candidates.map(async (item) => {
-        const hasMerged =
-          hasMergedVideoRef(item.mergedVideoUrl) || (await hasMergedVideoFile(item));
-        return { item, hasMerged };
+        const hasVideo = await hasExistingGeneratedVideo(item);
+        return { item, hasVideo };
       })
     );
-    const skippedMerged = presence.filter((p) => p.hasMerged).map((p) => p.item);
-    const targets = presence.filter((p) => !p.hasMerged).map((p) => p.item);
+    const skippedDone = presence.filter((p) => p.hasVideo).map((p) => p.item);
+    const targets = presence.filter((p) => !p.hasVideo).map((p) => p.item);
 
-    if (skippedMerged.length) {
-      // Gỡ status "running" bị kẹt — tránh spinner nút Chạy dù đã có video nối
+    if (skippedDone.length) {
+      // Gỡ status "running" bị kẹt — tránh spinner nút Chạy dù đã có video
       await Promise.all(
-        skippedMerged
+        skippedDone
           .filter((i) => i.status === "running" || i.status === "uploading")
           .map((i) =>
             patchThread(sessionId, i.id, {
@@ -903,16 +878,16 @@ export function ThreadManagementPanel({
       );
       setGeneratingIds((prev) => {
         const next = { ...prev };
-        for (const i of skippedMerged) delete next[i.id];
+        for (const i of skippedDone) delete next[i.id];
         return next;
       });
       setMergingIds((prev) => {
         const next = { ...prev };
-        for (const i of skippedMerged) delete next[i.id];
+        for (const i of skippedDone) delete next[i.id];
         return next;
       });
       onAddLog(
-        t("Bỏ qua {{count}} luồng đã có video nối", { count: skippedMerged.length }),
+        t("Bỏ qua {{count}} luồng đã có video", { count: skippedDone.length }),
         "info"
       );
       void loadPage();
@@ -920,8 +895,8 @@ export function ThreadManagementPanel({
 
     if (!targets.length) {
       toast.warn(
-        skippedMerged.length
-          ? t("Tất cả luồng đã có video nối — không cần generate lại")
+        skippedDone.length
+          ? t("Tất cả luồng đã có video — không cần generate lại")
           : t("Chưa bật switch luồng nào để chạy")
       );
       return;
@@ -1218,14 +1193,15 @@ export function ThreadManagementPanel({
     toast.success(t("Đã tạm dừng"));
   };
 
+  /** Xóa hẳn các luồng đang tick (checkbox). */
   const handleDeleteSelected = async () => {
     const all = await getSessionItems(sessionId);
     const selected = all.filter((i) => i.selected);
     if (!selected.length) {
-      toast.warn(t("Chưa chọn luồng nào"));
+      toast.warn(t("Chọn ít nhất một task để xóa"));
       return;
     }
-    if (!confirm(t("Xóa {{count}} luồng đã chọn?", { count: selected.length }))) return;
+    if (!confirm(t("Xóa {{count}} task đã chọn?", { count: selected.length }))) return;
     selected.forEach((i) => {
       if (i.mergedVideoUrl?.startsWith("blob:")) {
         try {
@@ -1242,7 +1218,18 @@ export function ThreadManagementPanel({
     );
     await loadPage();
     scheduleParentSync();
-    onAddLog(t("Xóa {{count}} luồng", { count: selected.length }), "warning");
+    onAddLog(t("Đã xóa {{count}} tasks", { count: selected.length }), "warning");
+  };
+
+  /** Chỉ bỏ tick — không xóa luồng. */
+  const clearSelection = () => {
+    if (!selectedCount) {
+      toast.warn(t("Chưa có mục nào được chọn"));
+      return;
+    }
+    const n = selectedCount;
+    updateAll((item) => (item.selected ? { ...item, selected: false } : item));
+    toast.info(t("Đã bỏ chọn {{count}} mục", { count: n }));
   };
 
   const handleDelete = async (id: string) => {
@@ -1704,17 +1691,18 @@ export function ThreadManagementPanel({
             </button>
             <button
               type="button"
-              onClick={handleDeleteErrorTasks}
-              disabled={stats.error === 0}
+              onClick={() => void handleDeleteSelected()}
+              disabled={selectedCount === 0}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               style={
-                stats.error === 0
+                selectedCount === 0
                   ? undefined
                   : { backgroundColor: "#fff1f2", borderColor: "#fb7185", color: "#e11d48" }
               }
             >
               <HiOutlineTrash className="text-base" />
               {t("Xóa Tasks")}
+              {selectedCount > 0 ? ` (${selectedCount})` : ""}
             </button>
             <button
               type="button"
@@ -1792,14 +1780,15 @@ export function ThreadManagementPanel({
             </button>
             <button
               type="button"
-              onClick={handleDeleteSelected}
+              onClick={clearSelection}
               disabled={selectedCount === 0}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               style={
                 selectedCount === 0
                   ? undefined
-                  : { backgroundColor: "#fff1f2", borderColor: "#fb7185", color: "#e11d48" }
+                  : { backgroundColor: "#f1f5f9", borderColor: "#94a3b8", color: "#475569" }
               }
+              title={t("Bỏ tick các mục đã chọn — không xóa task") as string}
             >
               <HiBan className="text-base" />
               {t("Xóa Chọn")}
@@ -2133,7 +2122,9 @@ export function ThreadManagementPanel({
                             // (item đã 2/2 + video nối vẫn bị spinner nếu chỉ nhìn status).
                             const isItemRunning =
                               Boolean(generatingIds[item.id]) || Boolean(mergingIds[item.id]);
-                            const alreadyDone = hasMergedVideoRef(item.mergedVideoUrl);
+                            const alreadyDone =
+                              hasMergedVideoRef(item.mergedVideoUrl) ||
+                              hasVariantVideoUrls(item);
                             return (
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
@@ -2151,7 +2142,7 @@ export function ThreadManagementPanel({
                                     isItemRunning
                                       ? t("Đang chạy...")
                                       : alreadyDone
-                                      ? t("Đã có video nối — bỏ qua khi Bắt Đầu")
+                                      ? t("Đã có video — bỏ qua khi Bắt Đầu")
                                       : t("Chạy")
                                   }
                                 >

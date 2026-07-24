@@ -114,18 +114,6 @@ const DIALOGUE_OPTIONS = [
   { value: "generate", label: "Tạo Thoại Mới" },
 ];
 
-const IMAGE_MODEL_OPTIONS = [
-  { value: "nano-banana-pro", label: "Nano Banana Pro" },
-  { value: "nano-banana-2", label: "Nano Banana 2" },
-  { value: "nano-banana", label: "Nano Banana" },
-];
-
-const VIDEO_MODEL_OPTIONS = [
-  { value: "0-credit", label: "0 Credit (Lower Priority)" },
-  { value: "fast", label: "Fast (Higher Priority)" },
-  { value: "quality", label: "Quality" },
-];
-
 const fieldClass =
   "h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-800 outline-none focus:border-primary";
 
@@ -1013,56 +1001,36 @@ export function GenerateVideoConfigDialog({
             {/* General */}
             <SectionCard title={t("Cấu Hình Tổng Thể")} accent="#0D9488" icon={<RiSettings4Line />}>
               <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <div className="space-y-2.5">
-                  <p className="m-0 mb-1 font-bold tracking-wider text-teal-600 uppercase text-10">
-                    {t("Mô Hình")}
-                  </p>
-                  <FieldRow label={t("Mô Hình Ảnh")}>
-                    <NativeSelect
-                      value={config.imageModel}
-                      onChange={(v) => patch({ imageModel: v })}
-                      options={IMAGE_MODEL_OPTIONS}
-                    />
-                  </FieldRow>
-                  <FieldRow label={t("Mô Hình Video")}>
-                    <NativeSelect
-                      value={config.videoModel}
-                      onChange={(v) => patch({ videoModel: v })}
-                      options={VIDEO_MODEL_OPTIONS}
-                    />
-                  </FieldRow>
-                </div>
-
-                <div className="space-y-2.5">
-                  <p className="m-0 mb-1 font-bold tracking-wider text-teal-600 uppercase text-10">
-                    {t("Cài Đặt")}
-                  </p>
-                  <FieldRow label={t("Số video mỗi job")}>
-                    <NativeSelect
-                      value={String(Math.min(4, Math.max(1, config.videosPerJob || 1)))}
-                      onChange={(v) =>
-                        patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })
+                <FieldRow label={t("Số video mỗi job")}>
+                  <NativeSelect
+                    value={String(Math.min(4, Math.max(1, config.videosPerJob || 1)))}
+                    onChange={(v) =>
+                      patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })
+                    }
+                    options={[1, 2, 3, 4].map((n) => ({
+                      value: String(n),
+                      label: String(n),
+                    }))}
+                  />
+                </FieldRow>
+                <FieldRow label={t("Số luồng video chạy song song")}>
+                  <div className="flex flex-1 gap-2 items-center min-w-0">
+                    <input
+                      className={`${fieldClass} cursor-not-allowed bg-gray-100 text-gray-600`}
+                      value={Math.max(1, Math.round(VIDEO_CONCURRENCY || 1))}
+                      disabled
+                      readOnly
+                      title={
+                        t(
+                          "Theo số luồng video của customer (googlePackage.videoStreamCount) — không chỉnh được"
+                        ) as string
                       }
-                      options={[1, 2, 3, 4].map((n) => ({
-                        value: String(n),
-                        label: String(n),
-                      }))}
                     />
-                  </FieldRow>
-                  <FieldRow label={t("Số luồng video chạy song song")}>
-                    <div className="flex flex-1 gap-2 items-center min-w-0">
-                      <input
-                        className={`${fieldClass} bg-gray-50 text-gray-700`}
-                        value={Math.max(1, Math.round(VIDEO_CONCURRENCY || 1))}
-                        readOnly
-                        title={t("Theo gói customer (videoStreamCount) — không chỉnh trong cấu hình") as string}
-                      />
-                      <span className="text-10 text-gray-400 whitespace-nowrap shrink-0">
-                        {t("Theo gói KH")}
-                      </span>
-                    </div>
-                  </FieldRow>
-                </div>
+                    <span className="text-10 text-gray-400 whitespace-nowrap shrink-0">
+                      {t("Theo gói KH")}
+                    </span>
+                  </div>
+                </FieldRow>
               </div>
             </SectionCard>
           </div>

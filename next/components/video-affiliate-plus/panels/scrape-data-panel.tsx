@@ -94,7 +94,7 @@ const GUIDE_STEPS = [
     step: "01",
     titleKey: "Tải & chạy Agent",
     descKey:
-      "Tải zip Windows hoặc Mac → giải nén → chạy BatDau.bat / BatDau.command. Giữ cửa sổ mở.",
+      "Tải zip Windows hoặc Mac → giải nén → chạy BatDau.bat / BatDau.command (tự cài Node nếu chưa có). Giữ cửa sổ mở.",
     Icon: RiDatabase2Line,
   },
   {

@@ -19,16 +19,15 @@ Dev build bản phân phối:
 yarn build-scrape-agent
 ```
 
-Output: `release/shopee-scrape-agent/`
+Output: `release/shopee-scrape-agent-windows/` + `…-macos/`
 
 | File | Mô tả |
 |------|--------|
-| `ShopeeScrapeAgent.exe` | Chạy double-click (không cần Node/source) |
-| `BatDau.bat` | Shortcut Windows |
-| `HUONG-DAN.txt` | Hướng dẫn khách |
-| `agent.js` | Fallback nếu chưa có exe (cần Node) |
+| `BatDau.bat` / `BatDau.command` | Chạy Agent; tự tải Node portable nếu máy chưa có |
+| `agent.js` | Bundle Agent |
+| `HUONG-DAN*.txt` | Hướng dẫn khách |
 
-Gửi khách **cả thư mục** (zip) — không gửi repo.
+Gửi khách **cả thư mục** (zip) — không gửi repo. Không còn binary `.exe` / pkg.
 
 ## Dev local (nội bộ)
 

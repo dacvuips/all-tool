@@ -2,17 +2,16 @@ Shopee Scrape Agent — macOS (MacBook)
 ====================================
 
 1. Cài và mở GemLogin Desktop (nếu có bản Mac).
-2. Lần đầu macOS chặn app chưa ký:
+2. Lần đầu macOS có thể chặn app chưa ký:
    - Chuột phải BatDau.command → Open
    - hoặc Terminal:
      cd thư-mục-này
-     chmod +x BatDau.command ShopeeScrapeAgent-macos-*
+     chmod +x BatDau.command
      xattr -cr .
      ./BatDau.command
-3. Apple Silicon (M1/M2/M3): dùng ShopeeScrapeAgent-macos-arm64
-   Intel Mac: dùng ShopeeScrapeAgent-macos-x64
+3. BatDau.command:
+   - Đã có Node.js → chạy Agent ngay.
+   - Chưa có → tự tải Node portable vào .runtime (chỉ lần đầu, cần mạng).
 4. Giữ Terminal/Agent mở → web Cào dữ liệu.
 
 http://127.0.0.1:17890
-
-Fallback: cài Node.js rồi chạy: node agent.js

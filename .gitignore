@@ -66,4 +66,7 @@ data/shopee-affiliate-sessions/
 release/shopee-scrape-agent/
 release/ShopeeScrapeAgent.zip
 
+# Node portable do BatDau tự tải (máy khách)
+**/.runtime/
+
 config/**/*.yml

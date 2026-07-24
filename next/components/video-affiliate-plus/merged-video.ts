@@ -57,6 +57,35 @@ function recordHasMergedBinary(rec?: ProductVideoRecord | null): boolean {
   return false;
 }
 
+function recordHasVariantVideos(rec?: ProductVideoRecord | null): boolean {
+  if (!rec) return false;
+  if ((rec.videoUris || []).some((u) => String(u || "").trim())) return true;
+  if ((rec.videoBlobList || []).some((b) => Boolean(b && b.size > 0))) return true;
+  if ((rec.videoBytesList || []).some((b) => String(b || "").trim())) return true;
+  return false;
+}
+
+/** Đã có ít nhất 1 variant trên item (URL không rỗng). */
+export function hasVariantVideoUrls(item: ProductVideoKeySource): boolean {
+  return (item.videoUrls || []).some((u) => String(u || "").trim());
+}
+
+/**
+ * Đã có video generate (variant trên item / IndexedDB) hoặc video nối.
+ * Dùng khi Bắt Đầu — bỏ qua, không generate lại.
+ */
+export async function hasExistingGeneratedVideo(item: ProductVideoKeySource): Promise<boolean> {
+  if (hasVariantVideoUrls(item)) return true;
+  if (hasMergedVideoRef(item.mergedVideoUrl)) return true;
+  if (await hasMergedVideoFile(item)) return true;
+  const key = getMergedVideoStorageKey(item);
+  if (key) {
+    const rec = await idbGetProductVideo(key);
+    if (recordHasVariantVideos(rec)) return true;
+  }
+  return false;
+}
+
 /**
  * Đã có file video nối thật (ref trên item / Blob IndexedDB / legacy).
  * Không decode full base64 — chỉ kiểm tra tồn tại.
