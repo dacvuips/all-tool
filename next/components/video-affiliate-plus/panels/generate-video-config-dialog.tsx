@@ -821,7 +821,7 @@ export function GenerateVideoConfigDialog({
                         setManageList("techniques");
                         setManageDraft("");
                       }}
-                      className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 border-primary bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
+                      className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 border-primary whitespace-nowrap bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
                     >
                       {t("Quản lý")}
                     </button>
@@ -839,7 +839,7 @@ export function GenerateVideoConfigDialog({
                     <button
                       type="button"
                       onClick={() => setCharacterManagerOpen(true)}
-                      className="px-3 h-9 text-xs font-semibold whitespace-nowrap rounded-lg border border-opacity-30 shrink-0 border-primary bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
+                      className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 border-primary whitespace-nowrap bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
                     >
                       {t("Quản lý")}
                     </button>
@@ -876,7 +876,7 @@ export function GenerateVideoConfigDialog({
                           setManageList(row.list);
                           setManageDraft("");
                         }}
-                        className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 border-primary bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
+                        className="px-3 h-9 text-xs font-semibold rounded-lg border border-opacity-30 shrink-0 border-primary whitespace-nowrap bg-primary-light text-primary-dark hover:bg-primary hover:bg-opacity-10"
                       >
                         {t("Quản lý")}
                       </button>
@@ -887,7 +887,7 @@ export function GenerateVideoConfigDialog({
                 {manageList && (
                   <div className="p-3 mt-3 bg-orange-50 rounded-lg border border-orange-200">
                     <div className="flex justify-between items-center mb-2">
-                      <span className="text-xs font-bold text-orange-700">
+                      <span className="text-xs font-bold text-orange-700 whitespace-nowrap">
                         {t("Quản lý")} {t(manageTitles[manageList])}
                       </span>
                       <button
@@ -1227,9 +1227,7 @@ export function GenerateVideoConfigDialog({
             ) : editingPrompt === "checkTotal" ? (
               <div className="space-y-2">
                 <p className="m-0 text-xs text-gray-500">
-                  {t(
-                    "Tổng hợp từ Rules / Prompt Tạo Thoại / Prompt Tạo Ảnh — chỉ xem, không sửa."
-                  )}
+                  {t("Tổng hợp từ Rules / Prompt Tạo Thoại / Prompt Tạo Ảnh — chỉ xem, không sửa.")}
                 </p>
                 <pre className="m-0 whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-3 text-sm text-gray-800">
                   {promptDraft.trim() || t("Chưa có prompt nào được cấu hình.")}

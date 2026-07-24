@@ -92,6 +92,7 @@ import {
   GenerateVideoConfig,
   getMergeableVideoUrls,
   padVideoSlots,
+  pickCharacterImage,
   ThreadStatus,
 } from "../types";
 import { GenerateVideoConfigDialog } from "./generate-video-config-dialog";
@@ -134,14 +135,10 @@ function getCharacterPreview(config: GenerateVideoConfig): {
   const character: CharacterProfile | undefined =
     config.characters.find((c) => c.id === config.characterId) || config.characters[0];
   if (!character) return { url: "", name: "" };
-  const url =
-    character.images[character.previewPose] ||
-    character.images.fashion ||
-    character.images.standing ||
-    character.images.sitting ||
-    "";
+  // UI preview luôn theo previewPose; random chỉ áp khi generate từng job
+  const picked = pickCharacterImage(character, { random: false });
   return {
-    url,
+    url: picked.url,
     name: character.characterName || character.name || "",
   };
 }
@@ -229,6 +226,8 @@ export function ThreadManagementPanel({
   const [downloadingMerged, setDownloadingMerged] = useState(false);
   const [clearingIdb, setClearingIdb] = useState(false);
   const pauseAllRef = useRef(false);
+  /** threadId → jobId server đang chạy — dùng để cancel khi tạm dừng. */
+  const activeJobIdsRef = useRef<Record<string, string>>({});
   /** ThreadRunner đang chạy batch — tránh auto-merge effect tranh ffmpeg với generate. */
   const batchRunningRef = useRef(false);
   const shopeeVideoJob = useMediaGenerationJob<{
@@ -236,6 +235,27 @@ export function ThreadManagementPanel({
     videoUris?: string[];
     mimeType?: string;
   }>();
+
+  const cancelServerJobs = useCallback(
+    async (threadIds?: string[]) => {
+      const entries = Object.entries(activeJobIdsRef.current);
+      const toCancel = threadIds?.length
+        ? entries.filter(([tid]) => threadIds.includes(tid))
+        : entries;
+      if (!toCancel.length) return;
+      await Promise.all(
+        toCancel.map(async ([tid, jobId]) => {
+          try {
+            await shopeeVideoJob.cancel(jobId);
+          } catch {
+            // best-effort
+          }
+          delete activeJobIdsRef.current[tid];
+        })
+      );
+    },
+    [shopeeVideoJob]
+  );
 
   const scheduleParentSync = useCallback(() => {
     const scheduledSessionId = sessionIdRef.current;
@@ -347,7 +367,13 @@ export function ThreadManagementPanel({
     return () => {
       if (parentSyncTimerRef.current) clearTimeout(parentSyncTimerRef.current);
       runnerRef.current?.stop();
+      const jobIds = Object.values(activeJobIdsRef.current);
+      activeJobIdsRef.current = {};
+      for (const jobId of jobIds) {
+        void shopeeVideoJob.cancel(jobId);
+      }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const openVideoPreviewMerged = (
@@ -716,6 +742,7 @@ export function ThreadManagementPanel({
       if (id === sessionId) {
         pauseAllRef.current = true;
         runnerRef.current?.pause();
+        await cancelServerJobs();
         setVideoPreview(null);
         autoMergeAttemptedRef.current = {};
         setMergingIds({});
@@ -757,6 +784,7 @@ export function ThreadManagementPanel({
     try {
       pauseAllRef.current = true;
       runnerRef.current?.pause();
+      await cancelServerJobs();
       setVideoPreview(null);
       await onClearHistory();
       autoMergeAttemptedRef.current = {};
@@ -915,8 +943,10 @@ export function ThreadManagementPanel({
       }
     }
 
-    const characterImage = getCharacterPreview(config).url;
-    if (!characterImage) {
+    const character: CharacterProfile | undefined =
+      config.characters.find((c) => c.id === config.characterId) || config.characters[0];
+    const preview = getCharacterPreview(config);
+    if (!preview.url) {
       toast.warn(t("Chưa có ảnh nhân vật trong config. Vào Quản lý Nhân Vật để thêm ảnh."));
       return;
     }
@@ -944,14 +974,20 @@ export function ThreadManagementPanel({
       }),
       "info"
     );
+    if (character?.randomImage) {
+      onAddLog(t("Ảnh nhân vật: chọn ngẫu nhiên mỗi luồng"), "info");
+    }
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
 
-    let characterPrepared;
-    try {
-      characterPrepared = await prepareShopeeImageInput(characterImage);
-    } catch (err: any) {
-      toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
-      return;
+    const useRandomCharacter = Boolean(character?.randomImage);
+    let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>> | null = null;
+    if (!useRandomCharacter) {
+      try {
+        characterPreparedFixed = await prepareShopeeImageInput(preview.url);
+      } catch (err: any) {
+        toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
+        return;
+      }
     }
 
     const runJob = async (
@@ -971,6 +1007,14 @@ export function ThreadManagementPanel({
         if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
         const fresh = (await getThreadItem(sessionId, target.id)) || target;
+        let characterPrepared = characterPreparedFixed;
+        if (useRandomCharacter && character) {
+          const picked = pickCharacterImage(character, { random: true });
+          if (!picked.url) throw new Error(t("Chưa có ảnh nhân vật"));
+          characterPrepared = await prepareShopeeImageInput(picked.url);
+        }
+        if (!characterPrepared) throw new Error(t("Chưa có ảnh nhân vật"));
+
         const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
         const images = [characterPrepared, productPrepared];
 
@@ -1002,6 +1046,10 @@ export function ThreadManagementPanel({
                   shopName: fresh.shopName,
                   productName: fresh.productName,
                 },
+              },
+              cancelOnUnmount: true,
+              onJobEnqueued: (jobId) => {
+                activeJobIdsRef.current[fresh.id] = jobId;
               },
               onProgress: (_pct, msg) => {
                 if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
@@ -1084,7 +1132,23 @@ export function ThreadManagementPanel({
         scheduleParentSync();
         return "success";
       } catch (err: any) {
-        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+        const isCancelled =
+          ctx.isPaused() ||
+          pauseAllRef.current ||
+          (err instanceof MediaGenerationJobError &&
+            (err.code === "JOB_CANCELLED" || err.code === "JOB_NOT_FOUND"));
+        if (isCancelled) {
+          try {
+            await patchThread(sessionId, target.id, {
+              status: "stopped" as ThreadStatus,
+              countdown: 0,
+              error: "",
+            });
+          } catch {
+            // ignore
+          }
+          return "cancelled";
+        }
         console.error(err);
         await patchThread(sessionId, target.id, {
           status: "error" as ThreadStatus,
@@ -1101,6 +1165,7 @@ export function ThreadManagementPanel({
         scheduleParentSync();
         return "error";
       } finally {
+        delete activeJobIdsRef.current[target.id];
         setGeneratingIds((prev) => {
           const next = { ...prev };
           delete next[target.id];
@@ -1146,6 +1211,9 @@ export function ThreadManagementPanel({
   const handlePause = async (ids?: string[]) => {
     pauseAllRef.current = true;
     runnerRef.current?.pause();
+    // Tạm dừng = huỷ job trên server (giống generate image/video tool).
+    // pauseAllRef luôn dừng cả batch → cancel hết job đang chạy.
+    await cancelServerJobs();
 
     if (!ids?.length) {
       setGeneratingIds({});
@@ -1202,6 +1270,7 @@ export function ThreadManagementPanel({
       return;
     }
     if (!confirm(t("Xóa {{count}} task đã chọn?", { count: selected.length }))) return;
+    await cancelServerJobs(selected.map((i) => i.id));
     selected.forEach((i) => {
       if (i.mergedVideoUrl?.startsWith("blob:")) {
         try {
@@ -1233,6 +1302,7 @@ export function ThreadManagementPanel({
   };
 
   const handleDelete = async (id: string) => {
+    await cancelServerJobs([id]);
     const target = (await getThreadItem(sessionId, id)) || items.find((i) => i.id === id);
     if (target?.mergedVideoUrl?.startsWith("blob:")) {
       try {
@@ -1334,12 +1404,7 @@ export function ThreadManagementPanel({
       const config = genConfig || (await loadGenerateVideoConfig());
       const character =
         config.characters.find((c) => c.id === config.characterId) || config.characters[0];
-      const characterImage =
-        character?.images?.[character.previewPose] ||
-        character?.images?.fashion ||
-        character?.images?.standing ||
-        character?.images?.sitting ||
-        "";
+      const characterImage = character ? pickCharacterImage(character).url : "";
       if (!characterImage) {
         toast.error(t("Chưa có ảnh nhân vật trong cấu hình"));
         return;
@@ -1373,6 +1438,10 @@ export function ThreadManagementPanel({
             productName: target.productName,
             slotIndex,
           },
+        },
+        cancelOnUnmount: true,
+        onJobEnqueued: (jobId) => {
+          activeJobIdsRef.current[itemId] = jobId;
         },
       });
 
@@ -1428,17 +1497,24 @@ export function ThreadManagementPanel({
       onAddLog(t("Đã tạo lại video {{n}}", { n: slotIndex + 1 }), "success", itemId);
       toast.success(t("Đã tạo lại Video {{n}}", { n: slotIndex + 1 }));
     } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || t("Tạo lại video thất bại"));
-      onAddLog(
-        t("Tạo lại video {{n}} thất bại: {{msg}}", {
-          n: slotIndex + 1,
-          msg: err?.message || "unknown",
-        }),
-        "error",
-        itemId
-      );
+      const isCancelled =
+        pauseAllRef.current ||
+        (err instanceof MediaGenerationJobError &&
+          (err.code === "JOB_CANCELLED" || err.code === "JOB_NOT_FOUND"));
+      if (!isCancelled) {
+        console.error(err);
+        toast.error(err?.message || t("Tạo lại video thất bại"));
+        onAddLog(
+          t("Tạo lại video {{n}} thất bại: {{msg}}", {
+            n: slotIndex + 1,
+            msg: err?.message || "unknown",
+          }),
+          "error",
+          itemId
+        );
+      }
     } finally {
+      delete activeJobIdsRef.current[itemId];
       setVideoPreview((prev) => {
         if (prev?.kind !== "variants" || prev.itemId !== itemId) return prev;
         const regenerating = { ...prev.regenerating };

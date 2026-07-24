@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  HiOutlinePhotograph,
-  HiOutlinePlus,
-  HiOutlineX,
-  HiUser,
-} from "react-icons/hi";
+import { HiOutlinePhotograph, HiOutlinePlus, HiOutlineX, HiUser } from "react-icons/hi";
 import {
   RiDeleteBinLine,
   RiDownload2Line,
@@ -149,13 +144,11 @@ export function CharacterProfileManagerDialog({
           id: item.id || crypto.randomUUID(),
           name: item.name || "Imported",
           characterName: item.characterName || "",
-          characterSummary:
-            item.characterSummary || item.characterPrompt || item.content || "",
+          characterSummary: item.characterSummary || item.characterPrompt || item.content || "",
           appearanceDetails: item.appearanceDetails || "",
           audioVoice: item.audioVoice || "",
           backgroundSound:
-            item.backgroundSound ||
-            "Natural ambient sound appropriate for the scene.",
+            item.backgroundSound || "Natural ambient sound appropriate for the scene.",
           scenes: item.scenes?.length > 0 ? item.scenes : [createEmptyCharacterScene(1)],
           images: {
             standing: item.images?.standing || "",
@@ -163,6 +156,7 @@ export function CharacterProfileManagerDialog({
             fashion: item.images?.fashion || "",
           },
           previewPose: item.previewPose || "fashion",
+          randomImage: Boolean(item.randomImage),
         })
       );
       if (!imported.length) {
@@ -351,8 +345,7 @@ export function CharacterProfileManagerDialog({
             <div className="flex-1 space-y-1 overflow-y-auto p-2">
               {list.map((p) => {
                 const isActive = p.id === activeId;
-                const thumb =
-                  p.images.fashion || p.images.standing || p.images.sitting || "";
+                const thumb = p.images.fashion || p.images.standing || p.images.sitting || "";
                 return (
                   <button
                     key={p.id}
@@ -439,9 +432,7 @@ export function CharacterProfileManagerDialog({
                 <div className="border-b border-gray-100 bg-white px-5 py-3">
                   <label className="mb-1.5 block text-xs font-semibold text-gray-500">
                     {t("Tên Profile")}{" "}
-                    <span className="font-normal text-gray-400">
-                      ({t("Tên folder & file")})
-                    </span>
+                    <span className="font-normal text-gray-400">({t("Tên folder & file")})</span>
                   </label>
                   <input
                     value={draft.name}
@@ -490,9 +481,7 @@ export function CharacterProfileManagerDialog({
                               </label>
                               <input
                                 value={draft.characterName}
-                                onChange={(e) =>
-                                  patchDraft({ characterName: e.target.value })
-                                }
+                                onChange={(e) => patchDraft({ characterName: e.target.value })}
                                 className="h-9 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder={t("Tên nhân vật...")}
                                 autoFocus
@@ -505,9 +494,7 @@ export function CharacterProfileManagerDialog({
                               </label>
                               <textarea
                                 value={draft.characterSummary}
-                                onChange={(e) =>
-                                  patchDraft({ characterSummary: e.target.value })
-                                }
+                                onChange={(e) => patchDraft({ characterSummary: e.target.value })}
                                 rows={3}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder={t("Mô tả nhân vật...")}
@@ -520,9 +507,7 @@ export function CharacterProfileManagerDialog({
                               </label>
                               <textarea
                                 value={draft.appearanceDetails}
-                                onChange={(e) =>
-                                  patchDraft({ appearanceDetails: e.target.value })
-                                }
+                                onChange={(e) => patchDraft({ appearanceDetails: e.target.value })}
                                 rows={5}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder={t("Chi tiết ngoại hình...")}
@@ -538,9 +523,7 @@ export function CharacterProfileManagerDialog({
                               </div>
                               <textarea
                                 value={draft.audioVoice}
-                                onChange={(e) =>
-                                  patchDraft({ audioVoice: e.target.value })
-                                }
+                                onChange={(e) => patchDraft({ audioVoice: e.target.value })}
                                 rows={4}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder={t("Mô tả giọng nói / âm thanh...")}
@@ -553,9 +536,7 @@ export function CharacterProfileManagerDialog({
                               </label>
                               <input
                                 value={draft.backgroundSound}
-                                onChange={(e) =>
-                                  patchDraft({ backgroundSound: e.target.value })
-                                }
+                                onChange={(e) => patchDraft({ backgroundSound: e.target.value })}
                                 className="h-9 w-full rounded-xl border border-gray-200 bg-gray-50 px-3 text-sm text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder="Natural ambient sound appropriate for the scene."
                               />
@@ -598,9 +579,7 @@ export function CharacterProfileManagerDialog({
                               </div>
                               <textarea
                                 value={scene.content}
-                                onChange={(e) =>
-                                  updateSceneContent(idx, e.target.value)
-                                }
+                                onChange={(e) => updateSceneContent(idx, e.target.value)}
                                 rows={11}
                                 className="w-full rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 text-sm leading-relaxed text-gray-800 outline-none transition-colors focus:border-primary focus:bg-white"
                                 placeholder={t("Mô tả bối cảnh...")}
@@ -616,64 +595,109 @@ export function CharacterProfileManagerDialog({
                         {t("Ảnh Model")}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
-                        {(["standing", "sitting", "fashion"] as CharacterPose[]).map(
-                          (pose) => {
-                            const has = !!draft.images[pose];
-                            return (
-                              <button
-                                key={pose}
-                                type="button"
-                                onClick={() => pickImage(pose)}
-                                className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-all ${
-                                  has
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-gray-200 bg-gray-50 text-gray-600 hover:border-primary hover:bg-primary-light"
-                                }`}
-                              >
-                                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm">
-                                  {has ? (
-                                    <img
-                                      src={draft.images[pose]}
-                                      alt=""
-                                      className="h-full w-full object-cover"
-                                    />
-                                  ) : (
-                                    <HiOutlinePhotograph className="text-lg text-gray-300" />
-                                  )}
-                                </div>
-                                <span className="text-10 font-semibold leading-tight">
-                                  {has
-                                    ? t("{{pose}} · Sửa", { pose: POSE_LABELS[pose] })
-                                    : t("Model {{pose}}", { pose: POSE_LABELS[pose] })}
-                                </span>
-                              </button>
-                            );
-                          }
-                        )}
+                        {(["standing", "sitting", "fashion"] as CharacterPose[]).map((pose) => {
+                          const has = !!draft.images[pose];
+                          return (
+                            <button
+                              key={pose}
+                              type="button"
+                              onClick={() => pickImage(pose)}
+                              className={`flex flex-col items-center gap-1.5 rounded-xl border px-2 py-2.5 text-center transition-all ${
+                                has
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-gray-200 bg-gray-50 text-gray-600 hover:border-primary hover:bg-primary-light"
+                              }`}
+                            >
+                              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm">
+                                {has ? (
+                                  <img
+                                    src={draft.images[pose]}
+                                    alt=""
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <HiOutlinePhotograph className="text-lg text-gray-300" />
+                                )}
+                              </div>
+                              <span className="text-10 font-semibold leading-tight">
+                                {has
+                                  ? t("{{pose}} · Sửa", { pose: POSE_LABELS[pose] })
+                                  : t("Model {{pose}}", { pose: POSE_LABELS[pose] })}
+                              </span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
 
                   {/* Preview */}
                   <aside className="flex w-60 shrink-0 flex-col border-l border-gray-200 bg-gray-50 p-3">
-                    <div className="mb-2.5 inline-flex rounded-xl bg-white p-1 shadow-sm border border-gray-100">
-                      {(["standing", "sitting", "fashion"] as CharacterPose[]).map(
-                        (pose) => (
-                          <button
-                            key={pose}
-                            type="button"
-                            onClick={() => patchDraft({ previewPose: pose })}
-                            className={`flex-1 rounded-lg px-2 py-1.5 text-10 font-bold transition-all ${
-                              draft.previewPose === pose
-                                ? "bg-primary text-white shadow-sm"
-                                : "text-gray-500 hover:text-gray-700"
-                            }`}
-                          >
-                            {POSE_LABELS[pose]}
-                          </button>
-                        )
-                      )}
+                    <div className="mb-2.5 flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
+                      <div className="min-w-0">
+                        <div className="text-10 font-bold text-gray-700">{t("Ảnh ngẫu nhiên")}</div>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={Boolean(draft.randomImage)}
+                        title={
+                          draft.randomImage
+                            ? (t("Đang bật — generate sẽ chọn ngẫu nhiên") as string)
+                            : (t("Bật để tự chọn ảnh ngẫu nhiên khi generate") as string)
+                        }
+                        onClick={() => {
+                          const next = !draft.randomImage;
+                          if (next && imageCount < 1) {
+                            toast.warn(t("Cần thêm ít nhất 1 ảnh model"));
+                            return;
+                          }
+                          if (next && imageCount < 2) {
+                            toast.info(
+                              t("Chỉ có 1 ảnh — sẽ luôn dùng ảnh đó (thêm ảnh để random)")
+                            );
+                          }
+                          patchDraft({ randomImage: next });
+                        }}
+                        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                          draft.randomImage ? "bg-primary" : "bg-gray-300"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                            draft.randomImage ? "translate-x-4" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
                     </div>
+                    <div
+                      className={`mb-2.5 inline-flex rounded-xl bg-white p-1 shadow-sm border border-gray-100 ${
+                        draft.randomImage ? "opacity-60" : ""
+                      }`}
+                    >
+                      {(["standing", "sitting", "fashion"] as CharacterPose[]).map((pose) => (
+                        <button
+                          key={pose}
+                          type="button"
+                          disabled={Boolean(draft.randomImage)}
+                          onClick={() => patchDraft({ previewPose: pose })}
+                          className={`flex-1 rounded-lg px-2 py-1.5 text-10 font-bold transition-all disabled:cursor-not-allowed ${
+                            draft.previewPose === pose
+                              ? "bg-primary text-white shadow-sm"
+                              : "text-gray-500 hover:text-gray-700"
+                          }`}
+                        >
+                          {POSE_LABELS[pose]}
+                        </button>
+                      ))}
+                    </div>
+                    {draft.randomImage ? (
+                      <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[9px] font-medium leading-snug text-amber-700">
+                        {t("Generate sẽ tự chọn ngẫu nhiên 1 trong {{count}} ảnh model đã có.", {
+                          count: imageCount,
+                        })}
+                      </div>
+                    ) : null}
                     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-inner">
                       {previewUrl ? (
                         <img
