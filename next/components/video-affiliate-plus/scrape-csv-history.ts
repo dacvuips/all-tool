@@ -1,5 +1,5 @@
 /**
- * Phiên CSV do extension gửi — store riêng trong DB video-affiliate-manager.
+ * Phiên CSV scrape (GemLogin CDP) — store riêng trong DB video-affiliate-manager.
  */
 
 import {
@@ -23,6 +23,7 @@ export async function saveScrapeCsvSession(
   const session: ScrapeCsvSession = {
     id: input.id || `scrape-csv-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     createdAt: input.createdAt || Date.now(),
+    name: String(input.name || "").trim() || undefined,
     keyword: input.keyword || "",
     marketHost: input.marketHost || "",
     marketCode: input.marketCode || "",
@@ -58,4 +59,24 @@ export function formatSessionTime(ts: number): string {
   } catch {
     return String(ts);
   }
+}
+
+/** Hiển thị tên session — ưu tiên name, fallback keyword. */
+export function sessionDisplayName(session: Pick<ScrapeCsvSession, "name" | "keyword">): string {
+  const name = String(session.name || "").trim();
+  if (name) return name;
+  const keyword = String(session.keyword || "").trim();
+  return keyword || "—";
+}
+
+/** Tên mặc định tiếp theo: Crawl Project 1, 2, … */
+export function nextCrawlProjectName(sessions: Pick<ScrapeCsvSession, "name">[]): string {
+  let max = 0;
+  for (const s of sessions) {
+    const m = String(s.name || "")
+      .trim()
+      .match(/^Crawl Project\s+(\d+)$/i);
+    if (m) max = Math.max(max, Number(m[1]) || 0);
+  }
+  return `Crawl Project ${max + 1}`;
 }

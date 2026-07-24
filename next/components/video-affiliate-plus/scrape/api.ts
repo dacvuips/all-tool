@@ -1,4 +1,4 @@
-/** Client API — mở browser + sync CSV từ extension. */
+/** Client API — ưu tiên Local Agent (máy user), fallback thông báo rõ khi offline. */
 
 import {
   clearScrapeCsvSessions,
@@ -7,101 +7,164 @@ import {
   saveScrapeCsvSession,
   ScrapeCsvSession,
 } from "../scrape-csv-history";
+import { agentFetch, probeScrapeAgent, SCRAPE_AGENT_BASE } from "./agent-client";
 
 export type { ScrapeCsvSession };
+export { SCRAPE_AGENT_BASE, probeScrapeAgent };
 
-async function parseJson(res: Response) {
-  try {
-    return await res.json();
-  } catch {
-    return null;
+export type GemLoginProfileOption = {
+  id: string;
+  name: string;
+};
+
+async function ensureAgentOnline() {
+  const st = await probeScrapeAgent(2500);
+  if (!st.online) {
+    throw new Error(
+      st.message ||
+        `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
+    );
   }
+  return st;
 }
 
-export async function openShopeeAffiliateBrowser(marketHost?: string): Promise<{
-  marketHost: string;
-  offerUrl: string;
-  openedOnServer: boolean;
+export async function fetchGemLoginStatus(): Promise<{
+  online: boolean;
+  apiBase: string;
+  profileCount?: number;
+  agentOnline?: boolean;
 }> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/open-browser", {
-    method: "POST",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(marketHost ? { marketHost } : {}),
-  });
-  const json = await parseJson(res);
-  if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
+  const agent = await probeScrapeAgent(2500);
+  if (!agent.online) {
+    return {
+      online: false,
+      agentOnline: false,
+      apiBase: SCRAPE_AGENT_BASE,
+    };
   }
-  const offerUrl = String(json.offerUrl || "");
-  // Luôn mở trên máy user (nơi có extension). Server spawn Chrome chỉ khi API chạy local.
-  if (offerUrl && typeof window !== "undefined") {
-    window.open(offerUrl, "_blank", "noopener,noreferrer");
+  const { res, json } = await agentFetch("/gemlogin-status", { method: "GET", timeoutMs: 8000 });
+  if (!res.ok || !json?.ok) {
+    return {
+      online: false,
+      agentOnline: true,
+      apiBase: String(json?.apiBase || "http://127.0.0.1:1010"),
+    };
   }
   return {
-    marketHost: String(json.marketHost || marketHost || ""),
-    offerUrl,
-    openedOnServer: Boolean(json.openedOnServer),
+    online: Boolean(json.online),
+    agentOnline: true,
+    apiBase: String(json.apiBase || "http://127.0.0.1:1010"),
+    profileCount: typeof json.profileCount === "number" ? json.profileCount : undefined,
   };
 }
 
-export async function downloadShopeeExtensionPackage(): Promise<void> {
-  const res = await fetch("/api/app/scrape-shopee-affiliate/extension-package", {
-    method: "GET",
-    credentials: "include",
-  });
-  if (!res.ok) {
-    const json = await parseJson(res);
-    throw new Error(json?.message || `Không tải được extension (${res.status})`);
+export async function fetchGemLoginProfiles(): Promise<GemLoginProfileOption[]> {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/gemlogin-profiles", { method: "GET", timeoutMs: 15000 });
+  if (!res.ok || !json?.ok) {
+    throw new Error(json?.message || `Không lấy được profile GemLogin (${res.status})`);
   }
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "shopee-affiliate-bridge.zip";
-  a.click();
-  URL.revokeObjectURL(url);
+  const list = Array.isArray(json.profiles) ? json.profiles : [];
+  return list.map((p: any) => ({
+    id: String(p.id),
+    name: String(p.name || p.id),
+  }));
 }
 
-/** Poll server → lưu phiên mới vào IndexedDB video-affiliate-manager. */
-export async function syncExtensionCsvToIdb(): Promise<ScrapeCsvSession[]> {
-  const existing = await listScrapeCsvSessions();
-  const knownIds = existing.map((s) => s.id);
-  const res = await fetch(
-    `/api/app/scrape-shopee-affiliate/extension-pending?knownIds=${encodeURIComponent(knownIds.join(","))}`,
-    { method: "GET", credentials: "include" }
-  );
-  const json = await parseJson(res);
+export async function openShopeeAffiliateBrowser(input?: {
+  marketHost?: string;
+  gemloginProfileId?: string;
+  allowChromeFallback?: boolean;
+}): Promise<{
+  marketHost: string;
+  offerUrl: string;
+  cdpEndpoint?: string;
+  source?: string;
+  gemloginProfileId?: string;
+  debugAddr?: string;
+  cookieCount?: number;
+  profileStopped?: boolean;
+}> {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/open-browser", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input || {}),
+    timeoutMs: 120000,
+  });
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || `Sync lỗi (${res.status})`);
+    throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
   }
+  return {
+    marketHost: String(json.marketHost || input?.marketHost || ""),
+    offerUrl: String(json.offerUrl || ""),
+    cdpEndpoint: json.cdpEndpoint ? String(json.cdpEndpoint) : undefined,
+    source: json.source ? String(json.source) : undefined,
+    gemloginProfileId: json.gemloginProfileId ? String(json.gemloginProfileId) : undefined,
+    debugAddr: json.debugAddr ? String(json.debugAddr) : undefined,
+    cookieCount: typeof json.cookieCount === "number" ? json.cookieCount : undefined,
+    profileStopped: Boolean(json.profileStopped),
+  };
+}
 
-  const incoming = Array.isArray(json.sessions) ? json.sessions : [];
-  const savedIds: string[] = [];
-  for (const raw of incoming) {
-    const session = await saveScrapeCsvSession({
-      id: String(raw.id),
-      createdAt: Number(raw.createdAt) || Date.now(),
-      keyword: String(raw.keyword || ""),
-      marketHost: String(raw.marketHost || ""),
-      marketCode: String(raw.marketCode || ""),
-      productCount: Number(raw.productCount) || 0,
-      csv: String(raw.csv || ""),
-      durationMs: Number(raw.durationMs) || 0,
-    });
-    savedIds.push(session.id);
+/** long_link → short link qua Local Agent (GraphQL batchCustomLink). */
+export async function shortenAffiliateLinks(
+  links: string[],
+  delayMs = 400
+): Promise<string[]> {
+  await ensureAgentOnline();
+  const clean = links.map((l) => String(l || "").trim());
+  if (!clean.some(Boolean)) return clean.map(() => "");
+  const timeoutMs = Math.min(600000, Math.max(90000, clean.filter(Boolean).length * 800));
+  const { res, json } = await agentFetch("/short-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ links: clean, delayMs }),
+    timeoutMs,
+  });
+  if (!res.ok || !json?.ok) {
+    throw new Error(
+      json?.message ||
+        "Không tạo được short link. Bấm «Mở Trình duyệt» rồi thử lại."
+    );
   }
+  const shorts = Array.isArray(json.shortLinks) ? json.shortLinks : [];
+  return clean.map((_, i) => String(shorts[i] || ""));
+}
 
-  if (savedIds.length) {
-    await fetch("/api/app/scrape-shopee-affiliate/extension-ack", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: savedIds }),
-    }).catch(() => undefined);
+/** Xuất CSV qua Local Agent → lưu thẳng IndexedDB. */
+export async function exportShopeeAffiliateCsv(input: {
+  marketHost: string;
+  keyword?: string;
+  sortType?: number;
+  maxProducts?: number;
+  delayMs?: number;
+  listType?: number;
+  filterShopTypes?: number[];
+}): Promise<ScrapeCsvSession> {
+  await ensureAgentOnline();
+  const { res, json } = await agentFetch("/export-csv", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    timeoutMs: 600000,
+  });
+  if (!res.ok || !json?.ok || !json.session) {
+    throw new Error(json?.message || `Xuất CSV thất bại (${res.status})`);
   }
-
-  return listScrapeCsvSessions();
+  const raw = json.session;
+  const keyword = String(raw.keyword || "");
+  return saveScrapeCsvSession({
+    id: String(raw.id),
+    createdAt: Number(raw.createdAt) || Date.now(),
+    name: String(raw.name || keyword.trim() || "Xuất CSV"),
+    keyword,
+    marketHost: String(raw.marketHost || ""),
+    marketCode: String(raw.marketCode || ""),
+    productCount: Number(raw.productCount) || 0,
+    csv: String(raw.csv || ""),
+    durationMs: Number(raw.durationMs) || 0,
+  });
 }
 
 export async function loadScrapeCsvSessions(): Promise<ScrapeCsvSession[]> {

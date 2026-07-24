@@ -1,9 +1,7 @@
 /**
- * Mở Chrome Affiliate + hàng đợi CSV do extension gửi (để web sync vào IndexedDB).
+ * Tạo session CSV từ products (không hàng đợi extension).
  */
 
-import { openNormalChrome } from "./open-chrome";
-import { defaultOfferUrl } from "./domains";
 import { productsToCsv, ScrapedAffiliateProduct, toImportRows } from "./product-mapper";
 
 export type ExtensionPushSession = {
@@ -18,26 +16,19 @@ export type ExtensionPushSession = {
   importRows: ReturnType<typeof toImportRows>;
 };
 
-let pendingSessions: ExtensionPushSession[] = [];
 let lastMarketHost = "affiliate.shopee.vn";
 
 export function getLastMarketHost() {
   return lastMarketHost;
 }
 
-export async function openAffiliateBrowser(marketHost?: string): Promise<{
-  marketHost: string;
-  offerUrl: string;
-  openedOnServer: boolean;
-}> {
-  const host = String(marketHost || lastMarketHost || "affiliate.shopee.vn").trim();
-  lastMarketHost = host;
-  const offerUrl = defaultOfferUrl(host);
-  const openedOnServer = await openNormalChrome({ startUrl: offerUrl });
-  return { marketHost: host, offerUrl, openedOnServer };
+export function setLastMarketHost(host: string) {
+  const h = String(host || "").trim();
+  if (h) lastMarketHost = h;
 }
 
-export function pushExtensionCsv(input: {
+/** Build session CSV — client lưu IndexedDB trực tiếp. */
+export function buildCsvSession(input: {
   products: ScrapedAffiliateProduct[];
   keyword?: string;
   marketHost?: string;
@@ -49,12 +40,10 @@ export function pushExtensionCsv(input: {
   if (!products.length) {
     throw new Error("Không có sản phẩm để gửi");
   }
-  const csv = input.csv?.trim()
-    ? input.csv
-    : "\uFEFF" + productsToCsv(products);
+  const csv = input.csv?.trim() ? input.csv : "\uFEFF" + productsToCsv(products);
   const marketHost = String(input.marketHost || lastMarketHost || "");
   if (marketHost) lastMarketHost = marketHost;
-  const session: ExtensionPushSession = {
+  return {
     id: `scrape-csv-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     createdAt: Date.now(),
     keyword: String(input.keyword || ""),
@@ -65,23 +54,4 @@ export function pushExtensionCsv(input: {
     durationMs: Math.max(0, Number(input.durationMs) || 0),
     importRows: toImportRows(products),
   };
-  pendingSessions = [session, ...pendingSessions].slice(0, 100);
-  return session;
-}
-
-/** Web poll: lấy phiên mới chưa ack (theo id đã biết phía client). */
-export function listPendingExtensionSessions(knownIds: string[] = []): ExtensionPushSession[] {
-  const known = new Set(knownIds);
-  return pendingSessions.filter((s) => !known.has(s.id));
-}
-
-export function listAllExtensionSessions(): ExtensionPushSession[] {
-  return [...pendingSessions];
-}
-
-export function ackExtensionSessions(ids: string[]): number {
-  const set = new Set(ids);
-  const before = pendingSessions.length;
-  pendingSessions = pendingSessions.filter((s) => !set.has(s.id));
-  return before - pendingSessions.length;
 }

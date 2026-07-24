@@ -9,6 +9,7 @@ import { Button, Checkbox, Field, Form, Input, Select } from "../../../../shared
 import { NotFound, Spinner } from "../../../../shared/utilities/misc";
 import { useSettingsContext } from "../providers/settings-provider";
 import { SettingItem } from "./setting-item";
+import { ShopeeSignerBalancePanel } from "./shopee-signer-balance-panel";
 
 export interface MutableSetting extends Setting {
   values: {
@@ -92,6 +93,9 @@ export function SettingList(props: PropTypes) {
                       </>
                     ) : (
                       <>
+                        {settingGroup?.slug === "Shopee Video Upload" && mutableSettings?.length ? (
+                          <ShopeeSignerBalancePanel settings={mutableSettings} />
+                        ) : null}
                         {isStaticSettings ? (
                           <> {{}[settingGroup.slug]} </>
                         ) : (

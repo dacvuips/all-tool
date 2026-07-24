@@ -99,13 +99,6 @@
     return new Promise((r) => setTimeout(r, ms));
   }
 
-  function formatPrice(value) {
-    if (value == null || value === "") return "";
-    const num = Number(value);
-    if (Number.isNaN(num)) return String(value);
-    return Math.round(num / 100000);
-  }
-
   function formatImageUrl(imageId, market) {
     if (!imageId) return "";
     if (String(imageId).startsWith("http")) return imageId;
@@ -129,35 +122,36 @@
     return null;
   }
 
+  /** Gộp top-level + batch_item_for_item_card_full — giữ nguyên tên field API. */
   function flattenProduct(item, index, pageOffset, market) {
-    const card = item.batch_item_for_item_card_full || {};
-    const rating = card.item_rating || {};
+    const card =
+      item?.batch_item_for_item_card_full && typeof item.batch_item_for_item_card_full === "object"
+        ? item.batch_item_for_item_card_full
+        : {};
     const shopId = String(card.shopid || "");
-    const itemId = String(item.item_id || card.itemid || "");
-    return {
+    const itemId = String(item?.item_id || card.itemid || "");
+    const row = {
       stt: pageOffset + index + 1,
-      item_id: itemId,
-      shop_id: shopId,
-      product_name: card.name || "",
-      shop_name: card.shop_name || "",
-      price_min: formatPrice(card.price_min),
-      price_max: formatPrice(card.price_max),
-      commission: String(
-        item.max_commission_rate || item.seller_commission_rate || item.default_commission_rate || ""
-      ),
-      product_link:
-        item.product_link ||
-        (shopId && itemId ? `https://${market.mallHost}/product/${shopId}/${itemId}` : ""),
-      affiliate_link: item.long_link || "",
-      affiliate_link_short: "",
-      image_url: formatImageUrl(card.image, market),
-      default_commission_rate: String(item.default_commission_rate || ""),
-      seller_commission_rate: String(item.seller_commission_rate || ""),
-      max_commission_rate: String(item.max_commission_rate || ""),
-      currency: card.currency || "VND",
-      sold: card.sold ?? "",
-      rating_star: rating.rating_star ?? "",
     };
+
+    if (item && typeof item === "object") {
+      for (const [key, value] of Object.entries(item)) {
+        if (key === "batch_item_for_item_card_full") continue;
+        row[key] = value ?? "";
+      }
+    }
+
+    for (const [key, value] of Object.entries(card)) {
+      row[key] = value ?? "";
+    }
+
+    if (!row.product_link && shopId && itemId) {
+      row.product_link = `https://${market.mallHost}/product/${shopId}/${itemId}`;
+    }
+
+    row.image_url = formatImageUrl(card.image, market);
+    row.affiliate_link_short = "";
+    return row;
   }
 
   function getPageLimitFromUrl(templateUrl) {
@@ -186,6 +180,50 @@
       throw new Error(json.msg || json.message || `API error code: ${json.code}`);
     }
     return json;
+  }
+
+  function buildListUrl(options) {
+    const host = window.location.hostname;
+    const keyword = String(options.keyword || "").trim();
+    const sortType = Number(options.sortType);
+    const pageLimit = Number(options.pageLimit) > 0 ? Number(options.pageLimit) : DEFAULT_PAGE_LIMIT;
+    const listType = Number.isFinite(Number(options.listType)) ? Number(options.listType) : 0;
+    const pageOffset = Number(options.pageOffset) >= 0 ? Number(options.pageOffset) : 0;
+    const url = new URL(`https://${host}/api/v3/offer/product/list`);
+    url.searchParams.set("list_type", String(listType));
+    if (keyword) url.searchParams.set("keyword", keyword);
+    url.searchParams.set("sort_type", String(Number.isFinite(sortType) ? sortType : 1));
+    url.searchParams.set("page_offset", String(pageOffset));
+    url.searchParams.set("page_limit", String(pageLimit));
+    url.searchParams.set("client_type", "1");
+    return url.toString();
+  }
+
+  async function fetchOneProductPage(options) {
+    const market = getMarketConfig();
+    const pageOffset = Number(options.pageOffset) >= 0 ? Number(options.pageOffset) : 0;
+    const pageLimit = Number(options.pageLimit) > 0 ? Number(options.pageLimit) : DEFAULT_PAGE_LIMIT;
+    const templateUrl = buildListUrl({ ...options, pageOffset: 0 });
+    const payload = await fetchPage(templateUrl, pageOffset);
+    const list = extractList(payload);
+    const totalCount = extractTotal(payload);
+    const products = list.map((item, index) => flattenProduct(item, index, pageOffset, market));
+    const hasMore =
+      list.length >= pageLimit &&
+      (totalCount == null || pageOffset + list.length < totalCount);
+    let keyword = "";
+    try {
+      keyword = new URL(templateUrl).searchParams.get("keyword") || "";
+    } catch {}
+    return {
+      products,
+      hasMore,
+      totalCount,
+      keyword,
+      marketHost: market.host,
+      pageOffset,
+      pageLimit,
+    };
   }
 
   const SHORT_LINK_QUERY = `
@@ -248,7 +286,7 @@
 
   async function enrichProductsWithShortLinks(products, delayMs) {
     const withLinks = products
-      .map((p, index) => ({ index, link: p.affiliate_link }))
+      .map((p, index) => ({ index, link: p.long_link || p.affiliate_link }))
       .filter((row) => !!row.link);
 
     if (!withLinks.length) return products;
@@ -403,6 +441,47 @@
           {
             source: "viet-theo-bridge",
             action: "FETCH_ERROR",
+            requestId: data.requestId,
+            error: err?.message || String(err),
+          },
+          "*"
+        );
+      } finally {
+        running = false;
+      }
+      return;
+    }
+
+    if (data.action === "FETCH_PAGE") {
+      if (running) {
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_ERROR",
+            requestId: data.requestId,
+            error: "Đang chạy",
+          },
+          "*"
+        );
+        return;
+      }
+      running = true;
+      try {
+        const result = await fetchOneProductPage(data.options || {});
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_DONE",
+            requestId: data.requestId,
+            result,
+          },
+          "*"
+        );
+      } catch (err) {
+        window.postMessage(
+          {
+            source: "viet-theo-bridge",
+            action: "FETCH_PAGE_ERROR",
             requestId: data.requestId,
             error: err?.message || String(err),
           },

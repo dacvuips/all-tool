@@ -5,16 +5,17 @@
  * - product-videos (link → enrich base64; key = mã sản phẩm)
  * - merged-videos (legacy Blob — fallback đọc)
  * - import-history (phiên import / làm việc)
- * - scrape-csv-sessions (CSV do extension gửi)
+ * - scrape-csv-sessions (CSV scrape GemLogin/CDP)
  * - threads (per-item record; source of truth cho lazy list)
  * - thread-meta (aggregate stats theo sessionId)
  * - users (danh sách tài khoản + item Generate đã gắn)
  * - proxies (danh sách proxy host:port:user:pass)
  * - upload-history (phiên Đăng video Shope)
+ * - cookie-fetch-history (lịch sử lấy / gắn cookie)
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 9;
+const DB_VERSION = 10;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
@@ -25,6 +26,7 @@ const STORE_THREAD_META = "thread-meta";
 const STORE_USERS = "users";
 const STORE_PROXIES = "proxies";
 const STORE_UPLOAD_HISTORY = "upload-history";
+const STORE_COOKIE_FETCH_HISTORY = "cookie-fetch-history";
 const CONFIG_KEY = "config";
 const IMPORT_HISTORY_KEY = "list";
 const SELECTED_HISTORY_KEY = "selectedId";
@@ -32,17 +34,33 @@ const USERS_LIST_KEY = "list";
 const PROXIES_LIST_KEY = "list";
 const UPLOAD_HISTORY_KEY = "list";
 const SELECTED_UPLOAD_HISTORY_KEY = "selectedId";
+const COOKIE_FETCH_HISTORY_KEY = "list";
 
-/** Bản ghi video theo mã sản phẩm — giống pattern affiliate-video (link → base64). */
+/** Bản ghi video theo mã sản phẩm — giống pattern scene generate (link/tên + binary local). */
 export type ProductVideoRecord = {
   productId: string;
-  /** Link gốc từ Flow2 */
+  /** Link gốc từ Flow2 / generate */
   videoUris: string[];
-  /** base64 từng variant (null = chưa enrich) */
+  /**
+   * @deprecated base64 từng variant — nặng, dễ QuotaExceeded.
+   * Ưu tiên `videoBlobList`. Giữ để đọc bản ghi cũ.
+   */
   videoBytesList: Array<string | null>;
+  /** Blob từng variant (giống mediaBlob) — dùng khi nối / preview */
+  videoBlobList?: Array<Blob | null>;
   mimeType: string;
-  /** base64 video đã nối (null = chưa có) */
+  /**
+   * @deprecated Base64 video nối — nặng. Binary nối nằm store `merged-videos`.
+   * Giữ để đọc bản ghi cũ.
+   */
   mergedVideoBytes: string | null;
+  /**
+   * @deprecated Blob video nối trên product-videos — dễ bị enrich ghi đè.
+   * Nguồn chính: store `merged-videos`.
+   */
+  mergedVideoBlob?: Blob | null;
+  /** Tên file nhẹ trên UI/thread (vd. merged.mp4) — không chứa binary */
+  mergedVideoName?: string;
   updatedAt: number;
 };
 
@@ -54,10 +72,12 @@ export type MergedVideoRecord = {
   updatedAt: number;
 };
 
-/** CSV phiên cào từ extension — ID riêng trong DB video-affiliate-manager. */
+/** CSV phiên cào Affiliate — ID riêng trong DB video-affiliate-manager. */
 export type ScrapeCsvSessionRecord = {
   id: string;
   createdAt: number;
+  /** Tên project hiển thị (vd. Crawl Project 1) */
+  name?: string;
   keyword: string;
   marketHost: string;
   marketCode?: string;
@@ -94,13 +114,15 @@ export type ThreadMetaRecord = {
 };
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let openedDbVersion = 0;
 
 function openDB(): Promise<IDBDatabase> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("IndexedDB unavailable on server"));
   }
-  if (dbPromise) return dbPromise;
+  if (dbPromise && openedDbVersion === DB_VERSION) return dbPromise;
 
+  openedDbVersion = DB_VERSION;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(VIDEO_AFFILIATE_MANAGER_DB, DB_VERSION);
 
@@ -148,6 +170,9 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_UPLOAD_HISTORY)) {
         db.createObjectStore(STORE_UPLOAD_HISTORY);
       }
+      if (!db.objectStoreNames.contains(STORE_COOKIE_FETCH_HISTORY)) {
+        db.createObjectStore(STORE_COOKIE_FETCH_HISTORY);
+      }
     };
 
     req.onsuccess = () => resolve(req.result);
@@ -171,13 +196,27 @@ async function withStore<T>(
 ): Promise<T> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
+    let result: T;
+    let reqDone = false;
     try {
       const tx = db.transaction(storeName, mode);
       const store = tx.objectStore(storeName);
       const req = fn(store);
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        result = req.result;
+        reqDone = true;
+        // readonly: có thể resolve sớm; readwrite đợi oncomplete để chắc đã commit
+        if (mode === "readonly") resolve(result);
+      };
       req.onerror = () => reject(req.error);
-      tx.onerror = () => reject(tx.error);
+      tx.oncomplete = () => {
+        if (mode !== "readonly") {
+          if (!reqDone) reject(new Error(`IDB request incomplete: ${storeName}`));
+          else resolve(result);
+        }
+      };
+      tx.onerror = () => reject(tx.error || new Error(`IDB transaction error: ${storeName}`));
+      tx.onabort = () => reject(tx.error || new Error(`IDB transaction aborted: ${storeName}`));
     } catch (err) {
       reject(err);
     }
@@ -228,6 +267,22 @@ export async function idbDeleteProductVideo(productId: string): Promise<void> {
   }
 }
 
+/** Xóa toàn bộ variant video (Blob/base64) — giải phóng bộ nhớ Generate Video. */
+export async function idbClearProductVideos(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_PRODUCT_VIDEOS, "readwrite");
+      tx.objectStore(STORE_PRODUCT_VIDEOS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 /** @deprecated */
 export async function idbPutMergedVideo(
   itemId: string,
@@ -263,6 +318,22 @@ export async function idbDeleteMergedVideo(itemId: string): Promise<void> {
   } catch (err) {
     console.warn("[video-affiliate-manager] delete merged video failed", err);
   }
+}
+
+/** Xóa toàn bộ video đã nối — giải phóng bộ nhớ Generate Video. */
+export async function idbClearMergedVideos(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_MERGED_VIDEOS, "readwrite");
+      tx.objectStore(STORE_MERGED_VIDEOS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
 export async function idbGetMergedVideoObjectUrl(itemId: string): Promise<string | ""> {
@@ -483,6 +554,38 @@ export async function idbClearThreadsBySession(sessionId: string): Promise<void>
   });
 }
 
+/** Xóa toàn bộ threads (mọi phiên Generate Video). */
+export async function idbClearAllThreads(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_THREADS, "readwrite");
+      tx.objectStore(STORE_THREADS).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** Xóa toàn bộ thread-meta (stats mọi phiên). */
+export async function idbClearAllThreadMeta(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_THREAD_META, "readwrite");
+      tx.objectStore(STORE_THREAD_META).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 /** Đếm số thread trong session (không match search). */
 export async function idbCountThreadsBySession(sessionId: string): Promise<number> {
   if (!sessionId) return 0;
@@ -652,4 +755,36 @@ export async function idbSetSelectedUploadHistoryId(id: string | null): Promise<
   await withStore(STORE_UPLOAD_HISTORY, "readwrite", (s) =>
     s.put(id, SELECTED_UPLOAD_HISTORY_KEY)
   );
+}
+
+/** ==================== COOKIE FETCH HISTORY ==================== */
+
+export async function idbGetCookieFetchHistoryList<T>(): Promise<T[]> {
+  try {
+    const list = await withStore<T[] | undefined>(
+      STORE_COOKIE_FETCH_HISTORY,
+      "readonly",
+      (s) => s.get(COOKIE_FETCH_HISTORY_KEY) as IDBRequest<T[] | undefined>
+    );
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get cookie-fetch history failed", err);
+    return [];
+  }
+}
+
+export async function idbSetCookieFetchHistoryList<T>(list: T[]): Promise<void> {
+  await withStore(STORE_COOKIE_FETCH_HISTORY, "readwrite", (s) =>
+    s.put(list, COOKIE_FETCH_HISTORY_KEY)
+  );
+}
+
+export async function idbClearCookieFetchHistory(): Promise<void> {
+  try {
+    await withStore(STORE_COOKIE_FETCH_HISTORY, "readwrite", (s) =>
+      s.delete(COOKIE_FETCH_HISTORY_KEY)
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] clear cookie-fetch history failed", err);
+  }
 }

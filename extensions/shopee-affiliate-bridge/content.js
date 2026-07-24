@@ -37,6 +37,36 @@
     });
   }
 
+  function runFetchPage(options) {
+    return new Promise((resolve, reject) => {
+      const requestId = `page-${Date.now()}`;
+      let settled = false;
+      const finish = (fn, value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        window.removeEventListener("message", onMessage);
+        fn(value);
+      };
+      const onMessage = (event) => {
+        if (event.source !== window) return;
+        const data = event.data;
+        if (!data || data.source !== SOURCE || data.requestId !== requestId) return;
+        if (data.action === "FETCH_PAGE_DONE") {
+          finish(resolve, data.result);
+        }
+        if (data.action === "FETCH_PAGE_ERROR") {
+          finish(reject, new Error(data.error || "Fetch page failed"));
+        }
+      };
+      const timer = window.setTimeout(() => {
+        finish(reject, new Error("Hết thời gian chờ fetch page"));
+      }, 45000);
+      window.addEventListener("message", onMessage);
+      postToPage({ action: "FETCH_PAGE", requestId, options });
+    });
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const data = event.data;
@@ -107,6 +137,37 @@
         .then((result) => {
           busy = false;
           sendResponse({ ok: true, result });
+        })
+        .catch((err) => {
+          busy = false;
+          sendResponse({ ok: false, error: err?.message || String(err) });
+        });
+      return true;
+    }
+
+    if (message?.type === "FETCH_PRODUCT_PAGE") {
+      if (busy) {
+        sendResponse({ ok: false, error: "Đang chạy" });
+        return false;
+      }
+      busy = true;
+      runFetchPage({
+        keyword: message.keyword || "",
+        sortType: message.sortType,
+        pageOffset: message.pageOffset,
+        pageLimit: message.pageLimit,
+        listType: message.listType,
+      })
+        .then((result) => {
+          busy = false;
+          sendResponse({
+            ok: true,
+            products: result?.products || [],
+            hasMore: Boolean(result?.hasMore),
+            totalCount: result?.totalCount ?? null,
+            keyword: result?.keyword || "",
+            marketHost: result?.marketHost || "",
+          });
         })
         .catch((err) => {
           busy = false;

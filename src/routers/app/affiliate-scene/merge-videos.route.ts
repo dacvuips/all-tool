@@ -12,7 +12,7 @@ import { tmpdir } from "os";
 import path from "path";
 import { promisify } from "util";
 import { TOKEN_ROLES } from "../../../constants/role.const";
-import { concatVideosToBuffer } from "../../../helpers/ffmpeg";
+import { concatVideosToBuffer, isConcatUrlDownloadError } from "../../../helpers/ffmpeg";
 import logger from "../../../helpers/logger";
 import { id12 } from "../../../helpers/nanoid";
 import { Context } from "../../../libs/graphql";
@@ -81,6 +81,12 @@ export default [
         return res.status(200).send(buffer);
       } catch (err: any) {
         logger.error(`[merge-videos] ${err?.message || err}`);
+        if (isConcatUrlDownloadError(err)) {
+          return res.status(422).json({
+            code: err.code,
+            message: err.message,
+          });
+        }
         return res.status(500).json({
           message: err?.message || "Nối video thất bại",
         });

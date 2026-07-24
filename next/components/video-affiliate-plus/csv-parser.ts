@@ -39,6 +39,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "product name",
     "sản phẩm",
     "san pham",
+    "name",
   ],
   productLink: [
     "link sản phẩm",
@@ -59,6 +60,7 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "affiliate_link_short",
     "affiliate link short",
     "affiliate link shot",
+    "long_link",
   ],
   commission: [
     "hoa hồng shop",
@@ -71,6 +73,9 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "hoa hong",
     "hoa_hong",
     "commission",
+    "seller_commission_rate",
+    "default_commission_rate",
+    "max_commission_rate",
   ],
   imageUrl: [
     "ảnh",
@@ -276,8 +281,12 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
 
           if (field === "commission") {
             const headerName = normalizeHeader(firstRow[colIndex] || "");
-            // Ưu tiên "Hoa hồng shop" hơn mặc định / tối đa
-            if (headerName.includes("shop") || !raw.commission) {
+            // Ưu tiên seller_commission_rate / "Hoa hồng shop"
+            if (
+              headerName.includes("shop") ||
+              headerName === "seller_commission_rate" ||
+              !raw.commission
+            ) {
               raw.commission = value;
             }
             return;
@@ -285,13 +294,27 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
 
           if (field === "affiliateLink") {
             const headerName = normalizeHeader(firstRow[colIndex] || "");
-            // Ưu tiên link short/shot hơn long link
+            // Ưu tiên link short/shot hơn long_link
             if (
               headerName.includes("shot") ||
               headerName.includes("short") ||
+              headerName === "affiliate_link_short" ||
               !raw.affiliateLink
             ) {
               raw.affiliateLink = value;
+            }
+            return;
+          }
+
+          if (field === "imageUrl") {
+            const headerName = normalizeHeader(firstRow[colIndex] || "");
+            // Ưu tiên image_url (CDN) hơn image (id)
+            if (
+              headerName === "image_url" ||
+              headerName.includes("url") ||
+              !raw.imageUrl
+            ) {
+              raw.imageUrl = value;
             }
             return;
           }

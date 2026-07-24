@@ -46,7 +46,7 @@ function toRecord(
   item: AffiliatePlusItem,
   opts?: { createdAt?: number }
 ): ThreadRecord {
-  // Không persist prompt / blob:/data: — media nằm product-videos IDB (marker "indexeddb")
+  // Không persist prompt / blob:/data: — media nằm product-videos IDB (tên merged.mp4)
   const { prompt: _omitPrompt, mergedVideoUrl, ...rest } = item;
   const persistMerged = toPersistedMergedVideoUrl(mergedVideoUrl);
   const now = Date.now();

@@ -19,6 +19,7 @@ const securityHeaders = [
     value: "1; mode=block",
   },
   {
+    // Giữ same-origin — ffmpeg.wasm dùng @ffmpeg/core single-thread (không cần SharedArrayBuffer / require-corp)
     key: "Cross-Origin-Embedder-Policy",
     value: "same-origin",
   },
@@ -36,6 +37,8 @@ const securityHeaders = [
 const nextConfig = {
   swcMinify: true,
   reactStrictMode: false,
+  // @ffmpeg/* là ESM — cần transpile khi Next bundle
+  transpilePackages: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
   publicRuntimeConfig: {
     version: process.env.npm_package_version,
     firebaseView: config.get("firebase.webConfig"),
