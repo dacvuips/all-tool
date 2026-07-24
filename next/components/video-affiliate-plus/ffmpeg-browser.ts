@@ -50,6 +50,38 @@ async function drainQueue() {
 let _ffmpegInstance: import("@ffmpeg/ffmpeg").FFmpeg | null = null;
 let _loadPromise: Promise<import("@ffmpeg/ffmpeg").FFmpeg> | null = null;
 
+function isChunkLoadError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  const name = err instanceof Error ? err.name : "";
+  return (
+    name === "ChunkLoadError" ||
+    /Loading chunk .+ failed/i.test(msg) ||
+    /Failed to fetch dynamically imported module/i.test(msg)
+  );
+}
+
+/** Dynamic import kèm 1 lần retry (Next có thể 404 chunk lúc vừa compile). */
+async function importFfmpegPackages(): Promise<{
+  FFmpeg: typeof import("@ffmpeg/ffmpeg").FFmpeg;
+  toBlobURL: typeof import("@ffmpeg/util").toBlobURL;
+}> {
+  const load = async () => {
+    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
+      import("@ffmpeg/ffmpeg"),
+      import("@ffmpeg/util"),
+    ]);
+    return { FFmpeg, toBlobURL };
+  };
+
+  try {
+    return await load();
+  } catch (err) {
+    if (!isChunkLoadError(err)) throw err;
+    await new Promise((r) => setTimeout(r, 400));
+    return await load();
+  }
+}
+
 async function getFFmpeg(
   onProgress?: FfmpegMergeOptions["onProgress"]
 ): Promise<import("@ffmpeg/ffmpeg").FFmpeg> {
@@ -58,10 +90,9 @@ async function getFFmpeg(
 
   _loadPromise = (async () => {
     onProgress?.({ ratio: 0.02, message: "Đang tải ffmpeg.wasm..." });
-    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-    const { toBlobURL } = await import("@ffmpeg/util");
+    const { FFmpeg, toBlobURL } = await importFfmpegPackages();
 
-    // Single-thread core — không cần SharedArrayBuffer / COEP headers
+    // Single-thread core — không cần SharedArrayBuffer / COEP
     const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
     const ff = new FFmpeg();
 

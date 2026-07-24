@@ -18,11 +18,8 @@ const securityHeaders = [
     key: "X-XSS-Protection",
     value: "1; mode=block",
   },
-  {
-    // Giữ same-origin — ffmpeg.wasm dùng @ffmpeg/core single-thread (không cần SharedArrayBuffer / require-corp)
-    key: "Cross-Origin-Embedder-Policy",
-    value: "same-origin",
-  },
+  // Không set Cross-Origin-Embedder-Policy: @ffmpeg/core single-thread không cần
+  // SharedArrayBuffer; COEP same-origin chặn Worker/chunk → ChunkLoadError khi nối video.
   {
     key: "Cross-Origin-Opener-Policy",
     value: "same-origin-allow-popups",

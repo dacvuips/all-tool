@@ -133,6 +133,8 @@ function useHelmet(app: express.Application) {
             workerSrc: ["'self'", "blob:"],
             connectSrc: [
               "'self'",
+              // ffmpeg.wasm — Worker fetch core/wasm từ blob: URL (toBlobURL)
+              "blob:",
               // Shopee Scrape Local Agent (máy user) — tab Cào dữ liệu
               "http://127.0.0.1:17890",
               "http://localhost:17890",
