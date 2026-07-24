@@ -189,7 +189,13 @@ export async function mergeVideosInBrowser(
       if (typeof outData === "string") {
         throw new Error("ffmpeg trả về text thay vì video binary");
       }
-      resultBlob = new Blob([outData], { type: "video/mp4" });
+      const bytes =
+        outData instanceof Uint8Array ? outData : new Uint8Array(outData as ArrayBuffer);
+      const ab = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength
+      ) as ArrayBuffer;
+      resultBlob = new Blob([ab], { type: "video/mp4" });
     } finally {
       options.onProgress?.({ ratio: 0.98, message: "Dọn dẹp..." });
       for (const name of inputNames) {

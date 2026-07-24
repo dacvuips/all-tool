@@ -296,7 +296,7 @@ export function filterShopeeCookieAppString(cookie?: string | null): string {
   const used = new Set<string>();
   for (const name of SHOPEE_COOKIE_APP_FIELDS) {
     if (name === "_ga_*") {
-      const gaDyn = [...map.keys()]
+      const gaDyn = Array.from(map.keys())
         .filter((n) => n.startsWith("_ga_") && !used.has(n))
         .sort();
       for (const n of gaDyn) {
@@ -309,7 +309,7 @@ export function filterShopeeCookieAppString(cookie?: string | null): string {
     ordered.push(`${name}=${map.get(name)}`);
     used.add(name);
   }
-  for (const [name, value] of map.entries()) {
+  for (const [name, value] of Array.from(map.entries())) {
     if (used.has(name)) continue;
     ordered.push(`${name}=${value}`);
   }
