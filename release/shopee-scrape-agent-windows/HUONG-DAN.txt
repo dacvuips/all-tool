@@ -1,0 +1,9 @@
+Shopee Scrape Agent — Windows
+=============================
+
+1. Cài và mở GemLogin Desktop (API localhost:1010).
+2. Double-click BatDau.bat (hoặc ShopeeScrapeAgent.exe).
+3. Giữ cửa sổ Agent mở.
+4. Web → tab Cào dữ liệu → thấy Agent + GemLogin.
+
+http://127.0.0.1:17890

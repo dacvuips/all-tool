@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -61,8 +60,11 @@ const MARKET_OPTIONS = [
   { value: "affiliate.shopee.co.id", label: "ID" },
 ];
 
-const SCRAPE_AGENT_ZIP_URL = "/downloads/ShopeeScrapeAgent.zip";
-const SCRAPE_AGENT_ZIP_NAME = "ShopeeScrapeAgent.zip";
+const SCRAPE_AGENT_ZIP_WIN_URL = "/downloads/ShopeeScrapeAgent-windows.zip";
+const SCRAPE_AGENT_ZIP_WIN_NAME = "ShopeeScrapeAgent-windows.zip";
+const SCRAPE_AGENT_ZIP_MAC_URL = "/downloads/ShopeeScrapeAgent-macos.zip";
+const SCRAPE_AGENT_ZIP_MAC_NAME = "ShopeeScrapeAgent-macos.zip";
+/** Legacy link (Windows) — giữ file public cũ */
 const GEMLOGIN_DOWNLOAD_URL = "https://app.gemlogin.vn/download-auth";
 
 const GUIDE_STEPS = [
@@ -70,7 +72,7 @@ const GUIDE_STEPS = [
     step: "01",
     titleKey: "Tải & chạy Agent",
     descKey:
-      "Bấm «Tải Shopee Scrape Agent», giải nén zip → chạy BatDau.bat (hoặc .exe). Giữ cửa sổ mở.",
+      "Tải zip Windows hoặc Mac → giải nén → chạy BatDau.bat / BatDau.command. Giữ cửa sổ mở.",
     Icon: RiDatabase2Line,
   },
   {
@@ -1354,15 +1356,24 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           {t(item.descKey)}
                         </p>
                         {isDownloadStep ? (
-                          <Link
-                            href={SCRAPE_AGENT_ZIP_URL}
-                            target="_blank"
-                            download={SCRAPE_AGENT_ZIP_NAME}
-                            className="mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-bluegray-600 px-3 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-bluegray-700"
-                          >
-                            <HiDownload className="text-sm" />
-                            {t("Tải file ZIP")}
-                          </Link>
+                          <div className="mt-auto flex flex-row gap-1.5">
+                            <a
+                              href={SCRAPE_AGENT_ZIP_WIN_URL}
+                              download={SCRAPE_AGENT_ZIP_WIN_NAME}
+                              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-bluegray-600 px-2 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-bluegray-700"
+                            >
+                              <HiDownload className="text-sm shrink-0" />
+                              {t("Windows")}
+                            </a>
+                            <a
+                              href={SCRAPE_AGENT_ZIP_MAC_URL}
+                              download={SCRAPE_AGENT_ZIP_MAC_NAME}
+                              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-bluegray-400 bg-white px-2 text-12 font-semibold text-bluegray-800 shadow-sm transition-colors hover:bg-bluegray-50"
+                            >
+                              <HiDownload className="text-sm shrink-0" />
+                              {t("Mac")}
+                            </a>
+                          </div>
                         ) : null}
                         {isGemLoginStep ? (
                           <a
