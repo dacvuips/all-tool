@@ -28,10 +28,28 @@ export function dataUrlToBlob(dataUrl: string): Blob {
 
 const DOWNLOAD_PROXY_PATH = "/api/file/download-proxy";
 
+/** Host media thường không gửi CORS — fetch thẳng từ browser sẽ fail. */
+const PREFER_PROXY_HOST_SUFFIXES = [
+  "flow2.viettheo.site",
+  "flow-content.google",
+  "viettheo.site",
+];
+
 function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
     return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function shouldPreferDownloadProxy(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return PREFER_PROXY_HOST_SUFFIXES.some(
+      (suffix) => host === suffix || host.endsWith(`.${suffix}`)
+    );
   } catch {
     return false;
   }
@@ -63,44 +81,51 @@ export function toDownloadProxyUrl(url: string, inline = false): string {
 }
 
 /** Fetch HTTP(S) URL as Blob.
- * Ưu tiên fetch trực tiếp từ browser (cookie / CORS thực tế),
- * chỉ qua download-proxy khi direct fail.
+ * Flow2 / media host không CORS → ưu tiên download-proxy.
+ * Host khác: thử direct trước, fail thì fallback proxy.
  */
 async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
-  // 1) Direct browser fetch trước — nhiều CDN (flow2) chỉ browser đọc được
+  const preferProxy = shouldPreferDownloadProxy(url);
+
+  const tryProxy = async (): Promise<Blob> => {
+    const proxyUrl = toDownloadProxyUrl(url);
+    const proxyRes = await fetch(proxyUrl);
+    if (proxyRes.ok) {
+      return proxyRes.blob();
+    }
+
+    let detail = "";
+    try {
+      const json = await proxyRes.json();
+      if (json?.details) detail = `: ${json.details}`;
+      else if (json?.error) detail = `: ${json.error}`;
+    } catch {
+      // ignore
+    }
+    throw new Error(`Không tải được video (proxy ${proxyRes.status})${detail}`);
+  };
+
+  if (preferProxy) {
+    return tryProxy();
+  }
+
+  // Direct browser fetch — CDN/cookie thực tế
   try {
     const res = await fetch(url, { credentials: "omit", mode: "cors" });
     if (res.ok) {
       return res.blob();
     }
-    // 404/410 = URL chết — không cần proxy
     if (res.status === 404 || res.status === 410) {
       throw new Error(`Video URL không còn tồn tại (HTTP ${res.status})`);
     }
   } catch (err: any) {
-    // Nếu đã xác định 404 thì throw luôn
     if (/không còn tồn tại|HTTP 404|HTTP 410/i.test(String(err?.message || ""))) {
       throw err;
     }
     // CORS / network → thử proxy
   }
 
-  // 2) Fallback server proxy
-  const proxyUrl = toDownloadProxyUrl(url);
-  const proxyRes = await fetch(proxyUrl);
-  if (proxyRes.ok) {
-    return proxyRes.blob();
-  }
-
-  let detail = "";
-  try {
-    const json = await proxyRes.json();
-    if (json?.details) detail = `: ${json.details}`;
-    else if (json?.error) detail = `: ${json.error}`;
-  } catch {
-    // ignore
-  }
-  throw new Error(`Không tải được video (proxy ${proxyRes.status})${detail}`);
+  return tryProxy();
 }
 
 /** Resolve a remote or data URI to a Blob. Data URIs are parsed locally. */

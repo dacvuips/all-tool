@@ -213,6 +213,32 @@ function formatPostedDate(ts: number) {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+/** Link SP để mở tab mới — ưu tiên product_link trong raw. */
+function resolveScrapeProductUrl(row: ScrapeProductRow, marketHost: string): string {
+  const raw = (row.raw || {}) as Record<string, unknown>;
+  const fromRaw = String(
+    raw.product_link ||
+      raw.productLink ||
+      raw.long_link ||
+      raw.affiliate_link_short ||
+      raw.affiliate_link ||
+      ""
+  ).trim();
+  if (fromRaw) return fromRaw;
+
+  const id = String(row.id || "").trim();
+  const dash = id.indexOf("-");
+  if (dash <= 0) return "";
+  const shopId = id.slice(0, dash);
+  const itemId = id.slice(dash + 1);
+  if (!shopId || !itemId) return "";
+
+  const host = String(marketHost || "").toLowerCase();
+  const m = host.match(/^affiliate\.(shopee\..+)$/i);
+  const mallHost = m?.[1] || "shopee.vn";
+  return `https://${mallHost}/product/${shopId}/${itemId}`;
+}
+
 function serializeCsvCell(value: unknown): string {
   if (value == null) return "";
   if (typeof value === "object") return JSON.stringify(value);
@@ -1344,6 +1370,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               <tbody className={panelListClasses.tbody}>
                 {pagedProducts.map((row, idx) => {
                   const stt = (safeProductPage - 1) * productPageSize + idx + 1;
+                  const productUrl = resolveScrapeProductUrl(row, openMarketHost);
                   return (
                     <tr key={row.id} className={panelListRowClass()}>
                       <td className={`${panelListClasses.td} text-center text-gray-600`}>{stt}</td>
@@ -1351,7 +1378,19 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                         className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
                         title={row.productName}
                       >
-                        {row.productName || "—"}
+                        {productUrl ? (
+                          <a
+                            href={productUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-teal-700 hover:text-teal-800 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {row.productName || "—"}
+                          </a>
+                        ) : (
+                          row.productName || "—"
+                        )}
                       </td>
                       <td className={`${panelListClasses.td} text-center text-gray-700`}>
                         {row.commissionPct}%

@@ -129,6 +129,8 @@ function useHelmet(app: express.Application) {
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
             scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
+            // ffmpeg.wasm (video-affiliate-plus) chạy worker từ blob:
+            workerSrc: ["'self'", "blob:"],
             connectSrc: [
               "'self'",
               // Shopee Scrape Local Agent (máy user) — tab Cào dữ liệu
@@ -137,6 +139,8 @@ function useHelmet(app: express.Application) {
               // Shopee CDN — fetch ảnh/video từ browser (video-affiliate-plus)
               "https://*.img.susercontent.com",
               "https://*.vod.susercontent.com",
+              // @ffmpeg/core — tải wasm/js từ jsDelivr (ffmpeg-browser.ts)
+              "https://cdn.jsdelivr.net",
               "https://api.imgur.com/3/image",
               "wss:",
               "https://socialplugin.facebook.net",
