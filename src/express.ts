@@ -134,6 +134,9 @@ function useHelmet(app: express.Application) {
               // Shopee Scrape Local Agent (máy user) — tab Cào dữ liệu
               "http://127.0.0.1:17890",
               "http://localhost:17890",
+              // Shopee CDN — fetch ảnh/video từ browser (video-affiliate-plus)
+              "https://*.img.susercontent.com",
+              "https://*.vod.susercontent.com",
               "https://api.imgur.com/3/image",
               "wss:",
               "https://socialplugin.facebook.net",

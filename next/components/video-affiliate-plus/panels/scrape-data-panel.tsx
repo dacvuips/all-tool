@@ -67,6 +67,28 @@ const SCRAPE_AGENT_ZIP_MAC_NAME = "ShopeeScrapeAgent-macos.zip";
 /** Legacy link (Windows) — giữ file public cũ */
 const GEMLOGIN_DOWNLOAD_URL = "https://app.gemlogin.vn/download-auth";
 
+const SCRAPE_OPENAI_KEY_LS = "video-affiliate-plus-scrape-openai-key";
+const SCRAPE_GEMINI_KEY_LS = "video-affiliate-plus-scrape-gemini-key";
+
+function readScrapeAiKey(storageKey: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    return String(localStorage.getItem(storageKey) || "");
+  } catch {
+    return "";
+  }
+}
+
+function writeScrapeAiKey(storageKey: string, value: string) {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) localStorage.setItem(storageKey, value);
+    else localStorage.removeItem(storageKey);
+  } catch {
+    /* ignore quota */
+  }
+}
+
 const GUIDE_STEPS = [
   {
     step: "01",
@@ -127,6 +149,43 @@ export type ScrapeProductRow = {
   /** Bản ghi đầy đủ từ API — chỉ dùng khi xuất CSV */
   raw?: Record<string, unknown>;
 };
+
+/** Dòng bảng tab Crawl Giỏ Video (khớp PeeCrawl). */
+export type GioVideoRow = {
+  id: string;
+  stt: number;
+  /** Sản phẩm gốc */
+  name: string;
+  /** Số / text SP tương tự */
+  similar: string;
+  /** Quảng bá 7 ngày */
+  promoted: string;
+  /** Giỏ video */
+  cartText: string;
+  cartColor?: "ok" | "warn" | "muted";
+  statusText: string;
+  statusColor?: "ok" | "warn" | "muted" | "error" | "running";
+};
+
+/** Field sắp xếp SP tương tự — PeeCrawl tab2_data_sort.field */
+const GIO_VIDEO_SORT_FIELDS = [
+  { value: "hoa_hong", label: "Hoa Hồng" },
+  { value: "tien_hoa_hong", label: "Tiền hoa hồng" },
+  { value: "tong_da_ban", label: "Tổng đã bán" },
+  { value: "ban_gan_day", label: "Bán gần đây" },
+  { value: "ngay_dang", label: "Ngày đăng sản phẩm" },
+] as const;
+
+/** Hướng sắp xếp — PeeCrawl tab2_data_sort.direction */
+const GIO_VIDEO_SORT_DIRECTIONS = [
+  { value: "none", label: "Không sắp xếp" },
+  { value: "desc", label: "Cao → thấp" },
+  { value: "asc", label: "Thấp → cao" },
+] as const;
+
+type GioVideoSortField = (typeof GIO_VIDEO_SORT_FIELDS)[number]["value"];
+type GioVideoSortDirection = (typeof GIO_VIDEO_SORT_DIRECTIONS)[number]["value"];
+type GioVideoSortRow = { field: GioVideoSortField; direction: GioVideoSortDirection };
 
 interface ScrapeDataPanelProps {
   onImportItems?: (fileName: string, items: AffiliatePlusItem[]) => void | Promise<void>;
@@ -312,6 +371,33 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [crawledCount, setCrawledCount] = useState(0);
   const crawlAbortRef = useRef(false);
 
+  /** 0 = Crawl Project, 1 = Crawl Giỏ Video */
+  const [scrapeSubTab, setScrapeSubTab] = useState(0);
+  /** PeeCrawl: Song song (tab2_max_concurrent) */
+  const [gioParallel, setGioParallel] = useState(1);
+  /** PeeCrawl: Budget/profile (tab2_job_budget) */
+  const [gioBudget, setGioBudget] = useState(100);
+  /** PeeCrawl: 3 tiêu chí sắp xếp SP tương tự */
+  const [gioSortRows, setGioSortRows] = useState<GioVideoSortRow[]>([
+    { field: "hoa_hong", direction: "none" },
+    { field: "hoa_hong", direction: "none" },
+    { field: "hoa_hong", direction: "none" },
+  ]);
+  const [gioVideoRows, setGioVideoRows] = useState<GioVideoRow[]>([]);
+  const [gioVideoPage, setGioVideoPage] = useState(1);
+  const [gioVideoPageSize, setGioVideoPageSize] = useState(200);
+  const [gioCrawling, setGioCrawling] = useState(false);
+  const [gioCrawlStatus, setGioCrawlStatus] = useState("");
+  const gioAbortRef = useRef(false);
+
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [geminiKey, setGeminiKey] = useState("");
+  const [openaiKeyVisible, setOpenaiKeyVisible] = useState(false);
+  const [geminiKeyVisible, setGeminiKeyVisible] = useState(false);
+  const [checkingOpenaiKey, setCheckingOpenaiKey] = useState(false);
+  const [checkingGeminiKey, setCheckingGeminiKey] = useState(false);
+  const [aiKeysDialogOpen, setAiKeysDialogOpen] = useState(false);
+
   const refreshLocal = async () => {
     setSessions(await loadScrapeCsvSessions());
   };
@@ -350,7 +436,92 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   useEffect(() => {
     void refreshLocal();
     void refreshAgentAndGem();
+    setOpenaiKey(readScrapeAiKey(SCRAPE_OPENAI_KEY_LS));
+    setGeminiKey(readScrapeAiKey(SCRAPE_GEMINI_KEY_LS));
   }, []);
+
+  const persistOpenaiKey = (value: string) => {
+    setOpenaiKey(value);
+    writeScrapeAiKey(SCRAPE_OPENAI_KEY_LS, value.trim());
+  };
+
+  const persistGeminiKey = (value: string) => {
+    setGeminiKey(value);
+    writeScrapeAiKey(SCRAPE_GEMINI_KEY_LS, value.trim());
+  };
+
+  const handleCheckOpenaiKey = async () => {
+    const key = openaiKey.trim();
+    if (!key) {
+      toast.warn(t("Vui lòng nhập OpenAI Key."));
+      return;
+    }
+    setCheckingOpenaiKey(true);
+    try {
+      const resp = await fetch("https://api.openai.com/v1/models", {
+        method: "GET",
+        headers: { Authorization: `Bearer ${key}` },
+      });
+      if (resp.ok) {
+        toast.success(t("✅ OpenAI Key hợp lệ!"));
+        return;
+      }
+      const body = await resp.text().catch(() => "");
+      toast.error(
+        t("❌ OpenAI Key không hợp lệ ({{status}}): {{detail}}", {
+          status: resp.status,
+          detail: body.slice(0, 160) || resp.statusText,
+        })
+      );
+    } catch (err: any) {
+      // Browser thường bị CORS — vẫn lưu key; báo format gợi ý
+      if (/^sk-/i.test(key)) {
+        toast.warn(
+          t("Không kiểm tra trực tiếp từ trình duyệt (CORS). Key dạng sk-… đã lưu.")
+        );
+      } else {
+        toast.error(err?.message || t("Không kiểm tra được OpenAI Key"));
+      }
+    } finally {
+      setCheckingOpenaiKey(false);
+    }
+  };
+
+  const handleCheckGeminiKey = async () => {
+    const key = geminiKey.trim();
+    if (!key) {
+      toast.warn(t("Vui lòng nhập Gemini Key."));
+      return;
+    }
+    setCheckingGeminiKey(true);
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(
+        key
+      )}&pageSize=1`;
+      const resp = await fetch(url, { method: "GET" });
+      if (resp.ok) {
+        toast.success(t("✅ Gemini Key hợp lệ!"));
+        return;
+      }
+      const body = await resp.text().catch(() => "");
+      toast.error(
+        t("❌ Gemini Key không hợp lệ ({{status}}): {{detail}}", {
+          status: resp.status,
+          detail: body.slice(0, 160) || resp.statusText,
+        })
+      );
+    } catch (err: any) {
+      if (/^(AIza|AQ\.)/i.test(key)) {
+        toast.warn(
+          t("Không kiểm tra trực tiếp từ trình duyệt. Key dạng Gemini đã lưu.")
+        );
+      } else {
+        toast.error(err?.message || t("Không kiểm tra được Gemini Key"));
+      }
+    } finally {
+      setCheckingGeminiKey(false);
+    }
+  };
 
   const domainOptions = useMemo(() => {
     const fromData = new Set(sessions.map((s) => s.marketHost).filter(Boolean) as string[]);
@@ -391,9 +562,63 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     return products.slice(start, start + productPageSize);
   }, [products, safeProductPage, productPageSize]);
 
+  const gioCompletedCount = useMemo(
+    () => gioVideoRows.filter((r) => /hoàn thành/i.test(r.statusText)).length,
+    [gioVideoRows]
+  );
+  const gioVideoTotalPages = Math.max(1, Math.ceil(gioVideoRows.length / gioVideoPageSize));
+  const safeGioVideoPage = Math.min(gioVideoPage, gioVideoTotalPages);
+  const pagedGioVideoRows = useMemo(() => {
+    const start = (safeGioVideoPage - 1) * gioVideoPageSize;
+    return gioVideoRows.slice(start, start + gioVideoPageSize);
+  }, [gioVideoRows, safeGioVideoPage, gioVideoPageSize]);
+
   useEffect(() => {
     setProductPage(1);
   }, [products.length]);
+
+  useEffect(() => {
+    setGioVideoPage(1);
+  }, [gioVideoRows.length]);
+
+  const updateGioSortRow = (
+    index: number,
+    patch: Partial<GioVideoSortRow>
+  ) => {
+    setGioSortRows((prev) =>
+      prev.map((row, i) => (i === index ? { ...row, ...patch } : row))
+    );
+  };
+
+  const handleResetGioFilters = () => {
+    setGioParallel(1);
+    setGioBudget(100);
+    setGioSortRows([
+      { field: "hoa_hong", direction: "none" },
+      { field: "hoa_hong", direction: "none" },
+      { field: "hoa_hong", direction: "none" },
+    ]);
+    setGioCrawlStatus("");
+  };
+
+  const handleStartGioCrawl = () => {
+    if (gioCrawling) {
+      gioAbortRef.current = true;
+      setGioCrawling(false);
+      setGioCrawlStatus(t("Đã dừng"));
+      return;
+    }
+    gioAbortRef.current = false;
+    setGioCrawling(true);
+    setGioCrawlStatus(
+      t("Đã cấu hình (song song {{p}}, budget {{b}}) — chờ nối logic cào.", {
+        p: gioParallel,
+        b: gioBudget,
+      })
+    );
+    // UI-only: chưa có backend giỏ video → không giữ trạng thái "đang cào".
+    setGioCrawling(false);
+  };
 
   const domainLabel = (host: string) => {
     const known = MARKET_OPTIONS.find((m) => m.value === host);
@@ -1176,41 +1401,376 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     </div>
   );
 
+  const gioSortSelectClass =
+    "h-9 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-800 outline-none focus:border-teal-400 disabled:opacity-50";
+
+  const gioStatusClass = (color?: GioVideoRow["statusColor"]) => {
+    if (color === "ok") return "text-teal-700";
+    if (color === "warn") return "text-amber-700";
+    if (color === "error") return "text-rose-700";
+    if (color === "running") return "text-blue-700";
+    return "text-gray-600";
+  };
+
+  const gioCartClass = (color?: GioVideoRow["cartColor"]) => {
+    if (color === "ok") return "text-teal-700 font-semibold";
+    if (color === "warn") return "text-amber-700";
+    return "text-gray-700";
+  };
+
+  const crawlGioVideoForm = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="space-y-4">
+        <div>
+          <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
+            {t("Pool / Budget")}
+          </p>
+          <div className="space-y-2">
+            <div className={splitRowClass}>
+              <div className={splitLabelClass}>{t("Song song")}</div>
+              <div className={splitInputWrapClass}>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={gioParallel}
+                  disabled={gioCrawling}
+                  onChange={(e) => setGioParallel(Math.max(1, Number(e.target.value) || 1))}
+                  className={splitInputClass}
+                  aria-label={t("Song song")}
+                />
+              </div>
+            </div>
+            <div className={splitRowClass}>
+              <div className={splitLabelClass}>{t("Budget/profile")}</div>
+              <div className={splitInputWrapClass}>
+                <input
+                  type="number"
+                  min={1}
+                  value={gioBudget}
+                  disabled={gioCrawling}
+                  onChange={(e) => setGioBudget(Math.max(1, Number(e.target.value) || 1))}
+                  className={splitInputClass}
+                  aria-label={t("Budget/profile")}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
+            {t("Tiêu chí lựa chọn")}
+          </p>
+          <div className="space-y-2">
+            {gioSortRows.map((row, idx) => (
+              <div key={`gio-sort-${idx}`}>
+                <label className="m-0 mb-1 block text-10 font-semibold text-gray-500">
+                  {t("Sắp xếp {{n}}", { n: idx + 1 })}
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={row.field}
+                    disabled={gioCrawling}
+                    onChange={(e) =>
+                      updateGioSortRow(idx, { field: e.target.value as GioVideoSortField })
+                    }
+                    className={gioSortSelectClass}
+                    aria-label={t("Sắp xếp {{n}} — tiêu chí", { n: idx + 1 }) as string}
+                  >
+                    {GIO_VIDEO_SORT_FIELDS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {t(opt.label)}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={row.direction}
+                    disabled={gioCrawling}
+                    onChange={(e) =>
+                      updateGioSortRow(idx, {
+                        direction: e.target.value as GioVideoSortDirection,
+                      })
+                    }
+                    className={gioSortSelectClass}
+                    aria-label={t("Sắp xếp {{n}} — hướng", { n: idx + 1 }) as string}
+                  >
+                    {GIO_VIDEO_SORT_DIRECTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {t(opt.label)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
+        {gioCrawlStatus ? (
+          <p className="m-0 text-10 leading-relaxed text-gray-500">{gioCrawlStatus}</p>
+        ) : null}
+        <div className="flex flex-nowrap gap-2">
+          <button
+            type="button"
+            disabled={gioCrawling}
+            onClick={handleResetGioFilters}
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 px-2 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-300 disabled:opacity-50"
+          >
+            {t("Lọc lại")}
+          </button>
+          <button
+            type="button"
+            onClick={handleStartGioCrawl}
+            className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg border px-2 text-xs font-bold text-white transition-colors ${
+              gioCrawling
+                ? "border-rose-600 bg-rose-600 hover:bg-rose-700"
+                : "border-blue-600 bg-blue-600 hover:bg-blue-700"
+            }`}
+          >
+            {gioCrawling ? (
+              <>
+                <RiLoader4Line className="mr-1 animate-spin" />
+                {t("Dừng")}
+              </>
+            ) : (
+              t("Bắt đầu cào")
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const gioVideoListPanel = (
+    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
+        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-blue-600">
+            {t("Tổng SP")}
+          </p>
+          <p className="m-0 text-lg font-bold tabular-nums text-blue-800">{gioVideoRows.length}</p>
+        </div>
+        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-pink-300 bg-pink-100 px-3 py-2">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-pink-700">
+            {t("Hoàn thành")}
+          </p>
+          <p className="m-0 text-lg font-bold tabular-nums text-pink-900">{gioCompletedCount}</p>
+        </div>
+        <div className="col-span-2 flex flex-row items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 sm:col-span-1">
+          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-purple-600">
+            {t("Trạng thái")}
+          </p>
+          <p className="m-0 truncate text-sm font-semibold text-purple-800">
+            {gioCrawling ? t("Đang cào...") : gioCrawlStatus || t("Chưa chạy")}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100">
+        <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+          {t("Danh sách sản phẩm")}
+        </p>
+        <span className="text-xs text-gray-400">
+          {t("Hoàn thành")}: <b className="text-teal-700">{gioCompletedCount}</b>
+          <span className="mx-1 text-gray-300">·</span>
+          {t("Tổng")}: <b className="text-gray-700">{gioVideoRows.length}</b>
+        </span>
+      </div>
+
+      {!gioVideoRows.length ? (
+        <div className={`flex-1 ${panelListClasses.empty}`}>
+          {t("Chưa có dữ liệu. Chọn project / cấu hình rồi Bắt đầu cào.")}
+        </div>
+      ) : (
+        <>
+          <div
+            className="min-h-0 overflow-x-auto overflow-y-auto"
+            style={{ maxHeight: "calc(2.75rem + 10 * 2.75rem)" }}
+          >
+            <table className={panelListClasses.table}>
+              <thead className="sticky top-0 z-10">
+                <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
+                  <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
+                  <th className={`${panelListClasses.th} text-left min-w-[10rem]`}>
+                    {t("Sản phẩm gốc")}
+                  </th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("SP tương tự")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("QBá 7 ngày")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("Giỏ video")}</th>
+                  <th className={`${panelListClasses.th} text-center`}>{t("Trạng thái")}</th>
+                </tr>
+              </thead>
+              <tbody className={panelListClasses.tbody}>
+                {pagedGioVideoRows.map((row) => (
+                  <tr key={row.id} className={panelListRowClass()}>
+                    <td className={`${panelListClasses.td} text-center text-gray-600`}>{row.stt}</td>
+                    <td
+                      className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
+                      title={row.name}
+                    >
+                      {row.name || "—"}
+                    </td>
+                    <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                      {row.similar || "—"}
+                    </td>
+                    <td className={`${panelListClasses.td} text-center text-gray-700`}>
+                      {row.promoted || "—"}
+                    </td>
+                    <td className={`${panelListClasses.td} text-center ${gioCartClass(row.cartColor)}`}>
+                      {row.cartText || "—"}
+                    </td>
+                    <td
+                      className={`${panelListClasses.td} text-center whitespace-nowrap ${gioStatusClass(
+                        row.statusColor
+                      )}`}
+                    >
+                      {row.statusText || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="shrink-0 border-t border-gray-100">
+            <PanelListPagination
+              page={safeGioVideoPage}
+              totalPages={gioVideoTotalPages}
+              pageSize={gioVideoPageSize}
+              pageSizeOptions={[50, 100, 200, 300, 500, 1000, 1500]}
+              from={(safeGioVideoPage - 1) * gioVideoPageSize + 1}
+              to={Math.min(safeGioVideoPage * gioVideoPageSize, gioVideoRows.length)}
+              total={gioVideoRows.length}
+              onPageChange={setGioVideoPage}
+              onPageSizeChange={(size) => {
+                setGioVideoPageSize(size);
+                setGioVideoPage(1);
+              }}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+
+  const agentStatusChip =
+    agentOnline === false ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-10 font-semibold text-rose-700 ring-1 ring-inset ring-rose-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+        {t("Agent offline")}
+      </span>
+    ) : agentOnline === true && gemOnline === false ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-10 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        {t("GemLogin offline")}
+      </span>
+    ) : agentOnline === true && gemOnline === true ? (
+      <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-10 font-semibold text-success-dark ring-1 ring-inset ring-success">
+        <span className="h-1.5 w-1.5 rounded-full bg-success" />
+        {t("Online · {{n}} profile", { n: gemProfiles.length })}
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-10 font-semibold text-gray-500 ring-1 ring-inset ring-gray-200">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400" />
+        {t("Đang kiểm tra…")}
+      </span>
+    );
+
+  const hasOpenaiKey = Boolean(openaiKey.trim());
+  const hasGeminiKey = Boolean(geminiKey.trim());
+
+  const aiKeyFieldBtnClass =
+    "inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50";
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 justify-between lg:flex-row lg:items-center">
-        <div className="flex gap-3 items-center">
-          <div className="flex justify-center items-center w-10 h-10 text-teal-600 bg-teal-50 rounded-xl border border-teal-200">
-            <RiDatabase2Line className="text-xl" />
+      <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-50 text-teal-600 ring-1 ring-teal-100">
+              <RiDatabase2Line className="text-xl" />
+            </div>
+            <div className="min-w-0 space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="m-0 text-base font-bold tracking-tight text-gray-900">
+                  {t("Cào dữ liệu")}
+                </h3>
+                {agentStatusChip}
+                <button
+                  type="button"
+                  disabled={loadingGemProfiles}
+                  onClick={() => void refreshAgentAndGem()}
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition-colors hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
+                  title={t("Kiểm tra lại Agent + GemLogin") as string}
+                  aria-label={t("Kiểm tra lại Agent + GemLogin") as string}
+                >
+                  <RiRefreshLine className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+              <p className="m-0 text-xs leading-relaxed text-gray-500">
+                {t("Local Agent · GemLogin · Cào / Xuất CSV")}
+                {agentOnline === false ? (
+                  <span className="ml-1 text-rose-600">— {t("tải & mở BatDau.bat")}</span>
+                ) : null}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="m-0 text-sm font-bold text-gray-800">{t("Cào dữ liệu")}</h3>
-            <p className="m-0 mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-gray-500">
-              <span>{t("Local Agent · GemLogin · Cào / Xuất CSV")}</span>
-              {agentOnline === false ? (
-                <span className="text-danger-dark">
-                  {t("(Agent offline — tải & mở BatDau.bat)")}
-                </span>
-              ) : agentOnline === true && gemOnline === false ? (
-                <span className="text-danger-dark">{t("(Agent OK · GemLogin offline)")}</span>
-              ) : agentOnline === true && gemOnline === true ? (
-                <span className="text-success-dark">
-                  {t("(Agent + GemLogin · {{n}} profile)", { n: gemProfiles.length })}
-                </span>
-              ) : (
-                <span className="text-gray-400">{t("(Đang kiểm tra…)")}</span>
-              )}
-              <button
-                type="button"
-                disabled={loadingGemProfiles}
-                onClick={() => void refreshAgentAndGem()}
-                className="inline-flex h-5 w-5 items-center justify-center rounded border border-gray-200 bg-white text-gray-500 transition-colors hover:bg-gray-50 hover:text-teal-700 disabled:opacity-50"
-                title={t("Kiểm tra lại Agent + GemLogin") as string}
-                aria-label={t("Kiểm tra lại Agent + GemLogin") as string}
+
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setAiKeysDialogOpen(true)}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ring-1 ring-inset ${
+                hasOpenaiKey
+                  ? "bg-teal-50/80 ring-teal-200 hover:bg-teal-50"
+                  : "bg-gray-50 ring-gray-200 hover:bg-gray-100"
+              }`}
+              title={t("Nhập OpenAI Key") as string}
+            >
+              <span className="text-xs font-bold text-gray-800">{t("OpenAI")}</span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-10 font-semibold ${
+                  hasOpenaiKey
+                    ? "bg-teal-100 text-teal-800"
+                    : "bg-gray-200/80 text-gray-600"
+                }`}
               >
-                <RiRefreshLine className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`} />
-              </button>
-            </p>
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasOpenaiKey ? "bg-teal-500" : "bg-gray-400"
+                  }`}
+                />
+                {hasOpenaiKey ? t("Đã có Key") : t("Chưa có Key")}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiKeysDialogOpen(true)}
+              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ring-1 ring-inset ${
+                hasGeminiKey
+                  ? "bg-teal-50/80 ring-teal-200 hover:bg-teal-50"
+                  : "bg-gray-50 ring-gray-200 hover:bg-gray-100"
+              }`}
+              title={t("Nhập Gemini Key") as string}
+            >
+              <span className="text-xs font-bold text-gray-800">{t("Gemini")}</span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-10 font-semibold ${
+                  hasGeminiKey
+                    ? "bg-teal-100 text-teal-800"
+                    : "bg-gray-200/80 text-gray-600"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    hasGeminiKey ? "bg-teal-500" : "bg-gray-400"
+                  }`}
+                />
+                {hasGeminiKey ? t("Đã có Key") : t("Chưa có Key")}
+              </span>
+            </button>
           </div>
         </div>
       </div>
@@ -1446,6 +2006,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <TabGroup
           name="scrape-data-sub"
+          index={scrapeSubTab}
+          onChange={setScrapeSubTab}
           flex
           hasInkBar={false}
           className="!bg-transparent"
@@ -1465,11 +2027,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <TabGroup.Tab label={t("Crawl Giỏ Video")}>
             <div className="flex min-h-96 overflow-hidden">
               <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
-                <div className={panelListClasses.empty}>
-                  {t("Crawl Giỏ Video — đang phát triển.")}
-                </div>
+                {crawlGioVideoForm}
               </div>
-              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
+              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{gioVideoListPanel}</div>
             </div>
           </TabGroup.Tab>
         </TabGroup>
@@ -1750,6 +2310,101 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </>
         )}
       </div>
+
+      <Dialog
+        isOpen={aiKeysDialogOpen}
+        onClose={() => setAiKeysDialogOpen(false)}
+        title={t("API Keys")}
+        width="480px"
+        maxWidth="95vw"
+      >
+        <Dialog.Body>
+          <div className="space-y-4 pt-1">
+            <p className="m-0 text-xs text-gray-500">
+              {t("Dùng cho Crawl Giỏ Video (lọc SP tương tự). Key lưu trên trình duyệt.")}
+            </p>
+            <div>
+              <label
+                className="m-0 mb-1.5 block text-sm font-semibold text-gray-800"
+                htmlFor="scrape-openai-key"
+              >
+                {t("OpenAI Key")}
+              </label>
+              <div className="flex gap-1.5 items-center">
+                <input
+                  id="scrape-openai-key"
+                  type={openaiKeyVisible ? "text" : "password"}
+                  value={openaiKey}
+                  onChange={(e) => persistOpenaiKey(e.target.value)}
+                  placeholder="sk-..."
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setOpenaiKeyVisible((v) => !v)}
+                  className={aiKeyFieldBtnClass}
+                >
+                  {openaiKeyVisible ? t("Ẩn") : t("Hiện")}
+                </button>
+                <button
+                  type="button"
+                  disabled={checkingOpenaiKey}
+                  onClick={() => void handleCheckOpenaiKey()}
+                  className={`${aiKeyFieldBtnClass} text-teal-700`}
+                >
+                  {checkingOpenaiKey ? <RiLoader4Line className="animate-spin" /> : t("Check")}
+                </button>
+              </div>
+            </div>
+            <div>
+              <label
+                className="m-0 mb-1.5 block text-sm font-semibold text-gray-800"
+                htmlFor="scrape-gemini-key"
+              >
+                {t("Gemini Key")}
+              </label>
+              <div className="flex gap-1.5 items-center">
+                <input
+                  id="scrape-gemini-key"
+                  type={geminiKeyVisible ? "text" : "password"}
+                  value={geminiKey}
+                  onChange={(e) => persistGeminiKey(e.target.value)}
+                  placeholder="AIza… / AQ…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                />
+                <button
+                  type="button"
+                  onClick={() => setGeminiKeyVisible((v) => !v)}
+                  className={aiKeyFieldBtnClass}
+                >
+                  {geminiKeyVisible ? t("Ẩn") : t("Hiện")}
+                </button>
+                <button
+                  type="button"
+                  disabled={checkingGeminiKey}
+                  onClick={() => void handleCheckGeminiKey()}
+                  className={`${aiKeyFieldBtnClass} text-teal-700`}
+                >
+                  {checkingGeminiKey ? <RiLoader4Line className="animate-spin" /> : t("Check")}
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setAiKeysDialogOpen(false)}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700"
+              >
+                {t("Xong")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Body>
+      </Dialog>
 
       <Dialog
         isOpen={saveDialogOpen}
