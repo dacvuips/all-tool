@@ -1,83 +1,26 @@
 import logger from "../../../helpers/logger";
 import {
   fetchFlow2WithRetry,
-  FLOW2_GENERATION_TIMEOUT_MS,
   getFlow2Config,
-  getFlow2RequestStatus,
-  isFlow2FailedStatus,
-  isFlow2SuccessStatus,
-  pickError,
-  pickStatus,
   throwFlow2HttpError,
 } from "./_shared";
+import {
+  pickUpsampleJobId,
+  resolveUpsampleVideoUrl,
+  waitForUpsampleJobDone,
+} from "./upsample-poll";
 
 export type UpsampledVideoResult = {
-  videoBytes: string;
+  videoUri: string;
   mimeType: string;
+  upsampleJobId: string;
 };
 
-function pickUpsampleJobId(data: Record<string, unknown>): string | undefined {
-  const candidates = [
-    data.request_id,
-    data.id,
-    (data.data as Record<string, unknown> | undefined)?.request_id,
-    (data.data as Record<string, unknown> | undefined)?.id,
-  ];
-  const found = candidates.find((v) => typeof v === "string" && v.trim().length > 0);
-  return found ? String(found).trim() : undefined;
-}
-
-async function waitForUpsampleVideoDone(
-  upsampleJobId: string,
-  options?: {
-    timeoutMs?: number;
-    pollIntervalMs?: number;
-    onProgress?: (progress: number, message?: string) => void | Promise<void>;
-  }
-): Promise<void> {
-  const timeoutMs = options?.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS;
-  const pollIntervalMs = options?.pollIntervalMs ?? 2_500;
-  const startedAt = Date.now();
-  let pollCount = 0;
-
-  while (Date.now() - startedAt < timeoutMs) {
-    pollCount += 1;
-    const statusData = await getFlow2RequestStatus(upsampleJobId);
-    const status = pickStatus(statusData);
-
-    if (isFlow2FailedStatus(status)) {
-      const errorText = pickError(statusData) || status || "Unknown error";
-      const err: any = new Error(`Flow2 upsample video thất bại: ${errorText}`);
-      err.statusCode = 500;
-      throw err;
-    }
-
-    if (isFlow2SuccessStatus(status)) {
-      return;
-    }
-
-    if (options?.onProgress) {
-      const elapsed = Date.now() - startedAt;
-      const ratio = Math.min(1, elapsed / timeoutMs);
-      const progress = 15 + Math.round(ratio * 70);
-      Promise.resolve(
-        options.onProgress(progress, `Đang upscale video 1080p... (${pollCount})`)
-      ).catch((): undefined => undefined);
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-  }
-
-  throw new Error(
-    `Flow2 upsample video quá thời gian (${timeoutMs}ms) cho job ${upsampleJobId}`
-  );
-}
-
 /**
- * Upscale video lên 1080p qua Flow2:
- * 1. POST /api/requests/upsample-video (enqueue, trả ngay)
- * 2. Poll job đến status=done
- * 3. GET /api/requests/{jobId}?download=true
+ * Upscale video lên 1080p qua Flow2 (async):
+ * 1. POST /api/requests/upsample-video — enqueue
+ * 2. Poll GET /api/requests/{upsampleJobId} đến status=done
+ * 3. Trả URL video (không tải base64)
  */
 export async function upsampleVideoWithFlow2(params: {
   flow2RequestId: string;
@@ -119,48 +62,28 @@ export async function upsampleVideoWithFlow2(params: {
     await onProgress(12, "Đã enqueue, đang chờ Flow2 upscale...");
   }
 
-  await waitForUpsampleVideoDone(upsampleJobId, { onProgress });
+  const statusData = await waitForUpsampleJobDone(upsampleJobId, {
+    onProgress,
+    progressLabel: "upscale video 1080p",
+  });
 
   if (onProgress) {
-    await onProgress(90, "Đang tải video 1080p từ Flow2...");
+    await onProgress(90, "Đang lấy link video 1080p...");
   }
 
-  const downloadResp = await fetchFlow2WithRetry(
-    `${baseUrl}/api/requests/${upsampleJobId}?download=true`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-    }
-  );
-
-  if (!downloadResp.ok) {
-    const errText = await downloadResp.text();
-    throwFlow2HttpError("Flow2 upsample-video download error", downloadResp.status, errText);
-  }
-
-  const contentType = (downloadResp.headers.get("content-type") || "video/mp4")
-    .split(";")[0]
-    .trim();
-  const buffer = Buffer.from(await downloadResp.arrayBuffer());
-
-  if (contentType.includes("application/json")) {
-    const json = JSON.parse(buffer.toString("utf8")) as Record<string, unknown>;
-    const message =
-      (typeof json.message === "string" && json.message) ||
-      (typeof json.error === "string" && json.error) ||
-      "Flow2 upsample video không trả file";
-    throw new Error(message);
-  }
-
-  if (!buffer.length) {
-    throw new Error("Flow2 upsample video trả về file rỗng");
-  }
+  const videoUri = await resolveUpsampleVideoUrl(upsampleJobId, statusData);
 
   logger.info(
-    `[flow2-upsample-video] Hoàn tất source=${sourceRequestId} job=${upsampleJobId} (${buffer.length} bytes, ${contentType})`
+    `[flow2-upsample-video] Hoàn tất source=${sourceRequestId} job=${upsampleJobId} url=${videoUri}`
   );
 
+  if (onProgress) {
+    await onProgress(92, "Đã có link upscale video 1080p");
+  }
+
   return {
-    videoBytes: buffer.toString("base64"),
-    mimeType: contentType || "video/mp4",
+    videoUri,
+    mimeType: "video/mp4",
+    upsampleJobId,
   };
 }

@@ -181,6 +181,30 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         let missingPollCount = 0;
         let subscription: { unsubscribe: () => void } | null = null;
         let pollTimer: ReturnType<typeof setInterval> | null = null;
+        let polling = false;
+
+        const pollOnce = async () => {
+          if (settled || polling) return;
+          polling = true;
+          try {
+            const job = await MediaGenerationJobService.getJob<TResult>(jobId);
+            handleJobSnapshot(job);
+          } catch {
+            handleMissingJob();
+          } finally {
+            polling = false;
+          }
+        };
+
+        const handleWindowFocus = () => {
+          void pollOnce();
+        };
+
+        const handleVisibilityChange = () => {
+          if (document.visibilityState === "visible") {
+            void pollOnce();
+          }
+        };
 
         /** Dọn dẹp mọi resource — gọi 1 lần */
         const cleanup = () => {
@@ -195,6 +219,12 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           if (pollTimer) {
             clearInterval(pollTimer);
             pollTimer = null;
+          }
+          if (typeof window !== "undefined") {
+            window.removeEventListener("focus", handleWindowFocus);
+          }
+          if (typeof document !== "undefined") {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
           }
           const idx = activeHandlesRef.current.indexOf(handle);
           if (idx >= 0) activeHandlesRef.current.splice(idx, 1);
@@ -290,21 +320,22 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         }
 
         // 2b. Query initial — xử lý race "job xong trước khi subscribe"
-        MediaGenerationJobService.getJob<TResult>(jobId)
-          .then((job) => handleJobSnapshot(job))
-          .catch((err) => {
-            console.warn("[useMediaGenerationJob] query initial lỗi:", err?.message);
-            handleMissingJob();
-          });
+        void pollOnce().catch((err) => {
+          console.warn("[useMediaGenerationJob] query initial lỗi:", err?.message);
+        });
 
         // 2c. Poll fallback (nếu enable)
         if (pollIntervalMs > 0) {
           pollTimer = setInterval(() => {
-            if (settled) return;
-            MediaGenerationJobService.getJob<TResult>(jobId)
-              .then((job) => handleJobSnapshot(job))
-              .catch(() => handleMissingJob());
+            void pollOnce();
           }, pollIntervalMs);
+        }
+
+        if (typeof window !== "undefined") {
+          window.addEventListener("focus", handleWindowFocus);
+        }
+        if (typeof document !== "undefined") {
+          document.addEventListener("visibilitychange", handleVisibilityChange);
         }
       });
     },

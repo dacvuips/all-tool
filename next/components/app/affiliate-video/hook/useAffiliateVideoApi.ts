@@ -754,6 +754,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   // Hook dùng chung cho mọi tác vụ tạo ảnh/video (job + subscription + poll fallback)
   const imageJob = useMediaGenerationJob<{ images: GeneratedImageData[] }>();
   const videoJob = useMediaGenerationJob<GeneratedVideoData>();
+  /** Job AI text/JSON — enqueue + subscription/poll (tránh Cloudflare 504) */
+  const aiTextJob = useMediaGenerationJob<{ data: Record<string, unknown> }>();
   // ── Shared: gọi API /api/app/generation-scene/ ──
   const callGenerationSceneApi = useCallback(
     async (body: {
@@ -765,22 +767,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       /** Payload API – mảng ảnh tham chiếu nhân hoá (0–1 phần tử) */
       objectToPersonifyImages?: ElementFormImage[];
     }) => {
-      const res = await fetch("/api/app/generation-scene/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
+      try {
+        const { data } = await aiTextJob.run({
+          url: "/api/app/generation-scene/",
+          body,
+          pollIntervalMs: 1000,
+        });
+        return { success: true, data: data.data as unknown as ScriptData };
+      } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         return undefined;
       }
-
-      return res.json();
     },
-    [toast]
+    [aiTextJob, toast]
   );
   const callGenerationTrendingApi = useCallback(
     async (body: {
@@ -789,22 +788,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       artStyleId?: string;
       productImages?: string[];
     }) => {
-      const res = await fetch("/api/app/generation-trending/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
+      try {
+        const { data } = await aiTextJob.run({
+          url: "/api/app/generation-trending/",
+          body,
+          pollIntervalMs: 1000,
+        });
+        return { success: true, data: data.data as unknown as TrendingScriptData };
+      } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         return undefined;
       }
-
-      return res.json();
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── Helper: push a ScriptData into history array in IndexedDB ──
@@ -1013,22 +1009,19 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       objectToPersonifyCode?: string;
       artStyleId?: string;
     }) => {
-      const res = await fetch("/api/app/copy-video-analysis/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
+      try {
+        const { data } = await aiTextJob.run({
+          url: "/api/app/copy-video-analysis/",
+          body,
+          pollIntervalMs: 1000,
+        });
+        return { success: true, data: data.data as unknown as CopyVideoAnalysisData };
+      } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         return undefined;
       }
-
-      return res.json();
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
@@ -1158,24 +1151,21 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
       },
       options?: { suppressToast?: boolean }
     ) => {
-      const res = await fetch("/api/app/storyboard-analysis/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
+      try {
+        const { data } = await aiTextJob.run({
+          url: "/api/app/storyboard-analysis/",
+          body,
+          pollIntervalMs: 1000,
+        });
+        return { success: true, data: data.data as unknown as StoryboardAnalysisData };
+      } catch (err: any) {
         if (!options?.suppressToast) {
-          toast.error(message);
+          toast.error(err?.message || "Lỗi server");
         }
         return undefined;
       }
-
-      return res.json();
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   const analyzeStoryboardImage = useCallback(
@@ -1643,30 +1633,23 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
   const suggestConfig = useCallback(
     async (params: SuggestConfigParams): Promise<SuggestConfigResult | undefined> => {
       try {
-        const res = await fetch("/api/app/suggest-config/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const { data } = await aiTextJob.run({
+          url: "/api/app/suggest-config/",
+          body: {
             category: params.category,
             mood: params.mood,
             language: params.language,
-          }),
+          },
+          pollIntervalMs: 1000,
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
-          return undefined;
-        }
-
-        const result = await res.json();
-        return result.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);
+        return undefined;
       }
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── generateTTS – gọi API tạo audio từ text (Gemini TTS) ──

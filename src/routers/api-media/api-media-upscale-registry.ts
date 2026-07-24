@@ -42,7 +42,14 @@ export async function assertApiMediaFlow2RequestOwner(
     throw err;
   }
   const owner = await redis.get(reqKey(id));
-  if (owner && owner !== apiMediaTokenId) {
+  if (!owner) {
+    const err: any = new Error(
+      "Không tìm thấy quyền upscale cho request này (đã hết hạn hoặc không phải request của bạn)"
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+  if (owner !== apiMediaTokenId) {
     const err: any = new Error("Bạn không có quyền upscale request này");
     err.statusCode = 403;
     throw err;

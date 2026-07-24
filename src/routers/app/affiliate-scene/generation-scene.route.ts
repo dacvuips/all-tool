@@ -1,31 +1,14 @@
+/**
+ * POST /api/app/generation-scene/ — validate + checkLimit + enqueue → 202 { jobId }.
+ * Client poll/subscribe mediaGenerationJob đến SUCCEEDED/FAILED.
+ */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
-import { StoryModeTypeEnum } from "../constanst";
-import { AffiliateVideoOpenAIJsonSchema } from "./_chatgpt.constants";
-import { AffiliateVideoResponseSchema } from "./_gemini.constants";
-import {
-  AffiliateVideoFormConfig,
-  assertNonEmptyScenesArray,
-  buildObjectPersonifyImageScriptNote,
-  buildProductImageScriptNote,
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
-  checkRequestLimit,
-  filterReferenceImages,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
-  incrementRequestCount,
-  interpolateTemplate,
-  normalizeSceneAudioField,
-  parseGeminiJsonResponse,
-  resolveAiSceneProvider,
-  resolveArtStylePrompt,
-  resolveObjectToPersonifyPrompt,
-  resolveProductImagesForAi,
-  resolveReferenceImagesForGemini,
-} from "./_shared";
+import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { AffiliateVideoFormConfig, checkRequestLimit } from "./_shared";
 
 export default [
   {
@@ -39,188 +22,33 @@ export default [
 
         const body = req.body as {
           config: AffiliateVideoFormConfig;
-          text: string;
+          text?: string;
           objectToPersonifyCode?: string;
           productImages?: string[];
           objectToPersonifyImages?: import("./_shared").ReferenceImageInput[];
+          _metadata?: Record<string, unknown>;
         };
 
         if (!body?.config) {
           return res.status(400).json({ message: "Thiếu config" });
         }
 
-        // Kiểm tra giới hạn request trước khi tạo
         await checkRequestLimit(context.id);
 
-        const personifyImageRefs = filterReferenceImages(body.objectToPersonifyImages || []);
-        const usePersonifyImage = personifyImageRefs.length > 0;
+        const { _metadata, ...requestPayload } = body;
+        const { jobId, status } = await createAndEnqueueMediaJob(
+          {
+            customerId: context.id,
+            type: MediaGenerationJobType.GENERATION_SCENE,
+            requestPayload: requestPayload as unknown as Record<string, unknown>,
+            metadata: _metadata,
+          },
+          { skipStreamCheck: true }
+        );
 
-        // ── Resolve objectToPersonify prompt from DB (chỉ khi không dùng ảnh tham chiếu) ──
-        if (!usePersonifyImage) {
-          const { prompt: resolvedPersonifyPrompt, error: objectError } =
-            await resolveObjectToPersonifyPrompt({
-              objectToPersonifyCode: body.objectToPersonifyCode,
-              objectToPersonify: body.config.objectToPersonify,
-            });
-
-          if (objectError) {
-            return res.status(objectError.status).json({ message: objectError.message });
-          }
-          if (resolvedPersonifyPrompt) {
-            body.config.objectToPersonify = resolvedPersonifyPrompt;
-          }
-        } else {
-          body.config.objectToPersonify = "";
-        }
-
-        // ── Resolve artStyle prompt from DB ──
-        const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
-          artStyleId: body.config.artStyleId,
-          artStyle: body.config.artStyle,
-        });
-
-        if (resolvedArtStylePrompt) {
-          body.config.artStyle = resolvedArtStylePrompt;
-        }
-
-        // Build product image reference text
-        const productImageNote = buildProductImageScriptNote(body.productImages || []);
-        const personifyImageNote = usePersonifyImage
-          ? buildObjectPersonifyImageScriptNote(body.objectToPersonifyImages || [])
-          : "";
-
-        const storyModeTypes = req?.body?.config?.storyModeType;
-
-        const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
-        const batchSizeInstruction = hasBatchSize
-          ? `Your task is to generate exactly {{batchSize}} cinematic scenes`
-          : `Your task is to generate an appropriate number of cinematic scenes (decide based on the script content, typically 4-8 scenes)`;
-
-        const prompt = `
-
-Create a consistent multi-scene AI video prompt using:
-{{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. ${batchSizeInstruction} for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
-Create 2 fixed English anchors:
-
-CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
-
-ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view. Save to environment
-Generate "visualEffects" as one polished English sentence.
-It must make the scene feel visually rich, magical, and cinematic in a Pixar-like way.
-Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
-Keep it concise, vivid, and scene-specific.
-
-- Return valid JSON only.
-CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
-Root JSON structure:
-{
-  "topicTitle": "in {{language}}",
-  "artStyle": "{{artStyle}}",
-  "characterName": "same as main name in {{language}}",
-  "characterBaseDescription": "CHARACTER_ANCHOR",
-  "environment": "ENVIRONMENT_ANCHOR",
-  "voiceGender": "male or female",
-  "voiceTone": "",
-  "voiceStyle": "",
-  "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "scenes": [
-    {
-      "sceneNumber": 1,
-      "camera": "one exact value from CAMERA_TYPE",
-      "motionPrompt": "camera movement, character action, scene progression",
-      "audio": "voice metadata in {{language}}",
-      "dialogue": "dialogue/narration in {{language}}",
-      "visualEffects": "one polished English sentence"
-    }
-  ]
-}
-CRITICAL RULE: Always keep character and environment identical across all scenes.
-CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
-`;
-
-        // Thay thế placeholder trong text
-        const interpolatedText =
-          interpolateTemplate(body.text || prompt, body.config) +
-          personifyImageNote +
-          productImageNote;
-
-        const personifyImageBase64List = usePersonifyImage
-          ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
-          : [];
-        const productImageBase64List = await resolveProductImagesForAi(body.productImages);
-        const mediaImages = [...personifyImageBase64List, ...productImageBase64List];
-
-        const aiProvider = await resolveAiSceneProvider();
-        let responseText: string;
-
-        if (aiProvider === "gemini") {
-          responseText = await callGeminiJsonGenerate({
-            model: await getGeminiSceneModel("SCENE"),
-            text: interpolatedText,
-            media: mediaImages,
-            label: "generation-scene",
-            responseSchema: AffiliateVideoResponseSchema,
-          });
-        } else {
-          responseText = await callChatGPTGateway({
-            text: interpolatedText,
-            images: mediaImages.map((img, index) => ({
-              ...img,
-              fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-            })),
-            label: "generation-scene",
-            model: await getChatGPTSceneModel("SCENE"),
-            jsonSchema: AffiliateVideoOpenAIJsonSchema,
-          });
-        }
-        const rawParsed = parseGeminiJsonResponse(responseText) as any;
-        assertNonEmptyScenesArray(rawParsed.scenes);
-
-        const parsed = {
-          topicTitle: rawParsed.topicTitle || "",
-          artStyle: rawParsed.artStyle || "",
-          characterName: rawParsed.characterName || "",
-          characterBaseDescription: rawParsed.characterBaseDescription || "",
-          environment: rawParsed.environment || "",
-          voiceGender: rawParsed.voiceGender || "",
-          voiceTone: rawParsed.voiceTone || "",
-          voiceStyle: rawParsed.voiceStyle || "",
-          audioPrompt: rawParsed.audioPrompt || "",
-          cast: rawParsed.cast?.length
-            ? rawParsed.cast
-            : [
-                {
-                  name: rawParsed.characterName || "",
-                  tag: "main",
-                  description: rawParsed.characterBaseDescription || "",
-                },
-              ],
-          scenes: rawParsed.scenes.map((scene: any) => ({
-            sceneNumber: scene.sceneNumber,
-            camera: scene.camera || "",
-            motionPrompt: `${
-              storyModeTypes === StoryModeTypeEnum.prompt_to_video
-                ? `${rawParsed.characterBaseDescription}, `
-                : ""
-            } [${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
-              scene.visualEffects || ""
-            }`,
-            imageGenPrompt:
-              storyModeTypes === StoryModeTypeEnum.image_to_video
-                ? `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
-                  ""
-                : "",
-            audio:
-              `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
-              "",
-            dialogue: scene.dialogue || "",
-          })),
-        };
-
-        await incrementRequestCount(context.id);
-        res.json({ success: true, data: parsed });
+        res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
-        logger.error(`[generation-scene] Lỗi: ${err?.message}`);
+        logger.error(`[generation-scene] Lỗi enqueue: ${err?.message}`);
         const status = err?.statusCode || 500;
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }

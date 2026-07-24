@@ -364,6 +364,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
   // Hook chung cho mọi lệnh tạo media (job + subscription + poll fallback)
   const imageJob = useMediaGenerationJob<{ images: GeneratedImageData[] }>();
   const videoJob = useMediaGenerationJob<GeneratedVideoData>();
+  const aiTextJob = useMediaGenerationJob<{ data: Record<string, unknown> }>();
 
   // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
   const pushToCopyVideoHistory = useCallback(
@@ -744,30 +745,23 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
   const suggestConfig = useCallback(
     async (params: SuggestConfigParams): Promise<SuggestConfigResult | undefined> => {
       try {
-        const res = await fetch("/api/app/suggest-config/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const { data } = await aiTextJob.run({
+          url: "/api/app/suggest-config/",
+          body: {
             category: params.category,
             mood: params.mood,
             language: params.language,
-          }),
+          },
+          pollIntervalMs: 1000,
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
-          return undefined;
-        }
-
-        const result = await res.json();
-        return result.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);
+        return undefined;
       }
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── generateTTS – gọi API tạo audio từ text (Gemini TTS) ──

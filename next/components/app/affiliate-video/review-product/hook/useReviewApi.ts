@@ -420,26 +420,24 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   // Hook chung cho mọi lệnh tạo media (job + subscription + poll fallback)
   const imageJob = useMediaGenerationJob<{ images: GeneratedImageData[] }>();
   const videoJob = useMediaGenerationJob<GeneratedVideoData>();
+  const aiTextJob = useMediaGenerationJob<{ data: Record<string, unknown> }>();
 
-  // ── Shared: gọi API /api/app/generation-review-image/ (tạo kịch bản cảnh từ config) ──
+  // ── Shared: gọi API /api/app/generation-review-scene/ (tạo kịch bản cảnh từ config) ──
   const callGenerationReviewApi = useCallback(
     async (body: { config: Record<string, any> }) => {
-      const res = await fetchWith524Retry("/api/app/generation-review-scene/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        const message = err?.message || `Lỗi ${res.status}`;
-        toast.error(message);
+      try {
+        const { data } = await aiTextJob.run({
+          url: "/api/app/generation-review-scene/",
+          body,
+          pollIntervalMs: 1000,
+        });
+        return { success: true, data: data.data as unknown as ReviewAnalysisData };
+      } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         return undefined;
       }
-
-      return res.json();
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── Helper: push a CopyVideoAnalysisData into history array in IndexedDB ──
@@ -869,30 +867,23 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
   const suggestConfig = useCallback(
     async (params: SuggestConfigParams): Promise<SuggestConfigResult | undefined> => {
       try {
-        const res = await fetch("/api/app/suggest-config/", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const { data } = await aiTextJob.run({
+          url: "/api/app/suggest-config/",
+          body: {
             category: params.category,
             mood: params.mood,
             language: params.language,
-          }),
+          },
+          pollIntervalMs: 1000,
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          const message = err?.message || `Lỗi ${res.status}`;
-          toast.error(message);
-          return undefined;
-        }
-
-        const result = await res.json();
-        return result.data as SuggestConfigResult;
+        return data.data as unknown as SuggestConfigResult;
       } catch (err: any) {
+        toast.error(err?.message || "Lỗi server");
         console.error("[suggestConfig] Error:", err);
+        return undefined;
       }
     },
-    [toast]
+    [aiTextJob, toast]
   );
 
   // ── generateTTS – gọi API tạo audio từ text (Gemini TTS) ──

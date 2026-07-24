@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
   RiCloseLine,
+  RiDeleteBinLine,
   RiEyeLine,
   RiEyeOffLine,
   RiFileCopyLine,
@@ -20,6 +21,7 @@ import {
   RiSearchLine,
   RiText,
 } from "react-icons/ri";
+import { useAlert } from "../../../../../../lib/providers/alert-provider";
 import { useToast } from "../../../../../../lib/providers/toast-provider";
 import { NoTextIcon } from "../../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
@@ -103,6 +105,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
   onUpdateElementImageSlots,
+  onDeleteScene,
 }: {
   scene: CopyVideoScene;
   index: number;
@@ -128,9 +131,11 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     imageUrls: string[],
     actionMode?: ActionImageEnum
   ) => void;
+  onDeleteScene?: (sceneId: string) => void;
 }) {
   const { t } = useTranslation();
   const toast = useToast();
+  const Alert = useAlert();
 
   const [rowHovered, setRowHovered] = useState(false);
   const [editingField, setEditingField] = useState<EditField | null>(null);
@@ -285,6 +290,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     });
   };
 
+  const handleDeleteScene = async () => {
+    const confirmed = await Alert.danger(
+      t("Xác nhận xoá phân cảnh"),
+      t("Nếu xoá sẽ không thể hoàn lại, cân nhắc trước khi xác nhận.")
+    );
+    if (!confirmed) return;
+    onDeleteScene?.(scene.id);
+  };
+
   // auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
@@ -410,13 +424,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             {labelEl}
             {text}
           </span>
-          {/* Action icons – visible on hover */}
+          {/* Action icons – always visible on mobile, hover on desktop */}
           <div
-            className="absolute top-0 right-2 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity"
-            style={{
-              opacity: hoveredField === field ? 1 : 0,
-              pointerEvents: hoveredField === field ? "auto" : "none",
-            }}
+            className={`absolute -top-3 -right-1.5 sm:-right-2.5 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity opacity-100 pointer-events-auto ${
+              hoveredField === field
+                ? "md:opacity-100 md:pointer-events-auto"
+                : "md:opacity-0 md:pointer-events-none"
+            }`}
           >
             {/* Toggle view prompt button */}
             <button
@@ -535,6 +549,16 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
             placement="bottom"
           />
+          {onDeleteScene && (
+            <Button
+              onClick={() => void handleDeleteScene()}
+              className="w-6 h-6 px-2 rounded-md shadow-sm text-gray-400 bg-white hover:text-red-600 hover:bg-red-50"
+              iconClassName="text-sm"
+              icon={<RiDeleteBinLine />}
+              tooltip={t("Xoá phân cảnh")}
+              placement="bottom"
+            />
+          )}
         </div>
       </div>
       {/* ── Ảnh tham chiếu (3 ô, match tên trong prompt) ── */}
@@ -739,6 +763,7 @@ interface SceneRowGroupProps {
     imageUrls: string[],
     actionMode?: ActionImageEnum
   ) => void;
+  onDeleteScene?: (sceneId: string) => void;
 }
 
 export function SceneRowGroup({
@@ -758,6 +783,7 @@ export function SceneRowGroup({
   onSetSceneAutoDownloadVideoResolution,
   onUpdateSelectedProductImages,
   onUpdateElementImageSlots,
+  onDeleteScene,
 }: SceneRowGroupProps) {
   const [hovered, setHovered] = useState(false);
   const enter = () => setHovered(true);
@@ -801,6 +827,7 @@ export function SceneRowGroup({
           onSetSceneAutoDownloadVideoResolution={onSetSceneAutoDownloadVideoResolution}
           onUpdateSelectedProductImages={onUpdateSelectedProductImages}
           onUpdateElementImageSlots={onUpdateElementImageSlots}
+          onDeleteScene={onDeleteScene}
         />
       </div>
 

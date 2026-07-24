@@ -25,7 +25,7 @@ import {
   resolveElementAspectRatio,
   resolveElementServiceImageType,
 } from "../utils/elementSceneGenerationParams";
-import { downloadGeneratedVideo, downloadSceneImage, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../../shared/generatedMediaUtils";
 import { GeneratedImageData, GeneratedVideoData, useElementApi } from "./useElementApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
@@ -368,7 +368,7 @@ export function useElementSceneMedia({
     } else {
       setNextGeneratedImage(null);
     }
-  }, [nextSceneId, isBatchGenerating]);
+  }, [nextSceneId, isBatchGenerating, getGeneratedImage]);
 
   // ── Load video đã tạo trước đó từ IndexedDB ──
   // Re-check whenever batch video generating state changes (video may have been saved)
@@ -542,13 +542,32 @@ export function useElementSceneMedia({
     }
 
     try {
-      if (isStitch && (!generatedImage || !nextGeneratedImage)) {
-        const message = t(
-          "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
-        );
-        setExtendVideoError(message);
-        reportSceneError?.(scene.id + "::stitch", "extend", message);
-        throw new Error("Missing start or end image");
+      // Stitch: đọc lại từ IndexedDB — nextGeneratedImage trong state có thể stale
+      // nếu cảnh kế đã gen ảnh sau lần load gần nhất của hook này.
+      let stitchStartImage = generatedImage;
+      let stitchEndImage = nextGeneratedImage;
+      if (isStitch) {
+        const [startFromIdb, endFromIdb] = await Promise.all([
+          getGeneratedImage(scene.id),
+          nextSceneId ? getGeneratedImage(nextSceneId) : Promise.resolve(undefined),
+        ]);
+        if (startFromIdb) {
+          stitchStartImage = toUiGeneratedImage(startFromIdb);
+          setGeneratedImage(stitchStartImage);
+        }
+        if (endFromIdb) {
+          stitchEndImage = toUiGeneratedImage(endFromIdb);
+          setNextGeneratedImage(stitchEndImage);
+        }
+
+        if (!hasGeneratedImageData(stitchStartImage) || !hasGeneratedImageData(stitchEndImage)) {
+          const message = t(
+            "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
+          );
+          setExtendVideoError(message);
+          reportSceneError?.(scene.id + "::stitch", "extend", message);
+          throw new Error("Missing start or end image");
+        }
       }
 
       const videoParams = await buildElementVideoGenerateParams({
@@ -557,8 +576,8 @@ export function useElementSceneMedia({
         aspectRatio: elementFormConfig?.aspectRatio,
         serviceImageType: elementFormConfig?.serviceImageType,
         isStitch,
-        generatedImage: isStitch ? generatedImage : undefined,
-        nextGeneratedImage: isStitch ? nextGeneratedImage : undefined,
+        generatedImage: isStitch ? stitchStartImage : undefined,
+        nextGeneratedImage: isStitch ? stitchEndImage : undefined,
         selectedProductImages,
         selectedElementImageSlots,
         elementFormConfig,

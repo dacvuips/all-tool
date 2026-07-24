@@ -3,8 +3,14 @@
  * Không thay đổi flow2/video-generation.ts dùng chung bởi app.
  */
 import logger from "../../helpers/logger";
-import { isHttpUrl, looksLikeRawBase64 } from "./flow2/_shared";
-import { createFlow2Request, runFlow2WithRetry, safeProgress } from "./flow2/_shared";
+import {
+  createFlow2Request,
+  isHttpUrl,
+  looksLikeRawBase64,
+  resolveFlow2VideoHttpUrl,
+  runFlow2WithRetry,
+  safeProgress,
+} from "./flow2/_shared";
 import {
   Flow2ImageInput,
   normalizeImageToDataUrl,
@@ -172,8 +178,10 @@ export async function runApiMediaVideoFlow2(
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);
   await safeProgress(onProgress, 95, "Đang hoàn tất dữ liệu video...");
 
+  const videoUri = await resolveFlow2VideoHttpUrl(video.videoUri, requestId);
+
   return {
-    videoUri: video.videoUri,
+    videoUri,
     mimeType: video.mimeType,
     flow2RequestId: requestId,
   };

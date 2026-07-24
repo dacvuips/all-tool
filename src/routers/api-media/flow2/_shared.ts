@@ -6,7 +6,7 @@ export const FLOW2_GENERATION_TIMEOUT_MS = 30 * 60 * 1000;
 
 export type Flow2StatusResponse = Record<string, unknown>;
 
-/** Payload `result` Flow2 trả về khi gen_image / gen_text_video / gen_image_video hoàn tất. */
+/** Payload `result` Flow2 trả về khi gen_image / gen_text_video / gen_image_video / upsample hoàn tất. */
 export type Flow2MediaResult = {
   image_urls?: string[];
   video_urls?: string[];
@@ -16,6 +16,11 @@ export type Flow2MediaResult = {
   media_ids?: string[];
   media_entries?: Array<{ url?: string; media_id?: string; kind?: string }>;
   poll_mode?: string;
+  /** Upsample ảnh: đôi khi chỉ có data URL base64, không có HTTP URL */
+  data_url?: string | null;
+  url?: string | null;
+  image_url?: string | null;
+  video_url?: string | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -39,7 +44,11 @@ export function pickFlow2ResultPayload(statusData: Flow2StatusResponse): Flow2Me
       typeof candidate.Local === "string" ||
       Array.isArray(candidate.media_entries) ||
       (Array.isArray(candidate.media_ids) && candidate.media_ids.length > 0) ||
-      typeof candidate.poll_mode === "string";
+      typeof candidate.poll_mode === "string" ||
+      typeof candidate.data_url === "string" ||
+      typeof candidate.url === "string" ||
+      typeof candidate.image_url === "string" ||
+      typeof candidate.video_url === "string";
     if (hasMediaHints) {
       return candidate as Flow2MediaResult;
     }
@@ -156,13 +165,15 @@ export function resolveFlow2MediaBaseUrl(apiBaseUrl: string): string {
   }
 }
 
-/** Chuẩn hóa URL media Flow2 trả về (viettheo.site/video|image → flow2.viettheo.site). */
+/** Chuẩn hóa URL media Flow2 trả về (viettheo.site/video|image|media → flow2.viettheo.site). */
 export function normalizeFlow2MediaUrl(url: string): string {
   try {
     const parsed = new URL(url);
     if (
       parsed.hostname === "viettheo.site" &&
-      (parsed.pathname.startsWith("/video/") || parsed.pathname.startsWith("/image/"))
+      (parsed.pathname.startsWith("/video/") ||
+        parsed.pathname.startsWith("/image/") ||
+        parsed.pathname.startsWith("/media/"))
     ) {
       parsed.hostname = FLOW2_MEDIA_HOST;
       return parsed.toString();
@@ -177,6 +188,34 @@ export function normalizeFlow2MediaUrl(url: string): string {
 export function buildFlow2DerivedVideoUrl(apiBaseUrl: string, requestId: string): string {
   const mediaBase = resolveFlow2MediaBaseUrl(apiBaseUrl);
   return `${mediaBase.replace(/\/+$/, "")}/video/${requestId}`;
+}
+
+/** URL ảnh upsample/gen — `{mediaBaseUrl}/image/{requestId}`. */
+export function buildFlow2DerivedImageUrl(apiBaseUrl: string, requestId: string): string {
+  const mediaBase = resolveFlow2MediaBaseUrl(apiBaseUrl);
+  return `${mediaBase.replace(/\/+$/, "")}/image/${requestId}`;
+}
+
+/**
+ * Luôn trả link HTTP cho video Flow2.
+ * Nếu Flow2 trả base64 / data URL → derive `{mediaHost}/video/{requestId}`.
+ */
+export async function resolveFlow2VideoHttpUrl(
+  videoUri: string,
+  requestId: string
+): Promise<string> {
+  const trimmed = videoUri.trim();
+  if (isHttpUrl(trimmed)) {
+    return normalizeFlow2MediaUrl(trimmed);
+  }
+
+  const id = requestId.trim();
+  if (!id) {
+    throw new Error("Không có link video và thiếu requestId để tạo URL tải");
+  }
+
+  const { baseUrl } = await getFlow2Config();
+  return buildFlow2DerivedVideoUrl(baseUrl, id);
 }
 
 function summarizeFlow2ResultForLog(statusData: Flow2StatusResponse): string {

@@ -496,7 +496,7 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="p-3 bg-gray-50 rounded-xl border border-gray-100">
-              <p className="text-[11px] font-semibold text-gray-500 mb-2">POST (tạo job)</p>
+              <p className="text-[11px] font-semibold text-gray-500 mb-2">POST (tạo / upscale job)</p>
               <pre className="text-[11px] font-mono text-gray-700 whitespace-pre-wrap">{`{
   "success": true,
   "jobId": "...",
@@ -511,10 +511,19 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
     "status": "SUCCEEDED",
     "progress": 100,
     "resultData": {
-      "flow2RequestId": "..."
+      "images": [{ "imageUrl": "https://flow2.../image/...", "flow2RequestId": "..." }],
+      "videoUri": "https://flow2.../video/...",
+      "flow2RequestId": "...",
+      "imageUrl": "https://flow2.../image/...",
+      "mimeType": "image/jpeg"
     }
   }
 }`}</pre>
+              <p className="mt-2 text-[10px] text-gray-500 leading-snug">
+                {t(
+                  "Gen ảnh: images[].imageUrl + flow2RequestId — Gen video: videoUri + flow2RequestId — Upscale ảnh: imageUrl — Upscale video: videoUri"
+                )}
+              </p>
             </div>
           </div>
         </div>

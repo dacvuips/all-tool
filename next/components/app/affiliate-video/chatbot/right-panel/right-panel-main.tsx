@@ -8,6 +8,8 @@
 import { useTranslation } from "react-i18next";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { AiGeneratingSpinner } from "./ai-generating-spinner";
+import { BatchListPanel } from "./batch-list";
 import { ChatBotCategoryList } from "./chat-bot-category-list";
 import { ChatBotPromptRank } from "./chat-bot-prompt-rank";
 
@@ -38,9 +40,35 @@ export const AffiliateVideoRightPanel = () => {
         bodyClassName="flex-1 overflow-y-auto v-scrollbar"
         className="bg-white"
       >
-        {/* ── Tab: Danh sách Prompt (Trending) ── */}
+        {/* ── Tab: Danh sách Prompt (ChatBot) ── */}
         <TabGroup.Tab label={t("Danh sách ChatBot")}>
           <ChatBotCategoryList />
+        </TabGroup.Tab>
+
+        {/* ── Tab: Batch List (Danh sách hàng loạt) ── */}
+        <TabGroup.Tab label={batchTabLabel}>
+          {batchRunning ? (
+            <AiGeneratingSpinner />
+          ) : (
+            <BatchListPanel
+              scenes={(trendingScriptData?.scenes || []).map((s, i) => ({
+                id: (s as any).id || `scene-${i}`,
+                sceneNumber: s.sceneNumber,
+                camera: (s.camera as any) || "WIDE SHOT",
+                imageGenPrompt: s.imageGenPrompt || "",
+                motionPrompt: s.motionPrompt || "",
+                dialogue: s.dialogue || "",
+                visualPrompt: s.visualPrompt || "",
+                disabled: (s as any).disabled ?? false,
+                voiceDisable: (s as any).voiceDisable ?? false,
+                audio: s.audio || "",
+                noText: (s as any).noText ?? false,
+                product_image_prompt: (s as any).product_image_prompt ?? "",
+                selectedProductImages: (s as any).selectedProductImages ?? [],
+              }))}
+              characters={[]}
+            />
+          )}
         </TabGroup.Tab>
 
         <TabGroup.Tab label={t("Bảng xếp hạng")}>

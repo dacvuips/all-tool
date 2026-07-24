@@ -13,6 +13,8 @@ import {
 export const API_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
   MediaGenerationJobType.API_MEDIA_IMAGE,
   MediaGenerationJobType.API_MEDIA_VIDEO,
+  MediaGenerationJobType.API_MEDIA_UPSAMPLE_IMAGE,
+  MediaGenerationJobType.API_MEDIA_UPSAMPLE_VIDEO,
 ];
 
 export function isApiMediaJobType(type: MediaGenerationJobType): boolean {

@@ -11,6 +11,10 @@ export { DEFAULT_CHATGPT_MODELS as CHATGPT_MODELS } from "./_ai-scene.constants"
 /** Model ChatGPT Flow2 mặc định khi route không truyền `model`. */
 export const DEFAULT_CHATGPT_MODEL = DEFAULT_CHATGPT_MODELS.SCENE;
 
+/** Flow2 ChatGPT Conversation image (`picture_v2`). */
+export const CHATGPT_PICTURE_MODE = "picture_v2";
+export const CHATGPT_PICTURE_SYSTEM_HINTS = ["picture_v2"] as const;
+
 export const CHATGPT_GATEWAY_SYSTEM_MESSAGE = [
   "CRITICAL OUTPUT RULES:",
   "1. Your entire reply MUST be a single valid JSON object or array.",

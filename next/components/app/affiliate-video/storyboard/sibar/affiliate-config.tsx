@@ -9,11 +9,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
-import { RiLoader4Fill } from "react-icons/ri";
+import { RiLoader4Fill, RiMagicFill } from "react-icons/ri";
 
 import { useOptionsTranslation } from "../../../../../lib/hooks/useOptionsTranslate";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS, StoryModeTypeEnum } from "../../constants";
+import { ASPECT_RATIOS, ElementFormImage, StoryModeTypeEnum } from "../../constants";
 import { ElementImagesUpload } from "../../elements/sibar/element-images-upload";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
@@ -24,6 +24,7 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { ObjectPersonifyFieldTab } from "../../shared/object-personify-picker-dialog";
 import { SuggestButton } from "../../shared/suggest-button";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
+import { StoryboardAiSuggestDialog } from "./storyboard-ai-suggest-dialog";
 // ── Main Component ────────────────────────────────────────────────────────
 
 export const AffiliateConfig = ({
@@ -58,6 +59,7 @@ export const AffiliateConfig = ({
   const [isSuggestLoading, setIsSuggestLoading] = useState(false);
   const [objectPersonifyFieldTab, setObjectPersonifyFieldTab] =
     useState<ObjectPersonifyFieldTab>("image");
+  const [aiSuggestOpen, setAiSuggestOpen] = useState(false);
 
   // Sync from URL param when it changes (e.g. browser back/forward)
   useEffect(() => {
@@ -94,6 +96,32 @@ export const AffiliateConfig = ({
       />
     </span>
   );
+
+  const storyboardImageLabel = (
+    <span className="flex items-center gap-1.5 w-full">
+      {t("Ảnh storyboard")}
+      <Button
+        outline
+        info
+        onClick={() => setAiSuggestOpen(true)}
+        disabled={!customer || batchRunning}
+        className="px-1 h-6"
+        icon={<RiMagicFill className="text-xs" />}
+        text={t("AI gợi ý")}
+      />
+    </span>
+  );
+
+  const handleUseSuggestText = (text: string) => {
+    patchConfig?.({ tipContent: text });
+    formContext?.setValue("tipContent", text);
+  };
+
+  const handleUseSuggestImage = (image: ElementFormImage) => {
+    const next = [...(videoConfig?.storyboardImage || []), image];
+    patchConfig?.({ storyboardImage: next });
+  };
+
   const introSteps = useMemo(() => getStoryboardSidebarIntroSteps(t), [t]);
 
   return (
@@ -103,6 +131,12 @@ export const AffiliateConfig = ({
         steps={introSteps}
         onDismiss={onIntroDismiss ?? (() => {})}
       />
+      <StoryboardAiSuggestDialog
+        isOpen={aiSuggestOpen}
+        onClose={() => setAiSuggestOpen(false)}
+        onUseText={handleUseSuggestText}
+        onUseImage={handleUseSuggestImage}
+      />
     <div className="flex-1 bg-white">
       {/* ── Form Fields ── */}
 
@@ -110,7 +144,7 @@ export const AffiliateConfig = ({
         {/* Ảnh storyboard */}
         <div id="storyboard-upload-section" className="mt-3">
           <ElementImagesUpload
-            label={t("Ảnh storyboard")}
+            label={storyboardImageLabel}
             artStyleImg={videoConfig?.storyboardImage}
             readOnly={!customer || batchRunning}
             onArtStyleImgChange={(v) => patchConfig && patchConfig({ storyboardImage: v })}

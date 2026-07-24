@@ -11,15 +11,7 @@ import { resolveApiMediaTokenFromRequest } from "./api-media-key";
 import { prepareApiMediaImageRequest, prepareApiMediaVideoRequest } from "./api-media-prepare";
 import { assertApiMediaRateLimit } from "./api-media-rate-limit";
 import { assertApiMediaFlow2RequestOwner } from "./api-media-upscale-registry";
-import {
-  assertApiMediaTokenRequestQuota,
-  incrementApiMediaTokenUsage,
-} from "../../queues/media-generation/handlers/_api-media-quota";
-import {
-  upsampleImageWithFlow2,
-  UpsampleResolution,
-} from "./flow2/upsample-image";
-import { upsampleVideoWithFlow2 } from "./flow2/upsample-video";
+import { UpsampleResolution } from "./flow2/upsample-image";
 
 function serializeJob(doc: IMediaGenerationJob | null) {
   if (!doc) return null;
@@ -106,7 +98,9 @@ async function getApiMediaJob(req: Request, res: Response): Promise<void> {
 
   const { id } = req.params as { id: string };
 
-  const job = (await mediaGenerationJobService.findOne({ _id: id })) as unknown as IMediaGenerationJob | null;
+  const job = (await mediaGenerationJobService.findOne({
+    _id: id,
+  })) as unknown as IMediaGenerationJob | null;
   if (!job) {
     res.status(404).json({ message: "Không tìm thấy job" });
     return;
@@ -121,8 +115,9 @@ async function getApiMediaJob(req: Request, res: Response): Promise<void> {
   res.json({ success: true, data: serializeJob(job) });
 }
 
-async function upsampleApiMediaImage(req: Request, res: Response): Promise<void> {
-  const token = await resolveApiMediaTokenFromRequest(req);
+async function enqueueUpsampleImage(req: Request, res: Response): Promise<void> {
+  // Upsample không trừ requestQuantity — chỉ cần token active/còn hạn
+  const token = await resolveApiMediaTokenFromRequest(req, { skipRequestQuota: true });
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
 
@@ -148,22 +143,25 @@ async function upsampleApiMediaImage(req: Request, res: Response): Promise<void>
     return;
   }
   await assertApiMediaFlow2RequestOwner(apiMediaTokenId, flow2RequestId);
-  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
 
-  const result = await upsampleImageWithFlow2({ resolution, flow2RequestId });
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
+  const { jobId, status } = await createAndEnqueueApiMediaJob({
+    customerId,
+    type: MediaGenerationJobType.API_MEDIA_UPSAMPLE_IMAGE,
+    requestPayload: { resolution, flow2RequestId },
+    apiMediaTokenId,
+  });
 
-  res.json({
+  res.status(202).json({
     success: true,
-    data: {
-      imageBytes: result.imageBytes,
-      mimeType: result.mimeType,
-    },
+    jobId,
+    status,
+    message: "Job upscale ảnh đã được tạo. Poll GET /api/api-media/job/:jobId để lấy kết quả.",
   });
 }
 
-async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void> {
-  const token = await resolveApiMediaTokenFromRequest(req);
+async function enqueueUpsampleVideo(req: Request, res: Response): Promise<void> {
+  // Upsample không trừ requestQuantity — chỉ cần token active/còn hạn
+  const token = await resolveApiMediaTokenFromRequest(req, { skipRequestQuota: true });
   const apiMediaTokenId = String(token._id);
   await assertApiMediaRateLimit(req, apiMediaTokenId);
 
@@ -183,17 +181,19 @@ async function upsampleApiMediaVideo(req: Request, res: Response): Promise<void>
   }
 
   await assertApiMediaFlow2RequestOwner(apiMediaTokenId, requestId);
-  await assertApiMediaTokenRequestQuota(apiMediaTokenId);
 
-  const result = await upsampleVideoWithFlow2({ flow2RequestId: requestId });
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
+  const { jobId, status } = await createAndEnqueueApiMediaJob({
+    customerId,
+    type: MediaGenerationJobType.API_MEDIA_UPSAMPLE_VIDEO,
+    requestPayload: { flow2RequestId: requestId },
+    apiMediaTokenId,
+  });
 
-  res.json({
+  res.status(202).json({
     success: true,
-    data: {
-      videoBytes: result.videoBytes,
-      mimeType: result.mimeType,
-    },
+    jobId,
+    status,
+    message: "Job upscale video đã được tạo. Poll GET /api/api-media/job/:jobId để lấy kết quả.",
   });
 }
 
@@ -232,7 +232,7 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        await upsampleApiMediaImage(req, res);
+        await enqueueUpsampleImage(req, res);
       } catch (err: any) {
         logger.error(`[api-media] upsample-image lỗi: ${err?.message}`);
         const status = err?.statusCode || 500;
@@ -246,7 +246,7 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        await upsampleApiMediaVideo(req, res);
+        await enqueueUpsampleVideo(req, res);
       } catch (err: any) {
         logger.error(`[api-media] upsample-video lỗi: ${err?.message}`);
         const status = err?.statusCode || 500;

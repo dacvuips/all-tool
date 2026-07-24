@@ -500,12 +500,20 @@ const ApiMediaPage = ({
 
                         {/* Plan */}
                         <td className="px-4 py-4">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border ${planInfo.color}`}
-                          >
-                            <span>{planInfo.icon}</span>
-                            {planInfo.label}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border w-fit ${planInfo.color}`}
+                            >
+                              <span>{planInfo.icon}</span>
+                              {planInfo.label}
+                            </span>
+                            {(token.subscriptionPlan === ApiMediaSubscriptionPlanEnum.FREE ||
+                              !token.subscriptionPlan) && (
+                              <p className="text-xs text-blue-600 w-full leading-snug">
+                                {t("Hãy liên hệ Admin để được cấp thêm lượt dùng thử trải nghiệm")}
+                              </p>
+                            )}
+                          </div>
                         </td>
 
                         {/* Usage */}
@@ -648,6 +656,12 @@ const ApiMediaPage = ({
                             <span>{getPlanInfo(token.subscriptionPlan).icon}</span>
                             {getPlanInfo(token.subscriptionPlan).label}
                           </span>
+                          {(token.subscriptionPlan === ApiMediaSubscriptionPlanEnum.FREE ||
+                            !token.subscriptionPlan) && (
+                            <p className="text-xs text-amber-600 mt-1 leading-snug">
+                              {t("Hãy liên hệ Admin để được cấp thêm lượt dùng thử trải nghiệm")}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <span

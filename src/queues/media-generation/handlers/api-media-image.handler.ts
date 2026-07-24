@@ -4,7 +4,6 @@ import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
 import {
   assertApiMediaTokenRequestQuota,
-  incrementApiMediaTokenUsage,
 } from "./_api-media-quota";
 import {
   registerApiMediaFlow2RequestOwner,
@@ -49,8 +48,6 @@ export async function handleApiMediaImage(
     emitter,
     logPrefix: LOG_PREFIX,
   });
-
-  await incrementApiMediaTokenUsage(apiMediaTokenId);
 
   for (const img of images) {
     if (img.flow2RequestId) {

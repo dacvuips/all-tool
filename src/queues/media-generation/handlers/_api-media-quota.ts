@@ -1,4 +1,5 @@
 import { ApiMediaTokenModel } from "../../../libs/dal/apiMediaToken";
+import logger from "../../../helpers/logger";
 
 /** Kiểm tra token còn lượt request trước khi gọi API generate. */
 export async function assertApiMediaTokenRequestQuota(apiMediaTokenId: string): Promise<void> {
@@ -30,7 +31,38 @@ export async function assertApiMediaTokenRequestQuota(apiMediaTokenId: string): 
   }
 }
 
-/** Tăng usedQuantity sau khi generate thành công. */
+/**
+ * Tăng usedQuantity sau khi job SUCCEEDED.
+ * Có giới hạn (`requestQuantity >= 0`): chỉ tăng khi còn lượt (atomic).
+ * Không giới hạn (`requestQuantity` null hoặc < 0): luôn tăng.
+ */
 export async function incrementApiMediaTokenUsage(apiMediaTokenId: string): Promise<void> {
-  await ApiMediaTokenModel.findByIdAndUpdate(apiMediaTokenId, { $inc: { usedQuantity: 1 } });
+  const limited = await ApiMediaTokenModel.findOneAndUpdate(
+    {
+      _id: apiMediaTokenId,
+      requestQuantity: { $gte: 0 },
+      $expr: {
+        $lt: [{ $ifNull: ["$usedQuantity", 0] }, "$requestQuantity"],
+      },
+    },
+    { $inc: { usedQuantity: 1 } },
+    { new: true }
+  );
+  if (limited) return;
+
+  // Token không giới hạn lượt (requestQuantity null / âm) — vẫn ghi nhận usage
+  const unlimited = await ApiMediaTokenModel.findOneAndUpdate(
+    {
+      _id: apiMediaTokenId,
+      $or: [{ requestQuantity: null }, { requestQuantity: { $lt: 0 } }],
+    },
+    { $inc: { usedQuantity: 1 } },
+    { new: true }
+  );
+
+  if (!unlimited) {
+    logger.warn(
+      `[api-media-quota] Không tăng usedQuantity cho token ${apiMediaTokenId} (hết lượt do race hoặc token không tồn tại)`
+    );
+  }
 }

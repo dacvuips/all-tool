@@ -7,16 +7,13 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { upsampleVideoWithFlow2 } from "../../api-media/flow2/upsample-video";
+import { fetchFlow2UpsampleMediaBytes } from "../../api-media/flow2/upsample-poll";
 import {
   initGenerationSSE,
   sendGenerationSSEError,
 } from "../../api-media/generation-sse";
 import { Context } from "../../../libs/graphql";
-import {
-  assertCustomerMediaGenerationAllowed,
-  checkVideoLimit,
-  incrementVideoCount,
-} from "./_shared";
+import { assertCustomerMediaGenerationAllowed } from "./_shared";
 import {
   createUpsampleVideoDownloadToken,
   deleteUpsampleVideoTemp,
@@ -56,7 +53,6 @@ export default [
         }
 
         await assertCustomerMediaGenerationAllowed(context.id);
-        await checkVideoLimit(context.id);
 
         const send = initGenerationSSE(res);
         sseStarted = true;
@@ -79,12 +75,18 @@ export default [
 
         send({ type: "progress", progress: 96, message: "Đang chuẩn bị tải xuống..." });
 
-        await incrementVideoCount(context.id);
+        const downloaded = await fetchFlow2UpsampleMediaBytes({
+          url: result.videoUri,
+          jobId: result.upsampleJobId,
+          kind: "video",
+        });
+        const videoBytes = downloaded.buffer.toString("base64");
+        const mimeType = downloaded.mimeType || result.mimeType;
 
         const downloadToken = createUpsampleVideoDownloadToken();
         await saveUpsampleVideoTemp(downloadToken, {
-          videoBytes: result.videoBytes,
-          mimeType: result.mimeType,
+          videoBytes,
+          mimeType,
           customerId: context.id,
           fileName: downloadName,
         });
@@ -94,8 +96,9 @@ export default [
           progress: 100,
           message: "Hoàn tất upscale 1080p",
           downloadToken,
-          mimeType: result.mimeType,
+          mimeType,
           fileName: downloadName,
+          videoUri: downloaded.finalUrl || result.videoUri,
         });
         res.end();
       } catch (err: any) {
