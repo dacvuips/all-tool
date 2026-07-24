@@ -6,11 +6,17 @@ echo " === Shopee Scrape Agent (macOS) ==="
 echo " Giữ cửa sổ này mở khi dùng tab Cào dữ liệu trên web."
 echo " Thoát: Ctrl+C hoặc đóng cửa sổ."
 echo
-if [ -x "./ShopeeScrapeAgent-macos-arm64" ]; then
-  exec ./ShopeeScrapeAgent-macos-arm64
+ARCH=$(uname -m)
+BIN=""
+if [ "$ARCH" = "arm64" ] && [ -x "./ShopeeScrapeAgent-macos-arm64" ]; then
+  BIN="./ShopeeScrapeAgent-macos-arm64"
+elif [ -x "./ShopeeScrapeAgent-macos-x64" ]; then
+  BIN="./ShopeeScrapeAgent-macos-x64"
+elif [ -x "./ShopeeScrapeAgent-macos-arm64" ]; then
+  BIN="./ShopeeScrapeAgent-macos-arm64"
 fi
-if [ -x "./ShopeeScrapeAgent-macos-x64" ]; then
-  exec ./ShopeeScrapeAgent-macos-x64
+if [ -n "$BIN" ]; then
+  exec "$BIN"
 fi
 if command -v node >/dev/null 2>&1 && [ -f ./agent.js ]; then
   exec node agent.js

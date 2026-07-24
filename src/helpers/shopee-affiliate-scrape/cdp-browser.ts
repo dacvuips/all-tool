@@ -67,14 +67,67 @@ export type CdpExportInput = {
 const DEFAULT_PAGE_LIMIT = 20;
 
 const SHORT_LINK_QUERY = `
-  query batchGetCustomLink($linkParams: [CustomLinkParam!], $sourceCaller: SourceCaller){
-    batchCustomLink(linkParams: $linkParams, sourceCaller: $sourceCaller){
-      shortLink
-      longLink
-      failCode
+    query batchGetCustomLink($linkParams: [CustomLinkParam!], $sourceCaller: SourceCaller){
+      batchCustomLink(linkParams: $linkParams, sourceCaller: $sourceCaller){
+        shortLink
+        longLink
+        failCode
+      }
     }
-  }
-`;
+  `;
+
+/** Tracking sub_id1 gắn vào short link (utm_content). */
+const SHORT_LINK_SUB_ID1 = (
+  process.env.SHOPEE_AFFILIATE_SUB_ID1 ||
+  process.env.AFFILIATE_SUB_ID1 ||
+  "ViettheoVideoAffiliate"
+).trim();
+
+const SHORT_LINK_BATCH = 10;
+
+function buildShortLinkParams(
+  originalLinks: string[],
+  withSubId: boolean
+): Array<{ originalLink: string; advancedLinkParams: Record<string, string> }> {
+  return originalLinks.map((originalLink) => ({
+    originalLink,
+    advancedLinkParams:
+      withSubId && SHORT_LINK_SUB_ID1
+        ? { subId1: SHORT_LINK_SUB_ID1 }
+        : {},
+  }));
+}
+
+/** failCode: 0 = OK. Chấp nhận number hoặc string "0" (tránh truthy "0" làm bỏ shortLink). */
+function isShortLinkFail(item: any): boolean {
+  if (!item) return true;
+  const code = Number(item.failCode ?? 0);
+  return Number.isFinite(code) ? code !== 0 : Boolean(item.failCode);
+}
+
+function applyShortLinkBatch(
+  out: string[],
+  startIndex: number,
+  results: any[] | undefined
+): { applied: number; failCodes: number[] } {
+  const failCodes: number[] = [];
+  let applied = 0;
+  if (!Array.isArray(results)) return { applied, failCodes };
+  results.forEach((item: any, idx: number) => {
+    if (isShortLinkFail(item)) {
+      failCodes.push(Number(item?.failCode ?? -1));
+      return;
+    }
+    const short = String(item.shortLink || "").trim();
+    if (!short) {
+      failCodes.push(Number(item?.failCode ?? -2));
+      return;
+    }
+    out[startIndex + idx] = short;
+    applied += 1;
+  });
+  return { applied, failCodes };
+}
 
 function buildListUrl(options: {
   marketHost: string;
@@ -165,15 +218,20 @@ async function affiliateGetJson(url: string, referer: string): Promise<any> {
   return json;
 }
 
-async function fetchShortLinksHttp(originalLinks: string[], delayMs: number): Promise<string[]> {
-  if (!originalLinks.length) return [];
+async function fetchShortLinksHttp(
+  originalLinks: string[],
+  delayMs: number,
+  withSubId: boolean
+): Promise<{ shorts: string[]; detail: string }> {
+  if (!originalLinks.length) return { shorts: [], detail: "empty" };
   const session = requireAffiliateHttpSession();
   const origin = `https://${session.marketHost}`;
   const out: string[] = new Array(originalLinks.length).fill("");
-  const BATCH = 10;
+  const failCodes: number[] = [];
+  let lastSnippet = "";
 
-  for (let i = 0; i < originalLinks.length; i += BATCH) {
-    const chunk = originalLinks.slice(i, i + BATCH);
+  for (let i = 0; i < originalLinks.length; i += SHORT_LINK_BATCH) {
+    const chunk = originalLinks.slice(i, i + SHORT_LINK_BATCH);
     try {
       const res = await axios.post(
         `${origin}/api/v3/gql?q=batchCustomLink`,
@@ -181,10 +239,7 @@ async function fetchShortLinksHttp(originalLinks: string[], delayMs: number): Pr
           operationName: "batchGetCustomLink",
           query: SHORT_LINK_QUERY,
           variables: {
-            linkParams: chunk.map((originalLink) => ({
-              originalLink,
-              advancedLinkParams: {},
-            })),
+            linkParams: buildShortLinkParams(chunk, withSubId),
             sourceCaller: "CUSTOM_LINK_CALLER",
           },
         },
@@ -204,31 +259,208 @@ async function fetchShortLinksHttp(originalLinks: string[], delayMs: number): Pr
           validateStatus: () => true,
         }
       );
-      const results = res.data?.data?.batchCustomLink;
-      if (Array.isArray(results)) {
-        results.forEach((item: any, idx: number) => {
-          if (!item || item.failCode) return;
-          out[i + idx] = item.shortLink || "";
-        });
+      lastSnippet = JSON.stringify(res.data || {}).slice(0, 280);
+      if (res.status >= 400) {
+        logger.warn(`[scrape-http] short-link HTTP ${res.status}: ${lastSnippet}`);
+      } else if (res.data?.errors?.length) {
+        logger.warn(
+          `[scrape-http] short-link GraphQL: ${res.data.errors[0]?.message || lastSnippet}`
+        );
+      } else {
+        const applied = applyShortLinkBatch(out, i, res.data?.data?.batchCustomLink);
+        failCodes.push(...applied.failCodes);
       }
     } catch (err: any) {
       logger.warn(`[scrape-http] short-link batch failed: ${err?.message || err}`);
+      lastSnippet = String(err?.message || err);
     }
-    if (i + BATCH < originalLinks.length) {
+    if (i + SHORT_LINK_BATCH < originalLinks.length) {
       await new Promise((r) => setTimeout(r, Math.max(200, delayMs || 400)));
     }
   }
-  return out;
+
+  const ok = out.filter(Boolean).length;
+  const detail = `HTTP ok=${ok}/${originalLinks.length} subId=${withSubId} failCodes=[${failCodes
+    .slice(0, 8)
+    .join(",")}] snip=${lastSnippet}`;
+  return { shorts: out, detail };
 }
 
-/** Public: long affiliate links → short links (cần session cookie sau Mở Trình duyệt). */
+/**
+ * Tạo short link trong tab GemLogin (fetch credentials:include) — tránh 403 axios Node.
+ * Payload giống UI Affiliate / extension inject.js.
+ */
+async function fetchShortLinksViaCdp(
+  originalLinks: string[],
+  delayMs: number,
+  withSubId: boolean
+): Promise<{ shorts: string[]; detail: string }> {
+  if (!originalLinks.length) return { shorts: [], detail: "empty" };
+  const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
+  const marketHost = String(session?.marketHost || "affiliate.shopee.vn").trim();
+  const client = await ensureLiveCdpClient(marketHost);
+  const out: string[] = new Array(originalLinks.length).fill("");
+  const failCodes: number[] = [];
+  let lastSnippet = "";
+  let lastPage = "";
+
+  try {
+    const auth = await client.getPageAuthState(marketHost);
+    lastPage = String(auth.href || "");
+    if (!auth.onExpectedHost) {
+      throw new Error(
+        `Tab GemLogin không ở ${marketHost} (đang: ${auth.href}). Mở product_offer rồi thử lại.`
+      );
+    }
+    if (auth.looksLikeLogin) {
+      throw new Error(
+        `GemLogin đang ở trang login. Đăng nhập Affiliate rồi bấm Mở Trình duyệt lại.`
+      );
+    }
+
+    for (let i = 0; i < originalLinks.length; i += SHORT_LINK_BATCH) {
+      const chunk = originalLinks.slice(i, i + SHORT_LINK_BATCH);
+      const linkParams = buildShortLinkParams(chunk, withSubId);
+      // Chạy trong page: URL relative theo location.origin (giống extension)
+      const expression = `(() => {
+        const linkParams = ${JSON.stringify(linkParams)};
+        const query = ${JSON.stringify(SHORT_LINK_QUERY)};
+        const url = new URL("/api/v3/gql?q=batchCustomLink", location.origin).href;
+        const body = {
+          operationName: "batchGetCustomLink",
+          query,
+          variables: {
+            linkParams,
+            sourceCaller: "CUSTOM_LINK_CALLER",
+          },
+        };
+        return fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers: {
+            accept: "application/json, text/plain, */*",
+            "content-type": "application/json;charset=UTF-8",
+            "affiliate-program-type": "1",
+            referer: String(location.href || ""),
+          },
+          body: JSON.stringify(body),
+        }).then(async (res) => {
+          const text = await res.text();
+          let json = null;
+          try { json = text ? JSON.parse(text) : null; } catch (e) {}
+          return {
+            status: res.status,
+            ok: res.ok,
+            json,
+            text: text.slice(0, 600),
+            pageHref: String(location.href || ""),
+            origin: String(location.origin || ""),
+          };
+        });
+      })()`;
+
+      const result = await client.evaluateJson<{
+        status: number;
+        ok: boolean;
+        json: any;
+        text: string;
+        pageHref: string;
+        origin: string;
+      }>(expression, 90000);
+
+      if (!result) throw new Error("CDP short-link không trả kết quả");
+      lastPage = result.pageHref || lastPage;
+      lastSnippet = result.text || JSON.stringify(result.json || {}).slice(0, 280);
+
+      if (result.status === 401 || result.status === 403) {
+        throw new Error(
+          `Short link HTTP ${result.status} từ GemLogin (page=${result.pageHref}). ` +
+            `Login Affiliate → /offer/product_offer → F5 → Mở Trình duyệt lại.`
+        );
+      }
+      if (!result.ok) {
+        throw new Error(`Short link HTTP ${result.status}: ${result.text || ""}`);
+      }
+      if (result.json?.errors?.length) {
+        throw new Error(
+          result.json.errors[0]?.message || "GraphQL batchCustomLink lỗi"
+        );
+      }
+      const batch = result.json?.data?.batchCustomLink;
+      if (!Array.isArray(batch)) {
+        throw new Error(
+          `Short link response invalid (không có batchCustomLink). snip=${lastSnippet}`
+        );
+      }
+      const applied = applyShortLinkBatch(out, i, batch);
+      failCodes.push(...applied.failCodes);
+
+      if (i + SHORT_LINK_BATCH < originalLinks.length) {
+        await new Promise((r) => setTimeout(r, Math.max(200, delayMs || 400)));
+      }
+    }
+  } finally {
+    client.close();
+  }
+
+  const ok = out.filter(Boolean).length;
+  const detail = `CDP ok=${ok}/${originalLinks.length} subId=${withSubId} page=${lastPage} failCodes=[${failCodes
+    .slice(0, 8)
+    .join(",")}] snip=${lastSnippet}`;
+  return { shorts: out, detail };
+}
+
+/** Public: long affiliate links → short links (ưu tiên CDP trong GemLogin). */
 export async function fetchAffiliateShortLinks(
   originalLinks: string[],
   delayMs = 400
 ): Promise<string[]> {
-  return fetchShortLinksHttp(
-    originalLinks.map((l) => String(l || "").trim()),
-    delayMs
+  const links = originalLinks.map((l) => String(l || "").trim());
+  if (!links.some(Boolean)) return links.map(() => "");
+
+  const attempts: Array<{ withSubId: boolean; via: "cdp" | "http" }> = [
+    { withSubId: true, via: "cdp" },
+    { withSubId: false, via: "cdp" },
+    { withSubId: true, via: "http" },
+    { withSubId: false, via: "http" },
+  ];
+
+  const details: string[] = [];
+  let best: string[] | null = null;
+  let bestOk = 0;
+
+  for (const attempt of attempts) {
+    try {
+      const result =
+        attempt.via === "cdp"
+          ? await fetchShortLinksViaCdp(links, delayMs, attempt.withSubId)
+          : await fetchShortLinksHttp(links, delayMs, attempt.withSubId);
+      details.push(result.detail);
+      const ok = result.shorts.filter(Boolean).length;
+      logger.info(`[scrape] short-links ${result.detail}`);
+      if (ok > bestOk) {
+        bestOk = ok;
+        best = result.shorts;
+      }
+      if (ok === links.filter(Boolean).length) {
+        return result.shorts;
+      }
+      // Đủ phần lớn → dùng luôn, không thử tiếp
+      if (ok > 0 && ok >= Math.ceil(links.filter(Boolean).length * 0.5)) {
+        return result.shorts;
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || err);
+      details.push(`${attempt.via}/subId=${attempt.withSubId}: ${msg}`);
+      logger.warn(`[scrape] short-links ${attempt.via} failed: ${msg}`);
+    }
+  }
+
+  if (best && bestOk > 0) return best;
+
+  throw new Error(
+    `Không tạo được short link (${links.filter(Boolean).length} link). ` +
+      `Giữ GemLogin mở + login Affiliate. Chi tiết: ${details.slice(-2).join(" | ")}`
   );
 }
 
@@ -626,7 +858,7 @@ export async function exportCsvViaCdp(input: CdpExportInput): Promise<{
       }))
       .filter((r) => !!r.link);
     if (linkRows.length) {
-      const shorts = await fetchShortLinksHttp(
+      const shorts = await fetchAffiliateShortLinks(
         linkRows.map((r) => r.link),
         delayMs
       );

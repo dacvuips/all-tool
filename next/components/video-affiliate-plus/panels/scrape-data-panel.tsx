@@ -45,8 +45,8 @@ import {
 } from "../scrape/product-page-fetch";
 import {
   PanelListCard,
-  PanelListPagination,
   panelListClasses,
+  PanelListPagination,
   panelListRowClass,
 } from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
@@ -287,7 +287,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [filterDay, setFilterDay] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [guideOpen, setGuideOpen] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
   /** Uncontrolled — tránh IME tiếng Việt bị đúp dấu khi re-render. */
   const keywordsInputRef = useRef<HTMLInputElement>(null);
   const getKeywordsText = () => String(keywordsInputRef.current?.value || "");
@@ -305,7 +305,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [commissionReceivedK, setCommissionReceivedK] = useState(0);
   const [products, setProducts] = useState<ScrapeProductRow[]>([]);
   const [productPage, setProductPage] = useState(1);
-  const [productPageSize, setProductPageSize] = useState(10);
+  const [productPageSize, setProductPageSize] = useState(200);
   const [crawling, setCrawling] = useState(false);
   const [crawlStatus, setCrawlStatus] = useState("");
   /** Tổng SP API đã quét (raw). */
@@ -431,7 +431,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         gemloginProfileId: gemProfileId,
       });
       toast.success(
-        t("Đã mở GemLogin + capture session ({{n}} cookie). Giữ cửa sổ mở rồi Bắt đầu cào.", {
+        t("Đã mở GemLogin + capture session. Giữ cửa sổ mở rồi Bắt đầu cào.", {
           n: result.cookieCount ?? 0,
         })
       );
@@ -773,16 +773,33 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             ) as string
           );
         }
+        toast.info(t("Đang tạo short link {{count}} SP…", { count: linkRows.length }) as string);
         const shorts = await shortenAffiliateLinks(
           linkRows.map((r) => r.link),
           400
         );
+        const filled = shorts.filter(Boolean).length;
+        if (filled === 0) {
+          throw new Error(
+            t(
+              "Không tạo được short link. Giữ GemLogin mở (đã login Affiliate) rồi thử Lưu lại. Xem cửa sổ Agent để biết chi tiết."
+            ) as string
+          );
+        }
         productsWithShort = productsWithShort.map((p) => ({ ...p, raw: { ...p.raw } }));
         linkRows.forEach((row, i) => {
           const raw = productsWithShort[row.index].raw as Record<string, unknown>;
           raw.affiliate_link_short = shorts[i] || "";
         });
         setProducts(productsWithShort);
+        if (filled < linkRows.length) {
+          toast.warn(
+            t("Chỉ tạo được {{ok}}/{{total}} short link", {
+              ok: filled,
+              total: linkRows.length,
+            }) as string
+          );
+        }
       }
 
       const csv = productsToFullScrapedCsv(productsWithShort);
@@ -799,7 +816,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       });
       setSessions(await loadScrapeCsvSessions());
       setSaveDialogOpen(false);
-      toast.success(t("Đã lưu «{{name}}» · {{count}} SP", { name, count: productsWithShort.length }));
+      toast.success(
+        t("Đã lưu «{{name}}» · {{count}} SP", { name, count: productsWithShort.length })
+      );
     } catch (err: any) {
       toast.error(err?.message || t("Lưu project thất bại"));
     } finally {
@@ -1078,12 +1097,18 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
       ) : (
         <>
-          <div className="min-h-0 flex-1 overflow-x-auto overflow-y-auto">
+          {/* Viewport ~10 dòng; trang lớn hơn thì scroll trong khung (không dùng arbitrary [] — Tailwind cũ) */}
+          <div
+            className="min-h-0 overflow-x-auto overflow-y-auto"
+            style={{ maxHeight: "calc(2.75rem + 10 * 2.75rem)" }}
+          >
             <table className={panelListClasses.table}>
               <thead className="sticky top-0 z-10">
                 <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
                   <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
-                  <th className={`${panelListClasses.th} text-left max-w-xs`}>{t("Sản phẩm gốc")}</th>
+                  <th className={`${panelListClasses.th} text-left max-w-xs`}>
+                    {t("Sản phẩm gốc")}
+                  </th>
                   <th className={`${panelListClasses.th} text-center`}>{t("HH")}</th>
                   <th className={`${panelListClasses.th} text-center`}>{t("Lượt Bán")}</th>
                   <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
@@ -1135,7 +1160,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               page={safeProductPage}
               totalPages={productTotalPages}
               pageSize={productPageSize}
-              pageSizeOptions={[10, 20, 50, 100]}
+              pageSizeOptions={[50, 100, 200, 300, 500, 1000, 1500]}
               from={(safeProductPage - 1) * productPageSize + 1}
               to={Math.min(safeProductPage * productPageSize, products.length)}
               total={products.length}
@@ -1183,9 +1208,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 title={t("Kiểm tra lại Agent + GemLogin") as string}
                 aria-label={t("Kiểm tra lại Agent + GemLogin") as string}
               >
-                <RiRefreshLine
-                  className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`}
-                />
+                <RiRefreshLine className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`} />
               </button>
             </p>
           </div>
@@ -1196,27 +1219,41 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         aria-labelledby="scrape-guide-title"
         className="overflow-hidden rounded-2xl border bg-white"
       >
-        <div className={`px-4 sm:px-5 ${guideOpen ? "py-4 sm:py-5 space-y-4" : "py-3"}`}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className={`px-4 sm:px-5 ${guideOpen ? "py-4 sm:py-5 space-y-4" : "py-1.5 sm:py-2"}`}>
+          <div
+            className={`flex flex-col sm:flex-row sm:items-center sm:justify-between ${
+              guideOpen ? "gap-3" : "gap-2"
+            }`}
+          >
             <button
               type="button"
               onClick={() => setGuideOpen((v) => !v)}
-              className="flex min-w-0 flex-1 items-start gap-2 text-left rounded-lg -ml-1 px-1 py-0.5 transition-colors hover:bg-white/50"
+              className={`flex min-w-0 flex-1 text-left rounded-lg -ml-1 px-1 transition-colors hover:bg-white/50 ${
+                guideOpen ? "items-start gap-2 py-0.5" : "items-center gap-1.5 py-0"
+              }`}
               aria-expanded={guideOpen}
               aria-controls="scrape-guide-body"
             >
-              <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-bluegray-200 bg-white text-accent">
+              <span
+                className={`inline-flex shrink-0 items-center justify-center rounded border border-bluegray-200 bg-white text-accent ${
+                  guideOpen ? "mt-0.5 h-6 w-6 rounded-md" : "h-5 w-5"
+                }`}
+              >
                 {guideOpen ? (
                   <HiChevronUp className="text-sm" />
                 ) : (
-                  <HiChevronDown className="text-sm" />
+                  <HiChevronDown className="text-xs" />
                 )}
               </span>
-              <span className="min-w-0 space-y-1">
-                <span className="block text-16 font-semibold tracking-wider uppercase text-accent">
+              <span className={`min-w-0 ${guideOpen ? "space-y-1" : ""}`}>
+                <span
+                  className={`block font-semibold text-accent ${
+                    guideOpen ? "text-16 tracking-wider uppercase" : "text-11 tracking-wide"
+                  }`}
+                >
                   {t("Hướng dẫn")}
                   <span className="mx-1.5 font-normal text-bluegray-400">·</span>
-                  <span className="tracking-normal text-accent">
+                  <span className={guideOpen ? "tracking-normal text-accent" : "font-medium"}>
                     {t("Quy trình cào Shopee Affiliate")}
                   </span>
                 </span>
