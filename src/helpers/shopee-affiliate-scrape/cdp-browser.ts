@@ -85,7 +85,8 @@ const SHORT_LINK_SUB_ID1 = (
   "ViettheoVideoAffiliate"
 ).trim();
 
-const SHORT_LINK_BATCH = 10;
+/** Batch nhỏ hơn → giảm kích hoạt antibot 90309999. */
+const SHORT_LINK_BATCH = 5;
 
 function buildShortLinkParams(
   originalLinks: string[],
@@ -98,6 +99,25 @@ function buildShortLinkParams(
         ? { subId1: SHORT_LINK_SUB_ID1 }
         : {},
   }));
+}
+
+/** Shopee antibot / captcha traffic verify. */
+function isAntibotPayload(json: any, text?: string): boolean {
+  const snip = String(text || "");
+  if (/90309999|verify\/traffic|crawler_item/i.test(snip)) return true;
+  if (!json || typeof json !== "object") return false;
+  if (json.error === 90309999 || Number(json.error) === 90309999) return true;
+  if (Number((json as any)["3"]) === 90309999) return true;
+  return false;
+}
+
+function antibotShortLinkError(detail = ""): Error {
+  const extra = String(detail || "").trim();
+  return new Error(
+    `Shopee antibot chặn tạo short link (90309999). ` +
+      `Trên cửa sổ GemLogin: giải captcha nếu có → vào /offer/product_offer → F5 → «Mở Trình duyệt» rồi Lưu lại.` +
+      (extra ? ` (${extra.slice(0, 180)})` : "")
+  );
 }
 
 /** failCode: 0 = OK. Chấp nhận number hoặc string "0" (tránh truthy "0" làm bỏ shortLink). */
@@ -262,6 +282,9 @@ async function fetchShortLinksHttp(
         }
       );
       lastSnippet = JSON.stringify(res.data || {}).slice(0, 280);
+      if (isAntibotPayload(res.data, lastSnippet)) {
+        throw antibotShortLinkError(`HTTP snip=${lastSnippet}`);
+      }
       if (res.status >= 400) {
         logger.warn(`[scrape-http] short-link HTTP ${res.status}: ${lastSnippet}`);
       } else if (res.data?.errors?.length) {
@@ -309,6 +332,9 @@ async function fetchShortLinksViaCdp(
   try {
     const auth = await client.getPageAuthState(marketHost);
     lastPage = String(auth.href || "");
+    if (/verify\/traffic|crawler_item/i.test(lastPage)) {
+      throw antibotShortLinkError(`page=${lastPage}`);
+    }
     if (!auth.onExpectedHost) {
       throw new Error(
         `Tab GemLogin không ở ${marketHost} (đang: ${auth.href}). Mở product_offer rồi thử lại.`
@@ -323,11 +349,36 @@ async function fetchShortLinksViaCdp(
     for (let i = 0; i < originalLinks.length; i += SHORT_LINK_BATCH) {
       const chunk = originalLinks.slice(i, i + SHORT_LINK_BATCH);
       const linkParams = buildShortLinkParams(chunk, withSubId);
-      // Chạy trong page: URL relative theo location.origin (giống extension)
+      // Chạy trong page: URL absolute affiliate host + csrf (SAP hook gắn chữ ký).
       const expression = `(() => {
         const linkParams = ${JSON.stringify(linkParams)};
         const query = ${JSON.stringify(SHORT_LINK_QUERY)};
-        const url = new URL("/api/v3/gql?q=batchCustomLink", location.origin).href;
+        const marketHost = ${JSON.stringify(marketHost)};
+        const href = String(location.href || "");
+        if (/verify\\/traffic|crawler_item/i.test(href)) {
+          return {
+            status: 403,
+            ok: false,
+            json: { error: 90309999 },
+            text: "verify/traffic",
+            pageHref: href,
+            origin: String(location.origin || ""),
+          };
+        }
+        const url = "https://" + marketHost + "/api/v3/gql?q=batchCustomLink";
+        let csrf = "";
+        try {
+          const m = String(document.cookie || "").match(/(?:^|;\\s*)csrftoken=([^;]+)/);
+          if (m) csrf = decodeURIComponent(m[1]);
+        } catch (e) {}
+        const headers = {
+          accept: "application/json, text/plain, */*",
+          "content-type": "application/json;charset=UTF-8",
+          "affiliate-program-type": "1",
+          referer: href || ("https://" + marketHost + "/offer/product_offer"),
+          origin: "https://" + marketHost,
+        };
+        if (csrf) headers["x-csrftoken"] = csrf;
         const body = {
           operationName: "batchGetCustomLink",
           query,
@@ -339,12 +390,7 @@ async function fetchShortLinksViaCdp(
         return fetch(url, {
           method: "POST",
           credentials: "include",
-          headers: {
-            accept: "application/json, text/plain, */*",
-            "content-type": "application/json;charset=UTF-8",
-            "affiliate-program-type": "1",
-            referer: String(location.href || ""),
-          },
+          headers,
           body: JSON.stringify(body),
         }).then(async (res) => {
           const text = await res.text();
@@ -374,6 +420,9 @@ async function fetchShortLinksViaCdp(
       lastPage = result.pageHref || lastPage;
       lastSnippet = result.text || JSON.stringify(result.json || {}).slice(0, 280);
 
+      if (isAntibotPayload(result.json, lastSnippet) || /verify\/traffic/i.test(lastPage)) {
+        throw antibotShortLinkError(`CDP page=${lastPage} snip=${lastSnippet}`);
+      }
       if (result.status === 401 || result.status === 403) {
         throw new Error(
           `Short link HTTP ${result.status} từ GemLogin (page=${result.pageHref}). ` +
@@ -398,7 +447,7 @@ async function fetchShortLinksViaCdp(
       failCodes.push(...applied.failCodes);
 
       if (i + SHORT_LINK_BATCH < originalLinks.length) {
-        await new Promise((r) => setTimeout(r, Math.max(200, delayMs || 400)));
+        await new Promise((r) => setTimeout(r, Math.max(600, delayMs || 800)));
       }
     }
   } finally {
@@ -415,15 +464,15 @@ async function fetchShortLinksViaCdp(
 /** Public: long affiliate links → short links (ưu tiên CDP trong GemLogin). */
 export async function fetchAffiliateShortLinks(
   originalLinks: string[],
-  delayMs = 400
+  delayMs = 800
 ): Promise<string[]> {
   const links = originalLinks.map((l) => String(l || "").trim());
   if (!links.some(Boolean)) return links.map(() => "");
 
+  // CDP trước; HTTP gần như luôn 403/90309999 — chỉ fallback khi CDP không kết nối được.
   const attempts: Array<{ withSubId: boolean; via: "cdp" | "http" }> = [
     { withSubId: true, via: "cdp" },
     { withSubId: false, via: "cdp" },
-    { withSubId: true, via: "http" },
     { withSubId: false, via: "http" },
   ];
 
@@ -455,6 +504,10 @@ export async function fetchAffiliateShortLinks(
       const msg = String(err?.message || err);
       details.push(`${attempt.via}/subId=${attempt.withSubId}: ${msg}`);
       logger.warn(`[scrape] short-links ${attempt.via} failed: ${msg}`);
+      // Antibot: dừng sớm — retry HTTP chỉ làm nặng captcha hơn
+      if (/90309999|antibot|verify\/traffic|crawler_item/i.test(msg)) {
+        throw antibotShortLinkError(msg);
+      }
     }
   }
 

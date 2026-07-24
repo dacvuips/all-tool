@@ -39,6 +39,7 @@ import { ImageDialog } from "../../shared/utilities/dialog/image-dialog";
 import { Button, Field, Form, Input } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
+  buildMergedVideoFileBase,
   exportAffiliatePlusCSV,
   parseAffiliatePlusCSV,
   parseAffiliatePlusExcel,
@@ -808,14 +809,6 @@ export function ThreadManagementPanel({
     }
   };
 
-  const safeDownloadName = (raw: string, fallback: string) => {
-    const cleaned = String(raw || "")
-      .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
-      .replace(/\s+/g, " ")
-      .trim();
-    return cleaned.slice(0, 80) || fallback;
-  };
-
   const handleDownloadAllMerged = async () => {
     if (downloadingMerged) return;
     const candidates = (await getSessionItems(sessionId)).filter(
@@ -835,10 +828,11 @@ export function ThreadManagementPanel({
         const blob = await getMergedVideoBlob(item);
         if (!blob) continue;
 
-        const base = safeDownloadName(
-          item.productId || getMergedVideoStorageKey(item) || item.id,
-          "merged-video"
-        );
+        // TenSanPham_shopId_itemId.mp4 (vd. AoKhoacNam_1632480189_42874449161.mp4)
+        const base =
+          buildMergedVideoFileBase(item) ||
+          getMergedVideoStorageKey(item) ||
+          "merged-video";
         let fileName = `${base}.mp4`;
         let n = 2;
         while (usedNames.has(fileName.toLowerCase())) {

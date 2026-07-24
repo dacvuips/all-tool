@@ -110,12 +110,12 @@ export async function openShopeeAffiliateBrowser(input?: {
 /** long_link → short link qua Local Agent (GraphQL batchCustomLink). */
 export async function shortenAffiliateLinks(
   links: string[],
-  delayMs = 400
+  delayMs = 800
 ): Promise<string[]> {
   await ensureAgentOnline();
   const clean = links.map((l) => String(l || "").trim());
   if (!clean.some(Boolean)) return clean.map(() => "");
-  const timeoutMs = Math.min(600000, Math.max(90000, clean.filter(Boolean).length * 800));
+  const timeoutMs = Math.min(600000, Math.max(90000, clean.filter(Boolean).length * 1200));
   const { res, json } = await agentFetch("/short-links", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

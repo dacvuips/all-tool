@@ -213,12 +213,18 @@ function buildItemFromRaw(raw: Record<string, string>, index: number): Affiliate
   const total = videoUrls.length;
   // Ưu tiên Link sản phẩm (canonical); affiliate chỉ fallback
   const productLink = raw.productLink || raw.affiliateLink || "";
+  const fromLink = extractShopeeShopItemIds(productLink);
   const productId =
-    String(raw.productId || "").trim() || extractShopeeProductId(productLink) || "";
+    String(raw.productId || "").trim() || fromLink.itemId || "";
+  const rawShopId = String(raw.shopId || "").trim();
+  const shopId =
+    (rawShopId && !/^row-\d+$/i.test(rawShopId) ? rawShopId : "") ||
+    fromLink.shopId ||
+    `row-${index + 1}`;
 
   return createEmptyItem({
     shopName: raw.shopName || "",
-    shopId: raw.shopId || `row-${index + 1}`,
+    shopId,
     productId,
     productName: raw.productName || "",
     productLink,
@@ -237,20 +243,76 @@ function buildItemFromRaw(raw: Record<string, string>, index: number): Affiliate
   });
 }
 
-/** Parse product id từ URL Shopee: /product/{shopId}/{itemId} hoặc -i.{shopId}.{itemId} */
-export function extractShopeeProductId(link: string): string {
+/** Parse shopId + itemId từ URL Shopee: /product/{shopId}/{itemId} hoặc -i.{shopId}.{itemId} */
+export function extractShopeeShopItemIds(link: string): { shopId: string; itemId: string } {
   const raw = String(link || "").trim();
-  if (!raw) return "";
+  if (!raw) return { shopId: "", itemId: "" };
   try {
     const path = raw.includes("://") ? new URL(raw).pathname : raw;
-    const productMatch = path.match(/\/product\/\d+\/(\d+)/i);
-    if (productMatch?.[1]) return productMatch[1];
+    const productMatch = path.match(/\/product\/(\d+)\/(\d+)/i);
+    if (productMatch?.[1] && productMatch?.[2]) {
+      return { shopId: productMatch[1], itemId: productMatch[2] };
+    }
     const iMatch = path.match(/-i\.(\d+)\.(\d+)/i);
-    if (iMatch?.[2]) return iMatch[2];
+    if (iMatch?.[1] && iMatch?.[2]) {
+      return { shopId: iMatch[1], itemId: iMatch[2] };
+    }
   } catch {
     // ignore
   }
-  return "";
+  return { shopId: "", itemId: "" };
+}
+
+/** Parse product id (itemId) từ URL Shopee. */
+export function extractShopeeProductId(link: string): string {
+  return extractShopeeShopItemIds(link).itemId;
+}
+
+/** Tên SP → PascalCase không dấu, viết liền (vd. "Áo Khoác Nam" → "AoKhoacNam"). */
+export function toPascalCaseFileSlug(name: string, maxLen = 80): string {
+  const cleaned = String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .trim();
+  if (!cleaned) return "";
+  const pascal = cleaned
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join("");
+  return pascal.slice(0, Math.max(8, maxLen));
+}
+
+/**
+ * Tên file video nối: TenSanPham_shopId_itemId
+ * VD link https://shopee.vn/product/1632480189/42874449161
+ * → AoKhoacNam_1632480189_42874449161
+ */
+export function buildMergedVideoFileBase(item: {
+  productName?: string;
+  shopId?: string;
+  productId?: string;
+  productLink?: string;
+  affiliateLink?: string;
+  id?: string;
+}): string {
+  const fromLink = extractShopeeShopItemIds(
+    String(item.productLink || item.affiliateLink || "").trim()
+  );
+  let shopId = String(item.shopId || "").trim();
+  if (!shopId || /^row-\d+$/i.test(shopId)) shopId = fromLink.shopId;
+  const itemId = String(item.productId || "").trim() || fromLink.itemId;
+  const nameSlug = toPascalCaseFileSlug(item.productName || "") || "Video";
+
+  if (shopId && itemId) return `${nameSlug}_${shopId}_${itemId}`;
+  if (itemId) return `${nameSlug}_${itemId}`;
+  const fallback = String(item.id || "video")
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
+    .slice(0, 40);
+  return `${nameSlug}_${fallback || "video"}`;
 }
 
 /** Build fieldMap từ hàng header — chỉ theo tên cột. */

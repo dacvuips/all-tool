@@ -1025,30 +1025,45 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           );
         }
         toast.info(t("Đang tạo short link {{count}} SP…", { count: linkRows.length }) as string);
-        const shorts = await shortenAffiliateLinks(
-          linkRows.map((r) => r.link),
-          400
-        );
-        const filled = shorts.filter(Boolean).length;
-        if (filled === 0) {
-          throw new Error(
-            t(
-              "Không tạo được short link. Giữ GemLogin mở (đã login Affiliate) rồi thử Lưu lại. Xem cửa sổ Agent để biết chi tiết."
-            ) as string
+        try {
+          const shorts = await shortenAffiliateLinks(
+            linkRows.map((r) => r.link),
+            800
           );
-        }
-        productsWithShort = productsWithShort.map((p) => ({ ...p, raw: { ...p.raw } }));
-        linkRows.forEach((row, i) => {
-          const raw = productsWithShort[row.index].raw as Record<string, unknown>;
-          raw.affiliate_link_short = shorts[i] || "";
-        });
-        setProducts(productsWithShort);
-        if (filled < linkRows.length) {
+          const filled = shorts.filter(Boolean).length;
+          if (filled === 0) {
+            toast.warn(
+              t(
+                "Chưa tạo được short link (antibot/GemLogin). Vẫn lưu bằng long_link — giải captcha trên GemLogin rồi Lưu lại để bổ sung short."
+              ) as string
+            );
+          } else {
+            productsWithShort = productsWithShort.map((p) => ({
+              ...p,
+              raw: { ...p.raw },
+            }));
+            linkRows.forEach((row, i) => {
+              const raw = productsWithShort[row.index].raw as Record<string, unknown>;
+              raw.affiliate_link_short = shorts[i] || "";
+            });
+            setProducts(productsWithShort);
+            if (filled < linkRows.length) {
+              toast.warn(
+                t("Chỉ tạo được {{ok}}/{{total}} short link", {
+                  ok: filled,
+                  total: linkRows.length,
+                }) as string
+              );
+            }
+          }
+        } catch (shortErr: any) {
+          const msg = String(shortErr?.message || shortErr || "");
           toast.warn(
-            t("Chỉ tạo được {{ok}}/{{total}} short link", {
-              ok: filled,
-              total: linkRows.length,
-            }) as string
+            (msg
+              ? msg.slice(0, 220)
+              : t(
+                  "Không tạo được short link. Vẫn lưu bằng long_link."
+                )) as string
           );
         }
       }
