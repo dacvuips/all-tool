@@ -1223,7 +1223,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {guideOpen ? (
                   <span className="block max-w-3xl text-12 leading-relaxed text-bluegray-500">
                     {t(
-                      "Tải Agent về máy → mở GemLogin → Mở Trình duyệt → cào / xuất CSV. Web chỉ nói chuyện với Agent localhost, không cần source code."
+                      "Tải Agent về máy → mở GemLogin → Mở Trình duyệt → cào / xuất CSV. Trên domain HTTPS: khi Chrome hỏi quyền Local network hãy Allow (localhost web thì không cần)."
                     )}
                   </span>
                 ) : null}

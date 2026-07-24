@@ -2,6 +2,15 @@
 
 Agent chạy **trên máy khách** (cùng GemLogin). Web (domain) gọi `http://127.0.0.1:17890`.
 
+## Domain HTTPS vs localhost
+
+Web trên **domain HTTPS** gọi Agent `http://127.0.0.1:17890` bị Chrome **Local Network Access** chặn
+trừ khi user bấm **Allow** khi trình duyệt hỏi quyền local network.
+Trên `localhost` web thì không hỏi → nên “localhost được, domain không”.
+
+Sửa nhanh: DevTools → Console xem lỗi LNA; hoặc
+`chrome://settings/content/localNetworkAccess` → cho phép site của bạn.
+
 ## Cho khách (không đưa source)
 
 Dev build bản phân phối:

@@ -26,14 +26,35 @@ const PORT = Number(process.env.SCRAPE_AGENT_PORT || 17890);
 
 type Json = Record<string, unknown>;
 
-function sendJson(res: http.ServerResponse, status: number, body: Json) {
+/** CORS + Private Network Access (Chrome: domain HTTPS → 127.0.0.1). */
+function corsHeaders(req?: http.IncomingMessage): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, Access-Control-Request-Private-Network",
+  };
+  // Preflight PNA / Local Network Access
+  if (
+    req?.headers["access-control-request-private-network"] === "true" ||
+    req?.method?.toUpperCase() === "OPTIONS"
+  ) {
+    headers["Access-Control-Allow-Private-Network"] = "true";
+  }
+  return headers;
+}
+
+function sendJson(
+  res: http.ServerResponse,
+  status: number,
+  body: Json,
+  req?: http.IncomingMessage
+) {
   const text = JSON.stringify(body);
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(text),
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    ...corsHeaders(req),
   });
   res.end(text);
 }
@@ -75,11 +96,7 @@ async function handle(
   const path = url.pathname.replace(/\/+$/, "") || "/";
 
   if (method === "OPTIONS") {
-    res.writeHead(204, {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    });
+    res.writeHead(204, corsHeaders(req));
     res.end();
     return;
   }
@@ -88,32 +105,37 @@ async function handle(
     if (method === "GET" && (path === "/" || path === "/status" || path === "/api/status")) {
       const gem = await getGemLoginStatus();
       const cdp = await getCdpStatus().catch((): null => null);
-      sendJson(res, 200, {
-        ok: true,
-        agent: true,
-        name: "shopee-scrape-agent",
-        version: "1.0.0",
-        gemlogin: gem,
-        cdp: cdp || { hasCookies: false, connected: false, cdpAlive: false },
-      });
+      sendJson(
+        res,
+        200,
+        {
+          ok: true,
+          agent: true,
+          name: "shopee-scrape-agent",
+          version: "1.0.0",
+          gemlogin: gem,
+          cdp: cdp || { hasCookies: false, connected: false, cdpAlive: false },
+        },
+        req
+      );
       return;
     }
 
     if (method === "GET" && (path === "/gemlogin-status" || path === "/api/gemlogin-status")) {
       const status = await getGemLoginStatus();
-      sendJson(res, 200, { ok: true, ...status });
+      sendJson(res, 200, { ok: true, ...status }, req);
       return;
     }
 
     if (method === "GET" && (path === "/gemlogin-profiles" || path === "/api/gemlogin-profiles")) {
       const profiles = await listGemLoginProfiles();
-      sendJson(res, 200, { ok: true, profiles });
+      sendJson(res, 200, { ok: true, profiles }, req);
       return;
     }
 
     if (method === "GET" && (path === "/cdp-status" || path === "/api/cdp-status")) {
       const status = await getCdpStatus();
-      sendJson(res, 200, { ok: true, ...status });
+      sendJson(res, 200, { ok: true, ...status }, req);
       return;
     }
 
@@ -128,7 +150,7 @@ async function handle(
           : undefined,
         allowChromeFallback: body?.allowChromeFallback === true,
       });
-      sendJson(res, 200, { ok: true, ...result });
+      sendJson(res, 200, { ok: true, ...result }, req);
       return;
     }
 
@@ -143,7 +165,7 @@ async function handle(
         listType: Number.isFinite(Number(body?.listType)) ? Number(body.listType) : 0,
         filterShopTypes: parseFilterShopTypes(body?.filterShopTypes),
       });
-      sendJson(res, 200, { ok: true, ...result });
+      sendJson(res, 200, { ok: true, ...result }, req);
       return;
     }
 
@@ -161,7 +183,7 @@ async function handle(
         withShortLinks: body?.withShortLinks !== false,
       });
       const session = buildCsvSession(exported);
-      sendJson(res, 200, { ok: true, session });
+      sendJson(res, 200, { ok: true, session }, req);
       return;
     }
 
@@ -174,14 +196,14 @@ async function handle(
         links,
         Number(body?.delayMs) > 0 ? Number(body.delayMs) : 400
       );
-      sendJson(res, 200, { ok: true, shortLinks });
+      sendJson(res, 200, { ok: true, shortLinks }, req);
       return;
     }
 
-    sendJson(res, 404, { ok: false, message: `Not found: ${method} ${path}` });
+    sendJson(res, 404, { ok: false, message: `Not found: ${method} ${path}` }, req);
   } catch (err: any) {
     logger.error(`[scrape-agent] ${method} ${path}: ${err?.message || err}`);
-    sendJson(res, 400, { ok: false, message: err?.message || "Agent error" });
+    sendJson(res, 400, { ok: false, message: err?.message || "Agent error" }, req);
   }
 }
 

@@ -1,6 +1,9 @@
 /**
  * Client gọi Shopee Scrape Local Agent trên máy user.
  * Mặc định http://127.0.0.1:17890 — không đi qua server production.
+ *
+ * Trên domain HTTPS, Chrome Local Network Access chặn fetch → loopback
+ * trừ khi có targetAddressSpace + user Allow quyền Local network.
  */
 
 export const SCRAPE_AGENT_BASE = (
@@ -8,6 +11,19 @@ export const SCRAPE_AGENT_BASE = (
     process.env?.NEXT_PUBLIC_SCRAPE_AGENT_URL) ||
   "http://127.0.0.1:17890"
 ).replace(/\/$/, "");
+
+/** Chrome LNA: HTTPS public site → 127.0.0.1 (tránh mixed content + hiện permission). */
+type LoopbackFetchInit = RequestInit & {
+  targetAddressSpace?: "loopback" | "local" | "private" | "public";
+};
+
+function agentFetchInit(init?: RequestInit): LoopbackFetchInit {
+  return {
+    ...init,
+    // loopback = 127.0.0.1 / ::1 (Chrome 138+)
+    targetAddressSpace: "loopback",
+  };
+}
 
 async function parseJson(res: Response) {
   try {
@@ -27,10 +43,13 @@ export async function probeScrapeAgent(timeoutMs = 2500): Promise<{
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(`${SCRAPE_AGENT_BASE}/status`, {
-      method: "GET",
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      `${SCRAPE_AGENT_BASE}/status`,
+      agentFetchInit({
+        method: "GET",
+        signal: controller.signal,
+      })
+    );
     const json = await parseJson(res);
     if (!res.ok || !json?.ok) {
       return { online: false, message: json?.message || `Agent lỗi (${res.status})` };
@@ -49,7 +68,7 @@ export async function probeScrapeAgent(timeoutMs = 2500): Promise<{
   } catch {
     return {
       online: false,
-      message: `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`,
+      message: `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Agent, rồi Allow «Local network» khi Chrome hỏi (bắt buộc trên domain HTTPS).`,
     };
   } finally {
     window.clearTimeout(timer);
@@ -65,10 +84,13 @@ export async function agentFetch(
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
     const { timeoutMs: _t, ...rest } = init || {};
-    const res = await fetch(`${SCRAPE_AGENT_BASE}${path}`, {
-      ...rest,
-      signal: controller.signal,
-    });
+    const res = await fetch(
+      `${SCRAPE_AGENT_BASE}${path}`,
+      agentFetchInit({
+        ...rest,
+        signal: controller.signal,
+      })
+    );
     const json = await parseJson(res);
     return { res, json };
   } catch (err: any) {
@@ -77,7 +99,7 @@ export async function agentFetch(
     }
     throw new Error(
       err?.message ||
-        `Không gọi được Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent trên máy bạn.`
+        `Không gọi được Local Agent (${SCRAPE_AGENT_BASE}). Mở Agent trên máy bạn; trên domain HTTPS hãy Allow quyền Local network khi Chrome hỏi.`
     );
   } finally {
     window.clearTimeout(timer);
