@@ -128,8 +128,8 @@ function useHelmet(app: express.Application) {
             imgSrc: ["'self'", "https:", "data:", "blob:", "i.imgur.com", "http"],
             styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com", "https:"],
             fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:"],
-            // ffmpeg.wasm (video-affiliate-plus) chạy worker từ blob:
+            scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https:", "blob:"],
+            // ffmpeg.wasm (video-affiliate-plus) chạy worker/script từ blob:
             workerSrc: ["'self'", "blob:"],
             connectSrc: [
               "'self'",
