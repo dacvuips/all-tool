@@ -63,10 +63,14 @@ function isChunkLoadError(err: unknown): boolean {
 /** Dynamic import kèm 1 lần retry (Next có thể 404 chunk lúc vừa compile). */
 async function importFfmpegPackages(): Promise<{
   FFmpeg: typeof import("@ffmpeg/ffmpeg").FFmpeg;
+  toBlobURL: typeof import("@ffmpeg/util").toBlobURL;
 }> {
   const load = async () => {
-    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-    return { FFmpeg };
+    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
+      import("@ffmpeg/ffmpeg"),
+      import("@ffmpeg/util"),
+    ]);
+    return { FFmpeg, toBlobURL };
   };
 
   try {
@@ -86,23 +90,14 @@ async function getFFmpeg(
 
   _loadPromise = (async () => {
     onProgress?.({ ratio: 0.02, message: "Đang tải ffmpeg.wasm..." });
-    const { FFmpeg } = await importFfmpegPackages();
+    const { FFmpeg, toBlobURL } = await importFfmpegPackages();
 
-    // Same-origin /ffmpeg/* — không dùng toBlobURL (blob: bị CSP connect-src chặn
-    // trên một số deploy). Fallback CDN nếu chưa có file trong public.
+    // Bắt buộc toBlobURL: worker của @ffmpeg/ffmpeg bị webpack bundle,
+    // `import("http://...")` → "Cannot find module". Blob URL thì load được.
+    // CSP connect-src phải có blob: (đã set trong express.ts).
     const sameOriginBase = `${window.location.origin}/ffmpeg`;
-    const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+    const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
 
-    const loadAt = async (baseURL: string) => {
-      const ff = new FFmpeg();
-      await ff.load({
-        coreURL: `${baseURL}/ffmpeg-core.js`,
-        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
-      });
-      return ff;
-    };
-
-    // Ưu tiên same-origin nếu đã có file (HEAD nhanh); không thì CDN.
     let useSameOrigin = false;
     try {
       const head = await fetch(`${sameOriginBase}/ffmpeg-core.wasm`, { method: "HEAD" });
@@ -111,7 +106,14 @@ async function getFFmpeg(
       useSameOrigin = false;
     }
 
-    const ff = useSameOrigin ? await loadAt(sameOriginBase) : await loadAt(cdnBase);
+    // public/ffmpeg = UMD (fetch-ffmpeg-core.js). CDN UMD nếu chưa có file local.
+    const baseURL = useSameOrigin ? sameOriginBase : cdnBase;
+    const ff = new FFmpeg();
+
+    await ff.load({
+      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+    });
 
     _ffmpegInstance = ff;
     return ff;
