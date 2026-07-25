@@ -86,11 +86,6 @@ export interface CharacterProfile {
     fashion: string;
   };
   previewPose: CharacterPose;
-  /**
-   * Khi bật: mỗi lần generate tự chọn ngẫu nhiên 1 trong các ảnh model đã có
-   * (standing / sitting / fashion) thay vì luôn dùng previewPose.
-   */
-  randomImage?: boolean;
 }
 
 export interface GenerateVideoPromptConfig {
@@ -921,7 +916,6 @@ export function createEmptyCharacterProfile(
     scenes: [createEmptyCharacterScene(1)],
     images: { standing: "", sitting: "", fashion: "" },
     previewPose: "fashion",
-    randomImage: false,
     ...partial,
   };
 }
@@ -947,7 +941,6 @@ export function migrateToCharacterProfile(
       fashion: raw.images?.fashion || "",
     },
     previewPose: raw.previewPose || "fashion",
-    randomImage: Boolean(raw.randomImage),
   });
 }
 
@@ -963,22 +956,12 @@ export function listCharacterImages(
   })).filter((x) => Boolean(x.url));
 }
 
-/**
- * Chọn ảnh nhân vật để generate.
- * - `randomImage` bật → ngẫu nhiên trong các ảnh có sẵn
- * - tắt → ưu tiên previewPose, rồi fashion / standing / sitting
- */
+/** Chọn ảnh nhân vật để generate — ưu tiên previewPose, rồi ảnh còn lại. */
 export function pickCharacterImage(
-  profile: CharacterProfile,
-  opts?: { random?: boolean }
+  profile: CharacterProfile
 ): { pose: CharacterPose | ""; url: string } {
   const available = listCharacterImages(profile);
   if (!available.length) return { pose: "", url: "" };
-
-  const useRandom = opts?.random ?? Boolean(profile.randomImage);
-  if (useRandom) {
-    return available[Math.floor(Math.random() * available.length)];
-  }
 
   const preferred = available.find((a) => a.pose === profile.previewPose);
   if (preferred) return preferred;

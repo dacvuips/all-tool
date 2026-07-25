@@ -4,7 +4,8 @@
  *
  * - Lazy load wasm lần đầu (~25MB, cache trình duyệt lần sau)
  * - Queue: chỉ 1 job chạy cùng lúc (tránh OOM)
- * - Dùng @ffmpeg/core single-thread → không cần SharedArrayBuffer / COEP
+ * - @ffmpeg/core ESM single-thread → không cần SharedArrayBuffer / COEP
+ * - classWorkerURL → /ffmpeg/worker.js (bypass webpack; tránh Cannot find module blob/http)
  */
 
 export type FfmpegMergeProgress = {
@@ -63,14 +64,10 @@ function isChunkLoadError(err: unknown): boolean {
 /** Dynamic import kèm 1 lần retry (Next có thể 404 chunk lúc vừa compile). */
 async function importFfmpegPackages(): Promise<{
   FFmpeg: typeof import("@ffmpeg/ffmpeg").FFmpeg;
-  toBlobURL: typeof import("@ffmpeg/util").toBlobURL;
 }> {
   const load = async () => {
-    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
-      import("@ffmpeg/ffmpeg"),
-      import("@ffmpeg/util"),
-    ]);
-    return { FFmpeg, toBlobURL };
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    return { FFmpeg };
   };
 
   try {
@@ -90,39 +87,51 @@ async function getFFmpeg(
 
   _loadPromise = (async () => {
     onProgress?.({ ratio: 0.02, message: "Đang tải ffmpeg.wasm..." });
-    const { FFmpeg, toBlobURL } = await importFfmpegPackages();
+    const { FFmpeg } = await importFfmpegPackages();
 
-    // coreJS: bắt buộc toBlobURL (worker webpack không import() được http URL).
-    // wasm: URL thẳng (https) — Worker fetch theo connect-src 'self'/CDN.
-    // Không bọc wasm bằng blob: (CSP + tiết kiệm RAM ~32MB).
+    // classWorkerURL: Worker native ESM (không qua webpack) — import() được
+    // http/blob URL. Worker webpack cũ biến import(coreURL) → Cannot find module.
+    // Core phải là ESM (export default) vì Worker type: "module".
+    // Worker luôn same-origin (CSP worker-src chỉ 'self' + blob).
     const sameOriginBase = `${window.location.origin}/ffmpeg`;
-    const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+    const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
+    const classWorkerURL = `${sameOriginBase}/worker.js`;
 
     const loadFrom = async (baseURL: string) => {
       const ff = new FFmpeg();
-      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript");
       await ff.load({
-        coreURL,
+        classWorkerURL,
+        coreURL: `${baseURL}/ffmpeg-core.js`,
         wasmURL: `${baseURL}/ffmpeg-core.wasm`,
       });
       return ff;
     };
 
-    let useSameOrigin = false;
+    let hasWorker = false;
+    let hasWasm = false;
     try {
-      const head = await fetch(`${sameOriginBase}/ffmpeg-core.wasm`, { method: "HEAD" });
-      useSameOrigin = head.ok;
+      const [wasmHead, workerHead] = await Promise.all([
+        fetch(`${sameOriginBase}/ffmpeg-core.wasm`, { method: "HEAD" }),
+        fetch(classWorkerURL, { method: "HEAD" }),
+      ]);
+      hasWasm = wasmHead.ok;
+      hasWorker = workerHead.ok;
     } catch {
-      useSameOrigin = false;
+      // ignore
+    }
+
+    if (!hasWorker) {
+      throw new Error(
+        "Thiếu /ffmpeg/worker.js — chạy: yarn fetch-ffmpeg-core (hoặc yarn next:build)"
+      );
     }
 
     let ff: import("@ffmpeg/ffmpeg").FFmpeg;
     try {
-      ff = await loadFrom(useSameOrigin ? sameOriginBase : cdnBase);
+      ff = await loadFrom(hasWasm ? sameOriginBase : cdnBase);
     } catch (firstErr) {
-      if (!useSameOrigin) throw firstErr;
-      // Same-origin lỗi (CF/cache/MIME) → fallback CDN
-      console.warn("[ffmpeg] same-origin load failed, fallback CDN", firstErr);
+      if (!hasWasm) throw firstErr;
+      console.warn("[ffmpeg] same-origin core failed, fallback CDN", firstErr);
       ff = await loadFrom(cdnBase);
     }
 

@@ -136,8 +136,7 @@ function getCharacterPreview(config: GenerateVideoConfig): {
   const character: CharacterProfile | undefined =
     config.characters.find((c) => c.id === config.characterId) || config.characters[0];
   if (!character) return { url: "", name: "" };
-  // UI preview luôn theo previewPose; random chỉ áp khi generate từng job
-  const picked = pickCharacterImage(character, { random: false });
+  const picked = pickCharacterImage(character);
   return {
     url: picked.url,
     name: character.characterName || character.name || "",
@@ -937,8 +936,6 @@ export function ThreadManagementPanel({
       }
     }
 
-    const character: CharacterProfile | undefined =
-      config.characters.find((c) => c.id === config.characterId) || config.characters[0];
     const preview = getCharacterPreview(config);
     if (!preview.url) {
       toast.warn(t("Chưa có ảnh nhân vật trong config. Vào Quản lý Nhân Vật để thêm ảnh."));
@@ -968,20 +965,14 @@ export function ThreadManagementPanel({
       }),
       "info"
     );
-    if (character?.randomImage) {
-      onAddLog(t("Ảnh nhân vật: chọn ngẫu nhiên mỗi luồng"), "info");
-    }
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
 
-    const useRandomCharacter = Boolean(character?.randomImage);
     let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>> | null = null;
-    if (!useRandomCharacter) {
-      try {
-        characterPreparedFixed = await prepareShopeeImageInput(preview.url);
-      } catch (err: any) {
-        toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
-        return;
-      }
+    try {
+      characterPreparedFixed = await prepareShopeeImageInput(preview.url);
+    } catch (err: any) {
+      toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
+      return;
     }
 
     const runJob = async (
@@ -1001,12 +992,7 @@ export function ThreadManagementPanel({
         if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
         const fresh = (await getThreadItem(sessionId, target.id)) || target;
-        let characterPrepared = characterPreparedFixed;
-        if (useRandomCharacter && character) {
-          const picked = pickCharacterImage(character, { random: true });
-          if (!picked.url) throw new Error(t("Chưa có ảnh nhân vật"));
-          characterPrepared = await prepareShopeeImageInput(picked.url);
-        }
+        const characterPrepared = characterPreparedFixed;
         if (!characterPrepared) throw new Error(t("Chưa có ảnh nhân vật"));
 
         const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);

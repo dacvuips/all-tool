@@ -156,7 +156,6 @@ export function CharacterProfileManagerDialog({
             fashion: item.images?.fashion || "",
           },
           previewPose: item.previewPose || "fashion",
-          randomImage: Boolean(item.randomImage),
         })
       );
       if (!imported.length) {
@@ -633,55 +632,13 @@ export function CharacterProfileManagerDialog({
 
                   {/* Preview */}
                   <aside className="flex w-60 shrink-0 flex-col border-l border-gray-200 bg-gray-50 p-3">
-                    <div className="mb-2.5 flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-white px-2.5 py-2 shadow-sm">
-                      <div className="min-w-0">
-                        <div className="text-10 font-bold text-gray-700">{t("Ảnh ngẫu nhiên")}</div>
-                      </div>
-                      <button
-                        type="button"
-                        role="switch"
-                        aria-checked={Boolean(draft.randomImage)}
-                        title={
-                          draft.randomImage
-                            ? (t("Đang bật — generate sẽ chọn ngẫu nhiên") as string)
-                            : (t("Bật để tự chọn ảnh ngẫu nhiên khi generate") as string)
-                        }
-                        onClick={() => {
-                          const next = !draft.randomImage;
-                          if (next && imageCount < 1) {
-                            toast.warn(t("Cần thêm ít nhất 1 ảnh model"));
-                            return;
-                          }
-                          if (next && imageCount < 2) {
-                            toast.info(
-                              t("Chỉ có 1 ảnh — sẽ luôn dùng ảnh đó (thêm ảnh để random)")
-                            );
-                          }
-                          patchDraft({ randomImage: next });
-                        }}
-                        className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-                          draft.randomImage ? "bg-primary" : "bg-gray-300"
-                        }`}
-                      >
-                        <span
-                          className={`absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                            draft.randomImage ? "translate-x-4" : "translate-x-0"
-                          }`}
-                        />
-                      </button>
-                    </div>
-                    <div
-                      className={`mb-2.5 inline-flex rounded-xl bg-white p-1 shadow-sm border border-gray-100 ${
-                        draft.randomImage ? "opacity-60" : ""
-                      }`}
-                    >
+                    <div className="mb-2.5 inline-flex rounded-xl bg-white p-1 shadow-sm border border-gray-100">
                       {(["standing", "sitting", "fashion"] as CharacterPose[]).map((pose) => (
                         <button
                           key={pose}
                           type="button"
-                          disabled={Boolean(draft.randomImage)}
                           onClick={() => patchDraft({ previewPose: pose })}
-                          className={`flex-1 rounded-lg px-2 py-1.5 text-10 font-bold transition-all disabled:cursor-not-allowed ${
+                          className={`flex-1 rounded-lg px-2 py-1.5 text-10 font-bold transition-all ${
                             draft.previewPose === pose
                               ? "bg-primary text-white shadow-sm"
                               : "text-gray-500 hover:text-gray-700"
@@ -691,13 +648,6 @@ export function CharacterProfileManagerDialog({
                         </button>
                       ))}
                     </div>
-                    {draft.randomImage ? (
-                      <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5 text-[9px] font-medium leading-snug text-amber-700">
-                        {t("Generate sẽ tự chọn ngẫu nhiên 1 trong {{count}} ảnh model đã có.", {
-                          count: imageCount,
-                        })}
-                      </div>
-                    ) : null}
                     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-inner">
                       {previewUrl ? (
                         <img

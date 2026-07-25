@@ -1,8 +1,11 @@
 /**
- * Tải @ffmpeg/core (UMD) vào next/public/ffmpeg.
- * UMD + toBlobURL tương thích worker webpack của @ffmpeg/ffmpeg.
+ * Tải @ffmpeg/core (ESM) + copy worker ESM vào next/public/ffmpeg.
+ *
+ * classWorkerURL trỏ tới /ffmpeg/worker.js → bypass webpack bundle worker
+ * (tránh "Cannot find module 'blob:…'" / 'http:…').
  *
  * Chạy: node scripts/fetch-ffmpeg-core.js
+ * Force: FORCE=1 node scripts/fetch-ffmpeg-core.js
  */
 const fs = require("fs");
 const path = require("path");
@@ -10,8 +13,19 @@ const https = require("https");
 
 const VERSION = "0.12.6";
 const OUT_DIR = path.join(__dirname, "..", "next", "public", "ffmpeg");
-const BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${VERSION}/dist/umd`;
-const FILES = ["ffmpeg-core.js", "ffmpeg-core.wasm"];
+const CORE_BASE = `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${VERSION}/dist/esm`;
+const CORE_FILES = ["ffmpeg-core.js", "ffmpeg-core.wasm"];
+
+const FFMPEG_ESM = path.join(
+  __dirname,
+  "..",
+  "node_modules",
+  "@ffmpeg",
+  "ffmpeg",
+  "dist",
+  "esm"
+);
+const WORKER_FILES = ["worker.js", "const.js", "errors.js"];
 
 function download(url, dest) {
   return new Promise((resolve, reject) => {
@@ -52,21 +66,51 @@ function download(url, dest) {
   });
 }
 
+function isEsmCore(jsPath) {
+  try {
+    const s = fs.readFileSync(jsPath, "utf8");
+    // ESM build: `export default createFFmpegCore` ở cuối file
+    return /export\s+default\s+createFFmpegCore/.test(s.slice(-200)) || /export\s+default\s+/.test(s.slice(-200));
+  } catch {
+    return false;
+  }
+}
+
 async function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  for (const name of FILES) {
+
+  // Worker ESM từ node_modules — luôn sync theo version @ffmpeg/ffmpeg đã cài
+  for (const name of WORKER_FILES) {
+    const src = path.join(FFMPEG_ESM, name);
     const dest = path.join(OUT_DIR, name);
-    // Luôn tải lại nếu force=1; không thì giữ file đã có
-    if (process.env.FORCE !== "1" && fs.existsSync(dest) && fs.statSync(dest).size > 1000) {
-      // ESM cũ (~114KB js) khác UMD (~111KB+) — nếu js quá nhỏ/lệch thì tải lại
-      if (name !== "ffmpeg-core.js" || fs.statSync(dest).size > 100000) {
+    if (!fs.existsSync(src)) {
+      throw new Error(`Missing ${src} — chạy yarn install trước`);
+    }
+    fs.copyFileSync(src, dest);
+    console.log(`[ffmpeg-core] copy worker: ${name} (${fs.statSync(dest).size} bytes)`);
+  }
+
+  for (const name of CORE_FILES) {
+    const dest = path.join(OUT_DIR, name);
+    const force = process.env.FORCE === "1";
+    const exists = fs.existsSync(dest) && fs.statSync(dest).size > 1000;
+
+    if (!force && exists) {
+      if (name === "ffmpeg-core.js" && !isEsmCore(dest)) {
+        console.log(`[ffmpeg-core] ${name} là UMD — tải lại ESM...`);
+      } else {
         console.log(`[ffmpeg-core] skip (exists): ${name}`);
         continue;
       }
     }
-    console.log(`[ffmpeg-core] downloading ${name} (umd)...`);
-    await download(`${BASE}/${name}`, dest);
+
+    console.log(`[ffmpeg-core] downloading ${name} (esm)...`);
+    await download(`${CORE_BASE}/${name}`, dest);
     console.log(`[ffmpeg-core] ok ${name} (${fs.statSync(dest).size} bytes)`);
+  }
+
+  if (!isEsmCore(path.join(OUT_DIR, "ffmpeg-core.js"))) {
+    throw new Error("ffmpeg-core.js không phải ESM — kiểm tra CDN / FORCE=1");
   }
 }
 

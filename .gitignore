@@ -62,9 +62,12 @@ tmp
 
 data/shopee-affiliate-sessions/
 
-# @ffmpeg/core ESM (tải bằng yarn fetch-ffmpeg-core / next:build) — wasm ~32MB
+# @ffmpeg/core ESM + worker (tải bằng yarn fetch-ffmpeg-core / next:build) — wasm ~32MB
 next/public/ffmpeg/ffmpeg-core.wasm
 next/public/ffmpeg/ffmpeg-core.js
+next/public/ffmpeg/worker.js
+next/public/ffmpeg/const.js
+next/public/ffmpeg/errors.js
 
 # Bản đóng gói agent cho khách (build bằng yarn build-scrape-agent)
 release/shopee-scrape-agent/
