@@ -92,11 +92,21 @@ async function getFFmpeg(
     onProgress?.({ ratio: 0.02, message: "Đang tải ffmpeg.wasm..." });
     const { FFmpeg, toBlobURL } = await importFfmpegPackages();
 
-    // Bắt buộc toBlobURL: worker của @ffmpeg/ffmpeg bị webpack bundle,
-    // `import("http://...")` → "Cannot find module". Blob URL thì load được.
-    // CSP connect-src phải có blob: (đã set trong express.ts).
+    // coreJS: bắt buộc toBlobURL (worker webpack không import() được http URL).
+    // wasm: URL thẳng (https) — Worker fetch theo connect-src 'self'/CDN.
+    // Không bọc wasm bằng blob: (CSP + tiết kiệm RAM ~32MB).
     const sameOriginBase = `${window.location.origin}/ffmpeg`;
     const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
+
+    const loadFrom = async (baseURL: string) => {
+      const ff = new FFmpeg();
+      const coreURL = await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript");
+      await ff.load({
+        coreURL,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+      });
+      return ff;
+    };
 
     let useSameOrigin = false;
     try {
@@ -106,20 +116,22 @@ async function getFFmpeg(
       useSameOrigin = false;
     }
 
-    // public/ffmpeg = UMD (fetch-ffmpeg-core.js). CDN UMD nếu chưa có file local.
-    const baseURL = useSameOrigin ? sameOriginBase : cdnBase;
-    const ff = new FFmpeg();
-
-    await ff.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-    });
+    let ff: import("@ffmpeg/ffmpeg").FFmpeg;
+    try {
+      ff = await loadFrom(useSameOrigin ? sameOriginBase : cdnBase);
+    } catch (firstErr) {
+      if (!useSameOrigin) throw firstErr;
+      // Same-origin lỗi (CF/cache/MIME) → fallback CDN
+      console.warn("[ffmpeg] same-origin load failed, fallback CDN", firstErr);
+      ff = await loadFrom(cdnBase);
+    }
 
     _ffmpegInstance = ff;
     return ff;
   })().catch((err) => {
     _loadPromise = null;
-    throw err;
+    const msg = err instanceof Error ? err.message : String(err ?? "unknown");
+    throw new Error(`Không tải được ffmpeg.wasm: ${msg}`);
   });
 
   return _loadPromise;
@@ -182,10 +194,11 @@ export async function mergeVideosInBrowser(
 
       options.onProgress?.({ ratio: 0.65, message: "Đang nối video..." });
 
-      // Ưu tiên copy (nhanh); re-encode nếu codec/container lệch
+      // Ưu tiên copy (nhanh); re-encode nếu codec/container lệch.
+      // Lưu ý: ff.exec trả exit code, không throw khi ffmpeg fail.
       let copyOk = false;
       try {
-        await ff.exec([
+        const code = await ff.exec([
           "-f",
           "concat",
           "-safe",
@@ -197,14 +210,15 @@ export async function mergeVideosInBrowser(
           "-y",
           "output.mp4",
         ]);
-        copyOk = true;
+        copyOk = code === 0;
       } catch {
         copyOk = false;
       }
 
       if (!copyOk) {
         options.onProgress?.({ ratio: 0.7, message: "Đang re-encode video..." });
-        await ff.exec([
+        await ff.deleteFile("output.mp4").catch(() => undefined);
+        const code = await ff.exec([
           "-f",
           "concat",
           "-safe",
@@ -226,6 +240,9 @@ export async function mergeVideosInBrowser(
           "-y",
           "output.mp4",
         ]);
+        if (code !== 0) {
+          throw new Error(`ffmpeg re-encode thất bại (exit ${code})`);
+        }
       }
 
       options.onProgress?.({ ratio: 0.92, message: "Đang đọc kết quả..." });
@@ -236,6 +253,9 @@ export async function mergeVideosInBrowser(
       }
       const bytes =
         outData instanceof Uint8Array ? outData : new Uint8Array(outData as ArrayBuffer);
+      if (bytes.byteLength <= 0) {
+        throw new Error("ffmpeg tạo file rỗng — codec video có thể không tương thích");
+      }
       const ab = bytes.buffer.slice(
         bytes.byteOffset,
         bytes.byteOffset + bytes.byteLength
