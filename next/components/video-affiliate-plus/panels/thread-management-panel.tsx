@@ -827,7 +827,7 @@ export function ThreadManagementPanel({
         const blob = await getMergedVideoBlob(item);
         if (!blob) continue;
 
-        // TenSanPham_shopId_itemId.mp4 (vd. AoKhoacNam_1632480189_42874449161.mp4)
+        // itemId.mp4 (vd. 42874449161.mp4 từ /product/{shopId}/{itemId})
         const base =
           buildMergedVideoFileBase(item) ||
           getMergedVideoStorageKey(item) ||

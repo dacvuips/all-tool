@@ -287,9 +287,9 @@ export function toPascalCaseFileSlug(name: string, maxLen = 80): string {
 }
 
 /**
- * Tên file video nối: TenSanPham_shopId_itemId
+ * Tên file video nối: itemId (mã sản phẩm từ link)
  * VD link https://shopee.vn/product/1632480189/42874449161
- * → AoKhoacNam_1632480189_42874449161
+ * → 42874449161
  */
 export function buildMergedVideoFileBase(item: {
   productName?: string;
@@ -302,17 +302,12 @@ export function buildMergedVideoFileBase(item: {
   const fromLink = extractShopeeShopItemIds(
     String(item.productLink || item.affiliateLink || "").trim()
   );
-  let shopId = String(item.shopId || "").trim();
-  if (!shopId || /^row-\d+$/i.test(shopId)) shopId = fromLink.shopId;
   const itemId = String(item.productId || "").trim() || fromLink.itemId;
-  const nameSlug = toPascalCaseFileSlug(item.productName || "") || "Video";
-
-  if (shopId && itemId) return `${nameSlug}_${shopId}_${itemId}`;
-  if (itemId) return `${nameSlug}_${itemId}`;
+  if (itemId) return itemId;
   const fallback = String(item.id || "video")
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, "_")
     .slice(0, 40);
-  return `${nameSlug}_${fallback || "video"}`;
+  return fallback || "video";
 }
 
 /** Build fieldMap từ hàng header — chỉ theo tên cột. */

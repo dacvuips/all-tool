@@ -876,8 +876,8 @@ export async function fetchProductPageViaCdp(
   const list = extractList(payload);
   const totalCount = extractTotal(payload);
   const products = list.map((item, index) => flattenProduct(item, index, pageOffset, market));
-  const hasMore =
-    list.length >= pageLimit && (totalCount == null || pageOffset + list.length < totalCount);
+  // Không tin total_count (Shopee hay cap 500) — chỉ dừng khi trang không đầy.
+  const hasMore = list.length >= pageLimit;
 
   return {
     products,

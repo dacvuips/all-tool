@@ -129,6 +129,25 @@ const PRICE_SORT_OPTIONS = [
   { value: 3, label: "Giá cao → thấp" },
 ] as const;
 
+/** Tất cả sort_type — dùng xoay khi API cap ~500 SP / 1 sort. */
+const ALL_SORT_TYPES = [1, 5, 2, 4, 3] as const;
+
+const SORT_TYPE_LABELS: Record<number, string> = {
+  1: "Liên quan",
+  2: "Bán chạy",
+  3: "Giá cao → thấp",
+  4: "Giá thấp → cao",
+  5: "Hoa hồng (%)",
+};
+
+/** Ưu tiên sort user chọn, rồi các sort còn lại để vượt cap 500 của Shopee. */
+function buildSortQueue(preferred: number): number[] {
+  const first = ALL_SORT_TYPES.includes(preferred as (typeof ALL_SORT_TYPES)[number])
+    ? preferred
+    : 1;
+  return [first, ...ALL_SORT_TYPES.filter((s) => s !== first)];
+}
+
 /** filter_shop_types trên product/list — chọn nhiều */
 const SHOP_TYPE_TABS = [
   { value: 1, label: "Shopee Mall" },
@@ -859,87 +878,101 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     const seen = new Set<string>();
     const pageLimit = 20;
     const delayMs = 450;
-    const maxPagesPerKeyword = 250;
+    const maxPagesPerSort = 250;
+    const sortQueue = buildSortQueue(sortType);
+    const shopFilters = orderedShopTypes();
     let scannedRaw = 0;
 
     try {
       for (const keyword of crawlKeywords) {
         if (crawlAbortRef.current || accepted.length >= productLimit) break;
-        let pageOffset = 0;
-        let pageNo = 0;
         const keywordLabel = keyword || t("(không từ khóa)");
 
-        // Cào tiếp từng trang cho tới khi đủ số lượng hoặc hết data API
-        while (
-          !crawlAbortRef.current &&
-          accepted.length < productLimit &&
-          pageNo < maxPagesPerKeyword
-        ) {
-          pageNo += 1;
-          setCrawlStatus(
-            t(
-              'Đang cào "{{keyword}}" · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
-              {
-                keyword: keywordLabel,
-                page: pageNo,
-                scanned: scannedRaw,
-                count: accepted.length,
-                limit: productLimit,
-              }
-            )
-          );
+        // Shopee cap ~500 SP / 1 sort → xoay sort để lấy thêm SP unique đến đủ limit
+        for (const activeSort of sortQueue) {
+          if (crawlAbortRef.current || accepted.length >= productLimit) break;
 
-          const page = await fetchAffiliateProductPage({
-            marketHost: openMarketHost,
-            keyword,
-            sortType,
-            pageOffset,
-            pageLimit,
-            listType: 0,
-            filterShopTypes: orderedShopTypes(),
-          });
+          let pageOffset = 0;
+          let pageNo = 0;
+          const sortLabel = t(SORT_TYPE_LABELS[activeSort] || String(activeSort));
 
-          if (!page.products.length) break;
+          while (
+            !crawlAbortRef.current &&
+            accepted.length < productLimit &&
+            pageNo < maxPagesPerSort
+          ) {
+            pageNo += 1;
+            setCrawlStatus(
+              t(
+                'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+                {
+                  keyword: keywordLabel,
+                  sort: sortLabel,
+                  page: pageNo,
+                  scanned: scannedRaw,
+                  count: accepted.length,
+                  limit: productLimit,
+                }
+              )
+            );
 
-          scannedRaw += page.products.length;
-          setCrawledCount(scannedRaw);
-
-          for (const raw of page.products) {
-            if (accepted.length >= productLimit) break;
-            const mapped = mapRawToScrapeRow(raw, accepted.length);
-            if (!mapped.id || seen.has(mapped.id)) continue;
-            if (!passesFilters(mapped)) continue;
-            seen.add(mapped.id);
-            accepted.push({
-              id: mapped.id,
-              productName: mapped.productName,
-              commissionPct: mapped.commissionPct,
-              sales: mapped.sales,
-              price: mapped.price,
-              commissionReceived: mapped.commissionReceived,
-              postedAt: mapped.postedAt,
-              raw: raw as Record<string, unknown>,
+            const page = await fetchAffiliateProductPage({
+              marketHost: openMarketHost,
+              keyword,
+              sortType: activeSort,
+              pageOffset,
+              pageLimit,
+              listType: 0,
+              filterShopTypes: shopFilters,
             });
-            setProducts([...accepted]);
+
+            if (!page.products.length) break;
+
+            scannedRaw += page.products.length;
+            setCrawledCount(scannedRaw);
+
+            let newIdsOnPage = 0;
+            for (const raw of page.products) {
+              if (accepted.length >= productLimit) break;
+              const mapped = mapRawToScrapeRow(raw, accepted.length);
+              if (!mapped.id || seen.has(mapped.id)) continue;
+              seen.add(mapped.id);
+              newIdsOnPage += 1;
+              if (!passesFilters(mapped)) continue;
+              accepted.push({
+                id: mapped.id,
+                productName: mapped.productName,
+                commissionPct: mapped.commissionPct,
+                sales: mapped.sales,
+                price: mapped.price,
+                commissionReceived: mapped.commissionReceived,
+                postedAt: mapped.postedAt,
+                raw: raw as Record<string, unknown>,
+              });
+              setProducts([...accepted]);
+            }
+
+            setCrawlStatus(
+              t(
+                'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+                {
+                  keyword: keywordLabel,
+                  sort: sortLabel,
+                  page: pageNo,
+                  scanned: scannedRaw,
+                  count: accepted.length,
+                  limit: productLimit,
+                }
+              )
+            );
+
+            if (accepted.length >= productLimit) break;
+            // Trang toàn SP đã thấy (API lặp / hết) → sang sort khác
+            if (newIdsOnPage === 0) break;
+            if (!page.hasMore) break;
+            pageOffset += pageLimit;
+            await new Promise((r) => setTimeout(r, delayMs));
           }
-
-          setCrawlStatus(
-            t(
-              'Đang cào "{{keyword}}" · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
-              {
-                keyword: keywordLabel,
-                page: pageNo,
-                scanned: scannedRaw,
-                count: accepted.length,
-                limit: productLimit,
-              }
-            )
-          );
-
-          if (accepted.length >= productLimit) break;
-          if (!page.hasMore) break;
-          pageOffset += pageLimit;
-          await new Promise((r) => setTimeout(r, delayMs));
         }
       }
 
