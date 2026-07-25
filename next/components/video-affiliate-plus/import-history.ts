@@ -184,7 +184,7 @@ export async function clearImportHistory(): Promise<void> {
   await idbClearImportHistory();
 }
 
-/** Thu thập key video (productId / item id) còn được phiên khác tham chiếu. */
+/** Thu thập key video (theo phiên + legacy productId) còn được phiên khác tham chiếu. */
 async function collectReservedVideoKeys(excludeSessionId: string): Promise<Set<string>> {
   const reserved = new Set<string>();
   const history = await getImportHistory();
@@ -192,8 +192,10 @@ async function collectReservedVideoKeys(excludeSessionId: string): Promise<Set<s
     if (entry.id === excludeSessionId) continue;
     const items = await getSessionItems(entry.id);
     for (const item of items) {
-      const key = getMergedVideoStorageKey(item);
-      if (key) reserved.add(key);
+      const sessionKey = getMergedVideoStorageKey(item, entry.id);
+      if (sessionKey) reserved.add(sessionKey);
+      const legacyKey = getMergedVideoStorageKey(item);
+      if (legacyKey) reserved.add(legacyKey);
       if (item.id) reserved.add(item.id);
     }
   }
@@ -202,17 +204,24 @@ async function collectReservedVideoKeys(excludeSessionId: string): Promise<Set<s
 
 /** Xóa video IndexedDB của các item thuộc phiên (bỏ qua key còn dùng ở phiên khác). */
 async function purgeSessionVideos(
+  sessionId: string,
   sessionItems: AffiliatePlusItem[],
   reservedKeys: Set<string>
 ): Promise<void> {
   const purged = new Set<string>();
   for (const item of sessionItems) {
-    const key = getMergedVideoStorageKey(item);
-    if (!key || reservedKeys.has(key) || purged.has(key)) continue;
-    purged.add(key);
-    await idbDeleteProductVideo(key);
-    await idbDeleteMergedVideo(key);
-    if (item.id && item.id !== key && !reservedKeys.has(item.id)) {
+    const keys = [
+      getMergedVideoStorageKey(item, sessionId),
+      getMergedVideoStorageKey(item),
+    ].filter(Boolean);
+    for (const key of keys) {
+      if (!key || reservedKeys.has(key) || purged.has(key)) continue;
+      purged.add(key);
+      await idbDeleteProductVideo(key);
+      await idbDeleteMergedVideo(key);
+    }
+    if (item.id && !reservedKeys.has(item.id) && !purged.has(item.id)) {
+      purged.add(item.id);
       await idbDeleteMergedVideo(item.id);
     }
   }
@@ -239,7 +248,7 @@ export async function deleteImportHistorySession(
 
   const sessionItems = await getSessionItems(sessionId);
   const reservedKeys = await collectReservedVideoKeys(sessionId);
-  await purgeSessionVideos(sessionItems, reservedKeys);
+  await purgeSessionVideos(sessionId, sessionItems, reservedKeys);
   await clearSession(sessionId);
 
   const next = history.filter((h) => h.id !== sessionId);

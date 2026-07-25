@@ -160,7 +160,8 @@ export function groupThreadsByAccount(threads: ShopeeVideoUploadThread[]): Accou
 
 /** Khôi phục blob URL từ IndexedDB cho preview video nối */
 export async function hydrateUploadThreads(
-  list: PersistedUploadThread[]
+  list: PersistedUploadThread[],
+  generateSessionId?: string
 ): Promise<ShopeeVideoUploadThread[]> {
   if (!list.length) return [];
   const pseudoItems = list.map((row) =>
@@ -173,7 +174,7 @@ export async function hydrateUploadThreads(
       mergedVideoUrl: row.videoFile || "",
     })
   );
-  const hydrated = await hydrateMergedVideoUrls(pseudoItems);
+  const hydrated = await hydrateMergedVideoUrls(pseudoItems, generateSessionId);
   return list.map((row, index) => {
     const merged =
       String(hydrated[index]?.mergedVideoUrl || "").trim() || String(row.videoFile || "").trim();

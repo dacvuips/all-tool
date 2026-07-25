@@ -292,7 +292,7 @@ export function ThreadManagementPanel({
         sessionHasMergedVideos(requestedSessionId),
       ]);
       if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
-      const hydrated = await hydrateMergedVideoUrls(pageResult.items);
+      const hydrated = await hydrateMergedVideoUrls(pageResult.items, requestedSessionId);
       if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
       setVisibleItems(hydrated);
       setListTotalMatched(pageResult.totalMatched);
@@ -397,7 +397,7 @@ export function ThreadManagementPanel({
   const openVariantPreview = async (item: AffiliatePlusItem) => {
     const config = genConfig || (await loadGenerateVideoConfig());
     const slotCount = Math.max(item.videoUrls?.length || 0, config.videosPerJob || 1, 1);
-    const slots = await resolveVariantPreviewUrls(item, slotCount);
+    const slots = await resolveVariantPreviewUrls(item, slotCount, sessionId);
     const paddedSlots = Array.from({ length: slotCount }, (_, i) => slots[i] || "");
     const disabled = Array.from({ length: slotCount }, (_, i) => Boolean(item.videoDisabled?.[i]));
     setVideoPreview({
@@ -415,11 +415,11 @@ export function ThreadManagementPanel({
   const openMergedPreview = async (item: AffiliatePlusItem) => {
     const title = t("Video nối file");
     try {
-      let url = await resolveMergedPreviewUrl(item);
+      let url = await resolveMergedPreviewUrl(item, sessionId);
       // Race ngắn: blob vừa ghi / enrich vừa ghi đè — thử lại 1 lần
       if (!url && hasMergedVideoRef(item.mergedVideoUrl)) {
         await new Promise((r) => setTimeout(r, 120));
-        url = await resolveMergedPreviewUrl(item);
+        url = await resolveMergedPreviewUrl(item, sessionId);
       }
       if (!url) {
         openVideoPreviewMerged(title, item.id, [], t("Không mở được video — thử Nối lại"));
@@ -492,7 +492,7 @@ export function ThreadManagementPanel({
     if (batchRunningRef.current) return;
 
     const all = await getSessionItems(sessionId);
-    const hydrated = await hydrateMergedVideoUrls(all);
+    const hydrated = await hydrateMergedVideoUrls(all, sessionId);
 
     const pending = hydrated.filter((i) => {
       const mergeUrls = getMergeableVideoUrls(i);
@@ -516,7 +516,7 @@ export function ThreadManagementPanel({
       if (batchRunningRef.current) return;
       scheduleBackgroundMerge(
         item.id,
-        getMergedVideoStorageKey(item),
+        getMergedVideoStorageKey(item, sessionId),
         getMergeableVideoUrls(item),
         0
       );
@@ -824,13 +824,13 @@ export function ThreadManagementPanel({
       const usedNames = new Set<string>();
 
       for (const item of candidates) {
-        const blob = await getMergedVideoBlob(item);
+        const blob = await getMergedVideoBlob(item, sessionId);
         if (!blob) continue;
 
         // itemId.mp4 (vd. 42874449161.mp4 từ /product/{shopId}/{itemId})
         const base =
           buildMergedVideoFileBase(item) ||
-          getMergedVideoStorageKey(item) ||
+          getMergedVideoStorageKey(item, sessionId) ||
           "merged-video";
         let fileName = `${base}.mp4`;
         let n = 2;
@@ -877,7 +877,7 @@ export function ThreadManagementPanel({
     // Bỏ qua luồng đã có video (variant / video nối / IndexedDB) — không generate lại
     const presence = await Promise.all(
       candidates.map(async (item) => {
-        const hasVideo = await hasExistingGeneratedVideo(item);
+        const hasVideo = await hasExistingGeneratedVideo(item, sessionId);
         return { item, hasVideo };
       })
     );
@@ -1082,7 +1082,7 @@ export function ThreadManagementPanel({
         });
 
         try {
-          await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh), videoUrls);
+          await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh, sessionId), videoUrls);
         } catch (persistErr) {
           console.warn("[persistProductVideosWithEnrichment]", persistErr);
         }
@@ -1095,7 +1095,7 @@ export function ThreadManagementPanel({
           .map((x) => x.u);
         const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
         if (willMerge) {
-          scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh), mergeUrls);
+          scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh, sessionId), mergeUrls);
         }
 
         if (!ctx.isPaused() && !pauseAllRef.current) {
@@ -1259,7 +1259,7 @@ export function ThreadManagementPanel({
           // ignore
         }
       }
-      void removeMergedVideoFromIndexedDb(i);
+      void removeMergedVideoFromIndexedDb(i, sessionId);
     });
     await removeThreads(
       sessionId,
@@ -1291,7 +1291,7 @@ export function ThreadManagementPanel({
         // ignore
       }
     }
-    if (target) void removeMergedVideoFromIndexedDb(target);
+    if (target) void removeMergedVideoFromIndexedDb(target, sessionId);
     else void removeMergedVideoFromIndexedDb(id);
     await removeThread(sessionId, id);
     await loadPage();
@@ -1318,7 +1318,7 @@ export function ThreadManagementPanel({
           // ignore
         }
       }
-      const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item), urls);
+      const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item, sessionId), urls);
       await patchThread(sessionId, item.id, { mergedVideoUrl: mergedUrl, error: "" });
       scheduleParentSync();
       autoMergeAttemptedRef.current[item.id] = true;
@@ -1330,7 +1330,7 @@ export function ThreadManagementPanel({
         const previewUrl = await resolveMergedPreviewUrl({
           ...item,
           mergedVideoUrl: mergedUrl,
-        });
+        }, sessionId);
         setVideoPreview((prev) =>
           prev?.kind === "merged" && prev.itemId === item.id
             ? {
@@ -1457,11 +1457,12 @@ export function ThreadManagementPanel({
       scheduleParentSync();
       autoMergeAttemptedRef.current[itemId] = false;
 
-      await persistProductVideosWithEnrichment(getMergedVideoStorageKey(target), nextUrls);
+      await persistProductVideosWithEnrichment(getMergedVideoStorageKey(target, sessionId), nextUrls);
 
       const previewSlots = await resolveVariantPreviewUrls(
         { ...target, videoUrls: nextUrls },
-        slotCount
+        slotCount,
+        sessionId
       );
 
       setVideoPreview((prev) =>

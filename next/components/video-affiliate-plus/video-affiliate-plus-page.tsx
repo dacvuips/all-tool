@@ -238,7 +238,7 @@ export default function VideoAffiliatePlusPage() {
           sessionItems = loaded;
         }
 
-        const hydrated = await hydrateMergedVideoUrls(sessionItems);
+        const hydrated = await hydrateMergedVideoUrls(sessionItems, sessionId);
         if (cancelled) return;
 
         setItems(hydrated);
@@ -249,7 +249,7 @@ export default function VideoAffiliatePlusPage() {
       } catch (err) {
         console.warn("[video-affiliate-plus] init import history failed", err);
         if (!cancelled) {
-          const hydrated = await hydrateMergedVideoUrls(loaded);
+          const hydrated = await hydrateMergedVideoUrls(loaded, DEFAULT_SESSION_ID);
           setItems(hydrated);
         }
       }
@@ -348,7 +348,7 @@ export default function VideoAffiliatePlusPage() {
       });
 
       const sessionItems = await getSessionItems(id);
-      const hydrated = await hydrateMergedVideoUrls(sessionItems);
+      const hydrated = await hydrateMergedVideoUrls(sessionItems, id);
       setItems(hydrated);
       skipCountSyncRef.current = false;
     },
@@ -406,7 +406,7 @@ export default function VideoAffiliatePlusPage() {
         if (deletingCurrent) {
           if (nextSelectedId) {
             const sessionItems = await getSessionItems(nextSelectedId);
-            const hydrated = await hydrateMergedVideoUrls(sessionItems);
+            const hydrated = await hydrateMergedVideoUrls(sessionItems, nextSelectedId);
             setItems(hydrated);
           } else {
             setItems([]);

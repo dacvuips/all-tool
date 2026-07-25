@@ -71,14 +71,18 @@ export function hasVariantVideoUrls(item: ProductVideoKeySource): boolean {
 }
 
 /**
- * Đã có video generate (variant trên item / IndexedDB) hoặc video nối.
- * Dùng khi Bắt Đầu — bỏ qua, không generate lại.
+ * Đã có video generate (variant trên item / IndexedDB của phiên) hoặc video nối.
+ * Dùng khi Bắt Đầu — bỏ qua trong CÙNG phiên; không xem video phiên khác.
  */
-export async function hasExistingGeneratedVideo(item: ProductVideoKeySource): Promise<boolean> {
+export async function hasExistingGeneratedVideo(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): Promise<boolean> {
   if (hasVariantVideoUrls(item)) return true;
   if (hasMergedVideoRef(item.mergedVideoUrl)) return true;
-  if (await hasMergedVideoFile(item)) return true;
-  const key = getMergedVideoStorageKey(item);
+  // Chỉ tra IDB theo key phiên — tránh skip vì video của lần import cũ
+  if (await hasMergedVideoFile(item, sessionId, { sessionOnly: true })) return true;
+  const key = getMergedVideoStorageKey(item, sessionId);
   if (key) {
     const rec = await idbGetProductVideo(key);
     if (recordHasVariantVideos(rec)) return true;
@@ -90,7 +94,11 @@ export async function hasExistingGeneratedVideo(item: ProductVideoKeySource): Pr
  * Đã có file video nối thật (ref trên item / Blob IndexedDB / legacy).
  * Không decode full base64 — chỉ kiểm tra tồn tại.
  */
-export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<boolean> {
+export async function hasMergedVideoFile(
+  item: ProductVideoKeySource,
+  sessionId?: string,
+  opts?: { sessionOnly?: boolean }
+): Promise<boolean> {
   const url = String(item.mergedVideoUrl || "").trim();
   if (url && !isMergedVideoIdbMarker(url)) {
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
@@ -111,14 +119,17 @@ export async function hasMergedVideoFile(item: ProductVideoKeySource): Promise<b
     }
   }
 
-  const key = getMergedVideoStorageKey(item);
-  if (key) {
+  const keys = opts?.sessionOnly
+    ? [getMergedVideoStorageKey(item, sessionId)].filter(Boolean)
+    : videoStorageKeysToTry(item, sessionId);
+
+  for (const key of keys) {
     const rec = await idbGetProductVideo(key);
     if (recordHasMergedBinary(rec)) return true;
     const legacy = await idbGetMergedVideo(key);
     if (legacy?.blob && legacy.blob.size > 0) return true;
   }
-  if (item.id && item.id !== key) {
+  if (item.id && !keys.includes(item.id)) {
     const legacyById = await idbGetMergedVideo(item.id);
     if (legacyById?.blob && legacyById.blob.size > 0) return true;
   }
@@ -139,12 +150,45 @@ export function toPersistedMergedVideoUrl(url?: string): string {
   return u;
 }
 
-export function getMergedVideoStorageKey(item: ProductVideoKeySource): string {
+/** Key sản phẩm thuần (legacy) — không gắn phiên. */
+export function getProductStorageKey(item: ProductVideoKeySource): string {
   const fromField = String(item.productId || "").trim();
   if (fromField) return fromField;
   const fromLink = extractShopeeProductId(item.productLink || "");
   if (fromLink) return fromLink;
   return String(item.id || "").trim();
+}
+
+/** Phân tách sessionId khỏi product key trong IndexedDB. */
+export const SESSION_VIDEO_KEY_SEP = "::";
+
+/**
+ * Key lưu video IndexedDB.
+ * Có sessionId → `sessionId::productId` (mỗi lần import một bộ video riêng).
+ * Không có sessionId → legacy `productId` (upload / bản ghi cũ).
+ */
+export function getMergedVideoStorageKey(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): string {
+  const productKey = getProductStorageKey(item);
+  if (!productKey) return "";
+  const sid = String(sessionId || "").trim();
+  if (sid) return `${sid}${SESSION_VIDEO_KEY_SEP}${productKey}`;
+  return productKey;
+}
+
+/** Các key cần thử khi đọc (phiên trước, rồi legacy productId). */
+export function videoStorageKeysToTry(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): string[] {
+  const keys: string[] = [];
+  const sessionKey = getMergedVideoStorageKey(item, sessionId);
+  if (sessionKey) keys.push(sessionKey);
+  const productKey = getProductStorageKey(item);
+  if (productKey && productKey !== sessionKey) keys.push(productKey);
+  return keys;
 }
 
 function isHttpUrl(url: string): boolean {
@@ -581,16 +625,43 @@ export async function mergeVideosToIndexedDb(
 }
 
 /**
- * Hydrate list: chỉ gắn tên file `merged.mp4` nếu IDB có binary.
- * Không tạo Object URL hàng loạt (tránh decode base64 / leak blob) — resolve khi mở preview.
+ * Hydrate list theo phiên:
+ * - Video IDB gắn `sessionId::productId` → chỉ phiên đó thấy.
+ * - Import mới (item trống) không kéo video phiên cũ.
+ * - Phiên cũ (đã có videoUrls / merged trên thread) vẫn fallback legacy productId.
  */
 export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
-  items: T[]
+  items: T[],
+  sessionId?: string
 ): Promise<T[]> {
   return Promise.all(
     items.map(async (item) => {
-      const key = getMergedVideoStorageKey(item);
-      const rec = key ? await idbGetProductVideo(key) : undefined;
+      const itemHasOwn =
+        hasVariantVideoUrls(item) || hasMergedVideoRef(item.mergedVideoUrl);
+      const sessionKey = getMergedVideoStorageKey(item, sessionId);
+      let rec = sessionKey ? await idbGetProductVideo(sessionKey) : undefined;
+      let resolvedKey = sessionKey;
+
+      // Bản ghi cũ lưu theo productId — chỉ dùng khi item đã gen trong phiên này
+      if (!rec && itemHasOwn) {
+        const productKey = getProductStorageKey(item);
+        if (productKey && productKey !== sessionKey) {
+          rec = await idbGetProductVideo(productKey);
+          if (rec) resolvedKey = productKey;
+        }
+      }
+
+      // Import mới / item trống: không kéo video từ phiên khác
+      if (!rec && !itemHasOwn) {
+        return {
+          ...item,
+          videoUrls: item.videoUrls || [],
+          videoDisabled: (item.videoUrls || []).map((_, idx) =>
+            Boolean(item.videoDisabled?.[idx])
+          ),
+          mergedVideoUrl: "",
+        };
+      }
 
       const videoUrls = rec?.videoUris?.length
         ? rec.videoUris.map((u) => String(u || "").trim())
@@ -598,22 +669,27 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
       const videoDisabled = videoUrls.map((_, idx) => Boolean(item.videoDisabled?.[idx]));
 
       // Migrate legacy base64 → Blob (một lần, nền)
-      if (rec && (rec.mergedVideoBytes || "").trim() && !rec.mergedVideoBlob) {
-        void migrateMergedBytesToBlob(key, rec);
+      if (rec && resolvedKey && (rec.mergedVideoBytes || "").trim() && !rec.mergedVideoBlob) {
+        void migrateMergedBytesToBlob(resolvedKey, rec);
       }
 
       let hasFile = recordHasMergedBinary(rec);
-      if (!hasFile && key) {
-        const legacy = await idbGetMergedVideo(key);
-        hasFile = Boolean(legacy?.blob && legacy.blob.size > 0);
+      if (!hasFile) {
+        for (const key of videoStorageKeysToTry(item, sessionId)) {
+          const legacy = await idbGetMergedVideo(key);
+          if (legacy?.blob && legacy.blob.size > 0) {
+            hasFile = true;
+            break;
+          }
+        }
       }
-      if (!hasFile && item.id && item.id !== key) {
+      if (!hasFile && item.id) {
         const legacyById = await idbGetMergedVideo(item.id);
         hasFile = Boolean(legacyById?.blob && legacyById.blob.size > 0);
       }
 
-      if (rec && hasPendingVariantBase64(rec)) {
-        void enrichProductVideoBase64(key);
+      if (rec && resolvedKey && hasPendingVariantBase64(rec)) {
+        void enrichProductVideoBase64(resolvedKey);
       }
 
       const prevMerged = String(item.mergedVideoUrl || "").trim();
@@ -668,10 +744,15 @@ async function migrateMergedBytesToBlob(key: string, rec: ProductVideoRecord): P
 /** Resolve URL xem preview theo slot (giữ index; slot trống = ""). */
 export async function resolveVariantPreviewUrls(
   item: ProductVideoKeySource,
-  slotCount?: number
+  slotCount?: number,
+  sessionId?: string
 ): Promise<string[]> {
-  const key = getMergedVideoStorageKey(item);
-  const rec = key ? await idbGetProductVideo(key) : undefined;
+  const keys = videoStorageKeysToTry(item, sessionId);
+  let rec: ProductVideoRecord | undefined;
+  for (const key of keys) {
+    rec = await idbGetProductVideo(key);
+    if (rec) break;
+  }
   const fromItem = item.videoUrls || [];
   const count = Math.max(slotCount || 0, rec?.videoUris?.length || 0, fromItem.length, 1);
 
@@ -680,7 +761,7 @@ export async function resolveVariantPreviewUrls(
     return Array.from({ length: count }, (_, i) => {
       const p = previews[i] || "";
       if (p.startsWith("__idb_blob__:")) {
-        const blob = rec.videoBlobList?.[i];
+        const blob = rec!.videoBlobList?.[i];
         if (blob && blob.size > 0) {
           try {
             return URL.createObjectURL(blob);
@@ -710,9 +791,12 @@ export async function resolveVariantPreviewUrls(
   });
 }
 
-export async function resolveMergedPreviewUrl(item: ProductVideoKeySource): Promise<string> {
+export async function resolveMergedPreviewUrl(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): Promise<string> {
   // Luôn tạo Object URL mới từ Blob — tránh data: quá lớn và blob: đã revoke
-  const blob = await getMergedVideoBlob(item);
+  const blob = await getMergedVideoBlob(item, sessionId);
   if (blob && blob.size > 0) {
     return URL.createObjectURL(blob);
   }
@@ -726,29 +810,32 @@ export async function resolveMergedPreviewUrl(item: ProductVideoKeySource): Prom
 }
 
 /** Lấy Blob video đã nối từ IndexedDB (Blob / base64 legacy) hoặc URL trên item. */
-export async function getMergedVideoBlob(item: ProductVideoKeySource): Promise<Blob | null> {
-  const key = getMergedVideoStorageKey(item);
+export async function getMergedVideoBlob(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): Promise<Blob | null> {
+  const keys = videoStorageKeysToTry(item, sessionId);
 
   // Store riêng `merged-videos` là nguồn chính (không bị enrich ghi đè)
-  if (key) {
+  for (const key of keys) {
     const primary = await idbGetMergedVideo(key);
     if (primary?.blob && primary.blob.size > 0) return primary.blob;
   }
-  if (item.id && item.id !== key) {
+  if (item.id && !keys.includes(item.id)) {
     const byId = await idbGetMergedVideo(item.id);
     if (byId?.blob && byId.blob.size > 0) return byId.blob;
   }
 
-  const rec = key ? await idbGetProductVideo(key) : undefined;
-
-  if (rec?.mergedVideoBlob && rec.mergedVideoBlob.size > 0) {
-    return rec.mergedVideoBlob;
-  }
-
-  if (rec?.mergedVideoBytes) {
-    const blob = base64ToBlob(rec.mergedVideoBytes, rec.mimeType || "video/mp4");
-    if (key) void migrateMergedBytesToBlob(key, rec);
-    return blob;
+  for (const key of keys) {
+    const rec = await idbGetProductVideo(key);
+    if (rec?.mergedVideoBlob && rec.mergedVideoBlob.size > 0) {
+      return rec.mergedVideoBlob;
+    }
+    if (rec?.mergedVideoBytes) {
+      const blob = base64ToBlob(rec.mergedVideoBytes, rec.mimeType || "video/mp4");
+      void migrateMergedBytesToBlob(key, rec);
+      return blob;
+    }
   }
 
   const url = String(item.mergedVideoUrl || "").trim();
@@ -769,15 +856,19 @@ export async function getMergedVideoBlob(item: ProductVideoKeySource): Promise<B
 }
 
 export async function removeMergedVideoFromIndexedDb(
-  item: ProductVideoKeySource | string
+  item: ProductVideoKeySource | string,
+  sessionId?: string
 ): Promise<void> {
   if (typeof item === "string") {
     await idbDeleteProductVideo(item);
     await idbDeleteMergedVideo(item);
     return;
   }
-  const key = getMergedVideoStorageKey(item);
-  if (key) {
+  // Có sessionId → chỉ xóa key phiên (không đụng legacy / phiên khác cùng productId)
+  const keys = sessionId
+    ? [getMergedVideoStorageKey(item, sessionId)].filter(Boolean)
+    : videoStorageKeysToTry(item);
+  for (const key of keys) {
     const rec = await idbGetProductVideo(key);
     if (rec) {
       await idbPutProductVideo({
@@ -792,7 +883,7 @@ export async function removeMergedVideoFromIndexedDb(
     }
     await idbDeleteMergedVideo(key);
   }
-  if (item.id && item.id !== key) {
+  if (item.id && !keys.includes(item.id)) {
     await idbDeleteMergedVideo(item.id);
   }
 }

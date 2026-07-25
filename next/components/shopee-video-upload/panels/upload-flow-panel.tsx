@@ -92,7 +92,8 @@ async function resolveVideoForUpload(
   thread: Pick<
     ShopeeUploadThread,
     "id" | "generateItemId" | "productId" | "productLink" | "videoFile"
-  >
+  >,
+  generateSessionId?: string
 ): Promise<{ videoUrl?: string; videoBase64?: string }> {
   const v = String(thread.videoFile || "").trim();
 
@@ -107,8 +108,8 @@ async function resolveVideoForUpload(
     mergedVideoUrl: thread.videoFile,
   };
 
-  // Ưu tiên Blob IndexedDB (thread chỉ lưu tên merged.mp4)
-  const blob = await getMergedVideoBlob(keySource);
+  // Ưu tiên Blob IndexedDB (thread chỉ lưu tên merged.mp4) — theo phiên Generate
+  const blob = await getMergedVideoBlob(keySource, generateSessionId);
   if (blob && blob.size > 0) {
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -157,7 +158,8 @@ async function resolveVideoForUpload(
 }
 
 async function hydrateUploadThreads(
-  list: PersistedUploadThread[]
+  list: PersistedUploadThread[],
+  generateSessionId?: string
 ): Promise<ShopeeUploadThread[]> {
   if (!list.length) return [];
   const pseudoItems = list.map((row) =>
@@ -170,7 +172,7 @@ async function hydrateUploadThreads(
       mergedVideoUrl: row.videoFile || "",
     })
   );
-  const hydrated = await hydrateMergedVideoUrls(pseudoItems);
+  const hydrated = await hydrateMergedVideoUrls(pseudoItems, generateSessionId);
   return list.map((row, index) => {
     const merged =
       String(hydrated[index]?.mergedVideoUrl || "").trim() || String(row.videoFile || "").trim();
@@ -295,7 +297,9 @@ export function ShopeeUploadFlowPanel({
           const raw = entry?.data?.threads || [];
           if (raw.length) {
             skipPersistRef.current = true;
-            setThreads(await hydrateUploadThreads(raw));
+            setThreads(
+              await hydrateUploadThreads(raw, entry?.data?.generateSessionId)
+            );
             restoredRef.current = true;
             skipPersistRef.current = false;
             return;
@@ -480,10 +484,13 @@ export function ShopeeUploadFlowPanel({
   };
 
   const fireEnqueue = async (ready: ShopeeUploadThread[]) => {
+    const generateSessionId = uploadHistory.find(
+      (h) => h.id === selectedUploadHistoryIdRef.current
+    )?.data?.generateSessionId;
     try {
       const threads = await Promise.all(
         ready.map(async (t) => {
-          const video = await resolveVideoForUpload(t);
+          const video = await resolveVideoForUpload(t, generateSessionId);
           return {
             id: t.id,
             username: t.username,
@@ -665,9 +672,12 @@ export function ShopeeUploadFlowPanel({
       )
     );
     try {
+      const generateSessionId = uploadHistory.find(
+        (h) => h.id === selectedUploadHistoryIdRef.current
+      )?.data?.generateSessionId;
       const threads = await Promise.all(
         errors.map(async (t) => {
-          const video = await resolveVideoForUpload(t);
+          const video = await resolveVideoForUpload(t, generateSessionId);
           return {
             id: t.id,
             username: t.username,
@@ -845,7 +855,9 @@ export function ShopeeUploadFlowPanel({
     if (!entry) return;
     try {
       skipPersistRef.current = true;
-      setThreads(await hydrateUploadThreads(entry.data.threads || []));
+      setThreads(
+        await hydrateUploadThreads(entry.data.threads || [], entry.data.generateSessionId)
+      );
       setSelectedUploadHistoryIdState(id);
       selectedUploadHistoryIdRef.current = id;
       await setSelectedUploadHistoryId(id);

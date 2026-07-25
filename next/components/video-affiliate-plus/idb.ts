@@ -2,7 +2,7 @@
  * IndexedDB for video-affiliate-plus.
  * Database: video-affiliate-manager
  * - generate-video-config
- * - product-videos (link → enrich base64; key = mã sản phẩm)
+ * - product-videos (link → enrich base64; key = `sessionId::productId` hoặc legacy productId)
  * - merged-videos (legacy Blob — fallback đọc)
  * - import-history (phiên import / làm việc)
  * - scrape-csv-sessions (CSV scrape GemLogin/CDP)
