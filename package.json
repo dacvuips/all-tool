@@ -14,7 +14,8 @@
     "watch-ts": "tsc -w",
     "lint": "tsc --noEmit && eslint \"**/*.{js,ts}\"",
     "prettier": "prettier --write '**/*.{ts,css,js}'",
-    "next:build": "next build ./next",
+    "next:build": "node scripts/fetch-ffmpeg-core.js && next build ./next",
+    "fetch-ffmpeg-core": "node scripts/fetch-ffmpeg-core.js",
     "next:dev": "next dev ./next",
     "analyze": "cross-env ANALYZE=true next build ./next",
     "analyze:server": "cross-env BUNDLE_ANALYZE=server next build ./next",
@@ -62,7 +63,6 @@
     "apollo-server-express": "^2.14.1",
     "autoloader-ts": "^2.2.1",
     "axios": "^0.21.1",
-    "ws": "^8.18.0",
     "bee-queue": "^1.4.0",
     "body-parser": "^1.19.0",
     "chart.js": "^2.9.4",
@@ -167,6 +167,7 @@
     "webfontloader": "^1.6.28",
     "winston": "^3.3.3",
     "winwheel": "^1.0.1",
+    "ws": "^8.18.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

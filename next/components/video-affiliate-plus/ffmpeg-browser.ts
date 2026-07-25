@@ -63,14 +63,10 @@ function isChunkLoadError(err: unknown): boolean {
 /** Dynamic import kèm 1 lần retry (Next có thể 404 chunk lúc vừa compile). */
 async function importFfmpegPackages(): Promise<{
   FFmpeg: typeof import("@ffmpeg/ffmpeg").FFmpeg;
-  toBlobURL: typeof import("@ffmpeg/util").toBlobURL;
 }> {
   const load = async () => {
-    const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
-      import("@ffmpeg/ffmpeg"),
-      import("@ffmpeg/util"),
-    ]);
-    return { FFmpeg, toBlobURL };
+    const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+    return { FFmpeg };
   };
 
   try {
@@ -90,16 +86,32 @@ async function getFFmpeg(
 
   _loadPromise = (async () => {
     onProgress?.({ ratio: 0.02, message: "Đang tải ffmpeg.wasm..." });
-    const { FFmpeg, toBlobURL } = await importFfmpegPackages();
+    const { FFmpeg } = await importFfmpegPackages();
 
-    // Single-thread core — không cần SharedArrayBuffer / COEP
-    const baseURL = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd";
-    const ff = new FFmpeg();
+    // Same-origin /ffmpeg/* — không dùng toBlobURL (blob: bị CSP connect-src chặn
+    // trên một số deploy). Fallback CDN nếu chưa có file trong public.
+    const sameOriginBase = `${window.location.origin}/ffmpeg`;
+    const cdnBase = "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm";
 
-    await ff.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-    });
+    const loadAt = async (baseURL: string) => {
+      const ff = new FFmpeg();
+      await ff.load({
+        coreURL: `${baseURL}/ffmpeg-core.js`,
+        wasmURL: `${baseURL}/ffmpeg-core.wasm`,
+      });
+      return ff;
+    };
+
+    // Ưu tiên same-origin nếu đã có file (HEAD nhanh); không thì CDN.
+    let useSameOrigin = false;
+    try {
+      const head = await fetch(`${sameOriginBase}/ffmpeg-core.wasm`, { method: "HEAD" });
+      useSameOrigin = head.ok;
+    } catch {
+      useSameOrigin = false;
+    }
+
+    const ff = useSameOrigin ? await loadAt(sameOriginBase) : await loadAt(cdnBase);
 
     _ffmpegInstance = ff;
     return ff;
