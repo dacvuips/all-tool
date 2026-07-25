@@ -15,6 +15,10 @@ import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { GeneratedImageDownloadButtons } from "../shared/generated-image-download-buttons";
 import {
+  MEDIA_SYSTEM_BUSY_MESSAGE,
+  toUserFriendlyMediaErrorMessage,
+} from "../shared/media-error-message";
+import {
   getGeneratedImagePreviewSrc,
   getGeneratedVideoPreviewSrc,
   mimeTypeToFileExtension,
@@ -49,6 +53,12 @@ function isSameWolfProjectItemCardProps(
 function getAspectPadding(aspectRatio: "16:9" | "9:16", mediaType: WolfProjectItem["mediaType"]) {
   if (aspectRatio === "16:9") return "56.25%";
   return mediaType === "video" ? "174.78%" : "177.78%";
+}
+
+function displayWolfErrorMessage(message: string, t: (key: string) => string): string {
+  const normalized = toUserFriendlyMediaErrorMessage(message);
+  if (normalized === MEDIA_SYSTEM_BUSY_MESSAGE) return t(MEDIA_SYSTEM_BUSY_MESSAGE);
+  return normalized ?? t(MEDIA_SYSTEM_BUSY_MESSAGE);
 }
 
 export const WolfProjectItemCard = memo(function WolfProjectItemCard({
@@ -132,7 +142,7 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
               tone === "red" ? "text-red-500" : "text-amber-600"
             }`}
           >
-            {item.errorMessage}
+            {displayWolfErrorMessage(item.errorMessage, t)}
           </span>
         )}
       </div>
