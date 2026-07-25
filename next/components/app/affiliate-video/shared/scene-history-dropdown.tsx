@@ -114,7 +114,7 @@ export function SceneHistoryDropdown<TData = unknown>({
         confirmDeleteSelected ? (
           <HistoryConfirmButtons
             confirmLabel={deleteSelectedConfirmLabel || t("Xóa phiên")}
-            confirmClassName="text-white bg-amber-500 hover:bg-amber-600"
+            confirmClassName="text-white bg-red-500 hover:bg-red-600"
             onConfirm={async () => {
               await onDeleteSelected();
               setConfirmDeleteSelected(false);

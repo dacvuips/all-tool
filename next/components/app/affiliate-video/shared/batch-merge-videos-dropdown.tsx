@@ -35,7 +35,9 @@ export function BatchMergeVideosDropdown({
   const canMergeNormal = availableVideoCount >= 2;
   const canMergeStitch = availableExtendCount >= 2;
   const nothingToMerge = !canMergeNormal && !canMergeStitch;
-  const isDisabled = disabled || merging || nothingToMerge;
+  // merging không đưa vào disabled HTML — tránh disabled:opacity làm mất màu "Đang ghép"
+  const isDisabled = disabled || nothingToMerge;
+  const isBusy = merging || isDisabled;
 
   const menuItems = [
     {
@@ -57,12 +59,10 @@ export function BatchMergeVideosDropdown({
     action();
   };
 
-  const buttonColor = merging ? "bg-orange-400 cursor-wait" : "bg-yellow-500 hover:bg-yellow-600";
-  const buttonLabel = merging
-    ? mergeLabel
-      ? `${t("Đang nối")} ${mergeLabel}...`
-      : t("Đang nối...")
-    : t("Nối file");
+  const buttonColor = merging
+    ? "bg-yellow-500 hover:bg-yellow-600 cursor-pointer opacity-60"
+    : "bg-yellow-500 hover:bg-yellow-600 cursor-pointer";
+  const buttonLabel = merging ? t("Đang ghép...") : t("Ghép video");
 
   return (
     <>
@@ -71,15 +71,21 @@ export function BatchMergeVideosDropdown({
         id={id}
         type="button"
         disabled={isDisabled}
+        aria-busy={merging}
+        title={merging && mergeLabel ? mergeLabel : undefined}
         onClick={() => {
-          if (isDisabled) return;
+          if (isBusy) return;
           setOpen((prev) => !prev);
         }}
-        className={`flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${buttonColor}`}
+        className={`inline-flex items-center justify-center whitespace-nowrap gap-1.5 px-3 py-1.5 h-8 leading-none rounded-lg text-white text-xs font-semibold border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${buttonColor}`}
       >
-        {merging ? <RiLoader4Line className="animate-spin" /> : <RiLinkM />}
-        {buttonLabel}
-        {!merging && <RiArrowDownSLine className="text-sm opacity-80" />}
+        {merging ? (
+          <RiLoader4Line className="animate-spin shrink-0 text-sm" />
+        ) : (
+          <RiLinkM className="shrink-0 text-sm" />
+        )}
+        <span className="leading-none">{buttonLabel}</span>
+        {!merging && <RiArrowDownSLine className="shrink-0 text-sm opacity-80" />}
       </button>
 
       <Popover

@@ -9,6 +9,7 @@ import {
 import {
   generatedVideoToBlob,
   hasGeneratedVideoData,
+  hasStoredGeneratedVideoBase64,
   type GeneratedVideoLike,
 } from "./generatedMediaUtils";
 import { triggerBlobDownload } from "./videoDownloadUtils";
@@ -38,10 +39,33 @@ function getHttpVideoUri(video: GeneratedVideoLike): string | null {
   return HTTP_URL.test(uri) ? uri : null;
 }
 
-/** Tất cả đều có http URI → gửi JSON urls (nhanh). Ngược lại upload blob multipart. */
+async function buildMergeFormData(videos: GeneratedVideoLike[]): Promise<FormData> {
+  const form = new FormData();
+  for (let i = 0; i < videos.length; i++) {
+    try {
+      const blob = await generatedVideoToBlob(videos[i]);
+      form.append("videos", blob, `scene-${i + 1}.mp4`);
+    } catch (err: any) {
+      throw new Error(
+        `Không lấy được video số ${i + 1} để nối — link CDN có thể đã hết hạn và chưa lưu IndexedDB. Hãy generate lại scene đó.\n(${
+          err?.message || err
+        })`
+      );
+    }
+  }
+  return form;
+}
+
+/**
+ * Nối video qua API:
+ * - Ưu tiên multipart từ mediaBlob IndexedDB (tránh flow2 hết hạn)
+ * - Chỉ gửi JSON urls khi chưa có binary local
+ * - URL fail (422 URL_DOWNLOAD_FAILED) → fallback upload blob
+ */
 async function callMergeVideosApi(videos: GeneratedVideoLike[]): Promise<Blob> {
   const httpUrls = videos.map(getHttpVideoUri);
   const allHttp = httpUrls.every(Boolean);
+  const allHaveLocalBinary = videos.every((v) => hasStoredGeneratedVideoBase64(v));
 
   const parseMergeError = async (failedRes: Response) => {
     let message = `Nối video thất bại (${failedRes.status})`;
@@ -57,7 +81,14 @@ async function callMergeVideosApi(videos: GeneratedVideoLike[]): Promise<Blob> {
   };
 
   let res: Response;
-  if (allHttp) {
+  // Có blob local → luôn upload multipart (CDN flow2 hay 404).
+  if (allHaveLocalBinary || !allHttp) {
+    res = await fetch("/api/app/merge-videos/", {
+      method: "POST",
+      credentials: "include",
+      body: await buildMergeFormData(videos),
+    });
+  } else {
     res = await fetch("/api/app/merge-videos/", {
       method: "POST",
       credentials: "include",
@@ -70,29 +101,13 @@ async function callMergeVideosApi(videos: GeneratedVideoLike[]): Promise<Blob> {
       if (code !== "URL_DOWNLOAD_FAILED") {
         throw new Error(message);
       }
-      // Fallback multipart khi server không tải được URL
-      const form = new FormData();
-      for (let i = 0; i < videos.length; i++) {
-        const blob = await generatedVideoToBlob(videos[i]);
-        form.append("videos", blob, `scene-${i + 1}.mp4`);
-      }
+      // Server không tải được URL (CDN hết hạn) → upload blob nếu còn trong IDB
       res = await fetch("/api/app/merge-videos/", {
         method: "POST",
         credentials: "include",
-        body: form,
+        body: await buildMergeFormData(videos),
       });
     }
-  } else {
-    const form = new FormData();
-    for (let i = 0; i < videos.length; i++) {
-      const blob = await generatedVideoToBlob(videos[i]);
-      form.append("videos", blob, `scene-${i + 1}.mp4`);
-    }
-    res = await fetch("/api/app/merge-videos/", {
-      method: "POST",
-      credentials: "include",
-      body: form,
-    });
   }
 
   if (!res.ok) {

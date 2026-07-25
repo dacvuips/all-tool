@@ -28,11 +28,19 @@ export class ConcatUrlDownloadError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "ConcatUrlDownloadError";
+    // ES5 target: `instanceof Error` subclass thường gãy prototype — set lại cho chắc.
+    Object.setPrototypeOf(this, ConcatUrlDownloadError.prototype);
   }
 }
 
 export function isConcatUrlDownloadError(err: unknown): err is ConcatUrlDownloadError {
-  return err instanceof ConcatUrlDownloadError;
+  // Không chỉ dựa `instanceof` (ES5 + Error subclass hay fail) — duck-type theo code.
+  if (err instanceof ConcatUrlDownloadError) return true;
+  return (
+    !!err &&
+    typeof err === "object" &&
+    (err as { code?: string }).code === "URL_DOWNLOAD_FAILED"
+  );
 }
 
 export type ConcatVideosMode = "copy" | "reencode";
