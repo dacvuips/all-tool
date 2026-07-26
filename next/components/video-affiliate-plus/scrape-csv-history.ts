@@ -1,5 +1,5 @@
 /**
- * Phiên CSV scrape (GemLogin CDP) — store riêng trong DB video-affiliate-manager.
+ * Phiên CSV scrape (GPM Login CDP) — store riêng trong DB video-affiliate-manager.
  */
 
 import {

@@ -1,7 +1,7 @@
 /**
  * Shopee Scrape Local Agent
  *
- * Chạy trên máy user (cùng GemLogin). Web product gọi http://127.0.0.1:17890
+ * Chạy trên máy user (cùng GPM Login). Web product gọi http://127.0.0.1:17890
  * thay vì nhờ server production nối CDP máy user (không thể).
  *
  * Start: yarn scrape-agent
@@ -14,8 +14,8 @@ import {
   fetchProductPageViaCdp,
   fetchAffiliateShortLinks,
   getCdpStatus,
-  getGemLoginStatus,
-  listGemLoginProfiles,
+  getGpmLoginStatus,
+  listGpmLoginProfiles,
   openAffiliateBrowser,
   buildCsvSession,
 } from "../../helpers/shopee-affiliate-scrape";
@@ -103,7 +103,7 @@ async function handle(
 
   try {
     if (method === "GET" && (path === "/" || path === "/status" || path === "/api/status")) {
-      const gem = await getGemLoginStatus();
+      const gpm = await getGpmLoginStatus();
       const cdp = await getCdpStatus().catch((): null => null);
       sendJson(
         res,
@@ -113,7 +113,7 @@ async function handle(
           agent: true,
           name: "shopee-scrape-agent",
           version: "1.0.0",
-          gemlogin: gem,
+          gpmlogin: gpm,
           cdp: cdp || { hasCookies: false, connected: false, cdpAlive: false },
         },
         req
@@ -121,14 +121,14 @@ async function handle(
       return;
     }
 
-    if (method === "GET" && (path === "/gemlogin-status" || path === "/api/gemlogin-status")) {
-      const status = await getGemLoginStatus();
+    if (method === "GET" && (path === "/gpmlogin-status" || path === "/api/gpmlogin-status")) {
+      const status = await getGpmLoginStatus();
       sendJson(res, 200, { ok: true, ...status }, req);
       return;
     }
 
-    if (method === "GET" && (path === "/gemlogin-profiles" || path === "/api/gemlogin-profiles")) {
-      const profiles = await listGemLoginProfiles();
+    if (method === "GET" && (path === "/gpmlogin-profiles" || path === "/api/gpmlogin-profiles")) {
+      const profiles = await listGpmLoginProfiles();
       sendJson(res, 200, { ok: true, profiles }, req);
       return;
     }
@@ -143,8 +143,8 @@ async function handle(
       const body = await readBody(req);
       const result = await openAffiliateBrowser({
         marketHost: String(body?.marketHost || "affiliate.shopee.vn").trim(),
-        gemloginProfileId: body?.gemloginProfileId
-          ? String(body.gemloginProfileId).trim()
+        gpmloginProfileId: body?.gpmloginProfileId
+          ? String(body.gpmloginProfileId).trim()
           : body?.profileId
           ? String(body.profileId).trim()
           : undefined,
@@ -215,7 +215,7 @@ server.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
   console.log(`[scrape-agent] listening http://${HOST}:${PORT}`);
   // eslint-disable-next-line no-console
-  console.log(`[scrape-agent] GemLogin expected at http://127.0.0.1:1010`);
+  console.log(`[scrape-agent] GPM Login expected at http://127.0.0.1:9495`);
   // eslint-disable-next-line no-console
   console.log(`[scrape-agent] Keep this process running while using Cào dữ liệu on the web.`);
 });

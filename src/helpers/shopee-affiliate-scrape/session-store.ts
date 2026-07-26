@@ -1,6 +1,6 @@
 /**
  * Session Affiliate kiểu PeeCrawl cookie.json — persist disk + memory.
- * GemLogin chỉ dùng để capture; scrape HTTP đọc session này.
+ * GPM Login chỉ dùng để capture; scrape HTTP đọc session này.
  */
 
 import fs from "fs";
@@ -9,7 +9,7 @@ import { CdpCookie } from "./raw-cdp";
 
 export type AffiliateHttpSession = {
   marketHost: string;
-  gemloginProfileId?: string;
+  gpmloginProfileId?: string;
   cookieHeader: string;
   cookies: CdpCookie[];
   userAgent: string;
@@ -36,7 +36,7 @@ export function setAffiliateHttpSession(next: AffiliateHttpSession | null) {
   if (!next) return;
   try {
     fs.mkdirSync(SESSION_DIR, { recursive: true });
-    fs.writeFileSync(sessionFilePath(next.gemloginProfileId), JSON.stringify(next, null, 2), "utf8");
+    fs.writeFileSync(sessionFilePath(next.gpmloginProfileId), JSON.stringify(next, null, 2), "utf8");
   } catch {
     // ignore disk errors
   }
@@ -81,7 +81,7 @@ export function requireAffiliateHttpSession(): AffiliateHttpSession {
   }
   if (!session?.cookieHeader) {
     throw new Error(
-      "Chưa có session Affiliate. Bấm «Mở Trình duyệt» (GemLogin) để capture cookie — giống PeeCrawl hybrid."
+      "Chưa có session Affiliate. Bấm «Mở Trình duyệt» (GPM Login) để capture cookie — giống PeeCrawl hybrid."
     );
   }
   return session;

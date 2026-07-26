@@ -201,6 +201,7 @@ export function ThreadManagementPanel({
   const [scrapeSessions, setScrapeSessions] = useState<ScrapeCsvSession[]>([]);
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [importingSessionId, setImportingSessionId] = useState<string | null>(null);
+  const [importingAction, setImportingAction] = useState<"replace" | "merge" | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [page, setPage] = useState(1);
@@ -625,26 +626,58 @@ export function ThreadManagementPanel({
     })();
   };
 
-  const handleImportParsed = async (fileName: string, parsed: AffiliatePlusItem[]) => {
+  const prepareImportItems = async (parsed: AffiliatePlusItem[]) => {
     if (!parsed.length) {
       toast.warn(
         t(
           "Không đọc được dữ liệu sản phẩm. Cần các cột: Tên shop, Tên sản phẩm, Ảnh, Link sản phẩm / Link affiliate"
         )
       );
-      return false;
+      return null;
     }
-
     const genConfigLoaded = await loadGenerateVideoConfig();
-    const withPrompt = parsed.map((item) => ({
+    return parsed.map((item) => ({
       ...item,
       prompt: item.prompt || genConfigLoaded.activePrompt || "",
     }));
+  };
+
+  /** Import thay thế — clear danh sách hiện tại, tạo phiên mới. */
+  const handleImportParsed = async (fileName: string, parsed: AffiliatePlusItem[]) => {
+    const withPrompt = await prepareImportItems(parsed);
+    if (!withPrompt) return false;
 
     await onImportComplete(fileName, withPrompt);
     // loadPage + parent sync chạy qua useEffect [sessionId] sau khi parent cập nhật phiên mới
     onAddLog(t("Đã import {{count}} luồng từ file", { count: withPrompt.length }), "success");
     toast.success(t("Đã import {{count}} sản phẩm", { count: withPrompt.length }));
+    return true;
+  };
+
+  /** Import gộp — thêm vào danh sách đang hiển thị, giữ phiên hiện tại. */
+  const handleMergeImportParsed = async (fileName: string, parsed: AffiliatePlusItem[]) => {
+    const withPrompt = await prepareImportItems(parsed);
+    if (!withPrompt) return false;
+
+    const existing = await getSessionItems(sessionId);
+    const merged = [...existing, ...withPrompt];
+    await replaceSessionThreads(sessionId, merged);
+    await loadPage();
+    scheduleParentSync();
+    onAddLog(
+      t("Đã gộp thêm {{count}} luồng từ {{file}} (tổng {{total}})", {
+        count: withPrompt.length,
+        file: fileName,
+        total: merged.length,
+      }),
+      "success"
+    );
+    toast.success(
+      t("Đã gộp thêm {{count}} sản phẩm (tổng {{total}})", {
+        count: withPrompt.length,
+        total: merged.length,
+      })
+    );
     return true;
   };
 
@@ -673,9 +706,13 @@ export function ThreadManagementPanel({
     }
   };
 
-  const handleImportScrapeSession = async (session: ScrapeCsvSession) => {
+  const handleImportScrapeSession = async (
+    session: ScrapeCsvSession,
+    action: "replace" | "merge" = "replace"
+  ) => {
     if (importingSessionId) return;
     setImportingSessionId(session.id);
+    setImportingAction(action);
     try {
       const parsed = parseAffiliatePlusCSV(session.csv || "");
       const display = sessionDisplayName(session);
@@ -683,13 +720,18 @@ export function ThreadManagementPanel({
         display && display !== "—"
           ? `scrape-${display.replace(/[^\w\u00C0-\u024F\s-]+/gi, "_").trim()}-${session.id}.csv`
           : `scrape-${session.id}.csv`;
-      const ok = await handleImportParsed(fileName, parsed);
-      if (ok) setScrapeImportOpen(false);
+      const ok =
+        action === "merge"
+          ? await handleMergeImportParsed(fileName, parsed)
+          : await handleImportParsed(fileName, parsed);
+      // Replace: đóng dialog. Merge: giữ mở để gộp thêm phiên khác.
+      if (ok && action === "replace") setScrapeImportOpen(false);
     } catch (err) {
       console.error("Import scrape session failed:", err);
       toast.error(t("Không import được phiên CSV này"));
     } finally {
       setImportingSessionId(null);
+      setImportingAction(null);
     }
   };
 
@@ -2316,7 +2358,7 @@ export function ThreadManagementPanel({
           if (importingSessionId) return;
           setScrapeImportOpen(false);
         }}
-        width="720px"
+        width="820px"
         maxWidth="95vw"
         hasCloseIcon={false}
         slideFromBottom="mobile-only"
@@ -2326,7 +2368,7 @@ export function ThreadManagementPanel({
             <div className="min-w-0">
               <p className="m-0 text-base font-bold text-gray-800">{t("Chọn CSV từ Data")}</p>
               <p className="m-0 mt-0.5 text-xs text-gray-500">
-                {t("Danh sách phiên cào đã lưu — bấm Import để tạo luồng")}
+                {t("Import = thay mới · Import (gộp data) = thêm vào danh sách hiện tại")}
               </p>
             </div>
             <div className="flex flex-wrap gap-2 items-center shrink-0">
@@ -2413,16 +2455,35 @@ export function ThreadManagementPanel({
                         </td>
                         <td className="px-3 py-2 font-semibold text-gray-800">{s.productCount}</td>
                         <td className="px-3 py-2 text-gray-600">{formatDuration(s.durationMs)}</td>
-                        <td className="px-3 py-2">
-                          <div className="flex justify-end">
+                        <td className="px-3 py-2 whitespace-nowrap">
+                          <div className="flex gap-1.5 justify-end items-center">
                             <button
                               type="button"
                               disabled={!!importingSessionId}
-                              onClick={() => void handleImportScrapeSession(s)}
-                              className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-10 font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                              onClick={() => void handleImportScrapeSession(s, "replace")}
+                              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-10 font-semibold text-white hover:bg-blue-700 disabled:opacity-50 whitespace-nowrap"
+                              title={t("Thay thế toàn bộ danh sách hiện tại")}
                             >
-                              {busy ? <RiLoader4Line className="animate-spin" /> : <HiUpload />}
+                              {busy && importingAction === "replace" ? (
+                                <RiLoader4Line className="animate-spin" />
+                              ) : (
+                                <HiUpload />
+                              )}
                               {t("Import")}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!importingSessionId}
+                              onClick={() => void handleImportScrapeSession(s, "merge")}
+                              className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2.5 text-10 font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 whitespace-nowrap"
+                              title={t("Thêm vào danh sách đang hiển thị")}
+                            >
+                              {busy && importingAction === "merge" ? (
+                                <RiLoader4Line className="animate-spin" />
+                              ) : (
+                                <HiUpload />
+                              )}
+                              {t("Import (gộp data)")}
                             </button>
                           </div>
                         </td>

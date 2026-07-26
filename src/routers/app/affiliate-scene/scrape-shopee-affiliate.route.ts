@@ -1,8 +1,8 @@
 /**
- * API cào Shopee Affiliate — GemLogin CDP (không dùng Chrome extension).
+ * API cào Shopee Affiliate — GPM Login CDP (không dùng Chrome extension).
  *
- * GET  /api/app/scrape-shopee-affiliate/gemlogin-status
- * GET  /api/app/scrape-shopee-affiliate/gemlogin-profiles
+ * GET  /api/app/scrape-shopee-affiliate/gpmlogin-status
+ * GET  /api/app/scrape-shopee-affiliate/gpmlogin-profiles
  * POST /api/app/scrape-shopee-affiliate/open-browser
  * GET  /api/app/scrape-shopee-affiliate/cdp-status
  * POST /api/app/scrape-shopee-affiliate/product-page
@@ -15,8 +15,8 @@ import {
   exportCsvViaCdp,
   fetchProductPageViaCdp,
   getCdpStatus,
-  getGemLoginStatus,
-  listGemLoginProfiles,
+  getGpmLoginStatus,
+  listGpmLoginProfiles,
   openAffiliateBrowser,
 } from "../../../helpers/shopee-affiliate-scrape";
 import logger from "../../../helpers/logger";
@@ -31,32 +31,32 @@ function auth(req: Request) {
 export default [
   {
     method: "get",
-    path: "/api/app/scrape-shopee-affiliate/gemlogin-status",
+    path: "/api/app/scrape-shopee-affiliate/gpmlogin-status",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
         auth(req);
-        const status = await getGemLoginStatus();
+        const status = await getGpmLoginStatus();
         return res.status(200).json({ ok: true, ...status });
       } catch (err: any) {
-        return res.status(400).json({ ok: false, message: err?.message || "GemLogin status lỗi" });
+        return res.status(400).json({ ok: false, message: err?.message || "GPM Login status lỗi" });
       }
     },
   },
   {
     method: "get",
-    path: "/api/app/scrape-shopee-affiliate/gemlogin-profiles",
+    path: "/api/app/scrape-shopee-affiliate/gpmlogin-profiles",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
         auth(req);
-        const profiles = await listGemLoginProfiles();
+        const profiles = await listGpmLoginProfiles();
         return res.status(200).json({ ok: true, profiles });
       } catch (err: any) {
-        logger.error(`[scrape-shopee] gemlogin-profiles: ${err?.message || err}`);
+        logger.error(`[scrape-shopee] gpmlogin-profiles: ${err?.message || err}`);
         return res.status(400).json({
           ok: false,
-          message: err?.message || "Không lấy được danh sách profile GemLogin",
+          message: err?.message || "Không lấy được danh sách profile GPM Login",
         });
       }
     },
@@ -69,19 +69,19 @@ export default [
       try {
         auth(req);
         const marketHost = String(req.body?.marketHost || "affiliate.shopee.vn").trim();
-        const gemloginProfileId = req.body?.gemloginProfileId
-          ? String(req.body.gemloginProfileId).trim()
+        const gpmloginProfileId = req.body?.gpmloginProfileId
+          ? String(req.body.gpmloginProfileId).trim()
           : req.body?.profileId
           ? String(req.body.profileId).trim()
           : "";
         const allowChromeFallback = req.body?.allowChromeFallback === true;
         const result = await openAffiliateBrowser({
           marketHost,
-          gemloginProfileId: gemloginProfileId || undefined,
+          gpmloginProfileId: gpmloginProfileId || undefined,
           allowChromeFallback,
         });
         logger.info(
-          `[scrape-shopee] open-browser source=${result.source} host=${result.marketHost} cdp=${result.cdpEndpoint || ""} profile=${result.gemloginProfileId || ""}`
+          `[scrape-shopee] open-browser source=${result.source} host=${result.marketHost} cdp=${result.cdpEndpoint || ""} profile=${result.gpmloginProfileId || ""}`
         );
         return res.status(200).json({ ok: true, ...result });
       } catch (err: any) {

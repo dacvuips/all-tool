@@ -1,5 +1,5 @@
 /**
- * Web → Local Agent (máy user): lấy 1 trang product list qua GemLogin CDP.
+ * Web → Local Agent (máy user): lấy 1 trang product list qua GPM Login CDP.
  */
 
 import { agentFetch, probeScrapeAgent, SCRAPE_AGENT_BASE } from "./agent-client";
@@ -27,7 +27,7 @@ export type AffiliateProductPageResult = {
   marketHost: string;
 };
 
-/** Kiểm tra Local Agent + đã có cookie session (sau Mở Trình duyệt GemLogin). */
+/** Kiểm tra Local Agent + đã có cookie session (sau Mở Trình duyệt GPM Login). */
 export async function probeCdpBridge(timeoutMs = 5000): Promise<boolean> {
   const agent = await probeScrapeAgent(Math.min(2500, timeoutMs));
   if (!agent.online) return false;
@@ -72,7 +72,7 @@ export async function fetchAffiliateProductPage(
     if (!res.ok || !json?.ok) {
       throw new Error(
         json?.message ||
-          "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GemLogin qua Agent) rồi thử lại."
+          "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GPM Login qua Agent) rồi thử lại."
       );
     }
     return {
@@ -85,7 +85,7 @@ export async function fetchAffiliateProductPage(
     };
   } catch (err: any) {
     if (err?.message) throw err;
-    throw new Error("Hết thời gian chờ. Kiểm tra Agent + GemLogin còn mở và thử lại.");
+    throw new Error("Hết thời gian chờ. Kiểm tra Agent + GPM Login còn mở và thử lại.");
   }
 }
 

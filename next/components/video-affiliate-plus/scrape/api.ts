@@ -12,7 +12,7 @@ import { agentFetch, probeScrapeAgent, SCRAPE_AGENT_BASE } from "./agent-client"
 export type { ScrapeCsvSession };
 export { SCRAPE_AGENT_BASE, probeScrapeAgent };
 
-export type GemLoginProfileOption = {
+export type GpmLoginProfileOption = {
   id: string;
   name: string;
 };
@@ -28,7 +28,7 @@ async function ensureAgentOnline() {
   return st;
 }
 
-export async function fetchGemLoginStatus(): Promise<{
+export async function fetchGpmLoginStatus(): Promise<{
   online: boolean;
   apiBase: string;
   profileCount?: number;
@@ -42,27 +42,27 @@ export async function fetchGemLoginStatus(): Promise<{
       apiBase: SCRAPE_AGENT_BASE,
     };
   }
-  const { res, json } = await agentFetch("/gemlogin-status", { method: "GET", timeoutMs: 8000 });
+  const { res, json } = await agentFetch("/gpmlogin-status", { method: "GET", timeoutMs: 8000 });
   if (!res.ok || !json?.ok) {
     return {
       online: false,
       agentOnline: true,
-      apiBase: String(json?.apiBase || "http://127.0.0.1:1010"),
+      apiBase: String(json?.apiBase || "http://127.0.0.1:9495"),
     };
   }
   return {
     online: Boolean(json.online),
     agentOnline: true,
-    apiBase: String(json.apiBase || "http://127.0.0.1:1010"),
+    apiBase: String(json.apiBase || "http://127.0.0.1:9495"),
     profileCount: typeof json.profileCount === "number" ? json.profileCount : undefined,
   };
 }
 
-export async function fetchGemLoginProfiles(): Promise<GemLoginProfileOption[]> {
+export async function fetchGpmLoginProfiles(): Promise<GpmLoginProfileOption[]> {
   await ensureAgentOnline();
-  const { res, json } = await agentFetch("/gemlogin-profiles", { method: "GET", timeoutMs: 15000 });
+  const { res, json } = await agentFetch("/gpmlogin-profiles", { method: "GET", timeoutMs: 15000 });
   if (!res.ok || !json?.ok) {
-    throw new Error(json?.message || `Không lấy được profile GemLogin (${res.status})`);
+    throw new Error(json?.message || `Không lấy được profile GPM Login (${res.status})`);
   }
   const list = Array.isArray(json.profiles) ? json.profiles : [];
   return list.map((p: any) => ({
@@ -73,14 +73,14 @@ export async function fetchGemLoginProfiles(): Promise<GemLoginProfileOption[]> 
 
 export async function openShopeeAffiliateBrowser(input?: {
   marketHost?: string;
-  gemloginProfileId?: string;
+  gpmloginProfileId?: string;
   allowChromeFallback?: boolean;
 }): Promise<{
   marketHost: string;
   offerUrl: string;
   cdpEndpoint?: string;
   source?: string;
-  gemloginProfileId?: string;
+  gpmloginProfileId?: string;
   debugAddr?: string;
   cookieCount?: number;
   profileStopped?: boolean;
@@ -90,7 +90,7 @@ export async function openShopeeAffiliateBrowser(input?: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input || {}),
-    timeoutMs: 120000,
+    timeoutMs: 360000,
   });
   if (!res.ok || !json?.ok) {
     throw new Error(json?.message || `Không mở được trình duyệt (${res.status})`);
@@ -100,7 +100,7 @@ export async function openShopeeAffiliateBrowser(input?: {
     offerUrl: String(json.offerUrl || ""),
     cdpEndpoint: json.cdpEndpoint ? String(json.cdpEndpoint) : undefined,
     source: json.source ? String(json.source) : undefined,
-    gemloginProfileId: json.gemloginProfileId ? String(json.gemloginProfileId) : undefined,
+    gpmloginProfileId: json.gpmloginProfileId ? String(json.gpmloginProfileId) : undefined,
     debugAddr: json.debugAddr ? String(json.debugAddr) : undefined,
     cookieCount: typeof json.cookieCount === "number" ? json.cookieCount : undefined,
     profileStopped: Boolean(json.profileStopped),

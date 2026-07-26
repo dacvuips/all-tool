@@ -35,7 +35,7 @@ async function parseJson(res: Response) {
 
 export async function probeScrapeAgent(timeoutMs = 2500): Promise<{
   online: boolean;
-  gemloginOnline?: boolean;
+  gpmloginOnline?: boolean;
   profileCount?: number;
   hasCookies?: boolean;
   message?: string;
@@ -56,10 +56,10 @@ export async function probeScrapeAgent(timeoutMs = 2500): Promise<{
     }
     return {
       online: true,
-      gemloginOnline: Boolean(json?.gemlogin?.online),
+      gpmloginOnline: Boolean(json?.gpmlogin?.online),
       profileCount:
-        typeof json?.gemlogin?.profileCount === "number"
-          ? json.gemlogin.profileCount
+        typeof json?.gpmlogin?.profileCount === "number"
+          ? json.gpmlogin.profileCount
           : undefined,
       hasCookies: Boolean(
         json?.cdp?.hasCookies || json?.cdp?.connected || json?.cdp?.cdpAlive
@@ -95,7 +95,7 @@ export async function agentFetch(
     return { res, json };
   } catch (err: any) {
     if (err?.name === "AbortError") {
-      throw new Error("Agent hết thời gian chờ. Kiểm tra GemLogin còn mở và thử lại.");
+      throw new Error("Agent hết thời gian chờ. Kiểm tra GPM Login còn mở và thử lại.");
     }
     throw new Error(
       err?.message ||

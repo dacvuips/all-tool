@@ -5,7 +5,7 @@
  * - product-videos (link → enrich base64; key = `sessionId::productId` hoặc legacy productId)
  * - merged-videos (legacy Blob — fallback đọc)
  * - import-history (phiên import / làm việc)
- * - scrape-csv-sessions (CSV scrape GemLogin/CDP)
+ * - scrape-csv-sessions (CSV scrape GPM Login/CDP)
  * - threads (per-item record; source of truth cho lazy list)
  * - thread-meta (aggregate stats theo sessionId)
  * - users (danh sách tài khoản + item Generate đã gắn)

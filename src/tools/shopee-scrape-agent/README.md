@@ -1,6 +1,6 @@
 # Shopee Scrape Local Agent
 
-Agent chạy **trên máy khách** (cùng GemLogin). Web (domain) gọi `http://127.0.0.1:17890`.
+Agent chạy **trên máy khách** (cùng GPM Login). Web (domain) gọi `http://127.0.0.1:17890`.
 
 ## Domain HTTPS vs localhost
 
@@ -40,9 +40,9 @@ yarn scrape-agent
 
 | Method | Path | Mô tả |
 |--------|------|--------|
-| GET | `/status` | Agent + GemLogin + CDP |
-| GET | `/gemlogin-status` | GemLogin online? |
-| GET | `/gemlogin-profiles` | Danh sách profile |
+| GET | `/status` | Agent + GPM Login + CDP |
+| GET | `/gpmlogin-status` | GPM Login online? |
+| GET | `/gpmlogin-profiles` | Danh sách profile |
 | GET | `/cdp-status` | Cookie/CDP session |
 | POST | `/open-browser` | Start profile + capture |
 | POST | `/product-page` | 1 trang product list |
@@ -52,4 +52,4 @@ yarn scrape-agent
 
 - `SCRAPE_AGENT_PORT` — mặc định `17890`
 - `SCRAPE_AGENT_HOST` — mặc định `127.0.0.1`
-- `GEMLOGIN_API_URL` — mặc định `http://127.0.0.1:1010`
+- `GPMLOGIN_API_URL` — mặc định `http://127.0.0.1:9495` (GPM Login Global `/api/v1`)

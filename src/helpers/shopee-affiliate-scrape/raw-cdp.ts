@@ -312,14 +312,17 @@ export class RawCdpClient {
         host,
         readyState: String(document.readyState || ""),
         cookieNames: names,
-        hasSpcEc: names.some(n => n === "SPC_EC" || n === "SPC_ST" || n === "SPC_F"),
+        hasSpcEc: names.some(n => n === "SPC_EC" || n === "SPC_ST"),
         looksLikeLogin,
         onExpectedHost: host === expectedHost,
       };
     })()`);
   }
 
-  /** Đảm bảo đang ở đúng host Affiliate và (cố gắng) đã login. */
+  /**
+   * Đảm bảo đang ở đúng host Affiliate và đã login.
+   * Nếu gặp trang login: chờ user đăng nhập trên cửa sổ GPM (mặc định vài phút), không throw ngay.
+   */
   async ensureAffiliateReady(offerUrl: string, waitMs = 8000): Promise<void> {
     let expectedHost = "affiliate.shopee.vn";
     try {
@@ -335,20 +338,57 @@ export class RawCdpClient {
 
     const deadline = Date.now() + waitMs;
     let last: Awaited<ReturnType<RawCdpClient["getPageAuthState"]>> | null = null;
+    let lastNudgeAt = 0;
+    let announcedWait = false;
+
     while (Date.now() < deadline) {
       last = await this.getPageAuthState(expectedHost);
-      if (last.onExpectedHost && !last.looksLikeLogin && last.readyState !== "loading") {
-        // Cho antibot/SDK thêm chút thời gian
+      const ready =
+        last.onExpectedHost &&
+        !last.looksLikeLogin &&
+        last.readyState !== "loading" &&
+        (last.hasSpcEc || !/login|signin|buyer\/login/i.test(last.href));
+
+      if (ready) {
+        // Cho antibot/SDK thêm chút thời gian rồi xác nhận lại
         await new Promise<void>((r) => setTimeout(r, 1500));
-        return;
+        last = await this.getPageAuthState(expectedHost);
+        if (
+          last.onExpectedHost &&
+          !last.looksLikeLogin &&
+          last.readyState !== "loading"
+        ) {
+          return;
+        }
       }
-      await new Promise<void>((r) => setTimeout(r, 700));
+
+      if (last.looksLikeLogin || !last.onExpectedHost) {
+        if (!announcedWait) {
+          announcedWait = true;
+          // eslint-disable-next-line no-console
+          console.log(
+            `[scrape-cdp] Đang chờ đăng nhập Shopee Affiliate trên cửa sổ GPM (tối đa ${Math.round(
+              waitMs / 1000
+            )}s)… url=${last.href}`
+          );
+        }
+        // Định kỳ quay lại product_offer — sau khi user login sẽ vào được
+        const now = Date.now();
+        if (now - lastNudgeAt > 20000) {
+          lastNudgeAt = now;
+          await this.navigate(offerUrl, 3500).catch((): undefined => undefined);
+        }
+      }
+
+      await new Promise<void>((r) => setTimeout(r, 1000));
     }
 
     last = last || (await this.getPageAuthState(expectedHost));
-    if (last.looksLikeLogin || !last.hasSpcEc) {
+    if (last.looksLikeLogin || !last.onExpectedHost || !last.hasSpcEc) {
+      const remainHint = Math.round(waitMs / 1000);
       throw new Error(
-        `Chưa login Affiliate trên GemLogin (url=${last.href}, cookies=${last.cookieNames.slice(0, 12).join(",") || "none"}). Đăng nhập trên cửa sổ GemLogin, F5 product_offer, rồi bấm Mở Trình duyệt lại.`
+        `Hết thời gian chờ đăng nhập Affiliate (~${remainHint}s). url=${last.href}. ` +
+          `Đăng nhập trên cửa sổ GPM Login → vào /offer/product_offer → bấm «Mở Trình duyệt» lại.`
       );
     }
   }
@@ -406,7 +446,7 @@ export class RawCdpClient {
 
   /**
    * Chạy async JS trong page (awaitPromise) — dùng fetch credentials:include
-   * để request đi trong browser GemLogin (tránh 403 axios từ Node).
+   * để request đi trong browser GPM Login (tránh 403 axios từ Node).
    */
   async evaluateJson<T = any>(expression: string, timeoutMs = 60000): Promise<T> {
     const result = await this.send("Runtime.evaluate", {
@@ -469,12 +509,12 @@ export class RawCdpClient {
   }
 }
 
-/** Kích thước cửa sổ GemLogin mặc định khi mở CDP. */
+/** Kích thước cửa sổ GPM Login mặc định khi mở CDP. */
 export const CDP_WINDOW_SIZE = { width: 400, height: 400, left: 0, top: 0 } as const;
 
 /**
  * Ép resize cửa sổ Chrome qua CDP browser WS.
- * Dùng khi GemLogin `win_size` bị bỏ qua (profile đã mở sẵn).
+ * Dùng khi GPM Login `win_size` bị bỏ qua (profile đã mở sẵn).
  */
 export async function setCdpWindowBounds(
   port: number,

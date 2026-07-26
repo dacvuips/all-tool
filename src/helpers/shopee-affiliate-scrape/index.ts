@@ -35,16 +35,16 @@ export {
 } from "./open-chrome";
 
 export {
-  closeGemLoginProfile,
-  DEFAULT_GEMLOGIN_API,
-  getGemLoginRawProxy,
-  getGemLoginStatus,
-  listGemLoginProfiles,
+  closeGpmLoginProfile,
+  DEFAULT_GPMLOGIN_API,
+  getGpmLoginRawProxy,
+  getGpmLoginStatus,
+  listGpmLoginProfiles,
   parseDebugAddr,
-  probeGemLoginApi,
-  startGemLoginProfile,
-} from "./gemlogin-client";
-export type { GemLoginProfile, GemLoginStartResult } from "./gemlogin-client";
+  probeGpmLoginApi,
+  startGpmLoginProfile,
+} from "./gpmlogin-client";
+export type { GpmLoginProfile, GpmLoginStartResult } from "./gpmlogin-client";
 
 export {
   clearAffiliateHttpSession,
@@ -68,5 +68,5 @@ export type {
   CdpProductPageResult,
 } from "./cdp-browser";
 
-/** Alias — GemLogin + lấy cookie → HTTP/CDP scrape. */
+/** Alias — GPM Login + lấy cookie → HTTP/CDP scrape. */
 export { openAffiliateBrowserCdp as openAffiliateBrowser } from "./cdp-browser";

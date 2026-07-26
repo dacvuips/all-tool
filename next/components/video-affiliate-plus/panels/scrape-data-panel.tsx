@@ -27,9 +27,9 @@ import {
 import {
   downloadCsvText,
   exportShopeeAffiliateCsv,
-  fetchGemLoginProfiles,
-  fetchGemLoginStatus,
-  GemLoginProfileOption,
+  fetchGpmLoginProfiles,
+  fetchGpmLoginStatus,
+  GpmLoginProfileOption,
   loadScrapeCsvSessions,
   openShopeeAffiliateBrowser,
   probeScrapeAgent,
@@ -65,7 +65,7 @@ const SCRAPE_AGENT_ZIP_WIN_NAME = "ShopeeScrapeAgent-windows.zip";
 const SCRAPE_AGENT_ZIP_MAC_URL = "/downloads/ShopeeScrapeAgent-macos.zip";
 const SCRAPE_AGENT_ZIP_MAC_NAME = "ShopeeScrapeAgent-macos.zip";
 /** Legacy link (Windows) — giữ file public cũ */
-const GEMLOGIN_DOWNLOAD_URL = "https://app.gemlogin.vn/download-auth";
+const GPMLOGIN_DOWNLOAD_URL = "https://gpmloginapp.com/vi/download";
 
 const SCRAPE_OPENAI_KEY_LS = "video-affiliate-plus-scrape-openai-key";
 const SCRAPE_GEMINI_KEY_LS = "video-affiliate-plus-scrape-gemini-key";
@@ -99,8 +99,8 @@ const GUIDE_STEPS = [
   },
   {
     step: "02",
-    titleKey: "Mở GemLogin Desktop",
-    descKey: "Cài và mở GemLogin → Tạo profile mới → Profile đã đăng nhập Shopee Affiliate.",
+    titleKey: "Mở GPM Login Desktop",
+    descKey: "Cài và mở GPM Login → Tạo profile mới → Profile đã đăng nhập Shopee Affiliate.",
     Icon: RiChromeLine,
   },
   {
@@ -370,7 +370,7 @@ function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   return "\uFEFF" + lines.join("\n");
 }
 
-/** Tab Cào dữ liệu — GemLogin CDP + danh sách SP / CSV. */
+/** Tab Cào dữ liệu — GPM Login CDP + danh sách SP / CSV. */
 export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -380,11 +380,11 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [exportingCsv, setExportingCsv] = useState(false);
   /** Market dùng khi Mở trình duyệt → /offer/product_offer */
   const [openMarketHost, setOpenMarketHost] = useState(MARKET_OPTIONS[0].value);
-  const [gemProfiles, setGemProfiles] = useState<GemLoginProfileOption[]>([]);
-  const [gemProfileId, setGemProfileId] = useState("");
-  const [loadingGemProfiles, setLoadingGemProfiles] = useState(false);
+  const [gpmProfiles, setGpmProfiles] = useState<GpmLoginProfileOption[]>([]);
+  const [gpmProfileId, setGpmProfileId] = useState("");
+  const [loadingGpmProfiles, setLoadingGpmProfiles] = useState(false);
   const [agentOnline, setAgentOnline] = useState<boolean | null>(null);
-  const [gemOnline, setGemOnline] = useState<boolean | null>(null);
+  const [gpmOnline, setGpmOnline] = useState<boolean | null>(null);
   const [filterDomain, setFilterDomain] = useState("");
   const [filterYear, setFilterYear] = useState("");
   const [filterMonth, setFilterMonth] = useState("");
@@ -447,40 +447,40 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setSessions(await loadScrapeCsvSessions());
   };
 
-  const refreshAgentAndGem = async () => {
-    setLoadingGemProfiles(true);
+  const refreshAgentAndGpm = async () => {
+    setLoadingGpmProfiles(true);
     try {
       const agent = await probeScrapeAgent(2500);
       setAgentOnline(agent.online);
       if (!agent.online) {
-        setGemOnline(false);
-        setGemProfiles([]);
+        setGpmOnline(false);
+        setGpmProfiles([]);
         return;
       }
-      const status = await fetchGemLoginStatus();
-      setGemOnline(Boolean(status.online));
+      const status = await fetchGpmLoginStatus();
+      setGpmOnline(Boolean(status.online));
       if (!status.online) {
-        setGemProfiles([]);
+        setGpmProfiles([]);
         return;
       }
-      const list = await fetchGemLoginProfiles();
-      setGemProfiles(list);
-      setGemProfileId((prev) => {
+      const list = await fetchGpmLoginProfiles();
+      setGpmProfiles(list);
+      setGpmProfileId((prev) => {
         if (prev && list.some((p) => p.id === prev)) return prev;
         return list[0]?.id || "";
       });
     } catch {
       setAgentOnline(false);
-      setGemOnline(false);
-      setGemProfiles([]);
+      setGpmOnline(false);
+      setGpmProfiles([]);
     } finally {
-      setLoadingGemProfiles(false);
+      setLoadingGpmProfiles(false);
     }
   };
 
   useEffect(() => {
     void refreshLocal();
-    void refreshAgentAndGem();
+    void refreshAgentAndGpm();
     setOpenaiKey(readScrapeAiKey(SCRAPE_OPENAI_KEY_LS));
     setGeminiKey(readScrapeAiKey(SCRAPE_GEMINI_KEY_LS));
   }, []);
@@ -689,25 +689,28 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       );
       return;
     }
-    if (!gemProfileId) {
-      toast.warn(t("Chọn profile GemLogin trước. Bấm làm mới nếu danh sách trống."));
-      void refreshAgentAndGem();
+    if (!gpmProfileId) {
+      toast.warn(t("Chọn profile GPM Login trước. Bấm làm mới nếu danh sách trống."));
+      void refreshAgentAndGpm();
       return;
     }
     try {
       setOpening(true);
+      toast.info(
+        t("Đang mở GPM… Nếu chưa login Affiliate, đăng nhập + xác thực trên cửa sổ GPM — hệ thống sẽ chờ tới ~5 phút.")
+      );
       const result = await openShopeeAffiliateBrowser({
         marketHost: openMarketHost,
-        gemloginProfileId: gemProfileId,
+        gpmloginProfileId: gpmProfileId,
       });
       toast.success(
-        t("Đã mở GemLogin + capture session. Giữ cửa sổ mở rồi Bắt đầu cào.", {
+        t("Đã mở GPM Login + capture session. Giữ cửa sổ mở rồi Bắt đầu cào.", {
           n: result.cookieCount ?? 0,
         })
       );
     } catch (err: any) {
       toast.error(err?.message || t("Không mở được trình duyệt"));
-      void refreshAgentAndGem();
+      void refreshAgentAndGpm();
     } finally {
       setOpening(false);
     }
@@ -727,7 +730,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         const agent = await probeScrapeAgent(2000);
         toast.error(
           agent.online
-            ? t("Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin) trước.")
+            ? t("Chưa có cookie. Bấm «Mở Trình duyệt» (GPM Login) trước.")
             : t("Chưa thấy Local Agent. Mở Shopee Scrape Agent (BatDau.bat / .exe).")
         );
         return;
@@ -862,7 +865,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       toast.error(
         agent.online
           ? t(
-              "Chưa có cookie. Bấm «Mở Trình duyệt» (GemLogin), đăng nhập Affiliate nếu cần, rồi thử lại."
+              "Chưa có cookie. Bấm «Mở Trình duyệt» (GPM Login), đăng nhập Affiliate nếu cần, rồi thử lại."
             )
           : t("Chưa thấy Local Agent. Mở Shopee Scrape Agent (BatDau.bat / .exe).")
       );
@@ -1067,7 +1070,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           if (filled === 0) {
             toast.warn(
               t(
-                "Chưa tạo được short link (antibot/GemLogin). Vẫn lưu bằng long_link — giải captcha trên GemLogin rồi Lưu lại để bổ sung short."
+                "Chưa tạo được short link (antibot/GPM Login). Vẫn lưu bằng long_link — giải captcha trên GPM Login rồi Lưu lại để bổ sung short."
               ) as string
             );
           } else {
@@ -1748,15 +1751,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
         {t("Agent offline")}
       </span>
-    ) : agentOnline === true && gemOnline === false ? (
+    ) : agentOnline === true && gpmOnline === false ? (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-10 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">
         <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-        {t("GemLogin offline")}
+        {t("GPM Login offline")}
       </span>
-    ) : agentOnline === true && gemOnline === true ? (
+    ) : agentOnline === true && gpmOnline === true ? (
       <span className="inline-flex items-center gap-1 rounded-full bg-success-light px-2 py-0.5 text-10 font-semibold text-success-dark ring-1 ring-inset ring-success">
         <span className="h-1.5 w-1.5 rounded-full bg-success" />
-        {t("Online · {{n}} profile", { n: gemProfiles.length })}
+        {t("Online · {{n}} profile", { n: gpmProfiles.length })}
       </span>
     ) : (
       <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-10 font-semibold text-gray-500 ring-1 ring-inset ring-gray-200">
@@ -1787,17 +1790,17 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {agentStatusChip}
                 <button
                   type="button"
-                  disabled={loadingGemProfiles}
-                  onClick={() => void refreshAgentAndGem()}
+                  disabled={loadingGpmProfiles}
+                  onClick={() => void refreshAgentAndGpm()}
                   className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition-colors hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
-                  title={t("Kiểm tra lại Agent + GemLogin") as string}
-                  aria-label={t("Kiểm tra lại Agent + GemLogin") as string}
+                  title={t("Kiểm tra lại Agent + GPM Login") as string}
+                  aria-label={t("Kiểm tra lại Agent + GPM Login") as string}
                 >
-                  <RiRefreshLine className={`text-12 ${loadingGemProfiles ? "animate-spin" : ""}`} />
+                  <RiRefreshLine className={`text-12 ${loadingGpmProfiles ? "animate-spin" : ""}`} />
                 </button>
               </div>
               <p className="m-0 text-xs leading-relaxed text-gray-500">
-                {t("Local Agent · GemLogin · Cào / Xuất CSV")}
+                {t("Local Agent · GPM Login · Cào / Xuất CSV")}
                 {agentOnline === false ? (
                   <span className="ml-1 text-rose-600">— {t("tải & mở BatDau.bat")}</span>
                 ) : null}
@@ -1907,7 +1910,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {guideOpen ? (
                   <span className="block max-w-3xl text-12 leading-relaxed text-bluegray-500">
                     {t(
-                      "Tải Agent về máy → mở GemLogin → Mở Trình duyệt → cào / xuất CSV. Trên domain HTTPS: khi Chrome hỏi quyền Local network hãy Allow (localhost web thì không cần)."
+                      "Tải Agent về máy → mở GPM Login → Mở Trình duyệt → cào / xuất CSV. Trên domain HTTPS: khi Chrome hỏi quyền Local network hãy Allow (localhost web thì không cần)."
                     )}
                   </span>
                 ) : null}
@@ -1920,19 +1923,19 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             <div className="flex flex-wrap gap-2 items-center shrink-0 sm:justify-end">
               <label className="inline-flex items-center gap-1.5">
                 <span className="text-10 font-semibold text-accent whitespace-nowrap">
-                  {t("GemLogin")}
+                  {t("GPM Login")}
                 </span>
                 <select
-                  value={gemProfileId}
-                  onChange={(e) => setGemProfileId(e.target.value)}
-                  disabled={opening || loadingGemProfiles}
+                  value={gpmProfileId}
+                  onChange={(e) => setGpmProfileId(e.target.value)}
+                  disabled={opening || loadingGpmProfiles}
                   className="h-9 min-w-40 max-w-56 text-xs font-semibold rounded-lg border border-bluegray-300 bg-white px-2 text-accent disabled:opacity-50"
-                  aria-label={t("Profile GemLogin")}
+                  aria-label={t("Profile GPM Login")}
                 >
-                  {!gemProfiles.length ? (
+                  {!gpmProfiles.length ? (
                     <option value="">{t("— Không có profile —")}</option>
                   ) : (
-                    gemProfiles.map((p) => (
+                    gpmProfiles.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name}
                       </option>
@@ -1942,12 +1945,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </label>
               <button
                 type="button"
-                disabled={loadingGemProfiles || opening}
-                onClick={() => void refreshAgentAndGem()}
+                disabled={loadingGpmProfiles || opening}
+                onClick={() => void refreshAgentAndGpm()}
                 className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-bluegray-300 bg-white px-2.5 text-10 font-semibold text-accent shadow-sm transition-colors hover:bg-bluegray-50 disabled:opacity-50"
-                title={t("Làm mới Local Agent + profile GemLogin") as string}
+                title={t("Làm mới Local Agent + profile GPM Login") as string}
               >
-                {loadingGemProfiles ? (
+                {loadingGpmProfiles ? (
                   <RiLoader4Line className="text-sm animate-spin" />
                 ) : (
                   t("Làm mới")
@@ -1974,7 +1977,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
               <button
                 type="button"
-                disabled={opening || !gemProfileId}
+                disabled={opening || !gpmProfileId}
                 onClick={() => void handleOpenBrowser()}
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-purple-600 px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 disabled:opacity-50"
               >
@@ -1983,7 +1986,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 ) : (
                   <HiPlay className="text-base" />
                 )}
-                {t("Mở Trình duyệt")}
+                {opening ? t("Đang chờ login…") : t("Mở Trình duyệt")}
               </button>
             </div>
           </div>
@@ -1994,14 +1997,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 {GUIDE_STEPS.map((item) => {
                   const Icon = item.Icon;
                   const isDownloadStep = item.step === "01";
-                  const isGemLoginStep = item.step === "02";
+                  const isGpmLoginStep = item.step === "02";
                   return (
                     <li
                       key={item.step}
                       className={`relative flex min-h-32 flex-col rounded-xl border p-3.5 shadow-sm transition-colors ${
                         isDownloadStep
                           ? "border-teal-300 bg-teal-50/70 hover:border-teal-400 hover:bg-teal-50"
-                          : isGemLoginStep
+                          : isGpmLoginStep
                           ? "border-indigo-200 bg-indigo-50/50 hover:border-indigo-300 hover:bg-indigo-50"
                           : "border-bluegray-200 bg-bluegray-50 hover:border-bluegray-300 hover:bg-white"
                       }`}
@@ -2012,7 +2015,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                             className={`shrink-0 text-16 font-semibold leading-none tracking-tight ${
                               isDownloadStep
                                 ? "text-teal-400"
-                                : isGemLoginStep
+                                : isGpmLoginStep
                                 ? "text-indigo-300"
                                 : "text-bluegray-300"
                             }`}
@@ -2027,7 +2030,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
                             isDownloadStep
                               ? "border-teal-200 text-teal-700"
-                              : isGemLoginStep
+                              : isGpmLoginStep
                               ? "border-indigo-200 text-indigo-700"
                               : "border-bluegray-200 text-bluegray-600"
                           }`}
@@ -2059,15 +2062,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                             </a>
                           </div>
                         ) : null}
-                        {isGemLoginStep ? (
+                        {isGpmLoginStep ? (
                           <a
-                            href={GEMLOGIN_DOWNLOAD_URL}
+                            href={GPMLOGIN_DOWNLOAD_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="mt-auto inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700"
                           >
                             <HiDownload className="text-sm" />
-                            {t("Tải GemLogin")}
+                            {t("Tải GPM Login")}
                           </a>
                         ) : null}
                       </div>
@@ -2219,7 +2222,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         {!sessions.length ? (
           <PanelListCard>
             <div className={panelListClasses.empty}>
-              {t("Chưa có CSV. Mở GemLogin → Xuất CSV hoặc Lưu Project.")}
+              {t("Chưa có CSV. Mở GPM Login → Xuất CSV hoặc Lưu Project.")}
             </div>
           </PanelListCard>
         ) : !filteredSessions.length ? (

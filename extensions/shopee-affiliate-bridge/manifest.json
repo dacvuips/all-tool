@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Viet-Theo-Bridge",
   "version": "1.7.0",
-  "description": "Viet-Theo-Bridge (legacy). Cookie-fetch / scrape CSV đã chuyển sang GemLogin CDP.",
+  "description": "Viet-Theo-Bridge (legacy). Cookie-fetch / scrape CSV đã chuyển sang GPM Login CDP.",
   "permissions": ["storage", "tabs", "cookies"],
   "host_permissions": [
     "http://127.0.0.1/*",

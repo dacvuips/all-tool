@@ -931,7 +931,7 @@ chrome.tabs.onRemoved.addListener((removedTabId) => {
   active.tabId = removedTabId;
 });
 
-/** Cookie-fetch qua extension đã bỏ — dùng GemLogin/CDP + cookie thủ công. */
+/** Cookie-fetch qua extension đã bỏ — dùng GPM Login/CDP + cookie thủ công. */
 // (đã xóa poll setInterval → /api/app/shopee-cookie-fetch/pending)
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -1087,7 +1087,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "START_COOKIE_FETCH") {
     sendResponse({
       ok: false,
-      error: "Đã bỏ lấy cookie qua extension — dùng GemLogin/CDP hoặc dán cookie thủ công",
+      error: "Đã bỏ lấy cookie qua extension — dùng GPM Login/CDP hoặc dán cookie thủ công",
     });
     return false;
   }
@@ -1095,7 +1095,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === "APPLY_COOKIES_LOCAL") {
     sendResponse({
       ok: false,
-      error: "Đã bỏ gắn cookie qua extension — dùng GemLogin profile đã login",
+      error: "Đã bỏ gắn cookie qua extension — dùng GPM Login profile đã login",
     });
     return false;
   }

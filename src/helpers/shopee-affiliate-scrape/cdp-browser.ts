@@ -1,6 +1,6 @@
 /**
- * GemLogin hybrid kiểu PeeCrawl:
- * start profile → CDP capture session → ghi disk → đóng GemLogin → scrape HTTP bằng session.
+ * GPM Login hybrid kiểu PeeCrawl:
+ * start profile → CDP capture session → ghi disk → đóng GPM Login → scrape HTTP bằng session.
  * Không Playwright / không CloakSigner (PeeCrawl Cloak là .pyd riêng).
  */
 
@@ -15,10 +15,10 @@ import {
 } from "./product-mapper";
 import { setLastMarketHost } from "./extension-push";
 import {
-  closeGemLoginProfile,
-  getGemLoginRawProxy,
-  startGemLoginProfile,
-} from "./gemlogin-client";
+  closeGpmLoginProfile,
+  getGpmLoginRawProxy,
+  startGpmLoginProfile,
+} from "./gpmlogin-client";
 import {
   CDP_WINDOW_SIZE,
   cookiesToHeader,
@@ -115,7 +115,7 @@ function antibotShortLinkError(detail = ""): Error {
   const extra = String(detail || "").trim();
   return new Error(
     `Shopee antibot chặn tạo short link (90309999). ` +
-      `Trên cửa sổ GemLogin: giải captcha nếu có → vào /offer/product_offer → F5 → «Mở Trình duyệt» rồi Lưu lại.` +
+      `Trên cửa sổ GPM Login: giải captcha nếu có → vào /offer/product_offer → F5 → «Mở Trình duyệt» rồi Lưu lại.` +
       (extra ? ` (${extra.slice(0, 180)})` : "")
   );
 }
@@ -203,7 +203,7 @@ async function affiliateGetJson(url: string, referer: string): Promise<any> {
     },
     validateStatus: () => true,
   };
-  // Proxy từ GemLogin profile (nếu có) — giống PeeCrawl truyền raw_proxy
+  // Proxy từ GPM Login profile (nếu có) — giống PeeCrawl truyền raw_proxy
   if (session.rawProxy) {
     try {
       const proxyUrl = session.rawProxy.includes("://")
@@ -227,7 +227,7 @@ async function affiliateGetJson(url: string, referer: string): Promise<any> {
   const res = await axios.get(url, config);
   if (res.status === 401 || res.status === 403) {
     throw new Error(
-      `HTTP ${res.status} — session hết hạn. Bấm «Mở Trình duyệt» để capture lại từ GemLogin.`
+      `HTTP ${res.status} — session hết hạn. Bấm «Mở Trình duyệt» để capture lại từ GPM Login.`
     );
   }
   if (res.status >= 400) {
@@ -312,7 +312,7 @@ async function fetchShortLinksHttp(
 }
 
 /**
- * Tạo short link trong tab GemLogin (fetch credentials:include) — tránh 403 axios Node.
+ * Tạo short link trong tab GPM Login (fetch credentials:include) — tránh 403 axios Node.
  * Payload giống UI Affiliate / extension inject.js.
  */
 async function fetchShortLinksViaCdp(
@@ -337,12 +337,12 @@ async function fetchShortLinksViaCdp(
     }
     if (!auth.onExpectedHost) {
       throw new Error(
-        `Tab GemLogin không ở ${marketHost} (đang: ${auth.href}). Mở product_offer rồi thử lại.`
+        `Tab GPM Login không ở ${marketHost} (đang: ${auth.href}). Mở product_offer rồi thử lại.`
       );
     }
     if (auth.looksLikeLogin) {
       throw new Error(
-        `GemLogin đang ở trang login. Đăng nhập Affiliate rồi bấm Mở Trình duyệt lại.`
+        `GPM Login đang ở trang login. Đăng nhập Affiliate rồi bấm Mở Trình duyệt lại.`
       );
     }
 
@@ -425,7 +425,7 @@ async function fetchShortLinksViaCdp(
       }
       if (result.status === 401 || result.status === 403) {
         throw new Error(
-          `Short link HTTP ${result.status} từ GemLogin (page=${result.pageHref}). ` +
+          `Short link HTTP ${result.status} từ GPM Login (page=${result.pageHref}). ` +
             `Login Affiliate → /offer/product_offer → F5 → Mở Trình duyệt lại.`
         );
       }
@@ -461,7 +461,7 @@ async function fetchShortLinksViaCdp(
   return { shorts: out, detail };
 }
 
-/** Public: long affiliate links → short links (ưu tiên CDP trong GemLogin). */
+/** Public: long affiliate links → short links (ưu tiên CDP trong GPM Login). */
 export async function fetchAffiliateShortLinks(
   originalLinks: string[],
   delayMs = 800
@@ -515,29 +515,29 @@ export async function fetchAffiliateShortLinks(
 
   throw new Error(
     `Không tạo được short link (${links.filter(Boolean).length} link). ` +
-      `Giữ GemLogin mở + login Affiliate. Chi tiết: ${details.slice(-2).join(" | ")}`
+      `Giữ GPM Login mở + login Affiliate. Chi tiết: ${details.slice(-2).join(" | ")}`
   );
 }
 
 /**
  * PeeCrawl-inspired:
- * - Mở: GemLogin start → navigate → capture session (cookie/UA/LS) → GIỮ profile mở
- * - Cào: fetch trong page GemLogin qua CDP (credentials:include) — tránh 403 axios Node
+ * - Mở: GPM Login start → navigate → capture session (cookie/UA/LS) → GIỮ profile mở
+ * - Cào: fetch trong page GPM Login qua CDP (credentials:include) — tránh 403 axios Node
  * HTTP axios chỉ còn fallback / short-link khi CDP không dùng được.
  */
 export async function openAffiliateBrowserCdp(options?: {
   marketHost?: string;
-  gemloginProfileId?: string;
+  gpmloginProfileId?: string;
   allowChromeFallback?: boolean;
-  /** true = tắt GemLogin sau capture (dễ 403 khi cào HTTP). Mặc định false = giữ mở để cào CDP. */
+  /** true = tắt GPM Login sau capture (dễ 403 khi cào HTTP). Mặc định false = giữ mở để cào CDP. */
   stopProfileAfterCapture?: boolean;
 }): Promise<{
   marketHost: string;
   offerUrl: string;
   cdpEndpoint: string;
   launched: boolean;
-  source: "gemlogin" | "chrome";
-  gemloginProfileId?: string;
+  source: "gpmlogin" | "chrome";
+  gpmloginProfileId?: string;
   debugAddr?: string;
   cookieCount?: number;
   localStorageKeys?: number;
@@ -546,28 +546,28 @@ export async function openAffiliateBrowserCdp(options?: {
   const opts = options || {};
   const host = String(opts.marketHost || "affiliate.shopee.vn").trim();
   const offerUrl = defaultOfferUrl(host);
-  const profileId = String(opts.gemloginProfileId || "").trim();
+  const profileId = String(opts.gpmloginProfileId || "").trim();
   // Mặc định GIỮ profile — axios HTTP không đủ chống bot Shopee (403)
   const stopAfter = opts.stopProfileAfterCapture === true;
 
   if (!profileId) {
     throw new Error(
-      "Chọn profile GemLogin trước khi Mở Trình duyệt. (GemLogin Desktop phải đang chạy tại localhost:1010)"
+      "Chọn profile GPM Login trước khi Mở Trình duyệt. (GPM Login Global phải đang chạy tại localhost:9495)"
     );
   }
 
-  logger.info(`[scrape-hybrid] GemLogin start profileId=${profileId}`);
-  const rawProxy = await getGemLoginRawProxy(profileId);
-  // Đóng trước để win_size được áp dụng (GemLogin bỏ qua size nếu profile đang mở)
+  logger.info(`[scrape-hybrid] GPM Login start profileId=${profileId}`);
+  const rawProxy = await getGpmLoginRawProxy(profileId);
+  // Đóng trước để win_size được áp dụng (GPM Login bỏ qua size nếu profile đang mở)
   try {
-    await closeGemLoginProfile(profileId);
+    await closeGpmLoginProfile(profileId);
     await new Promise((r) => setTimeout(r, 600));
   } catch {
     // ignore
   }
   const winW = CDP_WINDOW_SIZE.width;
   const winH = CDP_WINDOW_SIZE.height;
-  const started = await startGemLoginProfile(profileId, {
+  const started = await startGpmLoginProfile(profileId, {
     winPos: `${CDP_WINDOW_SIZE.left},${CDP_WINDOW_SIZE.top}`,
     winSize: `${winW},${winH}`,
     additionalArgs: `--window-size=${winW},${winH}`,
@@ -583,25 +583,26 @@ export async function openAffiliateBrowserCdp(options?: {
   }
   if (!(await probeCdpEndpoint(port, 800))) {
     throw new Error(
-      `GemLogin đã start nhưng CDP ${debugAddr} chưa sẵn sàng. Đóng profile trong GemLogin rồi mở lại.`
+      `GPM Login đã start nhưng CDP ${debugAddr} chưa sẵn sàng. Đóng profile trong GPM Login rồi mở lại.`
     );
   }
 
-  // Ép resize qua CDP — chắc chắn kể cả khi win_size bị GemLogin bỏ qua
+  // Ép resize qua CDP — chắc chắn kể cả khi win_size bị GPM Login bỏ qua
   const resized = await setCdpWindowBounds(port, CDP_WINDOW_SIZE);
   logger.info(`[scrape-hybrid] window ${winW}x${winH} cdpResize=${resized}`);
 
   let client: RawCdpClient | null = null;
   try {
     client = await RawCdpClient.connect(port, offerUrl, host);
-    await client.ensureAffiliateReady(offerUrl, 12000);
+    // Chờ user đăng nhập trên cửa sổ GPM nếu chưa login (tối đa ~5 phút)
+    await client.ensureAffiliateReady(offerUrl, 300000);
 
     const allCookies = await client.getAllCookies();
     const filtered = filterShopeeCookies(allCookies, host);
     const cookieHeader = cookiesToHeader(filtered.length ? filtered : allCookies);
     if (!cookieHeader) {
       throw new Error(
-        "Không lấy được cookie từ GemLogin. Đăng nhập Shopee Affiliate trên cửa sổ profile rồi bấm Mở lại."
+        "Không lấy được cookie từ GPM Login. Đăng nhập Shopee Affiliate trên cửa sổ profile rồi bấm Mở lại."
       );
     }
     const userAgent = await client.getUserAgent();
@@ -609,7 +610,7 @@ export async function openAffiliateBrowserCdp(options?: {
 
     setAffiliateHttpSession({
       marketHost: isAffiliateHost(host) ? host.toLowerCase() : "affiliate.shopee.vn",
-      gemloginProfileId: profileId,
+      gpmloginProfileId: profileId,
       cookieHeader,
       cookies: filtered.length ? filtered : allCookies,
       userAgent,
@@ -630,7 +631,7 @@ export async function openAffiliateBrowserCdp(options?: {
   let profileStopped = false;
   if (stopAfter) {
     try {
-      await closeGemLoginProfile(profileId);
+      await closeGpmLoginProfile(profileId);
       profileStopped = true;
     } catch (err: any) {
       logger.warn(`[scrape-hybrid] Không tắt được profile: ${err?.message || err}`);
@@ -643,8 +644,8 @@ export async function openAffiliateBrowserCdp(options?: {
     offerUrl,
     cdpEndpoint: endpoint,
     launched: true,
-    source: "gemlogin",
-    gemloginProfileId: profileId,
+    source: "gpmlogin",
+    gpmloginProfileId: profileId,
     debugAddr,
     cookieCount: sess?.cookies.length || 0,
     localStorageKeys: sess?.localStorage ? Object.keys(sess.localStorage).length : 0,
@@ -652,12 +653,12 @@ export async function openAffiliateBrowserCdp(options?: {
   };
 }
 
-/** Đảm bảo GemLogin CDP sống — start lại profile nếu cần. */
+/** Đảm bảo GPM Login CDP sống — start lại profile nếu cần. */
 async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
   let session = getAffiliateHttpSession() || loadAffiliateHttpSession();
-  if (!session?.gemloginProfileId && !session?.cdpPort && !session?.debugAddr) {
+  if (!session?.gpmloginProfileId && !session?.cdpPort && !session?.debugAddr) {
     throw new Error(
-      "Chưa có session. Bấm «Mở Trình duyệt» (GemLogin) trước khi cào."
+      "Chưa có session. Bấm «Mở Trình duyệt» (GPM Login) trước khi cào."
     );
   }
 
@@ -669,22 +670,22 @@ async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
   }
 
   if (!port || !(await probeCdpEndpoint(port, 800))) {
-    const profileId = String(session.gemloginProfileId || "").trim();
+    const profileId = String(session.gpmloginProfileId || "").trim();
     if (!profileId) {
       throw new Error(
-        "GemLogin CDP đã tắt và thiếu profileId. Bấm «Mở Trình duyệt» lại."
+        "GPM Login CDP đã tắt và thiếu profileId. Bấm «Mở Trình duyệt» lại."
       );
     }
-    logger.info(`[scrape-cdp] CDP down → restart GemLogin profile ${profileId}`);
+    logger.info(`[scrape-cdp] CDP down → restart GPM Login profile ${profileId}`);
     try {
-      await closeGemLoginProfile(profileId);
+      await closeGpmLoginProfile(profileId);
       await new Promise((r) => setTimeout(r, 600));
     } catch {
       // ignore
     }
     const winW = CDP_WINDOW_SIZE.width;
     const winH = CDP_WINDOW_SIZE.height;
-    const started = await startGemLoginProfile(profileId, {
+    const started = await startGpmLoginProfile(profileId, {
       winPos: `${CDP_WINDOW_SIZE.left},${CDP_WINDOW_SIZE.top}`,
       winSize: `${winW},${winH}`,
       additionalArgs: `--window-size=${winW},${winH}`,
@@ -726,12 +727,12 @@ async function fetchJsonInBrowser(
   const auth = await client.getPageAuthState(expectedHost);
   if (!auth.onExpectedHost) {
     throw new Error(
-      `Tab GemLogin không ở ${expectedHost} (đang: ${auth.href}). Mở product_offer trên đúng market rồi thử lại.`
+      `Tab GPM Login không ở ${expectedHost} (đang: ${auth.href}). Mở product_offer trên đúng market rồi thử lại.`
     );
   }
   if (auth.looksLikeLogin) {
     throw new Error(
-      `GemLogin đang ở trang login (${auth.href}). Đăng nhập Affiliate trên cửa sổ đó, rồi bấm Mở Trình duyệt lại.`
+      `GPM Login đang ở trang login (${auth.href}). Đăng nhập Affiliate trên cửa sổ đó, rồi bấm Mở Trình duyệt lại.`
     );
   }
 
@@ -773,8 +774,8 @@ async function fetchJsonInBrowser(
   if (!result) throw new Error("CDP fetch không trả kết quả");
   if (result.status === 401 || result.status === 403) {
     throw new Error(
-      `HTTP ${result.status} từ tab GemLogin (page=${result.pageHref}, cookieLen=${result.cookieLen}). ` +
-        `Chưa login Affiliate hoặc antibot chặn. Trên cửa sổ GemLogin: login → vào /offer/product_offer → F5 → Mở Trình duyệt lại rồi cào.`
+      `HTTP ${result.status} từ tab GPM Login (page=${result.pageHref}, cookieLen=${result.cookieLen}). ` +
+        `Chưa login Affiliate hoặc antibot chặn. Trên cửa sổ GPM Login: login → vào /offer/product_offer → F5 → Mở Trình duyệt lại rồi cào.`
     );
   }
   if (!result.ok) {
@@ -792,8 +793,8 @@ export async function getCdpStatus(): Promise<{
   port: number;
   endpoint: string;
   pageUrl?: string;
-  source?: "gemlogin" | "chrome" | null;
-  gemloginProfileId?: string | null;
+  source?: "gpmlogin" | "chrome" | null;
+  gpmloginProfileId?: string | null;
   hasCookies?: boolean;
   cookieCount?: number;
   capturedAt?: number;
@@ -816,8 +817,8 @@ export async function getCdpStatus(): Promise<{
     port,
     endpoint: session?.debugAddr ? `http://${session.debugAddr}` : port ? `http://127.0.0.1:${port}` : "",
     pageUrl: session ? defaultOfferUrl(session.marketHost) : undefined,
-    source: session?.gemloginProfileId ? "gemlogin" : null,
-    gemloginProfileId: session?.gemloginProfileId || null,
+    source: session?.gpmloginProfileId ? "gpmlogin" : null,
+    gpmloginProfileId: session?.gpmloginProfileId || null,
     hasCookies: Boolean(session?.cookieHeader),
     cookieCount: session?.cookies.length || 0,
     capturedAt: session?.capturedAt,
@@ -861,7 +862,7 @@ export async function fetchProductPageViaCdp(
       throw new Error(
         cdpErr?.message ||
           httpErr?.message ||
-          "Cào thất bại. Giữ cửa sổ GemLogin mở (đã login Affiliate) rồi thử lại."
+          "Cào thất bại. Giữ cửa sổ GPM Login mở (đã login Affiliate) rồi thử lại."
       );
     }
   } finally {
@@ -954,7 +955,7 @@ export async function exportCsvViaCdp(input: CdpExportInput): Promise<{
   }
 
   if (!all.length) {
-    throw new Error("Không có sản phẩm — kiểm tra cookie / đăng nhập Affiliate trên GemLogin");
+    throw new Error("Không có sản phẩm — kiểm tra cookie / đăng nhập Affiliate trên GPM Login");
   }
 
   const market = getMarketByHost(hostOut);
