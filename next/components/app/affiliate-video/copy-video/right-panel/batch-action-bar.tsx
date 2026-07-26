@@ -115,6 +115,7 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     // Merge videos
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 
@@ -294,6 +295,8 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   id={action.id}
                   merging={mergingVideos}
                   mergeLabel={mergeVideosLabel}
+                  scenes={scenes}
+                  getGeneratedVideo={getGeneratedVideo}
                   availableVideoCount={availableVideoCount}
                   availableExtendCount={availableExtendCount}
                   disabled={

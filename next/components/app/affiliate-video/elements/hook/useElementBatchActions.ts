@@ -613,45 +613,53 @@ export function useCopyVideoBatchActions(
   const [mergingVideos, setMergingVideos] = useState(false);
   const [mergeVideosLabel, setMergeVideosLabel] = useState("");
 
-  const handleMergeNormalVideos = useCallback(async () => {
-    if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
-    setMergingVideos(true);
-    setMergeVideosLabel(t("Video thường"));
-    try {
-      const count = await mergeSceneVideosAndDownload({
-        scenes,
-        kind: "normal",
-        getGeneratedVideo,
-      });
-      toast.success(`${t("Đã nối")} ${count} ${t("video thường thành 1 file MP4")}`);
-    } catch (err: any) {
-      console.error("[handleMergeNormalVideos] Error:", err);
-      toast.error(err?.message || t("Lỗi khi nối video thường"));
-    } finally {
-      setMergingVideos(false);
-      setMergeVideosLabel("");
-    }
-  }, [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]);
+  const handleMergeNormalVideos = useCallback(
+    async (sceneIds?: string[]) => {
+      if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
+      setMergingVideos(true);
+      setMergeVideosLabel(t("Video thường"));
+      try {
+        const count = await mergeSceneVideosAndDownload({
+          scenes,
+          kind: "normal",
+          getGeneratedVideo,
+          sceneIds,
+        });
+        toast.success(`${t("Đã nối")} ${count} ${t("video thường thành 1 file MP4")}`);
+      } catch (err: any) {
+        console.error("[handleMergeNormalVideos] Error:", err);
+        toast.error(err?.message || t("Lỗi khi nối video thường"));
+      } finally {
+        setMergingVideos(false);
+        setMergeVideosLabel("");
+      }
+    },
+    [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]
+  );
 
-  const handleMergeStitchVideos = useCallback(async () => {
-    if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
-    setMergingVideos(true);
-    setMergeVideosLabel(t("Video nối"));
-    try {
-      const count = await mergeSceneVideosAndDownload({
-        scenes,
-        kind: "stitch",
-        getGeneratedVideo,
-      });
-      toast.success(`${t("Đã nối")} ${count} ${t("video nối thành 1 file MP4")}`);
-    } catch (err: any) {
-      console.error("[handleMergeStitchVideos] Error:", err);
-      toast.error(err?.message || t("Lỗi khi nối video nối"));
-    } finally {
-      setMergingVideos(false);
-      setMergeVideosLabel("");
-    }
-  }, [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]);
+  const handleMergeStitchVideos = useCallback(
+    async (sceneIds?: string[]) => {
+      if (mergingVideos || videoBatchRunning || extendBatchRunning) return;
+      setMergingVideos(true);
+      setMergeVideosLabel(t("Video nối"));
+      try {
+        const count = await mergeSceneVideosAndDownload({
+          scenes,
+          kind: "stitch",
+          getGeneratedVideo,
+          sceneIds,
+        });
+        toast.success(`${t("Đã nối")} ${count} ${t("video nối thành 1 file MP4")}`);
+      } catch (err: any) {
+        console.error("[handleMergeStitchVideos] Error:", err);
+        toast.error(err?.message || t("Lỗi khi nối video nối"));
+      } finally {
+        setMergingVideos(false);
+        setMergeVideosLabel("");
+      }
+    },
+    [mergingVideos, videoBatchRunning, extendBatchRunning, scenes, getGeneratedVideo, toast, t]
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllImage: worker pool ──
@@ -1383,6 +1391,7 @@ export function useCopyVideoBatchActions(
     // Merge videos (ffmpeg)
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 

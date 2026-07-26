@@ -123,8 +123,14 @@ export async function mergeSceneVideosAndDownload<T extends SceneWithNumber>(opt
   kind: MergeVideoKind;
   getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>;
   fileName?: string;
+  /** Chỉ ghép các scene đã chọn (theo scene.id). Bỏ trống = tất cả scene đủ video. */
+  sceneIds?: string[];
 }): Promise<number> {
-  const { scenes, kind, getGeneratedVideo } = options;
+  const { kind, getGeneratedVideo, sceneIds } = options;
+  const scenes =
+    sceneIds && sceneIds.length > 0
+      ? options.scenes.filter((s) => sceneIds.includes(s.id))
+      : options.scenes;
 
   const items =
     kind === "stitch"
