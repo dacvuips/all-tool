@@ -45,6 +45,7 @@ yarn scrape-agent
 | GET | `/gpmlogin-profiles` | Danh sách profile |
 | GET | `/cdp-status` | Cookie/CDP session |
 | POST | `/open-browser` | Start profile + capture |
+| POST | `/create-profile` | Tạo profile GPM + gắn cookie/SPC_F + mở Shopee |
 | POST | `/product-page` | 1 trang product list |
 | POST | `/export-csv` | Xuất CSV session |
 

@@ -4,6 +4,7 @@
  * GET  /api/app/scrape-shopee-affiliate/gpmlogin-status
  * GET  /api/app/scrape-shopee-affiliate/gpmlogin-profiles
  * POST /api/app/scrape-shopee-affiliate/open-browser
+ * POST /api/app/scrape-shopee-affiliate/create-profile
  * GET  /api/app/scrape-shopee-affiliate/cdp-status
  * POST /api/app/scrape-shopee-affiliate/product-page
  * POST /api/app/scrape-shopee-affiliate/export-csv
@@ -12,6 +13,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import {
   buildCsvSession,
+  createShopeeAccountGpmProfile,
   exportCsvViaCdp,
   fetchProductPageViaCdp,
   getCdpStatus,
@@ -87,6 +89,44 @@ export default [
       } catch (err: any) {
         logger.error(`[scrape-shopee] open-browser: ${err?.message || err}`);
         return res.status(400).json({ ok: false, message: err?.message || "Không mở được trình duyệt" });
+      }
+    },
+  },
+  {
+    method: "post",
+    path: "/api/app/scrape-shopee-affiliate/create-profile",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        auth(req);
+        const result = await createShopeeAccountGpmProfile({
+          profileName: String(
+            req.body?.profileName || req.body?.username || req.body?.name || ""
+          ).trim(),
+          domain: req.body?.domain != null ? String(req.body.domain) : undefined,
+          cookie: req.body?.cookie != null ? String(req.body.cookie) : undefined,
+          spcF:
+            req.body?.spcF != null
+              ? String(req.body.spcF)
+              : req.body?.spc_f != null
+              ? String(req.body.spc_f)
+              : undefined,
+          username: req.body?.username != null ? String(req.body.username) : undefined,
+          password: req.body?.password != null ? String(req.body.password) : undefined,
+          proxy: req.body?.proxy != null ? String(req.body.proxy) : undefined,
+          note: req.body?.note != null ? String(req.body.note) : undefined,
+          keepOpen: req.body?.keepOpen !== false && req.body?.stopAfter !== true,
+        });
+        logger.info(
+          `[scrape-shopee] create-profile id=${result.profileId} host=${result.shopeeHost} cookies=${result.cookieCount}`
+        );
+        return res.status(200).json({ ok: true, ...result });
+      } catch (err: any) {
+        logger.error(`[scrape-shopee] create-profile: ${err?.message || err}`);
+        return res.status(400).json({
+          ok: false,
+          message: err?.message || "Không tạo được profile GPM Login",
+        });
       }
     },
   },

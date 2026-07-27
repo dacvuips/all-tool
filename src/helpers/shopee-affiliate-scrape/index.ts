@@ -36,15 +36,48 @@ export {
 
 export {
   closeGpmLoginProfile,
+  createGpmLoginGroup,
+  createGpmLoginProfile,
   DEFAULT_GPMLOGIN_API,
+  deleteGpmLoginProfile,
+  duplicateGpmLoginProfile,
+  getGpmLoginProfile,
   getGpmLoginRawProxy,
   getGpmLoginStatus,
+  listGpmLoginGroups,
   listGpmLoginProfiles,
+  openGpmLoginProfileFolder,
   parseDebugAddr,
   probeGpmLoginApi,
+  probeGpmLoginCdpPort,
+  probeGpmLoginRunningStatuses,
   startGpmLoginProfile,
+  toGpmLoginRawProxy,
+  updateGpmLoginProfile,
 } from "./gpmlogin-client";
-export type { GpmLoginProfile, GpmLoginStartResult } from "./gpmlogin-client";
+export type {
+  CreateGpmLoginProfileInput,
+  GpmLoginGroup,
+  GpmLoginProfile,
+  GpmLoginStartResult,
+  UpdateGpmLoginProfileInput,
+} from "./gpmlogin-client";
+
+export {
+  createShopeeAccountGpmProfile,
+  ensureSpcFInCookies,
+  parseCookieHeaderPairs,
+  refreshShopeeGpmProfileCookies,
+  resolveShopeeMallHost,
+  resolveShopeeLoginUrl,
+} from "./create-account-profile";
+export type {
+  CreateShopeeAccountGpmProfileInput,
+  CreateShopeeAccountGpmProfileResult,
+  RefreshShopeeGpmProfileCookiesInput,
+  RefreshShopeeGpmProfileCookiesResult,
+  SavedGpmProfileSession,
+} from "./create-account-profile";
 
 export {
   clearAffiliateHttpSession,

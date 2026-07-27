@@ -10,13 +10,24 @@
 import http from "http";
 import { URL } from "url";
 import {
+  createShopeeAccountGpmProfile,
   exportCsvViaCdp,
   fetchProductPageViaCdp,
   fetchAffiliateShortLinks,
   getCdpStatus,
   getGpmLoginStatus,
+  closeGpmLoginProfile,
+  createGpmLoginGroup,
+  deleteGpmLoginProfile,
+  duplicateGpmLoginProfile,
+  listGpmLoginGroups,
   listGpmLoginProfiles,
+  openGpmLoginProfileFolder,
   openAffiliateBrowser,
+  probeGpmLoginRunningStatuses,
+  refreshShopeeGpmProfileCookies,
+  startGpmLoginProfile,
+  updateGpmLoginProfile,
   buildCsvSession,
 } from "../../helpers/shopee-affiliate-scrape";
 import logger from "./console-logger";
@@ -128,8 +139,123 @@ async function handle(
     }
 
     if (method === "GET" && (path === "/gpmlogin-profiles" || path === "/api/gpmlogin-profiles")) {
-      const profiles = await listGpmLoginProfiles();
+      const groupId = String(url.searchParams.get("group_id") || url.searchParams.get("groupId") || "").trim();
+      const search = String(url.searchParams.get("search") || "").trim();
+      const profiles = await listGpmLoginProfiles({
+        groupId: groupId || undefined,
+        search: search || undefined,
+      });
       sendJson(res, 200, { ok: true, profiles }, req);
+      return;
+    }
+
+    if (method === "GET" && (path === "/gpmlogin-groups" || path === "/api/gpmlogin-groups")) {
+      const groups = await listGpmLoginGroups();
+      sendJson(res, 200, { ok: true, groups }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/gpmlogin-groups/create" || path === "/api/gpmlogin-groups/create")) {
+      const body = await readBody(req);
+      const group = await createGpmLoginGroup({
+        name: String(body?.name || "").trim(),
+        sortOrder:
+          body?.sortOrder != null && Number.isFinite(Number(body.sortOrder))
+            ? Number(body.sortOrder)
+            : undefined,
+      });
+      sendJson(res, 200, { ok: true, group }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/gpmlogin-profiles/start" || path === "/api/gpmlogin-profiles/start")) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      const remoteDebuggingPort = Number(body?.remoteDebuggingPort || body?.cdpPort || 0);
+      const started = await startGpmLoginProfile(profileId, {
+        winPos: body?.winPos ? String(body.winPos) : undefined,
+        winSize: body?.winSize ? String(body.winSize) : undefined,
+        additionalArgs: body?.additionalArgs ? String(body.additionalArgs) : undefined,
+        remoteDebuggingPort:
+          Number.isFinite(remoteDebuggingPort) && remoteDebuggingPort > 0
+            ? remoteDebuggingPort
+            : undefined,
+      });
+      sendJson(res, 200, { ok: true, ...started }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/gpmlogin-profiles/stop" || path === "/api/gpmlogin-profiles/stop")) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      await closeGpmLoginProfile(profileId);
+      sendJson(res, 200, { ok: true, profileId }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/gpmlogin-profiles/probe-running" || path === "/api/gpmlogin-profiles/probe-running")
+    ) {
+      const body = await readBody(req);
+      const rawItems = Array.isArray(body?.items)
+        ? body.items
+        : Array.isArray(body?.profiles)
+        ? body.profiles
+        : [];
+      const items = rawItems.map((it: any) => ({
+        profileId: String(it?.profileId || it?.id || "").trim(),
+        port: Number(it?.port) || undefined,
+      }));
+      const statuses = await probeGpmLoginRunningStatuses(items);
+      sendJson(res, 200, { ok: true, statuses }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/gpmlogin-profiles/update" || path === "/api/gpmlogin-profiles/update")) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      const updated = await updateGpmLoginProfile(profileId, {
+        name: body?.name != null ? String(body.name) : undefined,
+        groupId: body?.groupId != null ? String(body.groupId) : undefined,
+        rawProxy: body?.rawProxy != null ? String(body.rawProxy) : undefined,
+        note: body?.note != null ? String(body.note) : undefined,
+        startupUrls: body?.startupUrls != null ? String(body.startupUrls) : undefined,
+        taskBarTitle: body?.taskBarTitle != null ? String(body.taskBarTitle) : undefined,
+      });
+      sendJson(res, 200, { ok: true, profile: updated }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/gpmlogin-profiles/delete" || path === "/api/gpmlogin-profiles/delete")) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      const mode = String(body?.mode || "soft").toLowerCase() === "hard" ? "hard" : "soft";
+      await deleteGpmLoginProfile(profileId, mode);
+      sendJson(res, 200, { ok: true, profileId }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/gpmlogin-profiles/duplicate" || path === "/api/gpmlogin-profiles/duplicate")
+    ) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      const newName = body?.name != null ? String(body.name).trim() : undefined;
+      const profile = await duplicateGpmLoginProfile(profileId, newName);
+      sendJson(res, 200, { ok: true, profile }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/gpmlogin-profiles/open-folder" || path === "/api/gpmlogin-profiles/open-folder")
+    ) {
+      const body = await readBody(req);
+      const profileId = String(body?.profileId || body?.id || "").trim();
+      const folder = await openGpmLoginProfileFolder(profileId);
+      sendJson(res, 200, { ok: true, profileId, folder }, req);
       return;
     }
 
@@ -149,6 +275,49 @@ async function handle(
           ? String(body.profileId).trim()
           : undefined,
         allowChromeFallback: body?.allowChromeFallback === true,
+      });
+      sendJson(res, 200, { ok: true, ...result }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/create-profile" || path === "/api/create-profile")
+    ) {
+      const body = await readBody(req);
+      const result = await createShopeeAccountGpmProfile({
+        profileName: String(body?.profileName || body?.username || body?.name || "").trim(),
+        domain: body?.domain != null ? String(body.domain) : undefined,
+        cookie: body?.cookie != null ? String(body.cookie) : undefined,
+        spcF: body?.spcF != null ? String(body.spcF) : body?.spc_f != null ? String(body.spc_f) : undefined,
+        username: body?.username != null ? String(body.username) : undefined,
+        password: body?.password != null ? String(body.password) : undefined,
+        proxy: body?.proxy != null ? String(body.proxy) : undefined,
+        note: body?.note != null ? String(body.note) : undefined,
+        groupId: body?.groupId != null ? String(body.groupId).trim() : undefined,
+        keepOpen:
+          body?.keepOpen !== false &&
+          body?.keepOpen !== "false" &&
+          body?.stopAfter !== true &&
+          body?.stopAfter !== "true",
+      });
+      sendJson(res, 200, { ok: true, ...result }, req);
+      return;
+    }
+
+    if (
+      method === "POST" &&
+      (path === "/refresh-profile-cookies" || path === "/api/refresh-profile-cookies")
+    ) {
+      const body = await readBody(req);
+      const result = await refreshShopeeGpmProfileCookies({
+        profileId: String(body?.profileId || body?.id || "").trim(),
+        domain: body?.domain != null ? String(body.domain) : undefined,
+        username: body?.username != null ? String(body.username) : undefined,
+        password: body?.password != null ? String(body.password) : undefined,
+        cookie: body?.cookie != null ? String(body.cookie) : undefined,
+        spcF: body?.spcF != null ? String(body.spcF) : body?.spc_f != null ? String(body.spc_f) : undefined,
+        proxy: body?.proxy != null ? String(body.proxy) : undefined,
       });
       sendJson(res, 200, { ok: true, ...result }, req);
       return;

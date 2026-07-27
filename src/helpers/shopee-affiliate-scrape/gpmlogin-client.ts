@@ -9,6 +9,7 @@ import http from "http";
 import https from "https";
 import os from "os";
 import path from "path";
+import { execFile } from "child_process";
 import { URL } from "url";
 
 const DEFAULT_PORT = 9495;
@@ -47,6 +48,32 @@ export const DEFAULT_GPMLOGIN_API = resolveDefaultApiBase();
 export type GpmLoginProfile = {
   id: string;
   name: string;
+  groupId?: string;
+  rawProxy?: string;
+  note?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  storagePath?: string;
+  browserName?: string;
+  browserVersion?: string;
+  os?: string;
+  tags?: string[];
+  raw?: Record<string, unknown>;
+};
+
+export type UpdateGpmLoginProfileInput = {
+  name?: string;
+  groupId?: string;
+  rawProxy?: string;
+  note?: string;
+  startupUrls?: string;
+  taskBarTitle?: string;
+};
+
+export type GpmLoginGroup = {
+  id: string;
+  name: string;
+  sortOrder?: number;
   raw?: Record<string, unknown>;
 };
 
@@ -62,12 +89,23 @@ export type GpmLoginStartResult = {
 
 function httpJson<T = any>(
   urlStr: string,
-  options: { method?: string; timeoutMs?: number } = {}
+  options: { method?: string; timeoutMs?: number; body?: unknown } = {}
 ): Promise<{ status: number; json: T | null; text: string }> {
   const method = options.method || "GET";
   const timeoutMs = options.timeoutMs ?? 30000;
   const url = new URL(urlStr);
   const lib = url.protocol === "https:" ? https : http;
+  const bodyText =
+    options.body === undefined || options.body === null
+      ? ""
+      : typeof options.body === "string"
+      ? options.body
+      : JSON.stringify(options.body);
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (bodyText) {
+    headers["Content-Type"] = "application/json";
+    headers["Content-Length"] = String(Buffer.byteLength(bodyText));
+  }
 
   return new Promise((resolve, reject) => {
     const req = lib.request(
@@ -77,7 +115,7 @@ function httpJson<T = any>(
         port: url.port || (url.protocol === "https:" ? 443 : 80),
         path: `${url.pathname}${url.search}`,
         method,
-        headers: { Accept: "application/json" },
+        headers,
         timeout: timeoutMs,
       },
       (res) => {
@@ -102,7 +140,94 @@ function httpJson<T = any>(
       req.destroy();
       reject(new Error(`GPM Login API timeout (${timeoutMs}ms): ${urlStr}`));
     });
+    if (bodyText) req.write(bodyText);
     req.end();
+  });
+}
+
+/**
+ * Chuẩn hoá proxy app (host:port:user:pass) → raw_proxy GPM Login.
+ * Giữ nguyên nếu đã có scheme (http://, socks5://, …).
+ */
+export function toGpmLoginRawProxy(raw?: string | null): string {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return s;
+
+  const parts = s.split(":");
+  if (parts.length >= 4) {
+    const host = parts[0];
+    const port = parts[1];
+    const user = encodeURIComponent(parts[2] || "");
+    const pass = encodeURIComponent(parts.slice(3).join(":"));
+    return `http://${user}:${pass}@${host}:${port}`;
+  }
+  if (parts.length === 2 && parts[0] && parts[1]) {
+    return `http://${parts[0]}:${parts[1]}`;
+  }
+  return s;
+}
+
+export type CreateGpmLoginProfileInput = {
+  name: string;
+  rawProxy?: string;
+  startupUrls?: string;
+  note?: string;
+  groupId?: string;
+  taskBarTitle?: string;
+};
+
+/** Tạo profile mới — POST /api/v1/profiles/create */
+export async function createGpmLoginProfile(
+  input: CreateGpmLoginProfileInput
+): Promise<GpmLoginProfile> {
+  const name = String(input.name || "").trim();
+  if (!name) throw new Error("Thiếu tên profile GPM Login");
+
+  const body: Record<string, unknown> = {
+    name,
+    browser_type: 1,
+    os_type: 1,
+  };
+  const rawProxy = toGpmLoginRawProxy(input.rawProxy);
+  if (rawProxy) body.raw_proxy = rawProxy;
+  if (input.startupUrls) body.startup_urls = String(input.startupUrls).trim();
+  if (input.note) body.note = String(input.note).trim();
+  if (input.groupId) body.group_id = String(input.groupId).trim();
+  const taskBarTitle = String(input.taskBarTitle || name).trim();
+  if (taskBarTitle) body.task_bar_title = taskBarTitle;
+
+  return withResolvedBase(async (base) => {
+    const url = `${base}/api/v1/profiles/create`;
+    let res;
+    try {
+      res = await httpJson(url, { method: "POST", body, timeoutMs: 60000 });
+    } catch (err: any) {
+      throw new Error(
+        `Không tạo được profile GPM Login (${base}). App đang chạy? ${err?.message || ""}`.trim()
+      );
+    }
+
+    const json: any = res.json;
+    const ok = res.status < 400 && json?.success !== false;
+    const data = json?.data && typeof json.data === "object" ? json.data : json;
+    if (!ok) {
+      throw new Error(
+        `GPM Login tạo profile thất bại: ${
+          json?.message || json?.error || data?.message || res.text || `HTTP ${res.status}`
+        }`
+      );
+    }
+
+    const id = String(data?.id ?? data?.profile_id ?? data?.profileId ?? "").trim();
+    if (!id) {
+      throw new Error("GPM Login tạo profile OK nhưng thiếu id");
+    }
+    return {
+      id,
+      name: String(data?.name || name).trim() || name,
+      raw: data && typeof data === "object" ? data : undefined,
+    };
   });
 }
 
@@ -188,9 +313,69 @@ function normalizeProfileList(json: any): GpmLoginProfile[] {
       const id = String(p?.id ?? p?.profile_id ?? p?.profileId ?? "").trim();
       const name = String(p?.name ?? p?.profile_name ?? p?.title ?? (id || "No Name")).trim();
       if (!id) return null;
-      return { id, name: name || id, raw: p };
+      const groupId = String(p?.group_id ?? p?.groupId ?? "").trim() || undefined;
+      const rawProxy = String(p?.raw_proxy ?? p?.rawProxy ?? p?.proxy ?? "").trim() || undefined;
+      const note = String(p?.note ?? "").trim() || undefined;
+      const createdAt = String(p?.created_at ?? p?.createdAt ?? "").trim() || undefined;
+      const updatedAt = String(p?.updated_at ?? p?.updatedAt ?? "").trim() || undefined;
+      const storagePath =
+        String(p?.storage_path ?? p?.storagePath ?? p?.profile_path ?? "").trim() || undefined;
+      const browser =
+        p?.browser && typeof p.browser === "object" ? (p.browser as Record<string, unknown>) : null;
+      const browserName = String(
+        browser?.name ?? p?.browser_type ?? p?.browserType ?? ""
+      ).trim();
+      const browserVersion = String(
+        browser?.version ?? p?.browser_version ?? p?.browserVersion ?? ""
+      ).trim();
+      const os = String(p?.os ?? p?.os_type ?? "").trim() || undefined;
+      const tags = Array.isArray(p?.tags)
+        ? p.tags.map((t: unknown) => String(t || "").trim()).filter(Boolean)
+        : undefined;
+      return {
+        id,
+        name: name || id,
+        groupId,
+        rawProxy,
+        note,
+        createdAt,
+        updatedAt,
+        storagePath,
+        browserName: browserName || undefined,
+        browserVersion: browserVersion || undefined,
+        os,
+        tags,
+        raw: p,
+      };
     })
     .filter(Boolean) as GpmLoginProfile[];
+}
+
+function normalizeGroupList(json: any): GpmLoginGroup[] {
+  const items: any[] = Array.isArray(json?.data?.data)
+    ? json.data.data
+    : Array.isArray(json?.data)
+    ? json.data
+    : Array.isArray(json)
+    ? json
+    : Array.isArray(json?.groups)
+    ? json.groups
+    : [];
+
+  return items
+    .map((g) => {
+      const id = String(g?.id ?? g?.group_id ?? "").trim();
+      const name = String(g?.name ?? g?.group_name ?? "").trim();
+      if (!id) return null;
+      const sortOrder = Number(g?.sort_order ?? g?.sortOrder);
+      return {
+        id,
+        name: name || id,
+        sortOrder: Number.isFinite(sortOrder) ? sortOrder : undefined,
+        raw: g,
+      };
+    })
+    .filter(Boolean) as GpmLoginGroup[];
 }
 
 async function withResolvedBase<T>(
@@ -210,12 +395,21 @@ async function withResolvedBase<T>(
 export async function listGpmLoginProfiles(options?: {
   page?: number;
   perPage?: number;
+  search?: string;
+  /** Lọc theo group_id (client-side sau khi lấy list). */
+  groupId?: string;
 }): Promise<GpmLoginProfile[]> {
   const page = options?.page ?? 1;
   const perPage = options?.perPage ?? 500;
+  const search = String(options?.search || "").trim();
+  const groupId = String(options?.groupId || "").trim();
 
   return withResolvedBase(async (base) => {
-    const url = `${base}/api/v1/profiles?page=${page}&page_size=${perPage}`;
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("page_size", String(perPage));
+    if (search) params.set("search", search);
+    const url = `${base}/api/v1/profiles?${params.toString()}`;
     let res;
     try {
       res = await httpJson(url, { timeoutMs: 8000 });
@@ -235,7 +429,96 @@ export async function listGpmLoginProfiles(options?: {
       );
     }
 
-    return normalizeProfileList(res.json);
+    let list = normalizeProfileList(res.json);
+    if (groupId && groupId !== "all") {
+      list = list.filter((p) => String(p.groupId || "") === groupId);
+    }
+    return list;
+  });
+}
+
+/** Danh sách nhóm profile — GET /api/v1/groups */
+export async function listGpmLoginGroups(options?: {
+  page?: number;
+  perPage?: number;
+}): Promise<GpmLoginGroup[]> {
+  const page = options?.page ?? 1;
+  const perPage = options?.perPage ?? 200;
+
+  return withResolvedBase(async (base) => {
+    const url = `${base}/api/v1/groups?page=${page}&page_size=${perPage}`;
+    let res;
+    try {
+      res = await httpJson(url, { timeoutMs: 8000 });
+    } catch (err: any) {
+      throw new Error(
+        `Không lấy được nhóm GPM Login (${base}). ${err?.message || ""}`.trim()
+      );
+    }
+
+    if (res.status >= 400 || (res.json as any)?.success === false) {
+      throw new Error(
+        `GPM Login list groups lỗi HTTP ${res.status}: ${
+          (res.json as any)?.message || res.text
+        }`
+      );
+    }
+
+    const groups = normalizeGroupList(res.json);
+    // Đưa "all" / mặc định lên đầu nếu có
+    return groups.sort((a, b) => {
+      const ao = a.sortOrder ?? 9999;
+      const bo = b.sortOrder ?? 9999;
+      if (ao !== bo) return ao - bo;
+      return a.name.localeCompare(b.name);
+    });
+  });
+}
+
+/** Tạo nhóm profile — POST /api/v1/groups/create */
+export async function createGpmLoginGroup(input: {
+  name: string;
+  sortOrder?: number;
+}): Promise<GpmLoginGroup> {
+  const name = String(input.name || "").trim();
+  if (!name) throw new Error("Thiếu tên nhóm GPM Login");
+
+  const body: Record<string, unknown> = { name };
+  if (typeof input.sortOrder === "number" && Number.isFinite(input.sortOrder)) {
+    body.sort_order = input.sortOrder;
+  }
+
+  return withResolvedBase(async (base) => {
+    const url = `${base}/api/v1/groups/create`;
+    let res;
+    try {
+      res = await httpJson(url, { method: "POST", body, timeoutMs: 30000 });
+    } catch (err: any) {
+      throw new Error(
+        `Không tạo được nhóm GPM Login (${base}). ${err?.message || ""}`.trim()
+      );
+    }
+
+    const json: any = res.json;
+    const ok = res.status < 400 && json?.success !== false;
+    const data = json?.data && typeof json.data === "object" ? json.data : json;
+    if (!ok) {
+      throw new Error(
+        `GPM Login tạo nhóm thất bại: ${
+          json?.message || json?.error || data?.message || res.text || `HTTP ${res.status}`
+        }`
+      );
+    }
+
+    const id = String(data?.id ?? data?.group_id ?? "").trim();
+    if (!id) throw new Error("GPM Login tạo nhóm OK nhưng thiếu id");
+    const sortOrder = Number(data?.sort_order ?? data?.sortOrder);
+    return {
+      id,
+      name: String(data?.name || name).trim() || name,
+      sortOrder: Number.isFinite(sortOrder) ? sortOrder : undefined,
+      raw: data && typeof data === "object" ? data : undefined,
+    };
   });
 }
 
@@ -289,9 +572,142 @@ function extractStartDebug(data: any): {
   );
 }
 
+/** Chi tiết 1 profile — GET /api/v1/profiles/{id} */
+export async function getGpmLoginProfile(profileId: string): Promise<GpmLoginProfile> {
+  const id = String(profileId || "").trim();
+  if (!id) throw new Error("Thiếu GPM Login profileId");
+
+  return withResolvedBase(async (base) => {
+    const res = await httpJson(`${base}/api/v1/profiles/${encodeURIComponent(id)}`, {
+      timeoutMs: 15000,
+    });
+    const json: any = res.json;
+    const ok = res.status < 400 && json?.success !== false;
+    const data = json?.data && typeof json.data === "object" ? json.data : json;
+    if (!ok || !data) {
+      throw new Error(
+        `GPM Login get profile lỗi: ${json?.message || res.text || `HTTP ${res.status}`}`
+      );
+    }
+    const list = normalizeProfileList({ data: { data: [data] } });
+    const profile = list[0];
+    if (!profile) throw new Error("GPM Login không trả dữ liệu profile");
+    return profile;
+  });
+}
+
+/** Cập nhật profile — POST /api/v1/profiles/update/{id} */
+export async function updateGpmLoginProfile(
+  profileId: string,
+  input: UpdateGpmLoginProfileInput
+): Promise<GpmLoginProfile> {
+  const id = String(profileId || "").trim();
+  if (!id) throw new Error("Thiếu GPM Login profileId");
+
+  const body: Record<string, unknown> = {};
+  if (input.name != null) body.name = String(input.name).trim();
+  if (input.groupId != null) body.group_id = String(input.groupId).trim();
+  if (input.rawProxy != null) body.raw_proxy = toGpmLoginRawProxy(input.rawProxy);
+  if (input.note != null) body.note = String(input.note);
+  if (input.startupUrls != null) body.startup_urls = String(input.startupUrls).trim();
+  if (input.taskBarTitle != null) body.task_bar_title = String(input.taskBarTitle).trim();
+
+  return withResolvedBase(async (base) => {
+    const url = `${base}/api/v1/profiles/update/${encodeURIComponent(id)}`;
+    const res = await httpJson(url, { method: "POST", body, timeoutMs: 60000 });
+    const json: any = res.json;
+    const ok = res.status < 400 && json?.success !== false;
+    if (!ok) {
+      throw new Error(
+        `GPM Login cập nhật profile thất bại: ${
+          json?.message || json?.error || res.text || `HTTP ${res.status}`
+        }`
+      );
+    }
+    return getGpmLoginProfile(id);
+  });
+}
+
+/** Xóa profile — GET /api/v1/profiles/delete/{id}?mode=soft|hard
+ * GPM trả message `1/1` = OK, `0/1` = thất bại (thường vì browser đang mở).
+ * Luôn stop profile trước khi xóa.
+ */
+export async function deleteGpmLoginProfile(
+  profileId: string,
+  mode: "soft" | "hard" = "soft"
+): Promise<void> {
+  const id = String(profileId || "").trim();
+  if (!id) throw new Error("Thiếu GPM Login profileId");
+
+  // Profile đang mở → GPM trả success=false, message="0/1"
+  try {
+    await closeGpmLoginProfile(id);
+  } catch {
+    // ignore — có thể đã đóng
+  }
+  await new Promise((r) => setTimeout(r, 500));
+
+  await withResolvedBase(async (base) => {
+    const tryDelete = async (deleteMode: "soft" | "hard") => {
+      const url = `${base}/api/v1/profiles/delete/${encodeURIComponent(id)}?mode=${deleteMode}`;
+      const res = await httpJson(url, { timeoutMs: 30000 });
+      const json: any = res.json;
+      const ok = res.status < 400 && json?.success !== false;
+      return { ok, json, res };
+    };
+
+    let result = await tryDelete(mode);
+    if (!result.ok) {
+      // Retry: stop lại rồi xóa soft
+      try {
+        await closeGpmLoginProfile(id);
+      } catch {
+        // ignore
+      }
+      await new Promise((r) => setTimeout(r, 800));
+      result = await tryDelete(mode);
+    }
+
+    // Soft vẫn fail → thử hard (xóa hẳn)
+    if (!result.ok && mode === "soft") {
+      result = await tryDelete("hard");
+    }
+
+    if (!result.ok) {
+      const rawMsg = String(result.json?.message || result.json?.error || result.res.text || "").trim();
+      const hint =
+        rawMsg === "0/1"
+          ? "Không xóa được (0/1) — đóng browser profile trong GPM Login rồi thử lại"
+          : rawMsg || `HTTP ${result.res.status}`;
+      throw new Error(`GPM Login xóa profile thất bại: ${hint}`);
+    }
+  });
+}
+
+/** Nhân bản profile (lấy chi tiết → tạo mới). */
+export async function duplicateGpmLoginProfile(
+  profileId: string,
+  newName?: string
+): Promise<GpmLoginProfile> {
+  const source = await getGpmLoginProfile(profileId);
+  const name = String(newName || `${source.name} (copy)`).trim();
+  return createGpmLoginProfile({
+    name,
+    groupId: source.groupId,
+    rawProxy: source.rawProxy,
+    note: source.note,
+    taskBarTitle: name,
+  });
+}
+
 export async function startGpmLoginProfile(
   profileId: string,
-  options?: { winPos?: string; winSize?: string; additionalArgs?: string }
+  options?: {
+    winPos?: string;
+    winSize?: string;
+    additionalArgs?: string;
+    remoteDebuggingPort?: number;
+  }
 ): Promise<GpmLoginStartResult> {
   const id = String(profileId || "").trim();
   if (!id) throw new Error("Thiếu GPM Login profileId");
@@ -301,6 +717,9 @@ export async function startGpmLoginProfile(
   if (options?.winPos) params.set("window_pos", options.winPos);
   if (options?.winSize) params.set("window_size", options.winSize);
   if (options?.additionalArgs) params.set("addition_args", options.additionalArgs);
+  if (options?.remoteDebuggingPort && options.remoteDebuggingPort > 0) {
+    params.set("remote_debugging_port", String(options.remoteDebuggingPort));
+  }
   params.set("skip_proxy_check", "true");
 
   const qs = params.toString();
@@ -360,16 +779,58 @@ export async function startGpmLoginProfile(
 export async function closeGpmLoginProfile(profileId: string): Promise<void> {
   const id = String(profileId || "").trim();
   if (!id) return;
+  let lastErr: any;
   for (const base of apiBasesToTry()) {
     try {
-      await httpJson(`${base}/api/v1/profiles/stop/${encodeURIComponent(id)}`, {
+      const res = await httpJson(`${base}/api/v1/profiles/stop/${encodeURIComponent(id)}`, {
         timeoutMs: 15000,
       });
-      return;
-    } catch {
-      // try next
+      const json: any = res.json;
+      // GPM thường trả success=true kể cả khi profile đã đóng
+      if (res.status < 400 && json?.success !== false) return;
+      lastErr = new Error(json?.message || res.text || `HTTP ${res.status}`);
+    } catch (err) {
+      lastErr = err;
     }
   }
+  if (lastErr) {
+    throw new Error(
+      `Không đóng được profile GPM Login: ${lastErr?.message || lastErr}`
+    );
+  }
+}
+
+/** Kiểm tra CDP port còn sống (profile đang mở). */
+export async function probeGpmLoginCdpPort(
+  port: number,
+  timeoutMs = 1200
+): Promise<boolean> {
+  const p = Number(port);
+  if (!Number.isFinite(p) || p <= 0) return false;
+  try {
+    const { probeCdpEndpoint } = await import("./open-chrome");
+    return await probeCdpEndpoint(p, timeoutMs);
+  } catch {
+    return false;
+  }
+}
+
+export async function probeGpmLoginRunningStatuses(
+  items: Array<{ profileId: string; port?: number }>
+): Promise<Array<{ profileId: string; running: boolean; port?: number }>> {
+  const out: Array<{ profileId: string; running: boolean; port?: number }> = [];
+  for (const item of items) {
+    const profileId = String(item.profileId || "").trim();
+    if (!profileId) continue;
+    const port = Number(item.port) || 0;
+    if (port > 0) {
+      const alive = await probeGpmLoginCdpPort(port, 1000);
+      out.push({ profileId, running: alive, port: alive ? port : undefined });
+    } else {
+      out.push({ profileId, running: false });
+    }
+  }
+  return out;
 }
 
 /** Lấy raw_proxy của profile. */
@@ -425,4 +886,48 @@ export async function getGpmLoginStatus(): Promise<{
     }
   }
   return { online: false, apiBase: DEFAULT_GPMLOGIN_API };
+}
+
+function resolveGpmProfileFolder(storagePath: string): string | null {
+  const key = String(storagePath || "").trim();
+  if (!key) return null;
+  if (path.isAbsolute(key) && fs.existsSync(key)) return key;
+
+  const home = os.homedir();
+  const candidates = [
+    path.join(home, "AppData", "Local", "GPMLoginGlobal", "profiles", key),
+    path.join(home, "AppData", "Roaming", "GPMLoginGlobal", "profiles", key),
+    path.join(home, "AppData", "Local", "GPMLogin", "profiles", key),
+    path.join(home, "AppData", "Roaming", "GPMLogin", "profiles", key),
+    path.join("D:", "PhanMem", "tool", "GPMLoginGlobal", "profiles", key),
+  ];
+  for (const folder of candidates) {
+    if (fs.existsSync(folder)) return folder;
+  }
+  return null;
+}
+
+/** Mở thư mục dữ liệu profile trên máy local (Windows/macOS/Linux). */
+export async function openGpmLoginProfileFolder(profileId: string): Promise<string> {
+  const profile = await getGpmLoginProfile(profileId);
+  const folder = resolveGpmProfileFolder(profile.storagePath || profile.id);
+  if (!folder) {
+    throw new Error(
+      `Không tìm thấy thư mục profile (${profile.storagePath || profile.id}). Kiểm tra GPM Login đã cài đặt.`
+    );
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    if (process.platform === "win32") {
+      execFile("explorer.exe", [folder], (err) => (err ? reject(err) : resolve()));
+      return;
+    }
+    if (process.platform === "darwin") {
+      execFile("open", [folder], (err) => (err ? reject(err) : resolve()));
+      return;
+    }
+    execFile("xdg-open", [folder], (err) => (err ? reject(err) : resolve()));
+  });
+
+  return folder;
 }

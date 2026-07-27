@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  HiClock,
+  HiDesktopComputer,
   HiDownload,
   HiOutlineTrash,
   HiPencil,
@@ -14,14 +14,15 @@ import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
+import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import {
-  clearCookieFetchHistory,
-  cookieFetchActionLabel,
-  cookieFetchActionTone,
-  CookieFetchHistoryEntry,
-  loadCookieFetchHistory,
-} from "../cookie-fetch-history";
-import { downloadCsvText } from "../scrape/api";
+  createGpmLoginGroupAction,
+  createGpmProfileFromUser,
+  downloadCsvText,
+  fetchGpmLoginGroups,
+  fetchGpmLoginProfiles,
+  GpmLoginGroupOption,
+} from "../scrape/api";
 import {
   PanelListCard,
   PanelListMatchCount,
@@ -30,12 +31,45 @@ import {
   panelListClasses,
   panelListRowClass,
 } from "../shared/panel-list-ui";
-import { AffiliatePlusProxy, AffiliatePlusUser, extractSpcFFromCookie, filterShopeeCookieAppString, formatCookieRemaining, formatMaybeExcelDate, getCookieLifeColor, getCookieRemainingMs, normalizeMailKp, normalizeShopeeAccountDomain, parseBacVietTheoExcelColumns, parseCompoundMailKpCookie, parseUserImportLine, resolveUserProxy, SHOPEE_ACCOUNT_DOMAINS } from "../types";
+import { AffiliatePlusProxy, AffiliatePlusUser, extractSpcFFromCookie, formatMaybeExcelDate, getShopeeHostByDomain, normalizeMailKp, normalizeShopeeAccountDomain, parseBacVietTheoExcelColumns, parseCompoundMailKpCookie, parseUserImportLine, resolveAccountOriginCookie, resolveAccountSpcF, resolveUserCookie, resolveUserProxy, SHOPEE_ACCOUNT_DOMAINS } from "../types";
+import { UsersProfilesPanel } from "./users-profiles-panel";
 
 interface UsersPanelProps {
   users: AffiliatePlusUser[];
   proxies: AffiliatePlusProxy[];
   onUpdateUsers: (users: AffiliatePlusUser[]) => void;
+}
+
+/** Profile GPM còn tồn tại (đối chiếu API, không dựa cdpPort cũ trên tài khoản). */
+function isGpmProfileLinked(user: AffiliatePlusUser, validGpmIds: Set<string>): boolean {
+  const id = String(user.gpmProfileId || "").trim();
+  return Boolean(id && validGpmIds.has(id));
+}
+
+/** Xóa gpmProfileId/cdpPort lưu local nếu profile đã bị xóa khỏi GPM. */
+function stripStaleGpmLink(user: AffiliatePlusUser, validGpmIds: Set<string>): AffiliatePlusUser {
+  if (isGpmProfileLinked(user, validGpmIds)) return user;
+  const id = String(user.gpmProfileId || "").trim();
+  const port = Number(user.cdpPort || 0);
+  const hasStalePort = Number.isFinite(port) && port > 0;
+  if (!id && !hasStalePort) return user;
+  const next = { ...user };
+  delete next.gpmProfileId;
+  delete next.cdpPort;
+  return next;
+}
+
+function syncUsersWithGpmProfiles(
+  users: AffiliatePlusUser[],
+  validGpmIds: Set<string>
+): { users: AffiliatePlusUser[]; changed: boolean } {
+  let changed = false;
+  const next = users.map((u) => {
+    const synced = stripStaleGpmLink(u, validGpmIds);
+    if (synced !== u) changed = true;
+    return synced;
+  });
+  return { users: changed ? next : users, changed };
 }
 
 /**
@@ -226,49 +260,242 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
-  const [nowTick, setNowTick] = useState(() => Date.now());
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyFilterUserId, setHistoryFilterUserId] = useState<string>("");
-  const [historyEntries, setHistoryEntries] = useState<CookieFetchHistoryEntry[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [usersSubTab, setUsersSubTab] = useState(0);
+  const [batchCreating, setBatchCreating] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(
+    null
+  );
+  const [batchDialogOpen, setBatchDialogOpen] = useState(false);
+  const [batchGroups, setBatchGroups] = useState<GpmLoginGroupOption[]>([]);
+  const [batchGroupId, setBatchGroupId] = useState("");
+  const [batchGroupsLoading, setBatchGroupsLoading] = useState(false);
+  const [batchTargetCount, setBatchTargetCount] = useState(0);
+  const [batchSkipCreated, setBatchSkipCreated] = useState(0);
+  const [batchSkipMissing, setBatchSkipMissing] = useState(0);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const usersRef = useRef(users);
+  usersRef.current = users;
 
   useEffect(() => {
     const timer = setTimeout(() => setSearchTerm(searchQuery.trim()), 250);
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Tick mỗi 30s để đếm ngược hạn cookie 6 ngày đổi màu
-  useEffect(() => {
-    const id = setInterval(() => setNowTick(Date.now()), 30000);
-    return () => clearInterval(id);
-  }, []);
+  const getUserCreatePayload = (user: AffiliatePlusUser) => {
+    const accountName = String(user.username || user.mail || user.email || "").trim();
+    const domain = normalizeShopeeAccountDomain(user.domain);
+    const host = getShopeeHostByDomain(domain);
+    const profileName = accountName ? `${accountName} · ${host}` : "";
+    const cookie = resolveAccountOriginCookie(user);
+    const spcF = resolveAccountSpcF(user);
+    const username = String(user.username || "").trim() || accountName;
+    const password = String(user.password || "").trim();
+    return { profileName, accountName, cookie, spcF, domain, username, password };
+  };
 
-  const refreshCookieHistory = async (filterUserId?: string) => {
-    setHistoryLoading(true);
+  const canCreateGpmProfile = (user: AffiliatePlusUser) => {
+    const { accountName, cookie, spcF } = getUserCreatePayload(user);
+    return Boolean(accountName && (cookie || spcF) && spcF);
+  };
+
+  const applyUserProfileResult = (userId: string, patch: Partial<AffiliatePlusUser>) => {
+    const next = usersRef.current.map((u) => (u.id === userId ? { ...u, ...patch } : u));
+    usersRef.current = next;
+    onUpdateUsers(next);
+  };
+
+  /** Luôn mở Dialog — đối chiếu GPM thực tế trước khi đếm «đã tạo». */
+  const handleOpenBatchCreateDialog = async () => {
+    if (batchCreating) return;
+
+    setNewGroupName("");
+    setBatchDialogOpen(true);
+    setBatchGroupsLoading(true);
     try {
-      const list = await loadCookieFetchHistory();
-      const uid = filterUserId === undefined ? historyFilterUserId : filterUserId;
-      setHistoryEntries(uid ? list.filter((e) => e.userId === uid) : list);
-    } catch {
-      setHistoryEntries([]);
+      const [groups, gpmProfiles] = await Promise.all([
+        fetchGpmLoginGroups(),
+        fetchGpmLoginProfiles(),
+      ]);
+      const validGpmIds = new Set(gpmProfiles.map((p) => p.id));
+
+      const { users: syncedUsers, changed } = syncUsersWithGpmProfiles(
+        usersRef.current,
+        validGpmIds
+      );
+      if (changed) {
+        usersRef.current = syncedUsers;
+        onUpdateUsers(syncedUsers);
+      }
+
+      const checked = syncedUsers.filter((u) => selectedIds.has(u.id));
+      const eligible = checked.filter(canCreateGpmProfile);
+      const targets = eligible.filter((u) => !isGpmProfileLinked(u, validGpmIds));
+      const alreadyDone = eligible.length - targets.length;
+      const missingData = checked.length - eligible.length;
+
+      setBatchTargetCount(targets.length);
+      setBatchSkipCreated(alreadyDone);
+      setBatchSkipMissing(missingData);
+
+      setBatchGroups(groups);
+      setBatchGroupId((prev) => {
+        if (prev && groups.some((g) => g.id === prev)) return prev;
+        return groups[0]?.id || "";
+      });
+    } catch (err: any) {
+      setBatchGroups([]);
+      setBatchGroupId("");
+      setBatchTargetCount(0);
+      setBatchSkipCreated(0);
+      setBatchSkipMissing(0);
+      toast.error(String(err?.message || err || "Không tải được nhóm profile"));
     } finally {
-      setHistoryLoading(false);
+      setBatchGroupsLoading(false);
     }
   };
 
-  const openCookieHistory = (userId = "") => {
-    setHistoryFilterUserId(userId);
-    setHistoryOpen(true);
-    void refreshCookieHistory(userId);
+  const handleCreateNewBatchGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name || creatingGroup) return;
+    setCreatingGroup(true);
+    try {
+      const group = await createGpmLoginGroupAction({ name });
+      setBatchGroups((prev) => {
+        const next = [group, ...prev.filter((g) => g.id !== group.id)];
+        return next;
+      });
+      setBatchGroupId(group.id);
+      setNewGroupName("");
+      toast.success(`${t("Đã tạo nhóm") as string}: ${group.name}`);
+    } catch (err: any) {
+      toast.error(String(err?.message || err || "Không tạo được nhóm"));
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
+  /** Hàng loạt: chỉ tạo cho tài khoản đã check + chưa có profile GPM, gắn vào nhóm đã chọn. */
+  const handleCreateAllGpmProfiles = async (groupId: string) => {
+    if (batchCreating) return;
+    const selectedGroupId = String(groupId || "").trim();
+    if (!selectedGroupId) {
+      toast.warn(t("Chọn nhóm Profile trước khi tạo") as string);
+      return;
+    }
+
+    if (!selectedIds.size) {
+      toast.warn(t("Hãy chọn (check) ít nhất 1 tài khoản trước khi tạo Profile") as string);
+      return;
+    }
+
+    let currentUsers = usersRef.current;
+    let validGpmIds = new Set<string>();
+    try {
+      const gpmProfiles = await fetchGpmLoginProfiles();
+      validGpmIds = new Set(gpmProfiles.map((p) => p.id));
+      const { users: syncedUsers, changed } = syncUsersWithGpmProfiles(currentUsers, validGpmIds);
+      if (changed) {
+        currentUsers = syncedUsers;
+        usersRef.current = syncedUsers;
+        onUpdateUsers(syncedUsers);
+      }
+    } catch {
+      // Agent/GPM offline — vẫn cho tạo nếu chưa có gpmProfileId
+    }
+
+    const checked = currentUsers.filter((u) => selectedIds.has(u.id));
+    const eligible = checked.filter(canCreateGpmProfile);
+    const targets = eligible.filter((u) => !isGpmProfileLinked(u, validGpmIds));
+    const alreadyDone = eligible.length - targets.length;
+    const missingData = checked.length - eligible.length;
+
+    if (!targets.length) {
+      toast.warn(
+        t("Trong các tài khoản đã chọn không còn tài khoản nào đủ dữ liệu để tạo profile") as string
+      );
+      return;
+    }
+
+    setBatchDialogOpen(false);
+    setBatchCreating(true);
+    setBatchProgress({ done: 0, total: targets.length });
+    let ok = 0;
+    let fail = 0;
+
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const user = targets[i];
+        setBatchProgress({ done: i, total: targets.length });
+        const { profileName, cookie, spcF, domain, username, password } = getUserCreatePayload(user);
+        try {
+          const result = await createGpmProfileFromUser({
+            profileName,
+            domain,
+            cookie: cookie || undefined,
+            spcF: spcF || undefined,
+            username: username || undefined,
+            password: password || undefined,
+            proxy: resolveUserProxy(user) || undefined,
+            note: user.mail || user.email || undefined,
+            groupId: selectedGroupId,
+            keepOpen: false,
+          });
+          applyUserProfileResult(user.id, {
+            gpmProfileId: result.profileId,
+            cdpPort: result.profileStopped ? undefined : result.cdpPort || undefined,
+            error: "",
+            ...(result.savedSession && result.loggedIn
+              ? {
+                  username: result.savedSession.username || user.username,
+                  password: result.savedSession.password || user.password,
+                  cookie: result.savedSession.cookie || user.cookie,
+                  cookieApp: result.savedSession.cookie || user.cookieApp,
+                  spcF: result.savedSession.spcF || user.spcF,
+                  proxy: result.savedSession.proxy || user.proxy,
+                  cookieFetchedAt: result.savedSession.cookieFetchedAt,
+                }
+              : {}),
+          });
+          ok += 1;
+        } catch (err: any) {
+          const msg = String(err?.message || err || "Tạo profile thất bại");
+          applyUserProfileResult(user.id, { error: msg });
+          fail += 1;
+        }
+        setBatchProgress({ done: i + 1, total: targets.length });
+        if (i < targets.length - 1) {
+          await new Promise((r) => setTimeout(r, 800));
+        }
+      }
+
+      const skipHint =
+        alreadyDone + missingData > 0
+          ? ` · ${t("bỏ qua") as string} ${alreadyDone + missingData}`
+          : "";
+      if (fail === 0) {
+        toast.success(
+          `${t("Tạo Profile tự động xong") as string}: ${ok}/${targets.length}${skipHint}`
+        );
+      } else {
+        toast.warn(
+          `${t("Tạo Profile tự động") as string}: ${t("thành công") as string} ${ok}, ${
+            t("lỗi") as string
+          } ${fail}${skipHint}`
+        );
+      }
+    } finally {
+      setBatchCreating(false);
+      setBatchProgress(null);
+    }
   };
 
   const stats = useMemo(() => {
     const total = users.length;
     const active = users.filter((u) => u.active !== false).length;
     const inactive = total - active;
-    const error = users.filter((u) => Boolean(String(u.error || "").trim())).length;
     const withProxy = users.filter((u) => Boolean(resolveUserProxy(u))).length;
-    return { total, active, inactive, error, withProxy };
+    return { total, active, inactive, withProxy };
   }, [users]);
 
   const normalizedTerm = useMemo(() => searchTerm.toLowerCase(), [searchTerm]);
@@ -282,14 +509,9 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
         user.mail || user.email,
         user.mailKp,
         user.cookie,
-        user.cookieApp,
         user.password,
         user.spcF,
         resolveUserProxy(user),
-        user.error,
-        user.generateItems?.map((g) => g.productName).join(" "),
-        user.generateItems?.map((g) => g.productId).join(" "),
-        user.generateItems?.map((g) => g.caption).join(" "),
       ]
         .join(" ")
         .toLowerCase();
@@ -390,12 +612,9 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
           role: "user",
           mailKp: normalizeMailKp(form.mailKp),
           cookie: form.cookie.trim(),
-          cookieApp: filterShopeeCookieAppString(form.cookieApp),
+          cookieApp: "",
           password: form.password.trim(),
-          spcF:
-            extractSpcFFromCookie(form.cookieApp) ||
-            extractSpcFFromCookie(form.cookie) ||
-            form.spcF.trim(),
+          spcF: extractSpcFFromCookie(form.cookie) || form.spcF.trim(),
           domain: normalizeShopeeAccountDomain(form.domain),
           proxy: form.proxy.trim(),
           error: "",
@@ -417,12 +636,12 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                 mail: form.mail.trim(),
                 mailKp: normalizeMailKp(form.mailKp),
                 cookie: form.cookie.trim(),
-                cookieApp: filterShopeeCookieAppString(form.cookieApp),
+                // Giữ cookieApp / generateItems — tab này chỉ sửa tài khoản thô
                 password: form.password.trim(),
                 spcF:
-                  extractSpcFFromCookie(form.cookieApp) ||
                   extractSpcFFromCookie(form.cookie) ||
-                  form.spcF.trim(),
+                  form.spcF.trim() ||
+                  u.spcF,
                 domain: normalizeShopeeAccountDomain(form.domain),
                 proxy: form.proxy.trim(),
                 createdAt: form.createdAt.trim() || u.createdAt,
@@ -883,6 +1102,21 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
 
   return (
     <div className="space-y-4">
+      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+        <TabGroup
+          name="users-management-sub"
+          index={usersSubTab}
+          onChange={setUsersSubTab}
+          flex
+          hasInkBar={false}
+          className="!bg-transparent"
+          tabClassName="h-11 justify-center border-r border-gray-200 last:border-r-0 bg-gray-50"
+          activeClassName="!text-primary-dark bg-success-light"
+          titleClassName="text-sm font-bold whitespace-nowrap"
+          bodyClassName="border-t border-gray-200 bg-white"
+        >
+          <TabGroup.Tab label={t("Quản lý tài khoản")}>
+            <div className="p-4 space-y-4">
       <div className="flex flex-wrap gap-2">
         {[
           {
@@ -916,14 +1150,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             border: "#cbd5e1",
             text: "#475569",
             dot: "#94a3b8",
-          },
-          {
-            label: t("Lỗi"),
-            value: stats.error,
-            bg: "#fff1f2",
-            border: "#fb7185",
-            text: "#e11d48",
-            dot: "#f43f5e",
           },
         ].map((s) => (
           <div
@@ -1037,17 +1263,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
 
 <button
               type="button"
-              onClick={() => openCookieHistory("")}
-              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border shadow-sm hover:opacity-90"
-              style={{ backgroundColor: "#ecfeff", borderColor: "#22d3ee", color: "#0e7490" }}
-              title={t("Xem lịch sử cookie (IndexedDB)") as string}
-            >
-              <HiClock className="text-base" />
-              {t("Lịch sử cookie")}
-            </button>
-
-            <button
-              type="button"
               onClick={() => void downloadSampleExcel()}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border hover:opacity-90"
               style={{ backgroundColor: "#fef9c3", borderColor: "#fbbf24", color: "#ca8a04" }}
@@ -1067,8 +1282,27 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             </button>
             <button
               type="button"
+              onClick={() => void handleOpenBatchCreateDialog()}
+              disabled={!users.length || batchCreating}
+              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ backgroundColor: batchCreating ? "#059669" : "#047857" }}
+              title={
+                t(
+                  "Mở dialog chọn nhóm → tạo Profile GPM Login cho tài khoản đã chọn"
+                ) as string
+              }
+            >
+              <HiDesktopComputer className="text-base" />
+              {batchCreating && batchProgress
+                ? `${t("Đang tạo…") as string} ${batchProgress.done}/${batchProgress.total}`
+                : `${t("Tạo Profile tự động") as string}${
+                    selectedIds.size > 0 ? ` (${selectedIds.size})` : ""
+                  }`}
+            </button>
+            <button
+              type="button"
               onClick={handleSyncProxies}
-              disabled={!users.length || !proxies.length}
+              disabled={!users.length || !proxies.length || batchCreating}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold text-white rounded-lg shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
               style={
                 !users.length || !proxies.length
@@ -1096,18 +1330,14 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
           </div>
         </div>
         <p className="mt-2 text-xs text-gray-500">
-          {t("TXT/Excel")}:{" "}
-          <code className="px-1.5 py-0.5 bg-gray-100 rounded">
-            A–G … | H domain (.vn/.ph)
-          </code>
+          {t("Tài khoản thô")}: Username · Domain · mail · mailkp · cookie · mk · spc_f · proxy
           {" · "}
-          {t("TXT nên dùng TAB")} (export Excel → TXT){" · "}
-          {t("hoặc")}:{" "}
+          {t("Tạo Profile tự động")}: {t("chỉ tài khoản đã check + chưa có profile GPM")}
+          {" · "}
+          {t("TXT/Excel")}:{" "}
           <code className="px-1.5 py-0.5 bg-gray-100 rounded">
             Username|mail|mailkp|cookie|ngay|mk|spc_f|domain
           </code>
-          {" · "}
-          {t("Đồng bộ Proxy")}: 1 account ↔ 1 proxy (không trùng lắp)
         </p>
       </div>
 
@@ -1133,7 +1363,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             </PanelListToolbar>
 
             <div className="overflow-x-auto">
-              <table className={panelListClasses.table} style={{ minWidth: 1600 }}>
+              <table className={panelListClasses.table} style={{ minWidth: 1200 }}>
                 <thead>
                   <tr className={panelListClasses.theadTr}>
                     <th className={`${panelListClasses.th} w-12`}>
@@ -1150,22 +1380,18 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                     <th className={`${panelListClasses.th} text-left`}>mail</th>
                     <th className={`${panelListClasses.th} text-left`}>mailkp</th>
                     <th className={`${panelListClasses.th} text-left`}>cookie</th>
-                    <th className={`${panelListClasses.th} text-left`}>Cookies App</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("ngày tạo")}</th>
                     <th className={`${panelListClasses.th} text-left`}>{t("Mật khẩu")}</th>
                     <th className={`${panelListClasses.th} text-left`}>Cookie spc_f</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Hạn cookie")}</th>
-                    <th className={`${panelListClasses.th} text-left`}>{t("Item Generate")}</th>
+                    <th className={`${panelListClasses.th} text-left`}>{t("ngày tạo")}</th>
                     <th className={`${panelListClasses.th} text-left`}>Proxy</th>
-                    <th className={`${panelListClasses.th} text-center`}>Lỗi</th>
                     <th className={`${panelListClasses.th} text-center`}>{t("Kích hoạt")}</th>
-                    <th className={`${panelListClasses.th} w-40 text-center`}>{t("Thao tác")}</th>
+                    <th className={`${panelListClasses.th} w-28 text-center`}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
                 <tbody className={panelListClasses.tbody}>
                   {filteredUsers.length === 0 ? (
                     <tr>
-                      <td colSpan={17} className={panelListClasses.emptyMatch}>
+                      <td colSpan={13} className={panelListClasses.emptyMatch}>
                         {t("Không có người dùng nào khớp tìm kiếm.")}
                       </td>
                     </tr>
@@ -1210,22 +1436,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                             {user.cookie || "-"}
                           </span>
                         </td>
-                        <td className="px-4 py-3" style={{ maxWidth: 280 }}>
-                          <span
-                            className="inline-block px-2 py-1 max-w-full font-mono text-xs truncate rounded border"
-                            style={{
-                              color: user.cookieApp ? "#0f766e" : "#9ca3af",
-                              backgroundColor: user.cookieApp ? "#f0fdfa" : "#f9fafb",
-                              borderColor: user.cookieApp ? "#99f6e4" : "#e5e7eb",
-                            }}
-                            title={user.cookieApp || undefined}
-                          >
-                            {user.cookieApp || "-"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
-                          {user.createdAt || "-"}
-                        </td>
                         <td className="px-4 py-3 font-mono text-xs text-gray-700">
                           {user.password || "-"}
                         </td>
@@ -1234,60 +1444,8 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                             {user.spcF || "-"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {user.cookieFetchedAt ? (
-                            (() => {
-                              const remain = getCookieRemainingMs(user, nowTick);
-                              return (
-                                <span
-                                  className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded border"
-                                  style={{
-                                    color: getCookieLifeColor(remain),
-                                    borderColor: getCookieLifeColor(remain),
-                                    backgroundColor: "rgba(255,255,255,0.9)",
-                                  }}
-                                  title={
-                                    t("Còn hiệu lực kể từ lần lấy cookie (6 ngày)") as string
-                                  }
-                                >
-                                  {formatCookieRemaining(remain)}
-                                </span>
-                              );
-                            })()
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3" style={{ maxWidth: 200 }}>
-                          {(user.generateItems?.length || 0) > 0 ? (
-                            <div className="min-w-0">
-                              <div className="text-xs font-semibold text-gray-800">
-                                {t("{{count}} video/SP", {
-                                  count: user.generateItems!.length,
-                                })}
-                              </div>
-                              <div
-                                className="text-gray-400 truncate text-10"
-                                title={
-                                  user
-                                    .generateItems!.map(
-                                      (g) => g.productName || g.productId || g.itemId
-                                    )
-                                    .filter(Boolean)
-                                    .join(", ") || undefined
-                                }
-                              >
-                                {user.generateItems![0].productName ||
-                                  user.generateItems![0].productId ||
-                                  "—"}
-                                {user.generateItems!.length > 1
-                                  ? ` +${user.generateItems!.length - 1}`
-                                  : ""}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
+                        <td className="px-4 py-3 text-xs text-gray-600 whitespace-nowrap">
+                          {user.createdAt || "-"}
                         </td>
                         <td
                           className="px-4 py-3 font-mono text-xs truncate text-pink"
@@ -1295,7 +1453,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                         >
                           {resolveUserProxy(user) || "-"}
                         </td>
-                        <td className="px-4 py-3 text-center text-gray-500">{user.error || "-"}</td>
                         <td className="px-4 py-3">
                           <div
                             className="flex justify-center items-center"
@@ -1315,15 +1472,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex gap-1.5 justify-center items-center">
-                            <button
-                              type="button"
-                              onClick={() => openCookieHistory(user.id)}
-                              className="flex justify-center items-center w-8 h-8 text-cyan-700 bg-cyan-50 rounded-full border border-cyan-200 shadow-sm hover:bg-cyan-100"
-                              title={t("Lịch sử cookie của tài khoản") as string}
-                            >
-                              <HiClock className="text-sm" />
-                            </button>
-
                             <button
                               type="button"
                               onClick={() => openEdit(user)}
@@ -1351,6 +1499,172 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
           </>
         )}
       </PanelListCard>
+            </div>
+          </TabGroup.Tab>
+
+          <TabGroup.Tab label={t("Quản lý Profile")}>
+            <div className="p-4">
+              <UsersProfilesPanel />
+            </div>
+          </TabGroup.Tab>
+        </TabGroup>
+      </div>
+
+      <Dialog
+        isOpen={batchDialogOpen}
+        onClose={() => {
+          if (!batchCreating && !creatingGroup) setBatchDialogOpen(false);
+        }}
+        title={t("Tạo Profile tự động")}
+        icon={<HiDesktopComputer />}
+        width="480px"
+        maxWidth="95vw"
+        slideFromBottom="mobile-only"
+        extraHeaderClass="!z-0"
+        extraBodyClass="relative z-20"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Dialog.Body>
+          <div
+            className="pt-1 space-y-4"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="p-3 text-sm text-gray-700 bg-emerald-50 rounded-lg border border-emerald-100">
+              <div>
+                {t("Đã chọn")}: <strong>{selectedIds.size}</strong>
+              </div>
+              <div className="mt-1">
+                {t("Sẽ tạo (đã chọn, chưa có profile GPM)")}: <strong>{batchTargetCount}</strong>
+              </div>
+              {batchSkipCreated > 0 ? (
+                <div className="mt-1 text-xs text-gray-500">
+                  {t("Bỏ qua (đã tạo)")}: {batchSkipCreated}
+                </div>
+              ) : null}
+              {batchSkipMissing > 0 ? (
+                <div className="mt-1 text-xs text-gray-500">
+                  {t("Bỏ qua (thiếu dữ liệu)")}: {batchSkipMissing}
+                </div>
+              ) : null}
+              {!selectedIds.size ? (
+                <div className="mt-2 text-xs text-amber-700">
+                  {t("Hãy chọn (check) ít nhất 1 tài khoản trước khi tạo Profile")}
+                </div>
+              ) : batchTargetCount === 0 ? (
+                <div className="mt-2 text-xs text-amber-700">
+                  {batchSkipCreated > 0 && batchSkipMissing === 0
+                    ? t("Các tài khoản đã chọn đều đã có profile GPM")
+                    : t(
+                        "Trong các tài khoản đã chọn không còn tài khoản nào đủ dữ liệu để tạo profile"
+                      )}
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <span className="block mb-1.5 text-sm font-medium text-gray-700">
+                {t("Nhóm Profile")}
+              </span>
+              {batchGroupsLoading ? (
+                <div className="text-sm text-gray-400">{t("Đang tải nhóm…")}</div>
+              ) : batchGroups.length === 0 ? (
+                <div className="text-sm text-amber-700">
+                  {t("Chưa có nhóm — hãy tạo nhóm mới bên dưới")}
+                </div>
+              ) : (
+                <div
+                  className="overflow-y-auto relative z-30 max-h-48 rounded-lg border border-gray-200 divide-y divide-gray-100"
+                  role="radiogroup"
+                  aria-label={t("Nhóm Profile") as string}
+                >
+                  {batchGroups.map((g) => {
+                    const selected = String(batchGroupId) === String(g.id);
+                    return (
+                      <label
+                        key={g.id}
+                        className={`flex gap-2 items-center px-3 py-2.5 w-full text-left cursor-pointer transition-colors select-none ${
+                          selected ? "bg-emerald-50" : "bg-white hover:bg-gray-50"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="batch-gpm-group"
+                          value={g.id}
+                          checked={selected}
+                          onChange={() => setBatchGroupId(String(g.id))}
+                          className="w-4 h-4 text-emerald-600 border-gray-300 shrink-0 focus:ring-emerald-500"
+                        />
+                        <span className="text-sm font-medium text-gray-800">{g.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <span className="block mb-1.5 text-sm font-medium text-gray-700">
+                {t("Tạo nhóm Profile mới")}
+              </span>
+              <div className="flex gap-2">
+                <input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      void handleCreateNewBatchGroup();
+                    }
+                  }}
+                  placeholder={t("Tên nhóm mới…") as string}
+                  className="flex-1 px-3 h-10 text-sm bg-white rounded border border-gray-300 outline-none focus:border-emerald-500"
+                  disabled={creatingGroup}
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleCreateNewBatchGroup()}
+                  disabled={!newGroupName.trim() || creatingGroup}
+                  className="inline-flex gap-1 items-center px-3 h-10 text-sm font-semibold text-white whitespace-nowrap rounded-lg disabled:opacity-50"
+                  style={{ backgroundColor: "#047857" }}
+                >
+                  <HiPlus className="text-base" />
+                  {creatingGroup ? t("Đang tạo…") : t("Tạo nhóm")}
+                </button>
+              </div>
+              <p className="m-0 mt-2 text-xs text-gray-500">
+                {t("Sau khi tạo, nhóm mới sẽ được chọn mặc định để gắn profile.")}
+              </p>
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setBatchDialogOpen(false)}
+                disabled={batchCreating || creatingGroup}
+                className="px-4 h-9 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50"
+              >
+                {t("Hủy")}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCreateAllGpmProfiles(batchGroupId)}
+                disabled={
+                  !batchGroupId ||
+                  !batchTargetCount ||
+                  !selectedIds.size ||
+                  batchGroupsLoading ||
+                  batchCreating ||
+                  creatingGroup
+                }
+                className="px-4 h-9 text-sm font-bold text-white rounded-lg disabled:opacity-50"
+                style={{ backgroundColor: "#047857" }}
+              >
+                {t("Bắt đầu tạo")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Body>
+      </Dialog>
 
       <Dialog
         isOpen={!!editUser}
@@ -1404,19 +1718,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
               />
             </label>
 
-            <label className="block">
-              <span className="block mb-1.5 text-sm font-medium text-gray-700">Cookies App</span>
-              <textarea
-                value={form.cookieApp}
-                onChange={(e) => setForm((f) => ({ ...f, cookieApp: e.target.value }))}
-                rows={3}
-                placeholder={t("Cookie App — dán thủ công hoặc nhập từ Excel/TXT") as string}
-                className="px-3 py-2 w-full text-sm rounded border border-teal-300 outline-none focus:border-teal-500 bg-teal-50/40"
-              />
-              <span className="block mt-1 text-xs text-gray-500">
-                {t("Cookie dùng khi đăng video — chỉnh sửa thủ công nếu cần")}
-              </span>
-            </label>
 
             <label className="block">
               <span className="block mb-1.5 text-sm font-medium text-gray-700">
@@ -1499,149 +1800,6 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
         </Dialog.Body>
       </Dialog>
 
-      <Dialog
-        isOpen={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        title={t("Lịch sử lấy cookie") as string}
-        width="920px"
-        maxWidth="94vw"
-      >
-        <Dialog.Body>
-          <div className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-2 items-center justify-between">
-              <div className="flex flex-wrap gap-2 items-center">
-                <label className="text-sm text-gray-600">{t("Tài khoản")}</label>
-                <select
-                  value={historyFilterUserId}
-                  onChange={(e) => {
-                    const uid = e.target.value;
-                    setHistoryFilterUserId(uid);
-                    void refreshCookieHistory(uid);
-                  }}
-                  className="h-9 min-w-[200px] rounded-lg border border-gray-300 px-2 text-sm outline-none focus:border-cyan-500"
-                >
-                  <option value="">{t("Tất cả tài khoản")}</option>
-                  {users.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.username}
-                      {u.domain ? ` (.${normalizeShopeeAccountDomain(u.domain)})` : ""}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => void refreshCookieHistory()}
-                  className="inline-flex h-9 items-center gap-1 rounded-lg border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <HiRefresh className="text-base" />
-                  {t("Tải lại")}
-                </button>
-              </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!window.confirm(String(t("Xóa toàn bộ lịch sử lấy cookie?")))) return;
-                  await clearCookieFetchHistory();
-                  setHistoryEntries([]);
-                  toast.success(t("Đã xóa lịch sử cookie"));
-                }}
-                className="inline-flex h-9 items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-3 text-sm font-medium text-rose-700 hover:bg-rose-100"
-              >
-                <HiOutlineTrash className="text-base" />
-                {t("Xóa lịch sử")}
-              </button>
-            </div>
-
-            <div className="text-xs text-gray-500">
-              {historyLoading
-                ? t("Đang tải...")
-                : t("{{count}} thao tác (lưu IndexedDB, tối đa 800)", {
-                    count: historyEntries.length,
-                  })}
-            </div>
-
-            <div className="overflow-auto max-h-[60vh] rounded-xl border border-gray-200">
-              <table className="min-w-full text-sm">
-                <thead className="sticky top-0 bg-slate-50 text-left text-xs text-gray-600">
-                  <tr>
-                    <th className="px-3 py-2 font-semibold">{t("Thời gian")}</th>
-                    <th className="px-3 py-2 font-semibold">Username</th>
-                    <th className="px-3 py-2 font-semibold">Domain</th>
-                    <th className="px-3 py-2 font-semibold">{t("Thao tác")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Chi tiết")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {historyEntries.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-3 py-8 text-center text-gray-400">
-                        {historyLoading
-                          ? t("Đang tải...")
-                          : t("Chưa có lịch sử cookie")}
-                      </td>
-                    </tr>
-                  ) : (
-                    historyEntries.map((entry) => {
-                      const tone = cookieFetchActionTone(entry.action);
-                      const toneClass =
-                        tone === "ok"
-                          ? "text-emerald-700 bg-emerald-50 border-emerald-200"
-                          : tone === "warn"
-                            ? "text-amber-700 bg-amber-50 border-amber-200"
-                            : tone === "error"
-                              ? "text-rose-700 bg-rose-50 border-rose-200"
-                              : "text-sky-700 bg-sky-50 border-sky-200";
-                      const when = new Date(entry.createdAt);
-                      return (
-                        <tr key={entry.id} className="border-t border-gray-100 align-top">
-                          <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-600">
-                            {when.toLocaleDateString("vi-VN", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "2-digit",
-                            })}{" "}
-                            {when.toLocaleTimeString("vi-VN", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              second: "2-digit",
-                            })}
-                          </td>
-                          <td className="px-3 py-2 font-medium text-gray-900">
-                            {entry.username || "—"}
-                          </td>
-                          <td className="px-3 py-2 font-mono text-xs text-sky-700">
-                            {entry.domain ? `.${entry.domain}` : "—"}
-                          </td>
-                          <td className="px-3 py-2">
-                            <span
-                              className={`inline-flex rounded border px-2 py-0.5 text-xs font-semibold ${toneClass}`}
-                            >
-                              {cookieFetchActionLabel(entry.action)}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-xs text-gray-700">
-                            <div>{entry.message || "—"}</div>
-                            {entry.spcFPreview ? (
-                              <div className="mt-1 font-mono text-[11px] text-gray-500 truncate max-w-[360px]">
-                                SPC_F: {entry.spcFPreview}
-                              </div>
-                            ) : null}
-                            {entry.cookiePreview ? (
-                              <div className="mt-0.5 font-mono text-[11px] text-gray-400 truncate max-w-[360px]">
-                                cookie: {entry.cookiePreview}
-                              </div>
-                            ) : null}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Dialog.Body>
-      </Dialog>
     </div>
   );
 }

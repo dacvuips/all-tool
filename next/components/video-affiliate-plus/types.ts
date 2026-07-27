@@ -190,6 +190,14 @@ export interface AffiliatePlusUser {
    * Hiệu lực đếm ngược 6 ngày kể từ mốc này.
    */
   cookieFetchedAt?: string;
+  /** Id profile GPM Login đã tạo từ tài khoản này */
+  gpmProfileId?: string;
+  /**
+   * Port CDP lần tạo/mở profile gần nhất.
+   * Có giá trị (>0) = đã tạo profile GPM; chưa có = chưa tạo.
+   * Dùng để batch «Tạo Profile tự động» bỏ qua tài khoản đã xử lý.
+   */
+  cdpPort?: number;
   proxy?: string;
   error?: string;
   active: boolean;
@@ -713,6 +721,35 @@ export function resolveUserCookie(user: Partial<AffiliatePlusUser> | null | unde
   const spcF = String(user?.spcF || "").trim();
   if (spcF) return `spc_f=${spcF}`;
   return "";
+}
+
+/** Cookie gốc tài khoản (import Excel/TXT) — dùng khi tạo GPM profile từ tab Quản lý tài khoản. */
+export function resolveAccountOriginCookie(
+  user: Partial<AffiliatePlusUser> | null | undefined
+): string {
+  const cookie = String(user?.cookie || "").trim();
+  if (cookie) return cookie;
+  const cookieApp = String(user?.cookieApp || "").trim();
+  if (cookieApp) return cookieApp;
+  const spcF = resolveAccountSpcF(user);
+  if (spcF) return `spc_f=${spcF}`;
+  return "";
+}
+
+/**
+ * SPC_F lưu tại tài khoản gốc (cột spcF).
+ * Chỉ fallback sang cookie gốc — không lấy từ cookieApp để tránh lệch giá trị.
+ */
+export function resolveAccountSpcF(user: Partial<AffiliatePlusUser> | null | undefined): string {
+  const direct = String(user?.spcF || "").trim();
+  if (direct) {
+    const eq = direct.indexOf("=");
+    if (eq > 0 && /^SPC_F$/i.test(direct.slice(0, eq).trim())) {
+      return direct.slice(eq + 1).trim();
+    }
+    return direct;
+  }
+  return extractSpcFFromCookie(user?.cookie);
 }
 
 export function resolveUserProxy(user: Partial<AffiliatePlusUser> | null | undefined): string {

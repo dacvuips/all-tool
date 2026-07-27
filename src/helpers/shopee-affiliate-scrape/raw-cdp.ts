@@ -286,6 +286,64 @@ export class RawCdpClient {
     await new Promise<void>((r) => setTimeout(r, waitMs));
   }
 
+  /**
+   * Gắn cookie vào browser profile qua CDP (Network.setCookie).
+   * `domainHost` = shopee.vn / shopee.ph / … (không có dấu chấm đầu).
+   */
+  async setCookiesForHost(
+    domainHost: string,
+    cookies: Array<{ name: string; value: string }>
+  ): Promise<number> {
+    const host = String(domainHost || "")
+      .trim()
+      .replace(/^\.+/, "")
+      .toLowerCase();
+    if (!host) return 0;
+    const url = `https://${host}/`;
+    const cookieDomain = `.${host}`;
+    const expires = Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30;
+    await this.send("Network.enable").catch((): undefined => undefined);
+
+    let applied = 0;
+    const sorted = cookies.slice().sort((a, b) => {
+      const aSpc = /^SPC_F$/i.test(a.name) ? 0 : 1;
+      const bSpc = /^SPC_F$/i.test(b.name) ? 0 : 1;
+      return aSpc - bSpc;
+    });
+    for (const c of sorted) {
+      const name = String(c.name || "").trim();
+      const value = String(c.value ?? "");
+      if (!name) continue;
+      try {
+        const result = await this.send("Network.setCookie", {
+          url,
+          name,
+          value,
+          domain: cookieDomain,
+          path: "/",
+          secure: true,
+          expires,
+        });
+        if (result?.success !== false) applied += 1;
+      } catch {
+        try {
+          const result = await this.send("Network.setCookie", {
+            url,
+            name,
+            value,
+            path: "/",
+            secure: true,
+            expires,
+          });
+          if (result?.success !== false) applied += 1;
+        } catch {
+          // bỏ cookie không set được
+        }
+      }
+    }
+    return applied;
+  }
+
   /** Trạng thái trang hiện tại — dùng để bắt login / sai origin. */
   async getPageAuthState(expectedHost: string): Promise<{
     href: string;
@@ -496,6 +554,262 @@ export class RawCdpClient {
         windowState: "normal",
       },
     });
+  }
+
+  /** Captcha Shopee: «Verify to Continue», «Please slide to complete the puzzle», … */
+  async hasShopeeCaptchaVisible(): Promise<boolean> {
+    return this.evaluateJson(
+      `(() => {
+        const isVisible = (el) => {
+          if (!el || !(el instanceof Element)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width >= 8 && rect.height >= 8;
+        };
+        const body = String(document.body?.innerText || "");
+        if (/Verify to Continue/i.test(body) && /slide to complete the puzzle/i.test(body)) return true;
+        if (/Xác minh để tiếp tục/i.test(body) && /Kéo thanh để hoàn thành/i.test(body)) return true;
+        const nodes = document.querySelectorAll("div, section, aside, dialog");
+        for (const el of nodes) {
+          if (!isVisible(el)) continue;
+          const text = String(el.innerText || "");
+          if (text.length < 12 || text.length > 4000) continue;
+          const hasTitle =
+            /Verify to Continue/i.test(text) ||
+            /Xác minh để tiếp tục/i.test(text) ||
+            /Security Verification/i.test(text) ||
+            /Xác minh bảo mật/i.test(text);
+          const hasSlideHint =
+            /Please slide to complete the puzzle/i.test(text) ||
+            /slide to complete the puzzle/i.test(text) ||
+            /Kéo thanh để hoàn thành/i.test(text);
+          const hasImageHint =
+            /select all (images|pictures)/i.test(text) ||
+            /Please select/i.test(text) ||
+            /Chọn tất cả/i.test(text);
+          if (hasTitle && (hasSlideHint || hasImageHint)) return true;
+          if (hasTitle) {
+            for (const m of el.querySelectorAll("canvas, img")) {
+              if (!isVisible(m)) continue;
+              const r = m.getBoundingClientRect();
+              if (r.width >= 80 && r.height >= 80) return true;
+            }
+          }
+        }
+        return false;
+      })()`,
+      8000
+    );
+  }
+
+  /**
+   * Dừng và chờ user giải captcha trên cửa sổ GPM.
+   * Chỉ trả solved=true khi captcha biến mất.
+   */
+  async waitForShopeeCaptchaResolved(
+    captchaWaitMs = 300000
+  ): Promise<{ solved: boolean; hadCaptcha: boolean }> {
+    const hadCaptcha = await this.hasShopeeCaptchaVisible().catch(() => false);
+    if (!hadCaptcha) return { solved: true, hadCaptcha: false };
+
+    const started = Date.now();
+    while (Date.now() - started < captchaWaitMs) {
+      const visible = await this.hasShopeeCaptchaVisible().catch(() => false);
+      if (!visible) {
+        await new Promise((r) => setTimeout(r, 800));
+        const stillGone = !(await this.hasShopeeCaptchaVisible().catch(() => false));
+        if (stillGone) return { solved: true, hadCaptcha: true };
+      }
+      await new Promise((r) => setTimeout(r, 600));
+    }
+
+    const stillVisible = await this.hasShopeeCaptchaVisible().catch(() => false);
+    return { solved: !stillVisible, hadCaptcha: true };
+  }
+
+  /**
+   * Điền form Shopee buyer login và bấm LOG IN.
+   * Gọi sau khi đã gắn SPC_F + cookies lên đúng domain.
+   */
+  async attemptShopeeBuyerLogin(
+    username: string,
+    password: string,
+    options?: { formWaitMs?: number; captchaWaitMs?: number; afterClickMs?: number }
+  ): Promise<{
+    ok: boolean;
+    error?: string;
+    captcha?: boolean;
+    clicked?: boolean;
+    navigated?: boolean;
+  }> {
+    const user = String(username || "").trim();
+    const pass = String(password || "");
+    if (!user || !pass) {
+      return { ok: false, error: "Thiếu username/password" };
+    }
+
+    const formWaitMs = options?.formWaitMs ?? 20000;
+    const captchaWaitMs = options?.captchaWaitMs ?? 120000;
+    const afterClickMs = options?.afterClickMs ?? 30000;
+    const timeoutMs = formWaitMs + captchaWaitMs + afterClickMs + 15000;
+
+    const userJson = JSON.stringify(user);
+    const passJson = JSON.stringify(pass);
+
+    return this.evaluateJson(
+      `(async () => {
+        const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+        const username = ${userJson};
+        const password = ${passJson};
+        const formWaitMs = ${formWaitMs};
+        const captchaWaitMs = ${captchaWaitMs};
+        const afterClickMs = ${afterClickMs};
+
+        const isVisible = (el) => {
+          if (!el || !(el instanceof Element)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width >= 8 && rect.height >= 8;
+        };
+
+        const hasCaptcha = () => {
+          const nodes = document.querySelectorAll("div, section, aside, dialog");
+          for (const el of nodes) {
+            if (!isVisible(el)) continue;
+            const text = String(el.innerText || "");
+            if (text.length < 12 || text.length > 4000) continue;
+            const hasTitle =
+              /Verify to Continue/i.test(text) ||
+              /Xác minh để tiếp tục/i.test(text) ||
+              /Security Verification/i.test(text) ||
+              /Xác minh bảo mật/i.test(text);
+            const hasSlideHint =
+              /Please slide to complete the puzzle/i.test(text) ||
+              /slide to complete the puzzle/i.test(text) ||
+              /Kéo thanh để hoàn thành/i.test(text);
+            const hasImageHint =
+              /select all (images|pictures)/i.test(text) ||
+              /Please select/i.test(text) ||
+              /Chọn tất cả/i.test(text);
+            if (hasTitle && (hasSlideHint || hasImageHint)) return true;
+            if (hasTitle) {
+              for (const m of el.querySelectorAll("canvas, img")) {
+                if (!isVisible(m)) continue;
+                const r = m.getBoundingClientRect();
+                if (r.width >= 80 && r.height >= 80) return true;
+              }
+            }
+          }
+          return false;
+        };
+
+        const findLoginKey = () =>
+          document.querySelector('input[name="loginKey"]') ||
+          document.querySelector('input[placeholder*="Phone number"]') ||
+          document.querySelector('input[placeholder*="Username"]') ||
+          document.querySelector('input[type="text"][autocomplete="on"]');
+
+        const findPassword = () =>
+          document.querySelector('input[name="password"]') ||
+          document.querySelector('input[type="password"]');
+
+        const findLoginButton = () => {
+          const buttons = Array.from(document.querySelectorAll("button"));
+          return (
+            buttons.find((b) => /^(LOG IN|Log In|Đăng nhập|ĐĂNG NHẬP)$/i.test(String(b.textContent || "").trim())) ||
+            buttons.find((b) => /log\\s*in|đăng\\s*nhập/i.test(String(b.textContent || ""))) ||
+            null
+          );
+        };
+
+        const setNativeValue = (input, value) => {
+          const proto = window.HTMLInputElement.prototype;
+          const desc = Object.getOwnPropertyDescriptor(proto, "value");
+          if (desc?.set) desc.set.call(input, value);
+          else input.value = value;
+          input.dispatchEvent(new Event("input", { bubbles: true }));
+          input.dispatchEvent(new Event("change", { bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+        };
+
+        const waitForCaptchaSolved = async (timeoutMs) => {
+          if (!hasCaptcha()) return true;
+          const started = Date.now();
+          while (Date.now() - started < timeoutMs) {
+            if (!hasCaptcha()) {
+              await sleep(800);
+              if (!hasCaptcha()) return true;
+            }
+            await sleep(400);
+          }
+          return !hasCaptcha();
+        };
+
+        const waitForLoginForm = async (timeoutMs) => {
+          const started = Date.now();
+          while (Date.now() - started < timeoutMs) {
+            if (hasCaptcha()) {
+              const ok = await waitForCaptchaSolved(captchaWaitMs);
+              if (!ok) return { captchaTimeout: true };
+              continue;
+            }
+            const loginKey = findLoginKey();
+            const passwordEl = findPassword();
+            if (loginKey && passwordEl && isVisible(loginKey) && isVisible(passwordEl)) {
+              return { loginKey, passwordEl };
+            }
+            await sleep(300);
+          }
+          return {};
+        };
+
+        const onLoginPage = () =>
+          /login|signin|authenticate|buyer\\/login|seller\\/login/i.test(
+            String(location.href || "") + String(location.pathname || "")
+          ) || !!document.querySelector('input[type="password"]');
+
+        const form = await waitForLoginForm(formWaitMs);
+        if (form.captchaTimeout) {
+          return { ok: false, captcha: true, error: "Hết thời gian chờ giải captcha" };
+        }
+        if (!form.loginKey || !form.passwordEl) {
+          if (!onLoginPage()) return { ok: true, navigated: true };
+          return { ok: false, error: "Không thấy form login" };
+        }
+
+        setNativeValue(form.loginKey, username);
+        setNativeValue(form.passwordEl, password);
+        await sleep(1200);
+
+        if (hasCaptcha()) {
+          const ok = await waitForCaptchaSolved(captchaWaitMs);
+          if (!ok) return { ok: false, captcha: true, error: "Hết thời gian chờ giải captcha" };
+        }
+
+        const btn = findLoginButton();
+        if (!btn) return { ok: false, error: "Không tìm thấy nút LOG IN" };
+        btn.click();
+
+        const watchUntil = Date.now() + afterClickMs;
+        while (Date.now() < watchUntil) {
+          if (hasCaptcha()) {
+            const ok = await waitForCaptchaSolved(captchaWaitMs);
+            if (!ok) return { ok: false, captcha: true, error: "Hết thời gian chờ giải captcha" };
+            const btn2 = findLoginButton();
+            if (btn2 && isVisible(btn2)) btn2.click();
+            await sleep(1000);
+          }
+          if (!onLoginPage()) return { ok: true, navigated: true, clicked: true };
+          await sleep(400);
+        }
+
+        if (!onLoginPage()) return { ok: true, navigated: true, clicked: true };
+        return { ok: true, clicked: true };
+      })()`,
+      timeoutMs
+    );
   }
 
   close(): void {

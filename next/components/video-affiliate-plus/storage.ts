@@ -215,6 +215,15 @@ function normalizeUser(raw: Partial<AffiliatePlusUser>): AffiliatePlusUser {
     spcF,
     domain: normalizeShopeeAccountDomain((raw as AffiliatePlusUser).domain || (raw as any).country),
     cookieFetchedAt: cookieFetchedAt || undefined,
+    gpmProfileId: String(
+      (raw as AffiliatePlusUser).gpmProfileId || (raw as any).gpm_profile_id || ""
+    ).trim() || undefined,
+    cdpPort: (() => {
+      const n = Number(
+        (raw as AffiliatePlusUser).cdpPort ?? (raw as any).cdp_port ?? 0
+      );
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
+    })(),
     proxy: String(raw.proxy || ""),
     error: String(raw.error || ""),
     active: raw.active !== false,
