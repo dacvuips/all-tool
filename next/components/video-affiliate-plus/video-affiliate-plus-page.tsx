@@ -2,8 +2,12 @@ import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft } from "react-icons/hi";
-import { RiVideoAddLine } from "react-icons/ri";
+import { RiLoginBoxLine, RiVideoAddLine } from "react-icons/ri";
 import { useScreen } from "../../lib/hooks/useScreen";
+import { useAuth } from "../../lib/providers/auth-provider";
+import { useGlobalContext } from "../../lib/providers/global-provider";
+import { Button } from "../shared/utilities/form";
+import { Spinner } from "../shared/utilities/misc";
 import { TabGroup } from "../shared/utilities/tab/tab-group";
 import { ShopeeUploadFlowPanel } from "../shopee-video-upload/panels/upload-flow-panel";
 import {
@@ -148,6 +152,8 @@ export default function VideoAffiliatePlusPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const sm = useScreen("sm");
+  const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
 
   const [activeTab, setActiveTab] = useState(1);
   const [items, setItems] = useState<AffiliatePlusItem[]>([]);
@@ -381,46 +387,43 @@ export default function VideoAffiliatePlusPage() {
     skipCountSyncRef.current = false;
   }, []);
 
-  const handleDeleteHistorySession = useCallback(
-    async (sessionId: string) => {
-      const deletingCurrent = selectedHistoryIdRef.current === sessionId;
-      if (deletingCurrent) {
-        itemsRef.current.forEach((item) => {
-          if (item.mergedVideoUrl?.startsWith("blob:")) {
-            try {
-              URL.revokeObjectURL(item.mergedVideoUrl);
-            } catch {
-              // ignore
-            }
-          }
-        });
-      }
-
-      skipCountSyncRef.current = true;
-      try {
-        const { history, nextSelectedId } = await deleteImportHistorySession(sessionId);
-        setImportHistory(history);
-        setSelectedHistoryId(nextSelectedId);
-        selectedHistoryIdRef.current = nextSelectedId;
-
-        if (deletingCurrent) {
-          if (nextSelectedId) {
-            const sessionItems = await getSessionItems(nextSelectedId);
-            const hydrated = await hydrateMergedVideoUrls(sessionItems, nextSelectedId);
-            setItems(hydrated);
-          } else {
-            setItems([]);
+  const handleDeleteHistorySession = useCallback(async (sessionId: string) => {
+    const deletingCurrent = selectedHistoryIdRef.current === sessionId;
+    if (deletingCurrent) {
+      itemsRef.current.forEach((item) => {
+        if (item.mergedVideoUrl?.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(item.mergedVideoUrl);
+          } catch {
+            // ignore
           }
         }
-      } catch (err) {
-        console.warn("[video-affiliate-plus] delete history session failed", err);
-        throw err;
-      } finally {
-        skipCountSyncRef.current = false;
+      });
+    }
+
+    skipCountSyncRef.current = true;
+    try {
+      const { history, nextSelectedId } = await deleteImportHistorySession(sessionId);
+      setImportHistory(history);
+      setSelectedHistoryId(nextSelectedId);
+      selectedHistoryIdRef.current = nextSelectedId;
+
+      if (deletingCurrent) {
+        if (nextSelectedId) {
+          const sessionItems = await getSessionItems(nextSelectedId);
+          const hydrated = await hydrateMergedVideoUrls(sessionItems, nextSelectedId);
+          setItems(hydrated);
+        } else {
+          setItems([]);
+        }
       }
-    },
-    []
-  );
+    } catch (err) {
+      console.warn("[video-affiliate-plus] delete history session failed", err);
+      throw err;
+    } finally {
+      skipCountSyncRef.current = false;
+    }
+  }, []);
 
   const handleAddLog = useCallback(
     (message: string, level: AffiliatePlusLog["level"] = "info", threadId?: string) => {
@@ -468,7 +471,65 @@ export default function VideoAffiliatePlusPage() {
 
     return () => clearInterval(interval);
   }, [handleAddLog, scheduleCountSync, t]);
+  // undefined = đang xác thực; null = chưa đăng nhập (giống auth-provider / AI tools)
+  if (customer === undefined) {
+    return (
+      <div className="flex justify-center items-center min-h-screen bg-gray-100">
+        <Spinner />
+      </div>
+    );
+  }
 
+  if (customer === null) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <div className="text-white bg-primary">
+          <div className="px-4 mx-auto w-full">
+            <div className="flex gap-4 justify-between items-center py-1">
+              <div className="flex gap-3 items-center">
+                <div
+                  onClick={() => router.back()}
+                  className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
+                >
+                  <HiArrowLeft />
+                  {sm && <span>{t("Quay lại")}</span>}
+                </div>
+                <div className="w-px h-5 bg-white/30" />
+                <div className="flex gap-2 items-center">
+                  <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
+                    <RiVideoAddLine className="text-2xl" />
+                  </div>
+                  <div>
+                    <h1 className="m-0 text-lg font-bold sm:text-xl">
+                      {t("XƯỞNG VIDEO AFFILIATE MANAGER")}
+                    </h1>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-4 justify-center items-center px-4 py-20 mx-auto text-center">
+          <div className="flex justify-center items-center w-16 h-16 rounded-2xl bg-primary/10 text-primary">
+            <RiLoginBoxLine className="text-3xl" />
+          </div>
+          <div>
+            <h2 className="m-0 text-xl font-bold text-gray-800">{t("Yêu cầu đăng nhập")}</h2>
+            <p className="mt-2 mb-0 text-sm text-gray-500">
+              {t("Vui lòng đăng nhập để sử dụng tính năng này")}
+            </p>
+          </div>
+          <Button
+            primary
+            icon={<RiLoginBoxLine />}
+            text={t("Đăng nhập")}
+            className="px-5 h-10 rounded-lg"
+            onClick={() => setOpenCustomerLoginDialog(true)}
+          />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="mx-auto">
@@ -481,7 +542,7 @@ export default function VideoAffiliatePlusPage() {
           stickyHeaderClassName="sticky top-14 z-50 shadow-sm"
           beforeHeader={
             <div className="text-white bg-primary">
-              <div className="px-4 mx-auto w-full" style={{ maxWidth: 1600 }}>
+              <div className="px-4 mx-auto w-full">
                 <div className="flex gap-4 justify-between items-center py-1">
                   <div className="flex gap-3 items-center">
                     <div

@@ -129,6 +129,43 @@ const EDIT_FIELD_LABELS: Record<Exclude<EditField, null>, string> = {
   hostPort: "Host Port",
 };
 
+const MAX_GENERATE_ERROR_RETRIES = 3;
+const MAX_MERGE_ERROR_RETRIES = 3;
+
+function getTaskErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message?.trim()) return err.message.trim();
+  if (typeof err === "string" && err.trim()) return err.trim();
+  return fallback;
+}
+
+function isGenerateRetryableError(err: unknown): boolean {
+  const message = getTaskErrorMessage(err, "").toLowerCase();
+  if (!message) return false;
+  return (
+    message.includes("violates the content policy") ||
+    message.includes("content policy") ||
+    message.includes("hệ thống hiện đang bận") ||
+    message.includes("he thong hien dang ban") ||
+    message.includes("task_timeout") ||
+    message.includes("job timeout")
+  );
+}
+
+function isMergeRetryCandidate(item: AffiliatePlusItem): boolean {
+  return getMergeableVideoUrls(item).length >= 2 && !hasMergedVideoRef(item.mergedVideoUrl);
+}
+
+function getRetryCounterLabel(item: AffiliatePlusItem): string {
+  const parts: string[] = [];
+  if ((item.generateRetryCount || 0) > 0) {
+    parts.push(`Gen retry ${item.generateRetryCount}/${MAX_GENERATE_ERROR_RETRIES}`);
+  }
+  if ((item.mergeRetryCount || 0) > 0) {
+    parts.push(`Merge retry ${item.mergeRetryCount}/${MAX_MERGE_ERROR_RETRIES}`);
+  }
+  return parts.join(" | ");
+}
+
 function getCharacterPreview(config: GenerateVideoConfig): {
   url: string;
   name: string;
@@ -440,6 +477,100 @@ export function ThreadManagementPanel({
 
   const autoMergeAttemptedRef = useRef<Record<string, boolean>>({});
 
+  const executeMergeWithRetry = useCallback(
+    async (
+      item: AffiliatePlusItem,
+      opts?: { urls?: string[]; resetRetryCount?: boolean; keepErrorVisible?: boolean }
+    ) => {
+      const urls = opts?.urls || getMergeableVideoUrls(item);
+      if (urls.length < 2) {
+        toast.warn(t("Cần ít nhất 2 video (không bị tắt) để nối"));
+        return false;
+      }
+
+      const latest = (await getThreadItem(sessionId, item.id)) || item;
+      let retriesUsed = opts?.resetRetryCount ? 0 : Number(latest.mergeRetryCount || 0);
+
+      autoMergeAttemptedRef.current[item.id] = true;
+      setMergingIds((prev) => ({ ...prev, [item.id]: true }));
+      await patchThread(sessionId, item.id, {
+        error: opts?.keepErrorVisible ? latest.error || "" : "",
+        countdown: 0,
+        mergeRetryCount: retriesUsed,
+      });
+
+      try {
+        if (latest.mergedVideoUrl?.startsWith("blob:")) {
+          try {
+            URL.revokeObjectURL(latest.mergedVideoUrl);
+          } catch {
+            // ignore
+          }
+        }
+
+        for (;;) {
+          try {
+            const mergedUrl = await mergeVideosToIndexedDb(
+              getMergedVideoStorageKey(latest, sessionId),
+              urls
+            );
+            await patchThread(sessionId, item.id, {
+              mergedVideoUrl: mergedUrl,
+              error: "",
+              mergeRetryCount: 0,
+            });
+            scheduleParentSync();
+            autoMergeAttemptedRef.current[item.id] = true;
+            onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
+            return true;
+          } catch (err: any) {
+            const msg = getTaskErrorMessage(err, t("Nối video thất bại"));
+            if (retriesUsed < MAX_MERGE_ERROR_RETRIES) {
+              retriesUsed += 1;
+              await patchThread(sessionId, item.id, {
+                error: "",
+                countdown: 0,
+                mergeRetryCount: retriesUsed,
+              });
+              onAddLog(
+                t("Nối video lỗi, tự retry {{current}}/{{max}}: {{msg}}", {
+                  current: retriesUsed,
+                  max: MAX_MERGE_ERROR_RETRIES,
+                  msg,
+                }),
+                "warning",
+                item.id
+              );
+              continue;
+            }
+
+            await patchThread(sessionId, item.id, {
+              error: msg,
+              countdown: 0,
+              mergeRetryCount: retriesUsed,
+            });
+            scheduleParentSync();
+            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
+            toast.error(msg);
+            setVideoPreview((prev) =>
+              prev?.kind === "merged" && prev.itemId === item.id
+                ? { ...prev, urls: [], error: msg }
+                : prev
+            );
+            return false;
+          }
+        }
+      } finally {
+        setMergingIds((prev) => {
+          const next = { ...prev };
+          delete next[item.id];
+          return next;
+        });
+      }
+    },
+    [onAddLog, scheduleParentSync, sessionId, t, toast]
+  );
+
   /** Hoãn merge ffmpeg — nhường event loop để worker enqueue/poll job generate tiếp theo. */
   const MERGE_DEFER_MS = 400;
 
@@ -464,29 +595,13 @@ export function ThreadManagementPanel({
         }
 
         void (async () => {
-          try {
-            const mergedUrl = await mergeVideosToIndexedDb(mergeKey, mergeUrls);
-            if (pauseAllRef.current) return;
-            await patchThread(sessionId, mergeItemId, { mergedVideoUrl: mergedUrl, error: "" });
-            onAddLog(t("Đã nối video và lưu IndexedDB"), "success", mergeItemId);
-            scheduleParentSync();
-          } catch (mergeErr: any) {
-            console.error(mergeErr);
-            const msg = mergeErr?.message || t("Nối video thất bại");
-            await patchThread(sessionId, mergeItemId, { error: msg });
-            onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", mergeItemId);
-            scheduleParentSync();
-          } finally {
-            setMergingIds((prev) => {
-              const next = { ...prev };
-              delete next[mergeItemId];
-              return next;
-            });
-          }
+          const latest = (await getThreadItem(sessionId, mergeItemId)) || itemsRef.current.find((i) => i.id === mergeItemId);
+          if (!latest || pauseAllRef.current) return;
+          await executeMergeWithRetry(latest, { urls: mergeUrls, resetRetryCount: true });
         })();
       }, deferMs);
     },
-    [MERGE_DEFER_MS, onAddLog, scheduleParentSync, sessionId, t]
+    [MERGE_DEFER_MS, executeMergeWithRetry, sessionId, t]
   );
 
   const runPendingAutoMerge = useCallback(async () => {
@@ -750,18 +865,34 @@ export function ThreadManagementPanel({
       toast.warn(t("Không có luồng lỗi"));
       return;
     }
-    const ids = errorItems.map((i) => i.id);
-    for (const id of ids) {
-      await patchThread(sessionId, id, {
+    const mergeItems = errorItems.filter(isMergeRetryCandidate);
+    const generateItems = errorItems.filter((item) => !isMergeRetryCandidate(item));
+
+    for (const item of generateItems) {
+      await patchThread(sessionId, item.id, {
         status: "waiting" as ThreadStatus,
         error: "",
         countdown: 0,
+        generateRetryCount: 0,
+        mergeRetryCount: 0,
       });
     }
     await loadPage();
     scheduleParentSync();
-    onAddLog(t("Retry {{count}} luồng lỗi", { count: ids.length }), "warning");
-    void handleStart(ids);
+    onAddLog(
+      t("Retry {{count}} luồng lỗi (generate: {{generate}}, merge: {{merge}})", {
+        count: errorItems.length,
+        generate: generateItems.length,
+        merge: mergeItems.length,
+      }),
+      "warning"
+    );
+    if (generateItems.length) void handleStart(generateItems.map((item) => item.id));
+    if (mergeItems.length) {
+      for (const item of mergeItems) {
+        void handleRetryMerge(item, { resetRetryCount: true });
+      }
+    }
   };
 
   const handleDeleteSelectedHistory = async (opts?: { skipConfirm?: boolean }) => {
@@ -1028,164 +1159,198 @@ export function ThreadManagementPanel({
         status: "running" as ThreadStatus,
         error: "",
         countdown: 99999,
+        generateRetryCount: 0,
+        mergeRetryCount: 0,
       });
 
       try {
-        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
-
-        const fresh = (await getThreadItem(sessionId, target.id)) || target;
-        const characterPrepared = characterPreparedFixed;
-        if (!characterPrepared) throw new Error(t("Chưa có ảnh nhân vật"));
-
-        const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
-        const images = [characterPrepared, productPrepared];
-
-        // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
-        let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
-        for (let attempt = 0; ; attempt++) {
           if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+
+        for (;;) {
           try {
-            result = await shopeeVideoJob.run({
-              url: "/api/app/generation-shopee-video/",
-              body: {
-                prompt: fresh.prompt?.trim() || prompt,
-                images,
-                characterImage: characterPrepared,
-                productImage: productPrepared,
-                videosPerJob: config!.videosPerJob,
-                variantCount: config!.videosPerJob,
-                videoModel: config!.videoModel,
-                config: {
-                  prompt: fresh.prompt?.trim() || prompt,
-                  aspectRatio: "9:16",
-                  videosPerJob: config!.videosPerJob,
-                  variantCount: config!.videosPerJob,
-                  videoModel: config!.videoModel,
-                  videoMode: "component",
-                },
-                _metadata: {
-                  threadId: fresh.id,
-                  shopName: fresh.shopName,
-                  productName: fresh.productName,
-                },
-              },
-              cancelOnUnmount: true,
-              onJobEnqueued: (jobId) => {
-                activeJobIdsRef.current[fresh.id] = jobId;
-              },
-              onProgress: (_pct, msg) => {
-                if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
-              },
-            });
-            break;
-          } catch (enqueueErr: any) {
-            const isStreamLimit =
-              enqueueErr instanceof MediaGenerationJobError &&
-              enqueueErr.code === "ENQUEUE_FAILED" &&
-              (enqueueErr.httpStatus === 429 ||
-                /giới hạn luồng/i.test(String(enqueueErr.message || "")));
-            if (!isStreamLimit || attempt >= 90) throw enqueueErr;
-            onAddLog(
-              t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
-              "warning",
-              fresh.id
+            const fresh = (await getThreadItem(sessionId, target.id)) || target;
+            const characterPrepared = characterPreparedFixed;
+            if (!characterPrepared) throw new Error(t("Chưa có ảnh nhân vật"));
+
+            const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
+            const images = [characterPrepared, productPrepared];
+
+            // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
+            let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
+            for (let attempt = 0; ; attempt++) {
+              if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+              try {
+                result = await shopeeVideoJob.run({
+                  url: "/api/app/generation-shopee-video/",
+                  body: {
+                    prompt: fresh.prompt?.trim() || prompt,
+                    images,
+                    characterImage: characterPrepared,
+                    productImage: productPrepared,
+                    videosPerJob: config!.videosPerJob,
+                    variantCount: config!.videosPerJob,
+                    videoModel: config!.videoModel,
+                    config: {
+                      prompt: fresh.prompt?.trim() || prompt,
+                      aspectRatio: "9:16",
+                      videosPerJob: config!.videosPerJob,
+                      variantCount: config!.videosPerJob,
+                      videoModel: config!.videoModel,
+                      videoMode: "component",
+                    },
+                    _metadata: {
+                      threadId: fresh.id,
+                      shopName: fresh.shopName,
+                      productName: fresh.productName,
+                    },
+                  },
+                  cancelOnUnmount: true,
+                  onJobEnqueued: (jobId) => {
+                    activeJobIdsRef.current[fresh.id] = jobId;
+                  },
+                  onProgress: (_pct, msg) => {
+                    if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+                  },
+                });
+                break;
+              } catch (enqueueErr: any) {
+                const isStreamLimit =
+                  enqueueErr instanceof MediaGenerationJobError &&
+                  enqueueErr.code === "ENQUEUE_FAILED" &&
+                  (enqueueErr.httpStatus === 429 ||
+                    /giới hạn luồng/i.test(String(enqueueErr.message || "")));
+                if (!isStreamLimit || attempt >= 90) throw enqueueErr;
+                onAddLog(
+                  t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
+                  "warning",
+                  fresh.id
+                );
+                await new Promise((r) => setTimeout(r, 2000));
+              }
+            }
+
+            if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+
+            const fromUris = ((result.data.videoUris?.length ? result.data.videoUris : []) as string[])
+              .map((u) => String(u || "").trim())
+              .filter(Boolean);
+            const singleUri = String(result.data.videoUri || "").trim();
+            const rawUris = Array.from(
+              new Set(fromUris.length ? fromUris : singleUri ? [singleUri] : [])
             );
-            await new Promise((r) => setTimeout(r, 2000));
-          }
-        }
+            const slotCount = Math.max(config!.videosPerJob || 1, rawUris.length, 1);
+            const { videoUrls, videoDisabled } = padVideoSlots(rawUris, slotCount);
+            const filledCount = videoUrls.filter(Boolean).length;
 
-        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
-
-        const fromUris = ((result.data.videoUris?.length ? result.data.videoUris : []) as string[])
-          .map((u) => String(u || "").trim())
-          .filter(Boolean);
-        const singleUri = String(result.data.videoUri || "").trim();
-        const rawUris = Array.from(
-          new Set(fromUris.length ? fromUris : singleUri ? [singleUri] : [])
-        );
-        const slotCount = Math.max(config!.videosPerJob || 1, rawUris.length, 1);
-        const { videoUrls, videoDisabled } = padVideoSlots(rawUris, slotCount);
-        const filledCount = videoUrls.filter(Boolean).length;
-
-        await patchThread(sessionId, fresh.id, {
-          status: "success" as ThreadStatus,
-          videoUrls,
-          videoDisabled,
-          uploaded: filledCount,
-          pending: Math.max(slotCount - filledCount, 0),
-          error: "",
-          countdown: 0,
-        });
-
-        setGeneratingIds((prev) => {
-          const next = { ...prev };
-          delete next[fresh.id];
-          return next;
-        });
-
-        try {
-          await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh, sessionId), videoUrls);
-        } catch (persistErr) {
-          console.warn("[persistProductVideosWithEnrichment]", persistErr);
-        }
-
-        // Nối video chạy nền — KHÔNG giữ slot concurrency của ThreadRunner.
-        // (Trước đây await merge → UI đã success nhưng pool không lấy job mới.)
-        const mergeUrls = videoUrls
-          .map((u, idx) => ({ u, disabled: videoDisabled[idx] }))
-          .filter((x) => x.u && !x.disabled)
-          .map((x) => x.u);
-        const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
-        if (willMerge) {
-          scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh, sessionId), mergeUrls);
-        }
-
-        if (!ctx.isPaused() && !pauseAllRef.current) {
-          onAddLog(
-            t("Hoàn tất video cho {{name}} ({{count}} file{{merged}})", {
-              name: fresh.productName || fresh.shopName || fresh.id,
-              count: filledCount || 1,
-              merged: willMerge ? `, ${t("đang nối")}` : "",
-            }),
-            "success",
-            fresh.id
-          );
-        }
-        scheduleParentSync();
-        return "success";
-      } catch (err: any) {
-        const isCancelled =
-          ctx.isPaused() ||
-          pauseAllRef.current ||
-          (err instanceof MediaGenerationJobError &&
-            (err.code === "JOB_CANCELLED" || err.code === "JOB_NOT_FOUND"));
-        if (isCancelled) {
-          try {
-            await patchThread(sessionId, target.id, {
-              status: "stopped" as ThreadStatus,
-              countdown: 0,
+            await patchThread(sessionId, fresh.id, {
+              status: "success" as ThreadStatus,
+              videoUrls,
+              videoDisabled,
+              uploaded: filledCount,
+              pending: Math.max(slotCount - filledCount, 0),
               error: "",
+              countdown: 0,
+              generateRetryCount: 0,
+              mergeRetryCount: 0,
             });
-          } catch {
-            // ignore
+
+            setGeneratingIds((prev) => {
+              const next = { ...prev };
+              delete next[fresh.id];
+              return next;
+            });
+
+            try {
+              await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh, sessionId), videoUrls);
+            } catch (persistErr) {
+              console.warn("[persistProductVideosWithEnrichment]", persistErr);
+            }
+
+            // Nối video chạy nền — KHÔNG giữ slot concurrency của ThreadRunner.
+            // (Trước đây await merge → UI đã success nhưng pool không lấy job mới.)
+            const mergeUrls = videoUrls
+              .map((u, idx) => ({ u, disabled: videoDisabled[idx] }))
+              .filter((x) => x.u && !x.disabled)
+              .map((x) => x.u);
+            const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
+            if (willMerge) {
+              scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh, sessionId), mergeUrls);
+            }
+
+            if (!ctx.isPaused() && !pauseAllRef.current) {
+              onAddLog(
+                t("Hoàn tất video cho {{name}} ({{count}} file{{merged}})", {
+                  name: fresh.productName || fresh.shopName || fresh.id,
+                  count: filledCount || 1,
+                  merged: willMerge ? `, ${t("đang nối")}` : "",
+                }),
+                "success",
+                fresh.id
+              );
+            }
+            scheduleParentSync();
+            return "success";
+          } catch (err: any) {
+            const isCancelled =
+              ctx.isPaused() ||
+              pauseAllRef.current ||
+              (err instanceof MediaGenerationJobError &&
+                (err.code === "JOB_CANCELLED" || err.code === "JOB_NOT_FOUND"));
+            if (isCancelled) {
+              try {
+                await patchThread(sessionId, target.id, {
+                  status: "stopped" as ThreadStatus,
+                  countdown: 0,
+                  error: "",
+                });
+              } catch {
+                // ignore
+              }
+              return "cancelled";
+            }
+
+            const latest = (await getThreadItem(sessionId, target.id)) || target;
+            const retriesUsed = Number(latest.generateRetryCount || 0);
+            const msg = getTaskErrorMessage(err, t("Generate video thất bại"));
+
+            if (isGenerateRetryableError(err) && retriesUsed < MAX_GENERATE_ERROR_RETRIES) {
+              const nextRetry = retriesUsed + 1;
+              await patchThread(sessionId, target.id, {
+                status: "running" as ThreadStatus,
+                error: "",
+                countdown: 99999,
+                generateRetryCount: nextRetry,
+              });
+              onAddLog(
+                t("Generate lỗi, tự retry {{current}}/{{max}}: {{msg}}", {
+                  current: nextRetry,
+                  max: MAX_GENERATE_ERROR_RETRIES,
+                  msg,
+                }),
+                "warning",
+                target.id
+              );
+              continue;
+            }
+
+            console.error(err);
+            await patchThread(sessionId, target.id, {
+              status: "error" as ThreadStatus,
+              error: msg,
+              countdown: 0,
+              generateRetryCount: retriesUsed,
+            });
+            onAddLog(
+              t("Lỗi generate video: {{msg}}", {
+                msg,
+              }),
+              "error",
+              target.id
+            );
+            scheduleParentSync();
+            return "error";
           }
-          return "cancelled";
         }
-        console.error(err);
-        await patchThread(sessionId, target.id, {
-          status: "error" as ThreadStatus,
-          error: err?.message || t("Generate video thất bại"),
-          countdown: 0,
-        });
-        onAddLog(
-          t("Lỗi generate video: {{msg}}", {
-            msg: err?.message || "unknown",
-          }),
-          "error",
-          target.id
-        );
-        scheduleParentSync();
-        return "error";
       } finally {
         delete activeJobIdsRef.current[target.id];
         setGeneratingIds((prev) => {
@@ -1341,72 +1506,36 @@ export function ThreadManagementPanel({
     onAddLog(t("Xóa luồng"), "warning", id);
   };
 
-  const handleRetryMerge = async (item: AffiliatePlusItem) => {
-    const urls = getMergeableVideoUrls(item);
-    if (urls.length < 2) {
-      toast.warn(t("Cần ít nhất 2 video (không bị tắt) để nối"));
-      return;
-    }
+  const handleRetryMerge = async (
+    item: AffiliatePlusItem,
+    opts?: { resetRetryCount?: boolean }
+  ) => {
     if (mergingIds[item.id]) return;
 
-    setMergingIds((prev) => ({ ...prev, [item.id]: true }));
-    await patchThread(sessionId, item.id, { error: "" });
-    try {
-      // Revoke blob cũ nếu có
-      if (item.mergedVideoUrl?.startsWith("blob:")) {
-        try {
-          URL.revokeObjectURL(item.mergedVideoUrl);
-        } catch {
-          // ignore
-        }
-      }
-      const mergedUrl = await mergeVideosToIndexedDb(getMergedVideoStorageKey(item, sessionId), urls);
-      await patchThread(sessionId, item.id, { mergedVideoUrl: mergedUrl, error: "" });
-      scheduleParentSync();
-      autoMergeAttemptedRef.current[item.id] = true;
-      onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
-      toast.success(t("Đã nối lại video"));
+    const mergedOk = await executeMergeWithRetry(item, { resetRetryCount: opts?.resetRetryCount ?? true });
+    if (!mergedOk) return;
 
-      // Cập nhật dialog nếu đang mở preview merged của item này
-      try {
-        const previewUrl = await resolveMergedPreviewUrl({
-          ...item,
-          mergedVideoUrl: mergedUrl,
-        }, sessionId);
-        setVideoPreview((prev) =>
-          prev?.kind === "merged" && prev.itemId === item.id
-            ? {
-                ...prev,
-                urls: previewUrl ? [previewUrl] : [],
-                index: 0,
-                error: previewUrl ? undefined : t("Không mở được video — thử Nối lại"),
-              }
-            : prev
-        );
-      } catch {
-        setVideoPreview((prev) =>
-          prev?.kind === "merged" && prev.itemId === item.id
-            ? { ...prev, urls: [], index: 0, error: t("Không mở được video — thử Nối lại") }
-            : prev
-        );
-      }
-    } catch (err: any) {
-      const msg = err?.message || t("Nối video thất bại");
-      await patchThread(sessionId, item.id, { error: msg });
-      scheduleParentSync();
-      onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
-      toast.error(msg);
+    toast.success(t("Đã nối lại video"));
+
+    const latest = (await getThreadItem(sessionId, item.id)) || item;
+    try {
+      const previewUrl = await resolveMergedPreviewUrl(latest, sessionId);
       setVideoPreview((prev) =>
         prev?.kind === "merged" && prev.itemId === item.id
-          ? { ...prev, urls: [], error: msg }
+          ? {
+              ...prev,
+              urls: previewUrl ? [previewUrl] : [],
+              index: 0,
+              error: previewUrl ? undefined : t("Không mở được video — thử Nối lại"),
+            }
           : prev
       );
-    } finally {
-      setMergingIds((prev) => {
-        const next = { ...prev };
-        delete next[item.id];
-        return next;
-      });
+    } catch {
+      setVideoPreview((prev) =>
+        prev?.kind === "merged" && prev.itemId === item.id
+          ? { ...prev, urls: [], index: 0, error: t("Không mở được video — thử Nối lại") }
+          : prev
+      );
     }
   };
 
@@ -2184,7 +2313,11 @@ export function ThreadManagementPanel({
                                       className="flex justify-center items-center w-9 h-9 text-amber-600 bg-amber-50 rounded-full border border-amber-400 shadow-sm transition-colors hover:bg-amber-100"
                                       title={
                                         item.error
-                                          ? `${t("Nối lại")}: ${item.error}`
+                                          ? `${t("Nối lại")}: ${item.error}${
+                                              getRetryCounterLabel(item)
+                                                ? ` (${getRetryCounterLabel(item)})`
+                                                : ""
+                                            }`
                                           : t("Chưa nối — bấm để nối video")
                                       }
                                     >
@@ -2208,9 +2341,14 @@ export function ThreadManagementPanel({
                             {item.error ? (
                               <div
                                 className="w-full max-w-[160px] text-center text-10 leading-snug text-danger line-clamp-3"
-                                title={item.error}
+                                title={
+                                  getRetryCounterLabel(item)
+                                    ? `${item.error} (${getRetryCounterLabel(item)})`
+                                    : item.error
+                                }
                               >
                                 {item.error}
+                                {getRetryCounterLabel(item) ? ` (${getRetryCounterLabel(item)})` : ""}
                               </div>
                             ) : null}
                           </div>

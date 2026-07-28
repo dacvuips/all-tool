@@ -47,6 +47,10 @@ export interface AffiliatePlusItem {
   delayMin: number;
   delayMax: number;
   error: string;
+  /** Số lần auto-retry generate đã dùng trong cycle hiện tại. */
+  generateRetryCount?: number;
+  /** Số lần auto-retry nối video đã dùng trong cycle hiện tại. */
+  mergeRetryCount?: number;
   status: ThreadStatus;
   selected: boolean;
   countdown: number;
