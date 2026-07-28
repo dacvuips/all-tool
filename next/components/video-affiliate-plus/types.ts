@@ -90,6 +90,10 @@ export interface CharacterProfile {
     fashion: string;
   };
   previewPose: CharacterPose;
+  /** Bật = gửi toàn bộ ảnh model vào generate thay vì chỉ 1 ảnh preview. */
+  randomImagesEnabled?: boolean;
+  /** Prompt cộng thêm vào Check Prompt Tổng khi bật random ảnh. */
+  randomImagesPrompt?: string;
 }
 
 export interface GenerateVideoPromptConfig {
@@ -957,6 +961,8 @@ export function createEmptyCharacterProfile(
     scenes: [createEmptyCharacterScene(1)],
     images: { standing: "", sitting: "", fashion: "" },
     previewPose: "fashion",
+    randomImagesEnabled: false,
+    randomImagesPrompt: "",
     ...partial,
   };
 }
@@ -982,6 +988,8 @@ export function migrateToCharacterProfile(
       fashion: raw.images?.fashion || "",
     },
     previewPose: raw.previewPose || "fashion",
+    randomImagesEnabled: Boolean(raw.randomImagesEnabled),
+    randomImagesPrompt: raw.randomImagesPrompt || "",
   });
 }
 
@@ -1007,6 +1015,15 @@ export function pickCharacterImage(
   const preferred = available.find((a) => a.pose === profile.previewPose);
   if (preferred) return preferred;
   return available[0];
+}
+
+/** Danh sách ảnh generate cho character theo mode hiện tại. */
+export function getCharacterImagesForGeneration(profile: CharacterProfile): string[] {
+  if (profile.randomImagesEnabled) {
+    return listCharacterImages(profile).map((img) => img.url);
+  }
+  const picked = pickCharacterImage(profile);
+  return picked.url ? [picked.url] : [];
 }
 
 /** Tạo prompt tự động từ profile (ghép mô tả + bối cảnh). */
@@ -1168,17 +1185,23 @@ export function buildDialoguePrompt(
 }
 
 /** Check Prompt Tổng = tổng hợp các prompt (chỉ xem, không sửa). */
-export function buildCheckTotalPrompt(prompts: GenerateVideoPromptConfig): string {
+export function buildCheckTotalPrompt(
+  prompts: GenerateVideoPromptConfig,
+  character?: CharacterProfile | null
+): string {
   const rules = syncCheckTotalFromRules(prompts.directives, prompts.rulesNegative);
   const dialogue =
     prompts.dialogue.trim() ||
     buildDialoguePrompt(prompts.dialogueSystem, prompts.dialogueSection1, prompts.dialogueSectionLast);
   const image = prompts.image.trim();
+  const randomImagePrompt =
+    character?.randomImagesEnabled ? String(character.randomImagesPrompt || "").trim() : "";
 
   const parts: string[] = [];
   if (rules) parts.push(`=== Rules Negative Prompt ===\n${rules}`);
   if (dialogue) parts.push(`=== Prompt Tạo Thoại ===\n${dialogue}`);
   if (image) parts.push(`=== Prompt Tạo Ảnh ===\n${image}`);
+  if (randomImagePrompt) parts.push(`=== Prompt Ảnh Ngẫu Nhiên ===\n${randomImagePrompt}`);
   return parts.join("\n\n");
 }
 
@@ -1208,7 +1231,9 @@ DEFAULT_GENERATE_VIDEO_CONFIG.prompts = getDefaultPromptConfig();
 
 /** Build prompt gửi đi từ config (áp dụng chung cho mọi luồng). */
 export function buildActivePromptFromConfig(config: GenerateVideoConfig): string {
-  const checkTotal = buildCheckTotalPrompt(config.prompts);
+  const character =
+    config.characters.find((item) => item.id === config.characterId) || config.characters[0] || null;
+  const checkTotal = buildCheckTotalPrompt(config.prompts, character);
   return checkTotal.trim() || config.activePrompt;
 }
 

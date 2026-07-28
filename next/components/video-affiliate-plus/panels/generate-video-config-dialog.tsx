@@ -24,6 +24,7 @@ import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
 import {
+  CharacterProfile,
   DEFAULT_GENERATE_VIDEO_CONFIG,
   GenerateVideoConfig,
   ManagedOption,
@@ -116,6 +117,10 @@ const DIALOGUE_OPTIONS = [
 
 const fieldClass =
   "h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-800 outline-none focus:border-primary";
+
+function getSelectedCharacter(config: GenerateVideoConfig): CharacterProfile | null {
+  return config.characters.find((item) => item.id === config.characterId) || config.characters[0] || null;
+}
 
 interface GenerateVideoConfigDialogProps {
   isOpen: boolean;
@@ -304,7 +309,7 @@ export function GenerateVideoConfigDialog({
       setPromptDraft("");
     } else if (key === "checkTotal") {
       // Chỉ xem — tổng hợp từ các prompt khác
-      setPromptDraft(buildCheckTotalPrompt(config.prompts));
+      setPromptDraft(buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)));
     } else {
       setPromptDraft(config.prompts[key] || "");
       setDirectivesDraft("");
@@ -332,11 +337,14 @@ export function GenerateVideoConfigDialog({
         ...nextPrompts,
         directives: directivesDraft,
         rulesNegative: negativeDraft,
-        checkTotal: buildCheckTotalPrompt({
-          ...nextPrompts,
-          directives: directivesDraft,
-          rulesNegative: negativeDraft,
-        }),
+        checkTotal: buildCheckTotalPrompt(
+          {
+            ...nextPrompts,
+            directives: directivesDraft,
+            rulesNegative: negativeDraft,
+          },
+          getSelectedCharacter(config)
+        ),
       };
     } else if (editingPrompt === "dialogue") {
       const dialogue = buildDialoguePrompt(
@@ -350,22 +358,28 @@ export function GenerateVideoConfigDialog({
         dialogueSection1: dialogueSection1Draft,
         dialogueSectionLast: dialogueSectionLastDraft,
         dialogue,
-        checkTotal: buildCheckTotalPrompt({
-          ...nextPrompts,
-          dialogueSystem: dialogueSystemDraft,
-          dialogueSection1: dialogueSection1Draft,
-          dialogueSectionLast: dialogueSectionLastDraft,
-          dialogue,
-        }),
+        checkTotal: buildCheckTotalPrompt(
+          {
+            ...nextPrompts,
+            dialogueSystem: dialogueSystemDraft,
+            dialogueSection1: dialogueSection1Draft,
+            dialogueSectionLast: dialogueSectionLastDraft,
+            dialogue,
+          },
+          getSelectedCharacter(config)
+        ),
       };
     } else {
       nextPrompts = {
         ...nextPrompts,
         [editingPrompt]: promptDraft,
-        checkTotal: buildCheckTotalPrompt({
-          ...nextPrompts,
-          [editingPrompt]: promptDraft,
-        }),
+        checkTotal: buildCheckTotalPrompt(
+          {
+            ...nextPrompts,
+            [editingPrompt]: promptDraft,
+          },
+          getSelectedCharacter(config)
+        ),
       };
     }
 
@@ -440,7 +454,7 @@ export function GenerateVideoConfigDialog({
   };
 
   const handleSave = async () => {
-    const checkTotal = buildCheckTotalPrompt(config.prompts);
+    const checkTotal = buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config));
     const activePrompt = buildActivePromptFromConfig(config);
     const next = {
       ...config,
@@ -511,7 +525,7 @@ export function GenerateVideoConfigDialog({
       );
     }
     if (btn.key === "checkTotal") {
-      return !!buildCheckTotalPrompt(config.prompts).trim();
+      return !!buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)).trim();
     }
     return !!config.prompts[btn.key]?.trim();
   }).length;
@@ -578,7 +592,7 @@ export function GenerateVideoConfigDialog({
                             config.prompts.dialogue?.trim()
                           )
                         : btn.key === "checkTotal"
-                        ? !!buildCheckTotalPrompt(config.prompts).trim()
+                        ? !!buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)).trim()
                         : !!config.prompts[btn.key]?.trim();
                     return (
                       <button

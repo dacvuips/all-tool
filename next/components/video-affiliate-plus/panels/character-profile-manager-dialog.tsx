@@ -12,6 +12,7 @@ import {
 } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { Switch } from "../../shared/utilities/form";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import {
   CharacterPose,
@@ -156,6 +157,8 @@ export function CharacterProfileManagerDialog({
             fashion: item.images?.fashion || "",
           },
           previewPose: item.previewPose || "fashion",
+          randomImagesEnabled: Boolean(item.randomImagesEnabled),
+          randomImagesPrompt: item.randomImagesPrompt || "",
         })
       );
       if (!imported.length) {
@@ -262,6 +265,11 @@ export function CharacterProfileManagerDialog({
   const imageCount = draft
     ? (["standing", "sitting", "fashion"] as CharacterPose[]).filter((p) => draft.images[p]).length
     : 0;
+  const randomPreviewUrls = draft
+    ? (["standing", "sitting", "fashion"] as CharacterPose[])
+        .map((pose) => draft.images[pose])
+        .filter(Boolean)
+    : [];
 
   return (
     <Dialog
@@ -540,6 +548,47 @@ export function CharacterProfileManagerDialog({
                                 placeholder="Natural ambient sound appropriate for the scene."
                               />
                             </div>
+
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-xs font-bold text-amber-800">
+                                    {t("Ảnh ngẫu nhiên")}
+                                  </div>
+                                  <div className="mt-0.5 text-10 text-amber-700">
+                                    {t(
+                                      "Bật để gửi toàn bộ ảnh model vào generate và cộng prompt riêng vào Check Prompt Tổng."
+                                    )}
+                                  </div>
+                                </div>
+                                <Switch
+                                  size="sm"
+                                  dependent
+                                  value={draft.randomImagesEnabled === true}
+                                  onChange={(value) =>
+                                    patchDraft({ randomImagesEnabled: Boolean(value) })
+                                  }
+                                />
+                              </div>
+                              {draft.randomImagesEnabled ? (
+                                <div className="mt-3">
+                                  <label className="mb-1 block text-xs font-semibold text-gray-700">
+                                    {t("Prompt Ảnh Ngẫu Nhiên")}
+                                  </label>
+                                  <textarea
+                                    value={draft.randomImagesPrompt || ""}
+                                    onChange={(e) =>
+                                      patchDraft({ randomImagesPrompt: e.target.value })
+                                    }
+                                    rows={4}
+                                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none transition-colors focus:border-primary"
+                                    placeholder={t(
+                                      "Prompt này chỉ được gắn vào Check Prompt Tổng khi bật Ảnh ngẫu nhiên."
+                                    )}
+                                  />
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         </TabGroup.Tab>
 
@@ -649,7 +698,18 @@ export function CharacterProfileManagerDialog({
                       ))}
                     </div>
                     <div className="relative flex flex-1 items-center justify-center overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-inner">
-                      {previewUrl ? (
+                      {draft.randomImagesEnabled && randomPreviewUrls.length > 0 ? (
+                        <div className="grid h-full w-full grid-cols-2 gap-2 overflow-y-auto p-2">
+                          {randomPreviewUrls.map((url, idx) => (
+                            <img
+                              key={`${url}-${idx}`}
+                              src={url}
+                              alt={`${draft.name}-${idx + 1}`}
+                              className="h-full min-h-[120px] w-full rounded-xl object-cover"
+                            />
+                          ))}
+                        </div>
+                      ) : previewUrl ? (
                         <img
                           src={previewUrl}
                           alt={draft.name}

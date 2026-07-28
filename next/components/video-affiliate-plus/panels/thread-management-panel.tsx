@@ -91,9 +91,10 @@ import {
   buildActivePromptFromConfig,
   CharacterProfile,
   GenerateVideoConfig,
+  getCharacterImagesForGeneration,
   getMergeableVideoUrls,
+  listCharacterImages,
   padVideoSlots,
-  pickCharacterImage,
   ThreadStatus,
 } from "../types";
 import { GenerateVideoConfigDialog } from "./generate-video-config-dialog";
@@ -167,16 +168,20 @@ function getRetryCounterLabel(item: AffiliatePlusItem): string {
 }
 
 function getCharacterPreview(config: GenerateVideoConfig): {
-  url: string;
+  urls: string[];
   name: string;
+  randomEnabled: boolean;
 } {
   const character: CharacterProfile | undefined =
     config.characters.find((c) => c.id === config.characterId) || config.characters[0];
-  if (!character) return { url: "", name: "" };
-  const picked = pickCharacterImage(character);
+  if (!character) return { urls: [], name: "", randomEnabled: false };
+  const urls = character.randomImagesEnabled
+    ? listCharacterImages(character).map((img) => img.url)
+    : getCharacterImagesForGeneration(character);
   return {
-    url: picked.url,
+    urls,
     name: character.characterName || character.name || "",
+    randomEnabled: Boolean(character.randomImagesEnabled),
   };
 }
 
@@ -252,9 +257,14 @@ export function ThreadManagementPanel({
   pageRef.current = page;
   pageSizeRef.current = pageSize;
   const [genConfig, setGenConfig] = useState<GenerateVideoConfig | null>(null);
-  const [characterPreview, setCharacterPreview] = useState<{ url: string; name: string }>({
-    url: "",
+  const [characterPreview, setCharacterPreview] = useState<{
+    urls: string[];
+    name: string;
+    randomEnabled: boolean;
+  }>({
+    urls: [],
     name: "",
+    randomEnabled: false,
   });
   const [videoPreview, setVideoPreview] = useState<VideoPreviewState | null>(null);
   const [zoomImage, setZoomImage] = useState("");
@@ -1110,7 +1120,7 @@ export function ThreadManagementPanel({
     }
 
     const preview = getCharacterPreview(config);
-    if (!preview.url) {
+    if (!preview.urls.length) {
       toast.warn(t("Chưa có ảnh nhân vật trong config. Vào Quản lý Nhân Vật để thêm ảnh."));
       return;
     }
@@ -1140,9 +1150,11 @@ export function ThreadManagementPanel({
     );
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
 
-    let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>> | null = null;
+    let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
     try {
-      characterPreparedFixed = await prepareShopeeImageInput(preview.url);
+      characterPreparedFixed = await Promise.all(
+        preview.urls.map((url) => prepareShopeeImageInput(url))
+      );
     } catch (err: any) {
       toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
       return;
@@ -1170,10 +1182,10 @@ export function ThreadManagementPanel({
           try {
             const fresh = (await getThreadItem(sessionId, target.id)) || target;
             const characterPrepared = characterPreparedFixed;
-            if (!characterPrepared) throw new Error(t("Chưa có ảnh nhân vật"));
+            if (!characterPrepared.length) throw new Error(t("Chưa có ảnh nhân vật"));
 
             const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
-            const images = [characterPrepared, productPrepared];
+            const images = [...characterPrepared, productPrepared];
 
             // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
             let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
@@ -1185,7 +1197,7 @@ export function ThreadManagementPanel({
                   body: {
                     prompt: fresh.prompt?.trim() || prompt,
                     images,
-                    characterImage: characterPrepared,
+                    characterImage: characterPrepared[0],
                     productImage: productPrepared,
                     videosPerJob: config!.videosPerJob,
                     variantCount: config!.videosPerJob,
@@ -1555,13 +1567,15 @@ export function ThreadManagementPanel({
       const config = genConfig || (await loadGenerateVideoConfig());
       const character =
         config.characters.find((c) => c.id === config.characterId) || config.characters[0];
-      const characterImage = character ? pickCharacterImage(character).url : "";
-      if (!characterImage) {
+      const characterImages = character ? getCharacterImagesForGeneration(character) : [];
+      if (!characterImages.length) {
         toast.error(t("Chưa có ảnh nhân vật trong cấu hình"));
         return;
       }
 
-      const characterPrepared = await prepareShopeeImageInput(characterImage);
+      const characterPrepared = await Promise.all(
+        characterImages.map((image) => prepareShopeeImageInput(image))
+      );
       const productPrepared = await prepareShopeeImageInput(target.imageUrl);
       const prompt = target.prompt?.trim() || buildActivePromptFromConfig(config);
 
@@ -1569,8 +1583,8 @@ export function ThreadManagementPanel({
         url: "/api/app/generation-shopee-video/",
         body: {
           prompt,
-          images: [characterPrepared, productPrepared],
-          characterImage: characterPrepared,
+          images: [...characterPrepared, productPrepared],
+          characterImage: characterPrepared[0],
           productImage: productPrepared,
           videosPerJob: 1,
           variantCount: 1,
@@ -2174,19 +2188,30 @@ export function ThreadManagementPanel({
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
-                            {characterPreview.url ? (
-                              <button
-                                type="button"
-                                onClick={() => setZoomImage(characterPreview.url)}
-                                title={characterPreview.name || t("Ảnh nhân vật từ config")}
-                                className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                            {characterPreview.urls.length ? (
+                              <div
+                                className={`grid gap-1 ${
+                                  characterPreview.urls.length > 1 ? "grid-cols-2" : "grid-cols-1"
+                                }`}
                               >
-                                <img
-                                  src={characterPreview.url}
-                                  alt={characterPreview.name || t("Ảnh nhân vật")}
-                                  className="object-cover w-16 h-16 rounded-lg cursor-zoom-in"
-                                />
-                              </button>
+                                {characterPreview.urls.map((url, imageIdx) => (
+                                  <button
+                                    key={`${url}-${imageIdx}`}
+                                    type="button"
+                                    onClick={() => setZoomImage(url)}
+                                    title={characterPreview.name || t("Ảnh nhân vật từ config")}
+                                    className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                                  >
+                                    <img
+                                      src={url}
+                                      alt={characterPreview.name || t("Ảnh nhân vật")}
+                                      className={`cursor-zoom-in rounded-lg object-cover ${
+                                        characterPreview.urls.length > 1 ? "h-8 w-8" : "h-16 w-16"
+                                      }`}
+                                    />
+                                  </button>
+                                ))}
+                              </div>
                             ) : (
                               <div
                                 className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
