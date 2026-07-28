@@ -148,6 +148,45 @@ function simulateTick(items: AffiliatePlusItem[]): AffiliatePlusItem[] {
   });
 }
 
+function VideoAffiliatePlusPageHeader({
+  onBack,
+  showBackLabel,
+  backLabel,
+  title,
+}: {
+  onBack: () => void;
+  showBackLabel: boolean;
+  backLabel: string;
+  title: string;
+}) {
+  return (
+    <div className="text-white bg-primary">
+      <div className="px-4 mx-auto w-full">
+        <div className="flex gap-4 justify-between items-center py-1">
+          <div className="flex gap-3 items-center">
+            <div
+              onClick={onBack}
+              className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
+            >
+              <HiArrowLeft />
+              {showBackLabel && <span>{backLabel}</span>}
+            </div>
+            <div className="w-px h-5 bg-white/30" />
+            <div className="flex gap-2 items-center">
+              <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
+                <RiVideoAddLine className="text-2xl" />
+              </div>
+              <div>
+                <h1 className="m-0 text-lg font-bold sm:text-xl">{title}</h1>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VideoAffiliatePlusPage() {
   const { t } = useTranslation();
   const router = useRouter();
@@ -480,35 +519,18 @@ export default function VideoAffiliatePlusPage() {
     );
   }
 
+  const pageTitle = t("XƯỞNG VIDEO AFFILIATE MANAGER");
+  const backLabel = t("Quay lại");
+
   if (customer === null) {
     return (
       <div className="min-h-screen bg-gray-100">
-        <div className="text-white bg-primary">
-          <div className="px-4 mx-auto w-full">
-            <div className="flex gap-4 justify-between items-center py-1">
-              <div className="flex gap-3 items-center">
-                <div
-                  onClick={() => router.back()}
-                  className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
-                >
-                  <HiArrowLeft />
-                  {sm && <span>{t("Quay lại")}</span>}
-                </div>
-                <div className="w-px h-5 bg-white/30" />
-                <div className="flex gap-2 items-center">
-                  <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
-                    <RiVideoAddLine className="text-2xl" />
-                  </div>
-                  <div>
-                    <h1 className="m-0 text-lg font-bold sm:text-xl">
-                      {t("XƯỞNG VIDEO AFFILIATE MANAGER")}
-                    </h1>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <VideoAffiliatePlusPageHeader
+          onBack={() => router.back()}
+          showBackLabel={sm}
+          backLabel={backLabel}
+          title={pageTitle}
+        />
         <div className="flex flex-col gap-4 justify-center items-center px-4 py-20 mx-auto text-center">
           <div className="flex justify-center items-center w-16 h-16 rounded-2xl bg-primary/10 text-primary">
             <RiLoginBoxLine className="text-3xl" />
@@ -541,32 +563,12 @@ export default function VideoAffiliatePlusPage() {
           stickyHeader
           stickyHeaderClassName="sticky top-14 z-50 shadow-sm"
           beforeHeader={
-            <div className="text-white bg-primary">
-              <div className="px-4 mx-auto w-full">
-                <div className="flex gap-4 justify-between items-center py-1">
-                  <div className="flex gap-3 items-center">
-                    <div
-                      onClick={() => router.back()}
-                      className="flex gap-1 items-center text-sm cursor-pointer text-white/80 hover:text-white"
-                    >
-                      <HiArrowLeft />
-                      {sm && <span>{t("Quay lại")}</span>}
-                    </div>
-                    <div className="w-px h-5 bg-white/30" />
-                    <div className="flex gap-2 items-center">
-                      <div className="flex justify-center items-center w-10 h-10 rounded-xl bg-white/20">
-                        <RiVideoAddLine className="text-2xl" />
-                      </div>
-                      <div>
-                        <h1 className="m-0 text-lg font-bold sm:text-xl">
-                          {t("XƯỞNG VIDEO AFFILIATE MANAGER")}
-                        </h1>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <VideoAffiliatePlusPageHeader
+              onBack={() => router.back()}
+              showBackLabel={sm}
+              backLabel={backLabel}
+              title={pageTitle}
+            />
           }
           tabClassName="px-5 py-3.5"
           titleClassName="text-sm font-semibold whitespace-nowrap"

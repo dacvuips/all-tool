@@ -476,7 +476,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {/* ── Media tabs ── */}
       <SceneCardTabs
         hideImageTab={!!hideImageColumn}
-        hideExtendTab={true}
+        hideExtendTab={!nextSceneId}
         forcedTab={forcedTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
