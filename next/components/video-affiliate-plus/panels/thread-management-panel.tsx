@@ -66,7 +66,7 @@ import {
   ScrapeCsvSession,
   sessionDisplayName,
 } from "../scrape-csv-history";
-import { prepareShopeeImageInput } from "../shopee-image";
+import { buildShopeeVideoImages, prepareShopeeImageInput } from "../shopee-image";
 import { loadGenerateVideoConfig } from "../storage";
 import { ThreadRunner } from "../thread-runner";
 import {
@@ -1107,13 +1107,15 @@ export function ThreadManagementPanel({
     }
 
     let config = genConfig;
-    if (!config) {
-      try {
-        config = await loadGenerateVideoConfig();
-        setGenConfig(config);
-        setCharacterPreview(getCharacterPreview(config));
-      } catch (err) {
-        console.error(err);
+    // Luôn reload từ IndexedDB — tránh dùng config cũ trong memory
+    // (vd. vừa bật "Ảnh ngẫu nhiên" trong Quản lý Nhân Vật nhưng chưa Save & Apply).
+    try {
+      config = await loadGenerateVideoConfig();
+      setGenConfig(config);
+      setCharacterPreview(getCharacterPreview(config));
+    } catch (err) {
+      console.error(err);
+      if (!config) {
         toast.error(t("Không tải được cấu hình generate video"));
         return;
       }
@@ -1185,7 +1187,8 @@ export function ThreadManagementPanel({
             if (!characterPrepared.length) throw new Error(t("Chưa có ảnh nhân vật"));
 
             const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
-            const images = [...characterPrepared, productPrepared];
+            // Flow2 component tối đa 3 ảnh: ưu tiên giữ product cuối + nhiều ảnh nhân vật nhất có thể
+            const images = buildShopeeVideoImages(characterPrepared, productPrepared);
 
             // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
             let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
@@ -1197,7 +1200,8 @@ export function ThreadManagementPanel({
                   body: {
                     prompt: fresh.prompt?.trim() || prompt,
                     images,
-                    characterImage: characterPrepared[0],
+                    // Giữ field cũ cho tương thích; server ưu tiên `images[]` khi đủ ≥2 ảnh
+                    characterImage: images[0],
                     productImage: productPrepared,
                     videosPerJob: config!.videosPerJob,
                     variantCount: config!.videosPerJob,
@@ -1577,14 +1581,15 @@ export function ThreadManagementPanel({
         characterImages.map((image) => prepareShopeeImageInput(image))
       );
       const productPrepared = await prepareShopeeImageInput(target.imageUrl);
+      const images = buildShopeeVideoImages(characterPrepared, productPrepared);
       const prompt = target.prompt?.trim() || buildActivePromptFromConfig(config);
 
       const result = await shopeeVideoJob.run({
         url: "/api/app/generation-shopee-video/",
         body: {
           prompt,
-          images: [...characterPrepared, productPrepared],
-          characterImage: characterPrepared[0],
+          images,
+          characterImage: images[0],
           productImage: productPrepared,
           videosPerJob: 1,
           variantCount: 1,
@@ -2511,7 +2516,16 @@ export function ThreadManagementPanel({
 
       <GenerateVideoConfigDialog
         isOpen={generateConfigOpen}
-        onClose={() => setGenerateConfigOpen(false)}
+        onClose={() => {
+          setGenerateConfigOpen(false);
+          // Sync lại cột Ảnh nhân vật sau khi chỉnh profile (vd. bật Ảnh ngẫu nhiên)
+          void loadGenerateVideoConfig()
+            .then((config) => {
+              setGenConfig(config);
+              setCharacterPreview(getCharacterPreview(config));
+            })
+            .catch((err) => console.warn("[generate-video] reload config after dialog close", err));
+        }}
         onSaveAndApply={handleSaveGenerateConfig}
       />
 

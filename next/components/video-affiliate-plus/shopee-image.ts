@@ -7,6 +7,22 @@ import { compressUploadImage } from "../../lib/helpers/image";
 const MAX_DIMENSION = 1920;
 const JPEG_QUALITY = 72;
 
+/** Flow2 video_mode=component: tối đa 3 ảnh tham chiếu. */
+export const MAX_SHOPEE_VIDEO_REFERENCE_IMAGES = 3;
+
+/**
+ * Ghép ảnh nhân vật + ảnh sản phẩm cho request generate.
+ * Luôn giữ product ở cuối; số ảnh nhân vật bị cắt để tổng ≤ 3.
+ */
+export function buildShopeeVideoImages<T>(
+  characterImages: T[],
+  productImage: T
+): T[] {
+  const maxChars = Math.max(1, MAX_SHOPEE_VIDEO_REFERENCE_IMAGES - 1);
+  const chars = characterImages.filter(Boolean).slice(0, maxChars);
+  return [...chars, productImage];
+}
+
 export type ShopeeGenerationImage = {
   imageBytes: string;
   mimeType: string;
