@@ -568,6 +568,7 @@ export function UsersProfilesPanel() {
   const [users, setUsers] = useState<AffiliatePlusUser[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterTab, setFilterTab] = useState<"all" | "running" | "proxy" | "off" | string>("all");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [runningMap, setRunningMap] = useState<Record<string, RunningInfo>>({});
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
@@ -721,9 +722,50 @@ export function UsersProfilesPanel() {
   }, [users]);
 
   const normalizedTerm = searchTerm.toLowerCase();
+
+  // Unique domains từ toàn bộ profiles (không phụ thuộc filter)
+  const allDomains = useMemo(
+    () => Array.from(new Set(profiles.map((p) => resolveProfileDomain(p, userByProfileId.get(p.id))))).sort(),
+    [profiles, userByProfileId]
+  );
+
+  const filterTabCounts = useMemo(() => {
+    const running = profiles.filter((p) => Boolean(runningMap[p.id])).length;
+    const proxy = profiles.filter((p) => {
+      const info = getProfileSavedInfo(p, userByProfileId.get(p.id));
+      return Boolean(info.proxy);
+    }).length;
+    const off = profiles.filter((p) => !runningMap[p.id]).length;
+    const byDomain: Record<string, number> = {};
+    for (const d of allDomains) {
+      byDomain[d] = profiles.filter(
+        (p) => resolveProfileDomain(p, userByProfileId.get(p.id)) === d
+      ).length;
+    }
+    return { running, proxy, off, byDomain };
+  }, [profiles, runningMap, userByProfileId, allDomains]);
+
   const filteredProfiles = useMemo(() => {
-    if (!normalizedTerm) return profiles;
-    return profiles.filter((p) => {
+    let result = profiles;
+    // Apply tab filter
+    if (filterTab === "running") {
+      result = result.filter((p) => Boolean(runningMap[p.id]));
+    } else if (filterTab === "proxy") {
+      result = result.filter((p) => {
+        const info = getProfileSavedInfo(p, userByProfileId.get(p.id));
+        return Boolean(info.proxy);
+      });
+    } else if (filterTab === "off") {
+      result = result.filter((p) => !runningMap[p.id]);
+    } else if (filterTab !== "all") {
+      // domain filter
+      result = result.filter(
+        (p) => resolveProfileDomain(p, userByProfileId.get(p.id)) === filterTab
+      );
+    }
+    // Apply search
+    if (!normalizedTerm) return result;
+    return result.filter((p) => {
       const groupName = p.groupId ? groupNameById.get(p.groupId) || p.groupId : "";
       const info = getProfileSavedInfo(p, userByProfileId.get(p.id));
       return [
@@ -744,7 +786,7 @@ export function UsersProfilesPanel() {
         .toLowerCase()
         .includes(normalizedTerm);
     });
-  }, [profiles, normalizedTerm, groupNameById, userByProfileId]);
+  }, [profiles, filterTab, normalizedTerm, groupNameById, userByProfileId, runningMap]);
 
   const allVisibleSelected =
     filteredProfiles.length > 0 && filteredProfiles.every((p) => selectedIds.has(p.id));
@@ -1468,6 +1510,43 @@ export function UsersProfilesPanel() {
                 onToolsAction={handleBulkToolsAction}
               />
             ) : null}
+            {/* Filter tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-1">
+              {([
+                { key: "all", label: t("Tất cả"), count: profiles.length, color: undefined },
+                { key: "running", label: t("Đang bật"), count: filterTabCounts.running, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+                { key: "proxy", label: t("Có Proxy"), count: filterTabCounts.proxy, color: "text-blue-700 bg-blue-50 border-blue-200" },
+                { key: "off", label: t("Tắt"), count: filterTabCounts.off, color: "text-gray-600 bg-gray-100 border-gray-300" },
+                ...allDomains.map((d) => ({
+                  key: d,
+                  label: `Domain .${d}`,
+                  count: filterTabCounts.byDomain[d] ?? 0,
+                  color: "text-violet-700 bg-violet-50 border-violet-200",
+                })),
+              ] as { key: string; label: string; count: number; color?: string }[]).map(({ key, label, count, color }) => {
+                const isActive = filterTab === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFilterTab(key)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                      isActive
+                        ? color
+                          ? color + " ring-1 ring-offset-0 ring-current"
+                          : "bg-gray-800 text-white border-gray-800"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
+                    }`}
+                  >
+                    {label}
+                    <span className={`text-[10px] font-bold ${isActive ? "opacity-80" : "opacity-60"}`}>
+                      ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <PanelListToolbar
               trailing={
                 <PanelListMatchCount

@@ -36,9 +36,13 @@ export function normalizeSearch(s: string): string {
     .trim();
 }
 
-/** searchKey chung cho một item = shopName + productName sau normalize. */
-export function buildSearchKey(shopName: string, productName: string): string {
-  return normalizeSearch(`${shopName || ""} ${productName || ""}`);
+/** searchKey chung cho một item = shopName + productName + productId sau normalize. */
+export function buildSearchKey(
+  shopName: string,
+  productName: string,
+  productId?: string
+): string {
+  return normalizeSearch(`${shopName || ""} ${productName || ""} ${productId || ""}`);
 }
 
 function toRecord(
@@ -53,7 +57,11 @@ function toRecord(
   return {
     id: String(item.id || ""),
     sessionId,
-    searchKey: buildSearchKey(item.shopName || "", item.productName || ""),
+    searchKey: buildSearchKey(
+      item.shopName || "",
+      item.productName || "",
+      item.productId || ""
+    ),
     createdAt: opts?.createdAt ?? now,
     updatedAt: now,
     data: { ...rest, prompt: "", mergedVideoUrl: persistMerged } as unknown as Record<
@@ -214,19 +222,35 @@ export async function clearSession(sessionId: string): Promise<void> {
 }
 
 /**
- * Truy vấn 1 trang theo session, có filter search chung shopName + productName.
+ * Truy vấn 1 trang theo session, có filter search chung shopName + productName + productId.
  * Trả về items đã sắp theo `updatedAt` desc và totalMatched.
  */
 export async function queryThreadPage(
   sessionId: string,
-  opts: { offset?: number; limit?: number; q?: string } = {}
+  opts: {
+    offset?: number;
+    limit?: number;
+    q?: string;
+    bucket?: "waiting" | "uploading" | "success" | "error" | "all";
+  } = {}
 ): Promise<{ items: AffiliatePlusItem[]; totalMatched: number; total: number }> {
   const offset = Math.max(0, Number(opts.offset) || 0);
   const limit = Math.max(1, Number(opts.limit) || 50);
   const q = normalizeSearch(opts.q || "");
+  const bucket = opts.bucket && opts.bucket !== "all" ? opts.bucket : null;
 
   const records = await idbGetThreadsBySession(sessionId);
-  const filtered = q ? records.filter((r) => r.searchKey.includes(q)) : records;
+  let filtered = q
+    ? records.filter((r) => {
+        if (r.searchKey.includes(q)) return true;
+        // Bản ghi cũ chưa có productId trong searchKey
+        const d = r.data as { productId?: string; shopName?: string; productName?: string };
+        return buildSearchKey(d.shopName || "", d.productName || "", d.productId || "").includes(q);
+      })
+    : records;
+  if (bucket) {
+    filtered = filtered.filter((r) => itemBucket(fromRecord(r)) === bucket);
+  }
   const sorted = sortRecordsByCreatedAt(filtered);
   const pageRecs = sorted.slice(offset, offset + limit);
   return {

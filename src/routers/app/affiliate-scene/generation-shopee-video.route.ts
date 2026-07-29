@@ -2,8 +2,8 @@
  * Route POST tạo video Shopee (video-affiliate-plus).
  *
  * Payload ảnh (video_mode=component, tối đa 3 ảnh Flow2):
- *   - Ưu tiên `images[]` (có thể nhiều ảnh nhân vật + 1 ảnh sản phẩm cuối)
- *   - Fallback: `characterImage` + `productImage`
+ *   - Ưu tiên `images[]` (0–N ảnh nhân vật + 1 ảnh sản phẩm cuối; có thể chỉ 1 ảnh sản phẩm)
+ *   - Fallback: `characterImage` + `productImage` (characterImage tùy chọn)
  *
  * Luôn dùng video_mode = component (Thành phần).
  * variant_count = Số Video / Job (videosPerJob) từ config.
@@ -63,7 +63,7 @@ export default [
           return res.status(400).json({ message: "Thiếu prompt" });
         }
 
-        /** Flow2 component mode: tối đa 3 ảnh tham chiếu */
+        /** Flow2 component mode: 1–3 ảnh tham chiếu (có thể chỉ ảnh sản phẩm) */
         const MAX_IMAGES = 3;
         const imagesFromArray = Array.isArray(body.images)
           ? body.images.filter(Boolean)
@@ -71,20 +71,16 @@ export default [
         const imagesFromPair = [body.characterImage, body.productImage].filter(
           Boolean
         ) as Array<string | { imageBytes: string; mimeType?: string }>;
-        // Ưu tiên images[] (hỗ trợ nhiều ảnh nhân vật khi bật "Ảnh ngẫu nhiên")
+        // Ưu tiên images[] khi có; fallback character + product (character tùy chọn)
         const images =
-          imagesFromArray.length >= 2
-            ? imagesFromArray
-            : imagesFromPair.length >= 2
-            ? imagesFromPair
-            : imagesFromArray.length
+          imagesFromArray.length > 0
             ? imagesFromArray
             : imagesFromPair;
 
-        if (images.length < 2) {
+        if (images.length < 1) {
           return res.status(400).json({
             message:
-              "Cần ít nhất 2 ảnh: ảnh nhân vật (trước) và ảnh sản phẩm (cuối). Tối đa 3 ảnh (component).",
+              "Cần ít nhất 1 ảnh sản phẩm. Có thể kèm ảnh nhân vật (tối đa 3 ảnh, component).",
           });
         }
         if (images.length > MAX_IMAGES) {

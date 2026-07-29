@@ -21,6 +21,7 @@ import {
 import { useToast } from "../../../lib/providers/toast-provider";
 import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { Switch } from "../../shared/utilities/form";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
 import {
@@ -176,17 +177,20 @@ function NativeSelect({
   onChange,
   options,
   className = "",
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <select
       value={value}
+      disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={`${fieldClass} ${className}`}
+      className={`${fieldClass} ${className}${disabled ? " opacity-50 cursor-not-allowed" : ""}`}
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>
@@ -849,6 +853,7 @@ export function GenerateVideoConfigDialog({
                         value: o.id,
                         label: o.name,
                       }))}
+                      disabled={config.useCharacterImage === false}
                     />
                     <button
                       type="button"
@@ -858,6 +863,23 @@ export function GenerateVideoConfigDialog({
                       {t("Quản lý")}
                     </button>
                   </FieldRow>
+
+                  <div className="flex items-start justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-indigo-800">{t("Dùng ảnh nhân vật")}</div>
+                      <div className="mt-0.5 text-10 text-indigo-700">
+                        {t(
+                          "Bật: gửi ảnh nhân vật + ảnh sản phẩm. Tắt: chỉ gửi ảnh sản phẩm khi generate."
+                        )}
+                      </div>
+                    </div>
+                    <Switch
+                      size="sm"
+                      dependent
+                      value={config.useCharacterImage !== false}
+                      onChange={(value) => patch({ useCharacterImage: Boolean(value) })}
+                    />
+                  </div>
 
                   {(
                     [

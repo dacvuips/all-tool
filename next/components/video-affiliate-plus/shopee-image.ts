@@ -11,14 +11,15 @@ const JPEG_QUALITY = 72;
 export const MAX_SHOPEE_VIDEO_REFERENCE_IMAGES = 3;
 
 /**
- * Ghép ảnh nhân vật + ảnh sản phẩm cho request generate.
+ * Ghép ảnh nhân vật (tùy chọn) + ảnh sản phẩm cho request generate.
  * Luôn giữ product ở cuối; số ảnh nhân vật bị cắt để tổng ≤ 3.
+ * Không có ảnh nhân vật → chỉ gửi ảnh sản phẩm.
  */
 export function buildShopeeVideoImages<T>(
   characterImages: T[],
   productImage: T
 ): T[] {
-  const maxChars = Math.max(1, MAX_SHOPEE_VIDEO_REFERENCE_IMAGES - 1);
+  const maxChars = Math.max(0, MAX_SHOPEE_VIDEO_REFERENCE_IMAGES - 1);
   const chars = characterImages.filter(Boolean).slice(0, maxChars);
   return [...chars, productImage];
 }

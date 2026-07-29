@@ -24,6 +24,7 @@ import {
 import { useToast } from "../../../lib/providers/toast-provider";
 import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
+import { GeneratedVideoDownloadButtons } from "../../app/affiliate-video/shared/generated-video-download-buttons";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
 import {
   PanelListCard,
@@ -36,7 +37,7 @@ import {
 } from "../shared/panel-list-ui";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { ImageDialog } from "../../shared/utilities/dialog/image-dialog";
-import { Button, Field, Form, Input } from "../../shared/utilities/form";
+import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
   buildMergedVideoFileBase,
@@ -47,6 +48,7 @@ import {
 import { ThreadMetaRecord } from "../idb";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import {
+  getGeneratedVideoBlob,
   getMergedVideoBlob,
   getMergedVideoStorageKey,
   hasExistingGeneratedVideo,
@@ -67,7 +69,7 @@ import {
   sessionDisplayName,
 } from "../scrape-csv-history";
 import { buildShopeeVideoImages, prepareShopeeImageInput } from "../shopee-image";
-import { loadGenerateVideoConfig } from "../storage";
+import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
 import { ThreadRunner } from "../thread-runner";
 import {
   countSelectedInSession,
@@ -175,6 +177,13 @@ function getCharacterPreview(config: GenerateVideoConfig): {
   const character: CharacterProfile | undefined =
     config.characters.find((c) => c.id === config.characterId) || config.characters[0];
   if (!character) return { urls: [], name: "", randomEnabled: false };
+  if (config.useCharacterImage === false) {
+    return {
+      urls: [],
+      name: character.characterName || character.name || "",
+      randomEnabled: false,
+    };
+  }
   const urls = character.randomImagesEnabled
     ? listCharacterImages(character).map((img) => img.url)
     : getCharacterImagesForGeneration(character);
@@ -234,6 +243,8 @@ export function ThreadManagementPanel({
   const [listLoading, setListLoading] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [hasMergedVideos, setHasMergedVideos] = useState(false);
+  const [filterBucket, setFilterBucket] = useState<"all" | "waiting" | "uploading" | "success" | "error">("all");
+  const filterBucketRef = useRef<"all" | "waiting" | "uploading" | "success" | "error">("all");
 
   const [editField, setEditField] = useState<EditField>(null);
   const [editItemId, setEditItemId] = useState<string | null>(null);
@@ -282,6 +293,7 @@ export function ThreadManagementPanel({
     videoUri?: string | null;
     videoUris?: string[];
     mimeType?: string;
+    flow2RequestId?: string;
   }>();
 
   const cancelServerJobs = useCallback(
@@ -323,18 +335,20 @@ export function ThreadManagementPanel({
   const pageStartIndex = (safePage - 1) * pageSize;
   const safePageRef = useRef(safePage);
   safePageRef.current = safePage;
+  filterBucketRef.current = filterBucket;
 
-  const loadPage = useCallback(async (override?: { page?: number; q?: string }) => {
+  const loadPage = useCallback(async (override?: { page?: number; q?: string; bucket?: "all" | "waiting" | "uploading" | "success" | "error" }) => {
     const gen = ++loadGenRef.current;
     const requestedSessionId = sessionIdRef.current;
     const pageNum = override?.page ?? safePageRef.current;
     const q = override?.q ?? searchTermRef.current;
+    const bucket = override?.bucket ?? filterBucketRef.current;
     const limit = pageSizeRef.current;
     const offset = (Math.max(1, pageNum) - 1) * limit;
     setListLoading(true);
     try {
       const [pageResult, meta, selected, hasMerged] = await Promise.all([
-        queryThreadPage(requestedSessionId, { offset, limit, q }),
+        queryThreadPage(requestedSessionId, { offset, limit, q, bucket }),
         getSessionMeta(requestedSessionId),
         countSelectedInSession(requestedSessionId),
         sessionHasMergedVideos(requestedSessionId),
@@ -362,9 +376,11 @@ export function ThreadManagementPanel({
     // Reset UI ngay khi đổi phiên — tránh giữ list/search của phiên cũ
     pageRef.current = 1;
     searchTermRef.current = "";
+    filterBucketRef.current = "all";
     setPage(1);
     setSearchQuery("");
     setSearchTerm("");
+    setFilterBucket("all");
     setVisibleItems([]);
     setListTotal(0);
     setListTotalMatched(0);
@@ -374,7 +390,7 @@ export function ThreadManagementPanel({
 
     let cancelled = false;
     (async () => {
-      if (!cancelled) await loadPage({ page: 1, q: "" });
+      if (!cancelled) await loadPage({ page: 1, q: "", bucket: "all" });
     })();
     return () => {
       cancelled = true;
@@ -528,6 +544,7 @@ export function ThreadManagementPanel({
               mergedVideoUrl: mergedUrl,
               error: "",
               mergeRetryCount: 0,
+              ...(latest.status === "error" ? { status: "stopped" as ThreadStatus } : {}),
             });
             scheduleParentSync();
             autoMergeAttemptedRef.current[item.id] = true;
@@ -541,6 +558,7 @@ export function ThreadManagementPanel({
                 error: "",
                 countdown: 0,
                 mergeRetryCount: retriesUsed,
+                ...(latest.status === "error" ? { status: "stopped" as ThreadStatus } : {}),
               });
               onAddLog(
                 t("Nối video lỗi, tự retry {{current}}/{{max}}: {{msg}}", {
@@ -702,7 +720,11 @@ export function ThreadManagementPanel({
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, pageSize]);
+  }, [searchTerm, pageSize, filterBucket]);
+
+  useEffect(() => {
+    void loadPage({ page: 1, bucket: filterBucket });
+  }, [filterBucket, loadPage]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -993,11 +1015,24 @@ export function ThreadManagementPanel({
 
   const handleDownloadAllMerged = async () => {
     if (downloadingMerged) return;
-    const candidates = (await getSessionItems(sessionId)).filter(
-      (i) => Boolean(i.mergedVideoUrl) || Boolean(i.productId) || Boolean(i.productLink)
-    );
+
+    const config = genConfig || (await loadGenerateVideoConfig());
+    if (!genConfig) setGenConfig(config);
+    // videosPerJob = 1 → không nối; tải luôn video generate. > 1 → video đã nối.
+    const downloadGeneratedOnly = Math.max(1, Number(config.videosPerJob) || 1) <= 1;
+
+    const candidates = (await getSessionItems(sessionId)).filter((i) => {
+      if (downloadGeneratedOnly) {
+        return hasVariantVideoUrls(i) || Boolean(i.productId) || Boolean(i.productLink);
+      }
+      return Boolean(i.mergedVideoUrl) || Boolean(i.productId) || Boolean(i.productLink);
+    });
     if (!candidates.length) {
-      toast.warn(t("Chưa có video đã nối để tải"));
+      toast.warn(
+        downloadGeneratedOnly
+          ? t("Chưa có video generate để tải")
+          : t("Chưa có video đã nối để tải")
+      );
       return;
     }
 
@@ -1007,10 +1042,25 @@ export function ThreadManagementPanel({
       const usedNames = new Set<string>();
 
       for (const item of candidates) {
-        const blob = await getMergedVideoBlob(item, sessionId);
+        let blob: Blob | null = null;
+        if (downloadGeneratedOnly) {
+          // Slot đầu tiên có URL (videosPerJob = 1 thường chỉ 1 slot)
+          const urls = item.videoUrls || [];
+          const disabled = item.videoDisabled || [];
+          let slot = 0;
+          for (let i = 0; i < Math.max(urls.length, 1); i++) {
+            if (String(urls[i] || "").trim() && !disabled[i]) {
+              slot = i;
+              break;
+            }
+          }
+          blob = await getGeneratedVideoBlob(item, sessionId, slot);
+        } else {
+          blob = await getMergedVideoBlob(item, sessionId);
+        }
         if (!blob) continue;
 
-        // itemId.mp4 (vd. 42874449161.mp4 từ /product/{shopId}/{itemId})
+        // Luôn đặt tên theo Id sản phẩm.mp4 (vd. 42874449161.mp4)
         const base =
           buildMergedVideoFileBase(item) ||
           getMergedVideoStorageKey(item, sessionId) ||
@@ -1026,14 +1076,30 @@ export function ThreadManagementPanel({
       }
 
       if (!files.length) {
-        toast.warn(t("Chưa có video đã nối để tải"));
+        toast.warn(
+          downloadGeneratedOnly
+            ? t("Chưa có video generate để tải")
+            : t("Chưa có video đã nối để tải")
+        );
         return;
       }
 
       const stamp = new Date().toISOString().slice(0, 10);
-      await zipAndDownload(files, `video-da-noi-${stamp}.zip`);
-      onAddLog(t("Đã tải {{count}} video đã nối (ZIP)", { count: files.length }), "success");
-      toast.success(t("Đã tải {{count}} video đã nối", { count: files.length }));
+      const zipName = downloadGeneratedOnly
+        ? `video-generate-${stamp}.zip`
+        : `video-da-noi-${stamp}.zip`;
+      await zipAndDownload(files, zipName);
+      onAddLog(
+        downloadGeneratedOnly
+          ? t("Đã tải {{count}} video generate (ZIP)", { count: files.length })
+          : t("Đã tải {{count}} video đã nối (ZIP)", { count: files.length }),
+        "success"
+      );
+      toast.success(
+        downloadGeneratedOnly
+          ? t("Đã tải {{count}} video generate", { count: files.length })
+          : t("Đã tải {{count}} video đã nối", { count: files.length })
+      );
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || t("Tải video thất bại"));
@@ -1122,10 +1188,8 @@ export function ThreadManagementPanel({
     }
 
     const preview = getCharacterPreview(config);
-    if (!preview.urls.length) {
-      toast.warn(t("Chưa có ảnh nhân vật trong config. Vào Quản lý Nhân Vật để thêm ảnh."));
-      return;
-    }
+    const useCharacterImage = config.useCharacterImage !== false;
+    // Ảnh nhân vật theo switch cấu hình — tắt thì chỉ dùng ảnh sản phẩm
 
     const missingProduct = targets.filter((i) => !i.imageUrl?.trim());
     if (missingProduct.length) {
@@ -1153,13 +1217,19 @@ export function ThreadManagementPanel({
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
 
     let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
-    try {
-      characterPreparedFixed = await Promise.all(
-        preview.urls.map((url) => prepareShopeeImageInput(url))
-      );
-    } catch (err: any) {
-      toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
-      return;
+    if (useCharacterImage && preview.urls.length) {
+      try {
+        characterPreparedFixed = await Promise.all(
+          preview.urls.map((url) => prepareShopeeImageInput(url))
+        );
+      } catch (err: any) {
+        toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
+        return;
+      }
+    } else if (!useCharacterImage) {
+      onAddLog(t("Đã tắt ảnh nhân vật — generate chỉ với ảnh sản phẩm"), "info");
+    } else {
+      onAddLog(t("Không có ảnh nhân vật — generate chỉ với ảnh sản phẩm"), "info");
     }
 
     const runJob = async (
@@ -1184,10 +1254,9 @@ export function ThreadManagementPanel({
           try {
             const fresh = (await getThreadItem(sessionId, target.id)) || target;
             const characterPrepared = characterPreparedFixed;
-            if (!characterPrepared.length) throw new Error(t("Chưa có ảnh nhân vật"));
 
             const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
-            // Flow2 component tối đa 3 ảnh: ưu tiên giữ product cuối + nhiều ảnh nhân vật nhất có thể
+            // Flow2 component tối đa 3 ảnh: product cuối; nhân vật tùy chọn
             const images = buildShopeeVideoImages(characterPrepared, productPrepared);
 
             // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
@@ -1200,8 +1269,8 @@ export function ThreadManagementPanel({
                   body: {
                     prompt: fresh.prompt?.trim() || prompt,
                     images,
-                    // Giữ field cũ cho tương thích; server ưu tiên `images[]` khi đủ ≥2 ảnh
-                    characterImage: images[0],
+                    // characterImage chỉ gửi khi có ảnh nhân vật (tránh duplicate product)
+                    ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
                     productImage: productPrepared,
                     videosPerJob: config!.videosPerJob,
                     variantCount: config!.videosPerJob,
@@ -1257,11 +1326,16 @@ export function ThreadManagementPanel({
             const slotCount = Math.max(config!.videosPerJob || 1, rawUris.length, 1);
             const { videoUrls, videoDisabled } = padVideoSlots(rawUris, slotCount);
             const filledCount = videoUrls.filter(Boolean).length;
+            const flow2RequestId = String(result.data.flow2RequestId || "").trim();
+            const videoFlow2RequestIds = videoUrls.map((u) =>
+              u && flow2RequestId ? flow2RequestId : ""
+            );
 
             await patchThread(sessionId, fresh.id, {
               status: "success" as ThreadStatus,
               videoUrls,
               videoDisabled,
+              videoFlow2RequestIds,
               uploaded: filledCount,
               pending: Math.max(slotCount - filledCount, 0),
               error: "",
@@ -1569,17 +1643,15 @@ export function ThreadManagementPanel({
 
     try {
       const config = genConfig || (await loadGenerateVideoConfig());
+      const useCharacterImage = config.useCharacterImage !== false;
       const character =
         config.characters.find((c) => c.id === config.characterId) || config.characters[0];
-      const characterImages = character ? getCharacterImagesForGeneration(character) : [];
-      if (!characterImages.length) {
-        toast.error(t("Chưa có ảnh nhân vật trong cấu hình"));
-        return;
-      }
+      const characterImages =
+        useCharacterImage && character ? getCharacterImagesForGeneration(character) : [];
 
-      const characterPrepared = await Promise.all(
-        characterImages.map((image) => prepareShopeeImageInput(image))
-      );
+      const characterPrepared = characterImages.length
+        ? await Promise.all(characterImages.map((image) => prepareShopeeImageInput(image)))
+        : [];
       const productPrepared = await prepareShopeeImageInput(target.imageUrl);
       const images = buildShopeeVideoImages(characterPrepared, productPrepared);
       const prompt = target.prompt?.trim() || buildActivePromptFromConfig(config);
@@ -1589,7 +1661,7 @@ export function ThreadManagementPanel({
         body: {
           prompt,
           images,
-          characterImage: images[0],
+          ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
           productImage: productPrepared,
           videosPerJob: 1,
           variantCount: 1,
@@ -1633,11 +1705,18 @@ export function ThreadManagementPanel({
       const nextDisabled = Array.from({ length: slotCount }, (_, i) =>
         Boolean(target.videoDisabled?.[i])
       );
+      const flow2RequestId = String(result.data.flow2RequestId || "").trim();
+      const nextFlow2Ids = Array.from({ length: slotCount }, (_, i) =>
+        i === slotIndex
+          ? flow2RequestId
+          : String(target.videoFlow2RequestIds?.[i] || "").trim()
+      );
       const filledCount = nextUrls.filter(Boolean).length;
 
       await patchThread(sessionId, itemId, {
         videoUrls: nextUrls,
         videoDisabled: nextDisabled,
+        videoFlow2RequestIds: nextFlow2Ids,
         uploaded: filledCount,
         pending: Math.max(slotCount - filledCount, 0),
         status: "success" as ThreadStatus,
@@ -1922,6 +2001,45 @@ export function ThreadManagementPanel({
               <HiCog className="text-base" />
               {t("Cấu hình Generate Video")}
             </button>
+            <div
+              className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium"
+              style={
+                genConfig?.useCharacterImage === false
+                  ? { backgroundColor: "#f8fafc", borderColor: "#cbd5e1", color: "#64748b" }
+                  : { backgroundColor: "#eef2ff", borderColor: "#a5b4fc", color: "#4338ca" }
+              }
+              title={
+                genConfig?.useCharacterImage === false
+                  ? (t("Đang tắt — generate chỉ dùng ảnh sản phẩm") as string)
+                  : (t("Đang bật — generate kèm ảnh nhân vật") as string)
+              }
+            >
+              <span className="whitespace-nowrap">{t("Ảnh nhân vật")}</span>
+              <Switch
+                size="sm"
+                dependent
+                value={genConfig?.useCharacterImage !== false}
+                onChange={(value) => {
+                  void (async () => {
+                    try {
+                      const base = genConfig || (await loadGenerateVideoConfig());
+                      const next = { ...base, useCharacterImage: Boolean(value) };
+                      const saved = await saveGenerateVideoConfig(next);
+                      setGenConfig(saved);
+                      setCharacterPreview(getCharacterPreview(saved));
+                      onAddLog(
+                        value
+                          ? t("Đã bật dùng ảnh nhân vật khi generate")
+                          : t("Đã tắt ảnh nhân vật — chỉ dùng ảnh sản phẩm"),
+                        "info"
+                      );
+                    } catch (err: any) {
+                      toast.error(err?.message || t("Không lưu được cấu hình"));
+                    }
+                  })();
+                }}
+              />
+            </div>
             <button
               type="button"
               onClick={handleRetryErrors}
@@ -2053,6 +2171,40 @@ export function ThreadManagementPanel({
           </div>
         ) : (
           <>
+            {/* Filter tabs */}
+            <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-1">
+              {(
+                [
+                  { key: "all", label: t("Tất cả"), count: stats.total },
+                  { key: "waiting", label: t("Chờ"), count: stats.waiting, color: "text-cyan-700 bg-cyan-50 border-cyan-200" },
+                  { key: "uploading", label: t("Đang upload"), count: stats.uploading, color: "text-blue-700 bg-blue-50 border-blue-200" },
+                  { key: "success", label: t("Thành công"), count: stats.success, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
+                  { key: "error", label: t("Lỗi"), count: stats.error, color: "text-rose-700 bg-rose-50 border-rose-200" },
+                ] as { key: typeof filterBucket; label: string; count: number; color?: string }[]
+              ).map(({ key, label, count, color }) => {
+                const isActive = filterBucket === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setFilterBucket(key)}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border text-xs font-semibold transition-colors ${
+                      isActive
+                        ? color
+                          ? color + " ring-1 ring-offset-0 ring-current opacity-100"
+                          : "bg-gray-800 text-white border-gray-800"
+                        : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
+                    }`}
+                  >
+                    {label}
+                    <span className={`text-[10px] font-bold ${isActive ? "opacity-80" : "opacity-60"}`}>
+                      ({count})
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
             <PanelListToolbar
               trailing={
                 <>
@@ -2070,7 +2222,7 @@ export function ThreadManagementPanel({
               <PanelListSearch
                 value={searchQuery}
                 onChange={setSearchQuery}
-                placeholder={t("Tìm tên shop / tên sản phẩm...") as string}
+                placeholder={t("Tìm tên shop / tên sản phẩm / Id sản phẩm...") as string}
               />
             </PanelListToolbar>
 
@@ -2109,6 +2261,7 @@ export function ThreadManagementPanel({
                   ) : null}
                   {visibleItems.map((item, localIdx) => {
                     const idx = pageStartIndex + localIdx;
+                    const productUrl = String(item.productLink || "").trim();
                     return (
                       <tr
                         key={item.id}
@@ -2146,12 +2299,29 @@ export function ThreadManagementPanel({
                               </button>
                             </div>
                             <div className="flex items-center gap-1.5 min-w-0">
-                              <span
-                                className="block flex-1 min-w-0 text-gray-600 truncate"
-                                title={item.productName || undefined}
-                              >
-                                {item.productName || "—"}
-                              </span>
+                              {productUrl ? (
+                                <a
+                                  href={productUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block flex-1 min-w-0 text-sky-600 truncate hover:text-sky-800 hover:underline"
+                                  title={
+                                    item.productName
+                                      ? `${item.productName}\n${productUrl}`
+                                      : productUrl
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {item.productName || "—"}
+                                </a>
+                              ) : (
+                                <span
+                                  className="block flex-1 min-w-0 text-gray-600 truncate"
+                                  title={item.productName || undefined}
+                                >
+                                  {item.productName || "—"}
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => openEdit(item, "productName")}
@@ -2159,6 +2329,14 @@ export function ThreadManagementPanel({
                               >
                                 <HiPencil className="text-xs" />
                               </button>
+                            </div>
+                            <div
+                              className="font-mono text-[11px] text-gray-400 truncate"
+                              title={item.productId || undefined}
+                            >
+                              {item.productId
+                                ? `${t("Id SP")}: ${item.productId}`
+                                : `${t("Id SP")}: —`}
                             </div>
                           </div>
                         </td>
@@ -2220,18 +2398,24 @@ export function ThreadManagementPanel({
                             ) : (
                               <div
                                 className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
-                                title={t("Chưa có ảnh nhân vật trong config")}
+                                title={
+                                  genConfig?.useCharacterImage === false
+                                    ? t("Đã tắt dùng ảnh nhân vật")
+                                    : t("Chưa có ảnh nhân vật trong config")
+                                }
                               >
                                 <HiOutlinePhotograph className="text-xl" />
                               </div>
                             )}
-                            {characterPreview.name ? (
+                            {characterPreview.name && genConfig?.useCharacterImage !== false ? (
                               <span
                                 className="max-w-[88px] truncate text-10 text-gray-500"
                                 title={characterPreview.name}
                               >
                                 {characterPreview.name}
                               </span>
+                            ) : genConfig?.useCharacterImage === false ? (
+                              <span className="text-10 text-gray-400">{t("Đã tắt")}</span>
                             ) : null}
                           </div>
                         </td>
@@ -2812,9 +2996,40 @@ export function ThreadManagementPanel({
                       ) : null}
                     </div>
 
-                    <div className="flex flex-wrap gap-2 justify-center">
+                    <div className="flex flex-wrap gap-2 justify-center items-center">
                       {!isFailed ? (
                         <>
+                          {(() => {
+                            const previewItem =
+                              visibleItems.find((i) => i.id === videoPreview.itemId) ||
+                              items.find((i) => i.id === videoPreview.itemId);
+                            const remoteUri = String(
+                              previewItem?.videoUrls?.[idx] || ""
+                            ).trim();
+                            const flow2RequestId = String(
+                              previewItem?.videoFlow2RequestIds?.[idx] || ""
+                            ).trim();
+                            const downloadVideo = {
+                              videoUri: remoteUri || src,
+                              flow2RequestId: flow2RequestId || undefined,
+                              mimeType: "video/mp4",
+                            };
+                            const baseName =
+                              (previewItem && buildMergedVideoFileBase(previewItem)) ||
+                              previewItem?.productId ||
+                              videoPreview.itemId;
+                            const fileName =
+                              videoPreview.slots.length > 1
+                                ? `${baseName}-v${idx + 1}.mp4`
+                                : `${baseName}.mp4`;
+                            return (
+                              <GeneratedVideoDownloadButtons
+                                video={downloadVideo}
+                                fileName={fileName}
+                                disabled={anyRegen}
+                              />
+                            );
+                          })()}
                           <button
                             type="button"
                             disabled={anyRegen}

@@ -260,6 +260,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterBucket, setFilterBucket] = useState<"all" | "active" | "proxy" | "inactive">("all");
   const [usersSubTab, setUsersSubTab] = useState(0);
   const [batchCreating, setBatchCreating] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(
@@ -501,8 +502,12 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
   const normalizedTerm = useMemo(() => searchTerm.toLowerCase(), [searchTerm]);
 
   const filteredUsers = useMemo(() => {
-    if (!normalizedTerm) return users;
     return users.filter((user) => {
+      if (filterBucket === "active" && user.active === false) return false;
+      if (filterBucket === "inactive" && user.active !== false) return false;
+      if (filterBucket === "proxy" && !resolveUserProxy(user)) return false;
+
+      if (!normalizedTerm) return true;
       const haystack = [
         user.username,
         user.domain,
@@ -517,7 +522,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
         .toLowerCase();
       return haystack.includes(normalizedTerm);
     });
-  }, [users, normalizedTerm]);
+  }, [users, normalizedTerm, filterBucket]);
 
   const allVisibleSelected =
     filteredUsers.length > 0 && filteredUsers.every((u) => selectedIds.has(u.id));
@@ -1118,50 +1123,73 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
           <TabGroup.Tab label={t("Quản lý tài khoản")}>
             <div className="p-4 space-y-4">
       <div className="flex flex-wrap gap-2">
-        {[
-          {
-            label: t("Tổng"),
-            value: stats.total,
-            bg: "#e0f2fe",
-            border: "#38bdf8",
-            text: "#0284c7",
-            dot: "#0ea5e9",
-          },
-          {
-            label: t("Đang bật"),
-            value: stats.active,
-            bg: "#ecfdf5",
-            border: "#34d399",
-            text: "#059669",
-            dot: "#10b981",
-          },
-          {
-            label: t("Có Proxy"),
-            value: stats.withProxy,
-            bg: "#fdf4ff",
-            border: "#e879f9",
-            text: "#c026d3",
-            dot: "#d946ef",
-          },
-          {
-            label: t("Tắt"),
-            value: stats.inactive,
-            bg: "#f8fafc",
-            border: "#cbd5e1",
-            text: "#475569",
-            dot: "#94a3b8",
-          },
-        ].map((s) => (
-          <div
-            key={String(s.label)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm"
-            style={{ backgroundColor: s.bg, borderColor: s.border, color: s.text }}
-          >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
-            <span className="text-xs font-medium">{s.label}</span>
-            <span className="text-sm font-bold">{s.value}</span>
-          </div>
-        ))}
+        {(
+          [
+            {
+              key: "all" as const,
+              label: t("Tổng"),
+              value: stats.total,
+              bg: "#e0f2fe",
+              border: "#38bdf8",
+              text: "#0284c7",
+              dot: "#0ea5e9",
+            },
+            {
+              key: "active" as const,
+              label: t("Đang bật"),
+              value: stats.active,
+              bg: "#ecfdf5",
+              border: "#34d399",
+              text: "#059669",
+              dot: "#10b981",
+            },
+            {
+              key: "proxy" as const,
+              label: t("Có Proxy"),
+              value: stats.withProxy,
+              bg: "#fdf4ff",
+              border: "#e879f9",
+              text: "#c026d3",
+              dot: "#d946ef",
+            },
+            {
+              key: "inactive" as const,
+              label: t("Tắt"),
+              value: stats.inactive,
+              bg: "#f8fafc",
+              border: "#cbd5e1",
+              text: "#475569",
+              dot: "#94a3b8",
+            },
+          ] as const
+        ).map((s) => {
+          const isActive = filterBucket === s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setFilterBucket(s.key)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border shadow-sm transition-all ${
+                isActive ? "ring-2 ring-offset-1" : "opacity-80 hover:opacity-100"
+              }`}
+              style={{
+                backgroundColor: s.bg,
+                borderColor: s.border,
+                color: s.text,
+                ...(isActive ? { boxShadow: `0 0 0 2px ${s.border}` } : {}),
+              }}
+              title={
+                s.key === "all"
+                  ? (t("Hiện tất cả tài khoản") as string)
+                  : (t("Lọc: {{label}}", { label: s.label }) as string)
+              }
+            >
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
+              <span className="text-xs font-medium">{s.label}</span>
+              <span className="text-sm font-bold">{s.value}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div className="p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
@@ -1349,7 +1377,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
             <PanelListToolbar
               trailing={
                 <PanelListMatchCount
-                  term={normalizedTerm}
+                  term={normalizedTerm || (filterBucket !== "all" ? "filter" : "")}
                   matched={filteredUsers.length}
                   total={users.length}
                 />
@@ -1392,7 +1420,7 @@ export function UsersPanel({ users, proxies, onUpdateUsers }: UsersPanelProps) {
                   {filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan={13} className={panelListClasses.emptyMatch}>
-                        {t("Không có người dùng nào khớp tìm kiếm.")}
+                        {t("Không có người dùng nào khớp bộ lọc / tìm kiếm.")}
                       </td>
                     </tr>
                   ) : (

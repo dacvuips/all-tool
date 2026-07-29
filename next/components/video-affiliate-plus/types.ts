@@ -37,6 +37,11 @@ export interface AffiliatePlusItem {
   videoUrls: string[];
   /** Slot bị tắt — bỏ qua khi nối video */
   videoDisabled: boolean[];
+  /**
+   * flow2RequestId theo từng slot (để upscale 1080p).
+   * Generate batch → cùng id; regenerate 1 slot → id riêng.
+   */
+  videoFlow2RequestIds: string[];
   /** Video đã nối — UI/thread chỉ lưu tên `merged.mp4`; binary ở IndexedDB (Blob). */
   mergedVideoUrl: string;
   hostPort: string;
@@ -135,6 +140,11 @@ export interface GenerateVideoConfig {
   voice: string;
   techniqueId: string;
   characterId: string;
+  /**
+   * Bật/tắt gửi ảnh nhân vật khi generate.
+   * false → chỉ dùng ảnh sản phẩm.
+   */
+  useCharacterImage: boolean;
   actionV1Id: string;
   actionV2Id: string;
   techniques: ManagedOption[];
@@ -1075,6 +1085,7 @@ export const DEFAULT_GENERATE_VIDEO_CONFIG: GenerateVideoConfig = {
   voice: "Achernar",
   techniqueId: "tech-professional",
   characterId: "char-ao-dai",
+  useCharacterImage: true,
   actionV1Id: "act1-review",
   actionV2Id: "act2-review",
   techniques: [
@@ -1135,6 +1146,7 @@ export function createEmptyItem(partial?: Partial<AffiliatePlusItem>): Affiliate
     prompt: "",
     videoUrls: [],
     videoDisabled: [],
+    videoFlow2RequestIds: [],
     mergedVideoUrl: "",
     hostPort: "",
     country: "VN",

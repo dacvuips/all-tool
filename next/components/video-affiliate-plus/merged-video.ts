@@ -809,6 +809,63 @@ export async function resolveMergedPreviewUrl(
   return url;
 }
 
+/**
+ * Lấy Blob video generate (variant) theo slot.
+ * Dùng khi `videosPerJob === 1` — không có video nối, tải luôn file generate.
+ */
+export async function getGeneratedVideoBlob(
+  item: ProductVideoKeySource,
+  sessionId?: string,
+  slotIndex = 0
+): Promise<Blob | null> {
+  const keys = videoStorageKeysToTry(item, sessionId);
+  const idx = Math.max(0, slotIndex);
+
+  for (const key of keys) {
+    const rec = await idbGetProductVideo(key);
+    if (!rec) continue;
+
+    const blob = rec.videoBlobList?.[idx];
+    if (blob && blob.size > 0) return blob;
+
+    const bytes = (rec.videoBytesList?.[idx] || "").trim();
+    if (bytes) return base64ToBlob(bytes, rec.mimeType || "video/mp4");
+
+    const uri = String(rec.videoUris?.[idx] || "").trim();
+    if (!uri) continue;
+    try {
+      if (uri.startsWith("data:")) return dataUrlToBlob(uri);
+      if (uri.startsWith("blob:")) {
+        const res = await fetch(uri);
+        if (res.ok) {
+          const live = await res.blob();
+          if (live.size > 0) return live;
+        }
+      } else {
+        return await uriToBlob(uri);
+      }
+    } catch (err) {
+      console.warn("[getGeneratedVideoBlob] idb uri", err);
+    }
+  }
+
+  const url = String(item.videoUrls?.[idx] || "").trim();
+  if (!url) return null;
+  try {
+    if (url.startsWith("data:")) return dataUrlToBlob(url);
+    if (url.startsWith("blob:")) {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const live = await res.blob();
+      return live.size > 0 ? live : null;
+    }
+    return await uriToBlob(url);
+  } catch (err) {
+    console.warn("[getGeneratedVideoBlob]", err);
+    return null;
+  }
+}
+
 /** Lấy Blob video đã nối từ IndexedDB (Blob / base64 legacy) hoặc URL trên item. */
 export async function getMergedVideoBlob(
   item: ProductVideoKeySource,

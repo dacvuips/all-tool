@@ -66,6 +66,10 @@ function migrateItem(raw: Record<string, unknown>): AffiliatePlusItem {
 
   const rawDisabled = Array.isArray(raw.videoDisabled) ? (raw.videoDisabled as boolean[]) : [];
   const videoDisabled = videoUrls.map((_, idx) => Boolean(rawDisabled[idx]));
+  const rawFlow2Ids = Array.isArray(raw.videoFlow2RequestIds)
+    ? (raw.videoFlow2RequestIds as string[])
+    : [];
+  const videoFlow2RequestIds = videoUrls.map((_, idx) => String(rawFlow2Ids[idx] || "").trim());
 
   const productLink = String(raw.productLink || "");
   const productId =
@@ -87,6 +91,7 @@ function migrateItem(raw: Record<string, unknown>): AffiliatePlusItem {
     prompt: String(raw.prompt || ""),
     videoUrls,
     videoDisabled,
+    videoFlow2RequestIds,
     mergedVideoUrl,
     hostPort: String(raw.hostPort || ""),
     country: String(raw.country || "VN"),
@@ -125,6 +130,9 @@ export function saveItems(items: AffiliatePlusItem[]) {
         ...i,
         videoUrls,
         videoDisabled: videoUrls.map((_, idx) => Boolean(i.videoDisabled?.[idx])),
+        videoFlow2RequestIds: videoUrls.map((_, idx) =>
+          String(i.videoFlow2RequestIds?.[idx] || "").trim()
+        ),
         mergedVideoUrl: isEphemeralMediaUrl(i.mergedVideoUrl || "") ? "" : i.mergedVideoUrl || "",
       };
     })
@@ -383,6 +391,8 @@ function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): Ge
     ...data,
     threadCount,
     videosPerJob,
+    // Bản ghi cũ chưa có field → mặc định bật ảnh nhân vật
+    useCharacterImage: data.useCharacterImage !== false,
     prompts: { ...DEFAULT_GENERATE_VIDEO_CONFIG.prompts, ...data.prompts },
     watermark: { ...DEFAULT_GENERATE_VIDEO_CONFIG.watermark, ...data.watermark },
     techniques: data.techniques?.length ? data.techniques : DEFAULT_GENERATE_VIDEO_CONFIG.techniques,

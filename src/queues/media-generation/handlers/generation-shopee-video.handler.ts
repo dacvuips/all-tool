@@ -2,7 +2,7 @@
  * Handler job `GENERATION_SHOPEE_VIDEO`
  * (video-affiliate-plus — gen_image_video, video_mode=component).
  *
- * Ảnh (tối đa 3): các ảnh nhân vật trước, ảnh sản phẩm cuối.
+ * Ảnh (1–3): tùy chọn ảnh nhân vật trước, ảnh sản phẩm cuối (bắt buộc).
  * variant_count = videosPerJob từ config.
  * Nối video + lưu IndexedDB do client xử lý sau khi nhận videoUris.
  */
@@ -42,11 +42,11 @@ export async function handleGenerationShopeeVideo(
   await emitter.progress(10, "Đang chuẩn bị tạo video Shopee...");
 
   const prompt = (payload.prompt ?? payload.config?.prompt ?? "").trim();
-  /** Flow2 component: tối đa 3 ảnh tham chiếu */
+  /** Flow2 component: 1–3 ảnh tham chiếu (có thể chỉ ảnh sản phẩm) */
   const images = (payload.images || []).slice(0, 3);
 
-  if (images.length < 2) {
-    throw Object.assign(new Error("Thiếu ảnh nhân vật hoặc ảnh sản phẩm"), { statusCode: 400 });
+  if (images.length < 1) {
+    throw Object.assign(new Error("Thiếu ảnh sản phẩm"), { statusCode: 400 });
   }
   if (!prompt) {
     throw Object.assign(new Error("Thiếu prompt"), { statusCode: 400 });

@@ -39,6 +39,9 @@ function sanitizeItemsForHistory(items: AffiliatePlusItem[]): AffiliatePlusItem[
       prompt: "",
       videoUrls,
       videoDisabled: videoUrls.map((_, idx) => Boolean(i.videoDisabled?.[idx])),
+      videoFlow2RequestIds: videoUrls.map((_, idx) =>
+        String(i.videoFlow2RequestIds?.[idx] || "").trim()
+      ),
       mergedVideoUrl: toPersistedMergedVideoUrl(i.mergedVideoUrl),
       status:
         i.status === "running" || i.status === "uploading"
