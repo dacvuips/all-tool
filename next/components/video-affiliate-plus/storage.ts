@@ -25,6 +25,7 @@ import {
   USERS_STORAGE_KEY,
   buildProxyRaw,
   createEmptyItem,
+  ensureVideoSlots,
   migrateToCharacterProfile,
   parseProxyLine,
   parseCompoundMailKpCookie,
@@ -386,20 +387,27 @@ function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): Ge
     data.videosPerJob,
     DEFAULT_GENERATE_VIDEO_CONFIG.videosPerJob
   );
-  return {
+  const base: GenerateVideoConfig = {
     ...DEFAULT_GENERATE_VIDEO_CONFIG,
     ...data,
     threadCount,
     videosPerJob,
+    splitPrompt: Boolean(data.splitPrompt),
     // Bản ghi cũ chưa có field → mặc định bật ảnh nhân vật
     useCharacterImage: data.useCharacterImage !== false,
+    randomImagesEnabled: data.randomImagesEnabled === true,
+    randomImagesPrompt: String(data.randomImagesPrompt || ""),
     prompts: { ...DEFAULT_GENERATE_VIDEO_CONFIG.prompts, ...data.prompts },
     watermark: { ...DEFAULT_GENERATE_VIDEO_CONFIG.watermark, ...data.watermark },
     techniques: data.techniques?.length ? data.techniques : DEFAULT_GENERATE_VIDEO_CONFIG.techniques,
     characters,
     actionsV1: data.actionsV1?.length ? data.actionsV1 : DEFAULT_GENERATE_VIDEO_CONFIG.actionsV1,
     actionsV2: data.actionsV2?.length ? data.actionsV2 : DEFAULT_GENERATE_VIDEO_CONFIG.actionsV2,
+    videoSlots: Array.isArray(data.videoSlots) ? data.videoSlots : [],
   };
+  // Luôn chuẩn hóa độ dài slots theo videosPerJob
+  base.videoSlots = ensureVideoSlots(base);
+  return base;
 }
 
 /** Load generate-video config từ IndexedDB `video-affiliate-manager`. */

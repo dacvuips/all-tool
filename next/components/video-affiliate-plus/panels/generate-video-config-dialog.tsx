@@ -1,14 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  HiCog,
-  HiDownload,
-  HiMusicNote,
-  HiOutlinePhotograph,
-  HiOutlineX,
-  HiPlay,
-  HiUpload,
-} from "react-icons/hi";
+import { HiCog, HiDownload, HiOutlineX, HiPlay, HiUpload } from "react-icons/hi";
 import {
   RiDeleteBinLine,
   RiFileDownloadLine,
@@ -28,12 +20,19 @@ import {
   CharacterProfile,
   DEFAULT_GENERATE_VIDEO_CONFIG,
   GenerateVideoConfig,
+  GenerateVideoPromptConfig,
+  GenerateVideoSlotConfig,
   ManagedOption,
   PromptTemplateField,
   buildActivePromptFromConfig,
+  buildActivePromptFromSlot,
   buildCheckTotalPrompt,
   buildDialoguePrompt,
+  createSlotConfigFromRoot,
+  ensureVideoSlots,
   getDefaultPrompt,
+  isSlotPromptConfigured,
+  listCharacterImages,
 } from "../types";
 import { CharacterProfileManagerDialog } from "./character-profile-manager-dialog";
 
@@ -48,8 +47,8 @@ const PROMPT_BUTTONS: {
   style: React.CSSProperties;
 }[] = [
   { key: "rulesNegative", label: "Rules Negative Prompt", style: { background: "#4B5563" } },
-  { key: "dialogue", label: "Prompt Tạo Thoại", style: { background: "#D97706" } },
   { key: "checkTotal", label: "Check Prompt Tổng", style: { background: "#059669" } },
+  { key: "dialogue", label: "Prompt Tạo Thoại", style: { background: "#D97706" } },
   { key: "image", label: "Prompt Tạo Ảnh", style: { background: "#0284C7" } },
 ];
 
@@ -93,34 +92,15 @@ const VOICE_OPTIONS = [
   "Zephyr",
 ];
 
-const POSITION_OPTIONS = [
-  { value: "custom", label: "Tùy chỉnh" },
-  { value: "top-left", label: "Trên trái" },
-  { value: "top-right", label: "Trên phải" },
-  { value: "bottom-left", label: "Dưới trái" },
-  { value: "bottom-right", label: "Dưới phải" },
-  { value: "center", label: "Giữa" },
-];
-
-const EFFECT_OPTIONS = [
-  { value: "move", label: "Di Chuyển" },
-  { value: "static", label: "Tĩnh" },
-  { value: "fade", label: "Fade" },
-  { value: "pulse", label: "Pulse" },
-];
-
-const DIALOGUE_OPTIONS = [
-  { value: "keep", label: "Giữ Nguyên Thoại" },
-  { value: "replace", label: "Thay Thế Thoại" },
-  { value: "mute", label: "Tắt Thoại" },
-  { value: "generate", label: "Tạo Thoại Mới" },
-];
-
 const fieldClass =
   "h-9 w-full rounded-lg border border-gray-200 bg-white px-2.5 text-sm text-gray-800 outline-none focus:border-primary";
 
-function getSelectedCharacter(config: GenerateVideoConfig): CharacterProfile | null {
-  return config.characters.find((item) => item.id === config.characterId) || config.characters[0] || null;
+function getSelectedCharacter(
+  config: GenerateVideoConfig,
+  characterId?: string
+): CharacterProfile | null {
+  const id = characterId || config.characterId;
+  return config.characters.find((item) => item.id === id) || config.characters[0] || null;
 }
 
 interface GenerateVideoConfigDialogProps {
@@ -165,9 +145,9 @@ function SectionCard({
 
 function FieldRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex gap-2 items-center">
-      <span className="w-28 text-xs font-medium text-gray-500 shrink-0 sm:w-32">{label}</span>
-      <div className="flex flex-1 gap-2 items-center min-w-0">{children}</div>
+    <div className="flex gap-1.5 items-center min-w-0">
+      <span className="shrink-0 text-xs font-medium text-gray-500 whitespace-nowrap">{label}</span>
+      <div className="flex flex-1 gap-1.5 items-center min-w-0">{children}</div>
     </div>
   );
 }
@@ -209,8 +189,6 @@ export function GenerateVideoConfigDialog({
   const { t } = useTranslation();
   const toast = useToast();
   const { VIDEO_CONCURRENCY } = useConcurrencyLimits();
-  const musicInputRef = useRef<HTMLInputElement>(null);
-  const logoInputRef = useRef<HTMLInputElement>(null);
 
   const [config, setConfig] = useState<GenerateVideoConfig>(DEFAULT_GENERATE_VIDEO_CONFIG);
   const [editingPrompt, setEditingPrompt] = useState<PromptKey | null>(null);
@@ -226,8 +204,8 @@ export function GenerateVideoConfigDialog({
     null
   );
   const [manageDraft, setManageDraft] = useState("");
-  const [showCustomPos, setShowCustomPos] = useState(false);
   const [characterManagerOpen, setCharacterManagerOpen] = useState(false);
+  const [activeSlotIndex, setActiveSlotIndex] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -236,6 +214,7 @@ export function GenerateVideoConfigDialog({
       const loaded = await loadGenerateVideoConfig();
       if (cancelled) return;
       setConfig(loaded);
+      setActiveSlotIndex(0);
       setEditingPrompt(null);
       setPromptDraft("");
       setDirectivesDraft("");
@@ -246,7 +225,6 @@ export function GenerateVideoConfigDialog({
       setImportOpen(false);
       setImportText("");
       setManageList(null);
-      setShowCustomPos(false);
       setCharacterManagerOpen(false);
     })();
     return () => {
@@ -254,16 +232,86 @@ export function GenerateVideoConfigDialog({
     };
   }, [isOpen]);
 
+  const slotCount = Math.min(4, Math.max(1, config.videosPerJob || 1));
+  const videoSlots = ensureVideoSlots(config);
+  const safeSlotIndex = Math.min(activeSlotIndex, Math.max(0, slotCount - 1));
+  const activeSlot: GenerateVideoSlotConfig = config.splitPrompt
+    ? videoSlots[safeSlotIndex] || createSlotConfigFromRoot(config)
+    : createSlotConfigFromRoot(config);
+
+  /** Prompt/video đang chỉnh — root hoặc slot đang chọn khi tách prompt. */
+  const workingPrompts: GenerateVideoPromptConfig = activeSlot.prompts;
+  const workingCharacterId = activeSlot.characterId;
+
   const patch = (partial: Partial<GenerateVideoConfig>) => {
     setConfig((c) => ({ ...c, ...partial }));
   };
 
-  const patchWatermark = (partial: Partial<GenerateVideoConfig["watermark"]>) => {
-    setConfig((c) => ({ ...c, watermark: { ...c.watermark, ...partial } }));
+  const patchSlot = (partial: Partial<GenerateVideoSlotConfig>) => {
+    setConfig((c) => {
+      if (!c.splitPrompt) {
+        const next = { ...c, ...partial } as GenerateVideoConfig;
+        if (partial.prompts) next.prompts = { ...c.prompts, ...partial.prompts };
+        return next;
+      }
+      const slots = ensureVideoSlots(c);
+      const idx = Math.min(activeSlotIndex, Math.max(0, slots.length - 1));
+      const updated: GenerateVideoSlotConfig = {
+        ...slots[idx],
+        ...partial,
+        prompts: partial.prompts
+          ? { ...slots[idx].prompts, ...partial.prompts }
+          : slots[idx].prompts,
+      };
+      slots[idx] = updated;
+      // Đồng bộ root với slot 0 để tương thích luồng cũ
+      const rootSync =
+        idx === 0
+          ? {
+              prompts: updated.prompts,
+              activePrompt: updated.activePrompt,
+              workflow: updated.workflow,
+              voice: updated.voice,
+              techniqueId: updated.techniqueId,
+              characterId: updated.characterId,
+              useCharacterImage: updated.useCharacterImage,
+              randomImagesEnabled: updated.randomImagesEnabled,
+              randomImagesPrompt: updated.randomImagesPrompt,
+              actionV1Id: updated.actionV1Id,
+              actionV2Id: updated.actionV2Id,
+              imageModel: updated.imageModel,
+              videoModel: updated.videoModel,
+              quality: updated.quality,
+            }
+          : {};
+      return { ...c, ...rootSync, videoSlots: slots };
+    });
   };
 
-  const patchPrompt = (key: PromptKey, value: string) => {
-    setConfig((c) => ({ ...c, prompts: { ...c.prompts, [key]: value } }));
+  const setVideosPerJob = (n: number) => {
+    const videosPerJob = Math.min(4, Math.max(1, n));
+    setConfig((c) => {
+      const next = { ...c, videosPerJob };
+      next.videoSlots = ensureVideoSlots(next);
+      return next;
+    });
+    setActiveSlotIndex((i) => Math.min(i, videosPerJob - 1));
+  };
+
+  const setSplitPrompt = (enabled: boolean) => {
+    setConfig((c) => {
+      const next = { ...c, splitPrompt: enabled };
+      if (enabled) {
+        // Tab 1 = config hiện tại; các tab còn lại prompt trống → fallback tab 1 khi generate
+        const slot0 = createSlotConfigFromRoot(c);
+        next.videoSlots = ensureVideoSlots({
+          ...next,
+          videoSlots: [slot0],
+        });
+      }
+      return next;
+    });
+    setActiveSlotIndex(0);
   };
 
   const applyImportedJson = async (text: string) => {
@@ -302,20 +350,26 @@ export function GenerateVideoConfigDialog({
 
   const openPromptEditor = (key: PromptKey) => {
     setEditingPrompt(key);
+    const prompts = workingPrompts;
+    const character = getSelectedCharacter(config, workingCharacterId);
     if (key === "rulesNegative") {
-      setDirectivesDraft(config.prompts.directives || "");
-      setNegativeDraft(config.prompts.rulesNegative || "");
+      setDirectivesDraft(prompts.directives || "");
+      setNegativeDraft(prompts.rulesNegative || "");
       setPromptDraft("");
     } else if (key === "dialogue") {
-      setDialogueSystemDraft(config.prompts.dialogueSystem || "");
-      setDialogueSection1Draft(config.prompts.dialogueSection1 || "");
-      setDialogueSectionLastDraft(config.prompts.dialogueSectionLast || "");
+      setDialogueSystemDraft(prompts.dialogueSystem || "");
+      setDialogueSection1Draft(prompts.dialogueSection1 || "");
+      setDialogueSectionLastDraft(prompts.dialogueSectionLast || "");
       setPromptDraft("");
     } else if (key === "checkTotal") {
-      // Chỉ xem — tổng hợp từ các prompt khác
-      setPromptDraft(buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)));
+      setPromptDraft(
+        buildCheckTotalPrompt(prompts, character, {
+          enabled: activeSlot.randomImagesEnabled,
+          prompt: activeSlot.randomImagesPrompt,
+        })
+      );
     } else {
-      setPromptDraft(config.prompts[key] || "");
+      setPromptDraft(prompts[key] || "");
       setDirectivesDraft("");
       setNegativeDraft("");
     }
@@ -334,7 +388,12 @@ export function GenerateVideoConfigDialog({
   const savePromptEditor = async () => {
     if (!editingPrompt || editingPrompt === "checkTotal") return;
 
-    let nextPrompts = { ...config.prompts };
+    const character = getSelectedCharacter(config, workingCharacterId);
+    const randomOverride = {
+      enabled: activeSlot.randomImagesEnabled,
+      prompt: activeSlot.randomImagesPrompt,
+    };
+    let nextPrompts = { ...workingPrompts };
 
     if (editingPrompt === "rulesNegative") {
       nextPrompts = {
@@ -347,7 +406,8 @@ export function GenerateVideoConfigDialog({
             directives: directivesDraft,
             rulesNegative: negativeDraft,
           },
-          getSelectedCharacter(config)
+          character,
+          randomOverride
         ),
       };
     } else if (editingPrompt === "dialogue") {
@@ -370,7 +430,8 @@ export function GenerateVideoConfigDialog({
             dialogueSectionLast: dialogueSectionLastDraft,
             dialogue,
           },
-          getSelectedCharacter(config)
+          character,
+          randomOverride
         ),
       };
     } else {
@@ -382,15 +443,26 @@ export function GenerateVideoConfigDialog({
             ...nextPrompts,
             [editingPrompt]: promptDraft,
           },
-          getSelectedCharacter(config)
+          character,
+          randomOverride
         ),
       };
     }
 
-    const next = { ...config, prompts: nextPrompts };
+    patchSlot({ prompts: nextPrompts });
     closePromptEditor();
+    // Persist after state update — build next from current + patch
     try {
-      const saved = await saveGenerateVideoConfig(next);
+      const base = config.splitPrompt
+        ? (() => {
+            const slots = ensureVideoSlots(config);
+            const idx = safeSlotIndex;
+            slots[idx] = { ...slots[idx], prompts: nextPrompts };
+            const rootSync = idx === 0 ? { prompts: nextPrompts } : {};
+            return { ...config, ...rootSync, videoSlots: slots };
+          })()
+        : { ...config, prompts: nextPrompts };
+      const saved = await saveGenerateVideoConfig(base);
       setConfig(saved);
       toast.success(
         editingPrompt === "rulesNegative"
@@ -401,7 +473,6 @@ export function GenerateVideoConfigDialog({
       );
     } catch (err) {
       console.error(err);
-      setConfig(next);
       toast.error(t("Không lưu được prompt vào IndexedDB"));
     }
   };
@@ -417,21 +488,9 @@ export function GenerateVideoConfigDialog({
     toast.success(t("Đã export template"));
   };
 
-  const handleMusicSelect = (file: File) => {
-    const url = URL.createObjectURL(file);
-    patch({ musicName: file.name, musicUrl: url });
-    toast.success(t("Đã chọn nhạc: {{name}}", { name: file.name }));
-  };
-
-  const handleLogoSelect = (file: File) => {
-    const url = URL.createObjectURL(file);
-    patchWatermark({ logoUrl: url, mode: "logo" });
-    toast.success(t("Đã chọn logo"));
-  };
-
   const handlePlayVoice = () => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      const u = new SpeechSynthesisUtterance(`Xin chào, đây là giọng ${config.voice}`);
+      const u = new SpeechSynthesisUtterance(`Xin chào, đây là giọng ${activeSlot.voice}`);
       u.lang = "vi-VN";
       window.speechSynthesis.cancel();
       window.speechSynthesis.speak(u);
@@ -441,6 +500,17 @@ export function GenerateVideoConfigDialog({
   };
 
   const handleQuickTest = () => {
+    if (config.splitPrompt) {
+      const slots = ensureVideoSlots(config);
+      const lens = slots.map((s) => buildActivePromptFromSlot(s, config.characters).length);
+      toast.success(
+        t("Test nhanh OK — {{count}} prompt: {{lens}}", {
+          count: slots.length,
+          lens: lens.join(", "),
+        })
+      );
+      return;
+    }
     const prompt = buildActivePromptFromConfig(config);
     toast.success(t("Test nhanh OK — prompt {{len}} ký tự", { len: prompt.length }));
   };
@@ -450,6 +520,7 @@ export function GenerateVideoConfigDialog({
     try {
       const next = await saveGenerateVideoConfig({ ...DEFAULT_GENERATE_VIDEO_CONFIG });
       setConfig(next);
+      setActiveSlotIndex(0);
       toast.success(t("Đã dọn dẹp cấu hình"));
     } catch (err) {
       console.error(err);
@@ -458,13 +529,58 @@ export function GenerateVideoConfigDialog({
   };
 
   const handleSave = async () => {
-    const checkTotal = buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config));
-    const activePrompt = buildActivePromptFromConfig(config);
-    const next = {
-      ...config,
-      prompts: { ...config.prompts, checkTotal },
-      activePrompt,
-    };
+    let next: GenerateVideoConfig = { ...config };
+    if (config.splitPrompt) {
+      const slots = ensureVideoSlots(config).map((slot) => {
+        const character = getSelectedCharacter(config, slot.characterId);
+        const checkTotal = buildCheckTotalPrompt(slot.prompts, character, {
+          enabled: slot.randomImagesEnabled,
+          prompt: slot.randomImagesPrompt,
+        });
+        const activePrompt = buildActivePromptFromSlot(
+          { ...slot, prompts: { ...slot.prompts, checkTotal } },
+          config.characters
+        );
+        return {
+          ...slot,
+          prompts: { ...slot.prompts, checkTotal },
+          activePrompt,
+        };
+      });
+      const root = slots[0] || createSlotConfigFromRoot(config);
+      next = {
+        ...config,
+        splitPrompt: true,
+        videoSlots: slots,
+        prompts: root.prompts,
+        activePrompt: root.activePrompt,
+        workflow: root.workflow,
+        voice: root.voice,
+        techniqueId: root.techniqueId,
+        characterId: root.characterId,
+        useCharacterImage: root.useCharacterImage,
+        randomImagesEnabled: root.randomImagesEnabled,
+        randomImagesPrompt: root.randomImagesPrompt,
+        actionV1Id: root.actionV1Id,
+        actionV2Id: root.actionV2Id,
+        imageModel: root.imageModel,
+        videoModel: root.videoModel,
+        quality: root.quality,
+      };
+    } else {
+      const checkTotal = buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config), {
+        enabled: config.randomImagesEnabled,
+        prompt: config.randomImagesPrompt,
+      });
+      const activePrompt = buildActivePromptFromConfig(config);
+      next = {
+        ...config,
+        splitPrompt: false,
+        prompts: { ...config.prompts, checkTotal },
+        activePrompt,
+        videoSlots: ensureVideoSlots(config),
+      };
+    }
     try {
       const saved = await saveGenerateVideoConfig(next);
       setConfig(saved);
@@ -505,8 +621,8 @@ export function GenerateVideoConfigDialog({
 
   const promptLabels: Record<PromptKey, string> = {
     rulesNegative: "Rules Negative Prompt",
-    dialogue: "Prompt Tạo Thoại",
     checkTotal: "Check Prompt Tổng",
+    dialogue: "Prompt Tạo Thoại",
     image: "Prompt Tạo Ảnh",
   };
 
@@ -518,20 +634,27 @@ export function GenerateVideoConfigDialog({
 
   const filledPromptCount = PROMPT_BUTTONS.filter((btn) => {
     if (btn.key === "rulesNegative") {
-      return !!(config.prompts.directives?.trim() || config.prompts.rulesNegative?.trim());
+      return !!(workingPrompts.directives?.trim() || workingPrompts.rulesNegative?.trim());
     }
     if (btn.key === "dialogue") {
       return !!(
-        config.prompts.dialogueSystem?.trim() ||
-        config.prompts.dialogueSection1?.trim() ||
-        config.prompts.dialogueSectionLast?.trim() ||
-        config.prompts.dialogue?.trim()
+        workingPrompts.dialogueSystem?.trim() ||
+        workingPrompts.dialogueSection1?.trim() ||
+        workingPrompts.dialogueSectionLast?.trim() ||
+        workingPrompts.dialogue?.trim()
       );
     }
     if (btn.key === "checkTotal") {
-      return !!buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)).trim();
+      return !!buildCheckTotalPrompt(
+        workingPrompts,
+        getSelectedCharacter(config, workingCharacterId),
+        {
+          enabled: activeSlot.randomImagesEnabled,
+          prompt: activeSlot.randomImagesPrompt,
+        }
+      ).trim();
     }
-    return !!config.prompts[btn.key]?.trim();
+    return !!workingPrompts[btn.key]?.trim();
   }).length;
 
   return (
@@ -577,222 +700,171 @@ export function GenerateVideoConfigDialog({
 
         <Dialog.Body>
           <div className="overflow-y-auto p-4 space-y-4">
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {/* Prompt */}
-              <SectionCard title={t("Cấu Hình Prompt")} accent="#7C3AED" icon={<HiCog />}>
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {PROMPT_BUTTONS.map((btn) => {
-                    const filled =
-                      btn.key === "rulesNegative"
-                        ? !!(
-                            config.prompts.directives?.trim() ||
-                            config.prompts.rulesNegative?.trim()
-                          )
-                        : btn.key === "dialogue"
-                        ? !!(
-                            config.prompts.dialogueSystem?.trim() ||
-                            config.prompts.dialogueSection1?.trim() ||
-                            config.prompts.dialogueSectionLast?.trim() ||
-                            config.prompts.dialogue?.trim()
-                          )
-                        : btn.key === "checkTotal"
-                        ? !!buildCheckTotalPrompt(config.prompts, getSelectedCharacter(config)).trim()
-                        : !!config.prompts[btn.key]?.trim();
+            {/* General */}
+            <SectionCard title={t("Cấu Hình Tổng Thể")} accent="#0D9488" icon={<RiSettings4Line />}>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <FieldRow label={t("Số video mỗi job")}>
+                  <NativeSelect
+                    value={String(slotCount)}
+                    onChange={(v) => setVideosPerJob(Number(v) || 1)}
+                    options={[1, 2, 3, 4].map((n) => ({
+                      value: String(n),
+                      label: String(n),
+                    }))}
+                  />
+                </FieldRow>
+                <FieldRow label={t("Số luồng video chạy song song")}>
+                  <div className="flex flex-1 gap-2 items-center min-w-0">
+                    <input
+                      className={`${fieldClass} cursor-not-allowed bg-gray-100 text-gray-600`}
+                      value={Math.max(1, Math.round(VIDEO_CONCURRENCY || 1))}
+                      disabled
+                      readOnly
+                      title={
+                        t(
+                          "Theo số luồng video của customer (googlePackage.videoStreamCount) — không chỉnh được"
+                        ) as string
+                      }
+                    />
+                    <span className="text-10 text-gray-400 whitespace-nowrap shrink-0">
+                      {t("Theo gói KH")}
+                    </span>
+                  </div>
+                </FieldRow>
+              </div>
+              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="text-xs font-bold text-teal-900">{t("Tách Prompt")}</div>
+                  <div className="mt-0.5 text-10 leading-relaxed text-teal-800">
+                    {t(
+                      'Nếu kích hoạt thì sẽ tách ra từng job riêng theo "Số video mỗi job" mỗi job là 1 lần Generate và 1 prompt khác nhau'
+                    )}
+                  </div>
+                </div>
+                <Switch
+                  size="sm"
+                  dependent
+                  value={Boolean(config.splitPrompt)}
+                  onChange={(value) => setSplitPrompt(Boolean(value))}
+                />
+              </div>
+            </SectionCard>
+
+            {config.splitPrompt ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: slotCount }, (_, i) => {
+                    const configured =
+                      i === 0 ||
+                      isSlotPromptConfigured(videoSlots[i] || createSlotConfigFromRoot(config));
                     return (
                       <button
-                        key={btn.key}
+                        key={i}
                         type="button"
-                        onClick={() => openPromptEditor(btn.key)}
-                        style={btn.style}
-                        className="relative w-full rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 text-left"
+                        onClick={() => setActiveSlotIndex(i)}
+                        className={`rounded-lg px-3.5 py-2 text-xs font-bold transition-all ${
+                          safeSlotIndex === i
+                            ? "bg-primary text-white shadow-sm hover:bg-primary-dark"
+                            : "bg-white text-gray-600 border border-gray-200 hover:border-primary hover:text-primary-dark"
+                        }`}
                       >
-                        {t(btn.label)}
-                        {filled && (
-                          <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-white border-2 border-emerald-500" />
-                        )}
+                        {t("Video - {{n}}", { n: i + 1 })}
+                        {i > 0 ? (
+                          <span
+                            className={`ml-1.5 text-10 font-semibold ${
+                              safeSlotIndex === i
+                                ? configured
+                                  ? "text-white/90"
+                                  : "text-white/70"
+                                : configured
+                                ? "text-emerald-600"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {configured ? t("riêng") : t("tab 1")}
+                          </span>
+                        ) : null}
                       </button>
                     );
                   })}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setImportText("");
-                      setImportOpen(true);
-                    }}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
-                    style={{ background: "#7C3AED" }}
-                  >
-                    <HiDownload className="text-sm" />
-                    {t("Import Template")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleExportTemplate}
-                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
-                    style={{ background: "#4F46E5" }}
-                  >
-                    <HiUpload className="text-sm" />
-                    {t("Export Template")}
-                  </button>
                 </div>
-              </SectionCard>
+                {safeSlotIndex > 0 && !isSlotPromptConfigured(activeSlot) ? (
+                  <p className="m-0 text-10 leading-relaxed text-teal-800">
+                    {t(
+                      "Tab này chưa lưu prompt riêng — khi generate sẽ dùng prompt của Video - 1. Chỉnh prompt rồi Lưu Setting để tách riêng."
+                    )}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
 
-              {/* Watermark */}
-              <SectionCard
-                title={t("Ghép Watermark")}
-                accent="#0EA5E9"
-                icon={<HiOutlinePhotograph />}
-              >
-                <div className="mb-3 inline-flex rounded-lg bg-gray-100 p-0.5">
-                  {(["signature", "logo"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => patchWatermark({ mode })}
-                      className={`rounded-md px-4 py-1.5 text-xs font-semibold transition-all ${
-                        config.watermark.mode === mode
-                          ? "bg-sky-500 text-white shadow-sm"
-                          : "text-gray-500 hover:text-gray-700"
-                      }`}
-                    >
-                      {mode === "signature" ? t("Chữ Ký") : t("Logo")}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="space-y-2.5">
-                  {config.watermark.mode === "signature" ? (
-                    <FieldRow label={t("Chữ Ký (Text)")}>
-                      <input
-                        className={fieldClass}
-                        value={config.watermark.text}
-                        onChange={(e) => patchWatermark({ text: e.target.value })}
-                      />
-                    </FieldRow>
-                  ) : (
-                    <FieldRow label={t("Logo")}>
-                      <input
-                        ref={logoInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handleLogoSelect(f);
-                          e.target.value = "";
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => logoInputRef.current?.click()}
-                        className="flex-1 px-3 h-9 text-xs text-left text-gray-500 bg-gray-50 rounded-lg border border-gray-300 border-dashed hover:border-sky-400 hover:bg-sky-50"
-                      >
-                        {config.watermark.logoUrl
-                          ? t("Đã chọn logo (đổi)")
-                          : t("Chọn file logo...")}
-                      </button>
-                    </FieldRow>
-                  )}
-
-                  <FieldRow label={t("Kích Cỡ (px)")}>
-                    <input
-                      type="number"
-                      className={fieldClass}
-                      value={config.watermark.size}
-                      onChange={(e) => patchWatermark({ size: Number(e.target.value) || 0 })}
-                    />
-                  </FieldRow>
-
-                  <FieldRow label={t("Vị Trí")}>
-                    <NativeSelect
-                      value={config.watermark.position}
-                      onChange={(v) => patchWatermark({ position: v })}
-                      options={POSITION_OPTIONS}
-                    />
-                  </FieldRow>
-
-                  <FieldRow label={t("Hiệu Ứng")}>
-                    <NativeSelect
-                      value={config.watermark.effect}
-                      onChange={(v) => patchWatermark({ effect: v })}
-                      options={EFFECT_OPTIONS}
-                    />
-                  </FieldRow>
-
-                  <FieldRow label={t("Opacity")}>
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={config.watermark.opacity}
-                      onChange={(e) => patchWatermark({ opacity: Number(e.target.value) })}
-                      className="flex-1 h-2 accent-sky-500"
-                    />
-                    <span className="w-8 text-xs font-semibold text-right text-gray-600">
-                      {config.watermark.opacity}
-                    </span>
+            <div className="flex flex-col gap-4">
+              {/* Prompt */}
+              <SectionCard title={t("Cấu Hình Prompt")} accent="#7C3AED" icon={<HiCog />}>
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {PROMPT_BUTTONS.map((btn) => {
+                      const filled =
+                        btn.key === "rulesNegative"
+                          ? !!(
+                              workingPrompts.directives?.trim() ||
+                              workingPrompts.rulesNegative?.trim()
+                            )
+                          : btn.key === "dialogue"
+                          ? !!(
+                              workingPrompts.dialogueSystem?.trim() ||
+                              workingPrompts.dialogueSection1?.trim() ||
+                              workingPrompts.dialogueSectionLast?.trim() ||
+                              workingPrompts.dialogue?.trim()
+                            )
+                          : btn.key === "checkTotal"
+                          ? !!buildCheckTotalPrompt(
+                              workingPrompts,
+                              getSelectedCharacter(config, workingCharacterId),
+                              {
+                                enabled: activeSlot.randomImagesEnabled,
+                                prompt: activeSlot.randomImagesPrompt,
+                              }
+                            ).trim()
+                          : !!workingPrompts[btn.key]?.trim();
+                      return (
+                        <button
+                          key={btn.key}
+                          type="button"
+                          onClick={() => openPromptEditor(btn.key)}
+                          style={btn.style}
+                          className="relative w-full rounded-lg px-2 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90 text-center sm:px-3"
+                        >
+                          {t(btn.label)}
+                          {filled && (
+                            <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-white border-2 border-emerald-500" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowCustomPos((v) => !v)}
-                      className="inline-flex h-9 shrink-0 items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                      onClick={() => {
+                        setImportText("");
+                        setImportOpen(true);
+                      }}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                      style={{ background: "#7C3AED" }}
                     >
-                      <HiCog className="text-gray-400" />
-                      {t("Vị Trí Tùy Chỉnh")}
-                    </button>
-                  </FieldRow>
-
-                  {showCustomPos && (
-                    <div className="flex gap-2 sm:pl-32">
-                      <input
-                        type="number"
-                        className={fieldClass}
-                        value={config.watermark.customX}
-                        onChange={(e) => patchWatermark({ customX: Number(e.target.value) || 0 })}
-                        placeholder="X %"
-                      />
-                      <input
-                        type="number"
-                        className={fieldClass}
-                        value={config.watermark.customY}
-                        onChange={(e) => patchWatermark({ customY: Number(e.target.value) || 0 })}
-                        placeholder="Y %"
-                      />
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-2 items-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        patchWatermark({
-                          stickerCount: Math.max(0, config.watermark.stickerCount + 1),
-                        })
-                      }
-                      className="px-3 py-2 text-xs font-bold text-white rounded-lg shadow-sm hover:opacity-90"
-                      style={{ background: "#DB2777" }}
-                    >
-                      {config.watermark.stickerCount} Sticker
+                      <HiDownload className="text-sm" />
+                      {t("Import Template")}
                     </button>
                     <button
                       type="button"
-                      onClick={() => toast.info(t("Ghép thủ công — mở editor (mô phỏng)"))}
-                      className="px-3 py-2 text-xs font-bold text-white rounded-lg shadow-sm hover:opacity-90"
-                      style={{ background: "#059669" }}
+                      onClick={handleExportTemplate}
+                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-all hover:opacity-90"
+                      style={{ background: "#4F46E5" }}
                     >
-                      {t("Ghép Thủ Công")}
+                      <HiUpload className="text-sm" />
+                      {t("Export Template")}
                     </button>
-                    <div className="flex gap-2 items-center ml-auto">
-                      <span className="text-xs font-medium text-gray-500">FFmpeg</span>
-                      <NativeSelect
-                        value={String(config.watermark.ffmpegThreads)}
-                        onChange={(v) => patchWatermark({ ffmpegThreads: Number(v) || 1 })}
-                        options={[1, 2, 4, 8].map((n) => ({
-                          value: String(n),
-                          label: String(n),
-                        }))}
-                        className="w-16"
-                      />
-                    </div>
                   </div>
                 </div>
               </SectionCard>
@@ -800,18 +872,19 @@ export function GenerateVideoConfigDialog({
               {/* Video */}
               <SectionCard title={t("Cấu Hình Video")} accent="#F2890D" icon={<RiVideoAddLine />}>
                 <div className="space-y-2.5">
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-x-4">
                   <FieldRow label="WorkFlow">
                     <NativeSelect
-                      value={config.workflow}
-                      onChange={(v) => patch({ workflow: v })}
+                      value={activeSlot.workflow}
+                      onChange={(v) => patchSlot({ workflow: v })}
                       options={WORKFLOW_OPTIONS}
                     />
                   </FieldRow>
 
                   <FieldRow label="Voice">
                     <NativeSelect
-                      value={config.voice}
-                      onChange={(v) => patch({ voice: v })}
+                      value={activeSlot.voice}
+                      onChange={(v) => patchSlot({ voice: v })}
                       options={VOICE_OPTIONS.map((v) => ({ value: v, label: v }))}
                     />
                     <button
@@ -826,8 +899,8 @@ export function GenerateVideoConfigDialog({
 
                   <FieldRow label={t("Kỹ Thuật")}>
                     <NativeSelect
-                      value={config.techniqueId}
-                      onChange={(v) => patch({ techniqueId: v })}
+                      value={activeSlot.techniqueId}
+                      onChange={(v) => patchSlot({ techniqueId: v })}
                       options={config.techniques.map((o) => ({
                         value: o.id,
                         label: o.name,
@@ -847,13 +920,13 @@ export function GenerateVideoConfigDialog({
 
                   <FieldRow label={t("Nhân Vật")}>
                     <NativeSelect
-                      value={config.characterId}
-                      onChange={(v) => patch({ characterId: v })}
+                      value={activeSlot.characterId}
+                      onChange={(v) => patchSlot({ characterId: v })}
                       options={config.characters.map((o) => ({
                         value: o.id,
                         label: o.name,
                       }))}
-                      disabled={config.useCharacterImage === false}
+                      disabled={activeSlot.useCharacterImage === false}
                     />
                     <button
                       type="button"
@@ -863,10 +936,13 @@ export function GenerateVideoConfigDialog({
                       {t("Quản lý")}
                     </button>
                   </FieldRow>
+                  </div>
 
                   <div className="flex items-start justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
                     <div className="min-w-0">
-                      <div className="text-xs font-bold text-indigo-800">{t("Dùng ảnh nhân vật")}</div>
+                      <div className="text-xs font-bold text-indigo-800">
+                        {t("Dùng ảnh nhân vật")}
+                      </div>
                       <div className="mt-0.5 text-10 text-indigo-700">
                         {t(
                           "Bật: gửi ảnh nhân vật + ảnh sản phẩm. Tắt: chỉ gửi ảnh sản phẩm khi generate."
@@ -876,24 +952,86 @@ export function GenerateVideoConfigDialog({
                     <Switch
                       size="sm"
                       dependent
-                      value={config.useCharacterImage !== false}
-                      onChange={(value) => patch({ useCharacterImage: Boolean(value) })}
+                      value={activeSlot.useCharacterImage !== false}
+                      onChange={(value) => patchSlot({ useCharacterImage: Boolean(value) })}
                     />
                   </div>
 
+                  {activeSlot.useCharacterImage !== false ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-xs font-bold text-amber-800">
+                            {t("Ảnh ngẫu nhiên")}
+                          </div>
+                          <div className="mt-0.5 text-10 text-amber-700">
+                            {t(
+                              "Bật để gửi toàn bộ ảnh model vào generate và cộng prompt riêng vào Check Prompt Tổng."
+                            )}
+                          </div>
+                        </div>
+                        <Switch
+                          size="sm"
+                          dependent
+                          value={activeSlot.randomImagesEnabled === true}
+                          onChange={(value) => patchSlot({ randomImagesEnabled: Boolean(value) })}
+                        />
+                      </div>
+                      {activeSlot.randomImagesEnabled ? (
+                        <div className="mt-3 space-y-2">
+                          <label className="mb-1 block text-xs font-semibold text-gray-700">
+                            {t("Prompt Ảnh Ngẫu Nhiên")}
+                          </label>
+                          <textarea
+                            value={activeSlot.randomImagesPrompt || ""}
+                            onChange={(e) => patchSlot({ randomImagesPrompt: e.target.value })}
+                            rows={3}
+                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none focus:border-amber-400"
+                            placeholder={t(
+                              "Prompt này chỉ được gắn vào Check Prompt Tổng khi bật Ảnh ngẫu nhiên."
+                            )}
+                          />
+                          {(() => {
+                            const character = getSelectedCharacter(config, activeSlot.characterId);
+                            const imgCount = character ? listCharacterImages(character).length : 0;
+                            if (imgCount <= 1) {
+                              return (
+                                <p className="m-0 text-10 leading-relaxed text-rose-600">
+                                  {t(
+                                    "Nhân vật này mới có {{count}} ảnh (standing/sitting/fashion). Ảnh ngẫu nhiên cần ≥2 ảnh trong Quản lý Nhân Vật — nếu chỉ 1 file thì cột ngoài cũng chỉ hiện 1 ảnh.",
+                                    { count: imgCount }
+                                  )}
+                                </p>
+                              );
+                            }
+                            return (
+                              <p className="m-0 text-10 leading-relaxed text-amber-800">
+                                {t(
+                                  "Sẽ gửi {{count}} ảnh model khi generate tab này. V1–V4 cùng nhân vật sẽ hiện cùng bộ ảnh.",
+                                  { count: imgCount }
+                                )}
+                              </p>
+                            );
+                          })()}
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-x-4">
                   {(
                     [
                       {
                         label: "Action V1",
                         list: "actionsV1" as const,
-                        id: config.actionV1Id,
-                        setId: (v: string) => patch({ actionV1Id: v }),
+                        id: activeSlot.actionV1Id,
+                        setId: (v: string) => patchSlot({ actionV1Id: v }),
                       },
                       {
                         label: "Action V2",
                         list: "actionsV2" as const,
-                        id: config.actionV2Id,
-                        setId: (v: string) => patch({ actionV2Id: v }),
+                        id: activeSlot.actionV2Id,
+                        setId: (v: string) => patchSlot({ actionV2Id: v }),
                       },
                     ] as const
                   ).map((row) => (
@@ -918,6 +1056,7 @@ export function GenerateVideoConfigDialog({
                       </button>
                     </FieldRow>
                   ))}
+                  </div>
                 </div>
 
                 {manageList && (
@@ -975,100 +1114,7 @@ export function GenerateVideoConfigDialog({
                   </div>
                 )}
               </SectionCard>
-
-              {/* Audio */}
-              <SectionCard title={t("Cấu Hình Âm Thanh")} accent="#8B5CF6" icon={<HiMusicNote />}>
-                <div className="space-y-3">
-                  <FieldRow label={t("Lời Thoại")}>
-                    <NativeSelect
-                      value={config.dialogueMode}
-                      onChange={(v) => patch({ dialogueMode: v })}
-                      options={DIALOGUE_OPTIONS}
-                    />
-                  </FieldRow>
-
-                  <div className="p-3 bg-violet-50 rounded-lg border border-violet-200 border-dashed">
-                    <div className="flex gap-3 items-center">
-                      <input
-                        ref={musicInputRef}
-                        type="file"
-                        accept="audio/*"
-                        className="hidden"
-                        onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) handleMusicSelect(f);
-                          e.target.value = "";
-                        }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => musicInputRef.current?.click()}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-bold text-white shadow-sm hover:opacity-90"
-                        style={{ background: "#7C3AED" }}
-                      >
-                        <HiMusicNote />
-                        {t("Thêm Nhạc")}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-gray-700 truncate">
-                          {config.musicName || t("Chưa chọn nhạc")}
-                        </div>
-                        {!config.musicName && (
-                          <div className="text-gray-400 text-10">
-                            {t("Hỗ trợ mp3, wav, m4a...")}
-                          </div>
-                        )}
-                      </div>
-                      {config.musicName && (
-                        <button
-                          type="button"
-                          onClick={() => patch({ musicName: "", musicUrl: "" })}
-                          className="text-xs font-semibold text-rose-500 hover:underline"
-                        >
-                          {t("Xóa")}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </SectionCard>
             </div>
-
-            {/* General */}
-            <SectionCard title={t("Cấu Hình Tổng Thể")} accent="#0D9488" icon={<RiSettings4Line />}>
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                <FieldRow label={t("Số video mỗi job")}>
-                  <NativeSelect
-                    value={String(Math.min(4, Math.max(1, config.videosPerJob || 1)))}
-                    onChange={(v) =>
-                      patch({ videosPerJob: Math.min(4, Math.max(1, Number(v) || 1)) })
-                    }
-                    options={[1, 2, 3, 4].map((n) => ({
-                      value: String(n),
-                      label: String(n),
-                    }))}
-                  />
-                </FieldRow>
-                <FieldRow label={t("Số luồng video chạy song song")}>
-                  <div className="flex flex-1 gap-2 items-center min-w-0">
-                    <input
-                      className={`${fieldClass} cursor-not-allowed bg-gray-100 text-gray-600`}
-                      value={Math.max(1, Math.round(VIDEO_CONCURRENCY || 1))}
-                      disabled
-                      readOnly
-                      title={
-                        t(
-                          "Theo số luồng video của customer (googlePackage.videoStreamCount) — không chỉnh được"
-                        ) as string
-                      }
-                    />
-                    <span className="text-10 text-gray-400 whitespace-nowrap shrink-0">
-                      {t("Theo gói KH")}
-                    </span>
-                  </div>
-                </FieldRow>
-              </div>
-            </SectionCard>
           </div>
         </Dialog.Body>
 

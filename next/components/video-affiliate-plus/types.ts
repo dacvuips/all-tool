@@ -42,6 +42,13 @@ export interface AffiliatePlusItem {
    * Generate batch → cùng id; regenerate 1 slot → id riêng.
    */
   videoFlow2RequestIds: string[];
+  /**
+   * Trạng thái từng slot khi Tách Prompt (pending/running/success/error).
+   * Dùng để hiện tiến trình V1…Vn ngay khi từng video xong hoặc lỗi.
+   */
+  videoSlotStatuses?: Array<"pending" | "running" | "success" | "error">;
+  /** Lỗi theo từng slot (index khớp videoUrls). */
+  videoSlotErrors?: string[];
   /** Video đã nối — UI/thread chỉ lưu tên `merged.mp4`; binary ở IndexedDB (Blob). */
   mergedVideoUrl: string;
   hostPort: string;
@@ -132,6 +139,25 @@ export interface GenerateVideoWatermarkConfig {
   ffmpegThreads: number;
 }
 
+/** Cấu hình riêng cho từng video khi bật "Tách Prompt". */
+export interface GenerateVideoSlotConfig {
+  prompts: GenerateVideoPromptConfig;
+  activePrompt: string;
+  workflow: string;
+  voice: string;
+  techniqueId: string;
+  characterId: string;
+  useCharacterImage: boolean;
+  /** Bật gửi toàn bộ ảnh model + cộng prompt ảnh ngẫu nhiên (theo từng Video). */
+  randomImagesEnabled: boolean;
+  randomImagesPrompt: string;
+  actionV1Id: string;
+  actionV2Id: string;
+  imageModel: string;
+  videoModel: string;
+  quality: string;
+}
+
 export interface GenerateVideoConfig {
   prompts: GenerateVideoPromptConfig;
   /** Prompt chính gửi đi khi generate — áp dụng cho tất cả luồng khi Lưu Setting */
@@ -145,6 +171,9 @@ export interface GenerateVideoConfig {
    * false → chỉ dùng ảnh sản phẩm.
    */
   useCharacterImage: boolean;
+  /** Bật ảnh ngẫu nhiên (root / khi không tách prompt). */
+  randomImagesEnabled: boolean;
+  randomImagesPrompt: string;
   actionV1Id: string;
   actionV2Id: string;
   techniques: ManagedOption[];
@@ -158,6 +187,13 @@ export interface GenerateVideoConfig {
   imageModel: string;
   videoModel: string;
   videosPerJob: number;
+  /**
+   * Tách mỗi video thành 1 job generate riêng (variantCount=1) với prompt/config riêng.
+   * Sau khi đủ slot mới nối file.
+   */
+  splitPrompt: boolean;
+  /** Cấu hình theo từng video khi splitPrompt = true (độ dài = videosPerJob). */
+  videoSlots: GenerateVideoSlotConfig[];
   /** @deprecated Không còn dùng khi Bắt Đầu — concurrency lấy từ customer.videoStreamCount */
   threadCount: number;
   quality: string;
@@ -1086,6 +1122,8 @@ export const DEFAULT_GENERATE_VIDEO_CONFIG: GenerateVideoConfig = {
   techniqueId: "tech-professional",
   characterId: "char-ao-dai",
   useCharacterImage: true,
+  randomImagesEnabled: false,
+  randomImagesPrompt: "",
   actionV1Id: "act1-review",
   actionV2Id: "act2-review",
   techniques: [
@@ -1129,6 +1167,8 @@ export const DEFAULT_GENERATE_VIDEO_CONFIG: GenerateVideoConfig = {
   imageModel: "nano-banana-pro",
   videoModel: "0-credit",
   videosPerJob: 2,
+  splitPrompt: false,
+  videoSlots: [],
   threadCount: 5,
   quality: "720p",
 };
@@ -1147,6 +1187,8 @@ export function createEmptyItem(partial?: Partial<AffiliatePlusItem>): Affiliate
     videoUrls: [],
     videoDisabled: [],
     videoFlow2RequestIds: [],
+    videoSlotStatuses: [],
+    videoSlotErrors: [],
     mergedVideoUrl: "",
     hostPort: "",
     country: "VN",
@@ -1199,15 +1241,25 @@ export function buildDialoguePrompt(
 /** Check Prompt Tổng = tổng hợp các prompt (chỉ xem, không sửa). */
 export function buildCheckTotalPrompt(
   prompts: GenerateVideoPromptConfig,
-  character?: CharacterProfile | null
+  character?: CharacterProfile | null,
+  randomOverride?: { enabled?: boolean; prompt?: string } | null
 ): string {
   const rules = syncCheckTotalFromRules(prompts.directives, prompts.rulesNegative);
   const dialogue =
     prompts.dialogue.trim() ||
     buildDialoguePrompt(prompts.dialogueSystem, prompts.dialogueSection1, prompts.dialogueSectionLast);
   const image = prompts.image.trim();
-  const randomImagePrompt =
-    character?.randomImagesEnabled ? String(character.randomImagesPrompt || "").trim() : "";
+  const randomEnabled =
+    randomOverride && randomOverride.enabled !== undefined
+      ? Boolean(randomOverride.enabled)
+      : Boolean(character?.randomImagesEnabled);
+  const randomImagePrompt = randomEnabled
+    ? String(
+        randomOverride && randomOverride.prompt !== undefined
+          ? randomOverride.prompt
+          : character?.randomImagesPrompt || ""
+      ).trim()
+    : "";
 
   const parts: string[] = [];
   if (rules) parts.push(`=== Rules Negative Prompt ===\n${rules}`);
@@ -1245,8 +1297,161 @@ DEFAULT_GENERATE_VIDEO_CONFIG.prompts = getDefaultPromptConfig();
 export function buildActivePromptFromConfig(config: GenerateVideoConfig): string {
   const character =
     config.characters.find((item) => item.id === config.characterId) || config.characters[0] || null;
-  const checkTotal = buildCheckTotalPrompt(config.prompts, character);
+  const checkTotal = buildCheckTotalPrompt(config.prompts, character, {
+    enabled: config.randomImagesEnabled,
+    prompt: config.randomImagesPrompt,
+  });
   return checkTotal.trim() || config.activePrompt;
+}
+
+/** Clone cấu hình gốc thành 1 slot (dùng khi bật Tách Prompt / thêm slot). */
+export function createSlotConfigFromRoot(config: GenerateVideoConfig): GenerateVideoSlotConfig {
+  const character =
+    config.characters.find((item) => item.id === config.characterId) || config.characters[0] || null;
+  return {
+    prompts: { ...config.prompts },
+    activePrompt: config.activePrompt,
+    workflow: config.workflow,
+    voice: config.voice,
+    techniqueId: config.techniqueId,
+    characterId: config.characterId,
+    useCharacterImage: config.useCharacterImage !== false,
+    randomImagesEnabled:
+      config.randomImagesEnabled === true || Boolean(character?.randomImagesEnabled),
+    randomImagesPrompt:
+      config.randomImagesPrompt ||
+      (character?.randomImagesEnabled ? String(character.randomImagesPrompt || "") : ""),
+    actionV1Id: config.actionV1Id,
+    actionV2Id: config.actionV2Id,
+    imageModel: config.imageModel,
+    videoModel: config.videoModel,
+    quality: config.quality,
+  };
+}
+
+/** Prompt config trống — slot chưa cấu hình riêng sẽ fallback về tab 1. */
+export function createEmptyPromptConfig(): GenerateVideoPromptConfig {
+  return {
+    directives: "",
+    rulesNegative: "",
+    dialogueSystem: "",
+    dialogueSection1: "",
+    dialogueSectionLast: "",
+    dialogue: "",
+    checkTotal: "",
+    image: "",
+  };
+}
+
+/** Slot đã có ít nhất 1 phần prompt do user lưu (không tính checkTotal tổng hợp). */
+export function isSlotPromptConfigured(slot: GenerateVideoSlotConfig): boolean {
+  const p = slot?.prompts;
+  if (!p) return false;
+  return !!(
+    p.directives?.trim() ||
+    p.rulesNegative?.trim() ||
+    p.dialogueSystem?.trim() ||
+    p.dialogueSection1?.trim() ||
+    p.dialogueSectionLast?.trim() ||
+    p.dialogue?.trim() ||
+    p.image?.trim() ||
+    slot.activePrompt?.trim()
+  );
+}
+
+function normalizeSlotConfig(
+  raw: Partial<GenerateVideoSlotConfig> | null | undefined,
+  fallback: GenerateVideoSlotConfig
+): GenerateVideoSlotConfig {
+  const data = raw || {};
+  return {
+    ...fallback,
+    ...data,
+    useCharacterImage: data.useCharacterImage !== false,
+    randomImagesEnabled: data.randomImagesEnabled === true,
+    randomImagesPrompt: String(data.randomImagesPrompt ?? fallback.randomImagesPrompt ?? ""),
+    prompts: { ...fallback.prompts, ...data.prompts },
+  };
+}
+
+/** Đảm bảo `videoSlots` đủ số lượng theo `videosPerJob` (1–4). */
+export function ensureVideoSlots(config: GenerateVideoConfig): GenerateVideoSlotConfig[] {
+  const count = Math.min(4, Math.max(1, Number(config.videosPerJob) || 1));
+  const root = createSlotConfigFromRoot(config);
+  const existing = Array.isArray(config.videoSlots) ? config.videoSlots : [];
+  const slots: GenerateVideoSlotConfig[] = [];
+  for (let i = 0; i < count; i++) {
+    if (existing[i]) {
+      slots.push(normalizeSlotConfig(existing[i], root));
+      continue;
+    }
+    if (i === 0) {
+      slots.push(normalizeSlotConfig(null, root));
+      continue;
+    }
+    // Slot mới: giữ setting video từ tab 1, prompt trống → generate sẽ lấy prompt tab 1
+    const base = slots[0] || root;
+    slots.push({
+      ...base,
+      prompts: createEmptyPromptConfig(),
+      activePrompt: "",
+    });
+  }
+  return slots;
+}
+
+export function buildActivePromptFromSlot(
+  slot: GenerateVideoSlotConfig,
+  characters: CharacterProfile[]
+): string {
+  const character =
+    characters.find((item) => item.id === slot.characterId) || characters[0] || null;
+  const checkTotal = buildCheckTotalPrompt(slot.prompts, character, {
+    enabled: slot.randomImagesEnabled,
+    prompt: slot.randomImagesPrompt,
+  });
+  return checkTotal.trim() || slot.activePrompt;
+}
+
+/** Ảnh nhân vật gửi generate theo switch Ảnh ngẫu nhiên của slot/root. */
+export function getCharacterImagesForRandomMode(
+  character: CharacterProfile,
+  randomImagesEnabled: boolean
+): string[] {
+  if (randomImagesEnabled) {
+    return listCharacterImages(character).map((img) => img.url);
+  }
+  const picked = pickCharacterImage(character);
+  return picked.url ? [picked.url] : [];
+}
+
+/**
+ * Prompt hiệu lực cho 1 slot khi Tách Prompt:
+ * - Tab đã lưu prompt riêng → dùng prompt đó
+ * - Chưa cấu hình → lấy prompt Video - 1
+ */
+export function resolveEffectiveSlotPrompt(
+  config: GenerateVideoConfig,
+  slotIndex: number
+): string {
+  const slots = ensureVideoSlots(config);
+  const slot0 = slots[0] || createSlotConfigFromRoot(config);
+  const prompt0 = buildActivePromptFromSlot(slot0, config.characters).trim();
+  if (slotIndex <= 0) return prompt0;
+
+  const slot = slots[Math.min(slotIndex, slots.length - 1)] || slot0;
+  if (!isSlotPromptConfigured(slot)) return prompt0;
+  return buildActivePromptFromSlot(slot, config.characters).trim() || prompt0;
+}
+
+/** Lấy config hiệu lực cho 1 slot — không tách thì dùng root. */
+export function resolveSlotConfig(
+  config: GenerateVideoConfig,
+  slotIndex: number
+): GenerateVideoSlotConfig {
+  if (!config.splitPrompt) return createSlotConfigFromRoot(config);
+  const slots = ensureVideoSlots(config);
+  return slots[Math.min(Math.max(0, slotIndex), slots.length - 1)] || createSlotConfigFromRoot(config);
 }
 
 export function getTotalVideos(item: AffiliatePlusItem): number {
@@ -1276,6 +1481,39 @@ export function getMergeableVideoUrls(item: AffiliatePlusItem): string[] {
     }))
     .filter((x) => x.url && !x.disabled)
     .map((x) => x.url);
+}
+
+export type VideoSlotStatus = "pending" | "running" | "success" | "error";
+
+/** Trạng thái hiển thị slot — URL có sẵn luôn là success (tránh kẹt running cũ). */
+export function resolveVideoSlotDisplayStatus(
+  item: Pick<AffiliatePlusItem, "videoUrls" | "videoSlotStatuses">,
+  index: number,
+  opts?: { isGenerating?: boolean }
+): VideoSlotStatus {
+  if (String(item.videoUrls?.[index] || "").trim()) return "success";
+  const stored = item.videoSlotStatuses?.[index];
+  if (stored === "error") return "error";
+  if (stored === "running") return "running";
+  return "pending";
+}
+
+/** Chuẩn hoá slot status lưu IDB theo videoUrls thực tế. */
+export function normalizeVideoSlotStatuses(
+  videoUrls: string[],
+  stored?: VideoSlotStatus[],
+  storedErrors?: string[]
+): { statuses: VideoSlotStatus[]; errors: string[] } {
+  const n = Math.max(videoUrls.length, stored?.length || 0, storedErrors?.length || 0);
+  const statuses = Array.from({ length: n }, (_, i) => {
+    if (String(videoUrls[i] || "").trim()) return "success" as const;
+    if (stored?.[i] === "error") return "error" as const;
+    return "pending" as const;
+  });
+  const errors = Array.from({ length: n }, (_, i) =>
+    String(videoUrls[i] || "").trim() ? "" : String(storedErrors?.[i] || "").trim()
+  );
+  return { statuses, errors };
 }
 
 export const STATUS_LABELS: Record<ThreadStatus, string> = {

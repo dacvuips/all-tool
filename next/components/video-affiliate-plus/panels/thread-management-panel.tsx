@@ -16,7 +16,13 @@ import {
   HiRefresh,
   HiUpload,
 } from "react-icons/hi";
-import { RiArrowDownSLine, RiDatabase2Line, RiFileExcel2Line, RiLoader4Line, RiVideoFill } from "react-icons/ri";
+import {
+  RiArrowDownSLine,
+  RiDatabase2Line,
+  RiFileExcel2Line,
+  RiLoader4Line,
+  RiVideoFill,
+} from "react-icons/ri";
 import {
   MediaGenerationJobError,
   useMediaGenerationJob,
@@ -26,15 +32,6 @@ import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurre
 import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { GeneratedVideoDownloadButtons } from "../../app/affiliate-video/shared/generated-video-download-buttons";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
-import {
-  PanelListCard,
-  PanelListMatchCount,
-  PanelListPagination,
-  PanelListSearch,
-  PanelListToolbar,
-  panelListClasses,
-  panelListRowClass,
-} from "../shared/panel-list-ui";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { ImageDialog } from "../../shared/utilities/dialog/image-dialog";
 import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form";
@@ -68,6 +65,15 @@ import {
   ScrapeCsvSession,
   sessionDisplayName,
 } from "../scrape-csv-history";
+import {
+  PanelListCard,
+  panelListClasses,
+  PanelListMatchCount,
+  PanelListPagination,
+  panelListRowClass,
+  PanelListSearch,
+  PanelListToolbar,
+} from "../shared/panel-list-ui";
 import { buildShopeeVideoImages, prepareShopeeImageInput } from "../shopee-image";
 import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
 import { ThreadRunner } from "../thread-runner";
@@ -92,12 +98,17 @@ import {
   AffiliatePlusSettings,
   buildActivePromptFromConfig,
   CharacterProfile,
+  ensureVideoSlots,
   GenerateVideoConfig,
-  getCharacterImagesForGeneration,
+  getCharacterImagesForRandomMode,
   getMergeableVideoUrls,
-  listCharacterImages,
+  normalizeVideoSlotStatuses,
   padVideoSlots,
+  resolveEffectiveSlotPrompt,
+  resolveSlotConfig,
+  resolveVideoSlotDisplayStatus,
   ThreadStatus,
+  VideoSlotStatus,
 } from "../types";
 import { GenerateVideoConfigDialog } from "./generate-video-config-dialog";
 
@@ -110,6 +121,7 @@ type VideoPreviewState =
       itemId: string;
       slots: string[];
       disabled: boolean[];
+      slotErrors: string[];
       index: number;
       regenerating: Record<number, boolean>;
     }
@@ -150,8 +162,37 @@ function isGenerateRetryableError(err: unknown): boolean {
     message.includes("hệ thống hiện đang bận") ||
     message.includes("he thong hien dang ban") ||
     message.includes("task_timeout") ||
-    message.includes("job timeout")
+    message.includes("job timeout") ||
+    message.includes("timeout: quá 20 phút không hoàn thành") ||
+    message.includes("timeout: qua 20 phut khong hoan thanh") ||
+    (message.includes("flow2") && message.includes("timeout"))
   );
+}
+
+/** Giới hạn số job video chạy đồng thời (dùng chung khi Tách Prompt + Bắt đầu nhiều task). */
+function createConcurrencyPool(limit: number) {
+  const max = Math.max(1, Math.min(50, Math.round(limit || 1)));
+  let active = 0;
+  const waiters: Array<() => void> = [];
+  return {
+    async acquire(): Promise<void> {
+      if (active < max) {
+        active += 1;
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        waiters.push(() => {
+          active += 1;
+          resolve();
+        });
+      });
+    },
+    release(): void {
+      active = Math.max(0, active - 1);
+      const next = waiters.shift();
+      if (next) next();
+    },
+  };
 }
 
 function isMergeRetryCandidate(item: AffiliatePlusItem): boolean {
@@ -184,14 +225,50 @@ function getCharacterPreview(config: GenerateVideoConfig): {
       randomEnabled: false,
     };
   }
-  const urls = character.randomImagesEnabled
-    ? listCharacterImages(character).map((img) => img.url)
-    : getCharacterImagesForGeneration(character);
+  const randomEnabled = config.randomImagesEnabled === true;
+  const urls = getCharacterImagesForRandomMode(character, randomEnabled);
   return {
     urls,
     name: character.characterName || character.name || "",
-    randomEnabled: Boolean(character.randomImagesEnabled),
+    randomEnabled,
   };
+}
+
+/** Preview ảnh nhân vật theo từng slot (Tách Prompt → mỗi Video - N một nhân vật). */
+function getSlotCharacterPreviews(config: GenerateVideoConfig): Array<{
+  slotIndex: number;
+  urls: string[];
+  name: string;
+  enabled: boolean;
+  randomEnabled: boolean;
+}> {
+  const count = config.splitPrompt ? Math.min(4, Math.max(1, Number(config.videosPerJob) || 1)) : 1;
+  return Array.from({ length: count }, (_, slotIndex) => {
+    const slot = resolveSlotConfig(config, slotIndex);
+    const character =
+      config.characters.find((c) => c.id === slot.characterId) || config.characters[0];
+    if (!character) {
+      return { slotIndex, urls: [], name: "", enabled: false, randomEnabled: false };
+    }
+    if (slot.useCharacterImage === false) {
+      return {
+        slotIndex,
+        urls: [],
+        name: character.characterName || character.name || "",
+        enabled: false,
+        randomEnabled: false,
+      };
+    }
+    const randomEnabled = slot.randomImagesEnabled === true;
+    const urls = getCharacterImagesForRandomMode(character, randomEnabled);
+    return {
+      slotIndex,
+      urls,
+      name: character.characterName || character.name || "",
+      enabled: true,
+      randomEnabled,
+    };
+  });
 }
 
 interface ThreadManagementPanelProps {
@@ -243,7 +320,9 @@ export function ThreadManagementPanel({
   const [listLoading, setListLoading] = useState(false);
   const [selectedCount, setSelectedCount] = useState(0);
   const [hasMergedVideos, setHasMergedVideos] = useState(false);
-  const [filterBucket, setFilterBucket] = useState<"all" | "waiting" | "uploading" | "success" | "error">("all");
+  const [filterBucket, setFilterBucket] = useState<
+    "all" | "waiting" | "uploading" | "success" | "error"
+  >("all");
   const filterBucketRef = useRef<"all" | "waiting" | "uploading" | "success" | "error">("all");
 
   const [editField, setEditField] = useState<EditField>(null);
@@ -337,40 +416,47 @@ export function ThreadManagementPanel({
   safePageRef.current = safePage;
   filterBucketRef.current = filterBucket;
 
-  const loadPage = useCallback(async (override?: { page?: number; q?: string; bucket?: "all" | "waiting" | "uploading" | "success" | "error" }) => {
-    const gen = ++loadGenRef.current;
-    const requestedSessionId = sessionIdRef.current;
-    const pageNum = override?.page ?? safePageRef.current;
-    const q = override?.q ?? searchTermRef.current;
-    const bucket = override?.bucket ?? filterBucketRef.current;
-    const limit = pageSizeRef.current;
-    const offset = (Math.max(1, pageNum) - 1) * limit;
-    setListLoading(true);
-    try {
-      const [pageResult, meta, selected, hasMerged] = await Promise.all([
-        queryThreadPage(requestedSessionId, { offset, limit, q, bucket }),
-        getSessionMeta(requestedSessionId),
-        countSelectedInSession(requestedSessionId),
-        sessionHasMergedVideos(requestedSessionId),
-      ]);
-      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
-      const hydrated = await hydrateMergedVideoUrls(pageResult.items, requestedSessionId);
-      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
-      setVisibleItems(hydrated);
-      setListTotalMatched(pageResult.totalMatched);
-      setListTotal(pageResult.total);
-      setListMeta(meta);
-      setSelectedCount(selected);
-      setHasMergedVideos(hasMerged);
-    } catch (err) {
-      if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
-      console.error("[thread-panel] loadPage failed", err);
-    } finally {
-      if (gen === loadGenRef.current && sessionIdRef.current === requestedSessionId) {
-        setListLoading(false);
+  const loadPage = useCallback(
+    async (override?: {
+      page?: number;
+      q?: string;
+      bucket?: "all" | "waiting" | "uploading" | "success" | "error";
+    }) => {
+      const gen = ++loadGenRef.current;
+      const requestedSessionId = sessionIdRef.current;
+      const pageNum = override?.page ?? safePageRef.current;
+      const q = override?.q ?? searchTermRef.current;
+      const bucket = override?.bucket ?? filterBucketRef.current;
+      const limit = pageSizeRef.current;
+      const offset = (Math.max(1, pageNum) - 1) * limit;
+      setListLoading(true);
+      try {
+        const [pageResult, meta, selected, hasMerged] = await Promise.all([
+          queryThreadPage(requestedSessionId, { offset, limit, q, bucket }),
+          getSessionMeta(requestedSessionId),
+          countSelectedInSession(requestedSessionId),
+          sessionHasMergedVideos(requestedSessionId),
+        ]);
+        if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
+        const hydrated = await hydrateMergedVideoUrls(pageResult.items, requestedSessionId);
+        if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
+        setVisibleItems(hydrated);
+        setListTotalMatched(pageResult.totalMatched);
+        setListTotal(pageResult.total);
+        setListMeta(meta);
+        setSelectedCount(selected);
+        setHasMergedVideos(hasMerged);
+      } catch (err) {
+        if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
+        console.error("[thread-panel] loadPage failed", err);
+      } finally {
+        if (gen === loadGenRef.current && sessionIdRef.current === requestedSessionId) {
+          setListLoading(false);
+        }
       }
-    }
-  }, []);
+    },
+    []
+  );
 
   useEffect(() => {
     // Reset UI ngay khi đổi phiên — tránh giữ list/search của phiên cũ
@@ -457,20 +543,51 @@ export function ThreadManagementPanel({
     });
   };
 
+  /** Lấy text lỗi hiển thị cho từng tab variant trong modal Kết quả video. */
+  const resolveVariantSlotErrorMessage = (
+    item: AffiliatePlusItem | undefined,
+    slotIndex: number,
+    slotErrors: string[]
+  ): string => {
+    const direct = String(slotErrors[slotIndex] || "").trim();
+    if (direct) return direct;
+
+    const taskErr = String(item?.error || "").trim();
+    if (!taskErr) return "";
+
+    const perSlot = taskErr.match(
+      new RegExp(`Video\\s*-\\s*${slotIndex + 1}\\s*lỗi:\\s*(.+)$`, "i")
+    );
+    if (perSlot?.[1]?.trim()) return perSlot[1].trim();
+
+    const failedOnly =
+      (item?.videoUrls || []).filter((u) => String(u || "").trim()).length === 0 &&
+      !String(item?.videoUrls?.[slotIndex] || "").trim();
+    if (failedOnly && taskErr) return taskErr;
+
+    return "";
+  };
+
   /** Preview variant: đủ số tab = config; slot trống = lỗi (tab đỏ). */
-  const openVariantPreview = async (item: AffiliatePlusItem) => {
+  const openVariantPreview = async (item: AffiliatePlusItem, startIndex = 0) => {
+    const fresh = (await getThreadItem(sessionId, item.id)) || item;
     const config = genConfig || (await loadGenerateVideoConfig());
-    const slotCount = Math.max(item.videoUrls?.length || 0, config.videosPerJob || 1, 1);
-    const slots = await resolveVariantPreviewUrls(item, slotCount, sessionId);
+    const slotCount = Math.max(fresh.videoUrls?.length || 0, config.videosPerJob || 1, 1);
+    const slots = await resolveVariantPreviewUrls(fresh, slotCount, sessionId);
     const paddedSlots = Array.from({ length: slotCount }, (_, i) => slots[i] || "");
-    const disabled = Array.from({ length: slotCount }, (_, i) => Boolean(item.videoDisabled?.[i]));
+    const disabled = Array.from({ length: slotCount }, (_, i) => Boolean(fresh.videoDisabled?.[i]));
+    const slotErrors = Array.from({ length: slotCount }, (_, i) =>
+      String(fresh.videoSlotErrors?.[i] || "").trim()
+    );
+    const safeIndex = Math.min(Math.max(0, startIndex), Math.max(0, slotCount - 1));
     setVideoPreview({
       kind: "variants",
       title: t("Kết quả video"),
-      itemId: item.id,
+      itemId: fresh.id,
       slots: paddedSlots,
       disabled,
-      index: 0,
+      slotErrors,
+      index: safeIndex,
       regenerating: {},
     });
   };
@@ -492,12 +609,7 @@ export function ThreadManagementPanel({
       openVideoPreviewMerged(title, item.id, [url]);
     } catch (err: any) {
       console.warn("[openMergedPreview]", err);
-      openVideoPreviewMerged(
-        title,
-        item.id,
-        [],
-        err?.message || t("Không mở được video")
-      );
+      openVideoPreviewMerged(title, item.id, [], err?.message || t("Không mở được video"));
     }
   };
 
@@ -606,11 +718,7 @@ export function ThreadManagementPanel({
     (mergeItemId: string, mergeKey: string, mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
       autoMergeAttemptedRef.current[mergeItemId] = true;
       setMergingIds((prev) => ({ ...prev, [mergeItemId]: true }));
-      onAddLog(
-        t("Đang nối {{count}} video...", { count: mergeUrls.length }),
-        "info",
-        mergeItemId
-      );
+      onAddLog(t("Đang nối {{count}} video...", { count: mergeUrls.length }), "info", mergeItemId);
 
       window.setTimeout(() => {
         if (pauseAllRef.current) {
@@ -623,9 +731,13 @@ export function ThreadManagementPanel({
         }
 
         void (async () => {
-          const latest = (await getThreadItem(sessionId, mergeItemId)) || itemsRef.current.find((i) => i.id === mergeItemId);
+          const latest =
+            (await getThreadItem(sessionId, mergeItemId)) ||
+            itemsRef.current.find((i) => i.id === mergeItemId);
           if (!latest || pauseAllRef.current) return;
-          await executeMergeWithRetry(latest, { urls: mergeUrls, resetRetryCount: true });
+          const urlsToMerge = getMergeableVideoUrls(latest);
+          if (urlsToMerge.length < 2) return;
+          await executeMergeWithRetry(latest, { urls: urlsToMerge, resetRetryCount: true });
         })();
       }, deferMs);
     },
@@ -935,7 +1047,7 @@ export function ThreadManagementPanel({
       const label = entry?.label || id;
       const ok = window.confirm(
         t(
-          "Xóa phiên \"{{label}}\"?\n\n• Lịch sử + luồng của phiên này\n• Video variant + video nối trong IndexedDB (nếu không còn phiên khác dùng)\n\nCấu hình Generate Video vẫn giữ.",
+          'Xóa phiên "{{label}}"?\n\n• Lịch sử + luồng của phiên này\n• Video variant + video nối trong IndexedDB (nếu không còn phiên khác dùng)\n\nCấu hình Generate Video vẫn giữ.',
           { label }
         ) as string
       );
@@ -1156,10 +1268,7 @@ export function ThreadManagementPanel({
         for (const i of skippedDone) delete next[i.id];
         return next;
       });
-      onAddLog(
-        t("Bỏ qua {{count}} luồng đã có video", { count: skippedDone.length }),
-        "info"
-      );
+      onAddLog(t("Bỏ qua {{count}} luồng đã có video", { count: skippedDone.length }), "info");
       void loadPage();
     }
 
@@ -1198,19 +1307,34 @@ export function ThreadManagementPanel({
     }
 
     const prompt = buildActivePromptFromConfig(config).trim() || config.activePrompt?.trim() || "";
-    if (!prompt) {
+    if (config.splitPrompt) {
+      const prompt0 = resolveEffectiveSlotPrompt(config, 0);
+      if (!prompt0) {
+        toast.warn(t("Chưa có prompt cho Video - 1 trong cấu hình Tách Prompt"));
+        return;
+      }
+    } else if (!prompt) {
       toast.warn(t("Chưa có prompt trong cấu hình Generate Video"));
       return;
     }
 
     pauseAllRef.current = false;
     runnerRef.current?.stop();
-    // Concurrency = số luồng video của customer (googlePackage), không dùng threadCount trong config
-    const concurrency = Math.max(1, Math.min(50, Math.round(VIDEO_CONCURRENCY || 1)));
+    const isSingleTaskRun = ids?.length === 1;
+    const videoConcurrency = Math.max(1, Math.min(50, Math.round(VIDEO_CONCURRENCY || 1)));
+    const videoSlotPool = config.splitPrompt ? createConcurrencyPool(videoConcurrency) : null;
+    // Không tách prompt: concurrency = số luồng video customer (mỗi task = 1 job).
+    // Tách prompt + 1 task: task concurrency = 1, slot song song theo videoConcurrency.
+    // Tách prompt + Bắt đầu: mọi task chạy, slot dùng chung pool videoConcurrency.
+    const concurrency = config.splitPrompt
+      ? isSingleTaskRun
+        ? 1
+        : Math.max(1, targets.length)
+      : videoConcurrency;
     onAddLog(
       t("Bắt đầu {{count}} luồng (song song {{n}})", {
         count: targets.length,
-        n: concurrency,
+        n: config.splitPrompt ? videoConcurrency : concurrency,
       }),
       "info"
     );
@@ -1248,97 +1372,432 @@ export function ThreadManagementPanel({
       });
 
       try {
-          if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+        if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
 
         for (;;) {
           try {
             const fresh = (await getThreadItem(sessionId, target.id)) || target;
-            const characterPrepared = characterPreparedFixed;
-
             const productPrepared = await prepareShopeeImageInput(fresh.imageUrl);
-            // Flow2 component tối đa 3 ảnh: product cuối; nhân vật tùy chọn
-            const images = buildShopeeVideoImages(characterPrepared, productPrepared);
+            const slotCount = Math.max(1, Math.min(4, config!.videosPerJob || 1));
+            const splitPrompt = Boolean(config!.splitPrompt);
 
-            // Retry khi 429 (hết slot luồng server) — đợi slot trống thay vì đánh error cả queue.
-            let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
-            for (let attempt = 0; ; attempt++) {
-              if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
-              try {
-                result = await shopeeVideoJob.run({
-                  url: "/api/app/generation-shopee-video/",
-                  body: {
-                    prompt: fresh.prompt?.trim() || prompt,
-                    images,
-                    // characterImage chỉ gửi khi có ảnh nhân vật (tránh duplicate product)
-                    ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
-                    productImage: productPrepared,
-                    videosPerJob: config!.videosPerJob,
-                    variantCount: config!.videosPerJob,
-                    videoModel: config!.videoModel,
-                    config: {
-                      prompt: fresh.prompt?.trim() || prompt,
-                      aspectRatio: "9:16",
+            const runOneGenerate = async (opts: {
+              promptText: string;
+              images: Awaited<ReturnType<typeof buildShopeeVideoImages>>;
+              characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[];
+              productPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>;
+              videoModel: string;
+              slotIndex?: number;
+            }) => {
+              let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
+              for (let attempt = 0; ; attempt++) {
+                if (ctx.isPaused() || pauseAllRef.current) {
+                  throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
+                }
+                try {
+                  result = await shopeeVideoJob.run({
+                    url: "/api/app/generation-shopee-video/",
+                    body: {
+                      prompt: opts.promptText,
+                      images: opts.images,
+                      ...(opts.characterPrepared[0]
+                        ? { characterImage: opts.characterPrepared[0] }
+                        : {}),
+                      productImage: opts.productPrepared,
+                      videosPerJob: 1,
+                      variantCount: 1,
+                      videoModel: opts.videoModel,
+                      config: {
+                        prompt: opts.promptText,
+                        aspectRatio: "9:16",
+                        videosPerJob: 1,
+                        variantCount: 1,
+                        videoModel: opts.videoModel,
+                        videoMode: "component",
+                      },
+                      _metadata: {
+                        threadId: fresh.id,
+                        shopName: fresh.shopName,
+                        productName: fresh.productName,
+                        ...(opts.slotIndex != null ? { slotIndex: opts.slotIndex } : {}),
+                      },
+                    },
+                    cancelOnUnmount: true,
+                    onJobEnqueued: (jobId) => {
+                      activeJobIdsRef.current[fresh.id] = jobId;
+                    },
+                    onProgress: (_pct, msg) => {
+                      if (msg)
+                        onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+                    },
+                  });
+                  break;
+                } catch (enqueueErr: any) {
+                  const isStreamLimit =
+                    enqueueErr instanceof MediaGenerationJobError &&
+                    enqueueErr.code === "ENQUEUE_FAILED" &&
+                    (enqueueErr.httpStatus === 429 ||
+                      /giới hạn luồng/i.test(String(enqueueErr.message || "")));
+                  if (!isStreamLimit || attempt >= 90) throw enqueueErr;
+                  onAddLog(
+                    t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
+                    "warning",
+                    fresh.id
+                  );
+                  await new Promise((r) => setTimeout(r, 2000));
+                }
+              }
+              return result!;
+            };
+
+            const extractUris = (result: Awaited<ReturnType<typeof shopeeVideoJob.run>>) => {
+              const fromUris = (
+                (result.data.videoUris?.length ? result.data.videoUris : []) as string[]
+              )
+                .map((u) => String(u || "").trim())
+                .filter(Boolean);
+              const singleUri = String(result.data.videoUri || "").trim();
+              return Array.from(new Set(fromUris.length ? fromUris : singleUri ? [singleUri] : []));
+            };
+
+            let videoUrls: string[] = [];
+            let videoDisabled: boolean[] = [];
+            let videoFlow2RequestIds: string[] = [];
+            let filledCount = 0;
+
+            let splitSlotStatuses: Array<"pending" | "running" | "success" | "error"> | undefined;
+            let splitSlotErrors: string[] | undefined;
+
+            if (splitPrompt) {
+              // Tách Prompt: mỗi video = 1 job (variantCount=1), prompt/config riêng → rồi mới nối.
+              // Cập nhật thread sau mỗi slot để UI hiện Vn xong / lỗi ngay.
+              videoUrls = Array.from({ length: slotCount }, () => "");
+              videoDisabled = Array.from({ length: slotCount }, () => false);
+              videoFlow2RequestIds = Array.from({ length: slotCount }, () => "");
+              const slotStatuses: Array<"pending" | "running" | "success" | "error"> = Array.from(
+                { length: slotCount },
+                () => "pending"
+              );
+              const slotErrors: string[] = Array.from({ length: slotCount }, () => "");
+
+              await patchThread(sessionId, fresh.id, {
+                status: "running" as ThreadStatus,
+                videoUrls: [...videoUrls],
+                videoDisabled: [...videoDisabled],
+                videoFlow2RequestIds: [...videoFlow2RequestIds],
+                videoSlotStatuses: [...slotStatuses],
+                videoSlotErrors: [...slotErrors],
+                uploaded: 0,
+                pending: slotCount,
+                error: "",
+                countdown: 99999,
+              });
+              scheduleParentSync();
+
+              let slotPatchChain: Promise<void> = Promise.resolve();
+              const patchSlotState = (buildPatch: () => Parameters<typeof patchThread>[2]) => {
+                slotPatchChain = slotPatchChain.then(async () => {
+                  await patchThread(sessionId, fresh.id, buildPatch());
+                });
+                return slotPatchChain;
+              };
+
+              let slotRunCancelled = false;
+              const runOneSlot = async (slotIndex: number) => {
+                if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
+                  slotRunCancelled = true;
+                  return;
+                }
+
+                await videoSlotPool!.acquire();
+                try {
+                  if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
+                    slotRunCancelled = true;
+                    return;
+                  }
+
+                  slotStatuses[slotIndex] = "running";
+                  slotErrors[slotIndex] = "";
+                  await patchSlotState(() => ({
+                    videoSlotStatuses: [...slotStatuses],
+                    videoSlotErrors: [...slotErrors],
+                    status: "running" as ThreadStatus,
+                    countdown: 99999,
+                  }));
+                  scheduleParentSync();
+
+                  const slot = resolveSlotConfig(config!, slotIndex);
+                  const slotPrompt =
+                    resolveEffectiveSlotPrompt(config!, slotIndex) ||
+                    fresh.prompt?.trim() ||
+                    prompt;
+
+                  let characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
+                  if (slot.useCharacterImage !== false) {
+                    const character =
+                      config!.characters.find((c) => c.id === slot.characterId) ||
+                      config!.characters[0];
+                    if (character) {
+                      const urls = getCharacterImagesForRandomMode(
+                        character,
+                        slot.randomImagesEnabled === true
+                      );
+                      if (urls.length) {
+                        characterPrepared = await Promise.all(
+                          urls.map((url) => prepareShopeeImageInput(url))
+                        );
+                      }
+                    }
+                  }
+                  const images = buildShopeeVideoImages(characterPrepared, productPrepared);
+
+                  for (let slotRetry = 0; ; slotRetry++) {
+                    if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
+                      slotRunCancelled = true;
+                      return;
+                    }
+
+                    try {
+                      onAddLog(
+                        t("Generate Video - {{n}}/{{total}} (Tách Prompt)", {
+                          n: slotIndex + 1,
+                          total: slotCount,
+                        }),
+                        "info",
+                        fresh.id
+                      );
+
+                      const result = await runOneGenerate({
+                        promptText: slotPrompt,
+                        images,
+                        characterPrepared,
+                        productPrepared,
+                        videoModel: slot.videoModel || config!.videoModel,
+                        slotIndex,
+                      });
+
+                      if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
+                        slotRunCancelled = true;
+                        return;
+                      }
+
+                      const rawUris = extractUris(result);
+                      const uri = rawUris[0] || "";
+                      if (!uri) {
+                        throw new Error(t("Không nhận được video"));
+                      }
+                      videoUrls[slotIndex] = uri;
+                      videoFlow2RequestIds[slotIndex] = String(
+                        result.data.flow2RequestId || ""
+                      ).trim();
+                      slotStatuses[slotIndex] = "success";
+                      slotErrors[slotIndex] = "";
+
+                      const filledSoFar = videoUrls.filter(Boolean).length;
+                      await patchSlotState(() => ({
+                        status: "running" as ThreadStatus,
+                        videoUrls: [...videoUrls],
+                        videoDisabled: [...videoDisabled],
+                        videoFlow2RequestIds: [...videoFlow2RequestIds],
+                        videoSlotStatuses: [...slotStatuses],
+                        videoSlotErrors: [...slotErrors],
+                        uploaded: filledSoFar,
+                        pending: Math.max(slotCount - filledSoFar, 0),
+                        error: "",
+                        countdown: 99999,
+                      }));
+                      scheduleParentSync();
+
+                      onAddLog(t("Video - {{n}} xong", { n: slotIndex + 1 }), "success", fresh.id);
+                      return;
+                    } catch (slotErr: any) {
+                      if (
+                        ctx.isPaused() ||
+                        pauseAllRef.current ||
+                        (slotErr instanceof MediaGenerationJobError &&
+                          (slotErr.code === "JOB_CANCELLED" || slotErr.code === "JOB_NOT_FOUND"))
+                      ) {
+                        slotRunCancelled = true;
+                        return;
+                      }
+
+                      const slotMsg = getTaskErrorMessage(slotErr, t("Generate video thất bại"));
+                      if (
+                        isGenerateRetryableError(slotErr) &&
+                        slotRetry < MAX_GENERATE_ERROR_RETRIES
+                      ) {
+                        const nextRetry = slotRetry + 1;
+                        onAddLog(
+                          t("Video - {{n}} lỗi, tự retry {{current}}/{{max}}: {{msg}}", {
+                            n: slotIndex + 1,
+                            current: nextRetry,
+                            max: MAX_GENERATE_ERROR_RETRIES,
+                            msg: slotMsg,
+                          }),
+                          "warning",
+                          fresh.id
+                        );
+                        continue;
+                      }
+
+                      slotStatuses[slotIndex] = "error";
+                      slotErrors[slotIndex] = slotMsg;
+                      videoUrls[slotIndex] = "";
+                      videoFlow2RequestIds[slotIndex] = "";
+
+                      const filledSoFar = videoUrls.filter(Boolean).length;
+                      await patchSlotState(() => ({
+                        status: "running" as ThreadStatus,
+                        videoUrls: [...videoUrls],
+                        videoDisabled: [...videoDisabled],
+                        videoFlow2RequestIds: [...videoFlow2RequestIds],
+                        videoSlotStatuses: [...slotStatuses],
+                        videoSlotErrors: [...slotErrors],
+                        uploaded: filledSoFar,
+                        pending: Math.max(slotCount - filledSoFar, 0),
+                        error: t("Video - {{n}} lỗi: {{msg}}", {
+                          n: slotIndex + 1,
+                          msg: slotMsg,
+                        }),
+                        countdown: 99999,
+                      }));
+                      scheduleParentSync();
+                      onAddLog(
+                        t("Video - {{n}} lỗi: {{msg}}", {
+                          n: slotIndex + 1,
+                          msg: slotMsg,
+                        }),
+                        "error",
+                        fresh.id
+                      );
+                      return;
+                    }
+                  }
+                } finally {
+                  videoSlotPool!.release();
+                }
+              };
+
+              await Promise.all(
+                Array.from({ length: slotCount }, (_, slotIndex) => runOneSlot(slotIndex))
+              );
+              await slotPatchChain;
+
+              if (slotRunCancelled) return "cancelled";
+
+              splitSlotStatuses = [...slotStatuses];
+              splitSlotErrors = [...slotErrors];
+
+              filledCount = videoUrls.filter(Boolean).length;
+              // Nếu mọi slot đều lỗi → ném để outer catch đánh error task
+              if (filledCount === 0 && slotStatuses.every((s) => s === "error")) {
+                const firstErr = slotErrors.find((e) => e.trim()) || t("Generate video thất bại");
+                throw new Error(firstErr);
+              }
+            } else {
+              // Giữ hành vi cũ: 1 job với variantCount = videosPerJob
+              const characterPrepared = characterPreparedFixed;
+              const images = buildShopeeVideoImages(characterPrepared, productPrepared);
+              const jobPrompt = fresh.prompt?.trim() || prompt;
+
+              let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
+              for (let attempt = 0; ; attempt++) {
+                if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+                try {
+                  result = await shopeeVideoJob.run({
+                    url: "/api/app/generation-shopee-video/",
+                    body: {
+                      prompt: jobPrompt,
+                      images,
+                      ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
+                      productImage: productPrepared,
                       videosPerJob: config!.videosPerJob,
                       variantCount: config!.videosPerJob,
                       videoModel: config!.videoModel,
-                      videoMode: "component",
+                      config: {
+                        prompt: jobPrompt,
+                        aspectRatio: "9:16",
+                        videosPerJob: config!.videosPerJob,
+                        variantCount: config!.videosPerJob,
+                        videoModel: config!.videoModel,
+                        videoMode: "component",
+                      },
+                      _metadata: {
+                        threadId: fresh.id,
+                        shopName: fresh.shopName,
+                        productName: fresh.productName,
+                      },
                     },
-                    _metadata: {
-                      threadId: fresh.id,
-                      shopName: fresh.shopName,
-                      productName: fresh.productName,
+                    cancelOnUnmount: true,
+                    onJobEnqueued: (jobId) => {
+                      activeJobIdsRef.current[fresh.id] = jobId;
                     },
-                  },
-                  cancelOnUnmount: true,
-                  onJobEnqueued: (jobId) => {
-                    activeJobIdsRef.current[fresh.id] = jobId;
-                  },
-                  onProgress: (_pct, msg) => {
-                    if (msg) onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
-                  },
-                });
-                break;
-              } catch (enqueueErr: any) {
-                const isStreamLimit =
-                  enqueueErr instanceof MediaGenerationJobError &&
-                  enqueueErr.code === "ENQUEUE_FAILED" &&
-                  (enqueueErr.httpStatus === 429 ||
-                    /giới hạn luồng/i.test(String(enqueueErr.message || "")));
-                if (!isStreamLimit || attempt >= 90) throw enqueueErr;
-                onAddLog(
-                  t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
-                  "warning",
-                  fresh.id
-                );
-                await new Promise((r) => setTimeout(r, 2000));
+                    onProgress: (_pct, msg) => {
+                      if (msg)
+                        onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+                    },
+                  });
+                  break;
+                } catch (enqueueErr: any) {
+                  const isStreamLimit =
+                    enqueueErr instanceof MediaGenerationJobError &&
+                    enqueueErr.code === "ENQUEUE_FAILED" &&
+                    (enqueueErr.httpStatus === 429 ||
+                      /giới hạn luồng/i.test(String(enqueueErr.message || "")));
+                  if (!isStreamLimit || attempt >= 90) throw enqueueErr;
+                  onAddLog(
+                    t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
+                    "warning",
+                    fresh.id
+                  );
+                  await new Promise((r) => setTimeout(r, 2000));
+                }
               }
+
+              if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
+
+              const rawUris = extractUris(result!);
+              const padded = padVideoSlots(rawUris, Math.max(slotCount, rawUris.length, 1));
+              videoUrls = padded.videoUrls;
+              videoDisabled = padded.videoDisabled;
+              filledCount = videoUrls.filter(Boolean).length;
+              const flow2RequestId = String(result!.data.flow2RequestId || "").trim();
+              videoFlow2RequestIds = videoUrls.map((u) =>
+                u && flow2RequestId ? flow2RequestId : ""
+              );
             }
 
-            if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
-
-            const fromUris = ((result.data.videoUris?.length ? result.data.videoUris : []) as string[])
-              .map((u) => String(u || "").trim())
+            const normalizedSlots = splitPrompt
+              ? normalizeVideoSlotStatuses(
+                  videoUrls,
+                  splitSlotStatuses,
+                  splitSlotErrors
+                )
+              : null;
+            const finalSlotStatuses = normalizedSlots
+              ? normalizedSlots.statuses
+              : videoUrls.map((u) => (u ? ("success" as const) : ("error" as const)));
+            const finalSlotErrors = normalizedSlots
+              ? normalizedSlots.errors
+              : videoUrls.map(() => "");
+            const failedSlots = finalSlotStatuses
+              .map((s, i) => (s === "error" ? i + 1 : 0))
               .filter(Boolean);
-            const singleUri = String(result.data.videoUri || "").trim();
-            const rawUris = Array.from(
-              new Set(fromUris.length ? fromUris : singleUri ? [singleUri] : [])
-            );
-            const slotCount = Math.max(config!.videosPerJob || 1, rawUris.length, 1);
-            const { videoUrls, videoDisabled } = padVideoSlots(rawUris, slotCount);
-            const filledCount = videoUrls.filter(Boolean).length;
-            const flow2RequestId = String(result.data.flow2RequestId || "").trim();
-            const videoFlow2RequestIds = videoUrls.map((u) =>
-              u && flow2RequestId ? flow2RequestId : ""
-            );
+            const partialError =
+              splitPrompt && failedSlots.length
+                ? t("Lỗi Video - {{list}}", { list: failedSlots.join(", ") })
+                : "";
 
             await patchThread(sessionId, fresh.id, {
               status: "success" as ThreadStatus,
               videoUrls,
               videoDisabled,
               videoFlow2RequestIds,
+              videoSlotStatuses: finalSlotStatuses,
+              videoSlotErrors: finalSlotErrors,
               uploaded: filledCount,
               pending: Math.max(slotCount - filledCount, 0),
-              error: "",
+              error: partialError,
               countdown: 0,
               generateRetryCount: 0,
               mergeRetryCount: 0,
@@ -1351,20 +1810,29 @@ export function ThreadManagementPanel({
             });
 
             try {
-              await persistProductVideosWithEnrichment(getMergedVideoStorageKey(fresh, sessionId), videoUrls);
+              await persistProductVideosWithEnrichment(
+                getMergedVideoStorageKey(fresh, sessionId),
+                videoUrls
+              );
             } catch (persistErr) {
               console.warn("[persistProductVideosWithEnrichment]", persistErr);
             }
 
             // Nối video chạy nền — KHÔNG giữ slot concurrency của ThreadRunner.
             // (Trước đây await merge → UI đã success nhưng pool không lấy job mới.)
-            const mergeUrls = videoUrls
-              .map((u, idx) => ({ u, disabled: videoDisabled[idx] }))
-              .filter((x) => x.u && !x.disabled)
-              .map((x) => x.u);
+            const latestForMerge = (await getThreadItem(sessionId, fresh.id)) || fresh;
+            const mergeUrls = getMergeableVideoUrls({
+              ...latestForMerge,
+              videoUrls,
+              videoDisabled,
+            });
             const willMerge = mergeUrls.length >= 2 && !ctx.isPaused() && !pauseAllRef.current;
             if (willMerge) {
-              scheduleBackgroundMerge(fresh.id, getMergedVideoStorageKey(fresh, sessionId), mergeUrls);
+              scheduleBackgroundMerge(
+                fresh.id,
+                getMergedVideoStorageKey(fresh, sessionId),
+                mergeUrls
+              );
             }
 
             if (!ctx.isPaused() && !pauseAllRef.current) {
@@ -1374,7 +1842,7 @@ export function ThreadManagementPanel({
                   count: filledCount || 1,
                   merged: willMerge ? `, ${t("đang nối")}` : "",
                 }),
-                "success",
+                failedSlots.length ? "warning" : "success",
                 fresh.id
               );
             }
@@ -1602,7 +2070,9 @@ export function ThreadManagementPanel({
   ) => {
     if (mergingIds[item.id]) return;
 
-    const mergedOk = await executeMergeWithRetry(item, { resetRetryCount: opts?.resetRetryCount ?? true });
+    const mergedOk = await executeMergeWithRetry(item, {
+      resetRetryCount: opts?.resetRetryCount ?? true,
+    });
     if (!mergedOk) return;
 
     toast.success(t("Đã nối lại video"));
@@ -1630,31 +2100,76 @@ export function ThreadManagementPanel({
   };
 
   /** Tạo lại 1 slot variant (gắn vào đúng tab; URL → IDB → base64 ngầm). */
-  const regenerateVariantSlot = async (itemId: string, slotIndex: number) => {
+  const regenerateVariantSlot = async (
+    itemId: string,
+    slotIndex: number,
+    opts?: { manageGeneratingState?: boolean }
+  ) => {
+    const manageGeneratingState = opts?.manageGeneratingState !== false;
     const target =
       (await getThreadItem(sessionId, itemId)) || itemsRef.current.find((i) => i.id === itemId);
     if (!target) return;
 
+    const config = genConfig || (await loadGenerateVideoConfig());
+    const slotCount = Math.max(
+      target.videoUrls?.length || 0,
+      config.videosPerJob || 1,
+      slotIndex + 1
+    );
+    const buildSlotArrays = (base: AffiliatePlusItem) => {
+      const statuses = Array.from({ length: slotCount }, (_, i) => {
+        if (String(base.videoUrls?.[i] || "").trim()) return "success" as const;
+        const prev = base.videoSlotStatuses?.[i];
+        if (prev === "error" || prev === "running" || prev === "pending") return prev;
+        return "pending" as const;
+      });
+      const errors = Array.from({ length: slotCount }, (_, i) =>
+        String(base.videoSlotErrors?.[i] || "").trim()
+      );
+      return { statuses, errors };
+    };
+
+    if (manageGeneratingState) {
+      setGeneratingIds((prev) => ({ ...prev, [itemId]: true }));
+    }
     setVideoPreview((prev) =>
       prev?.kind === "variants" && prev.itemId === itemId
         ? { ...prev, regenerating: { ...prev.regenerating, [slotIndex]: true }, index: slotIndex }
         : prev
     );
 
+    const { statuses: startStatuses, errors: startErrors } = buildSlotArrays(target);
+    startStatuses[slotIndex] = "running";
+    startErrors[slotIndex] = "";
+    await patchItem(itemId, {
+      status: "running" as ThreadStatus,
+      countdown: 99999,
+      error: "",
+      videoSlotStatuses: startStatuses,
+      videoSlotErrors: startErrors,
+    });
+
+    let finished = false;
     try {
-      const config = genConfig || (await loadGenerateVideoConfig());
-      const useCharacterImage = config.useCharacterImage !== false;
+      const slot = resolveSlotConfig(config, slotIndex);
+      const useCharacterImage = slot.useCharacterImage !== false;
       const character =
-        config.characters.find((c) => c.id === config.characterId) || config.characters[0];
+        config.characters.find((c) => c.id === slot.characterId) || config.characters[0];
       const characterImages =
-        useCharacterImage && character ? getCharacterImagesForGeneration(character) : [];
+        useCharacterImage && character
+          ? getCharacterImagesForRandomMode(character, slot.randomImagesEnabled === true)
+          : [];
 
       const characterPrepared = characterImages.length
         ? await Promise.all(characterImages.map((image) => prepareShopeeImageInput(image)))
         : [];
       const productPrepared = await prepareShopeeImageInput(target.imageUrl);
       const images = buildShopeeVideoImages(characterPrepared, productPrepared);
-      const prompt = target.prompt?.trim() || buildActivePromptFromConfig(config);
+      const prompt = config.splitPrompt
+        ? resolveEffectiveSlotPrompt(config, slotIndex) ||
+          target.prompt?.trim() ||
+          buildActivePromptFromConfig(config)
+        : target.prompt?.trim() || buildActivePromptFromConfig(config);
 
       const result = await shopeeVideoJob.run({
         url: "/api/app/generation-shopee-video/",
@@ -1665,13 +2180,13 @@ export function ThreadManagementPanel({
           productImage: productPrepared,
           videosPerJob: 1,
           variantCount: 1,
-          videoModel: config.videoModel,
+          videoModel: slot.videoModel || config.videoModel,
           config: {
             prompt,
             aspectRatio: "9:16",
             videosPerJob: 1,
             variantCount: 1,
-            videoModel: config.videoModel,
+            videoModel: slot.videoModel || config.videoModel,
             videoMode: "component",
           },
           _metadata: {
@@ -1681,9 +2196,12 @@ export function ThreadManagementPanel({
             slotIndex,
           },
         },
-        cancelOnUnmount: true,
+        cancelOnUnmount: false,
         onJobEnqueued: (jobId) => {
           activeJobIdsRef.current[itemId] = jobId;
+        },
+        onProgress: (_pct, msg) => {
+          if (msg) onAddLog(msg, "info", itemId);
         },
       });
 
@@ -1694,11 +2212,6 @@ export function ThreadManagementPanel({
       const newUri = fromUris[0] || singleUri;
       if (!newUri) throw new Error(t("Không nhận được video"));
 
-      const slotCount = Math.max(
-        target.videoUrls?.length || 0,
-        config.videosPerJob || 1,
-        slotIndex + 1
-      );
       const nextUrls = Array.from({ length: slotCount }, (_, i) =>
         i === slotIndex ? newUri : String(target.videoUrls?.[i] || "").trim()
       );
@@ -1707,26 +2220,39 @@ export function ThreadManagementPanel({
       );
       const flow2RequestId = String(result.data.flow2RequestId || "").trim();
       const nextFlow2Ids = Array.from({ length: slotCount }, (_, i) =>
-        i === slotIndex
-          ? flow2RequestId
-          : String(target.videoFlow2RequestIds?.[i] || "").trim()
+        i === slotIndex ? flow2RequestId : String(target.videoFlow2RequestIds?.[i] || "").trim()
       );
+      const nextSlotErrors = Array.from({ length: slotCount }, (_, i) =>
+        i === slotIndex ? "" : String(target.videoSlotErrors?.[i] || "").trim()
+      );
+      const nextSlotStatuses = Array.from({ length: slotCount }, (_, i) => {
+        if (i === slotIndex) return "success" as const;
+        const prev = target.videoSlotStatuses?.[i];
+        if (prev) return prev;
+        return String(nextUrls[i] || "").trim() ? ("success" as const) : ("pending" as const);
+      });
       const filledCount = nextUrls.filter(Boolean).length;
 
-      await patchThread(sessionId, itemId, {
+      await patchItem(itemId, {
         videoUrls: nextUrls,
         videoDisabled: nextDisabled,
         videoFlow2RequestIds: nextFlow2Ids,
+        videoSlotErrors: nextSlotErrors,
+        videoSlotStatuses: nextSlotStatuses,
         uploaded: filledCount,
         pending: Math.max(slotCount - filledCount, 0),
         status: "success" as ThreadStatus,
         error: "",
+        countdown: 0,
         mergedVideoUrl: "",
       });
-      scheduleParentSync();
+      finished = true;
       autoMergeAttemptedRef.current[itemId] = false;
 
-      await persistProductVideosWithEnrichment(getMergedVideoStorageKey(target, sessionId), nextUrls);
+      await persistProductVideosWithEnrichment(
+        getMergedVideoStorageKey(target, sessionId),
+        nextUrls
+      );
 
       const previewSlots = await resolveVariantPreviewUrls(
         { ...target, videoUrls: nextUrls },
@@ -1740,6 +2266,7 @@ export function ThreadManagementPanel({
               ...prev,
               slots: Array.from({ length: slotCount }, (_, i) => previewSlots[i] || ""),
               disabled: nextDisabled,
+              slotErrors: nextSlotErrors,
             }
           : prev
       );
@@ -1752,40 +2279,113 @@ export function ThreadManagementPanel({
         (err instanceof MediaGenerationJobError &&
           (err.code === "JOB_CANCELLED" || err.code === "JOB_NOT_FOUND"));
       if (!isCancelled) {
+        const msg = getTaskErrorMessage(err, t("Tạo lại video thất bại"));
         console.error(err);
-        toast.error(err?.message || t("Tạo lại video thất bại"));
+        toast.error(msg);
         onAddLog(
           t("Tạo lại video {{n}} thất bại: {{msg}}", {
             n: slotIndex + 1,
-            msg: err?.message || "unknown",
+            msg,
           }),
           "error",
           itemId
         );
+        setVideoPreview((prev) => {
+          if (prev?.kind !== "variants" || prev.itemId !== itemId) return prev;
+          const slotErrors = [...prev.slotErrors];
+          while (slotErrors.length <= slotIndex) slotErrors.push("");
+          slotErrors[slotIndex] = msg;
+          return { ...prev, slotErrors };
+        });
+
+        const latest =
+          (await getThreadItem(sessionId, itemId)) ||
+          itemsRef.current.find((i) => i.id === itemId) ||
+          target;
+        const { statuses: errStatuses, errors: errSlotErrors } = buildSlotArrays(latest);
+        errStatuses[slotIndex] = "error";
+        errSlotErrors[slotIndex] = msg;
+        await patchItem(itemId, {
+          videoSlotStatuses: errStatuses,
+          videoSlotErrors: errSlotErrors,
+          error: t("Video - {{n}} lỗi: {{msg}}", { n: slotIndex + 1, msg }),
+        });
+        finished = true;
       }
     } finally {
       delete activeJobIdsRef.current[itemId];
+      if (manageGeneratingState) {
+        setGeneratingIds((prev) => {
+          const next = { ...prev };
+          delete next[itemId];
+          return next;
+        });
+      }
       setVideoPreview((prev) => {
         if (prev?.kind !== "variants" || prev.itemId !== itemId) return prev;
         const regenerating = { ...prev.regenerating };
         delete regenerating[slotIndex];
         return { ...prev, regenerating };
       });
+      if (!finished) {
+        const latest = await getThreadItem(sessionId, itemId);
+        if (latest?.videoSlotStatuses?.[slotIndex] === "running") {
+          const { statuses, errors } = buildSlotArrays(latest);
+          statuses[slotIndex] = "pending";
+          await patchItem(itemId, { videoSlotStatuses: statuses, videoSlotErrors: errors });
+        }
+      }
     }
   };
 
-  const regenerateAllFailedSlots = async (itemId: string) => {
+  const regenerateAllFailedSlots = async (
+    itemId: string,
+    mode: "error" | "pending" | "all-empty" = "all-empty"
+  ) => {
     const preview = videoPreview;
     if (preview?.kind !== "variants" || preview.itemId !== itemId) return;
-    const failedIndexes = preview.slots
+    const previewItem =
+      visibleItems.find((i) => i.id === itemId) || items.find((i) => i.id === itemId);
+    const emptyIndexes = preview.slots
       .map((s, idx) => (!String(s || "").trim() ? idx : -1))
       .filter((idx) => idx >= 0);
-    if (!failedIndexes.length) {
-      toast.warn(t("Không có tab lỗi"));
+    const resolveTabStatus = (tabIdx: number): VideoSlotStatus => {
+      const url = String(preview.slots[tabIdx] || "").trim();
+      if (url) return "success";
+      if (!previewItem) return "pending";
+      return resolveVideoSlotDisplayStatus(previewItem, tabIdx, {
+        isGenerating: Boolean(generatingIds[itemId]),
+      });
+    };
+    const indexes =
+      mode === "all-empty"
+        ? emptyIndexes
+        : emptyIndexes.filter((idx) =>
+            mode === "error"
+              ? resolveTabStatus(idx) === "error"
+              : resolveTabStatus(idx) === "pending" || resolveTabStatus(idx) === "running"
+          );
+    if (!indexes.length) {
+      toast.warn(
+        mode === "error"
+          ? t("Không có tab lỗi")
+          : mode === "pending"
+          ? t("Không có video chưa tạo")
+          : t("Không có tab lỗi")
+      );
       return;
     }
-    for (const idx of failedIndexes) {
-      await regenerateVariantSlot(itemId, idx);
+    setGeneratingIds((prev) => ({ ...prev, [itemId]: true }));
+    try {
+      for (const idx of indexes) {
+        await regenerateVariantSlot(itemId, idx, { manageGeneratingState: false });
+      }
+    } finally {
+      setGeneratingIds((prev) => {
+        const next = { ...prev };
+        delete next[itemId];
+        return next;
+      });
     }
   };
 
@@ -2003,13 +2603,20 @@ export function ThreadManagementPanel({
             </button>
             <div
               className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium"
-              style={
-                genConfig?.useCharacterImage === false
-                  ? { backgroundColor: "#f8fafc", borderColor: "#cbd5e1", color: "#64748b" }
-                  : { backgroundColor: "#eef2ff", borderColor: "#a5b4fc", color: "#4338ca" }
-              }
+              style={(() => {
+                const enabled = genConfig?.splitPrompt
+                  ? getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                  : genConfig?.useCharacterImage !== false;
+                return enabled
+                  ? { backgroundColor: "#eef2ff", borderColor: "#a5b4fc", color: "#4338ca" }
+                  : { backgroundColor: "#f8fafc", borderColor: "#cbd5e1", color: "#64748b" };
+              })()}
               title={
-                genConfig?.useCharacterImage === false
+                genConfig?.splitPrompt
+                  ? ((genConfig && getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                      ? t("Tách Prompt — bật/tắt ảnh nhân vật cho tất cả Video - N")
+                      : t("Tách Prompt — đang tắt ảnh nhân vật mọi tab")) as string)
+                  : genConfig?.useCharacterImage === false
                   ? (t("Đang tắt — generate chỉ dùng ảnh sản phẩm") as string)
                   : (t("Đang bật — generate kèm ảnh nhân vật") as string)
               }
@@ -2018,18 +2625,35 @@ export function ThreadManagementPanel({
               <Switch
                 size="sm"
                 dependent
-                value={genConfig?.useCharacterImage !== false}
+                value={
+                  genConfig?.splitPrompt
+                    ? getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                    : genConfig?.useCharacterImage !== false
+                }
                 onChange={(value) => {
                   void (async () => {
                     try {
                       const base = genConfig || (await loadGenerateVideoConfig());
-                      const next = { ...base, useCharacterImage: Boolean(value) };
+                      const on = Boolean(value);
+                      const slots = ensureVideoSlots(base).map((slot) => ({
+                        ...slot,
+                        useCharacterImage: on,
+                      }));
+                      const next = {
+                        ...base,
+                        useCharacterImage: on,
+                        videoSlots: slots,
+                      };
                       const saved = await saveGenerateVideoConfig(next);
                       setGenConfig(saved);
                       setCharacterPreview(getCharacterPreview(saved));
                       onAddLog(
-                        value
-                          ? t("Đã bật dùng ảnh nhân vật khi generate")
+                        on
+                          ? base.splitPrompt
+                            ? t("Đã bật ảnh nhân vật cho tất cả Video (Tách Prompt)")
+                            : t("Đã bật dùng ảnh nhân vật khi generate")
+                          : base.splitPrompt
+                          ? t("Đã tắt ảnh nhân vật mọi Video — chỉ dùng ảnh sản phẩm")
                           : t("Đã tắt ảnh nhân vật — chỉ dùng ảnh sản phẩm"),
                         "info"
                       );
@@ -2176,10 +2800,30 @@ export function ThreadManagementPanel({
               {(
                 [
                   { key: "all", label: t("Tất cả"), count: stats.total },
-                  { key: "waiting", label: t("Chờ"), count: stats.waiting, color: "text-cyan-700 bg-cyan-50 border-cyan-200" },
-                  { key: "uploading", label: t("Đang upload"), count: stats.uploading, color: "text-blue-700 bg-blue-50 border-blue-200" },
-                  { key: "success", label: t("Thành công"), count: stats.success, color: "text-emerald-700 bg-emerald-50 border-emerald-200" },
-                  { key: "error", label: t("Lỗi"), count: stats.error, color: "text-rose-700 bg-rose-50 border-rose-200" },
+                  {
+                    key: "waiting",
+                    label: t("Chờ"),
+                    count: stats.waiting,
+                    color: "text-cyan-700 bg-cyan-50 border-cyan-200",
+                  },
+                  {
+                    key: "uploading",
+                    label: t("Đang upload"),
+                    count: stats.uploading,
+                    color: "text-blue-700 bg-blue-50 border-blue-200",
+                  },
+                  {
+                    key: "success",
+                    label: t("Thành công"),
+                    count: stats.success,
+                    color: "text-emerald-700 bg-emerald-50 border-emerald-200",
+                  },
+                  {
+                    key: "error",
+                    label: t("Lỗi"),
+                    count: stats.error,
+                    color: "text-danger bg-danger/10 border-danger/30",
+                  },
                 ] as { key: typeof filterBucket; label: string; count: number; color?: string }[]
               ).map(({ key, label, count, color }) => {
                 const isActive = filterBucket === key;
@@ -2197,7 +2841,9 @@ export function ThreadManagementPanel({
                     }`}
                   >
                     {label}
-                    <span className={`text-[10px] font-bold ${isActive ? "opacity-80" : "opacity-60"}`}>
+                    <span
+                      className={`text-[10px] font-bold ${isActive ? "opacity-80" : "opacity-60"}`}
+                    >
                       ({count})
                     </span>
                   </button>
@@ -2245,9 +2891,15 @@ export function ThreadManagementPanel({
                     >
                       {t("Shop / Sản phẩm")}
                     </th>
-                    <th className={`${panelListClasses.th} w-28 text-center`}>{t("Ảnh sản phẩm")}</th>
-                    <th className={`${panelListClasses.th} w-28 text-center`}>{t("Ảnh nhân vật")}</th>
-                    <th className={`${panelListClasses.th} min-w-[140px] text-center`}>{t("Video")}</th>
+                    <th className={`${panelListClasses.th} w-28 text-center`}>
+                      {t("Ảnh sản phẩm")}
+                    </th>
+                    <th className={`${panelListClasses.th} min-w-[11rem] text-center`}>
+                      {t("Ảnh nhân vật")}
+                    </th>
+                    <th className={`${panelListClasses.th} min-w-[140px] text-center`}>
+                      {t("Video")}
+                    </th>
                     <th className={`${panelListClasses.th} w-32 text-center`}>{t("Thao tác")}</th>
                   </tr>
                 </thead>
@@ -2371,52 +3023,158 @@ export function ThreadManagementPanel({
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
-                            {characterPreview.urls.length ? (
-                              <div
-                                className={`grid gap-1 ${
-                                  characterPreview.urls.length > 1 ? "grid-cols-2" : "grid-cols-1"
-                                }`}
-                              >
-                                {characterPreview.urls.map((url, imageIdx) => (
-                                  <button
-                                    key={`${url}-${imageIdx}`}
-                                    type="button"
-                                    onClick={() => setZoomImage(url)}
-                                    title={characterPreview.name || t("Ảnh nhân vật từ config")}
-                                    className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
-                                  >
-                                    <img
-                                      src={url}
-                                      alt={characterPreview.name || t("Ảnh nhân vật")}
-                                      className={`cursor-zoom-in rounded-lg object-cover ${
-                                        characterPreview.urls.length > 1 ? "h-8 w-8" : "h-16 w-16"
-                                      }`}
-                                    />
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div
-                                className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
-                                title={
-                                  genConfig?.useCharacterImage === false
-                                    ? t("Đã tắt dùng ảnh nhân vật")
-                                    : t("Chưa có ảnh nhân vật trong config")
-                                }
-                              >
-                                <HiOutlinePhotograph className="text-xl" />
-                              </div>
-                            )}
-                            {characterPreview.name && genConfig?.useCharacterImage !== false ? (
-                              <span
-                                className="max-w-[88px] truncate text-10 text-gray-500"
-                                title={characterPreview.name}
-                              >
-                                {characterPreview.name}
-                              </span>
-                            ) : genConfig?.useCharacterImage === false ? (
-                              <span className="text-10 text-gray-400">{t("Đã tắt")}</span>
-                            ) : null}
+                            {(() => {
+                              const slotPreviews = genConfig
+                                ? getSlotCharacterPreviews(genConfig)
+                                : [];
+                              const showSplit =
+                                Boolean(genConfig?.splitPrompt) && slotPreviews.length > 1;
+                              const hasAnyUrl = slotPreviews.some((s) => s.urls.length > 0);
+
+                              if (!hasAnyUrl) {
+                                return (
+                                  <>
+                                    <div
+                                      className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200"
+                                      title={
+                                        slotPreviews.every((s) => !s.enabled)
+                                          ? t("Đã tắt dùng ảnh nhân vật")
+                                          : t("Chưa có ảnh nhân vật trong config")
+                                      }
+                                    >
+                                      <HiOutlinePhotograph className="text-xl" />
+                                    </div>
+                                    {slotPreviews.every((s) => !s.enabled) ? (
+                                      <span className="text-10 text-gray-400">{t("Đã tắt")}</span>
+                                    ) : null}
+                                  </>
+                                );
+                              }
+
+                              if (!showSplit) {
+                                const single = slotPreviews[0] || {
+                                  urls: characterPreview.urls,
+                                  name: characterPreview.name,
+                                  enabled: genConfig?.useCharacterImage !== false,
+                                };
+                                return (
+                                  <>
+                                    <div className="flex flex-wrap justify-center gap-1">
+                                      {single.urls.map((url, imageIdx) => (
+                                        <button
+                                          key={`${url}-${imageIdx}`}
+                                          type="button"
+                                          onClick={() => setZoomImage(url)}
+                                          title={single.name || t("Ảnh nhân vật từ config")}
+                                          className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
+                                        >
+                                          <img
+                                            src={url}
+                                            alt={single.name || t("Ảnh nhân vật")}
+                                            className={`cursor-zoom-in rounded-lg object-cover ${
+                                              single.urls.length > 1 ? "h-8 w-8" : "h-16 w-16"
+                                            }`}
+                                          />
+                                        </button>
+                                      ))}
+                                    </div>
+                                    {single.name && single.enabled !== false ? (
+                                      <span
+                                        className="max-w-[88px] truncate text-10 text-gray-500"
+                                        title={single.name}
+                                      >
+                                        {single.name}
+                                      </span>
+                                    ) : null}
+                                  </>
+                                );
+                              }
+
+                              // Tách Prompt: hiện ảnh theo từng Video - N — 1 hàng, tự xuống dòng khi hẹp
+                              return (
+                                <div className="flex flex-wrap justify-start gap-1.5 w-full min-w-0">
+                                  {slotPreviews.map((slot) => {
+                                    const thumbs = slot.randomEnabled
+                                      ? slot.urls.slice(0, 6)
+                                      : slot.urls.slice(0, 1);
+                                    const imgCount = slot.urls.length;
+                                    return (
+                                      <div
+                                        key={slot.slotIndex}
+                                        className="flex gap-1 items-center shrink-0 rounded-lg border border-gray-300 bg-gray-50 px-1 py-1 text-gray-900"
+                                        title={
+                                          !slot.enabled
+                                            ? t("Video - {{n}}: đã tắt ảnh nhân vật", {
+                                                n: slot.slotIndex + 1,
+                                              })
+                                            : slot.randomEnabled
+                                            ? t(
+                                                "Video - {{n}}: {{name}} — ảnh ngẫu nhiên ({{count}} ảnh gửi generate)",
+                                                {
+                                                  n: slot.slotIndex + 1,
+                                                  name: slot.name || "",
+                                                  count: imgCount,
+                                                }
+                                              )
+                                            : slot.name
+                                            ? t("Video - {{n}}: {{name}}", {
+                                                n: slot.slotIndex + 1,
+                                                name: slot.name,
+                                              })
+                                            : t("Video - {{n}}", { n: slot.slotIndex + 1 })
+                                        }
+                                      >
+                                        <span className="w-7 shrink-0 text-12 font-bold text-gray-900">
+                                          V{slot.slotIndex + 1}
+                                        </span>
+                                        {thumbs.length ? (
+                                          <div className="flex flex-1 flex-wrap gap-0.5">
+                                            {thumbs.map((thumb, ti) => (
+                                              <button
+                                                key={`${slot.slotIndex}-${ti}`}
+                                                type="button"
+                                                onClick={() => setZoomImage(thumb)}
+                                                className="rounded border border-gray-200 transition-colors hover:border-sky-400"
+                                              >
+                                                <img
+                                                  src={thumb}
+                                                  alt={slot.name || t("Ảnh nhân vật")}
+                                                  className="h-8 w-8 cursor-zoom-in rounded object-cover"
+                                                />
+                                              </button>
+                                            ))}
+                                            {slot.randomEnabled && imgCount > thumbs.length ? (
+                                              <span className="inline-flex h-8 items-center rounded bg-pink-50 px-1 text-9 font-semibold text-pink-700">
+                                                +{imgCount - thumbs.length}
+                                              </span>
+                                            ) : null}
+                                          </div>
+                                        ) : (
+                                          <div className="flex h-8 w-8 items-center justify-center rounded border border-gray-200 bg-white text-gray-400">
+                                            <HiOutlinePhotograph className="text-sm" />
+                                          </div>
+                                        )}
+                                        <span
+                                          className={`shrink-0 text-[9px] font-semibold ${
+                                            slot.randomEnabled
+                                              ? imgCount > 1
+                                                ? "text-amber-700"
+                                                : "text-danger"
+                                              : "text-gray-400"
+                                          }`}
+                                        >
+                                          {slot.randomEnabled
+                                            ? imgCount > 1
+                                              ? t("{{n}} ảnh", { n: imgCount })
+                                              : t("1 ảnh")
+                                            : null}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -2427,50 +3185,179 @@ export function ThreadManagementPanel({
                                 const filledUrls = (item.videoUrls || []).filter((u) =>
                                   String(u || "").trim()
                                 );
-                                const slotCount = item.videoUrls?.length || 0;
-                                const hasVideos = slotCount > 0;
+                                const hasVideos = (item.videoUrls || []).some((u) =>
+                                  String(u || "").trim()
+                                );
                                 const filled = filledUrls.length;
+                                const slotCount = Math.max(
+                                  item.videoUrls?.length || 0,
+                                  item.videoSlotStatuses?.length || 0,
+                                  genConfig?.splitPrompt
+                                    ? Math.min(4, genConfig?.videosPerJob || 1)
+                                    : 0,
+                                  0
+                                );
                                 const configTotal = Math.max(
                                   1,
-                                  Math.min(4, genConfig?.videosPerJob || slotCount || 1)
+                                  Math.min(
+                                    4,
+                                    genConfig?.videosPerJob ||
+                                      item.videoUrls?.length ||
+                                      (genConfig?.splitPrompt
+                                        ? item.videoSlotStatuses?.length
+                                        : 0) ||
+                                      1
+                                  )
                                 );
+                                // UI theo cấu hình hiện tại — không dựa videoSlotStatuses cũ (task gen khi Tách Prompt).
+                                const showSplitSlots = Boolean(genConfig?.splitPrompt);
 
-                                if (isGenerating) {
+                                // Tách Prompt: mỗi Video - N một icon riêng (giống icon không tách)
+                                if (showSplitSlots && (isGenerating || slotCount > 0)) {
+                                  const statuses = Array.from(
+                                    { length: Math.max(slotCount, configTotal) },
+                                    (_, i) =>
+                                      resolveVideoSlotDisplayStatus(item, i, { isGenerating })
+                                  );
+                                  const errors = item.videoSlotErrors || [];
                                   return (
-                                    <div
-                                      className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm"
-                                      title={t("Đang tạo video...")}
+                                    <div className="flex flex-wrap gap-1.5 justify-center max-w-[9.5rem]">
+                                      {statuses.map((st, i) => {
+                                        const err = String(errors[i] || "").trim();
+                                        const done = st === "success";
+                                        const failed = st === "error";
+                                        const running = st === "running";
+                                        const pending = !done && !failed && !running;
+                                        return (
+                                          <button
+                                            key={i}
+                                            type="button"
+                                            onClick={() => void openVariantPreview(item, i)}
+                                            title={
+                                              failed
+                                                ? t("Video - {{n}} lỗi — bấm xem / tạo lại{{msg}}", {
+                                                    n: i + 1,
+                                                    msg: err ? `: ${err}` : "",
+                                                  })
+                                                : running
+                                                ? t("Video - {{n}} đang generate — bấm xem tiến độ", {
+                                                    n: i + 1,
+                                                  })
+                                                : done
+                                                ? t("Video - {{n}} xong — bấm xem", {
+                                                    n: i + 1,
+                                                  })
+                                                : t("Video - {{n}} chưa tạo — bấm xem / tạo lại", {
+                                                    n: i + 1,
+                                                  })
+                                            }
+                                            className={`relative flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors cursor-pointer ${
+                                              done
+                                                ? "border-purple-500 bg-purple-500 text-white hover:border-purple-600 hover:bg-purple-600"
+                                                : failed
+                                                ? "border-danger bg-danger/10 text-danger hover:bg-danger/20"
+                                                : running
+                                                ? "border-purple-300 bg-purple-50 text-purple-600 hover:bg-purple-100"
+                                                : "border-gray-300 bg-gray-200 text-gray-500 hover:bg-gray-100"
+                                            }`}
+                                          >
+                                            {running ? (
+                                              <RiLoader4Line className="text-xl animate-spin" />
+                                            ) : (
+                                              <FaPhotoVideo
+                                                className={`text-lg ${
+                                                  done
+                                                    ? "text-white"
+                                                    : failed
+                                                    ? "text-danger"
+                                                    : "text-gray-400"
+                                                }`}
+                                              />
+                                            )}
+                                            <span
+                                              className={`absolute -top-1 -left-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white ${
+                                                done
+                                                  ? "bg-purple-700"
+                                                  : failed
+                                                  ? "bg-danger"
+                                                  : running
+                                                  ? "bg-purple-500"
+                                                  : "bg-gray-400"
+                                              }`}
+                                            >
+                                              V{i + 1}
+                                            </span>
+                                            {done ? (
+                                              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-success shadow-sm ring-1 ring-success">
+                                                <HiCheck className="text-[11px] font-bold" />
+                                              </span>
+                                            ) : null}
+                                            {failed ? (
+                                              <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-danger shadow-sm ring-1 ring-danger">
+                                                <HiOutlineX className="text-[11px] font-bold" />
+                                              </span>
+                                            ) : null}
+                                            {pending ? (
+                                              <span className="absolute -bottom-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-white text-gray-400 shadow-sm ring-1 ring-gray-300">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-gray-300" />
+                                              </span>
+                                            ) : null}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                }
+
+                                if (isGenerating && !hasVideos) {
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => void openVariantPreview(item)}
+                                      className="flex relative justify-center items-center w-9 h-9 text-purple-600 bg-purple-50 rounded-full border border-purple-300 shadow-sm cursor-pointer transition-colors hover:bg-purple-100"
+                                      title={t("Đang tạo video... — bấm xem tiến độ")}
                                     >
                                       <RiLoader4Line className="text-xl animate-spin" />
-                                    </div>
+                                      <span className="flex absolute -top-1 -left-1 justify-center items-center px-1 h-4 font-semibold text-white rounded-full min-w-4 bg-danger text-10 whitespace-nowrap">
+                                        {filled}/{configTotal}
+                                      </span>
+                                    </button>
                                   );
                                 }
 
                                 return (
                                   <button
                                     type="button"
-                                    disabled={!hasVideos}
                                     onClick={() => void openVariantPreview(item)}
-                                    className={`relative flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors disabled:opacity-100 ${
+                                    className={`relative flex h-9 w-9 items-center justify-center rounded-full border shadow-sm transition-colors cursor-pointer ${
                                       hasVideos
-                                        ? "text-white bg-purple-500 border-purple-500 cursor-pointer hover:border-purple-600 hover:bg-purple-600"
-                                        : "text-gray-400 bg-gray-200 border-gray-300 cursor-default"
+                                        ? "text-white bg-purple-500 border-purple-500 hover:border-purple-600 hover:bg-purple-600"
+                                        : "text-gray-500 bg-gray-200 border-gray-300 hover:bg-gray-100"
                                     }`}
                                     title={
-                                      hasVideos
+                                      isGenerating
+                                        ? t("Đang tạo video… {{filled}}/{{total}} — bấm xem", {
+                                            filled,
+                                            total: configTotal,
+                                          })
+                                        : hasVideos
                                         ? t("{{filled}}/{{total}} video — xem", {
                                             filled,
                                             total: configTotal,
                                           })
-                                        : t("Chưa có video")
+                                        : t("Chưa có video — bấm xem / tạo lại")
                                     }
                                   >
-                                    <FaPhotoVideo
-                                      className={`text-lg ${
-                                        hasVideos ? "text-white" : "text-gray-400"
-                                      }`}
-                                    />
-                                    {hasVideos ? (
+                                    {isGenerating ? (
+                                      <RiLoader4Line className="text-xl text-white animate-spin" />
+                                    ) : (
+                                      <FaPhotoVideo
+                                        className={`text-lg ${
+                                          hasVideos ? "text-white" : "text-gray-400"
+                                        }`}
+                                      />
+                                    )}
+                                    {hasVideos || isGenerating ? (
                                       <span
                                         className={`flex absolute -top-1 -left-1 justify-center items-center px-1 h-4 font-semibold text-white rounded-full min-w-4 text-10 whitespace-nowrap ${
                                           filled !== configTotal ? "bg-danger" : "bg-purple-700"
@@ -2479,7 +3366,7 @@ export function ThreadManagementPanel({
                                         {filled}/{configTotal}
                                       </span>
                                     ) : null}
-                                    {hasVideos && filled >= configTotal ? (
+                                    {hasVideos && filled >= configTotal && !isGenerating ? (
                                       <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-success shadow-sm ring-1 ring-success">
                                         <HiCheck className="text-[11px] font-bold" />
                                       </span>
@@ -2562,7 +3449,9 @@ export function ThreadManagementPanel({
                                 }
                               >
                                 {item.error}
-                                {getRetryCounterLabel(item) ? ` (${getRetryCounterLabel(item)})` : ""}
+                                {getRetryCounterLabel(item)
+                                  ? ` (${getRetryCounterLabel(item)})`
+                                  : ""}
                               </div>
                             ) : null}
                           </div>
@@ -2574,8 +3463,7 @@ export function ThreadManagementPanel({
                             const isItemRunning =
                               Boolean(generatingIds[item.id]) || Boolean(mergingIds[item.id]);
                             const alreadyDone =
-                              hasMergedVideoRef(item.mergedVideoUrl) ||
-                              hasVariantVideoUrls(item);
+                              hasMergedVideoRef(item.mergedVideoUrl) || hasVariantVideoUrls(item);
                             return (
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
@@ -2904,7 +3792,7 @@ export function ThreadManagementPanel({
                           <p className="m-0 text-sm font-semibold text-white">
                             {videoPreview.error || t("Không có file video nối")}
                           </p>
-                          <p className="m-0 text-xs text-white/60">
+                          <p className="m-0 max-w-[320px] break-words text-xs leading-relaxed text-white/60">
                             {t("Dialog vẫn mở — thử Nối lại nếu còn đủ video nguồn")}
                           </p>
                         </div>
@@ -2941,9 +3829,37 @@ export function ThreadManagementPanel({
                 const isFailed = !src;
                 const isDisabled = Boolean(videoPreview.disabled[idx]);
                 const isRegen = Boolean(videoPreview.regenerating[idx]);
-                const failedCount = videoPreview.slots.filter(
-                  (s) => !String(s || "").trim()
+                const previewItem =
+                  visibleItems.find((i) => i.id === videoPreview.itemId) ||
+                  items.find((i) => i.id === videoPreview.itemId);
+                const slotErrorMsg = isFailed
+                  ? resolveVariantSlotErrorMessage(previewItem, idx, videoPreview.slotErrors || [])
+                  : "";
+                const slotDisplayStatus = previewItem
+                  ? resolveVideoSlotDisplayStatus(previewItem, idx, {
+                      isGenerating: Boolean(generatingIds[videoPreview.itemId]),
+                    })
+                  : "pending";
+                const isSlotRunning = isFailed && slotDisplayStatus === "running";
+                const isSlotError = isFailed && slotDisplayStatus === "error";
+                const resolveTabStatus = (tabIdx: number): VideoSlotStatus => {
+                  const url = String(videoPreview.slots[tabIdx] || "").trim();
+                  if (url) return "success";
+                  if (!previewItem) return "pending";
+                  return resolveVideoSlotDisplayStatus(previewItem, tabIdx, {
+                    isGenerating: Boolean(generatingIds[videoPreview.itemId]),
+                  });
+                };
+                const emptyTabIndexes = videoPreview.slots
+                  .map((s, i) => (!String(s || "").trim() ? i : -1))
+                  .filter((i) => i >= 0);
+                const errorTabCount = emptyTabIndexes.filter(
+                  (i) => resolveTabStatus(i) === "error"
                 ).length;
+                const pendingTabCount = emptyTabIndexes.filter((i) => {
+                  const st = resolveTabStatus(i);
+                  return st === "pending" || st === "running";
+                }).length;
                 const anyRegen = Object.values(videoPreview.regenerating).some(Boolean);
 
                 return (
@@ -2956,26 +3872,83 @@ export function ThreadManagementPanel({
                         </div>
                       ) : isFailed ? (
                         <div className="flex flex-col gap-3 items-center px-6 py-12 text-center">
-                          <div className="flex justify-center items-center w-12 h-12 rounded-full bg-danger/20 text-danger">
-                            <HiRefresh className="text-xl" />
-                          </div>
-                          <div>
-                            <p className="m-0 text-sm font-semibold text-white">
-                              {t("Video {{n}} lỗi / thiếu", { n: idx + 1 })}
-                            </p>
-                            <p className="m-0 mt-1 text-xs text-white/60">
-                              {t("Tạo lại để gắn kết quả vào tab này")}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={anyRegen}
-                            onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-600 disabled:opacity-50"
-                          >
-                            <HiRefresh className="text-sm" />
-                            {t("Tạo lại")}
-                          </button>
+                          {isSlotRunning ? (
+                            <>
+                              <RiLoader4Line className="text-3xl text-purple-300 animate-spin" />
+                              <p className="m-0 text-sm font-semibold text-white">
+                                {t("Video {{n}} đang generate…", { n: idx + 1 })}
+                              </p>
+                              <p className="m-0 text-xs text-white/60">
+                                {t("Chờ slot xong hoặc bấm Tạo lại nếu bị kẹt")}
+                              </p>
+                              <button
+                                type="button"
+                                disabled={anyRegen}
+                                onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-purple-400 bg-purple-500/20 px-3.5 py-2 text-xs font-semibold text-purple-200 transition-colors hover:bg-purple-500/30 disabled:opacity-50"
+                              >
+                                <HiRefresh className="text-sm" />
+                                {t("Tạo lại")}
+                              </button>
+                            </>
+                          ) : isSlotError ? (
+                            <>
+                              <div className="flex justify-center items-center w-12 h-12 rounded-full bg-danger/20 text-danger">
+                                <HiRefresh className="text-xl" />
+                              </div>
+                              <div>
+                                <p className="m-0 text-sm font-semibold text-white">
+                                  {t("Video {{n}} lỗi", { n: idx + 1 })}
+                                </p>
+                                {slotErrorMsg ? (
+                                  <>
+                                    <p className="m-0 mt-2 max-w-[320px] break-words text-xs leading-relaxed text-red-300">
+                                      {slotErrorMsg}
+                                    </p>
+                                    <p className="m-0 mt-2 text-xs text-white/60">
+                                      {t("Tạo lại để gắn kết quả vào tab này")}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <p className="m-0 mt-1 text-xs text-white/60">
+                                    {t("Tạo lại để gắn kết quả vào tab này")}
+                                  </p>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                disabled={anyRegen}
+                                onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-danger px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-600 disabled:opacity-50"
+                              >
+                                <HiRefresh className="text-sm" />
+                                {t("Tạo lại")}
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="flex justify-center items-center w-12 h-12 rounded-full bg-gray-500/30 text-gray-300">
+                                <FaPhotoVideo className="text-xl" />
+                              </div>
+                              <div>
+                                <p className="m-0 text-sm font-semibold text-white">
+                                  {t("Video {{n}} chưa tạo", { n: idx + 1 })}
+                                </p>
+                                <p className="m-0 mt-1 text-xs text-white/60">
+                                  {t("Bấm Tạo video để generate cho tab này")}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={anyRegen}
+                                onClick={() => void regenerateVariantSlot(videoPreview.itemId, idx)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-purple-700 disabled:opacity-50"
+                              >
+                                <HiPlay className="text-sm" />
+                                {t("Tạo video")}
+                              </button>
+                            </>
+                          )}
                         </div>
                       ) : (
                         <video
@@ -3003,9 +3976,7 @@ export function ThreadManagementPanel({
                             const previewItem =
                               visibleItems.find((i) => i.id === videoPreview.itemId) ||
                               items.find((i) => i.id === videoPreview.itemId);
-                            const remoteUri = String(
-                              previewItem?.videoUrls?.[idx] || ""
-                            ).trim();
+                            const remoteUri = String(previewItem?.videoUrls?.[idx] || "").trim();
                             const flow2RequestId = String(
                               previewItem?.videoFlow2RequestIds?.[idx] || ""
                             ).trim();
@@ -3063,15 +4034,26 @@ export function ThreadManagementPanel({
                           </button>
                         </>
                       ) : null}
-                      {failedCount > 0 ? (
+                      {errorTabCount > 0 ? (
                         <button
                           type="button"
                           disabled={anyRegen}
-                          onClick={() => void regenerateAllFailedSlots(videoPreview.itemId)}
+                          onClick={() => void regenerateAllFailedSlots(videoPreview.itemId, "error")}
                           className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-danger bg-danger/10 px-3 text-xs font-semibold text-danger transition-colors hover:bg-danger/20 disabled:opacity-50"
                         >
                           <HiRefresh className="text-sm" />
-                          {t("Tạo lại tất cả tab lỗi")} ({failedCount})
+                          {t("Tạo lại tất cả tab lỗi")} ({errorTabCount})
+                        </button>
+                      ) : null}
+                      {pendingTabCount > 0 ? (
+                        <button
+                          type="button"
+                          disabled={anyRegen}
+                          onClick={() => void regenerateAllFailedSlots(videoPreview.itemId, "pending")}
+                          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-purple-400 bg-purple-500/10 px-3 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+                        >
+                          <HiPlay className="text-sm" />
+                          {t("Tạo tất cả video chưa có")} ({pendingTabCount})
                         </button>
                       ) : null}
                     </div>
@@ -3079,9 +4061,25 @@ export function ThreadManagementPanel({
                     <div className="flex flex-wrap gap-2 justify-center pt-1">
                       {videoPreview.slots.map((slot, tabIdx) => {
                         const active = tabIdx === videoPreview.index;
-                        const failed = !String(slot || "").trim();
+                        const tabStatus = resolveTabStatus(tabIdx);
                         const disabled = Boolean(videoPreview.disabled[tabIdx]);
                         const regen = Boolean(videoPreview.regenerating[tabIdx]);
+                        const tabClass =
+                          tabStatus === "success"
+                            ? active
+                              ? "border-green-600 bg-green-500 text-white shadow-sm ring-2 ring-green-200"
+                              : "border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-gray-100 hover:text-gray-700"
+                            : tabStatus === "error"
+                            ? active
+                              ? "border-danger bg-danger text-white shadow-sm ring-2 ring-red-200"
+                              : "border-danger/60 bg-danger/10 text-danger hover:bg-danger/20"
+                            : tabStatus === "running"
+                            ? active
+                              ? "border-purple-500 bg-purple-500 text-white shadow-sm ring-2 ring-purple-200"
+                              : "border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100"
+                            : active
+                            ? "border-gray-500 bg-gray-500 text-white shadow-sm ring-2 ring-gray-300"
+                            : "border-gray-300 bg-gray-100 text-gray-600 hover:bg-gray-200";
                         return (
                           <button
                             key={`vp-${tabIdx}`}
@@ -3091,15 +4089,9 @@ export function ThreadManagementPanel({
                                 prev?.kind === "variants" ? { ...prev, index: tabIdx } : prev
                               )
                             }
-                            className={`relative min-w-[72px] rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${
-                              failed
-                                ? active
-                                  ? "border-danger bg-danger text-white shadow-sm ring-2 ring-red-200"
-                                  : "border-danger/60 bg-danger/10 text-danger hover:bg-danger/20"
-                                : active
-                                ? "border-green-600 bg-green-500 text-white shadow-sm ring-2 ring-green-200"
-                                : "border-gray-200 bg-gray-50 text-gray-500 hover:border-gray-300 hover:bg-gray-100 hover:text-gray-700"
-                            } ${disabled && !failed ? "opacity-55 line-through" : ""}`}
+                            className={`relative min-w-[72px] rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all ${tabClass} ${
+                              disabled && tabStatus === "success" ? "opacity-55 line-through" : ""
+                            }`}
                           >
                             {regen ? (
                               <span className="inline-flex gap-1 items-center">
@@ -3111,7 +4103,7 @@ export function ThreadManagementPanel({
                                 {t("Video")} {tabIdx + 1}
                               </>
                             )}
-                            {disabled && !failed ? (
+                            {disabled && tabStatus === "success" ? (
                               <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-warning text-white">
                                 <HiBan className="text-[9px]" />
                               </span>

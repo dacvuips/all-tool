@@ -434,19 +434,30 @@ function resolveVariantBlobFromRecord(
 ): Blob | null {
   if (!record?.videoUris?.length) return null;
 
-  let idx = record.videoUris.findIndex((u) => urlsLooselyMatch(u, url));
-  if (idx < 0 && index < record.videoUris.length) {
-    const sameOrderUri = String(record.videoUris[index] || "").trim();
-    if (!sameOrderUri || urlsLooselyMatch(sameOrderUri, url)) idx = index;
+  const trimmedUrl = String(url || "").trim();
+  if (!trimmedUrl) return null;
+
+  const getBlobAt = (idx: number): Blob | null => {
+    if (idx < 0 || idx >= record.videoUris.length) return null;
+    const blob = record.videoBlobList?.[idx];
+    if (blob && blob.size > 0) return blob;
+    const bytes = (record.videoBytesList?.[idx] || "").trim();
+    if (bytes) return base64ToBlob(bytes, mime);
+    return null;
+  };
+
+  // Ưu tiên đúng slot/index — tránh findIndex + urlsLooselyMatch lấy nhầm blob video đầu
+  // (variant /1 /2 /3 cùng request, hoặc Tách Prompt nhiều job riêng).
+  if (index >= 0 && index < record.videoUris.length) {
+    const atIndex = String(record.videoUris[index] || "").trim();
+    if (atIndex && (atIndex === trimmedUrl || urlsLooselyMatch(atIndex, trimmedUrl))) {
+      return getBlobAt(index);
+    }
   }
-  if (idx < 0) return null;
 
-  const blob = record.videoBlobList?.[idx];
-  if (blob && blob.size > 0) return blob;
-
-  const bytes = (record.videoBytesList?.[idx] || "").trim();
-  if (bytes) return base64ToBlob(bytes, mime);
-  return null;
+  // Fallback: chỉ khớp URL chính xác (không loose) để không gộp variant khác slot.
+  const exactIdx = record.videoUris.findIndex((u) => String(u || "").trim() === trimmedUrl);
+  return exactIdx >= 0 ? getBlobAt(exactIdx) : null;
 }
 
 async function putMergedVideoWithVerify(
