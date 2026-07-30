@@ -108,11 +108,27 @@ export function parseCommissionPct(raw: unknown): number {
   return n;
 }
 
-/** Giá VND — lấy đúng số từ API, không chia. */
+/** Giá VND đã chuẩn (sau khi chia ×1000 từ API, hoặc từ CSV đã lưu). */
 export function parsePriceVnd(raw: unknown): number {
   const n = Number(String(raw ?? "").replace(/,/g, "").trim());
   if (!Number.isFinite(n) || n <= 0) return 0;
   return Math.round(n);
+}
+
+const PRICE_VND_NORMALIZED = "__priceVndNormalized";
+
+/** API affiliate trả giá ×1000 — chia về đồng thật cho price / price_min / price_max (idempotent). */
+export function normalizeApiPriceFields<T extends Record<string, unknown>>(raw: T): T {
+  if ((raw as Record<string, unknown>)[PRICE_VND_NORMALIZED]) return raw;
+  const out = { ...raw } as T;
+  for (const key of ["price", "price_min", "price_max"] as const) {
+    if (out[key] == null || out[key] === "") continue;
+    const n = Number(String(out[key]).replace(/,/g, "").trim());
+    if (!Number.isFinite(n) || n <= 0) continue;
+    (out as Record<string, unknown>)[key] = Math.round(n / 1000);
+  }
+  (out as Record<string, unknown>)[PRICE_VND_NORMALIZED] = true;
+  return out;
 }
 
 export function parseSales(raw: unknown): number {
