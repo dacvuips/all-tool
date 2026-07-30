@@ -21,6 +21,7 @@ import {
 } from "./gpmlogin-client";
 import {
   CDP_WINDOW_SIZE,
+  cookieJarHasAffiliateAuth,
   cookiesToHeader,
   filterShopeeCookies,
   RawCdpClient,
@@ -597,12 +598,17 @@ export async function openAffiliateBrowserCdp(options?: {
     // Chờ user đăng nhập trên cửa sổ GPM nếu chưa login (tối đa ~5 phút)
     await client.ensureAffiliateReady(offerUrl, 300000);
 
-    const allCookies = await client.getAllCookies();
+    // Capture cookie sau login — retry ngắn nếu HttpOnly chưa kịp vào jar
+    let allCookies = await client.getAllCookies();
+    for (let i = 0; i < 8 && !cookieJarHasAffiliateAuth(allCookies); i++) {
+      await new Promise((r) => setTimeout(r, 800));
+      allCookies = await client.getAllCookies();
+    }
     const filtered = filterShopeeCookies(allCookies, host);
     const cookieHeader = cookiesToHeader(filtered.length ? filtered : allCookies);
-    if (!cookieHeader) {
+    if (!cookieHeader || !cookieJarHasAffiliateAuth(filtered.length ? filtered : allCookies)) {
       throw new Error(
-        "Không lấy được cookie từ GPM Login. Đăng nhập Shopee Affiliate trên cửa sổ profile rồi bấm Mở lại."
+        "Không lấy được cookie đăng nhập (SPC_EC/SPC_ST) từ GPM Login. Đăng nhập Shopee Affiliate trên cửa sổ profile rồi đợi nút «Mở Trình duyệt» hoàn tất — hoặc bấm Mở lại."
       );
     }
     const userAgent = await client.getUserAgent();

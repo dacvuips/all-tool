@@ -350,8 +350,11 @@ export class RawCdpClient {
     host: string;
     readyState: string;
     cookieNames: string[];
+    /** document.cookie — thường thiếu SPC_EC/SPC_ST (HttpOnly). Chỉ dùng phụ. */
     hasSpcEc: boolean;
     looksLikeLogin: boolean;
+    /** User đang focus / gõ form login (hoặc captcha iframe) — không được navigate cắt ngang. */
+    userInteracting: boolean;
     onExpectedHost: boolean;
   }> {
     const hostJson = JSON.stringify(expectedHost);
@@ -365,6 +368,35 @@ export class RawCdpClient {
       const looksLikeLogin =
         /login|signin|authenticate|buyer\\/login|seller\\/login/i.test(href + path) ||
         !!document.querySelector('input[type="password"]');
+
+      const active = document.activeElement;
+      const tag = String(active && active.tagName ? active.tagName : "").toLowerCase();
+      const focusedOnForm =
+        !!active &&
+        active !== document.body &&
+        active !== document.documentElement &&
+        (tag === "input" ||
+          tag === "textarea" ||
+          tag === "select" ||
+          tag === "button" ||
+          tag === "iframe" ||
+          !!(active).isContentEditable);
+
+      let hasTypedValue = false;
+      try {
+        const inputs = document.querySelectorAll(
+          'input[type="password"], input[type="text"], input[type="tel"], input[type="email"], input:not([type])'
+        );
+        for (let i = 0; i < inputs.length; i++) {
+          const el = inputs[i];
+          if (String(el.value || "").trim().length > 0) {
+            hasTypedValue = true;
+            break;
+          }
+        }
+      } catch (e) {}
+
+      const userInteracting = focusedOnForm || hasTypedValue;
       return {
         href,
         host,
@@ -372,14 +404,26 @@ export class RawCdpClient {
         cookieNames: names,
         hasSpcEc: names.some(n => n === "SPC_EC" || n === "SPC_ST"),
         looksLikeLogin,
+        userInteracting,
         onExpectedHost: host === expectedHost,
       };
     })()`);
   }
 
+  /** SPC_EC/SPC_ST thường HttpOnly — phải đọc qua CDP Network.getAllCookies, không dùng document.cookie. */
+  async hasCdpAuthCookies(): Promise<boolean> {
+    try {
+      const cookies = await this.getAllCookies();
+      return cookieJarHasAffiliateAuth(cookies);
+    } catch {
+      return false;
+    }
+  }
+
   /**
    * Đảm bảo đang ở đúng host Affiliate và đã login.
    * Nếu gặp trang login: chờ user đăng nhập trên cửa sổ GPM (mặc định vài phút), không throw ngay.
+   * Sau login: đợi cookie auth CDP rồi navigate 1 lần về product_offer trước khi return (để capture đủ cookie).
    */
   async ensureAffiliateReady(offerUrl: string, waitMs = 8000): Promise<void> {
     let expectedHost = "affiliate.shopee.vn";
@@ -390,7 +434,8 @@ export class RawCdpClient {
     }
 
     const state0 = await this.getPageAuthState(expectedHost).catch((): null => null);
-    if (!state0?.onExpectedHost) {
+    // Chỉ navigate lần đầu nếu sai host và user không đang tương tác login
+    if (!state0?.onExpectedHost && !(state0?.looksLikeLogin && state0?.userInteracting)) {
       await this.navigate(offerUrl, 4000);
     }
 
@@ -398,29 +443,48 @@ export class RawCdpClient {
     let last: Awaited<ReturnType<RawCdpClient["getPageAuthState"]>> | null = null;
     let lastNudgeAt = 0;
     let announcedWait = false;
+    let settledAfterAuth = false;
 
     while (Date.now() < deadline) {
       last = await this.getPageAuthState(expectedHost);
-      const ready =
+      const hasAuth = await this.hasCdpAuthCookies();
+
+      // Đã có cookie auth (HttpOnly) → coi như login xong dù DOM còn ô password
+      if (hasAuth) {
+        if (!settledAfterAuth) {
+          settledAfterAuth = true;
+          // eslint-disable-next-line no-console
+          console.log(
+            `[scrape-cdp] Phát hiện cookie auth CDP → settle về product_offer rồi capture. url=${last.href}`
+          );
+          await this.navigate(offerUrl, 3500).catch((): undefined => undefined);
+          await new Promise<void>((r) => setTimeout(r, 1500));
+          continue;
+        }
+        if (last.onExpectedHost && last.readyState !== "loading") {
+          // Xác nhận cookie còn sau navigate
+          if (await this.hasCdpAuthCookies()) return;
+          settledAfterAuth = false;
+        } else if (!last.userInteracting) {
+          await this.navigate(offerUrl, 2500).catch((): undefined => undefined);
+        }
+      } else if (
         last.onExpectedHost &&
         !last.looksLikeLogin &&
         last.readyState !== "loading" &&
-        (last.hasSpcEc || !/login|signin|buyer\/login/i.test(last.href));
-
-      if (ready) {
-        // Cho antibot/SDK thêm chút thời gian rồi xác nhận lại
-        await new Promise<void>((r) => setTimeout(r, 1500));
-        last = await this.getPageAuthState(expectedHost);
-        if (
-          last.onExpectedHost &&
-          !last.looksLikeLogin &&
-          last.readyState !== "loading"
-        ) {
-          return;
+        !/login|signin|buyer\/login/i.test(last.href)
+      ) {
+        // UI đã thoát login nhưng cookie HttpOnly chưa kịp — chờ thêm, không return sớm
+        if (!announcedWait) {
+          announcedWait = true;
+          // eslint-disable-next-line no-console
+          console.log(
+            `[scrape-cdp] Trang Affiliate đã mở nhưng chưa thấy SPC_EC/SPC_ST (HttpOnly) — đang chờ cookie… url=${last.href}`
+          );
         }
       }
 
-      if (last.looksLikeLogin || !last.onExpectedHost) {
+      if (!hasAuth && (last.looksLikeLogin || !last.onExpectedHost)) {
         if (!announcedWait) {
           announcedWait = true;
           // eslint-disable-next-line no-console
@@ -430,11 +494,13 @@ export class RawCdpClient {
             )}s)… url=${last.href}`
           );
         }
-        // Định kỳ quay lại product_offer — sau khi user login sẽ vào được
+        // Chỉ nudge về product_offer khi sai host — không cắt ngang login/captcha
         const now = Date.now();
         if (now - lastNudgeAt > 20000) {
           lastNudgeAt = now;
-          await this.navigate(offerUrl, 3500).catch((): undefined => undefined);
+          if (!last.looksLikeLogin && !last.userInteracting) {
+            await this.navigate(offerUrl, 3500).catch((): undefined => undefined);
+          }
         }
       }
 
@@ -442,7 +508,8 @@ export class RawCdpClient {
     }
 
     last = last || (await this.getPageAuthState(expectedHost));
-    if (last.looksLikeLogin || !last.onExpectedHost || !last.hasSpcEc) {
+    const hasAuthFinal = await this.hasCdpAuthCookies();
+    if (!hasAuthFinal || !last.onExpectedHost) {
       const remainHint = Math.round(waitMs / 1000);
       throw new Error(
         `Hết thời gian chờ đăng nhập Affiliate (~${remainHint}s). url=${last.href}. ` +
@@ -877,6 +944,14 @@ export function filterShopeeCookies(cookies: CdpCookie[], marketHost: string): C
       d.includes("shopee") ||
       d.includes("susercontent")
     );
+  });
+}
+
+/** Cookie auth Affiliate/Shopee — thường HttpOnly (SPC_EC / SPC_ST). */
+export function cookieJarHasAffiliateAuth(cookies: CdpCookie[]): boolean {
+  return cookies.some((c) => {
+    const n = String(c.name || "");
+    return n === "SPC_EC" || n === "SPC_ST";
   });
 }
 

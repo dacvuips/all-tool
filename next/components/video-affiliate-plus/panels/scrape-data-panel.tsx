@@ -44,12 +44,23 @@ import {
   probeCdpBridge,
 } from "../scrape/product-page-fetch";
 import {
+  buildProductSeoWorkItems,
+  generateProductSeoBatch,
+} from "../scrape/product-seo";
+import {
   PanelListCard,
   panelListClasses,
   PanelListPagination,
   panelListRowClass,
 } from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
+
+type SaveProgressLog = {
+  id: string;
+  time: string;
+  level: "info" | "success" | "warning" | "error";
+  message: string;
+};
 
 const MARKET_OPTIONS = [
   { value: "affiliate.shopee.vn", label: "VN" },
@@ -326,6 +337,8 @@ function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
     if (!base.id && r.id) base.id = r.id;
     if (base.affiliate_link_short == null) base.affiliate_link_short = "";
     if (base.long_link == null) base.long_link = "";
+    if (base.description == null) base.description = "";
+    if (base.hashtags == null) base.hashtags = "";
     return base;
   });
 
@@ -336,6 +349,8 @@ function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
     "shopid",
     "name",
     "shop_name",
+    "description",
+    "hashtags",
     "seller_commission_rate",
     "default_commission_rate",
     "max_commission_rate",
@@ -398,6 +413,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveProjectName, setSaveProjectName] = useState("Crawl Project 1");
   const [savingProject, setSavingProject] = useState(false);
+  /** Dialog theo dõi tiến trình Lưu Project (short link + AI SEO). */
+  const [saveProgressOpen, setSaveProgressOpen] = useState(false);
+  const [saveProgressPercent, setSaveProgressPercent] = useState(0);
+  const [saveProgressStatus, setSaveProgressStatus] = useState("");
+  const [saveProgressLogs, setSaveProgressLogs] = useState<SaveProgressLog[]>([]);
+  const [saveProgressDone, setSaveProgressDone] = useState(false);
+  const saveLogSeqRef = useRef(0);
+  const saveLogBoxRef = useRef<HTMLDivElement>(null);
   /** sort_type API: 1 liên quan, 2 bán chạy, 3 giá↓, 4 giá↑, 5 hoa hồng */
   const [sortType, setSortType] = useState(1);
   /** filter_shop_types: 1=Mall, 4=Yêu thích+, 2=Yêu thích — multi-select */
@@ -1021,16 +1044,51 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setSaveDialogOpen(true);
   };
 
+  const formatSaveLogTime = () => {
+    const d = new Date();
+    return [d.getHours(), d.getMinutes(), d.getSeconds()]
+      .map((n) => String(n).padStart(2, "0"))
+      .join(":");
+  };
+
+  const pushSaveLog = (
+    message: string,
+    level: SaveProgressLog["level"] = "info"
+  ) => {
+    saveLogSeqRef.current += 1;
+    const entry: SaveProgressLog = {
+      id: `save-log-${saveLogSeqRef.current}`,
+      time: formatSaveLogTime(),
+      level,
+      message,
+    };
+    setSaveProgressLogs((prev) => [...prev, entry]);
+    requestAnimationFrame(() => {
+      const el = saveLogBoxRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  };
+
   const handleSaveProject = async () => {
     if (!products.length) {
       toast.warn(t("Chưa có sản phẩm để lưu"));
       return;
     }
     const name = saveProjectName.trim() || nextCrawlProjectName(sessions);
-    try {
-      setSavingProject(true);
 
-      // long_link → affiliate_link_short trước khi ghi CSV
+    setSaveDialogOpen(false);
+    setSavingProject(true);
+    setSaveProgressOpen(true);
+    setSaveProgressDone(false);
+    setSaveProgressPercent(0);
+    setSaveProgressStatus(t("Đang khởi tạo…") as string);
+    setSaveProgressLogs([]);
+    saveLogSeqRef.current = 0;
+
+    try {
+      pushSaveLog(`Bắt đầu lưu «${name}» · ${products.length} SP`, "info");
+
+      // ── 1) long_link → affiliate_link_short ──
       const linkRows = products
         .map((p, index) => ({
           index,
@@ -1043,13 +1101,18 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         }))
         .filter((r) => !!r.link);
 
-      let productsWithShort = products.map((p) => ({
+      let productsWithShort: ScrapeProductRow[] = products.map((p) => ({
         ...p,
         raw: {
           ...(p.raw || {}),
           affiliate_link_short: String((p.raw as any)?.affiliate_link_short || ""),
+          description: String((p.raw as any)?.description || ""),
+          hashtags: String((p.raw as any)?.hashtags || ""),
         },
       }));
+
+      setSaveProgressPercent(5);
+      setSaveProgressStatus(t("Tạo short link…") as string);
 
       if (linkRows.length) {
         const bridgeOk = await probeCdpBridge();
@@ -1060,7 +1123,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             ) as string
           );
         }
-        toast.info(t("Đang tạo short link {{count}} SP…", { count: linkRows.length }) as string);
+        pushSaveLog(`Đang tạo short link ${linkRows.length} SP…`, "info");
         try {
           const shorts = await shortenAffiliateLinks(
             linkRows.map((r) => r.link),
@@ -1068,10 +1131,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           );
           const filled = shorts.filter(Boolean).length;
           if (filled === 0) {
-            toast.warn(
-              t(
-                "Chưa tạo được short link (antibot/GPM Login). Vẫn lưu bằng long_link — giải captcha trên GPM Login rồi Lưu lại để bổ sung short."
-              ) as string
+            pushSaveLog(
+              "Chưa tạo được short link (antibot/GPM Login). Vẫn lưu bằng long_link.",
+              "warning"
             );
           } else {
             productsWithShort = productsWithShort.map((p) => ({
@@ -1083,26 +1145,72 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               raw.affiliate_link_short = shorts[i] || "";
             });
             setProducts(productsWithShort);
+            pushSaveLog(`Short link OK · ${filled}/${linkRows.length}`, "success");
             if (filled < linkRows.length) {
-              toast.warn(
-                t("Chỉ tạo được {{ok}}/{{total}} short link", {
-                  ok: filled,
-                  total: linkRows.length,
-                }) as string
+              pushSaveLog(
+                `Chỉ tạo được ${filled}/${linkRows.length} short link`,
+                "warning"
               );
             }
           }
         } catch (shortErr: any) {
           const msg = String(shortErr?.message || shortErr || "");
-          toast.warn(
-            (msg
-              ? msg.slice(0, 220)
-              : t(
-                  "Không tạo được short link. Vẫn lưu bằng long_link."
-                )) as string
+          pushSaveLog(
+            msg
+              ? `Short link lỗi: ${msg.slice(0, 160)}`
+              : "Không tạo được short link. Vẫn lưu bằng long_link.",
+            "warning"
           );
         }
+      } else {
+        pushSaveLog("Không có long_link để rút gọn", "warning");
       }
+
+      setSaveProgressPercent(25);
+
+      // ── 2) Gộp id + tên → object (description/hashtags trống) ──
+      const workItems = buildProductSeoWorkItems(productsWithShort);
+      pushSaveLog(
+        `Đã gộp ${workItems.length} object (id + tên · description/hashtags trống)`,
+        "info"
+      );
+      setSaveProgressStatus(t("ChatGPT tạo mô tả & hashtag…") as string);
+      setSaveProgressPercent(30);
+
+      // ── 3) ChatGPT: mô tả + 4–6 hashtag SEO Shopee ──
+      const seoResults = await generateProductSeoBatch(
+        workItems.map((w) => ({ id: w.id, name: w.productName })),
+        (p) => {
+          const pct = 30 + Math.round((p.done / Math.max(p.total, 1)) * 55);
+          setSaveProgressPercent(Math.min(85, pct));
+          setSaveProgressStatus(p.message);
+          pushSaveLog(p.message, p.level || "info");
+        }
+      );
+
+      const seoById = new Map(seoResults.map((r) => [r.id, r]));
+      productsWithShort = productsWithShort.map((p) => {
+        const seo = seoById.get(p.id);
+        if (!seo) return p;
+        return {
+          ...p,
+          raw: {
+            ...(p.raw || {}),
+            description: seo.description,
+            hashtags: seo.hashtags,
+          },
+        };
+      });
+      setProducts(productsWithShort);
+      pushSaveLog(
+        `Đã gắn mô tả + hashtag vào ${seoResults.length} SP`,
+        "success"
+      );
+
+      // ── 4) Ghi CSV + IndexedDB ──
+      setSaveProgressPercent(90);
+      setSaveProgressStatus(t("Đang ghi CSV…") as string);
+      pushSaveLog("Đang ghi CSV vào IndexedDB…", "info");
 
       const csv = productsToFullScrapedCsv(productsWithShort);
       const keywordsText = getKeywordsText().trim();
@@ -1117,12 +1225,23 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         durationMs: 0,
       });
       setSessions(await loadScrapeCsvSessions());
-      setSaveDialogOpen(false);
+
+      setSaveProgressPercent(100);
+      setSaveProgressStatus(t("Hoàn tất") as string);
+      pushSaveLog(
+        `Xong · đã lưu «${name}» · ${productsWithShort.length} SP`,
+        "success"
+      );
+      setSaveProgressDone(true);
       toast.success(
         t("Đã lưu «{{name}}» · {{count}} SP", { name, count: productsWithShort.length })
       );
     } catch (err: any) {
-      toast.error(err?.message || t("Lưu project thất bại"));
+      const msg = err?.message || t("Lưu project thất bại");
+      pushSaveLog(String(msg), "error");
+      setSaveProgressStatus(String(msg));
+      setSaveProgressDone(true);
+      toast.error(msg);
     } finally {
       setSavingProject(false);
     }
@@ -2544,7 +2663,154 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-green-600 px-4 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {savingProject ? <RiLoader4Line className="animate-spin" /> : null}
-                {savingProject ? t("Đang tạo short link…") : t("Lưu")}
+                {savingProject ? t("Đang lưu…") : t("Lưu")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Body>
+      </Dialog>
+
+      <Dialog
+        isOpen={saveProgressOpen}
+        onClose={() => {
+          if (!savingProject) setSaveProgressOpen(false);
+        }}
+        title={t("Tiến trình lưu Project")}
+        width="600px"
+        maxWidth="95vw"
+      >
+        <Dialog.Body>
+          <div className="space-y-4 pt-1">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <p className="m-0 min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+                  {saveProgressStatus || t("Đang xử lý…")}
+                </p>
+                <span
+                  className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-bold tabular-nums ${
+                    saveProgressDone && saveProgressPercent < 100
+                      ? "bg-rose-50 text-rose-700"
+                      : "bg-teal-50 text-teal-800"
+                  }`}
+                >
+                  {Math.max(0, Math.min(100, saveProgressPercent))}%
+                </span>
+              </div>
+              {/* Progress fill dùng inline style — tránh Tailwind purge / h-full collapse */}
+              <div
+                className="relative w-full overflow-hidden rounded-full"
+                style={{ height: 10, backgroundColor: "#e2e8f0" }}
+                role="progressbar"
+                aria-valuenow={saveProgressPercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 0,
+                    top: 0,
+                    bottom: 0,
+                    width: `${Math.max(2, Math.min(100, saveProgressPercent))}%`,
+                    borderRadius: 9999,
+                    background:
+                      saveProgressDone && saveProgressPercent < 100
+                        ? "linear-gradient(90deg,#fb7185,#e11d48)"
+                        : "linear-gradient(90deg,#2dd4bf,#0d9488)",
+                    transition: "width 280ms ease-out",
+                    boxShadow: "0 0 12px rgba(13,148,136,0.35)",
+                  }}
+                />
+              </div>
+            </div>
+
+            <div
+              className="overflow-hidden rounded-xl"
+              style={{
+                border: "1px solid #1e293b",
+                background:
+                  "linear-gradient(180deg, #0b1220 0%, #0f172a 40%, #020617 100%)",
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+              }}
+            >
+              <div
+                className="flex items-center justify-between gap-2 px-3 py-2"
+                style={{
+                  borderBottom: "1px solid rgba(51,65,85,0.8)",
+                  background: "rgba(15,23,42,0.85)",
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`inline-block h-2 w-2 rounded-full ${
+                      savingProject ? "animate-pulse bg-teal-400" : "bg-slate-500"
+                    }`}
+                  />
+                  <span
+                    className="text-[11px] font-semibold uppercase tracking-wider"
+                    style={{ color: "#94a3b8" }}
+                  >
+                    {t("Nhật ký")}
+                  </span>
+                </div>
+                <span className="text-[11px] tabular-nums" style={{ color: "#64748b" }}>
+                  {saveProgressLogs.length} lines
+                </span>
+              </div>
+              <div
+                ref={saveLogBoxRef}
+                className="max-h-72 min-h-[200px] overflow-y-auto px-3 py-2.5"
+                style={{
+                  fontFamily:
+                    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+                  fontSize: 11.5,
+                  lineHeight: 1.65,
+                }}
+              >
+                {saveProgressLogs.length === 0 ? (
+                  <div style={{ color: "#64748b" }}>{t("Chờ log…")}</div>
+                ) : (
+                  saveProgressLogs.map((log) => {
+                    const levelColor =
+                      log.level === "success"
+                        ? "#34d399"
+                        : log.level === "warning"
+                          ? "#fbbf24"
+                          : log.level === "error"
+                            ? "#fb7185"
+                            : "#38bdf8";
+                    const rowBg =
+                      log.level === "error"
+                        ? "rgba(244,63,94,0.08)"
+                        : log.level === "warning"
+                          ? "rgba(245,158,11,0.07)"
+                          : log.level === "success"
+                            ? "rgba(16,185,129,0.06)"
+                            : "transparent";
+                    return (
+                      <div
+                        key={log.id}
+                        className="mb-0.5 break-words rounded px-1.5 py-0.5"
+                        style={{ background: rowBg, color: "#e2e8f0" }}
+                      >
+                        <span style={{ color: "#64748b" }}>[{log.time}]</span>{" "}
+                        <span style={{ color: levelColor, fontWeight: 600 }}>{log.level}:</span>{" "}
+                        <span style={{ color: "#f1f5f9" }}>{log.message}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                disabled={savingProject}
+                onClick={() => setSaveProgressOpen(false)}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+              >
+                {savingProject ? t("Đang chạy…") : t("Đóng")}
               </button>
             </div>
           </div>
