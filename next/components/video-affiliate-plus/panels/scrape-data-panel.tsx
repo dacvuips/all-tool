@@ -598,12 +598,26 @@ const GIO_VIDEO_CSV_HEADERS = [
   "similar_keys",
   "gio_video",
   "image_url",
+  /** product_link các SP similar đã chọn vào giỏ (cách nhau bởi |) */
+  "similar_links",
+  /** long_link affiliate các SP similar đã chọn (cách nhau bởi |) */
+  "long_links",
 ] as const;
 
 function gioVideoRowsToCsv(rows: GioVideoRow[]): string {
   const lines = [GIO_VIDEO_CSV_HEADERS.join(",")];
   for (const row of rows) {
     const keys = row.similarItemIds || [];
+    // Giỏ = SP match đã sort (không gồm SP gốc trong row.similars)
+    const cart = row.similars || [];
+    const similarLinks = cart
+      .map((s) => String(s.productLink || "").trim())
+      .filter(Boolean)
+      .join("|");
+    const longLinks = cart
+      .map((s) => String(s.longLink || "").trim())
+      .filter(Boolean)
+      .join("|");
     lines.push(
       [
         row.stt,
@@ -616,6 +630,8 @@ function gioVideoRowsToCsv(rows: GioVideoRow[]): string {
         keys.join("|"),
         keys.join("|"),
         row.imageUrl || "",
+        similarLinks,
+        longLinks,
       ]
         .map((v) => escapeCsvValue(v))
         .join(",")

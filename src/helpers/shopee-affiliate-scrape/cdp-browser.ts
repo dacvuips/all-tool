@@ -1053,6 +1053,8 @@ export type SimilarOfferItem = {
   itemId: string;
   name: string;
   productLink: string;
+  /** Affiliate long_link từ DETAIL (universal-link + utm). */
+  longLink: string;
   imageId: string;
   /** % hoa hồng (ưu tiên seller → default) */
   commissionPct: number;
@@ -1208,6 +1210,7 @@ function mapSimilarOfferItem(entry: any): SimilarOfferItem | null {
       entry.product_link,
       shopId && itemId ? `https://shopee.vn/product/${shopId}/${itemId}` : ""
     ),
+    longLink: pickString(entry.long_link, entry.longLink, entry.affiliate_link),
     imageId: pickString(card.image, entry.image),
     commissionPct,
     commissionValue,
@@ -1289,6 +1292,7 @@ export function extractSimilarFromDetailPayload(
         itemId: iid,
         name: "",
         productLink: sid && iid ? `https://shopee.vn/product/${sid}/${iid}` : "",
+        longLink: "",
         imageId: "",
         commissionPct: 0,
         commissionValue: 0,

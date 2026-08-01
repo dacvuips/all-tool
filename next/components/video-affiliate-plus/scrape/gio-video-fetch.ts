@@ -12,6 +12,8 @@ export type SimilarOfferItem = {
   itemId: string;
   name: string;
   productLink: string;
+  /** Affiliate long_link từ DETAIL (universal-link + utm). */
+  longLink: string;
   imageId: string;
   commissionPct: number;
   commissionValue: number;
@@ -80,6 +82,7 @@ function mapSimilarFromJson(raw: unknown): SimilarOfferItem | null {
     itemId: itemId || resolvedKey.split("-").pop() || "",
     name: String(o.name || ""),
     productLink: String(o.productLink || o.product_link || ""),
+    longLink: String(o.longLink || o.long_link || o.affiliate_link || ""),
     imageId: String(o.imageId || o.image || ""),
     commissionPct: Number(o.commissionPct) || 0,
     commissionValue: Number(o.commissionValue) || 0,
