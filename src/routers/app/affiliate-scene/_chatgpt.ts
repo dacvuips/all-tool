@@ -984,6 +984,12 @@ export async function callChatGPTGateway(params: {
   conversationId?: string;
   /** Multi-turn: message_id từ response trước → parent_message_id. */
   parentMessageId?: string;
+  /**
+   * Override credential (customer tự nhập endpoint + API key).
+   * Không truyền → dùng Flow2 / setting `ai-scene-more` như mặc định.
+   */
+  baseUrl?: string;
+  apiKey?: string;
 }): Promise<string> {
   if (params.videos?.length) {
     logger.warn(
@@ -996,10 +1002,12 @@ export async function callChatGPTGateway(params: {
     jsonSchema: params.jsonSchema,
   });
   const images = toPublicChatImages(params.images);
-  const [baseUrl, apiKey] = await Promise.all([
-    getChatGPTGatewayBaseUrl(),
-    getChatGPTGatewayToken(),
-  ]);
+  const overrideBase = params.baseUrl?.trim();
+  const overrideKey = params.apiKey?.trim();
+  const [baseUrl, apiKey] =
+    overrideBase && overrideKey
+      ? [resolveChatGPTFlow2BaseUrl(overrideBase), overrideKey]
+      : await Promise.all([getChatGPTGatewayBaseUrl(), getChatGPTGatewayToken()]);
   const model = params.model?.trim() || DEFAULT_CHATGPT_MODEL;
   const enqueueUrl = `${baseUrl}/api/v1/chatgpt/chat?async=true`;
 

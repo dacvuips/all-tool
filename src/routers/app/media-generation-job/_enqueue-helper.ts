@@ -3,7 +3,7 @@
  *
  * Luồng mới:
  *   1. Kiểm tra giới hạn luồng (imageStreamCount / videoStreamCount theo customer).
- *   2. Sinh jobId → ghi payload lên Redis (TTL 4 giờ).
+ *   2. Sinh jobId → ghi payload lên Redis (TTL 1 giờ).
  *   3. Tạo doc Mongo (chỉ metadata + dataRedisKey, không lưu payload).
  *   4. Enqueue bee-queue → worker đọc Redis khi chạy.
  *   5. Trả `{ jobId, status }` cho client subscribe/poll.

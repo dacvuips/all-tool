@@ -35,6 +35,36 @@ import {
 } from "./session-store";
 import logger from "../logger";
 
+/** Serialize CDP ops — tránh race song song product-page / product-detail đóng tab. */
+let cdpOpChain: Promise<unknown> = Promise.resolve();
+
+function withCdpLock<T>(fn: () => Promise<T>): Promise<T> {
+  const run = cdpOpChain.then(fn, fn);
+  cdpOpChain = run.then(
+    (): void => undefined,
+    (): void => undefined
+  );
+  return run;
+}
+
+function isTransientCdpError(err: unknown): boolean {
+  const msg = String((err as any)?.message || err || "").toLowerCase();
+  return (
+    msg.includes("navigated or closed") ||
+    msg.includes("target closed") ||
+    msg.includes("session closed") ||
+    msg.includes("websocket is not open") ||
+    msg.includes("websocket connection closed") ||
+    msg.includes("inspector") ||
+    msg.includes("execution context was destroyed") ||
+    msg.includes("cannot find context")
+  );
+}
+
+async function sleepMs(ms: number): Promise<void> {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 export type CdpProductPageInput = {
   marketHost: string;
   keyword?: string;
@@ -324,7 +354,7 @@ async function fetchShortLinksViaCdp(
   if (!originalLinks.length) return { shorts: [], detail: "empty" };
   const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
   const marketHost = String(session?.marketHost || "affiliate.shopee.vn").trim();
-  const client = await ensureLiveCdpClient(marketHost);
+  const client = await ensureLiveCdpClient(marketHost, { settle: false });
   const out: string[] = new Array(originalLinks.length).fill("");
   const failCodes: number[] = [];
   let lastSnippet = "";
@@ -660,7 +690,10 @@ export async function openAffiliateBrowserCdp(options?: {
 }
 
 /** Đảm bảo GPM Login CDP sống — start lại profile nếu cần. */
-async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
+async function ensureLiveCdpClient(
+  marketHost: string,
+  opts?: { settle?: boolean }
+): Promise<RawCdpClient> {
   let session = getAffiliateHttpSession() || loadAffiliateHttpSession();
   if (!session?.gpmloginProfileId && !session?.cdpPort && !session?.debugAddr) {
     throw new Error(
@@ -715,11 +748,14 @@ async function ensureLiveCdpClient(marketHost: string): Promise<RawCdpClient> {
   }
 
   const client = await RawCdpClient.connect(port, offerUrl, marketHost || session.marketHost);
-  try {
-    await client.ensureAffiliateReady(offerUrl, 10000);
-  } catch (err: any) {
-    logger.warn(`[scrape-cdp] ensureAffiliateReady: ${err?.message || err}`);
-    throw err;
+  // settle=true chỉ khi «Mở Trình duyệt» — scrape không reload page
+  if (opts?.settle) {
+    try {
+      await client.ensureAffiliateReady(offerUrl, 10000);
+    } catch (err: any) {
+      logger.warn(`[scrape-cdp] ensureAffiliateReady: ${err?.message || err}`);
+      throw err;
+    }
   }
   return client;
 }
@@ -834,12 +870,22 @@ export async function getCdpStatus(): Promise<{
   };
 }
 
+/**
+ * Cào list: ưu tiên HTTP + cookie đã capture (không đụng trang GPM).
+ * CDP in-page fetch chỉ fallback khi HTTP 401/403 — và không Page.navigate.
+ */
 export async function fetchProductPageViaCdp(
   input: CdpProductPageInput
 ): Promise<CdpProductPageResult> {
   const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
+  if (!session?.cookieHeader) {
+    throw new Error(
+      "Chưa có cookie session. Bấm «Mở Trình duyệt» (GPM Login) để capture cookie rồi cào."
+    );
+  }
+
   const marketHost = String(
-    input.marketHost || session?.marketHost || "affiliate.shopee.vn"
+    input.marketHost || session.marketHost || "affiliate.shopee.vn"
   ).trim();
   const pageOffset = Number(input.pageOffset) >= 0 ? Number(input.pageOffset) : 0;
   const pageLimit = Number(input.pageLimit) > 0 ? Number(input.pageLimit) : DEFAULT_PAGE_LIMIT;
@@ -856,23 +902,40 @@ export async function fetchProductPageViaCdp(
   const referer = defaultOfferUrl(marketHost);
 
   let payload: any;
-  let client: RawCdpClient | null = null;
+  let lastErr: any = null;
+
   try {
-    client = await ensureLiveCdpClient(marketHost);
-    payload = await fetchJsonInBrowser(client, listUrl, referer, marketHost);
-  } catch (cdpErr: any) {
-    logger.warn(`[scrape-cdp] in-browser fetch failed: ${cdpErr?.message || cdpErr} → thử HTTP`);
-    try {
-      payload = await affiliateGetJson(listUrl, referer);
-    } catch (httpErr: any) {
-      throw new Error(
-        cdpErr?.message ||
-          httpErr?.message ||
-          "Cào thất bại. Giữ cửa sổ GPM Login mở (đã login Affiliate) rồi thử lại."
-      );
+    payload = await affiliateGetJson(listUrl, referer);
+  } catch (httpErr: any) {
+    lastErr = httpErr;
+    const msg = String(httpErr?.message || "");
+    const maybeAntibot = /HTTP 401|HTTP 403|hết hạn|antibot|90309999/i.test(msg);
+    if (!maybeAntibot) {
+      throw httpErr instanceof Error
+        ? httpErr
+        : new Error(msg || "Cào thất bại (HTTP).");
     }
-  } finally {
-    client?.close();
+    logger.warn(
+      `[scrape-http] product-page HTTP failed (${msg}) → fallback CDP in-page fetch (no reload)`
+    );
+  }
+
+  if (payload == null) {
+    payload = await withCdpLock(async () => {
+      let client: RawCdpClient | null = null;
+      try {
+        client = await ensureLiveCdpClient(marketHost, { settle: false });
+        return await fetchJsonInBrowser(client, listUrl, referer, marketHost);
+      } finally {
+        client?.close();
+      }
+    }).catch((cdpErr: any) => {
+      throw new Error(
+        lastErr?.message ||
+          cdpErr?.message ||
+          "Cào thất bại. Bấm «Mở Trình duyệt» capture cookie lại rồi thử."
+      );
+    });
   }
 
   const market = getMarketByHost(marketHost);
@@ -972,4 +1035,530 @@ export async function exportCsvViaCdp(input: CdpExportInput): Promise<{
     marketCode: market?.code || "",
     durationMs: Date.now() - started,
   };
+}
+
+// ─── Crawl Giỏ Video: DETAIL + image-search (PeeCrawl Tab2) ─────────────────
+
+export type CdpProductDetailInput = {
+  marketHost: string;
+  itemId: string;
+  /** shopId gốc — để key similar = shopId-itemId như URL mall */
+  shopId?: string;
+};
+
+/** 1 SP trong data.similar_product_offers.list */
+export type SimilarOfferItem = {
+  key: string;
+  shopId: string;
+  itemId: string;
+  name: string;
+  productLink: string;
+  imageId: string;
+  /** % hoa hồng (ưu tiên seller → default) */
+  commissionPct: number;
+  /** Tiền hoa hồng ước tính (VND) = price * commissionPct / 100 */
+  commissionValue: number;
+  /** Giá VND */
+  price: number;
+  historicalSold: number;
+  sold: number;
+  /** unix seconds */
+  ctime: number;
+};
+
+export type CdpProductDetailResult = {
+  marketHost: string;
+  itemId: string;
+  shopId: string;
+  name: string;
+  imageUrl: string;
+  /** Số SP tương tự từ DETAIL (trước khi merge image-search). */
+  similarCount: number;
+  /** Keys similar: ưu tiên `shopId-itemId` (URL /product/shop/item). */
+  similarItemIds: string[];
+  /** Similar đầy đủ từ similar_product_offers.list (để sort / giỏ video). */
+  similars: SimilarOfferItem[];
+  /** affiliate_promoted_last_7days */
+  promoted7days: string;
+  raw: any;
+};
+
+export type CdpImageSearchInput = {
+  marketHost: string;
+  /** CDN / http(s) ảnh SP gốc */
+  imageUrl: string;
+  /** Loại item gốc khỏi kết quả */
+  excludeItemId?: string;
+  /** Số trang image-search (page size 50). Mặc định 1. */
+  maxPages?: number;
+};
+
+export type CdpImageSearchResult = {
+  itemIds: string[];
+  httpCode: number;
+  pagesFetched: number;
+};
+
+const IMAGE_SEARCH_PAGE_SIZE = 50;
+
+function pickString(...vals: unknown[]): string {
+  for (const v of vals) {
+    if (v == null || v === "") continue;
+    const s = String(v).trim();
+    if (s) return s;
+  }
+  return "";
+}
+
+function collectProductKeysDeep(node: any, out: Set<string>, depth = 0) {
+  if (node == null || depth > 8) return;
+  if (Array.isArray(node)) {
+    for (const item of node) collectProductKeysDeep(item, out, depth + 1);
+    return;
+  }
+  if (typeof node !== "object") return;
+
+  const card =
+    node.batch_item_for_item_card_full && typeof node.batch_item_for_item_card_full === "object"
+      ? node.batch_item_for_item_card_full
+      : node.item_basic && typeof node.item_basic === "object"
+        ? node.item_basic
+        : null;
+
+  const itemId = pickString(
+    node.itemid,
+    node.item_id,
+    node.itemId,
+    card?.itemid,
+    card?.item_id,
+    card?.itemId
+  );
+  const shopId = pickString(
+    node.shopid,
+    node.shop_id,
+    node.shopId,
+    card?.shopid,
+    card?.shop_id,
+    card?.shopId
+  );
+
+  if (itemId && /^\d+$/.test(itemId)) {
+    if (shopId && /^\d+$/.test(shopId)) out.add(`${shopId}-${itemId}`);
+    else out.add(itemId);
+  }
+
+  for (const key of Object.keys(node)) {
+    const v = node[key];
+    if (v && typeof v === "object") collectProductKeysDeep(v, out, depth + 1);
+  }
+}
+
+/** "11,5%" | "3.5%" | 3500 (basis points) → percent number */
+function parseCommissionPctValue(raw: unknown): number {
+  if (raw == null || raw === "") return 0;
+  if (typeof raw === "number" && Number.isFinite(raw)) {
+    // DETAIL commission_rate_detail dùng basis points (3500 = 3.5%)
+    if (raw > 100) return Math.round((raw / 100) * 100) / 100;
+    return raw;
+  }
+  const s = String(raw)
+    .replace(/%/g, "")
+    .trim()
+    .replace(/\s/g, "")
+    .replace(",", ".");
+  const n = Number(s);
+  if (!Number.isFinite(n)) return 0;
+  if (n > 0 && n <= 1) return Math.round(n * 10000) / 100;
+  return n;
+}
+
+/** price API DETAIL card: ×100000 → VND */
+function priceToVnd(raw: unknown): number {
+  const n = Number(String(raw ?? "").replace(/,/g, "").trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  if (n >= 1e7) return Math.round(n / 100000);
+  if (n >= 1e5) return Math.round(n / 1000);
+  return Math.round(n);
+}
+
+function mapSimilarOfferItem(entry: any): SimilarOfferItem | null {
+  if (!entry || typeof entry !== "object") return null;
+  const card =
+    entry.batch_item_for_item_card_full && typeof entry.batch_item_for_item_card_full === "object"
+      ? entry.batch_item_for_item_card_full
+      : {};
+  const itemId = pickString(entry.item_id, entry.itemid, card.itemid, card.item_id);
+  const shopId = pickString(card.shopid, card.shop_id, entry.shopid, entry.shop_id);
+  if (!itemId || !/^\d+$/.test(itemId)) return null;
+  const key = shopId && /^\d+$/.test(shopId) ? `${shopId}-${itemId}` : itemId;
+  const commissionPct =
+    parseCommissionPctValue(entry.seller_commission_rate) ||
+    parseCommissionPctValue(entry.default_commission_rate) ||
+    parseCommissionPctValue(entry.max_commission_rate) ||
+    0;
+  const price = priceToVnd(card.price_min || card.price || entry.price);
+  const commissionValue = Math.round((price * commissionPct) / 100);
+  const ctime = Number(card.ctime) || 0;
+  return {
+    key,
+    shopId: shopId || "",
+    itemId,
+    name: pickString(card.name, entry.name),
+    productLink: pickString(
+      entry.product_link,
+      shopId && itemId ? `https://shopee.vn/product/${shopId}/${itemId}` : ""
+    ),
+    imageId: pickString(card.image, entry.image),
+    commissionPct,
+    commissionValue,
+    price,
+    historicalSold: Math.max(0, Math.round(Number(card.historical_sold) || 0)),
+    sold: Math.max(0, Math.round(Number(card.sold) || 0)),
+    ctime: ctime > 0 ? (ctime < 1e12 ? ctime : Math.floor(ctime / 1000)) : 0,
+  };
+}
+
+/** Lấy danh sách similar từ payload DETAIL Affiliate (API thật). */
+export function extractSimilarFromDetailPayload(
+  payload: any,
+  seedItemId: string,
+  seedShopId?: string
+): {
+  itemIds: string[];
+  similars: SimilarOfferItem[];
+  name: string;
+  shopId: string;
+  imageId: string;
+  promoted7days: string;
+} {
+  const data = payload?.data ?? payload ?? {};
+  const card =
+    data?.batch_item_for_item_card_full && typeof data.batch_item_for_item_card_full === "object"
+      ? data.batch_item_for_item_card_full
+      : data?.item_basic && typeof data.item_basic === "object"
+        ? data.item_basic
+        : {};
+
+  const name = pickString(card.name, data.name, data.product_name);
+  const shopId = pickString(card.shopid, card.shop_id, data.shopid, data.shop_id, seedShopId);
+  const imageId = pickString(card.image, data.image, data.image_url);
+  // API thật: affiliate_promoted_last_7days
+  const promoted7days = pickString(
+    data.affiliate_promoted_last_7days,
+    data.promoted_7days,
+    data.promoted7days,
+    card.promoted_7days,
+    data.affiliate_promoted_last_7_days
+  );
+
+  const seedItem = String(seedItemId || "").trim();
+  const seedShop = String(seedShopId || shopId || "").trim();
+  const seedKey = seedShop && seedItem ? `${seedShop}-${seedItem}` : seedItem;
+
+  // Primary: data.similar_product_offers.list[]
+  let list: any[] = [];
+  const spo = data?.similar_product_offers;
+  if (spo && typeof spo === "object" && Array.isArray(spo.list)) {
+    list = spo.list;
+  } else if (Array.isArray(data?.similar_products)) {
+    list = data.similar_products;
+  } else if (Array.isArray(data?.list)) {
+    list = data.list;
+  }
+
+  const byKey = new Map<string, SimilarOfferItem>();
+  for (const entry of list) {
+    const mapped = mapSimilarOfferItem(entry);
+    if (!mapped) continue;
+    if (mapped.key === seedKey || mapped.itemId === seedItem) continue;
+    if (!byKey.has(mapped.key)) byKey.set(mapped.key, mapped);
+  }
+
+  // Fallback deep-scan nếu list trống
+  if (!byKey.size) {
+    const found = new Set<string>();
+    collectProductKeysDeep(data, found);
+    for (const id of Array.from(found)) {
+      if (!id || id === seedKey || id === seedItem) continue;
+      const parts = id.split("-");
+      const sid = parts.length >= 2 ? parts.slice(0, -1).join("-") : "";
+      const iid = parts.length >= 2 ? parts[parts.length - 1] : id;
+      byKey.set(id, {
+        key: id,
+        shopId: sid,
+        itemId: iid,
+        name: "",
+        productLink: sid && iid ? `https://shopee.vn/product/${sid}/${iid}` : "",
+        imageId: "",
+        commissionPct: 0,
+        commissionValue: 0,
+        price: 0,
+        historicalSold: 0,
+        sold: 0,
+        ctime: 0,
+      });
+    }
+  }
+
+  const similars = Array.from(byKey.values());
+  return {
+    itemIds: similars.map((s) => s.key),
+    similars,
+    name,
+    shopId,
+    imageId,
+    promoted7days,
+  };
+}
+
+function buildDetailUrl(marketHost: string, itemId: string): string {
+  const url = new URL(`https://${marketHost}/api/v3/offer/product`);
+  url.searchParams.set("item_id", String(itemId));
+  return url.toString();
+}
+
+/** Chi tiết SP: HTTP + cookie trước; CDP chỉ fallback, không reload. */
+export async function fetchProductDetailViaCdp(
+  input: CdpProductDetailInput
+): Promise<CdpProductDetailResult> {
+  const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
+  if (!session?.cookieHeader) {
+    throw new Error(
+      "Chưa có cookie session. Bấm «Mở Trình duyệt» (GPM Login) để capture cookie rồi thử lại."
+    );
+  }
+
+  const marketHost = String(
+    input.marketHost || session.marketHost || "affiliate.shopee.vn"
+  ).trim();
+  const itemId = String(input.itemId || "").trim();
+  if (!itemId) throw new Error("Thiếu item_id");
+  const seedShopId = String(input.shopId || "").trim();
+
+  const detailUrl = buildDetailUrl(marketHost, itemId);
+  const referer = `${defaultOfferUrl(marketHost)}/${itemId}`;
+
+  let payload: any;
+  let lastErr: any = null;
+
+  try {
+    payload = await affiliateGetJson(detailUrl, referer);
+  } catch (httpErr: any) {
+    lastErr = httpErr;
+    const msg = String(httpErr?.message || "");
+    const maybeAntibot = /HTTP 401|HTTP 403|hết hạn|antibot|90309999/i.test(msg);
+    if (!maybeAntibot) {
+      throw httpErr instanceof Error
+        ? httpErr
+        : new Error(msg || "Lấy chi tiết SP thất bại (HTTP).");
+    }
+    logger.warn(
+      `[scrape-http] product-detail HTTP failed (${msg}) → fallback CDP in-page fetch (no reload)`
+    );
+  }
+
+  if (payload == null) {
+    payload = await withCdpLock(async () => {
+      let client: RawCdpClient | null = null;
+      try {
+        client = await ensureLiveCdpClient(marketHost, { settle: false });
+        return await fetchJsonInBrowser(client, detailUrl, referer, marketHost);
+      } finally {
+        client?.close();
+      }
+    }).catch((cdpErr: any) => {
+      throw new Error(
+        lastErr?.message ||
+          cdpErr?.message ||
+          "Lấy chi tiết SP thất bại. Bấm «Mở Trình duyệt» capture cookie lại rồi thử."
+      );
+    });
+  }
+
+  const market = getMarketByHost(marketHost);
+  if (!market) throw new Error(`Market không hợp lệ: ${marketHost}`);
+
+  const extracted = extractSimilarFromDetailPayload(payload, itemId, seedShopId);
+  const imageUrl = extracted.imageId
+    ? extracted.imageId.startsWith("http")
+      ? extracted.imageId
+      : `${market.imageCdn}${extracted.imageId}`
+    : "";
+
+  return {
+    marketHost: market.host,
+    itemId,
+    shopId: extracted.shopId,
+    name: extracted.name,
+    imageUrl,
+    similarCount: extracted.similars.length,
+    similarItemIds: extracted.similars.map((s) => s.key),
+    similars: extracted.similars,
+    promoted7days: extracted.promoted7days || "—",
+    raw: payload,
+  };
+}
+
+async function downloadImageBytes(imageUrl: string): Promise<Buffer> {
+  const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
+  const res = await axios.get(imageUrl, {
+    responseType: "arraybuffer",
+    timeout: 45000,
+    headers: {
+      accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+      referer: session ? `https://${session.marketHost}/` : "https://shopee.vn/",
+      "user-agent":
+        session?.userAgent ||
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      ...(session?.cookieHeader ? { cookie: session.cookieHeader } : {}),
+    },
+    validateStatus: () => true,
+  });
+  if (res.status >= 400 || !res.data) {
+    throw new Error(`Tải ảnh thất bại HTTP ${res.status}`);
+  }
+  return Buffer.from(res.data);
+}
+
+/**
+ * PeeCrawl fast-path Tab2: POST multipart mall image_search → danh sách itemid.
+ * Chạy trong tab GPM Login (credentials + cookie SPC_F).
+ */
+async function imageSearchOnePageInBrowser(
+  client: RawCdpClient,
+  mallHost: string,
+  imageBase64: string,
+  offset: number
+): Promise<{ httpCode: number; itemIds: string[]; ok: boolean; error?: string }> {
+  const url = `https://${mallHost}/api/v4/search/image_search/image_search?offset=${offset}&limit=${IMAGE_SEARCH_PAGE_SIZE}`;
+  const expression = `(() => {
+    const url = ${JSON.stringify(url)};
+    const b64 = ${JSON.stringify(imageBase64)};
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "image/jpeg" });
+    const fd = new FormData();
+    fd.append("file", blob, "image.jpg");
+    return fetch(url, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    }).then(async (res) => {
+      const text = await res.text();
+      let json = null;
+      try { json = text ? JSON.parse(text) : null; } catch (e) {}
+      return {
+        status: res.status,
+        ok: res.ok,
+        json,
+        text: text.slice(0, 300),
+      };
+    }).catch((err) => ({
+      status: 0,
+      ok: false,
+      json: null,
+      text: String(err && err.message || err),
+    }));
+  })()`;
+
+  const result = await client.evaluateJson<{
+    status: number;
+    ok: boolean;
+    json: any;
+    text: string;
+  }>(expression);
+
+  if (!result) {
+    return { httpCode: 0, itemIds: [], ok: false, error: "CDP image-search không trả kết quả" };
+  }
+  const ids = new Set<string>();
+  if (result.json) collectProductKeysDeep(result.json, ids);
+  return {
+    httpCode: result.status,
+    itemIds: Array.from(ids),
+    ok: result.ok && (result.json?.error == null || result.json?.error === 0),
+    error: result.ok ? undefined : result.text,
+  };
+}
+
+export async function searchSimilarByImageViaCdp(
+  input: CdpImageSearchInput
+): Promise<CdpImageSearchResult> {
+  return withCdpLock(() => searchSimilarByImageViaCdpLocked(input));
+}
+
+async function searchSimilarByImageViaCdpLocked(
+  input: CdpImageSearchInput
+): Promise<CdpImageSearchResult> {
+  const session = getAffiliateHttpSession() || loadAffiliateHttpSession();
+  const marketHost = String(
+    input.marketHost || session?.marketHost || "affiliate.shopee.vn"
+  ).trim();
+  const market = getMarketByHost(marketHost);
+  if (!market) throw new Error(`Market không hợp lệ: ${marketHost}`);
+
+  const imageUrl = String(input.imageUrl || "").trim();
+  if (!imageUrl) throw new Error("Thiếu imageUrl cho image-search");
+
+  const maxPages = Math.max(1, Math.min(Number(input.maxPages) || 1, 5));
+  const exclude = String(input.excludeItemId || "").trim();
+
+  const bytes = await downloadImageBytes(imageUrl);
+  const imageBase64 = bytes.toString("base64");
+
+  let lastErr: any = null;
+  const maxAttempts = 3;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let client: RawCdpClient | null = null;
+    const all = new Set<string>();
+    let lastHttp = 0;
+    let pagesFetched = 0;
+    try {
+      client = await ensureLiveCdpClient(marketHost, { settle: false });
+      for (let page = 0; page < maxPages; page++) {
+        const offset = page * IMAGE_SEARCH_PAGE_SIZE;
+        const pageRes = await imageSearchOnePageInBrowser(
+          client,
+          market.mallHost,
+          imageBase64,
+          offset
+        );
+        pagesFetched += 1;
+        lastHttp = pageRes.httpCode;
+        if (!pageRes.ok && page === 0) {
+          throw new Error(
+            pageRes.error ||
+              `Image-search HTTP ${pageRes.httpCode}. Cần cookie SPC_F (Mở Trình duyệt GPM Login).`
+          );
+        }
+        for (const id of pageRes.itemIds) {
+          if (id && id !== exclude) all.add(id);
+        }
+        if (pageRes.itemIds.length < IMAGE_SEARCH_PAGE_SIZE) break;
+      }
+      return {
+        itemIds: Array.from(all),
+        httpCode: lastHttp,
+        pagesFetched,
+      };
+    } catch (err: any) {
+      lastErr = err;
+      const transient = isTransientCdpError(err);
+      logger.warn(
+        `[scrape-cdp] image-search attempt ${attempt}/${maxAttempts} failed: ${
+          err?.message || err
+        }${transient ? " (transient → retry)" : ""}`
+      );
+      if (!transient || attempt >= maxAttempts) break;
+      await sleepMs(600 * attempt);
+    } finally {
+      client?.close();
+    }
+  }
+
+  throw lastErr instanceof Error
+    ? lastErr
+    : new Error(String(lastErr?.message || lastErr || "Image-search thất bại"));
 }

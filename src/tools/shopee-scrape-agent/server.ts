@@ -12,6 +12,7 @@ import { URL } from "url";
 import {
   createShopeeAccountGpmProfile,
   exportCsvViaCdp,
+  fetchProductDetailViaCdp,
   fetchProductPageViaCdp,
   fetchAffiliateShortLinks,
   getCdpStatus,
@@ -26,6 +27,7 @@ import {
   openAffiliateBrowser,
   probeGpmLoginRunningStatuses,
   refreshShopeeGpmProfileCookies,
+  searchSimilarByImageViaCdp,
   startGpmLoginProfile,
   updateGpmLoginProfile,
   buildCsvSession,
@@ -333,6 +335,117 @@ async function handle(
         pageLimit: Number(body?.pageLimit) || 20,
         listType: Number.isFinite(Number(body?.listType)) ? Number(body.listType) : 0,
         filterShopTypes: parseFilterShopTypes(body?.filterShopTypes),
+      });
+      sendJson(res, 200, { ok: true, ...result }, req);
+      return;
+    }
+
+    if (method === "POST" && (path === "/product-detail" || path === "/api/product-detail")) {
+      const body = await readBody(req);
+      const result = await fetchProductDetailViaCdp({
+        marketHost: String(body?.marketHost || "affiliate.shopee.vn").trim(),
+        itemId: String(body?.itemId || body?.item_id || "").trim(),
+        shopId: body?.shopId != null
+          ? String(body.shopId)
+          : body?.shop_id != null
+            ? String(body.shop_id)
+            : undefined,
+      });
+      sendJson(res, 200, { ok: true, ...result }, req);
+      return;
+    }
+
+    /** Proxy chat OpenAI/Gemini — apiKey PHẢI do client (customer) gửi; không dùng env hệ thống. */
+    if (method === "POST" && (path === "/ai-chat" || path === "/api/ai-chat")) {
+      const body = await readBody(req);
+      const apiKey = String(body?.apiKey || body?.api_key || "").trim();
+      const provider = String(body?.provider || "openai").trim().toLowerCase() === "gemini"
+        ? "gemini"
+        : "openai";
+      const model = String(
+        body?.model || (provider === "gemini" ? "gemini-2.0-flash" : "gpt-4o-mini")
+      ).trim();
+      const messages = Array.isArray(body?.messages) ? body.messages : [];
+      if (!apiKey) {
+        sendJson(
+          res,
+          400,
+          {
+            ok: false,
+            message:
+              "Thiếu apiKey của customer. Agent không dùng key hệ thống — hãy nhập key trên UI.",
+          },
+          req
+        );
+        return;
+      }
+      if (!messages.length) {
+        sendJson(res, 400, { ok: false, message: "Thiếu messages" }, req);
+        return;
+      }
+      const base =
+        provider === "gemini"
+          ? "https://generativelanguage.googleapis.com/v1beta/openai"
+          : "https://api.openai.com/v1";
+      const upstream = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature: body?.temperature != null ? Number(body.temperature) : 0,
+          response_format: body?.response_format || { type: "json_object" },
+        }),
+      });
+      const text = await upstream.text();
+      let json: any = null;
+      try {
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
+      }
+      if (!upstream.ok) {
+        sendJson(
+          res,
+          upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
+          {
+            ok: false,
+            status: upstream.status,
+            message:
+              json?.error?.message ||
+              text.slice(0, 300) ||
+              `AI upstream HTTP ${upstream.status}`,
+            provider,
+            model,
+          },
+          req
+        );
+        return;
+      }
+      const content = String(json?.choices?.[0]?.message?.content || "").trim();
+      sendJson(
+        res,
+        200,
+        { ok: true, provider, model, content, raw: json },
+        req
+      );
+      return;
+    }
+
+    if (method === "POST" && (path === "/image-search" || path === "/api/image-search")) {
+      const body = await readBody(req);
+      const result = await searchSimilarByImageViaCdp({
+        marketHost: String(body?.marketHost || "affiliate.shopee.vn").trim(),
+        imageUrl: String(body?.imageUrl || body?.image_url || "").trim(),
+        excludeItemId: body?.excludeItemId != null
+          ? String(body.excludeItemId)
+          : body?.exclude_item_id != null
+            ? String(body.exclude_item_id)
+            : undefined,
+        maxPages: Number(body?.maxPages) > 0 ? Number(body.maxPages) : 1,
       });
       sendJson(res, 200, { ok: true, ...result }, req);
       return;

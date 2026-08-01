@@ -10,7 +10,7 @@
  *   5. Lỗi → emitter.fail(err.message, err.statusCode).
  *   6. Đặc biệt: `MediaJobCancelledError` → coi như đã CANCELLED (không log lỗi server).
  *   7. **Giới hạn luồng**: route kiểm tra số job QUEUED/PROCESSING theo `imageStreamCount`/`videoStreamCount`.
- *   8. **Payload Redis**: worker đọc `dataRedisKey` (TTL 4 giờ) thay vì `requestPayload` Mongo.
+ *   8. **Payload Redis**: worker đọc `dataRedisKey` (TTL 1 giờ) thay vì `requestPayload` Mongo.
  *   9. **Terminal retention**: SUCCEEDED / FAILED giữ 30 phút kể từ `completedAt`.
  *      Sweep mỗi 5 phút xóa doc hết hạn (backup khi setTimeout mất do restart).
  *   10. **Stale PROCESSING**: mỗi 60s quét job không heartbeat > ~2.5 phút → re-enqueue;
@@ -50,7 +50,11 @@ import {
 } from "./api-media-job-concurrency";
 import { incrementApiMediaTokenUsage } from "./handlers/_api-media-quota";
 import { isAiTextJobType } from "./ai-text-job-types";
-import { isMediaJobPayloadAvailable, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE } from "./media-job-data";
+import {
+  isMediaJobPayloadAvailable,
+  isMediaJobPayloadTtlElapsed,
+  MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE,
+} from "./media-job-data";
 
 /** Tối đa 30 phút cho 1 job trước khi bị coi là stalled. */
 const MEDIA_GENERATION_STALL_INTERVAL_MS = 30 * 60 * 1000;
@@ -131,7 +135,15 @@ class MediaGenerationQueue extends BaseQueue {
     }
 
     if (!(await isMediaJobPayloadAvailable(jobDoc))) {
-      await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+      if (isMediaJobPayloadTtlElapsed(jobDoc)) {
+        await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+        return;
+      }
+      // Redis miss nhưng chưa quá TTL theo createdAt — defer, không fail.
+      this.logger.warn(
+        `[MediaGenerationJob] DEFER jobId=${jobId} (Redis miss, job còn trong TTL theo createdAt)`
+      );
+      await enqueueMediaGenerationJob(jobId, { delayMs: MEDIA_JOB_STREAM_DEFER_MS });
       return;
     }
 
@@ -300,12 +312,20 @@ export async function resumeStaleMediaJobs(): Promise<number> {
     if (jobs.length === 0) return 0;
     logger.info(`[MediaGenerationQueue] Re-enqueue ${jobs.length} job(s) sau restart`);
     let skippedExpired = 0;
+    let skippedTransientMiss = 0;
     for (const job of jobs) {
       const jobId = String((job as any)._id);
       try {
         if (!(await isMediaJobPayloadAvailable(job))) {
-          const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
-          if (ok) skippedExpired++;
+          if (isMediaJobPayloadTtlElapsed(job)) {
+            const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+            if (ok) skippedExpired++;
+          } else {
+            skippedTransientMiss++;
+            logger.warn(
+              `[MediaGenerationQueue] Skip resume jobId=${jobId} — Redis miss nhưng chưa quá TTL theo createdAt`
+            );
+          }
           continue;
         }
         await enqueueMediaGenerationJob(jobId);
@@ -318,10 +338,15 @@ export async function resumeStaleMediaJobs(): Promise<number> {
     }
     if (skippedExpired > 0) {
       logger.warn(
-        `[MediaGenerationQueue] Bỏ qua ${skippedExpired} job(s) — payload Redis đã hết hạn`
+        `[MediaGenerationQueue] Bỏ qua ${skippedExpired} job(s) — payload Redis đã hết hạn (theo createdAt)`
       );
     }
-    return jobs.length - skippedExpired;
+    if (skippedTransientMiss > 0) {
+      logger.warn(
+        `[MediaGenerationQueue] Giữ ${skippedTransientMiss} job(s) — Redis miss tạm, chưa quá TTL theo createdAt`
+      );
+    }
+    return jobs.length - skippedExpired - skippedTransientMiss;
   } catch (err: any) {
     logger.error(`[MediaGenerationQueue] resumeStaleMediaJobs lỗi: ${err?.message}`);
     return 0;
@@ -380,7 +405,13 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
       const jobId = String((job as any)._id);
       try {
         if (!(await isMediaJobPayloadAvailable(job))) {
-          await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+          if (isMediaJobPayloadTtlElapsed(job)) {
+            await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+          } else {
+            logger.warn(
+              `[MediaGenerationQueue] Skip orphaned QUEUED jobId=${jobId} — Redis miss nhưng chưa quá TTL theo createdAt`
+            );
+          }
           continue;
         }
         await mediaGenerationJobService.updateOne(jobId, {
@@ -445,8 +476,14 @@ export async function recoverStaleProcessingMediaJobs(): Promise<{
       }
 
       if (!(await isMediaJobPayloadAvailable(job))) {
-        const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
-        if (ok) failed++;
+        if (isMediaJobPayloadTtlElapsed(job)) {
+          const ok = await failUnrecoverableMediaJob(jobId, MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE, 410);
+          if (ok) failed++;
+        } else {
+          logger.warn(
+            `[MediaGenerationQueue] Skip stale PROCESSING jobId=${jobId} — Redis miss nhưng chưa quá TTL theo createdAt`
+          );
+        }
         continue;
       }
 

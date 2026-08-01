@@ -1,14 +1,15 @@
 /**
  * Lưu payload request của media job trên Redis (thay vì MongoDB).
  *
- * Key: `mgj:data:{jobId}` — TTL 4 giờ.
+ * Key: `mgj:data:{jobId}` — TTL 1 giờ.
  * Job Mongo chỉ giữ `dataRedisKey` để worker đọc lại khi xử lý.
  */
 import logger from "../../helpers/logger";
 import redis from "../../helpers/redis";
 
-/** TTL payload trên Redis — 4 giờ */
-export const MEDIA_JOB_DATA_TTL_SEC = 240 * 60;
+/** TTL payload trên Redis — 1 giờ */
+export const MEDIA_JOB_DATA_TTL_SEC = 60 * 60;
+export const MEDIA_JOB_DATA_TTL_MS = MEDIA_JOB_DATA_TTL_SEC * 1000;
 
 /** Job Redis-only mà key đã hết TTL — không thể resume sau restart. */
 export const MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE =
@@ -21,6 +22,42 @@ export function hasMongoRequestPayload(job: {
 }): boolean {
   const payload = job.requestPayload;
   return !!payload && typeof payload === "object" && Object.keys(payload).length > 0;
+}
+
+/** `createdAt` Mongo, fallback timestamp trong ObjectId. */
+export function getMediaJobCreatedAt(job: {
+  _id?: { getTimestamp?: () => Date } | string;
+  createdAt?: Date | string | null;
+}): Date | null {
+  if (job.createdAt) {
+    const d = job.createdAt instanceof Date ? job.createdAt : new Date(job.createdAt);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  const id = job._id;
+  if (id && typeof id === "object" && typeof id.getTimestamp === "function") {
+    return id.getTimestamp();
+  }
+  if (typeof id === "string" && /^[a-f0-9]{24}$/i.test(id)) {
+    const sec = parseInt(id.slice(0, 8), 16);
+    if (!Number.isNaN(sec)) return new Date(sec * 1000);
+  }
+  return null;
+}
+
+/**
+ * Payload Redis chỉ được coi là hết hạn khi đã quá TTL **theo thời gian tạo job**.
+ * Redis miss sớm hơn (restart / Redis chưa ready) không được fail unrecoverable.
+ */
+export function isMediaJobPayloadTtlElapsed(
+  job: {
+    _id?: { getTimestamp?: () => Date } | string;
+    createdAt?: Date | string | null;
+  },
+  now = Date.now()
+): boolean {
+  const createdAt = getMediaJobCreatedAt(job);
+  if (!createdAt) return false;
+  return now - createdAt.getTime() >= MEDIA_JOB_DATA_TTL_MS;
 }
 
 /** Redis còn key hoặc job cũ còn `requestPayload` trên Mongo. */
@@ -38,6 +75,20 @@ export async function isMediaJobPayloadAvailable(job: {
     logger.warn(`[MediaJobData] exists key=${job.dataRedisKey} lỗi: ${err?.message}`);
   }
   return hasMongoRequestPayload(job);
+}
+
+/**
+ * Redis miss + đã quá TTL theo createdAt → fail unrecoverable.
+ * Redis miss nhưng job còn trong TTL → chưa coi là hết hạn (có thể Redis tạm mất / chưa ready).
+ */
+export async function shouldFailMediaJobAsPayloadExpired(job: {
+  _id?: { getTimestamp?: () => Date } | string;
+  createdAt?: Date | string | null;
+  dataRedisKey?: string | null;
+  requestPayload?: Record<string, unknown>;
+}): Promise<boolean> {
+  if (await isMediaJobPayloadAvailable(job)) return false;
+  return isMediaJobPayloadTtlElapsed(job);
 }
 
 export function buildMediaJobDataKey(jobId: string): string {
@@ -63,6 +114,8 @@ export async function saveMediaJobPayload(
 
 /** Worker đọc payload từ Redis; fallback `requestPayload` Mongo cho job cũ. */
 export async function loadMediaJobPayload<T extends Record<string, unknown>>(job: {
+  _id?: { getTimestamp?: () => Date } | string;
+  createdAt?: Date | string | null;
   dataRedisKey?: string | null;
   requestPayload?: Record<string, unknown>;
 }): Promise<T> {
@@ -77,9 +130,15 @@ export async function loadMediaJobPayload<T extends Record<string, unknown>>(job
         logger.warn(`[MediaJobData] Redis miss key=${key}, dùng requestPayload Mongo`);
         return job.requestPayload as T;
       }
-      const err: any = new Error(MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE);
-      err.statusCode = 410;
-      throw err;
+      // Chỉ 410 khi đã quá TTL theo createdAt; miss sớm → 503 để retry.
+      if (isMediaJobPayloadTtlElapsed(job)) {
+        const err: any = new Error(MEDIA_JOB_PAYLOAD_EXPIRED_MESSAGE);
+        err.statusCode = 410;
+        throw err;
+      }
+      const transient: any = new Error("Không đọc được dữ liệu job từ Redis.");
+      transient.statusCode = 503;
+      throw transient;
     } catch (err: any) {
       if (err?.statusCode) throw err;
       logger.error(`[MediaJobData] load key=${key} lỗi: ${err?.message}`);

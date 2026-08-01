@@ -27,20 +27,73 @@ export type AffiliateProductPageResult = {
   marketHost: string;
 };
 
-/** Kiểm tra Local Agent + đã có cookie session (sau Mở Trình duyệt GPM Login). */
-export async function probeCdpBridge(timeoutMs = 5000): Promise<boolean> {
+export type CdpBridgeStatus = {
+  ok: boolean;
+  /** Số CDP/session sẵn sàng (hiện tối đa 1 — Mở Trình duyệt). */
+  slots: number;
+  hasCookies: boolean;
+  cdpAlive: boolean;
+  agentOnline: boolean;
+};
+
+/** Chi tiết Local Agent + CDP/session (cookie hoặc CDP còn sống). */
+export async function getCdpBridgeStatus(timeoutMs = 5000): Promise<CdpBridgeStatus> {
   const agent = await probeScrapeAgent(Math.min(2500, timeoutMs));
-  if (!agent.online) return false;
-  if (agent.hasCookies) return true;
+  if (!agent.online) {
+    return {
+      ok: false,
+      slots: 0,
+      hasCookies: false,
+      cdpAlive: false,
+      agentOnline: false,
+    };
+  }
+
+  let hasCookies = Boolean(agent.hasCookies);
+  let cdpAlive = false;
   try {
     const { res, json } = await agentFetch("/cdp-status", {
       method: "GET",
       timeoutMs,
     });
-    return Boolean(res.ok && json?.ok && (json?.hasCookies || json?.connected || json?.cdpAlive));
+    if (res.ok && json?.ok) {
+      hasCookies = Boolean(json.hasCookies || hasCookies);
+      cdpAlive = Boolean(json.cdpAlive || json.connected);
+    }
   } catch {
-    return false;
+    // Agent online nhưng /cdp-status lỗi — vẫn tin hasCookies từ /status
   }
+
+  const slots = hasCookies || cdpAlive ? 1 : 0;
+  return {
+    ok: slots > 0,
+    slots,
+    hasCookies,
+    cdpAlive,
+    agentOnline: true,
+  };
+}
+
+/** Kiểm tra Local Agent + đã có cookie session (sau Mở Trình duyệt GPM Login). */
+export async function probeCdpBridge(timeoutMs = 5000): Promise<boolean> {
+  const status = await getCdpBridgeStatus(timeoutMs);
+  return status.ok;
+}
+
+function isTransientProductPageError(message: string): boolean {
+  const msg = message.toLowerCase();
+  return (
+    msg.includes("navigated or closed") ||
+    msg.includes("target closed") ||
+    msg.includes("session closed") ||
+    msg.includes("websocket") ||
+    msg.includes("execution context was destroyed") ||
+    msg.includes("cannot find context") ||
+    msg.includes("econnreset") ||
+    msg.includes("econnrefused") ||
+    msg.includes("network") ||
+    msg.includes("fetch failed")
+  );
 }
 
 export async function fetchAffiliateProductPage(
@@ -54,39 +107,50 @@ export async function fetchAffiliateProductPage(
         `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
     );
   }
-  try {
-    const { res, json } = await agentFetch("/product-page", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      timeoutMs,
-      body: JSON.stringify({
-        marketHost: input.marketHost,
-        keyword: input.keyword,
-        sortType: input.sortType,
-        pageOffset: input.pageOffset,
-        pageLimit: input.pageLimit ?? 20,
-        listType: input.listType ?? 0,
-        filterShopTypes: input.filterShopTypes || [],
-      }),
-    });
-    if (!res.ok || !json?.ok) {
-      throw new Error(
-        json?.message ||
-          "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GPM Login qua Agent) rồi thử lại."
-      );
+
+  const maxAttempts = 3;
+  let lastErr: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const { res, json } = await agentFetch("/product-page", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        timeoutMs,
+        body: JSON.stringify({
+          marketHost: input.marketHost,
+          keyword: input.keyword,
+          sortType: input.sortType,
+          pageOffset: input.pageOffset,
+          pageLimit: input.pageLimit ?? 20,
+          listType: input.listType ?? 0,
+          filterShopTypes: input.filterShopTypes || [],
+        }),
+      });
+      if (!res.ok || !json?.ok) {
+        throw new Error(
+          json?.message ||
+            "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GPM Login qua Agent) rồi thử lại."
+        );
+      }
+      return {
+        ok: true,
+        products: Array.isArray(json.products) ? json.products : [],
+        hasMore: Boolean(json.hasMore),
+        totalCount: typeof json.totalCount === "number" ? json.totalCount : null,
+        keyword: String(json.keyword || input.keyword || ""),
+        marketHost: String(json.marketHost || input.marketHost || ""),
+      };
+    } catch (err: any) {
+      const message =
+        err?.message || "Hết thời gian chờ. Kiểm tra Agent + GPM Login còn mở và thử lại.";
+      lastErr = new Error(message);
+      if (!isTransientProductPageError(message) || attempt >= maxAttempts) break;
+      await new Promise((r) => setTimeout(r, 700 * attempt));
     }
-    return {
-      ok: true,
-      products: Array.isArray(json.products) ? json.products : [],
-      hasMore: Boolean(json.hasMore),
-      totalCount: typeof json.totalCount === "number" ? json.totalCount : null,
-      keyword: String(json.keyword || input.keyword || ""),
-      marketHost: String(json.marketHost || input.marketHost || ""),
-    };
-  } catch (err: any) {
-    if (err?.message) throw err;
-    throw new Error("Hết thời gian chờ. Kiểm tra Agent + GPM Login còn mở và thử lại.");
   }
+
+  throw lastErr || new Error("Lấy sản phẩm thất bại.");
 }
 
 /**
@@ -167,7 +231,9 @@ function pickField(row: AffiliateProductRaw, card: AffiliateProductRaw | null, .
   return undefined;
 }
 
-/** Ưu tiên seller → default → max; bỏ qua "0%" nếu còn rate khác. */
+/** Ưu tiên seller → default → max; bỏ qua "0%" nếu còn rate khác.
+ * API thật: seller_commission_rate "11,5%", default_commission_rate "3,5%"
+ */
 export function pickCommissionPct(row: AffiliateProductRaw, card: AffiliateProductRaw | null): number {
   const candidates = [
     pickField(row, card, "seller_commission_rate"),

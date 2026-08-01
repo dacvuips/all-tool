@@ -11,8 +11,9 @@ import {
   HiOutlineSearch,
   HiOutlineTrash,
   HiPlay,
+  HiX,
 } from "react-icons/hi";
-import { RiChromeLine, RiDatabase2Line, RiLoader4Line, RiRefreshLine } from "react-icons/ri";
+import { RiChromeLine, RiCloudLine, RiDatabase2Line, RiKey2Line, RiLoader4Line, RiMagicLine, RiRefreshLine } from "react-icons/ri";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
@@ -20,7 +21,10 @@ import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import {
   formatDuration,
   formatSessionTime,
+  isCrawlProjectSession,
+  isGioVideoSession,
   nextCrawlProjectName,
+  nextGioVideoProjectName,
   saveScrapeCsvSession,
   ScrapeCsvSession,
   sessionDisplayName,
@@ -34,18 +38,33 @@ import {
   loadScrapeCsvSessions,
   openShopeeAffiliateBrowser,
   probeScrapeAgent,
-  removeAllScrapeCsvSessions,
   removeScrapeCsvSession,
   SCRAPE_AGENT_BASE,
   shortenAffiliateLinks,
 } from "../scrape/api";
 import {
+  AiAuthError,
+  filterSimilarProductsWithAi,
+  providerLabel,
+  resolveAiApiKey,
+  selectVideoCartWithAiMatches,
+} from "../scrape/gio-video-ai";
+import {
+  fetchAffiliateProductDetail,
+  formatPromoted7days,
+  parseShopItemFromRowId,
+  pickImageUrlFromRaw,
+  type SimilarOfferItem,
+} from "../scrape/gio-video-fetch";
+import {
   fetchAffiliateProductPage,
+  getCdpBridgeStatus,
   mapRawToScrapeRow,
   normalizeApiPriceFields,
   probeCdpBridge,
 } from "../scrape/product-page-fetch";
 import { buildProductSeoWorkItems, generateProductSeoBatch } from "../scrape/product-seo";
+import { suggestShopeeKeywords, uniqueKeywords } from "../scrape/suggest-keywords";
 import {
   PanelListCard,
   panelListClasses,
@@ -79,6 +98,14 @@ const GPMLOGIN_DOWNLOAD_URL = "https://gpmloginapp.com/vi/download";
 
 const SCRAPE_OPENAI_KEY_LS = "video-affiliate-plus-scrape-openai-key";
 const SCRAPE_GEMINI_KEY_LS = "video-affiliate-plus-scrape-gemini-key";
+const SCRAPE_GATEWAY_ENDPOINT_LS = "video-affiliate-plus-scrape-gateway-endpoint";
+const SCRAPE_GATEWAY_API_KEY_LS = "video-affiliate-plus-scrape-gateway-api-key";
+const SCRAPE_GATEWAY_MODEL_LS = "video-affiliate-plus-scrape-gateway-model";
+const SCRAPE_KEYWORDS_LS = "video-affiliate-plus-scrape-keywords";
+const SCRAPE_KEYWORD_AI_LS = "video-affiliate-plus-scrape-keyword-ai";
+/** Fallback model Gateway khi customer để trống — cùng DEFAULT_CHATGPT_MODEL. */
+const DEFAULT_GATEWAY_MODEL = "gpt-5-5";
+const MIN_AI_KEYWORDS = 200;
 
 function readScrapeAiKey(storageKey: string): string {
   if (typeof window === "undefined") return "";
@@ -139,9 +166,6 @@ const PRICE_SORT_OPTIONS = [
   { value: 3, label: "Giá cao → thấp" },
 ] as const;
 
-/** Tất cả sort_type — dùng xoay khi API cap ~500 SP / 1 sort. */
-const ALL_SORT_TYPES = [1, 5, 2, 4, 3] as const;
-
 const SORT_TYPE_LABELS: Record<number, string> = {
   1: "Liên quan",
   2: "Bán chạy",
@@ -149,12 +173,6 @@ const SORT_TYPE_LABELS: Record<number, string> = {
   4: "Giá thấp → cao",
   5: "Hoa hồng (%)",
 };
-
-/** Ưu tiên sort user chọn, rồi các sort còn lại để vượt cap 500 của Shopee. */
-function buildSortQueue(preferred: number): number[] {
-  const first = ALL_SORT_TYPES.includes(preferred as typeof ALL_SORT_TYPES[number]) ? preferred : 1;
-  return [first, ...ALL_SORT_TYPES.filter((s) => s !== first)];
-}
 
 /** filter_shop_types trên product/list — chọn nhiều */
 const SHOP_TYPE_TABS = [
@@ -185,13 +203,18 @@ export type GioVideoRow = {
   name: string;
   /** Số / text SP tương tự */
   similar: string;
-  /** Quảng bá 7 ngày */
+  /** Quảng bá 7 ngày — data.affiliate_promoted_last_7days */
   promoted: string;
-  /** Giỏ video */
+  /** Giỏ video = similar đã sort (không AI) */
   cartText: string;
   cartColor?: "ok" | "warn" | "muted";
   statusText: string;
   statusColor?: "ok" | "warn" | "muted" | "error" | "running";
+  /** Keys giỏ video đã sort: `shopId-itemId` */
+  similarItemIds?: string[];
+  /** Similar đầy đủ từ similar_product_offers.list (+ image-search) */
+  similars?: SimilarOfferItem[];
+  imageUrl?: string;
 };
 
 /** Field sắp xếp SP tương tự — PeeCrawl tab2_data_sort.field */
@@ -264,6 +287,185 @@ function resolveScrapeProductUrl(row: ScrapeProductRow, marketHost: string): str
   const m = host.match(/^affiliate\.(shopee\..+)$/i);
   const mallHost = m?.[1] || "shopee.vn";
   return `https://${mallHost}/product/${shopId}/${itemId}`;
+}
+
+function mallHostFromAffiliate(marketHost: string): string {
+  const host = String(marketHost || "").toLowerCase();
+  const m = host.match(/^affiliate\.(shopee\..+)$/i);
+  return m?.[1] || "shopee.vn";
+}
+
+/** URL SP từ key `shopId-itemId` hoặc itemId. */
+function productUrlFromKey(key: string, marketHost: string): string {
+  const raw = String(key || "").trim();
+  if (!raw) return "";
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const mallHost = mallHostFromAffiliate(marketHost);
+  const dash = raw.indexOf("-");
+  if (dash > 0) {
+    const shopId = raw.slice(0, dash);
+    const itemId = raw.slice(dash + 1);
+    if (shopId && itemId && /^\d+$/.test(shopId) && /^\d+$/.test(itemId)) {
+      return `https://${mallHost}/product/${shopId}/${itemId}`;
+    }
+  }
+  if (/^\d+$/.test(raw)) return `https://${mallHost}/search?keyword=${raw}`;
+  return "";
+}
+
+type GioCartLink = { key: string; name: string; url: string };
+
+/** Giỏ video sau AI: SP gốc + các SP AI match (theo similarItemIds / similars). */
+function collectGioCartLinks(row: GioVideoRow, marketHost: string): GioCartLink[] {
+  const byKey = new Map<string, SimilarOfferItem>();
+  for (const s of row.similars || []) {
+    if (s?.key) byKey.set(s.key, s);
+  }
+  const ids =
+    row.similarItemIds && row.similarItemIds.length
+      ? row.similarItemIds
+      : (row.similars || []).map((s) => s.key).filter(Boolean);
+
+  const out: GioCartLink[] = [];
+  const seen = new Set<string>();
+  for (const key of ids) {
+    const k = String(key || "").trim();
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const s = byKey.get(k);
+    const url = String(s?.productLink || "").trim() || productUrlFromKey(k, marketHost);
+    if (!url) continue;
+    out.push({
+      key: k,
+      name: String(s?.name || (k === row.id ? row.name : "") || k).trim() || k,
+      url,
+    });
+  }
+  return out;
+}
+
+function escapeHtmlText(value: string): string {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/**
+ * Mở 1 tab trình duyệt lớn — bên trong có từng tab = link SP AI đã phân tích.
+ * Tất cả iframe load trong cùng 1 cửa sổ.
+ */
+function openGioVideoCartBrowserTab(
+  row: GioVideoRow,
+  marketHost: string,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): boolean {
+  const links = collectGioCartLinks(row, marketHost);
+  if (!links.length) return false;
+
+  const title = escapeHtmlText(
+    t("Giỏ video · {{name}}", { name: row.name || row.id }) as string
+  );
+  const tabsHtml = links
+    .map((link, i) => {
+      const label = escapeHtmlText(
+        `${i + 1}. ${(link.name || link.key).slice(0, 48)}${
+          (link.name || link.key).length > 48 ? "…" : ""
+        }`
+      );
+      return `<button type="button" class="tab${i === 0 ? " active" : ""}" data-idx="${i}" title="${escapeHtmlText(
+        link.name || link.key
+      )}">${label}</button>`;
+    })
+    .join("");
+  const panelsHtml = links
+    .map((link, i) => {
+      const safeUrl = escapeHtmlText(link.url);
+      const safeName = escapeHtmlText(link.name || link.key);
+      return `<div class="panel${i === 0 ? " active" : ""}" data-idx="${i}">
+  <div class="bar">
+    <a href="${safeUrl}" target="_blank" rel="noopener noreferrer">${safeName}</a>
+    <span class="url">${safeUrl}</span>
+  </div>
+  <iframe src="${safeUrl}" title="${safeName}" loading="${i === 0 ? "eager" : "lazy"}" referrerpolicy="no-referrer-when-downgrade"></iframe>
+</div>`;
+    })
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>${title}</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:Segoe UI,system-ui,sans-serif;background:#0f172a;color:#e2e8f0}
+  .wrap{display:flex;flex-direction:column;height:100%}
+  .head{flex:0 0 auto;padding:10px 12px 0;border-bottom:1px solid #334155;background:#111827}
+  .head h1{margin:0 0 8px;font-size:14px;font-weight:700;color:#f8fafc}
+  .head p{margin:0 0 8px;font-size:11px;color:#94a3b8}
+  .tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px}
+  .tab{flex:0 0 auto;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    border:1px solid #475569;background:#1e293b;color:#e2e8f0;border-radius:8px 8px 0 0;
+    padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer}
+  .tab:hover{background:#334155}
+  .tab.active{background:#0ea5e9;border-color:#0284c7;color:#fff}
+  .body{flex:1 1 auto;min-height:0;position:relative;background:#020617}
+  .panel{display:none;position:absolute;inset:0;flex-direction:column}
+  .panel.active{display:flex}
+  .bar{flex:0 0 auto;display:flex;gap:10px;align-items:center;padding:6px 10px;
+    background:#1e293b;border-bottom:1px solid #334155;font-size:12px}
+  .bar a{color:#38bdf8;font-weight:700;text-decoration:none;max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar a:hover{text-decoration:underline}
+  .bar .url{color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  iframe{flex:1 1 auto;width:100%;border:0;background:#fff}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="head">
+    <h1>${title}</h1>
+    <p>${escapeHtmlText(
+      t(
+        "{{n}} tab sản phẩm trong 1 cửa sổ — bấm tab để xem. Nếu Shopee chặn nhúng, bấm tên/link trên thanh để mở trang SP.",
+        { n: links.length }
+      ) as string
+    )}</p>
+    <div class="tabs" id="tabs">${tabsHtml}</div>
+  </div>
+  <div class="body" id="body">${panelsHtml}</div>
+</div>
+<script>
+(function(){
+  var tabs=document.getElementById('tabs');
+  var body=document.getElementById('body');
+  if(!tabs||!body)return;
+  tabs.addEventListener('click',function(e){
+    var btn=e.target&&e.target.closest?e.target.closest('.tab'):null;
+    if(!btn)return;
+    var idx=btn.getAttribute('data-idx');
+    tabs.querySelectorAll('.tab').forEach(function(el){el.classList.toggle('active',el.getAttribute('data-idx')===idx);});
+    body.querySelectorAll('.panel').forEach(function(el){el.classList.toggle('active',el.getAttribute('data-idx')===idx);});
+  });
+})();
+</script>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return false;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  try {
+    win.focus();
+  } catch {
+    /* ignore */
+  }
+  return true;
 }
 
 function serializeCsvCell(value: unknown): string {
@@ -385,6 +587,71 @@ function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   return "\uFEFF" + lines.join("\n");
 }
 
+const GIO_VIDEO_CSV_HEADERS = [
+  "stt",
+  "id",
+  "name",
+  "similar",
+  "promoted",
+  "cart_text",
+  "status_text",
+  "similar_keys",
+  "gio_video",
+  "image_url",
+] as const;
+
+function gioVideoRowsToCsv(rows: GioVideoRow[]): string {
+  const lines = [GIO_VIDEO_CSV_HEADERS.join(",")];
+  for (const row of rows) {
+    const keys = row.similarItemIds || [];
+    lines.push(
+      [
+        row.stt,
+        row.id,
+        row.name,
+        row.similar,
+        row.promoted,
+        row.cartText,
+        row.statusText,
+        keys.join("|"),
+        keys.join("|"),
+        row.imageUrl || "",
+      ]
+        .map((v) => escapeCsvValue(v))
+        .join(",")
+    );
+  }
+  return "\uFEFF" + lines.join("\n");
+}
+
+function parseGioVideoCsv(csv: string): GioVideoRow[] {
+  const raws = parseScrapedCsvToRaws(csv);
+  return raws.map((raw, index) => {
+    const similarIds = String(raw.gio_video || raw.similar_keys || raw.similar_item_ids || "")
+      .split("|")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const statusText = String(raw.status_text || "Hoàn thành");
+    return {
+      id: String(raw.id || `gio-${index + 1}`),
+      stt: Number(raw.stt) || index + 1,
+      name: String(raw.name || ""),
+      similar: String(raw.similar || similarIds.length || "—"),
+      promoted: String(raw.promoted || "—"),
+      cartText: String(raw.cart_text || "—"),
+      cartColor: similarIds.length > 0 || Number(raw.similar) > 0 ? "ok" : "muted",
+      statusText,
+      statusColor: /hoàn thành/i.test(statusText)
+        ? "ok"
+        : /lỗi|error/i.test(statusText)
+        ? "error"
+        : "muted",
+      similarItemIds: similarIds,
+      imageUrl: String(raw.image_url || ""),
+    };
+  });
+}
+
 /** Tab Cào dữ liệu — GPM Login CDP + danh sách SP / CSV. */
 export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const { t } = useTranslation();
@@ -407,14 +674,30 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [guideOpen, setGuideOpen] = useState(false);
-  /** Uncontrolled — tránh IME tiếng Việt bị đúp dấu khi re-render. */
-  const keywordsInputRef = useRef<HTMLInputElement>(null);
-  const getKeywordsText = () => String(keywordsInputRef.current?.value || "");
+  /** Danh sách từ khóa (chip) — persist localStorage, chỉ mất khi Clear. */
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [keywordDraft, setKeywordDraft] = useState("");
+  /** Gợi ý AI khi bắt đầu cào (chỉ khi keywords đang trống). */
+  const [keywordAiSuggest, setKeywordAiSuggest] = useState(false);
+  const [suggestingKeywords, setSuggestingKeywords] = useState(false);
+  /** Từ khóa đã cào xong trong phiên hiện tại → chip xanh. */
+  const [doneKeywords, setDoneKeywords] = useState<string[]>([]);
+  const [activeKeyword, setActiveKeyword] = useState("");
+  const getKeywordsText = () => keywords.join(",");
+  const persistKeywords = (list: string[]) => {
+    const next = uniqueKeywords(list);
+    setKeywords(next);
+    writeScrapeAiKey(SCRAPE_KEYWORDS_LS, next.join(","));
+  };
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveProjectName, setSaveProjectName] = useState("Crawl Project 1");
   /** Bật: ChatGPT tạo mô tả + hashtag khi Lưu Project. */
   const [saveUseAiSeo, setSaveUseAiSeo] = useState(true);
   const [savingProject, setSavingProject] = useState(false);
+  /** Dialog Lưu project riêng cho Crawl Giỏ Video */
+  const [gioSaveDialogOpen, setGioSaveDialogOpen] = useState(false);
+  const [gioSaveProjectName, setGioSaveProjectName] = useState("Crawl Giỏ Video 1");
+  const [savingGioProject, setSavingGioProject] = useState(false);
   /** Dialog theo dõi tiến trình Lưu Project (short link + AI SEO). */
   const [saveProgressOpen, setSaveProgressOpen] = useState(false);
   const [saveProgressPercent, setSaveProgressPercent] = useState(0);
@@ -458,12 +741,61 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [gioVideoPageSize, setGioVideoPageSize] = useState(200);
   const [gioCrawling, setGioCrawling] = useState(false);
   const [gioCrawlStatus, setGioCrawlStatus] = useState("");
+  /** Session Crawl Project đã lưu (IndexedDB) dùng làm nguồn SP cho Giỏ Video */
+  const [gioSourceSessionId, setGioSourceSessionId] = useState("");
   const gioAbortRef = useRef(false);
+  const gioSourceSessionIdRef = useRef("");
+  const crawlingRef = useRef(false);
+  /** Crawl Giỏ Video (live) đã kích hoạt Crawl Project — Dừng Giỏ sẽ dừng cả Project. */
+  const gioCombinedCrawlRef = useRef(false);
+  /** Song song thực tế sau khi check CDP (≤ slots CDP). */
+  const gioEffectiveParallelRef = useRef(1);
+  /** Không chọn Nguồn → SP từ Crawl Project được check Giỏ Video theo từng request. */
+  const gioLiveRef = useRef<{
+    active: boolean;
+    queue: ScrapeProductRow[];
+    processing: number;
+    processedIds: Set<string>;
+    done: number;
+    failed: number;
+    budget: number;
+    stt: number;
+    aiCred: {
+      apiKey: string;
+      provider: "openai" | "gemini" | "gateway";
+      endpoint?: string;
+      model?: string;
+    } | null;
+    sortSnapshot: GioVideoSortRow[];
+  }>({
+    active: false,
+    queue: [],
+    processing: 0,
+    processedIds: new Set(),
+    done: 0,
+    failed: 0,
+    budget: 100,
+    stt: 0,
+    aiCred: null,
+    sortSnapshot: [],
+  });
+
+  useEffect(() => {
+    gioSourceSessionIdRef.current = gioSourceSessionId;
+  }, [gioSourceSessionId]);
+
+  useEffect(() => {
+    crawlingRef.current = crawling;
+  }, [crawling]);
 
   const [openaiKey, setOpenaiKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
+  const [gatewayEndpoint, setGatewayEndpoint] = useState("");
+  const [gatewayApiKey, setGatewayApiKey] = useState("");
+  const [gatewayModel, setGatewayModel] = useState("");
   const [openaiKeyVisible, setOpenaiKeyVisible] = useState(false);
   const [geminiKeyVisible, setGeminiKeyVisible] = useState(false);
+  const [gatewayKeyVisible, setGatewayKeyVisible] = useState(false);
   const [checkingOpenaiKey, setCheckingOpenaiKey] = useState(false);
   const [checkingGeminiKey, setCheckingGeminiKey] = useState(false);
   const [aiKeysDialogOpen, setAiKeysDialogOpen] = useState(false);
@@ -508,16 +840,97 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     void refreshAgentAndGpm();
     setOpenaiKey(readScrapeAiKey(SCRAPE_OPENAI_KEY_LS));
     setGeminiKey(readScrapeAiKey(SCRAPE_GEMINI_KEY_LS));
+    setGatewayEndpoint(readScrapeAiKey(SCRAPE_GATEWAY_ENDPOINT_LS));
+    setGatewayApiKey(readScrapeAiKey(SCRAPE_GATEWAY_API_KEY_LS));
+    setGatewayModel(readScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS));
+    setKeywords(
+      uniqueKeywords(
+        readScrapeAiKey(SCRAPE_KEYWORDS_LS)
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean)
+      )
+    );
+    try {
+      const aiFlag = localStorage.getItem(SCRAPE_KEYWORD_AI_LS);
+      setKeywordAiSuggest(aiFlag == null ? true : aiFlag === "1");
+    } catch {
+      setKeywordAiSuggest(true);
+    }
   }, []);
 
-  const persistOpenaiKey = (value: string) => {
-    setOpenaiKey(value);
-    writeScrapeAiKey(SCRAPE_OPENAI_KEY_LS, value.trim());
+  const loadAiKeysFromStorage = () => {
+    setGatewayEndpoint(readScrapeAiKey(SCRAPE_GATEWAY_ENDPOINT_LS));
+    setGatewayApiKey(readScrapeAiKey(SCRAPE_GATEWAY_API_KEY_LS));
+    setGatewayModel(readScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS));
+    setOpenaiKey(readScrapeAiKey(SCRAPE_OPENAI_KEY_LS));
+    setGeminiKey(readScrapeAiKey(SCRAPE_GEMINI_KEY_LS));
   };
 
-  const persistGeminiKey = (value: string) => {
-    setGeminiKey(value);
-    writeScrapeAiKey(SCRAPE_GEMINI_KEY_LS, value.trim());
+  const openAiKeysDialog = () => {
+    loadAiKeysFromStorage();
+    setAiKeysDialogOpen(true);
+  };
+
+  const handleSaveAiKeys = () => {
+    const ep = gatewayEndpoint.trim();
+    const gwKey = gatewayApiKey.trim();
+    const gwModel = gatewayModel.trim();
+    const oai = openaiKey.trim();
+    const gem = geminiKey.trim();
+    const gwAny = Boolean(ep || gwKey || gwModel);
+    const gwReady = Boolean(ep && gwKey && gwModel);
+    if (gwAny && !gwReady) {
+      toast.warn(
+        t("Gateway cần đủ Endpoint, API Key và Model (hoặc để trống cả ba).")
+      );
+      return;
+    }
+    writeScrapeAiKey(SCRAPE_GATEWAY_ENDPOINT_LS, ep);
+    writeScrapeAiKey(SCRAPE_GATEWAY_API_KEY_LS, gwKey);
+    writeScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS, gwModel);
+    writeScrapeAiKey(SCRAPE_OPENAI_KEY_LS, oai);
+    writeScrapeAiKey(SCRAPE_GEMINI_KEY_LS, gem);
+    setGatewayEndpoint(ep);
+    setGatewayApiKey(gwKey);
+    setGatewayModel(gwModel);
+    setOpenaiKey(oai);
+    setGeminiKey(gem);
+    toast.success(t("Đã lưu API Keys trên trình duyệt."));
+    setAiKeysDialogOpen(false);
+  };
+
+  const persistKeywordAiSuggest = (value: boolean) => {
+    setKeywordAiSuggest(value);
+    try {
+      localStorage.setItem(SCRAPE_KEYWORD_AI_LS, value ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const commitKeywordDraft = (raw?: string) => {
+    const parts = String(raw ?? keywordDraft)
+      .split(",")
+      .map((k) => k.trim())
+      .filter(Boolean);
+    if (!parts.length) {
+      setKeywordDraft("");
+      return;
+    }
+    persistKeywords([...keywords, ...parts]);
+    setKeywordDraft("");
+  };
+
+  const removeKeywordAt = (index: number) => {
+    persistKeywords(keywords.filter((_, i) => i !== index));
+  };
+
+  const clearKeywords = () => {
+    persistKeywords([]);
+    setKeywordDraft("");
+    setDoneKeywords([]);
+    setActiveKeyword("");
   };
 
   const handleCheckOpenaiKey = async () => {
@@ -602,8 +1015,17 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     return Array.from(years).sort((a, b) => b - a);
   }, [sessions]);
 
+  const crawlProjectSessions = useMemo(
+    () => sessions.filter((s) => isCrawlProjectSession(s)),
+    [sessions]
+  );
+  const gioVideoSessions = useMemo(
+    () => sessions.filter((s) => isGioVideoSession(s)),
+    [sessions]
+  );
+
   const filteredSessions = useMemo(() => {
-    return sessions.filter((s) => {
+    return crawlProjectSessions.filter((s) => {
       if (filterDomain && s.marketHost !== filterDomain) return false;
       const { year, month, day } = sessionLocalParts(s.createdAt);
       if (filterYear && year !== Number(filterYear)) return false;
@@ -611,7 +1033,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       if (filterDay && day !== Number(filterDay)) return false;
       return true;
     });
-  }, [sessions, filterDomain, filterYear, filterMonth, filterDay]);
+  }, [crawlProjectSessions, filterDomain, filterYear, filterMonth, filterDay]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -651,6 +1073,315 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setGioSortRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
   };
 
+  const patchGioRow = (id: string, patch: Partial<GioVideoRow>) => {
+    setGioVideoRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  const stopGioLiveFollow = () => {
+    gioLiveRef.current.active = false;
+    gioLiveRef.current.queue = [];
+    gioLiveRef.current.processing = 0;
+  };
+
+  /**
+   * Pool (Song song) không vượt số CDP/session sẵn sàng.
+   * CDP không đủ → null (caller báo lỗi, không generate).
+   */
+  const resolveGioParallelFromCdp = async (): Promise<number | null> => {
+    const status = await getCdpBridgeStatus();
+    if (!status.ok || status.slots < 1) return null;
+    const wanted = Math.max(1, Math.min(Number(gioParallel) || 1, 20));
+    const parallel = Math.max(1, Math.min(wanted, status.slots, 5));
+    gioEffectiveParallelRef.current = parallel;
+    if (wanted > status.slots) {
+      toast.warn(
+        t("CDP chỉ có {{slots}} session — Song song hạ xuống {{n}}.", {
+          slots: status.slots,
+          n: parallel,
+        })
+      );
+    }
+    return parallel;
+  };
+
+  const processOneGioSeed = async (
+    seed: ScrapeProductRow,
+    aiCred: {
+      apiKey: string;
+      provider: "openai" | "gemini" | "gateway";
+      endpoint?: string;
+      model?: string;
+    },
+    sortSnapshot: GioVideoSortRow[]
+  ): Promise<"ok" | "fail" | "abort"> => {
+    const { shopId: seedShopId, itemId } = parseShopItemFromRowId(seed.id);
+    if (!itemId) {
+      patchGioRow(seed.id, {
+        statusText: t("Thiếu item_id"),
+        statusColor: "error",
+      });
+      return "fail";
+    }
+
+    patchGioRow(seed.id, {
+      statusText: t("Đang lấy DETAIL..."),
+      statusColor: "running",
+    });
+
+    try {
+      const detail = await fetchAffiliateProductDetail({
+        marketHost: openMarketHost,
+        itemId,
+        shopId: seedShopId || undefined,
+      });
+
+      if (gioAbortRef.current) return "abort";
+
+      const imageUrl =
+        detail.imageUrl || pickImageUrlFromRaw(seed.raw as Record<string, unknown> | undefined);
+      const excludeKey = seedShopId ? `${seedShopId}-${itemId}` : itemId;
+      const promoted = formatPromoted7days(detail.promoted7days);
+      const detailCount = detail.similars.length || detail.similarItemIds.length;
+      const originalName = detail.name || seed.productName || seed.id;
+
+      patchGioRow(seed.id, {
+        name: originalName,
+        promoted,
+        similar: String(detailCount),
+        cartText: t("Đang AI lọc..."),
+        cartColor: "muted",
+        statusText: t("Đang AI lọc ({{provider}})...", {
+          provider: providerLabel(aiCred.provider),
+        }),
+        statusColor: "running",
+        imageUrl: imageUrl || detail.imageUrl || "",
+      });
+
+      if (gioAbortRef.current) return "abort";
+
+      let matchedItems: { id: string; confidence: number }[] = [];
+      let aiSummary = "";
+      let aiFailed = false;
+      let aiSkippedNoCdp = false;
+
+      // Pool/Budget: chỉ generate AI khi CDP/session còn đủ
+      if (detail.similars.length > 0) {
+        const cdp = await getCdpBridgeStatus(3000);
+        if (!cdp.ok || cdp.slots < 1) {
+          aiSkippedNoCdp = true;
+          patchGioRow(seed.id, {
+            name: originalName,
+            promoted,
+            similar: String(detailCount),
+            cartText: "—",
+            cartColor: "muted",
+            statusText: t("CDP không đủ — bỏ qua AI"),
+            statusColor: "warn",
+            imageUrl: imageUrl || detail.imageUrl || "",
+          });
+        } else {
+          try {
+            const ai = await filterSimilarProductsWithAi({
+              originalName,
+              similarItems: detail.similars.map((s) => ({
+                id: s.itemId || s.key,
+                name: s.name || s.key,
+              })),
+              apiKey: aiCred.apiKey,
+              provider: aiCred.provider,
+              endpoint: aiCred.endpoint,
+              model: aiCred.model,
+            });
+            matchedItems = ai.matchedItems;
+            aiSummary = ai.summary;
+          } catch (aiErr: any) {
+            aiFailed = true;
+            if (aiErr instanceof AiAuthError) {
+              gioAbortRef.current = true;
+              throw aiErr;
+            }
+            console.warn("[gio-video] AI:", aiErr?.message || aiErr);
+          }
+        }
+      }
+
+      if (gioAbortRef.current) return "abort";
+
+      const { cart, selectedIds, source, matchCount } = selectVideoCartWithAiMatches(
+        detail.similars,
+        matchedItems,
+        excludeKey,
+        itemId,
+        sortSnapshot
+      );
+      const cartCount = selectedIds.length;
+
+      patchGioRow(seed.id, {
+        name: originalName,
+        similar: String(detailCount),
+        promoted,
+        cartText: t("{{n}}", { n: cartCount }),
+        cartColor: matchCount > 0 ? "ok" : "warn",
+        statusText: aiSkippedNoCdp
+          ? t("Hoàn thành · CDP không đủ → chỉ gốc")
+          : source === "ai"
+            ? t("Hoàn thành · AI match {{n}}{{summary}}", {
+                n: matchCount,
+                summary: aiSummary ? ` · ${aiSummary}` : "",
+              })
+            : aiFailed
+              ? t("Hoàn thành · AI lỗi → chỉ gốc")
+              : t("Hoàn thành · AI không match"),
+        statusColor: "ok",
+        similarItemIds: selectedIds,
+        similars: cart,
+        imageUrl: imageUrl || detail.imageUrl || "",
+      });
+      return "ok";
+    } catch (err: any) {
+      if (err instanceof AiAuthError) {
+        toast.error(err.message || t("API key AI không hợp lệ"));
+        gioAbortRef.current = true;
+      }
+      patchGioRow(seed.id, {
+        statusText: err?.message ? String(err.message).slice(0, 80) : t("Lỗi"),
+        statusColor: "error",
+        cartText: "—",
+        cartColor: "muted",
+      });
+      return "fail";
+    }
+  };
+
+  const pumpGioLiveQueue = async () => {
+    const live = gioLiveRef.current;
+    const concurrency = Math.max(1, Math.min(gioEffectiveParallelRef.current || gioParallel, 5));
+    while (
+      live.active &&
+      !gioAbortRef.current &&
+      live.processing < concurrency &&
+      live.queue.length > 0
+    ) {
+      const seed = live.queue.shift();
+      if (!seed || !live.aiCred) break;
+      live.processing += 1;
+      void (async () => {
+        try {
+          const result = await processOneGioSeed(seed, live.aiCred!, live.sortSnapshot);
+          if (result === "fail") live.failed += 1;
+          if (result !== "abort") live.done += 1;
+          setGioCrawlStatus(
+            t("Giỏ Video (theo Crawl Project) · {{done}}/{{budget}} · lỗi {{fail}} · chờ {{q}}", {
+              done: live.done,
+              budget: live.budget,
+              fail: live.failed,
+              q: live.queue.length + live.processing - 1,
+            })
+          );
+          } finally {
+          live.processing -= 1;
+          if (
+            live.active &&
+            !gioAbortRef.current &&
+            (live.queue.length > 0 || live.processing > 0)
+          ) {
+            void pumpGioLiveQueue();
+          } else if (
+            live.active &&
+            live.queue.length === 0 &&
+            live.processing <= 0 &&
+            !crawlingRef.current
+          ) {
+            live.active = false;
+            setGioCrawling(false);
+            setGioCrawlStatus(
+              t("Hoàn tất · {{done}} SP · lỗi {{fail}}", {
+                done: live.done,
+                fail: live.failed,
+              })
+            );
+          }
+        }
+      })();
+    }
+  };
+
+  const finishGioLiveIfIdle = () => {
+    const live = gioLiveRef.current;
+    if (!live.active) return;
+    if (live.queue.length > 0 || live.processing > 0) {
+      void pumpGioLiveQueue();
+      return;
+    }
+    live.active = false;
+    setGioCrawling(false);
+    setGioCrawlStatus(
+      t("Hoàn tất · {{done}} SP · lỗi {{fail}}", {
+        done: live.done,
+        fail: live.failed,
+      })
+    );
+  };
+
+  /** Đưa SP từ Crawl Project vào check Giỏ Video (khi không chọn Nguồn). */
+  const enqueueGioFromCrawlProduct = (product: ScrapeProductRow) => {
+    if (gioSourceSessionIdRef.current) return;
+    const live = gioLiveRef.current;
+    if (!live.active || !live.aiCred) return;
+    if (live.processedIds.has(product.id)) return;
+    if (live.processedIds.size >= live.budget) return;
+    live.processedIds.add(product.id);
+    live.stt += 1;
+    const stt = live.stt;
+    setGioVideoRows((prev) => [
+      ...prev,
+      {
+        id: product.id,
+        stt,
+        name: product.productName || product.id,
+        similar: "—",
+        promoted: "—",
+        cartText: "—",
+        cartColor: "muted",
+        statusText: t("Chờ..."),
+        statusColor: "muted",
+      },
+    ]);
+    live.queue.push(product);
+    void pumpGioLiveQueue();
+  };
+
+  const startGioLiveFollow = (aiCred: {
+    apiKey: string;
+    provider: "openai" | "gemini" | "gateway";
+    endpoint?: string;
+    model?: string;
+  }) => {
+    gioAbortRef.current = false;
+    gioLiveRef.current = {
+      active: true,
+      queue: [],
+      processing: 0,
+      processedIds: new Set(),
+      done: 0,
+      failed: 0,
+      budget: Math.max(1, gioBudget),
+      stt: 0,
+      aiCred,
+      sortSnapshot: gioSortRows.map((r) => ({ ...r })),
+    };
+    setGioVideoRows([]);
+    setGioVideoPage(1);
+    setGioCrawling(true);
+    setGioCrawlStatus(
+      t("Chờ SP từ Crawl Project · AI {{provider}} · budget {{b}} · song song {{p}}", {
+        provider: providerLabel(aiCred.provider),
+        b: Math.max(1, gioBudget),
+        p: Math.max(1, gioEffectiveParallelRef.current),
+      })
+    );
+  };
+
   const handleResetGioFilters = () => {
     setGioParallel(1);
     setGioBudget(100);
@@ -662,23 +1393,179 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setGioCrawlStatus("");
   };
 
-  const handleStartGioCrawl = () => {
+  const handleStartGioCrawl = async () => {
     if (gioCrawling) {
       gioAbortRef.current = true;
+      stopGioLiveFollow();
+      if (gioCombinedCrawlRef.current) {
+        crawlAbortRef.current = true;
+        gioCombinedCrawlRef.current = false;
+        setCrawlStatus(t("Đang dừng..."));
+      }
+      setGioCrawlStatus(t("Đang dừng..."));
       setGioCrawling(false);
-      setGioCrawlStatus(t("Đã dừng"));
       return;
     }
+
+    let aiCred: {
+      apiKey: string;
+      provider: "openai" | "gemini" | "gateway";
+      endpoint?: string;
+      model?: string;
+    };
+    try {
+      aiCred = resolveAiApiKey(openaiKey, geminiKey, {
+        endpoint: gatewayEndpoint,
+        apiKey: gatewayApiKey,
+        model: gatewayModel.trim(),
+      });
+    } catch {
+      toast.warn(
+        t(
+          "Nhập Endpoint + API Key + Model (gateway), hoặc OpenAI/Gemini Key trước khi cào Giỏ Video."
+        )
+      );
+      openAiKeysDialog();
+      return;
+    }
+
+    // Pool / Budget: CDP phải đủ mới generate (Song song ≤ slots)
+    const parallel = await resolveGioParallelFromCdp();
+    if (parallel == null) {
+      const agent = await probeScrapeAgent(2000);
+      toast.error(
+        agent.online
+          ? t(
+              "CDP không đủ để cào Giỏ Video. Bấm «Mở Trình duyệt» (GPM Login), đăng nhập Affiliate nếu cần, rồi thử lại."
+            )
+          : t("Chưa thấy Local Agent. Mở Shopee Scrape Agent (BatDau.bat / .exe).")
+      );
+      return;
+    }
+
+    // Không chọn Nguồn → chạy Crawl Project + check Giỏ Video (live)
+    if (!gioSourceSessionId) {
+      const existing = products.slice(0, Math.max(1, gioBudget));
+      startGioLiveFollow(aiCred);
+      if (existing.length) {
+        for (const p of existing) enqueueGioFromCrawlProduct(p);
+      }
+      const shouldStartProject = !crawling && !crawlingRef.current;
+      if (shouldStartProject) {
+        gioCombinedCrawlRef.current = true;
+        toast.info(
+          existing.length
+            ? t(
+                "Crawl Giỏ Video + Crawl Project · check {{n}} SP hiện có + SP mới (budget {{b}}).",
+                { n: existing.length, b: Math.max(1, gioBudget) }
+              )
+            : t(
+                "Crawl Giỏ Video + Crawl Project · mỗi SP mới sẽ được check Giỏ Video (budget {{b}}).",
+                { b: Math.max(1, gioBudget) }
+              )
+        );
+        void handleStartCrawl();
+      } else {
+        gioCombinedCrawlRef.current = false;
+        toast.info(
+          existing.length
+            ? t("Theo dõi Crawl Project đang chạy · check {{n}} SP hiện có + SP mới.", {
+                n: existing.length,
+              })
+            : t("Theo dõi Crawl Project đang chạy — mỗi SP mới sẽ được check Giỏ Video.")
+        );
+      }
+      return;
+    }
+
+    const seeds = products.slice(0, Math.max(1, gioBudget));
+    if (!seeds.length) {
+      toast.warn(
+        t(
+          "Chưa có SP nguồn. Chọn Crawl Project đã lưu, hoặc bỏ trống Nguồn để theo Crawl Project."
+        )
+      );
+      return;
+    }
+
     gioAbortRef.current = false;
+    gioCombinedCrawlRef.current = false;
+    stopGioLiveFollow();
     setGioCrawling(true);
+    setGioVideoPage(1);
+
+    const sortSnapshot = gioSortRows.map((r) => ({ ...r }));
+
+    const initialRows: GioVideoRow[] = seeds.map((p, i) => ({
+      id: p.id,
+      stt: i + 1,
+      name: p.productName || p.id,
+      similar: "—",
+      promoted: "—",
+      cartText: "—",
+      cartColor: "muted",
+      statusText: t("Chờ..."),
+      statusColor: "muted",
+    }));
+    setGioVideoRows(initialRows);
     setGioCrawlStatus(
-      t("Đã cấu hình (song song {{p}}, budget {{b}}) — chờ nối logic cào.", {
-        p: gioParallel,
-        b: gioBudget,
+      t("Đang cào giỏ video · {{n}} SP · AI {{provider}} · song song {{p}}", {
+        n: seeds.length,
+        provider: providerLabel(aiCred.provider),
+        p: parallel,
       })
     );
-    // UI-only: chưa có backend giỏ video → không giữ trạng thái "đang cào".
-    setGioCrawling(false);
+
+    let done = 0;
+    let failed = 0;
+    const concurrency = Math.max(1, Math.min(parallel, 5));
+    let cursor = 0;
+
+    const worker = async () => {
+      while (!gioAbortRef.current) {
+        const idx = cursor++;
+        if (idx >= seeds.length) return;
+        const seed = seeds[idx];
+        const result = await processOneGioSeed(seed, aiCred, sortSnapshot);
+        if (result === "fail") failed += 1;
+        if (result !== "abort") done += 1;
+        setGioCrawlStatus(
+          t("Đang cào giỏ video · {{done}}/{{total}} · lỗi {{fail}}", {
+            done,
+            total: seeds.length,
+            fail: failed,
+          })
+        );
+      }
+    };
+
+    try {
+      await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      const stopped = gioAbortRef.current;
+      setGioCrawlStatus(
+        stopped
+          ? t("Đã dừng · xong {{done}}/{{total}} · lỗi {{fail}}", {
+              done,
+              total: seeds.length,
+              fail: failed,
+            })
+          : t("Hoàn tất · {{done}} SP · lỗi {{fail}}", {
+              done,
+              fail: failed,
+            })
+      );
+      if (!stopped && failed === 0) {
+        toast.success(t("Crawl Giỏ Video xong · {{n}} SP", { n: seeds.length }));
+      } else if (!stopped && failed > 0) {
+        toast.warn(t("Xong với {{fail}} lỗi / {{total}} SP", { fail: failed, total: seeds.length }));
+      }
+    } catch (err: any) {
+      toast.error(err?.message || t("Crawl Giỏ Video thất bại"));
+      setGioCrawlStatus(err?.message || t("Lỗi"));
+    } finally {
+      setGioCrawling(false);
+      gioAbortRef.current = false;
+    }
   };
 
   const domainLabel = (host: string) => {
@@ -736,11 +1623,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
   const handleExportCsv = async () => {
     if (exportingCsv) return;
-    const keywordList = getKeywordsText()
-      .split(/[,;\n]+/)
-      .map((k) => k.trim())
-      .filter(Boolean);
-    const keyword = keywordList[0] || "";
+    const keyword = keywords[0] || "";
     try {
       setExportingCsv(true);
       const bridgeOk = await probeCdpBridge();
@@ -774,66 +1657,113 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const handleDeleteOne = async (id: string) => {
     try {
       setSessions(await removeScrapeCsvSession(id));
+      if (gioSourceSessionId === id) setGioSourceSessionId("");
       toast.warn(t("Đã xóa phiên CSV"));
     } catch (err: any) {
       toast.error(err?.message || t("Xóa thất bại"));
     }
   };
 
-  const handleViewSession = (session: ScrapeCsvSession) => {
-    try {
-      const raws = parseScrapedCsvToRaws(session.csv);
-      if (!raws.length) {
-        toast.warn(t("File CSV trống hoặc không đọc được"));
-        return;
-      }
-      const mapped: ScrapeProductRow[] = raws.map((raw, index) => {
-        // CSV đã lưu giá VND thật — không chia /1000 lại khi xem / lưu lại.
-        const priced = {
-          ...raw,
-          __priceVndNormalized: true,
-        } as Record<string, unknown>;
-        const row = mapRawToScrapeRow(priced, index);
-        return { ...row, raw: priced };
-      });
-      setProducts(mapped);
-      setCrawledCount(mapped.length);
-      setCrawlStatus("view");
-      if (session.marketHost) setOpenMarketHost(session.marketHost);
-      if (keywordsInputRef.current) {
-        keywordsInputRef.current.value = session.keyword || "";
-      }
+  /** Load SP từ session Crawl Project đã lưu → `products` (nguồn cho Giỏ Video). */
+  const loadSessionProducts = (
+    session: ScrapeCsvSession,
+    opts?: { scroll?: boolean; toastOk?: boolean }
+  ): number => {
+    const raws = parseScrapedCsvToRaws(session.csv);
+    if (!raws.length) {
+      throw new Error(t("File CSV trống hoặc không đọc được"));
+    }
+    const mapped: ScrapeProductRow[] = raws.map((raw, index) => {
+      const priced = {
+        ...raw,
+        __priceVndNormalized: true,
+      } as Record<string, unknown>;
+      const row = mapRawToScrapeRow(priced, index);
+      return { ...row, raw: priced };
+    });
+    setProducts(mapped);
+    setCrawledCount(mapped.length);
+    setCrawlStatus("view");
+    setGioSourceSessionId(session.id);
+    if (session.marketHost) setOpenMarketHost(session.marketHost);
+    if (session.keyword) {
+      persistKeywords(
+        uniqueKeywords(
+          String(session.keyword)
+            .split(/[,;\n]+/)
+            .map((k) => k.trim())
+            .filter(Boolean)
+        )
+      );
+    }
+    if (opts?.toastOk !== false) {
       toast.success(
         t("Đã mở «{{name}}» · {{count}} SP", {
           name: sessionDisplayName(session),
           count: mapped.length,
         })
       );
+    }
+    if (opts?.scroll) {
       window.requestAnimationFrame(() => {
         document.getElementById("scrape-product-list")?.scrollIntoView({
           behavior: "smooth",
           block: "start",
         });
       });
+    }
+    return mapped.length;
+  };
+
+  const handleViewSession = (session: ScrapeCsvSession) => {
+    try {
+      loadSessionProducts(session, { scroll: true });
+      setScrapeSubTab(0);
+    } catch (err: any) {
+      toast.error(err?.message || t("Không mở được file CSV"));
+    }
+  };
+
+  const handleSelectGioSourceSession = (sessionId: string) => {
+    if (!sessionId) {
+      setGioSourceSessionId("");
+      return;
+    }
+    const session = crawlProjectSessions.find((s) => s.id === sessionId);
+    if (!session) {
+      toast.warn(t("Không tìm thấy Crawl Project đã lưu"));
+      setGioSourceSessionId("");
+      return;
+    }
+    try {
+      loadSessionProducts(session, { scroll: false });
+      setGioCrawlStatus(
+        t("Nguồn: «{{name}}» · {{count}} SP", {
+          name: sessionDisplayName(session),
+          count: session.productCount || 0,
+        })
+      );
     } catch (err: any) {
       toast.error(err?.message || t("Không mở được file CSV"));
     }
   };
 
   const handleDeleteAll = async () => {
-    if (!sessions.length) return;
-    if (!window.confirm(t("Xóa tất cả danh sách CSV trong IndexedDB?"))) return;
+    if (!crawlProjectSessions.length) return;
+    if (!window.confirm(t("Xóa tất cả Crawl Project đã lưu?"))) return;
     try {
-      await removeAllScrapeCsvSessions();
-      setSessions([]);
-      toast.warn(t("Đã xóa tất cả phiên CSV"));
+      for (const s of crawlProjectSessions) {
+        await removeScrapeCsvSession(s.id);
+      }
+      setSessions(await loadScrapeCsvSessions());
+      setGioSourceSessionId("");
+      toast.warn(t("Đã xóa tất cả Crawl Project"));
     } catch (err: any) {
       toast.error(err?.message || t("Xóa thất bại"));
     }
   };
 
   const handleResetFilters = () => {
-    if (keywordsInputRef.current) keywordsInputRef.current.value = "";
     setSortType(1);
     setShopTypes([]);
     setProductLimit(20);
@@ -865,16 +1795,55 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   };
 
   const handleStartCrawl = async () => {
-    if (crawling) {
-      crawlAbortRef.current = true;
-      setCrawlStatus(t("Đang dừng..."));
+    if (crawling || suggestingKeywords) {
+      if (crawling) {
+        crawlAbortRef.current = true;
+        setCrawlStatus(t("Đang dừng..."));
+      }
       return;
     }
 
-    const keywordList = getKeywordsText()
-      .split(/[,;\n]+/)
-      .map((k) => k.trim())
-      .filter(Boolean);
+    let keywordList = [...keywords];
+
+    // Gợi ý AI chỉ khi bật + input đang trống (có value = user/đã lưu → không call lại)
+    if (keywordAiSuggest && keywordList.length === 0) {
+      try {
+        setSuggestingKeywords(true);
+        setCrawlStatus(t("AI đang gợi ý từ khóa Shopee (≥{{n}})…", { n: MIN_AI_KEYWORDS }));
+        const { keywords: suggested, provider } = await suggestShopeeKeywords({
+          openaiKey,
+          geminiKey,
+          gatewayEndpoint,
+          gatewayApiKey,
+          gatewayModel: gatewayModel.trim(),
+          minCount: MIN_AI_KEYWORDS,
+        });
+        keywordList = uniqueKeywords([...keywordList, ...suggested]);
+        persistKeywords(keywordList);
+        toast.success(
+          t("AI ({{provider}}) đã thêm {{count}} từ khóa", {
+            provider: providerLabel(provider),
+            count: suggested.length,
+          })
+        );
+        if (suggested.length < MIN_AI_KEYWORDS) {
+          toast.warn(
+            t("AI chỉ trả {{count}}/{{min}} từ khóa — vẫn tiếp tục cào.", {
+              count: suggested.length,
+              min: MIN_AI_KEYWORDS,
+            })
+          );
+        }
+      } catch (err: any) {
+        setCrawlStatus("");
+        toast.error(err?.message || t("Gợi ý từ khóa AI thất bại"));
+        if (err instanceof AiAuthError) openAiKeysDialog();
+        return;
+      } finally {
+        setSuggestingKeywords(false);
+      }
+    }
+
     // Không có từ khóa → cào list mặc định (không gửi param keyword)
     const crawlKeywords = keywordList.length ? keywordList : [""];
     if (productLimit < 1) {
@@ -897,15 +1866,22 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
     crawlAbortRef.current = false;
     setCrawling(true);
+    crawlingRef.current = true;
     setProducts([]);
     setCrawledCount(0);
+    setDoneKeywords([]);
+    setActiveKeyword("");
+
+    // Crawl Project chỉ cào SP. Check Giỏ Video chỉ khi đã bật từ nút «Crawl Giỏ Video».
 
     const accepted: ScrapeProductRow[] = [];
     const seen = new Set<string>();
     const pageLimit = 20;
     const delayMs = 450;
-    const maxPagesPerSort = 250;
-    const sortQueue = buildSortQueue(sortType);
+    // Shopee cap ~500 SP / keyword+sort → ~25 trang; dư buffer nhẹ
+    const maxPagesPerKeyword = 30;
+    const activeSort = Number(sortType) || 1;
+    const sortLabel = t(SORT_TYPE_LABELS[activeSort] || String(activeSort));
     const shopFilters = orderedShopTypes();
     let scannedRaw = 0;
 
@@ -913,36 +1889,36 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       for (const keyword of crawlKeywords) {
         if (crawlAbortRef.current || accepted.length >= productLimit) break;
         const keywordLabel = keyword || t("(không từ khóa)");
+        if (keyword) setActiveKeyword(keyword);
 
-        // Shopee cap ~500 SP / 1 sort → xoay sort để lấy thêm SP unique đến đủ limit
-        for (const activeSort of sortQueue) {
-          if (crawlAbortRef.current || accepted.length >= productLimit) break;
+        // Giữ đúng sort user chọn; hết ~500 / hết data → sang từ khóa tiếp
+        let pageOffset = 0;
+        let pageNo = 0;
+        let scannedThisKeyword = 0;
 
-          let pageOffset = 0;
-          let pageNo = 0;
-          const sortLabel = t(SORT_TYPE_LABELS[activeSort] || String(activeSort));
+        while (
+          !crawlAbortRef.current &&
+          accepted.length < productLimit &&
+          pageNo < maxPagesPerKeyword
+        ) {
+          pageNo += 1;
+          setCrawlStatus(
+            t(
+              'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+              {
+                keyword: keywordLabel,
+                sort: sortLabel,
+                page: pageNo,
+                scanned: scannedRaw,
+                count: accepted.length,
+                limit: productLimit,
+              }
+            )
+          );
 
-          while (
-            !crawlAbortRef.current &&
-            accepted.length < productLimit &&
-            pageNo < maxPagesPerSort
-          ) {
-            pageNo += 1;
-            setCrawlStatus(
-              t(
-                'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
-                {
-                  keyword: keywordLabel,
-                  sort: sortLabel,
-                  page: pageNo,
-                  scanned: scannedRaw,
-                  count: accepted.length,
-                  limit: productLimit,
-                }
-              )
-            );
-
-            const page = await fetchAffiliateProductPage({
+          let page: Awaited<ReturnType<typeof fetchAffiliateProductPage>>;
+          try {
+            page = await fetchAffiliateProductPage({
               marketHost: openMarketHost,
               keyword,
               sortType: activeSort,
@@ -951,57 +1927,90 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               listType: 0,
               filterShopTypes: shopFilters,
             });
-
-            if (!page.products.length) break;
-
-            scannedRaw += page.products.length;
-            setCrawledCount(scannedRaw);
-
-            let newIdsOnPage = 0;
-            for (const raw of page.products) {
-              if (accepted.length >= productLimit) break;
-              const normalizedRaw = normalizeApiPriceFields(
-                raw as Record<string, unknown>
-              );
-              const mapped = mapRawToScrapeRow(normalizedRaw, accepted.length);
-              if (!mapped.id || seen.has(mapped.id)) continue;
-              seen.add(mapped.id);
-              newIdsOnPage += 1;
-              if (!passesFilters(mapped)) continue;
-              accepted.push({
-                id: mapped.id,
-                productName: mapped.productName,
-                commissionPct: mapped.commissionPct,
-                sales: mapped.sales,
-                price: mapped.price,
-                commissionReceived: mapped.commissionReceived,
-                postedAt: mapped.postedAt,
-                raw: normalizedRaw,
-              });
-              setProducts([...accepted]);
-            }
-
+          } catch (pageErr: any) {
+            const msg = String(pageErr?.message || pageErr || "");
+            // Lỗi tạm → bỏ từ khóa này, sang từ khóa tiếp (không đổi sort)
             setCrawlStatus(
               t(
-                'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+                'Lỗi trang {{page}} ({{sort}}) · bỏ qua từ khóa · {{error}} · khớp {{count}}/{{limit}}',
                 {
-                  keyword: keywordLabel,
-                  sort: sortLabel,
                   page: pageNo,
-                  scanned: scannedRaw,
+                  sort: sortLabel,
+                  error: msg.slice(0, 80),
                   count: accepted.length,
                   limit: productLimit,
                 }
               )
             );
-
-            if (accepted.length >= productLimit) break;
-            // Trang toàn SP đã thấy (API lặp / hết) → sang sort khác
-            if (newIdsOnPage === 0) break;
-            if (!page.hasMore) break;
-            pageOffset += pageLimit;
-            await new Promise((r) => setTimeout(r, delayMs));
+            toast.warn(
+              t("Bỏ qua trang lỗi · sang từ khóa tiếp ({{count}} SP)", {
+                count: accepted.length,
+              })
+            );
+            await new Promise((r) => setTimeout(r, 900));
+            break;
           }
+
+          if (!page.products.length) break;
+
+          scannedRaw += page.products.length;
+          scannedThisKeyword += page.products.length;
+          setCrawledCount(scannedRaw);
+
+          let newIdsOnPage = 0;
+          for (const raw of page.products) {
+            if (accepted.length >= productLimit) break;
+            const normalizedRaw = normalizeApiPriceFields(
+              raw as Record<string, unknown>
+            );
+            const mapped = mapRawToScrapeRow(normalizedRaw, accepted.length);
+            if (!mapped.id || seen.has(mapped.id)) continue;
+            seen.add(mapped.id);
+            newIdsOnPage += 1;
+            if (!passesFilters(mapped)) continue;
+            accepted.push({
+              id: mapped.id,
+              productName: mapped.productName,
+              commissionPct: mapped.commissionPct,
+              sales: mapped.sales,
+              price: mapped.price,
+              commissionReceived: mapped.commissionReceived,
+              postedAt: mapped.postedAt,
+              raw: normalizedRaw,
+            });
+            setProducts([...accepted]);
+            enqueueGioFromCrawlProduct(accepted[accepted.length - 1]);
+          }
+
+          setCrawlStatus(
+            t(
+              'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
+              {
+                keyword: keywordLabel,
+                sort: sortLabel,
+                page: pageNo,
+                scanned: scannedRaw,
+                count: accepted.length,
+                limit: productLimit,
+              }
+            )
+          );
+
+          if (accepted.length >= productLimit) break;
+          // Hết data / API lặp / gần cap ~500 → sang từ khóa mới (giữ sort)
+          if (newIdsOnPage === 0) break;
+          if (!page.hasMore) break;
+          if (scannedThisKeyword >= 500) break;
+          pageOffset += pageLimit;
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+
+        // Từ khóa đã hết lượt request (hết data hoặc đạt limit) → đánh dấu xanh
+        if (keyword) {
+          setDoneKeywords((prev) =>
+            prev.includes(keyword) ? prev : [...prev, keyword]
+          );
+          setActiveKeyword("");
         }
       }
 
@@ -1034,7 +2043,11 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       toast.error(err?.message || t("Cào thất bại"));
     } finally {
       setCrawling(false);
+      crawlingRef.current = false;
+      setActiveKeyword("");
       crawlAbortRef.current = false;
+      gioCombinedCrawlRef.current = false;
+      finishGioLiveIfIdle();
     }
   };
 
@@ -1043,8 +2056,75 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       toast.warn(t("Chưa có sản phẩm để lưu"));
       return;
     }
-    setSaveProjectName(nextCrawlProjectName(sessions));
+    setSaveProjectName(nextCrawlProjectName(crawlProjectSessions));
     setSaveDialogOpen(true);
+  };
+
+  const openSaveGioProjectDialog = () => {
+    if (!gioVideoRows.length) {
+      toast.warn(t("Chưa có kết quả Giỏ Video để lưu"));
+      return;
+    }
+    setGioSaveProjectName(nextGioVideoProjectName(gioVideoSessions));
+    setGioSaveDialogOpen(true);
+  };
+
+  const handleSaveGioProject = async () => {
+    if (!gioVideoRows.length) {
+      toast.warn(t("Chưa có kết quả Giỏ Video để lưu"));
+      return;
+    }
+    const name = gioSaveProjectName.trim() || nextGioVideoProjectName(gioVideoSessions);
+    setGioSaveDialogOpen(false);
+    setSavingGioProject(true);
+    try {
+      const csv = gioVideoRowsToCsv(gioVideoRows);
+      const sourceSession = crawlProjectSessions.find((s) => s.id === gioSourceSessionId);
+      await saveScrapeCsvSession({
+        name,
+        kind: "gio-video",
+        keyword: sourceSession ? sessionDisplayName(sourceSession) : name,
+        marketHost: openMarketHost,
+        marketCode: "",
+        productCount: gioVideoRows.length,
+        csv,
+        durationMs: 0,
+      });
+      setSessions(await loadScrapeCsvSessions());
+      toast.success(t("Đã lưu «{{name}}» · {{count}} SP", { name, count: gioVideoRows.length }));
+    } catch (err: any) {
+      toast.error(err?.message || t("Lưu project Giỏ Video thất bại"));
+    } finally {
+      setSavingGioProject(false);
+    }
+  };
+
+  const handleViewGioSession = (session: ScrapeCsvSession) => {
+    try {
+      const rows = parseGioVideoCsv(session.csv);
+      if (!rows.length) {
+        toast.warn(t("File CSV trống hoặc không đọc được"));
+        return;
+      }
+      setGioVideoRows(rows);
+      setGioVideoPage(1);
+      setGioCrawlStatus(
+        t("Đã mở «{{name}}» · {{count}} SP", {
+          name: sessionDisplayName(session),
+          count: rows.length,
+        })
+      );
+      if (session.marketHost) setOpenMarketHost(session.marketHost);
+      setScrapeSubTab(1);
+      toast.success(
+        t("Đã mở «{{name}}» · {{count}} SP", {
+          name: sessionDisplayName(session),
+          count: rows.length,
+        })
+      );
+    } catch (err: any) {
+      toast.error(err?.message || t("Không mở được file CSV"));
+    }
   };
 
   const formatSaveLogTime = () => {
@@ -1074,7 +2154,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       toast.warn(t("Chưa có sản phẩm để lưu"));
       return;
     }
-    const name = saveProjectName.trim() || nextCrawlProjectName(sessions);
+    const name = saveProjectName.trim() || nextCrawlProjectName(crawlProjectSessions);
 
     setSaveDialogOpen(false);
     setSavingProject(true);
@@ -1216,6 +2296,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
       await saveScrapeCsvSession({
         name,
+        kind: "crawl-project",
         keyword: keywordsText || name,
         marketHost: openMarketHost,
         marketCode: "",
@@ -1268,20 +2349,117 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     <div className="flex h-full min-h-0 flex-col">
       <div className="space-y-3">
         <div>
-          <label className={fieldLabelClass} htmlFor="scrape-keywords">
-            {t("Từ khóa sản phẩm")}
-          </label>
-          <input
-            id="scrape-keywords"
-            ref={keywordsInputRef}
-            type="text"
-            defaultValue=""
-            autoComplete="off"
-            spellCheck={false}
-            lang="vi"
-            placeholder={t("Để trống = cào all · hoặc: túi xách, giày")}
-            className={fieldInputClass}
-          />
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="m-0 text-sm font-semibold text-gray-800" htmlFor="scrape-keyword-draft">
+              {t("Từ khóa sản phẩm")}
+            </label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-600">{t("Gợi ý AI")}</span>
+              <Switch
+                size="sm"
+                dependent
+                value={keywordAiSuggest}
+                onChange={(v) => persistKeywordAiSuggest(Boolean(v))}
+                readOnly={crawling || suggestingKeywords}
+              />
+            </div>
+          </div>
+          <div
+            className={`min-h-10 max-h-64 overflow-y-auto rounded-lg border bg-white px-2 py-1.5 ${
+              crawling || suggestingKeywords
+                ? "border-gray-200 opacity-80"
+                : "border-gray-300 focus-within:border-teal-400"
+            }`}
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              {keywords.map((kw, index) => {
+                const done = doneKeywords.includes(kw);
+                const active = activeKeyword === kw;
+                return (
+                  <span
+                    key={`${kw}-${index}`}
+                    className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${
+                      done
+                        ? "border-teal-300 bg-teal-50 text-teal-800"
+                        : active
+                          ? "border-amber-300 bg-amber-50 text-amber-900"
+                          : "border-gray-200 bg-gray-50 text-gray-700"
+                    }`}
+                  >
+                    <span className="truncate" title={kw}>
+                      {kw}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={crawling || suggestingKeywords}
+                      onClick={() => removeKeywordAt(index)}
+                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-white/80 hover:text-rose-600 disabled:opacity-40"
+                      aria-label={t("Xóa từ khóa") as string}
+                    >
+                      <HiX className="text-xs" />
+                    </button>
+                  </span>
+                );
+              })}
+              <input
+                id="scrape-keyword-draft"
+                type="text"
+                value={keywordDraft}
+                disabled={crawling || suggestingKeywords}
+                autoComplete="off"
+                spellCheck={false}
+                lang="vi"
+                placeholder={
+                  keywords.length
+                    ? t("Thêm từ khóa… (Enter hoặc ,)")
+                    : t("Nhập từ khóa… (Enter hoặc ,)")
+                }
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v.includes(",")) {
+                    const [head, ...rest] = v.split(",");
+                    const toAdd = [head, ...rest.slice(0, -1)];
+                    const tail = rest[rest.length - 1] ?? "";
+                    const parts = toAdd.map((k) => k.trim()).filter(Boolean);
+                    if (parts.length) persistKeywords([...keywords, ...parts]);
+                    setKeywordDraft(tail);
+                    return;
+                  }
+                  setKeywordDraft(v);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    commitKeywordDraft();
+                    return;
+                  }
+                  if (e.key === "Backspace" && !keywordDraft && keywords.length) {
+                    removeKeywordAt(keywords.length - 1);
+                  }
+                }}
+                onBlur={() => {
+                  if (keywordDraft.trim()) commitKeywordDraft();
+                }}
+                className="h-7 min-w-[140px] flex-1 border-0 bg-transparent px-1 text-sm text-gray-800 outline-none disabled:cursor-not-allowed"
+              />
+              {keywords.length > 0 ? (
+                <button
+                  type="button"
+                  disabled={crawling || suggestingKeywords}
+                  onClick={clearKeywords}
+                  className="ml-auto inline-flex h-7 shrink-0 items-center rounded-md px-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 hover:text-rose-600 disabled:opacity-40"
+                >
+                  {t("Clear")}
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
+            {t(
+              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Bật Gợi ý AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm. Có sẵn từ khóa thì không gọi AI. F5 vẫn giữ; Clear mới xóa.",
+              { n: MIN_AI_KEYWORDS }
+            )}
+          </p>
         </div>
 
         <div>
@@ -1437,17 +2615,25 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </button>
           <button
             type="button"
+            disabled={suggestingKeywords}
             onClick={() => void handleStartCrawl()}
-            className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg border px-2 text-xs font-bold text-white transition-colors ${
+            className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg border px-2 text-xs font-bold text-white transition-colors disabled:opacity-70 ${
               crawling
-                ? "border-rose-600 bg-rose-600 hover:bg-rose-700"
-                : "border-blue-600 bg-blue-600 hover:bg-blue-700"
+                ? "border-danger-dark bg-danger hover:bg-danger-dark"
+                : suggestingKeywords
+                  ? "border-teal-600 bg-teal-600"
+                  : "border-blue-600 bg-blue-600 hover:bg-blue-700"
             }`}
           >
             {crawling ? (
               <>
                 <RiLoader4Line className="mr-1 animate-spin" />
                 {t("Dừng")}
+              </>
+            ) : suggestingKeywords ? (
+              <>
+                <RiLoader4Line className="mr-1 animate-spin" />
+                {t("AI gợi ý…")}
               </>
             ) : (
               t("Bắt đầu cào")
@@ -1628,6 +2814,41 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       <div className="space-y-4">
         <div>
           <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
+            {t("Nguồn sản phẩm")}
+          </p>
+          <select
+            value={gioSourceSessionId}
+            disabled={gioCrawling}
+            onChange={(e) => handleSelectGioSourceSession(e.target.value)}
+            className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-800 outline-none focus:border-teal-400 disabled:opacity-50"
+            aria-label={t("Chọn Crawl Project đã lưu")}
+          >
+            <option value="">
+              {t("— Theo Crawl Project (live) —")}
+            </option>
+            {crawlProjectSessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {sessionDisplayName(s)} · {s.productCount || 0} SP · {formatSessionTime(s.createdAt)}
+              </option>
+            ))}
+          </select>
+          <p className="m-0 mt-1.5 text-10 leading-relaxed text-gray-400">
+            {!gioSourceSessionId
+              ? t(
+                  "Để trống: Bắt đầu cào ở đây chạy Crawl Project + check Giỏ Video (tối đa Budget {{b}}). Nút Crawl Project chỉ cào SP, không check Giỏ Video.",
+                  { b: gioBudget }
+                )
+              : products.length
+                ? t("Sẽ cào tối đa {{b}} / {{n}} SP nguồn (Budget).", {
+                    b: Math.min(gioBudget, products.length),
+                    n: products.length,
+                  })
+                : t("Project đã chọn chưa load SP — bấm chọn lại hoặc «Xem» CSV.")}
+          </p>
+        </div>
+
+        <div>
+          <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
             {t("Pool / Budget")}
           </p>
           <div className="space-y-2">
@@ -1661,11 +2882,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </div>
             </div>
           </div>
+          <p className="m-0 mt-1.5 text-10 leading-relaxed text-gray-400">
+            {t(
+              "Song song ≤ số CDP đang mở (hiện 1 session từ «Mở Trình duyệt»). CDP không đủ → không generate AI."
+            )}
+          </p>
         </div>
 
         <div>
           <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
-            {t("Tiêu chí lựa chọn")}
+            {t("Tiêu chí sắp xếp (lọc lần 2 sau AI)")}
           </p>
           <div className="space-y-2">
             {gioSortRows.map((row, idx) => (
@@ -1744,6 +2970,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               t("Bắt đầu cào")
             )}
           </button>
+          <button
+            type="button"
+            disabled={gioCrawling || savingGioProject || !gioVideoRows.length}
+            onClick={openSaveGioProjectDialog}
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-green-600 bg-green-600 px-2 text-xs font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+          >
+            {savingGioProject ? <RiLoader4Line className="mr-1 animate-spin" /> : null}
+            {t("Lưu project")}
+          </button>
         </div>
       </div>
     </div>
@@ -1787,7 +3022,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
       {!gioVideoRows.length ? (
         <div className={`flex-1 ${panelListClasses.empty}`}>
-          {t("Chưa có dữ liệu. Chọn project / cấu hình rồi Bắt đầu cào.")}
+          {t(
+            "Chưa có dữ liệu. Để trống Nguồn → Bắt đầu cào (chạy Project + Giỏ Video), hoặc chọn Crawl Project đã lưu rồi Bắt đầu cào."
+          )}
         </div>
       ) : (
         <>
@@ -1809,7 +3046,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 </tr>
               </thead>
               <tbody className={panelListClasses.tbody}>
-                {pagedGioVideoRows.map((row) => (
+                {pagedGioVideoRows.map((row) => {
+                  const originUrl = productUrlFromKey(row.id, openMarketHost);
+                  return (
                   <tr key={row.id} className={panelListRowClass()}>
                     <td className={`${panelListClasses.td} text-center text-gray-600`}>
                       {row.stt}
@@ -1818,7 +3057,19 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                       className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
                       title={row.name}
                     >
-                      {row.name || "—"}
+                      {originUrl ? (
+                        <a
+                          href={originUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-teal-700 hover:text-teal-800 hover:underline"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {row.name || "—"}
+                        </a>
+                      ) : (
+                        row.name || "—"
+                      )}
                     </td>
                     <td className={`${panelListClasses.td} text-center text-gray-700`}>
                       {row.similar || "—"}
@@ -1831,7 +3082,28 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                         row.cartColor
                       )}`}
                     >
-                      {row.cartText || "—"}
+                      {collectGioCartLinks(row, openMarketHost).length ? (
+                        <button
+                          type="button"
+                          className="cursor-pointer border-0 bg-transparent p-0 text-inherit underline-offset-2 hover:underline"
+                          style={{ font: "inherit" }}
+                          title={t("Mở giỏ video trong tab trình duyệt mới") as string}
+                          onClick={() => {
+                            const ok = openGioVideoCartBrowserTab(row, openMarketHost, t);
+                            if (!ok) {
+                              toast.warn(
+                                t(
+                                  "Không mở được tab (popup bị chặn) hoặc chưa có link SP trong giỏ."
+                                )
+                              );
+                            }
+                          }}
+                        >
+                          {row.cartText || "—"}
+                        </button>
+                      ) : (
+                        row.cartText || "—"
+                      )}
                     </td>
                     <td
                       className={`${
@@ -1841,7 +3113,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                       {row.statusText || "—"}
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -1891,6 +3164,30 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
   const hasOpenaiKey = Boolean(openaiKey.trim());
   const hasGeminiKey = Boolean(geminiKey.trim());
+  /** Gateway sẵn sàng chỉ khi đủ Endpoint + API Key + Model. */
+  const hasGateway =
+    Boolean(gatewayEndpoint.trim()) &&
+    Boolean(gatewayApiKey.trim()) &&
+    Boolean(gatewayModel.trim());
+  const hasAnyAi = hasGateway || hasOpenaiKey || hasGeminiKey;
+
+  const aiReadyIcon = (
+    ok: boolean,
+    Icon: typeof RiCloudLine,
+    label: string
+  ) => (
+    <span
+      className={`inline-flex items-center gap-1 ${
+        ok ? "text-success-dark" : "text-gray-400"
+      }`}
+      title={`${label}: ${ok ? "Sẵn sàng" : "Chưa sẵn sàng"}`}
+    >
+      <Icon className={`text-sm ${ok ? "text-success" : "text-gray-400"}`} />
+      <span className={`font-semibold ${ok ? "text-success-dark" : "text-gray-400"}`}>
+        {label}
+      </span>
+    </span>
+  );
 
   const aiKeyFieldBtnClass =
     "inline-flex h-9 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 disabled:opacity-50";
@@ -1934,50 +3231,30 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <div className="flex shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setAiKeysDialogOpen(true)}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ring-1 ring-inset ${
-                hasOpenaiKey
-                  ? "bg-teal-50/80 ring-teal-200 hover:bg-teal-50"
+              onClick={openAiKeysDialog}
+              className={`inline-flex max-w-full flex-col items-stretch gap-1.5 rounded-xl px-3 py-2 text-left transition-colors ring-1 ring-inset ${
+                hasAnyAi
+                  ? "bg-success-light/80 ring-success hover:bg-success-light"
                   : "bg-gray-50 ring-gray-200 hover:bg-gray-100"
               }`}
-              title={t("Nhập OpenAI Key") as string}
+              title={t("Cấu hình AI Keys") as string}
             >
-              <span className="text-xs font-bold text-gray-800">{t("OpenAI")}</span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-10 font-semibold ${
-                  hasOpenaiKey ? "bg-teal-100 text-teal-800" : "bg-gray-200/80 text-gray-600"
-                }`}
-              >
+              <span className="flex items-center gap-2">
+                <span className="text-xs font-bold text-gray-800">{t("AI Status")}</span>
                 <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    hasOpenaiKey ? "bg-teal-500" : "bg-gray-400"
+                  className={`text-10 font-bold ${
+                    hasAnyAi ? "text-success-dark" : "text-gray-500"
                   }`}
-                />
-                {hasOpenaiKey ? t("Đã có Key") : t("Chưa có Key")}
+                >
+                  {hasAnyAi ? t("Sẵn sàng") : t("Chưa cấu hình")}
+                </span>
               </span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setAiKeysDialogOpen(true)}
-              className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-left transition-colors ring-1 ring-inset ${
-                hasGeminiKey
-                  ? "bg-teal-50/80 ring-teal-200 hover:bg-teal-50"
-                  : "bg-gray-50 ring-gray-200 hover:bg-gray-100"
-              }`}
-              title={t("Nhập Gemini Key") as string}
-            >
-              <span className="text-xs font-bold text-gray-800">{t("Gemini")}</span>
-              <span
-                className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-10 font-semibold ${
-                  hasGeminiKey ? "bg-teal-100 text-teal-800" : "bg-gray-200/80 text-gray-600"
-                }`}
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    hasGeminiKey ? "bg-teal-500" : "bg-gray-400"
-                  }`}
-                />
-                {hasGeminiKey ? t("Đã có Key") : t("Chưa có Key")}
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-10">
+                {aiReadyIcon(hasGateway, RiCloudLine, "Gateway")}
+                <span className="text-gray-300">·</span>
+                {aiReadyIcon(hasOpenaiKey, RiKey2Line, "OpenAI")}
+                <span className="text-gray-300">·</span>
+                {aiReadyIcon(hasGeminiKey, RiMagicLine, "Gemini")}
               </span>
             </button>
           </div>
@@ -2211,7 +3488,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
       </section>
 
-      {/* Một thẻ: tabs + form trái (cố định) + danh sách SP phải (flex) */}
+      {/* Tabs: form + SP list + danh sách project đã lưu theo từng tab */}
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
         <TabGroup
           name="scrape-data-sub"
@@ -2226,303 +3503,436 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           bodyClassName="border-t border-gray-200 bg-white"
         >
           <TabGroup.Tab label={t("Crawl Project")}>
-            <div className="flex min-h-96 overflow-hidden">
-              <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
-                {crawlProjectForm}
+            <div className="flex flex-col">
+              <div className="flex min-h-96 overflow-hidden border-b border-gray-200">
+                <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+                  {crawlProjectForm}
+                </div>
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
               </div>
-              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
+
+              <div className="space-y-3 p-4">
+                <div className="flex flex-wrap gap-2 justify-between items-center">
+                  <div className="flex gap-2 items-center">
+                    <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                      {t("Danh sách Crawl Project")}
+                    </p>
+                    <span className="text-10 text-gray-400">
+                      {filteredSessions.length}/{crawlProjectSessions.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!crawlProjectSessions.length}
+                    onClick={() => void handleDeleteAll()}
+                    className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-40"
+                  >
+                    <HiOutlineTrash />
+                    {t("Xóa tất cả")}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-2 items-end">
+                  <div>
+                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                      {t("Domain")}
+                    </p>
+                    <select
+                      value={filterDomain}
+                      onChange={(e) => setFilterDomain(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">{t("Tất cả")}</option>
+                      {domainOptions.map((host) => (
+                        <option key={host} value={host}>
+                          {domainLabel(host)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                      {t("Năm")}
+                    </p>
+                    <select
+                      value={filterYear}
+                      onChange={(e) => setFilterYear(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">{t("Tất cả")}</option>
+                      {yearOptions.map((y) => (
+                        <option key={y} value={String(y)}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                      {t("Tháng")}
+                    </p>
+                    <select
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">{t("Tất cả")}</option>
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={String(m)}>
+                          {String(m).padStart(2, "0")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                      {t("Ngày")}
+                    </p>
+                    <select
+                      value={filterDay}
+                      onChange={(e) => setFilterDay(e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="">{t("Tất cả")}</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <option key={d} value={String(d)}>
+                          {String(d).padStart(2, "0")}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {(filterDomain || filterYear || filterMonth || filterDay) && (
+                    <button
+                      type="button"
+                      onClick={clearFilters}
+                      className="h-8 px-2.5 text-xs font-semibold text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50"
+                    >
+                      {t("Xóa lọc")}
+                    </button>
+                  )}
+                </div>
+
+                {!crawlProjectSessions.length ? (
+                  <PanelListCard>
+                    <div className={panelListClasses.empty}>
+                      {t("Chưa có Crawl Project. Cào SP → Lưu project.")}
+                    </div>
+                  </PanelListCard>
+                ) : !filteredSessions.length ? (
+                  <PanelListCard>
+                    <div className={panelListClasses.empty}>
+                      {t("Không có phiên khớp bộ lọc.")}
+                    </div>
+                  </PanelListCard>
+                ) : (
+                  <>
+                    <PanelListCard>
+                      <div className="overflow-auto max-h-96">
+                        <table className={panelListClasses.table}>
+                          <thead className="sticky top-0 z-10">
+                            <tr className={panelListClasses.theadTr}>
+                              <th className={`${panelListClasses.th} text-left`}>
+                                {t("Thời gian")}
+                              </th>
+                              <th className={`${panelListClasses.th} text-left`}>{t("Tên")}</th>
+                              <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
+                              <th className={`${panelListClasses.th} text-left`}>
+                                {t("Keyword")}
+                              </th>
+                              <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
+                              <th className={`${panelListClasses.th} text-left`}>
+                                {t("Thực hiện")}
+                              </th>
+                              <th className={`${panelListClasses.th} text-left`}>{t("ID")}</th>
+                              <th className={`${panelListClasses.th} text-left`} />
+                            </tr>
+                          </thead>
+                          <tbody className={panelListClasses.tbody}>
+                            {pagedSessions.map((s) => (
+                              <tr key={s.id} className={panelListRowClass()}>
+                                <td
+                                  className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}
+                                >
+                                  {formatSessionTime(s.createdAt)}
+                                </td>
+                                <td
+                                  className={`${panelListClasses.td} max-w-2xs truncate font-semibold text-gray-800`}
+                                  title={sessionDisplayName(s)}
+                                >
+                                  {sessionDisplayName(s)}
+                                </td>
+                                <td
+                                  className={`${panelListClasses.td} max-w-2xs truncate`}
+                                  title={s.marketHost}
+                                >
+                                  {s.marketHost ? domainLabel(s.marketHost) : "—"}
+                                </td>
+                                <td
+                                  className={`${panelListClasses.td} max-w-2xs truncate`}
+                                  title={s.keyword}
+                                >
+                                  {s.keyword || "—"}
+                                </td>
+                                <td
+                                  className={`${panelListClasses.td} font-semibold text-gray-800`}
+                                >
+                                  {s.productCount}
+                                </td>
+                                <td className={`${panelListClasses.td} text-gray-600`}>
+                                  {formatDuration(s.durationMs)}
+                                </td>
+                                <td
+                                  className={`${panelListClasses.td} font-mono text-10 text-gray-400 max-w-28 truncate`}
+                                  title={s.id}
+                                >
+                                  {s.id}
+                                </td>
+                                <td className={panelListClasses.td}>
+                                  <div className="flex gap-1 justify-end">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleViewSession(s)}
+                                      className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
+                                      title={t("Xem trong Danh sách sản phẩm") as string}
+                                    >
+                                      <HiEye />
+                                      {t("Xem")}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        downloadCsvText(
+                                          s.csv,
+                                          `scrape-${s.keyword || "export"}-${s.id}.csv`
+                                        )
+                                      }
+                                      className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
+                                    >
+                                      <HiDownload />
+                                      CSV
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => void handleDeleteOne(s.id)}
+                                      className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
+                                    >
+                                      <HiOutlineTrash />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </PanelListCard>
+
+                    <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
+                      <div className="flex gap-2 items-center text-xs text-gray-500">
+                        <span>
+                          {t("Trang")} {safePage}/{totalPages}
+                          <span className="mx-1 text-gray-300">·</span>
+                          {(safePage - 1) * pageSize + 1}–
+                          {Math.min(safePage * pageSize, filteredSessions.length)} /{" "}
+                          {filteredSessions.length}
+                        </span>
+                        <select
+                          value={pageSize}
+                          onChange={(e) => setPageSize(Number(e.target.value) || 10)}
+                          className="h-7 text-xs rounded-md border border-gray-200 bg-white px-1.5"
+                          aria-label={t("Số dòng mỗi trang")}
+                        >
+                          {[10, 20, 50, 100].map((n) => (
+                            <option key={n} value={n}>
+                              {n}/{t("trang")}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex gap-1 items-center">
+                        <button
+                          type="button"
+                          disabled={safePage <= 1}
+                          onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          aria-label={t("Trang trước")}
+                        >
+                          <HiChevronLeft />
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1)
+                          .filter((p) => {
+                            if (totalPages <= 7) return true;
+                            if (p === 1 || p === totalPages) return true;
+                            return Math.abs(p - safePage) <= 1;
+                          })
+                          .reduce<number[]>((acc, p, idx, arr) => {
+                            if (idx > 0 && p - arr[idx - 1] > 1) acc.push(-p);
+                            acc.push(p);
+                            return acc;
+                          }, [])
+                          .map((p) =>
+                            p < 0 ? (
+                              <span key={`e${p}`} className="px-1 text-xs text-gray-400">
+                                …
+                              </span>
+                            ) : (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => setPage(p)}
+                                className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
+                                  p === safePage
+                                    ? "border-teal-300 bg-teal-50 text-teal-800"
+                                    : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                }`}
+                              >
+                                {p}
+                              </button>
+                            )
+                          )}
+                        <button
+                          type="button"
+                          disabled={safePage >= totalPages}
+                          onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          aria-label={t("Trang sau")}
+                        >
+                          <HiChevronRight />
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Crawl Giỏ Video")}>
-            <div className="flex min-h-96 overflow-hidden">
-              <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
-                {crawlGioVideoForm}
+            <div className="flex flex-col">
+              <div className="flex min-h-96 overflow-hidden border-b border-gray-200">
+                <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+                  {crawlGioVideoForm}
+                </div>
+                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{gioVideoListPanel}</div>
               </div>
-              <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{gioVideoListPanel}</div>
+
+              <div className="space-y-3 p-4">
+                <div className="flex flex-wrap gap-2 justify-between items-center">
+                  <div className="flex gap-2 items-center">
+                    <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+                      {t("Danh sách Crawl Giỏ Video")}
+                    </p>
+                    <span className="text-10 text-gray-400">{gioVideoSessions.length}</span>
+                  </div>
+                </div>
+
+                {!gioVideoSessions.length ? (
+                  <PanelListCard>
+                    <div className={panelListClasses.empty}>
+                      {t(
+                        "Chưa có project Giỏ Video. Cào xong → Lưu project trên tab Crawl Giỏ Video."
+                      )}
+                    </div>
+                  </PanelListCard>
+                ) : (
+                  <PanelListCard>
+                    <div className="overflow-auto max-h-96">
+                      <table className={panelListClasses.table}>
+                        <thead className="sticky top-0 z-10">
+                          <tr className={panelListClasses.theadTr}>
+                            <th className={`${panelListClasses.th} text-left`}>
+                              {t("Thời gian")}
+                            </th>
+                            <th className={`${panelListClasses.th} text-left`}>{t("Tên")}</th>
+                            <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
+                            <th className={`${panelListClasses.th} text-left`}>{t("Nguồn")}</th>
+                            <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
+                            <th className={`${panelListClasses.th} text-left`} />
+                          </tr>
+                        </thead>
+                        <tbody className={panelListClasses.tbody}>
+                          {gioVideoSessions.map((s) => (
+                            <tr key={s.id} className={panelListRowClass()}>
+                              <td
+                                className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}
+                              >
+                                {formatSessionTime(s.createdAt)}
+                              </td>
+                              <td
+                                className={`${panelListClasses.td} max-w-2xs truncate font-semibold text-gray-800`}
+                                title={sessionDisplayName(s)}
+                              >
+                                {sessionDisplayName(s)}
+                              </td>
+                              <td
+                                className={`${panelListClasses.td} max-w-2xs truncate`}
+                                title={s.marketHost}
+                              >
+                                {s.marketHost ? domainLabel(s.marketHost) : "—"}
+                              </td>
+                              <td
+                                className={`${panelListClasses.td} max-w-2xs truncate`}
+                                title={s.keyword}
+                              >
+                                {s.keyword || "—"}
+                              </td>
+                              <td
+                                className={`${panelListClasses.td} font-semibold text-gray-800`}
+                              >
+                                {s.productCount}
+                              </td>
+                              <td className={panelListClasses.td}>
+                                <div className="flex gap-1 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleViewGioSession(s)}
+                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
+                                    title={t("Mở lại bảng Giỏ Video") as string}
+                                  >
+                                    <HiEye />
+                                    {t("Xem")}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      downloadCsvText(
+                                        s.csv,
+                                        `gio-video-${s.name || "export"}-${s.id}.csv`
+                                      )
+                                    }
+                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
+                                  >
+                                    <HiDownload />
+                                    CSV
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeleteOne(s.id)}
+                                    className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
+                                  >
+                                    <HiOutlineTrash />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </PanelListCard>
+                )}
+              </div>
             </div>
           </TabGroup.Tab>
         </TabGroup>
       </div>
 
-      {/* Danh sách cào CSV — giữ như cũ */}
-      <div className="p-4 space-y-3 bg-white rounded-xl border border-gray-200 shadow-sm">
-        <div className="flex flex-wrap gap-2 justify-between items-center">
-          <div className="flex gap-2 items-center">
-            <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
-              {t("Danh sách cào (CSV)")}
-            </p>
-            <span className="text-10 text-gray-400">
-              {filteredSessions.length}/{sessions.length}
-            </span>
-          </div>
-          <button
-            type="button"
-            disabled={!sessions.length}
-            onClick={() => void handleDeleteAll()}
-            className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-300 bg-rose-50 px-2.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-40"
-          >
-            <HiOutlineTrash />
-            {t("Xóa tất cả")}
-          </button>
-        </div>
-
-        <div className="flex flex-wrap gap-2 items-end">
-          <div>
-            <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">{t("Domain")}</p>
-            <select
-              value={filterDomain}
-              onChange={(e) => setFilterDomain(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">{t("Tất cả")}</option>
-              {domainOptions.map((host) => (
-                <option key={host} value={host}>
-                  {domainLabel(host)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">{t("Năm")}</p>
-            <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">{t("Tất cả")}</option>
-              {yearOptions.map((y) => (
-                <option key={y} value={String(y)}>
-                  {y}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">{t("Tháng")}</p>
-            <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">{t("Tất cả")}</option>
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={String(m)}>
-                  {String(m).padStart(2, "0")}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">{t("Ngày")}</p>
-            <select
-              value={filterDay}
-              onChange={(e) => setFilterDay(e.target.value)}
-              className={selectClass}
-            >
-              <option value="">{t("Tất cả")}</option>
-              {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-                <option key={d} value={String(d)}>
-                  {String(d).padStart(2, "0")}
-                </option>
-              ))}
-            </select>
-          </div>
-          {(filterDomain || filterYear || filterMonth || filterDay) && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="h-8 px-2.5 text-xs font-semibold text-gray-600 rounded-lg border border-gray-200 hover:bg-gray-50"
-            >
-              {t("Xóa lọc")}
-            </button>
-          )}
-        </div>
-
-        {!sessions.length ? (
-          <PanelListCard>
-            <div className={panelListClasses.empty}>
-              {t("Chưa có CSV. Mở GPM Login → Xuất CSV hoặc Lưu Project.")}
-            </div>
-          </PanelListCard>
-        ) : !filteredSessions.length ? (
-          <PanelListCard>
-            <div className={panelListClasses.empty}>{t("Không có phiên khớp bộ lọc.")}</div>
-          </PanelListCard>
-        ) : (
-          <>
-            <PanelListCard>
-              <div className="overflow-auto max-h-96">
-                <table className={panelListClasses.table}>
-                  <thead className="sticky top-0 z-10">
-                    <tr className={panelListClasses.theadTr}>
-                      <th className={`${panelListClasses.th} text-left`}>{t("Thời gian")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("Tên")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("Domain")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("Keyword")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("SP")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("Thực hiện")}</th>
-                      <th className={`${panelListClasses.th} text-left`}>{t("ID")}</th>
-                      <th className={`${panelListClasses.th} text-left`} />
-                    </tr>
-                  </thead>
-                  <tbody className={panelListClasses.tbody}>
-                    {pagedSessions.map((s) => (
-                      <tr key={s.id} className={panelListRowClass()}>
-                        <td className={`${panelListClasses.td} whitespace-nowrap text-gray-700`}>
-                          {formatSessionTime(s.createdAt)}
-                        </td>
-                        <td
-                          className={`${panelListClasses.td} max-w-2xs truncate font-semibold text-gray-800`}
-                          title={sessionDisplayName(s)}
-                        >
-                          {sessionDisplayName(s)}
-                        </td>
-                        <td
-                          className={`${panelListClasses.td} max-w-2xs truncate`}
-                          title={s.marketHost}
-                        >
-                          {s.marketHost ? domainLabel(s.marketHost) : "—"}
-                        </td>
-                        <td
-                          className={`${panelListClasses.td} max-w-2xs truncate`}
-                          title={s.keyword}
-                        >
-                          {s.keyword || "—"}
-                        </td>
-                        <td className={`${panelListClasses.td} font-semibold text-gray-800`}>
-                          {s.productCount}
-                        </td>
-                        <td className={`${panelListClasses.td} text-gray-600`}>
-                          {formatDuration(s.durationMs)}
-                        </td>
-                        <td
-                          className={`${panelListClasses.td} font-mono text-10 text-gray-400 max-w-28 truncate`}
-                          title={s.id}
-                        >
-                          {s.id}
-                        </td>
-                        <td className={panelListClasses.td}>
-                          <div className="flex gap-1 justify-end">
-                            <button
-                              type="button"
-                              onClick={() => handleViewSession(s)}
-                              className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
-                              title={t("Xem trong Danh sách sản phẩm") as string}
-                            >
-                              <HiEye />
-                              {t("Xem")}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                downloadCsvText(
-                                  s.csv,
-                                  `scrape-${s.keyword || "export"}-${s.id}.csv`
-                                )
-                              }
-                              className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
-                            >
-                              <HiDownload />
-                              CSV
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDeleteOne(s.id)}
-                              className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
-                            >
-                              <HiOutlineTrash />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </PanelListCard>
-
-            <div className="flex flex-wrap gap-2 justify-between items-center pt-1">
-              <div className="flex gap-2 items-center text-xs text-gray-500">
-                <span>
-                  {t("Trang")} {safePage}/{totalPages}
-                  <span className="mx-1 text-gray-300">·</span>
-                  {(safePage - 1) * pageSize + 1}–
-                  {Math.min(safePage * pageSize, filteredSessions.length)} /{" "}
-                  {filteredSessions.length}
-                </span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value) || 10)}
-                  className="h-7 text-xs rounded-md border border-gray-200 bg-white px-1.5"
-                  aria-label={t("Số dòng mỗi trang")}
-                >
-                  {[10, 20, 50, 100].map((n) => (
-                    <option key={n} value={n}>
-                      {n}/{t("trang")}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-1 items-center">
-                <button
-                  type="button"
-                  disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                  aria-label={t("Trang trước")}
-                >
-                  <HiChevronLeft />
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter((p) => {
-                    if (totalPages <= 7) return true;
-                    if (p === 1 || p === totalPages) return true;
-                    return Math.abs(p - safePage) <= 1;
-                  })
-                  .reduce<number[]>((acc, p, idx, arr) => {
-                    if (idx > 0 && p - arr[idx - 1] > 1) acc.push(-p);
-                    acc.push(p);
-                    return acc;
-                  }, [])
-                  .map((p) =>
-                    p < 0 ? (
-                      <span key={`e${p}`} className="px-1 text-xs text-gray-400">
-                        …
-                      </span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPage(p)}
-                        className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border px-1.5 text-xs font-semibold transition-colors ${
-                          p === safePage
-                            ? "border-teal-300 bg-teal-50 text-teal-800"
-                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    )
-                  )}
-                <button
-                  type="button"
-                  disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
-                  aria-label={t("Trang sau")}
-                >
-                  <HiChevronRight />
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-
       <Dialog
         isOpen={aiKeysDialogOpen}
-        onClose={() => setAiKeysDialogOpen(false)}
+        onClose={() => {
+          loadAiKeysFromStorage();
+          setAiKeysDialogOpen(false);
+        }}
         title={t("API Keys")}
         width="480px"
         maxWidth="95vw"
@@ -2530,8 +3940,90 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         <Dialog.Body>
           <div className="space-y-4 pt-1">
             <p className="m-0 text-xs text-gray-500">
-              {t("Dùng cho Crawl Giỏ Video (lọc SP tương tự). Key lưu trên trình duyệt.")}
+              {t(
+                "Lọc Giỏ Video bằng AI. Ưu tiên Gateway (endpoint + API key, cùng cách call Flow2 như ai-scene-more), không thì OpenAI/Gemini Key. Chỉ lưu trên trình duyệt."
+              )}
             </p>
+            <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 px-3 py-3">
+              <div>
+                <span className="block text-sm font-semibold text-gray-800">
+                  {t("Gateway (Endpoint + API Key)")}
+                </span>
+                <span className="mt-0.5 block text-xs text-gray-500">
+                  {t(
+                    "VD endpoint: https://flow2.viettheo.site/v1 — API key dạng f2api_… Gọi /api/v1/chatgpt/chat."
+                  )}
+                </span>
+              </div>
+              <div>
+                <label
+                  className="m-0 mb-1.5 block text-xs font-semibold text-gray-700"
+                  htmlFor="scrape-gateway-endpoint"
+                >
+                  {t("Endpoint")}
+                </label>
+                <input
+                  id="scrape-gateway-endpoint"
+                  type="url"
+                  value={gatewayEndpoint}
+                  onChange={(e) => setGatewayEndpoint(e.target.value)}
+                  placeholder="https://flow2.viettheo.site"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                />
+              </div>
+              <div>
+                <label
+                  className="m-0 mb-1.5 block text-xs font-semibold text-gray-700"
+                  htmlFor="scrape-gateway-api-key"
+                >
+                  {t("API Key")}
+                </label>
+                <div className="flex gap-1.5 items-center">
+                  <input
+                    id="scrape-gateway-api-key"
+                    type={gatewayKeyVisible ? "text" : "password"}
+                    value={gatewayApiKey}
+                    onChange={(e) => setGatewayApiKey(e.target.value)}
+                    placeholder="f2api_..."
+                    autoComplete="off"
+                    spellCheck={false}
+                    className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setGatewayKeyVisible((v) => !v)}
+                    className={aiKeyFieldBtnClass}
+                  >
+                    {gatewayKeyVisible ? t("Ẩn") : t("Hiện")}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label
+                  className="m-0 mb-1.5 block text-xs font-semibold text-gray-700"
+                  htmlFor="scrape-gateway-model"
+                >
+                  {t("Model")}
+                </label>
+                <input
+                  id="scrape-gateway-model"
+                  type="text"
+                  value={gatewayModel}
+                  onChange={(e) => setGatewayModel(e.target.value)}
+                  placeholder={DEFAULT_GATEWAY_MODEL}
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                />
+                <span className="mt-1 block text-10 text-gray-500">
+                  {t("Bắt buộc để Gateway sẵn sàng. VD: {{model}}", {
+                    model: DEFAULT_GATEWAY_MODEL,
+                  })}
+                </span>
+              </div>
+            </div>
             <div>
               <label
                 className="m-0 mb-1.5 block text-sm font-semibold text-gray-800"
@@ -2544,7 +4036,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   id="scrape-openai-key"
                   type={openaiKeyVisible ? "text" : "password"}
                   value={openaiKey}
-                  onChange={(e) => persistOpenaiKey(e.target.value)}
+                  onChange={(e) => setOpenaiKey(e.target.value)}
                   placeholder="sk-..."
                   autoComplete="off"
                   spellCheck={false}
@@ -2579,7 +4071,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   id="scrape-gemini-key"
                   type={geminiKeyVisible ? "text" : "password"}
                   value={geminiKey}
-                  onChange={(e) => persistGeminiKey(e.target.value)}
+                  onChange={(e) => setGeminiKey(e.target.value)}
                   placeholder="AIza… / AQ…"
                   autoComplete="off"
                   spellCheck={false}
@@ -2602,13 +4094,23 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 </button>
               </div>
             </div>
-            <div className="flex justify-end pt-1">
+            <div className="flex justify-end gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => setAiKeysDialogOpen(false)}
-                className="inline-flex h-9 items-center justify-center rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700"
+                onClick={() => {
+                  loadAiKeysFromStorage();
+                  setAiKeysDialogOpen(false);
+                }}
+                className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
               >
-                {t("Xong")}
+                {t("Hủy")}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAiKeys}
+                className="inline-flex h-9 items-center justify-center rounded-lg bg-success px-4 text-sm font-semibold text-white hover:bg-success-dark"
+              >
+                {t("Lưu")}
               </button>
             </div>
           </div>
@@ -2682,6 +4184,61 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               >
                 {savingProject ? <RiLoader4Line className="animate-spin" /> : null}
                 {savingProject ? t("Đang lưu…") : t("Lưu")}
+              </button>
+            </div>
+          </div>
+        </Dialog.Body>
+      </Dialog>
+
+      <Dialog
+        isOpen={gioSaveDialogOpen}
+        onClose={() => {
+          if (!savingGioProject) setGioSaveDialogOpen(false);
+        }}
+        title={t("Lưu Project Giỏ Video")}
+        width="420px"
+        maxWidth="95vw"
+      >
+        <Dialog.Body>
+          <div className="space-y-4 pt-1">
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-gray-700">
+                {t("Tên project")}
+              </span>
+              <input
+                autoFocus
+                value={gioSaveProjectName}
+                onChange={(e) => setGioSaveProjectName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !savingGioProject) {
+                    e.preventDefault();
+                    void handleSaveGioProject();
+                  }
+                }}
+                placeholder="Crawl Giỏ Video 1"
+                className="h-10 w-full rounded border border-gray-300 px-3 text-sm outline-none focus:border-blue-400"
+              />
+              <span className="mt-1 block text-xs text-gray-500">
+                {t("Lưu riêng danh sách kết quả Giỏ Video (không lẫn Crawl Project).")}
+              </span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={savingGioProject}
+                onClick={() => setGioSaveDialogOpen(false)}
+                className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50"
+              >
+                {t("Hủy")}
+              </button>
+              <button
+                type="button"
+                disabled={savingGioProject || !gioSaveProjectName.trim()}
+                onClick={() => void handleSaveGioProject()}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-green-600 px-4 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingGioProject ? <RiLoader4Line className="animate-spin" /> : null}
+                {t("Lưu")}
               </button>
             </div>
           </div>

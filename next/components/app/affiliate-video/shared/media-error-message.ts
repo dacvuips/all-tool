@@ -6,13 +6,14 @@
 export const MEDIA_SYSTEM_BUSY_MESSAGE =
   "Hệ thống đang bận, vui lòng nhấp nút tạo lại";
 
-/** Giữ nguyên thông báo UX có chủ đích (dừng, giới hạn concurrency, lưu local…). */
+/** Giữ nguyên thông báo UX có chủ đích (dừng, giới hạn concurrency, lưu local, content policy…). */
 const KEEP_ORIGINAL_PATTERNS = [
   /^đã dừng/i,
   /^đã huỷ/i,
   /^đã hủy/i,
   /cùng lúc/i,
   /không thể lưu/i,
+  /content policy/i,
 ];
 
 export function toUserFriendlyMediaErrorMessage(

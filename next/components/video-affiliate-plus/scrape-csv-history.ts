@@ -24,6 +24,7 @@ export async function saveScrapeCsvSession(
     id: input.id || `scrape-csv-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
     createdAt: input.createdAt || Date.now(),
     name: String(input.name || "").trim() || undefined,
+    kind: input.kind === "gio-video" ? "gio-video" : "crawl-project",
     keyword: input.keyword || "",
     marketHost: input.marketHost || "",
     marketCode: input.marketCode || "",
@@ -70,13 +71,37 @@ export function sessionDisplayName(session: Pick<ScrapeCsvSession, "name" | "key
 }
 
 /** Tên mặc định tiếp theo: Crawl Project 1, 2, … */
-export function nextCrawlProjectName(sessions: Pick<ScrapeCsvSession, "name">[]): string {
+export function nextCrawlProjectName(sessions: Pick<ScrapeCsvSession, "name" | "kind">[]): string {
   let max = 0;
   for (const s of sessions) {
+    if (s.kind === "gio-video") continue;
     const m = String(s.name || "")
       .trim()
       .match(/^Crawl Project\s+(\d+)$/i);
     if (m) max = Math.max(max, Number(m[1]) || 0);
   }
   return `Crawl Project ${max + 1}`;
+}
+
+/** Tên mặc định: Crawl Giỏ Video 1, 2, … */
+export function nextGioVideoProjectName(sessions: Pick<ScrapeCsvSession, "name" | "kind">[]): string {
+  let max = 0;
+  for (const s of sessions) {
+    if (s.kind && s.kind !== "gio-video") continue;
+    const m = String(s.name || "")
+      .trim()
+      .match(/^Crawl Giỏ Video\s+(\d+)$/i);
+    if (m) max = Math.max(max, Number(m[1]) || 0);
+  }
+  return `Crawl Giỏ Video ${max + 1}`;
+}
+
+export function isGioVideoSession(session: Pick<ScrapeCsvSession, "kind" | "name">): boolean {
+  if (session.kind === "gio-video") return true;
+  if (session.kind === "crawl-project") return false;
+  return /^Crawl Giỏ Video\s+/i.test(String(session.name || "").trim());
+}
+
+export function isCrawlProjectSession(session: Pick<ScrapeCsvSession, "kind" | "name">): boolean {
+  return !isGioVideoSession(session);
 }

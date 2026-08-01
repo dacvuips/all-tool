@@ -424,6 +424,9 @@ export class RawCdpClient {
    * Đảm bảo đang ở đúng host Affiliate và đã login.
    * Nếu gặp trang login: chờ user đăng nhập trên cửa sổ GPM (mặc định vài phút), không throw ngay.
    * Sau login: đợi cookie auth CDP rồi navigate 1 lần về product_offer trước khi return (để capture đủ cookie).
+   *
+   * Quan trọng: nếu đã sẵn sàng (đúng host + cookie auth) → return ngay, **không** Page.navigate.
+   * Tránh reload mỗi lần /product-page (gây "Inspected target navigated or closed").
    */
   async ensureAffiliateReady(offerUrl: string, waitMs = 8000): Promise<void> {
     let expectedHost = "affiliate.shopee.vn";
@@ -434,6 +437,19 @@ export class RawCdpClient {
     }
 
     const state0 = await this.getPageAuthState(expectedHost).catch((): null => null);
+    const hasAuth0 = await this.hasCdpAuthCookies().catch(() => false);
+
+    // Đã sẵn sàng → không reload (mọi lần scrape đều đi qua đây)
+    if (
+      state0 &&
+      hasAuth0 &&
+      state0.onExpectedHost &&
+      state0.readyState !== "loading" &&
+      !/login|signin|buyer\/login|seller\/login/i.test(state0.href)
+    ) {
+      return;
+    }
+
     // Chỉ navigate lần đầu nếu sai host và user không đang tương tác login
     if (!state0?.onExpectedHost && !(state0?.looksLikeLogin && state0?.userInteracting)) {
       await this.navigate(offerUrl, 4000);
@@ -453,6 +469,13 @@ export class RawCdpClient {
       if (hasAuth) {
         if (!settledAfterAuth) {
           settledAfterAuth = true;
+          const alreadyOnOffer =
+            last.onExpectedHost &&
+            last.readyState !== "loading" &&
+            !/login|signin|buyer\/login|seller\/login/i.test(last.href);
+          if (alreadyOnOffer) {
+            return;
+          }
           // eslint-disable-next-line no-console
           console.log(
             `[scrape-cdp] Phát hiện cookie auth CDP → settle về product_offer rồi capture. url=${last.href}`

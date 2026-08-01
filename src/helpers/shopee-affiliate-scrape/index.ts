@@ -90,13 +90,20 @@ export type { AffiliateHttpSession } from "./session-store";
 
 export {
   exportCsvViaCdp,
+  extractSimilarFromDetailPayload,
   fetchAffiliateShortLinks,
+  fetchProductDetailViaCdp,
   fetchProductPageViaCdp,
   getCdpStatus,
   openAffiliateBrowserCdp,
+  searchSimilarByImageViaCdp,
 } from "./cdp-browser";
 export type {
   CdpExportInput,
+  CdpImageSearchInput,
+  CdpImageSearchResult,
+  CdpProductDetailInput,
+  CdpProductDetailResult,
   CdpProductPageInput,
   CdpProductPageResult,
 } from "./cdp-browser";

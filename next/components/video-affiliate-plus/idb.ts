@@ -76,8 +76,14 @@ export type MergedVideoRecord = {
 export type ScrapeCsvSessionRecord = {
   id: string;
   createdAt: number;
-  /** Tên project hiển thị (vd. Crawl Project 1) */
+  /** Tên project hiển thị (vd. Crawl Project 1 / Crawl Giỏ Video 1) */
   name?: string;
+  /**
+   * Phân loại project:
+   * - crawl-project: danh sách SP từ Crawl Project (mặc định / session cũ)
+   * - gio-video: kết quả Crawl Giỏ Video
+   */
+  kind?: "crawl-project" | "gio-video";
   keyword: string;
   marketHost: string;
   marketCode?: string;
