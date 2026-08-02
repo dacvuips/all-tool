@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiChevronDown,
@@ -14,6 +14,7 @@ import {
   HiX,
 } from "react-icons/hi";
 import { RiChromeLine, RiCloudLine, RiDatabase2Line, RiKey2Line, RiLoader4Line, RiMagicLine, RiRefreshLine } from "react-icons/ri";
+import { useAlert } from "../../../lib/providers/alert-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
@@ -57,10 +58,10 @@ import {
   type SimilarOfferItem,
 } from "../scrape/gio-video-fetch";
 import {
+  ensureCrawlProductRaw,
   fetchAffiliateProductPage,
   getCdpBridgeStatus,
   mapRawToScrapeRow,
-  normalizeApiPriceFields,
   probeCdpBridge,
 } from "../scrape/product-page-fetch";
 import { buildProductSeoWorkItems, generateProductSeoBatch } from "../scrape/product-seo";
@@ -72,6 +73,7 @@ import {
   panelListRowClass,
 } from "../shared/panel-list-ui";
 import { AffiliatePlusItem } from "../types";
+import { MappingAccountPanel } from "./mapping-account-panel";
 
 type SaveProgressLog = {
   id: string;
@@ -531,7 +533,10 @@ function parseScrapedCsvToRaws(csv: string): Record<string, unknown>[] {
 /** CSV đầy đủ mọi field cào được — UI chỉ hiện cột gọn. */
 function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   const raws = rows.map((r, idx) => {
-    const base = normalizeApiPriceFields({ ...(r.raw || {}) } as Record<string, unknown>);
+    const base = ensureCrawlProductRaw(
+      { ...(r.raw || {}), __priceVndNormalized: true } as Record<string, unknown>,
+      {}
+    );
     if (base.stt == null) base.stt = idx + 1;
     if (!base.id && r.id) base.id = r.id;
     if (base.affiliate_link_short == null) base.affiliate_link_short = "";
@@ -544,25 +549,25 @@ function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   const preferred = [
     "stt",
     "item_id",
-    "itemid",
     "shopid",
     "name",
     "shop_name",
-    "description",
     "hashtags",
     "seller_commission_rate",
     "default_commission_rate",
-    "max_commission_rate",
     "long_link",
     "affiliate_link_short",
     "product_link",
-    "image",
     "image_url",
     "price",
     "price_min",
     "price_max",
-    "historical_sold",
     "sold",
+    "itemid",
+    "description",
+    "max_commission_rate",
+    "image",
+    "historical_sold",
     "ctime",
     "is_official_shop",
     "id",
@@ -672,6 +677,7 @@ function parseGioVideoCsv(csv: string): GioVideoRow[] {
 export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const { t } = useTranslation();
   const toast = useToast();
+  const alert = useAlert();
 
   const [sessions, setSessions] = useState<ScrapeCsvSession[]>([]);
   const [opening, setOpening] = useState(false);
@@ -693,7 +699,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   /** Danh sách từ khóa (chip) — persist localStorage, chỉ mất khi Clear. */
   const [keywords, setKeywords] = useState<string[]>([]);
   const [keywordDraft, setKeywordDraft] = useState("");
-  /** Gợi ý AI khi bắt đầu cào (chỉ khi keywords đang trống). */
+  /** Sử dụng AI khi bắt đầu cào (chỉ khi keywords đang trống + AI Status sẵn sàng). */
   const [keywordAiSuggest, setKeywordAiSuggest] = useState(false);
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
   /** Từ khóa đã cào xong trong phiên hiện tại → chip xanh. */
@@ -707,8 +713,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   };
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
   const [saveProjectName, setSaveProjectName] = useState("Crawl Project 1");
-  /** Bật: ChatGPT tạo mô tả + hashtag khi Lưu Project. */
-  const [saveUseAiSeo, setSaveUseAiSeo] = useState(true);
+  /** Bật: long_link → affiliate_link_short khi Lưu Project. Tắt: không gọi rút gọn. */
+  const [saveUseAffiliateShortLink, setSaveUseAffiliateShortLink] = useState(false);
+  /** Bật: AI tạo mô tả khi Lưu Project. Tắt: giữ nguyên description. */
+  const [saveUseAiDescription, setSaveUseAiDescription] = useState(false);
+  /** Bật: AI tạo hashtag khi Lưu Project. Tắt: giữ nguyên hashtags. */
+  const [saveUseAiHashtag, setSaveUseAiHashtag] = useState(false);
   const [savingProject, setSavingProject] = useState(false);
   /** Dialog Lưu project riêng cho Crawl Giỏ Video */
   const [gioSaveDialogOpen, setGioSaveDialogOpen] = useState(false);
@@ -731,7 +741,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [minSales, setMinSales] = useState(10);
   /** Đơn vị: nghìn đồng (k). Mặc định 0 = không lọc HH nhận về. */
   const [commissionReceivedK, setCommissionReceivedK] = useState(0);
-  const [products, setProducts] = useState<ScrapeProductRow[]>([]);
+  /**
+   * Kho SP đã cào (unique) — giữ nguyên để đổi HH/lượt bán/HH nhận về
+   * sẽ tự filter lại danh sách hiển thị mà không cần cào lại.
+   */
+  const [crawledProducts, setCrawledProducts] = useState<ScrapeProductRow[]>([]);
+  /** matched = khớp lọc 3 input; all = toàn bộ kho đã cào */
+  const [productListScope, setProductListScope] = useState<"matched" | "all">("matched");
   const [productPage, setProductPage] = useState(1);
   const [productPageSize, setProductPageSize] = useState(200);
   const [crawling, setCrawling] = useState(false);
@@ -854,11 +870,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   useEffect(() => {
     void refreshLocal();
     void refreshAgentAndGpm();
-    setOpenaiKey(readScrapeAiKey(SCRAPE_OPENAI_KEY_LS));
-    setGeminiKey(readScrapeAiKey(SCRAPE_GEMINI_KEY_LS));
-    setGatewayEndpoint(readScrapeAiKey(SCRAPE_GATEWAY_ENDPOINT_LS));
-    setGatewayApiKey(readScrapeAiKey(SCRAPE_GATEWAY_API_KEY_LS));
-    setGatewayModel(readScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS));
+    const oai = readScrapeAiKey(SCRAPE_OPENAI_KEY_LS);
+    const gem = readScrapeAiKey(SCRAPE_GEMINI_KEY_LS);
+    const ep = readScrapeAiKey(SCRAPE_GATEWAY_ENDPOINT_LS);
+    const gwKey = readScrapeAiKey(SCRAPE_GATEWAY_API_KEY_LS);
+    const gwModel = readScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS);
+    setOpenaiKey(oai);
+    setGeminiKey(gem);
+    setGatewayEndpoint(ep);
+    setGatewayApiKey(gwKey);
+    setGatewayModel(gwModel);
     setKeywords(
       uniqueKeywords(
         readScrapeAiKey(SCRAPE_KEYWORDS_LS)
@@ -867,11 +888,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           .filter(Boolean)
       )
     );
+    const aiReady =
+      Boolean(oai.trim()) ||
+      Boolean(gem.trim()) ||
+      (Boolean(ep.trim()) && Boolean(gwKey.trim()) && Boolean(gwModel.trim()));
     try {
       const aiFlag = localStorage.getItem(SCRAPE_KEYWORD_AI_LS);
-      setKeywordAiSuggest(aiFlag == null ? true : aiFlag === "1");
+      // Chỉ khôi phục bật khi AI Status sẵn sàng
+      setKeywordAiSuggest(aiReady && aiFlag === "1");
     } catch {
-      setKeywordAiSuggest(true);
+      setKeywordAiSuggest(false);
     }
   }, []);
 
@@ -916,6 +942,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setAiKeysDialogOpen(false);
   };
 
+  const hasOpenaiKey = Boolean(openaiKey.trim());
+  const hasGeminiKey = Boolean(geminiKey.trim());
+  /** Gateway sẵn sàng chỉ khi đủ Endpoint + API Key + Model. */
+  const hasGateway =
+    Boolean(gatewayEndpoint.trim()) &&
+    Boolean(gatewayApiKey.trim()) &&
+    Boolean(gatewayModel.trim());
+  /** AI Status sẵn sàng (khớp chip AI Status trên header). */
+  const hasAnyAi = hasGateway || hasOpenaiKey || hasGeminiKey;
+
   const persistKeywordAiSuggest = (value: boolean) => {
     setKeywordAiSuggest(value);
     try {
@@ -924,6 +960,31 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       /* ignore */
     }
   };
+
+  /** Bật «Sử dụng AI» — chỉ khi AI Status sẵn sàng; chưa sẵn sàng → Alert warning. */
+  const handleToggleUseAi = async (value: boolean) => {
+    if (!value) {
+      persistKeywordAiSuggest(false);
+      return;
+    }
+    if (!hasAnyAi) {
+      const ok = await alert.warn?.(
+        t("AI chưa sẵn sàng"),
+        t("Vui lòng thêm API key AI để sử dụng tính năng này."),
+        t("Thêm API Key")
+      );
+      if (ok) openAiKeysDialog();
+      return;
+    }
+    persistKeywordAiSuggest(true);
+  };
+
+  // Mất API key → tự tắt «Sử dụng AI»
+  useEffect(() => {
+    if (!hasAnyAi && keywordAiSuggest) {
+      persistKeywordAiSuggest(false);
+    }
+  }, [hasAnyAi]);
 
   const commitKeywordDraft = (raw?: string) => {
     const parts = String(raw ?? keywordDraft)
@@ -1051,6 +1112,53 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     });
   }, [crawlProjectSessions, filterDomain, filterYear, filterMonth, filterDay]);
 
+  /** Lọc theo HH % / lượt bán / HH nhận về — đổi input → danh sách tự cập nhật. */
+  const passesProductFilters = useCallback(
+    (row: { commissionPct: number; sales: number; commissionReceived: number }) => {
+      if (row.commissionPct < minCommissionPct) return false;
+      if (row.sales < minSales) return false;
+      if (commissionReceivedK > 0 && row.commissionReceived < commissionReceivedK * 1000) {
+        return false;
+      }
+      return true;
+    },
+    [minCommissionPct, minSales, commissionReceivedK]
+  );
+
+  const products = useMemo(
+    () => crawledProducts.filter(passesProductFilters),
+    [crawledProducts, passesProductFilters]
+  );
+
+  /** Danh sách đang hiện trên bảng: khớp lọc hoặc toàn bộ kho. */
+  const displayProducts = productListScope === "all" ? crawledProducts : products;
+
+  /** Cập nhật SP trong kho (vd. sau khi gắn short link / SEO khi Lưu project). */
+  const patchCrawledProducts = useCallback((updated: ScrapeProductRow[]) => {
+    if (!updated.length) return;
+    const byId = new Map(updated.map((p) => [p.id, p]));
+    setCrawledProducts((prev) => prev.map((p) => byId.get(p.id) ?? p));
+  }, []);
+
+  const handleExportDisplayCsv = () => {
+    const rows = displayProducts;
+    if (!rows.length) {
+      toast.warn(
+        productListScope === "all"
+          ? t("Chưa có sản phẩm trong kho đã cào")
+          : t("Chưa có sản phẩm khớp lọc để xuất")
+      );
+      return;
+    }
+    const csv = productsToFullScrapedCsv(rows);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+    const prefix = productListScope === "all" ? "kho-da-cao" : "khop-loc";
+    downloadCsvText(csv, `${prefix}-${rows.length}sp-${stamp}.csv`);
+    toast.success(
+      t("Đã xuất CSV · {{count}} SP", { count: rows.length })
+    );
+  };
+
   const totalPages = Math.max(1, Math.ceil(filteredSessions.length / pageSize));
   const safePage = Math.min(page, totalPages);
 
@@ -1059,12 +1167,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     return filteredSessions.slice(start, start + pageSize);
   }, [filteredSessions, safePage, pageSize]);
 
-  const productTotalPages = Math.max(1, Math.ceil(products.length / productPageSize));
+  const productTotalPages = Math.max(1, Math.ceil(displayProducts.length / productPageSize));
   const safeProductPage = Math.min(productPage, productTotalPages);
   const pagedProducts = useMemo(() => {
     const start = (safeProductPage - 1) * productPageSize;
-    return products.slice(start, start + productPageSize);
-  }, [products, safeProductPage, productPageSize]);
+    return displayProducts.slice(start, start + productPageSize);
+  }, [displayProducts, safeProductPage, productPageSize]);
 
   const gioCompletedCount = useMemo(
     () => gioVideoRows.filter((r) => /hoàn thành/i.test(r.statusText)).length,
@@ -1079,7 +1187,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
   useEffect(() => {
     setProductPage(1);
-  }, [products.length]);
+  }, [displayProducts.length, productListScope]);
 
   useEffect(() => {
     setGioVideoPage(1);
@@ -1690,14 +1798,18 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       throw new Error(t("File CSV trống hoặc không đọc được"));
     }
     const mapped: ScrapeProductRow[] = raws.map((raw, index) => {
-      const priced = {
-        ...raw,
-        __priceVndNormalized: true,
-      } as Record<string, unknown>;
+      // CSV đã lưu giá VND thật — không chia ×1000 lại
+      const priced = ensureCrawlProductRaw(
+        {
+          ...(raw as Record<string, unknown>),
+          __priceVndNormalized: true,
+        },
+        { marketHost: session.marketHost || openMarketHost }
+      );
       const row = mapRawToScrapeRow(priced, index);
       return { ...row, raw: priced };
     });
-    setProducts(mapped);
+    setCrawledProducts(mapped);
     setCrawledCount(mapped.length);
     setCrawlStatus("view");
     setGioSourceSessionId(session.id);
@@ -1713,11 +1825,18 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       );
     }
     if (opts?.toastOk !== false) {
+      const visible = mapped.filter(passesProductFilters).length;
       toast.success(
-        t("Đã mở «{{name}}» · {{count}} SP", {
-          name: sessionDisplayName(session),
-          count: mapped.length,
-        })
+        visible < mapped.length
+          ? t("Đã mở «{{name}}» · kho {{count}} SP · đang hiện {{visible}} khớp lọc", {
+              name: sessionDisplayName(session),
+              count: mapped.length,
+              visible,
+            })
+          : t("Đã mở «{{name}}» · {{count}} SP", {
+              name: sessionDisplayName(session),
+              count: mapped.length,
+            })
       );
     }
     if (opts?.scroll) {
@@ -1786,10 +1905,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setMinCommissionPct(2);
     setMinSales(10);
     setCommissionReceivedK(0);
-    setProducts([]);
-    setCrawlStatus("");
-    setCrawledCount(0);
-    toast.info(t("Đã lọc lại bộ lọc mặc định"));
+    toast.info(
+      crawledProducts.length
+        ? t("Đã về bộ lọc mặc định · đang lọc lại {{n}} SP đã cào", {
+            n: crawledProducts.length,
+          })
+        : t("Đã lọc lại bộ lọc mặc định")
+    );
   };
 
   const orderedShopTypes = () =>
@@ -1799,15 +1921,6 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setShopTypes((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value]
     );
-  };
-
-  const passesFilters = (row: ReturnType<typeof mapRawToScrapeRow>) => {
-    if (row.commissionPct < minCommissionPct) return false;
-    if (row.sales < minSales) return false;
-    if (commissionReceivedK > 0 && row.commissionReceived < commissionReceivedK * 1000) {
-      return false;
-    }
-    return true;
   };
 
   const handleStartCrawl = async () => {
@@ -1821,8 +1934,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
     let keywordList = [...keywords];
 
-    // Gợi ý AI chỉ khi bật + input đang trống (có value = user/đã lưu → không call lại)
-    if (keywordAiSuggest && keywordList.length === 0) {
+    // Sử dụng AI chỉ khi bật + AI sẵn sàng + input đang trống
+    if (keywordAiSuggest && hasAnyAi && keywordList.length === 0) {
       try {
         setSuggestingKeywords(true);
         setCrawlStatus(t("AI đang gợi ý từ khóa Shopee (≥{{n}})…", { n: MIN_AI_KEYWORDS }));
@@ -1883,15 +1996,38 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     crawlAbortRef.current = false;
     setCrawling(true);
     crawlingRef.current = true;
-    setProducts([]);
+    setCrawledProducts([]);
     setCrawledCount(0);
     setDoneKeywords([]);
     setActiveKeyword("");
 
     // Crawl Project chỉ cào SP. Check Giỏ Video chỉ khi đã bật từ nút «Crawl Giỏ Video».
 
-    const accepted: ScrapeProductRow[] = [];
+    /** Kho unique đã cào — lọc HH/lượt bán áp sau (và khi đổi input). */
+    const pool: ScrapeProductRow[] = [];
     const seen = new Set<string>();
+    /** Snapshot filter lúc bắt đầu — điều kiện dừng crawl. */
+    const filterSnap = {
+      minCommissionPct,
+      minSales,
+      commissionReceivedK,
+    };
+    const rowPassesSnap = (row: {
+      commissionPct: number;
+      sales: number;
+      commissionReceived: number;
+    }) => {
+      if (row.commissionPct < filterSnap.minCommissionPct) return false;
+      if (row.sales < filterSnap.minSales) return false;
+      if (
+        filterSnap.commissionReceivedK > 0 &&
+        row.commissionReceived < filterSnap.commissionReceivedK * 1000
+      ) {
+        return false;
+      }
+      return true;
+    };
+    let matchedCount = 0;
     const pageLimit = 20;
     const delayMs = 450;
     // Shopee cap ~500 SP / keyword+sort → ~25 trang; dư buffer nhẹ
@@ -1903,7 +2039,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
     try {
       for (const keyword of crawlKeywords) {
-        if (crawlAbortRef.current || accepted.length >= productLimit) break;
+        if (crawlAbortRef.current || matchedCount >= productLimit) break;
         const keywordLabel = keyword || t("(không từ khóa)");
         if (keyword) setActiveKeyword(keyword);
 
@@ -1914,7 +2050,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
         while (
           !crawlAbortRef.current &&
-          accepted.length < productLimit &&
+          matchedCount < productLimit &&
           pageNo < maxPagesPerKeyword
         ) {
           pageNo += 1;
@@ -1926,7 +2062,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 sort: sortLabel,
                 page: pageNo,
                 scanned: scannedRaw,
-                count: accepted.length,
+                count: matchedCount,
                 limit: productLimit,
               }
             )
@@ -1953,14 +2089,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   page: pageNo,
                   sort: sortLabel,
                   error: msg.slice(0, 80),
-                  count: accepted.length,
+                  count: matchedCount,
                   limit: productLimit,
                 }
               )
             );
             toast.warn(
               t("Bỏ qua trang lỗi · sang từ khóa tiếp ({{count}} SP)", {
-                count: accepted.length,
+                count: matchedCount,
               })
             );
             await new Promise((r) => setTimeout(r, 900));
@@ -1975,16 +2111,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
           let newIdsOnPage = 0;
           for (const raw of page.products) {
-            if (accepted.length >= productLimit) break;
-            const normalizedRaw = normalizeApiPriceFields(
-              raw as Record<string, unknown>
+            if (matchedCount >= productLimit) break;
+            const normalizedRaw = ensureCrawlProductRaw(
+              raw as Record<string, unknown>,
+              { marketHost: openMarketHost }
             );
-            const mapped = mapRawToScrapeRow(normalizedRaw, accepted.length);
+            const mapped = mapRawToScrapeRow(normalizedRaw, pool.length);
             if (!mapped.id || seen.has(mapped.id)) continue;
             seen.add(mapped.id);
             newIdsOnPage += 1;
-            if (!passesFilters(mapped)) continue;
-            accepted.push({
+            const row: ScrapeProductRow = {
               id: mapped.id,
               productName: mapped.productName,
               commissionPct: mapped.commissionPct,
@@ -1993,9 +2129,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               commissionReceived: mapped.commissionReceived,
               postedAt: mapped.postedAt,
               raw: normalizedRaw,
-            });
-            setProducts([...accepted]);
-            enqueueGioFromCrawlProduct(accepted[accepted.length - 1]);
+            };
+            // Lưu mọi SP unique vào kho — filter HH/lượt bán áp khi hiển thị
+            pool.push(row);
+            setCrawledProducts([...pool]);
+            if (rowPassesSnap(row)) {
+              matchedCount += 1;
+              enqueueGioFromCrawlProduct(row);
+            }
           }
 
           setCrawlStatus(
@@ -2006,13 +2147,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 sort: sortLabel,
                 page: pageNo,
                 scanned: scannedRaw,
-                count: accepted.length,
+                count: matchedCount,
                 limit: productLimit,
               }
             )
           );
 
-          if (accepted.length >= productLimit) break;
+          if (matchedCount >= productLimit) break;
           // Hết data / API lặp / gần cap ~500 → sang từ khóa mới (giữ sort)
           if (newIdsOnPage === 0) break;
           if (!page.hasMore) break;
@@ -2033,25 +2174,25 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       setCrawledCount(scannedRaw);
       const doneMsg = crawlAbortRef.current
         ? t("Đã dừng · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
-            count: accepted.length,
+            count: matchedCount,
             limit: productLimit,
             scanned: scannedRaw,
           })
-        : accepted.length >= productLimit
+        : matchedCount >= productLimit
         ? t("Hoàn tất · đã cào {{scanned}} · khớp {{count}}", {
-            count: accepted.length,
+            count: matchedCount,
             scanned: scannedRaw,
           })
         : t("Hết data API · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
-            count: accepted.length,
+            count: matchedCount,
             limit: productLimit,
             scanned: scannedRaw,
           });
       setCrawlStatus(doneMsg);
       toast.success(
-        t("Cào xong: đã cào {{scanned}} · khớp {{count}}", {
-          count: accepted.length,
-          scanned: scannedRaw,
+        t("Cào xong: kho {{pool}} SP · khớp lọc {{count}}", {
+          count: matchedCount,
+          pool: pool.length,
         })
       );
     } catch (err: any) {
@@ -2181,22 +2322,27 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setSaveProgressLogs([]);
     saveLogSeqRef.current = 0;
 
+    const hasShortLink = (p: ScrapeProductRow) =>
+      Boolean(String((p.raw as any)?.affiliate_link_short || "").trim());
+    const hasDescription = (p: ScrapeProductRow) =>
+      Boolean(String((p.raw as any)?.description || "").trim());
+    const hasHashtags = (p: ScrapeProductRow) =>
+      Boolean(String((p.raw as any)?.hashtags || "").trim());
+    const resolveLongLink = (p: ScrapeProductRow) =>
+      String(
+        (p.raw as any)?.long_link ||
+          (p.raw as any)?.affiliate_link ||
+          (p.raw as any)?.product_link ||
+          ""
+      ).trim();
+
     try {
-      pushSaveLog(`Bắt đầu lưu «${name}» · ${products.length} SP`, "info");
+      pushSaveLog(
+        `Bắt đầu lưu «${name}» · ${products.length} SP khớp lọc (kho ${crawledProducts.length})`,
+        "info"
+      );
 
-      // ── 1) long_link → affiliate_link_short ──
-      const linkRows = products
-        .map((p, index) => ({
-          index,
-          link: String(
-            (p.raw as any)?.long_link ||
-              (p.raw as any)?.affiliate_link ||
-              (p.raw as any)?.product_link ||
-              ""
-          ).trim(),
-        }))
-        .filter((r) => !!r.link);
-
+      // Giữ nguyên short_link / description / hashtags đã lưu trong kho
       let productsWithShort: ScrapeProductRow[] = products.map((p) => ({
         ...p,
         raw: {
@@ -2207,100 +2353,223 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         },
       }));
 
+      // ── 1) long_link → affiliate_link_short (chỉ khi bật Switch) ──
       setSaveProgressPercent(5);
-      setSaveProgressStatus(t("Tạo short link…") as string);
 
-      if (linkRows.length) {
-        const bridgeOk = await probeCdpBridge();
-        if (!bridgeOk) {
-          throw new Error(
-            t(
-              "Chưa có cookie. Bấm «Mở Trình duyệt» trước khi lưu (cần để tạo short link)."
-            ) as string
+      if (saveUseAffiliateShortLink) {
+        const needShortRows = productsWithShort
+          .map((p, index) => ({
+            index,
+            link: resolveLongLink(p),
+            hasShort: hasShortLink(p),
+          }))
+          .filter((r) => !!r.link && !r.hasShort);
+        const skippedShort = productsWithShort.filter(hasShortLink).length;
+
+        setSaveProgressStatus(t("Tạo short link…") as string);
+
+        if (skippedShort > 0) {
+          pushSaveLog(
+            `Bỏ qua short link · ${skippedShort} SP đã có affiliate_link_short`,
+            "info"
           );
         }
-        pushSaveLog(`Đang tạo short link ${linkRows.length} SP…`, "info");
-        try {
-          const shorts = await shortenAffiliateLinks(
-            linkRows.map((r) => r.link),
-            800
-          );
-          const filled = shorts.filter(Boolean).length;
-          if (filled === 0) {
+
+        if (needShortRows.length) {
+          const bridgeOk = await probeCdpBridge();
+          if (!bridgeOk) {
+            throw new Error(
+              t(
+                "Chưa có cookie. Bấm «Mở Trình duyệt» trước khi lưu (cần để tạo short link)."
+              ) as string
+            );
+          }
+          pushSaveLog(`Đang tạo short link ${needShortRows.length} SP mới…`, "info");
+          try {
+            const shorts = await shortenAffiliateLinks(
+              needShortRows.map((r) => r.link),
+              800
+            );
+            const filled = shorts.filter(Boolean).length;
+            if (filled === 0) {
+              pushSaveLog(
+                "Chưa tạo được short link (antibot/GPM Login). Vẫn lưu bằng long_link.",
+                "warning"
+              );
+            } else {
+              productsWithShort = productsWithShort.map((p) => ({
+                ...p,
+                raw: { ...p.raw },
+              }));
+              needShortRows.forEach((row, i) => {
+                const short = String(shorts[i] || "").trim();
+                if (!short) return;
+                const raw = productsWithShort[row.index].raw as Record<string, unknown>;
+                raw.affiliate_link_short = short;
+              });
+              // Ghi short_link vào kho SP đã cào ngay — lần khớp lọc / lưu sau bỏ qua
+              patchCrawledProducts(productsWithShort);
+              pushSaveLog(`Short link OK · ${filled}/${needShortRows.length}`, "success");
+              if (filled < needShortRows.length) {
+                pushSaveLog(
+                  `Chỉ tạo được ${filled}/${needShortRows.length} short link`,
+                  "warning"
+                );
+              }
+            }
+          } catch (shortErr: any) {
+            const msg = String(shortErr?.message || shortErr || "");
             pushSaveLog(
-              "Chưa tạo được short link (antibot/GPM Login). Vẫn lưu bằng long_link.",
+              msg
+                ? `Short link lỗi: ${msg.slice(0, 160)}`
+                : "Không tạo được short link. Vẫn lưu bằng long_link.",
               "warning"
             );
-          } else {
-            productsWithShort = productsWithShort.map((p) => ({
-              ...p,
-              raw: { ...p.raw },
-            }));
-            linkRows.forEach((row, i) => {
-              const raw = productsWithShort[row.index].raw as Record<string, unknown>;
-              raw.affiliate_link_short = shorts[i] || "";
-            });
-            setProducts(productsWithShort);
-            pushSaveLog(`Short link OK · ${filled}/${linkRows.length}`, "success");
-            if (filled < linkRows.length) {
-              pushSaveLog(`Chỉ tạo được ${filled}/${linkRows.length} short link`, "warning");
-            }
           }
-        } catch (shortErr: any) {
-          const msg = String(shortErr?.message || shortErr || "");
-          pushSaveLog(
-            msg
-              ? `Short link lỗi: ${msg.slice(0, 160)}`
-              : "Không tạo được short link. Vẫn lưu bằng long_link.",
-            "warning"
-          );
+        } else if (!productsWithShort.some((p) => resolveLongLink(p))) {
+          pushSaveLog("Không có long_link để rút gọn", "warning");
+        } else {
+          pushSaveLog("Tất cả SP khớp lọc đã có short link — bỏ qua bước tạo mới", "info");
         }
       } else {
-        pushSaveLog("Không có long_link để rút gọn", "warning");
+        pushSaveLog("Không chuyển short link — giữ nguyên long_link", "info");
       }
 
       setSaveProgressPercent(25);
 
-      if (saveUseAiSeo) {
-        // ── 2) Gộp id + tên → object (description/hashtags trống) ──
-        const workItems = buildProductSeoWorkItems(productsWithShort);
-        pushSaveLog(
-          `Đã gộp ${workItems.length} object (id + tên · description/hashtags trống)`,
-          "info"
-        );
-        setSaveProgressStatus(t("ChatGPT tạo mô tả & hashtag…") as string);
-        setSaveProgressPercent(30);
+      const wantAiDesc = saveUseAiDescription && hasAnyAi;
+      const wantAiTags = saveUseAiHashtag && hasAnyAi;
+      const aiFields =
+        wantAiDesc && wantAiTags
+          ? ("both" as const)
+          : wantAiDesc
+            ? ("description" as const)
+            : wantAiTags
+              ? ("hashtags" as const)
+              : null;
 
-        // ── 3) ChatGPT: mô tả + 4–6 hashtag SEO Shopee ──
-        const seoResults = await generateProductSeoBatch(
-          workItems.map((w) => ({ id: w.id, name: w.productName })),
-          (p) => {
-            const pct = 30 + Math.round((p.done / Math.max(p.total, 1)) * 55);
-            setSaveProgressPercent(Math.min(85, pct));
-            setSaveProgressStatus(p.message);
-            pushSaveLog(p.message, p.level || "info");
-          }
-        );
-
-        const seoById = new Map(seoResults.map((r) => [r.id, r]));
-        productsWithShort = productsWithShort.map((p) => {
-          const seo = seoById.get(p.id);
-          if (!seo) return p;
-          return {
-            ...p,
-            raw: {
-              ...(p.raw || {}),
-              description: seo.description,
-              hashtags: seo.hashtags,
-            },
-          };
+      if (aiFields) {
+        // ── 2–3) AI customer — chỉ SP thiếu field đang bật ──
+        const needSeoRows = productsWithShort.filter((p) => {
+          const needDesc = wantAiDesc && !hasDescription(p);
+          const needTags = wantAiTags && !hasHashtags(p);
+          return needDesc || needTags;
         });
-        setProducts(productsWithShort);
-        pushSaveLog(`Đã gắn mô tả + hashtag vào ${seoResults.length} SP`, "success");
+        const skippedSeo = productsWithShort.length - needSeoRows.length;
+        const fieldLabel =
+          aiFields === "description"
+            ? "mô tả"
+            : aiFields === "hashtags"
+              ? "hashtag"
+              : "mô tả & hashtag";
+
+        if (skippedSeo > 0) {
+          pushSaveLog(
+            `Bỏ qua AI · ${skippedSeo} SP đã có ${fieldLabel}`,
+            "info"
+          );
+        }
+
+        if (!needSeoRows.length) {
+          pushSaveLog(`Tất cả SP đã có ${fieldLabel} — bỏ qua AI`, "info");
+          setSaveProgressPercent(85);
+        } else {
+          const workItems = buildProductSeoWorkItems(needSeoRows);
+          pushSaveLog(
+            `AI (key customer) generate ${fieldLabel} cho ${workItems.length} SP…`,
+            "info"
+          );
+          setSaveProgressStatus(
+            t(
+              aiFields === "description"
+                ? "AI tạo mô tả…"
+                : aiFields === "hashtags"
+                  ? "AI tạo hashtag…"
+                  : "AI tạo mô tả & hashtag…"
+            ) as string
+          );
+          setSaveProgressPercent(30);
+
+          try {
+            const seoResults = await generateProductSeoBatch(
+              workItems.map((w) => ({ id: w.id, name: w.productName })),
+              (p) => {
+                const pct = 30 + Math.round((p.done / Math.max(p.total, 1)) * 55);
+                setSaveProgressPercent(Math.min(85, pct));
+                setSaveProgressStatus(p.message);
+                pushSaveLog(p.message, p.level || "info");
+              },
+              {
+                openaiKey,
+                geminiKey,
+                gatewayEndpoint,
+                gatewayApiKey,
+                gatewayModel: gatewayModel.trim(),
+              },
+              aiFields
+            );
+
+            const seoById = new Map(seoResults.map((r) => [r.id, r]));
+            let appliedDesc = 0;
+            let appliedTags = 0;
+            productsWithShort = productsWithShort.map((p) => {
+              const seo = seoById.get(p.id);
+              if (!seo) return p;
+              const description = String(seo.description || "").trim();
+              const hashtags = String(seo.hashtags || "").trim();
+              const applyDesc = wantAiDesc && !hasDescription(p) && Boolean(description);
+              const applyTags = wantAiTags && !hasHashtags(p) && Boolean(hashtags);
+              if (!applyDesc && !applyTags) return p;
+              if (applyDesc) appliedDesc += 1;
+              if (applyTags) appliedTags += 1;
+              return {
+                ...p,
+                raw: {
+                  ...(p.raw || {}),
+                  ...(applyDesc ? { description } : {}),
+                  ...(applyTags ? { hashtags } : {}),
+                },
+              };
+            });
+            patchCrawledProducts(productsWithShort);
+            const parts: string[] = [];
+            if (wantAiDesc) parts.push(`mô tả ${appliedDesc}`);
+            if (wantAiTags) parts.push(`hashtag ${appliedTags}`);
+            pushSaveLog(
+              appliedDesc || appliedTags
+                ? `Đã gắn AI · ${parts.join(" · ")} / ${seoResults.length} SP`
+                : `AI không trả nội dung — giữ nguyên ${fieldLabel}`,
+              appliedDesc || appliedTags ? "success" : "warning"
+            );
+          } catch (seoErr: any) {
+            if (seoErr instanceof AiAuthError) {
+              pushSaveLog(
+                `API key AI lỗi — giữ nguyên ${fieldLabel}: ${String(seoErr.message).slice(0, 120)}`,
+                "warning"
+              );
+              openAiKeysDialog();
+            } else {
+              pushSaveLog(
+                `AI lỗi — giữ nguyên ${fieldLabel}: ${String(
+                  seoErr?.message || seoErr
+                ).slice(0, 120)}`,
+                "warning"
+              );
+            }
+            setSaveProgressPercent(85);
+          }
+        }
       } else {
-        pushSaveLog("Bỏ qua AI generate mô tả & hashtag", "info");
+        if (saveUseAiDescription || saveUseAiHashtag) {
+          pushSaveLog("AI chưa sẵn sàng — giữ nguyên mô tả & hashtag", "warning");
+        } else {
+          pushSaveLog("Không dùng AI — giữ nguyên mô tả & hashtag", "info");
+        }
         setSaveProgressPercent(85);
       }
+
+      // Ghi lại vào kho SP đã cào (short_link / SEO) trước khi xuất CSV
+      patchCrawledProducts(productsWithShort);
 
       // ── 4) Ghi CSV + IndexedDB ──
       setSaveProgressPercent(90);
@@ -2324,7 +2593,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
       setSaveProgressPercent(100);
       setSaveProgressStatus(t("Hoàn tất") as string);
-      pushSaveLog(`Xong · đã lưu «${name}» · ${productsWithShort.length} SP`, "success");
+      pushSaveLog(
+        `Xong · đã lưu «${name}» · ${productsWithShort.length} SP · đã cập nhật kho`,
+        "success"
+      );
       setSaveProgressDone(true);
       toast.success(
         t("Đã lưu «{{name}}» · {{count}} SP", { name, count: productsWithShort.length })
@@ -2362,21 +2634,28 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     "relative z-10 bg-orange-light text-orange-dark ring-2 ring-inset ring-none ring-orange-light";
 
   const crawlProjectForm = (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex flex-col h-full min-h-0">
       <div className="space-y-3">
         <div>
           <div className="mb-1.5 flex items-center justify-between gap-2">
             <label className="m-0 text-sm font-semibold text-gray-800" htmlFor="scrape-keyword-draft">
               {t("Từ khóa sản phẩm")}
             </label>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-600">{t("Gợi ý AI")}</span>
+            <div className="flex gap-2 items-center">
+              <span
+                className={`text-xs font-medium ${
+                  hasAnyAi ? "text-gray-600" : "text-gray-400"
+                }`}
+              >
+                {t("Sử dụng AI")}
+              </span>
               <Switch
                 size="sm"
                 dependent
-                value={keywordAiSuggest}
-                onChange={(v) => persistKeywordAiSuggest(Boolean(v))}
+                value={keywordAiSuggest && hasAnyAi}
+                onChange={(v) => void handleToggleUseAi(Boolean(v))}
                 readOnly={crawling || suggestingKeywords}
+                className={!hasAnyAi ? "opacity-60" : ""}
               />
             </div>
           </div>
@@ -2409,7 +2688,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                       type="button"
                       disabled={crawling || suggestingKeywords}
                       onClick={() => removeKeywordAt(index)}
-                      className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded text-gray-400 hover:bg-white/80 hover:text-rose-600 disabled:opacity-40"
+                      className="inline-flex justify-center items-center w-4 h-4 text-gray-400 rounded shrink-0 hover:bg-white/80 hover:text-rose-600 disabled:opacity-40"
                       aria-label={t("Xóa từ khóa") as string}
                     >
                       <HiX className="text-xs" />
@@ -2463,7 +2742,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   type="button"
                   disabled={crawling || suggestingKeywords}
                   onClick={clearKeywords}
-                  className="ml-auto inline-flex h-7 shrink-0 items-center rounded-md px-2 text-xs font-semibold text-gray-500 hover:bg-gray-100 hover:text-rose-600 disabled:opacity-40"
+                  className="inline-flex items-center px-2 ml-auto h-7 text-xs font-semibold text-gray-500 rounded-md shrink-0 hover:bg-gray-100 hover:text-rose-600 disabled:opacity-40"
                 >
                   {t("Clear")}
                 </button>
@@ -2472,7 +2751,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </div>
           <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
             {t(
-              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Bật Gợi ý AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm. Có sẵn từ khóa thì không gọi AI. F5 vẫn giữ; Clear mới xóa.",
+              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Bật Sử dụng AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm (cần AI Status sẵn sàng). Có sẵn từ khóa thì không gọi AI. F5 vẫn giữ; Clear mới xóa.",
               { n: MIN_AI_KEYWORDS }
             )}
           </p>
@@ -2480,7 +2759,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
         <div>
           <label className={fieldLabelClass}>{t("Sắp xếp theo")}</label>
-          <div className="inline-flex w-full overflow-hidden rounded-lg border border-gray-300 bg-white">
+          <div className="inline-flex overflow-hidden w-full bg-white rounded-lg border border-gray-300">
             {SORT_TABS.map((tab) => {
               const active = sortType === tab.value;
               return (
@@ -2519,7 +2798,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   const v = Number(e.target.value);
                   if (v === 3 || v === 4) setSortType(v);
                 }}
-                className="absolute inset-0 cursor-pointer opacity-0"
+                className="absolute inset-0 opacity-0 cursor-pointer"
               >
                 <option value="" disabled>
                   {t("Giá")}
@@ -2536,7 +2815,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
         <div>
           <label className={fieldLabelClass}>{t("Loại shop")}</label>
-          <div className="inline-flex w-full overflow-hidden rounded-lg border border-gray-300 bg-white">
+          <div className="inline-flex overflow-hidden w-full bg-white rounded-lg border border-gray-300">
             {SHOP_TYPE_TABS.map((tab) => {
               const active = shopTypes.includes(tab.value);
               return (
@@ -2582,7 +2861,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               className={splitInputClass}
               aria-label={t("Hoa hồng tối thiểu")}
             />
-            <span className="shrink-0 text-sm text-gray-500">%</span>
+            <span className="text-sm text-gray-500 shrink-0">%</span>
           </div>
         </div>
 
@@ -2611,21 +2890,29 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               className={splitInputClass}
               aria-label={t("Hoa hồng nhận về")}
             />
-            <span className="shrink-0 text-sm text-gray-500">k</span>
+            <span className="text-sm text-gray-500 shrink-0">k</span>
           </div>
         </div>
+        {crawledProducts.length > 0 ? (
+          <p className="m-0 text-xs leading-relaxed text-gray-500">
+            {t(
+              "Kho {{n}} SP giữ nguyên (kể cả short_link / mô tả / hashtag). Đổi HH / lượt bán / HH nhận về → Khớp lọc lại ngay. Chỉ mất khi Bắt đầu cào.",
+              { n: crawledProducts.length }
+            )}
+          </p>
+        ) : null}
       </div>
 
-      <div className="mt-4 space-y-2 pt-3 border-t border-gray-100">
+      <div className="pt-3 mt-4 space-y-2 border-t border-gray-100">
         {crawlStatus ? (
-          <p className="m-0 text-10 leading-relaxed text-gray-500">{crawlStatus}</p>
+          <p className="m-0 leading-relaxed text-gray-500 text-10">{crawlStatus}</p>
         ) : null}
         <div className="flex flex-nowrap gap-2">
           <button
             type="button"
             disabled={crawling}
             onClick={handleResetFilters}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 px-2 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-300 disabled:opacity-50"
+            className="inline-flex flex-1 justify-center items-center px-2 h-9 text-xs font-bold text-gray-800 bg-gray-200 rounded-lg border border-gray-300 transition-colors hover:bg-gray-300 disabled:opacity-50"
           >
             {t("Lọc lại")}
           </button>
@@ -2637,8 +2924,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               crawling
                 ? "border-danger-dark bg-danger hover:bg-danger-dark"
                 : suggestingKeywords
-                  ? "border-teal-600 bg-teal-600"
-                  : "border-blue-600 bg-blue-600 hover:bg-blue-700"
+                  ? "bg-teal-600 border-teal-600"
+                  : "bg-blue-600 border-blue-600 hover:bg-blue-700"
             }`}
           >
             {crawling ? (
@@ -2659,7 +2946,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             type="button"
             disabled={crawling || !products.length}
             onClick={openSaveProjectDialog}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-green-600 bg-green-600 px-2 text-xs font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            className="inline-flex flex-1 justify-center items-center px-2 h-9 text-xs font-bold text-white bg-green-600 rounded-lg border border-green-600 transition-colors hover:bg-green-700 disabled:opacity-50"
           >
             {t("Lưu project")}
           </button>
@@ -2669,61 +2956,194 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   );
 
   const productListPanel = (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
-        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-blue-600">
-            {t("Đã cào")}
-          </p>
-          <p className="m-0 text-lg font-bold tabular-nums text-blue-800">{crawledCount}</p>
-        </div>
-        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-pink-300 bg-pink-100 px-3 py-2">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-pink-700">
-            {t("Khớp lọc")}
-          </p>
-          <p className="m-0 text-lg font-bold tabular-nums text-pink-900">
-            {products.length}
-            <span className="ml-1 text-xs font-semibold text-pink-600">/ {productLimit}</span>
-          </p>
-        </div>
-        <div className="col-span-2 flex flex-row items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 sm:col-span-1">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-purple-600">
-            {t("Trạng thái")}
-          </p>
-          <p className="m-0 truncate text-sm font-semibold text-purple-800">
-            {crawling ? t("Đang cào...") : crawlStatus ? t("Hoàn tất") : t("Chưa chạy")}
-          </p>
+    <div className="flex overflow-hidden flex-col min-w-0 h-full min-h-0">
+      <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
+        {/* Một thẻ: trạng thái + Đã cào / Khớp lọc + bộ lọc */}
+        <div
+          className={`flex min-w-0 items-start gap-2.5 rounded-xl border px-3 py-2.5 ${
+            crawling
+              ? "border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50"
+              : crawlStatus
+                ? "border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50"
+                : "border-gray-200 bg-gradient-to-r from-gray-50 to-slate-50"
+          }`}
+        >
+          <span
+            className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+              crawling
+                ? "animate-pulse bg-amber-500"
+                : crawlStatus
+                  ? "bg-blue-500"
+                  : "bg-gray-400"
+            }`}
+            aria-hidden
+          />
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="flex flex-wrap gap-y-1 gap-x-2 items-center">
+              <span
+                className={`text-xs font-bold ${
+                  crawling
+                    ? "text-amber-800"
+                    : crawlStatus
+                      ? "text-emerald-800"
+                      : "text-gray-600"
+                }`}
+              >
+                {crawling ? t("Đang cào...") : crawlStatus ? t("Hoàn tất") : t("Chưa chạy")}
+              </span>
+              <span className="text-gray-300">·</span>
+              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 px-1.5 py-0.5 text-10 font-bold text-blue-800 ring-1 ring-blue-200">
+                {t("Đã cào")}{" "}
+                <b className="text-sm tabular-nums leading-none">
+                  {crawledProducts.length || crawledCount}
+                </b>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-md bg-pink-100 px-1.5 py-0.5 text-10 font-bold text-pink-900 ring-1 ring-pink-300">
+                {t("Khớp lọc")}{" "}
+                <b className="text-sm tabular-nums leading-none">
+                  {products.length}
+                  <span className="ml-0.5 text-10 font-semibold text-pink-600">
+                    / {productLimit}
+                  </span>
+                </b>
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1 items-center">
+              <span className="font-semibold tracking-wide text-gray-500 uppercase text-10">
+                {t("Bộ lọc đang áp dụng")}
+              </span>
+              <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-10 font-semibold text-gray-700 ring-1 ring-gray-200">
+                HH ≥ {minCommissionPct}%
+              </span>
+              <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-10 font-semibold text-gray-700 ring-1 ring-gray-200">
+                {t("Bán")} ≥ {minSales}
+              </span>
+              <span className="rounded-md bg-white/80 px-1.5 py-0.5 text-10 font-semibold text-gray-700 ring-1 ring-gray-200">
+                {t("HH về")} ≥ {commissionReceivedK}k
+              </span>
+            </div>
+            {crawlStatus && crawlStatus !== "view" ? (
+              <p
+                className="m-0 leading-relaxed text-gray-500 truncate text-10"
+                title={crawlStatus}
+              >
+                {crawlStatus}
+              </p>
+            ) : (
+              <p className="m-0 leading-relaxed text-gray-400 text-10">
+                {t("Đổi bộ lọc → danh sách «Khớp lọc» cập nhật ngay trên kho đã cào.")}
+              </p>
+            )}
+          </div>
         </div>
       </div>
+
+      <TabGroup
+        name="scrape-product-list-scope"
+        index={productListScope === "matched" ? 0 : 1}
+        onChange={(i) => setProductListScope(i === 0 ? "matched" : "all")}
+        flex
+        hasInkBar={false}
+        className="shrink-0 !bg-transparent"
+        tabClassName="h-10 justify-center border-r border-gray-200 last:border-r-0 bg-gray-50"
+        activeClassName={
+          productListScope === "matched"
+            ? "!text-pink-900 bg-pink-100 ring-1 ring-inset ring-pink-300"
+            : "!text-blue-800 bg-blue-50 ring-1 ring-inset ring-blue-300"
+        }
+        titleClassName="text-xs font-bold whitespace-nowrap"
+        bodyClassName="hidden"
+      >
+        <TabGroup.Tab
+          label={t("Khớp lọc")}
+          count={products.length ? String(products.length) : undefined}
+        >
+          <span />
+        </TabGroup.Tab>
+        <TabGroup.Tab
+          label={t("Tất cả đã cào")}
+          count={crawledProducts.length ? String(crawledProducts.length) : undefined}
+        >
+          <span />
+        </TabGroup.Tab>
+      </TabGroup>
 
       <div
         id="scrape-product-list"
-        className="flex shrink-0 flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100"
+        className="flex flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100 shrink-0"
       >
-        <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
-          {t("Danh sách sản phẩm")}
-        </p>
-        <span className="text-xs text-gray-400">
-          {t("Đã cào")}: <b className="text-gray-700">{crawledCount}</b>
-          <span className="mx-1 text-gray-300">·</span>
-          {t("Khớp")}: <b className="text-teal-700">{products.length}</b>
-        </span>
+        <div className="flex flex-wrap gap-2 items-center min-w-0">
+          <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
+            {productListScope === "all"
+              ? t("Tất cả sản phẩm đã cào")
+              : t("Sản phẩm khớp lọc")}
+          </p>
+          <span className="text-xs text-gray-400">
+            <b className="text-gray-700">{displayProducts.length}</b>
+            {productListScope === "all" ? (
+              <>
+                <span className="mx-1 text-gray-300">·</span>
+                {t("Khớp lọc")}: <b className="text-teal-700">{products.length}</b>
+              </>
+            ) : (
+              <>
+                <span className="mx-1 text-gray-300">·</span>
+                {t("Kho")}: <b className="text-gray-700">{crawledProducts.length}</b>
+              </>
+            )}
+            {crawledProducts.some((p) =>
+              Boolean(String((p.raw as any)?.affiliate_link_short || "").trim())
+            ) ? (
+              <>
+                <span className="mx-1 text-gray-300">·</span>
+                <span className="text-emerald-700">
+                  {t("short")}:{" "}
+                  <b>
+                    {
+                      (productListScope === "all" ? crawledProducts : products).filter((p) =>
+                        Boolean(String((p.raw as any)?.affiliate_link_short || "").trim())
+                      ).length
+                    }
+                  </b>
+                </span>
+              </>
+            ) : null}
+          </span>
+        </div>
+        <button
+          type="button"
+          disabled={!displayProducts.length}
+          onClick={handleExportDisplayCsv}
+          className="inline-flex h-8 shrink-0 items-center gap-1 rounded-lg border border-green-600 bg-green-600 px-2.5 text-xs font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-40"
+          title={
+            productListScope === "all"
+              ? (t("Xuất CSV toàn bộ kho đã cào") as string)
+              : (t("Xuất CSV danh sách khớp lọc") as string)
+          }
+        >
+          <HiDownload className="text-sm" />
+          {t("Xuất CSV")}
+        </button>
       </div>
 
-      {!products.length ? (
+      {!displayProducts.length ? (
         <div className={`flex-1 ${panelListClasses.empty}`}>
-          {t("Chưa có sản phẩm. Cấu hình filter rồi chạy crawl.")}
+          {productListScope === "all"
+            ? t("Chưa có sản phẩm trong kho. Cấu hình filter rồi chạy crawl.")
+            : crawledProducts.length
+              ? t("Không có SP khớp lọc. Hạ HH / lượt bán / HH nhận về, hoặc mở tab «Tất cả đã cào».")
+              : t("Chưa có sản phẩm. Cấu hình filter rồi chạy crawl.")}
         </div>
       ) : (
         <>
           {/* Viewport ~10 dòng; trang lớn hơn thì scroll trong khung (không dùng arbitrary [] — Tailwind cũ) */}
           <div
-            className="min-h-0 overflow-x-auto overflow-y-auto"
+            className="overflow-x-auto overflow-y-auto min-h-0"
             style={{ maxHeight: "calc(2.75rem + 10 * 2.75rem)" }}
           >
             <table className={panelListClasses.table}>
               <thead className="sticky top-0 z-10">
-                <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
+                <tr className="text-xs font-semibold text-gray-700 border-b border-gray-200 bg-bluegray-100">
                   <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
                   <th className={`${panelListClasses.th} text-left max-w-xs`}>
                     {t("Sản phẩm gốc")}
@@ -2733,14 +3153,24 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   <th className={`${panelListClasses.th} text-right`}>{t("Giá")}</th>
                   <th className={`${panelListClasses.th} text-right`}>{t("HH nhận về")}</th>
                   <th className={`${panelListClasses.th} text-center`}>{t("Ngày đăng")}</th>
+                  <th className={`${panelListClasses.th} text-center w-16`}>{t("Short")}</th>
                 </tr>
               </thead>
               <tbody className={panelListClasses.tbody}>
                 {pagedProducts.map((row, idx) => {
                   const stt = (safeProductPage - 1) * productPageSize + idx + 1;
                   const productUrl = resolveScrapeProductUrl(row, openMarketHost);
+                  const shortOk = Boolean(
+                    String((row.raw as any)?.affiliate_link_short || "").trim()
+                  );
+                  const matched = passesProductFilters(row);
                   return (
-                    <tr key={row.id} className={panelListRowClass()}>
+                    <tr
+                      key={row.id}
+                      className={`${panelListRowClass()} ${
+                        productListScope === "all" && !matched ? "opacity-70" : ""
+                      }`}
+                    >
                       <td className={`${panelListClasses.td} text-center text-gray-600`}>{stt}</td>
                       <td
                         className={`${panelListClasses.td} max-w-xs truncate font-medium text-gray-800`}
@@ -2781,21 +3211,28 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                       >
                         {formatPostedDate(row.postedAt)}
                       </td>
+                      <td className={`${panelListClasses.td} text-center`}>
+                        {shortOk ? (
+                          <span className="text-xs font-semibold text-emerald-700">✓</span>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
           </div>
-          <div className="shrink-0 border-t border-gray-100">
+          <div className="border-t border-gray-100 shrink-0">
             <PanelListPagination
               page={safeProductPage}
               totalPages={productTotalPages}
               pageSize={productPageSize}
               pageSizeOptions={[50, 100, 200, 300, 500, 1000, 1500]}
               from={(safeProductPage - 1) * productPageSize + 1}
-              to={Math.min(safeProductPage * productPageSize, products.length)}
-              total={products.length}
+              to={Math.min(safeProductPage * productPageSize, displayProducts.length)}
+              total={displayProducts.length}
               onPageChange={setProductPage}
               onPageSizeChange={(size) => {
                 setProductPageSize(size);
@@ -2826,7 +3263,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   };
 
   const crawlGioVideoForm = (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="flex flex-col h-full min-h-0">
       <div className="space-y-4">
         <div>
           <p className="m-0 mb-2 text-xs font-bold tracking-wide text-gray-500 uppercase">
@@ -2836,7 +3273,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             value={gioSourceSessionId}
             disabled={gioCrawling}
             onChange={(e) => handleSelectGioSourceSession(e.target.value)}
-            className="h-9 w-full rounded-lg border border-gray-300 bg-white px-2 text-xs font-semibold text-gray-800 outline-none focus:border-teal-400 disabled:opacity-50"
+            className="px-2 w-full h-9 text-xs font-semibold text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400 disabled:opacity-50"
             aria-label={t("Chọn Crawl Project đã lưu")}
           >
             <option value="">
@@ -2912,7 +3349,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           <div className="space-y-2">
             {gioSortRows.map((row, idx) => (
               <div key={`gio-sort-${idx}`}>
-                <label className="m-0 mb-1 block text-10 font-semibold text-gray-500">
+                <label className="block m-0 mb-1 font-semibold text-gray-500 text-10">
                   {t("Sắp xếp {{n}}", { n: idx + 1 })}
                 </label>
                 <div className="flex gap-2">
@@ -2955,16 +3392,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         </div>
       </div>
 
-      <div className="mt-4 space-y-2 border-t border-gray-100 pt-3">
+      <div className="pt-3 mt-4 space-y-2 border-t border-gray-100">
         {gioCrawlStatus ? (
-          <p className="m-0 text-10 leading-relaxed text-gray-500">{gioCrawlStatus}</p>
+          <p className="m-0 leading-relaxed text-gray-500 text-10">{gioCrawlStatus}</p>
         ) : null}
         <div className="flex flex-nowrap gap-2">
           <button
             type="button"
             disabled={gioCrawling}
             onClick={handleResetGioFilters}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-gray-300 bg-gray-200 px-2 text-xs font-bold text-gray-800 transition-colors hover:bg-gray-300 disabled:opacity-50"
+            className="inline-flex flex-1 justify-center items-center px-2 h-9 text-xs font-bold text-gray-800 bg-gray-200 rounded-lg border border-gray-300 transition-colors hover:bg-gray-300 disabled:opacity-50"
           >
             {t("Lọc lại")}
           </button>
@@ -2973,8 +3410,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             onClick={handleStartGioCrawl}
             className={`inline-flex h-9 flex-1 items-center justify-center rounded-lg border px-2 text-xs font-bold text-white transition-colors ${
               gioCrawling
-                ? "border-rose-600 bg-rose-600 hover:bg-rose-700"
-                : "border-blue-600 bg-blue-600 hover:bg-blue-700"
+                ? "bg-rose-600 border-rose-600 hover:bg-rose-700"
+                : "bg-blue-600 border-blue-600 hover:bg-blue-700"
             }`}
           >
             {gioCrawling ? (
@@ -2990,7 +3427,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             type="button"
             disabled={gioCrawling || savingGioProject || !gioVideoRows.length}
             onClick={openSaveGioProjectDialog}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-green-600 bg-green-600 px-2 text-xs font-bold text-white transition-colors hover:bg-green-700 disabled:opacity-50"
+            className="inline-flex flex-1 justify-center items-center px-2 h-9 text-xs font-bold text-white bg-green-600 rounded-lg border border-green-600 transition-colors hover:bg-green-700 disabled:opacity-50"
           >
             {savingGioProject ? <RiLoader4Line className="mr-1 animate-spin" /> : null}
             {t("Lưu project")}
@@ -3001,31 +3438,31 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   );
 
   const gioVideoListPanel = (
-    <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
+    <div className="flex overflow-hidden flex-col min-w-0 h-full min-h-0">
       <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-gray-100 px-3 py-2.5 sm:grid-cols-3">
-        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-blue-600">
+        <div className="flex flex-row gap-2 justify-between items-center px-3 py-2 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="m-0 font-semibold tracking-wide text-blue-600 uppercase text-10">
             {t("Tổng SP")}
           </p>
           <p className="m-0 text-lg font-bold tabular-nums text-blue-800">{gioVideoRows.length}</p>
         </div>
-        <div className="flex flex-row items-center justify-between gap-2 rounded-lg border border-pink-300 bg-pink-100 px-3 py-2">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-pink-700">
+        <div className="flex flex-row gap-2 justify-between items-center px-3 py-2 bg-pink-100 rounded-lg border border-pink-300">
+          <p className="m-0 font-semibold tracking-wide text-pink-700 uppercase text-10">
             {t("Hoàn thành")}
           </p>
           <p className="m-0 text-lg font-bold tabular-nums text-pink-900">{gioCompletedCount}</p>
         </div>
-        <div className="col-span-2 flex flex-row items-center justify-between gap-2 rounded-lg border border-purple-200 bg-purple-50 px-3 py-2 sm:col-span-1">
-          <p className="m-0 text-10 font-semibold uppercase tracking-wide text-purple-600">
+        <div className="flex flex-row col-span-2 gap-2 justify-between items-center px-3 py-2 bg-purple-50 rounded-lg border border-purple-200 sm:col-span-1">
+          <p className="m-0 font-semibold tracking-wide text-purple-600 uppercase text-10">
             {t("Trạng thái")}
           </p>
-          <p className="m-0 truncate text-sm font-semibold text-purple-800">
+          <p className="m-0 text-sm font-semibold text-purple-800 truncate">
             {gioCrawling ? t("Đang cào...") : gioCrawlStatus || t("Chưa chạy")}
           </p>
         </div>
       </div>
 
-      <div className="flex shrink-0 flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100">
+      <div className="flex flex-wrap gap-2 justify-between items-center px-4 py-2 border-b border-gray-100 shrink-0">
         <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
           {t("Danh sách sản phẩm")}
         </p>
@@ -3045,12 +3482,12 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       ) : (
         <>
           <div
-            className="min-h-0 overflow-x-auto overflow-y-auto"
+            className="overflow-x-auto overflow-y-auto min-h-0"
             style={{ maxHeight: "calc(2.75rem + 10 * 2.75rem)" }}
           >
             <table className={panelListClasses.table}>
               <thead className="sticky top-0 z-10">
-                <tr className="text-xs font-semibold text-gray-700 bg-bluegray-100 border-b border-gray-200">
+                <tr className="text-xs font-semibold text-gray-700 border-b border-gray-200 bg-bluegray-100">
                   <th className={`${panelListClasses.th} text-center w-14`}>{t("STT")}</th>
                   <th className={`${panelListClasses.th} text-left min-w-[10rem]`}>
                     {t("Sản phẩm gốc")}
@@ -3101,7 +3538,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                       {collectGioCartLinks(row, openMarketHost).length ? (
                         <button
                           type="button"
-                          className="cursor-pointer border-0 bg-transparent p-0 text-inherit underline-offset-2 hover:underline"
+                          className="p-0 bg-transparent border-0 cursor-pointer text-inherit underline-offset-2 hover:underline"
                           style={{ font: "inherit" }}
                           title={t("Mở giỏ video trong tab trình duyệt mới") as string}
                           onClick={() => {
@@ -3134,7 +3571,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </tbody>
             </table>
           </div>
-          <div className="shrink-0 border-t border-gray-100">
+          <div className="border-t border-gray-100 shrink-0">
             <PanelListPagination
               page={safeGioVideoPage}
               totalPages={gioVideoTotalPages}
@@ -3178,15 +3615,6 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       </span>
     );
 
-  const hasOpenaiKey = Boolean(openaiKey.trim());
-  const hasGeminiKey = Boolean(geminiKey.trim());
-  /** Gateway sẵn sàng chỉ khi đủ Endpoint + API Key + Model. */
-  const hasGateway =
-    Boolean(gatewayEndpoint.trim()) &&
-    Boolean(gatewayApiKey.trim()) &&
-    Boolean(gatewayModel.trim());
-  const hasAnyAi = hasGateway || hasOpenaiKey || hasGeminiKey;
-
   const aiReadyIcon = (
     ok: boolean,
     Icon: typeof RiCloudLine,
@@ -3210,14 +3638,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm">
+      <div className="overflow-hidden bg-white rounded-2xl border shadow-sm border-gray-200/80">
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-teal-50 to-cyan-50 text-teal-600 ring-1 ring-teal-100">
+          <div className="flex gap-3 items-center min-w-0">
+            <div className="flex justify-center items-center w-11 h-11 text-teal-600 bg-gradient-to-br from-teal-50 to-cyan-50 rounded-2xl ring-1 ring-teal-100 shrink-0">
               <RiDatabase2Line className="text-xl" />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2 items-center">
                 <h3 className="m-0 text-base font-bold tracking-tight text-gray-900">
                   {t("Cào dữ liệu")}
                 </h3>
@@ -3226,7 +3654,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   type="button"
                   disabled={loadingGpmProfiles}
                   onClick={() => void refreshAgentAndGpm()}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-400 transition-colors hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
+                  className="inline-flex justify-center items-center w-6 h-6 text-gray-400 bg-white rounded-full border border-gray-200 transition-colors hover:border-teal-300 hover:text-teal-700 disabled:opacity-50"
                   title={t("Kiểm tra lại Agent + GPM Login") as string}
                   aria-label={t("Kiểm tra lại Agent + GPM Login") as string}
                 >
@@ -3244,7 +3672,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             </div>
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <div className="flex flex-wrap gap-2 items-center shrink-0">
             <button
               type="button"
               onClick={openAiKeysDialog}
@@ -3255,7 +3683,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               }`}
               title={t("Cấu hình AI Keys") as string}
             >
-              <span className="flex items-center gap-2">
+              <span className="flex gap-2 items-center">
                 <span className="text-xs font-bold text-gray-800">{t("AI Status")}</span>
                 <span
                   className={`text-10 font-bold ${
@@ -3265,7 +3693,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   {hasAnyAi ? t("Sẵn sàng") : t("Chưa cấu hình")}
                 </span>
               </span>
-              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-10">
+              <span className="flex flex-wrap gap-y-1 gap-x-3 items-center text-10">
                 {aiReadyIcon(hasGateway, RiCloudLine, "Gateway")}
                 <span className="text-gray-300">·</span>
                 {aiReadyIcon(hasOpenaiKey, RiKey2Line, "OpenAI")}
@@ -3279,7 +3707,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
       <section
         aria-labelledby="scrape-guide-title"
-        className="overflow-hidden rounded-2xl border bg-white"
+        className="overflow-hidden bg-white rounded-2xl border"
       >
         <div className={`px-4 sm:px-5 ${guideOpen ? "py-4 sm:py-5 space-y-4" : "py-1.5 sm:py-2"}`}>
           <div
@@ -3310,7 +3738,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               <span className={`min-w-0 ${guideOpen ? "space-y-1" : ""}`}>
                 <span
                   className={`block font-semibold text-accent ${
-                    guideOpen ? "text-16 tracking-wider uppercase" : "text-11 tracking-wide"
+                    guideOpen ? "tracking-wider uppercase text-16" : "tracking-wide text-11"
                   }`}
                 >
                   {t("Hướng dẫn")}
@@ -3320,7 +3748,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   </span>
                 </span>
                 {guideOpen ? (
-                  <span className="block max-w-3xl text-12 leading-relaxed text-bluegray-500">
+                  <span className="block max-w-3xl leading-relaxed text-12 text-bluegray-500">
                     {t(
                       "Tải Agent về máy → mở GPM Login → Mở Trình duyệt → cào / xuất CSV. Trên domain HTTPS: khi Chrome hỏi quyền Local network hãy Allow (localhost web thì không cần)."
                     )}
@@ -3334,14 +3762,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
             <div className="flex flex-wrap gap-2 items-center shrink-0 sm:justify-end">
               <label className="inline-flex items-center gap-1.5">
-                <span className="text-10 font-semibold text-accent whitespace-nowrap">
+                <span className="font-semibold whitespace-nowrap text-10 text-accent">
                   {t("GPM Login")}
                 </span>
                 <select
                   value={gpmProfileId}
                   onChange={(e) => setGpmProfileId(e.target.value)}
                   disabled={opening || loadingGpmProfiles}
-                  className="h-9 min-w-40 max-w-56 text-xs font-semibold rounded-lg border border-bluegray-300 bg-white px-2 text-accent disabled:opacity-50"
+                  className="px-2 h-9 text-xs font-semibold bg-white rounded-lg border min-w-40 max-w-56 border-bluegray-300 text-accent disabled:opacity-50"
                   aria-label={t("Profile GPM Login")}
                 >
                   {!gpmProfiles.length ? (
@@ -3369,14 +3797,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 )}
               </button>
               <label className="inline-flex items-center gap-1.5">
-                <span className="text-10 font-semibold text-accent whitespace-nowrap">
+                <span className="font-semibold whitespace-nowrap text-10 text-accent">
                   {t("Quốc gia")}
                 </span>
                 <select
                   value={openMarketHost}
                   onChange={(e) => setOpenMarketHost(e.target.value)}
                   disabled={opening}
-                  className="h-9 min-w-28 text-xs font-semibold rounded-lg border border-bluegray-300 bg-white px-2 text-accent disabled:opacity-50"
+                  className="px-2 h-9 text-xs font-semibold bg-white rounded-lg border min-w-28 border-bluegray-300 text-accent disabled:opacity-50"
                   aria-label={t("Quốc gia Affiliate")}
                 >
                   {MARKET_OPTIONS.map((m) => (
@@ -3405,7 +3833,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
           {guideOpen ? (
             <div id="scrape-guide-body" className="space-y-4">
-              <ol className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 m-0 p-0 list-none">
+              <ol className="grid gap-3 p-0 m-0 list-none sm:grid-cols-2 xl:grid-cols-4">
                 {GUIDE_STEPS.map((item) => {
                   const Icon = item.Icon;
                   const isDownloadStep = item.step === "01";
@@ -3421,8 +3849,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           : "border-bluegray-200 bg-bluegray-50 hover:border-bluegray-300 hover:bg-white"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex min-w-0 items-center gap-2">
+                      <div className="flex gap-2 justify-between items-center">
+                        <div className="flex gap-2 items-center min-w-0">
                           <span
                             className={`shrink-0 text-16 font-semibold leading-none tracking-tight ${
                               isDownloadStep
@@ -3434,24 +3862,24 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           >
                             {item.step}
                           </span>
-                          <p className="m-0 truncate text-13 font-bold text-accent">
+                          <p className="m-0 font-bold truncate text-13 text-accent">
                             {t(item.titleKey)}
                           </p>
                         </div>
                         <span
                           className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border bg-white ${
                             isDownloadStep
-                              ? "border-teal-200 text-teal-700"
+                              ? "text-teal-700 border-teal-200"
                               : isGpmLoginStep
-                              ? "border-indigo-200 text-indigo-700"
+                              ? "text-indigo-700 border-indigo-200"
                               : "border-bluegray-200 text-bluegray-600"
                           }`}
                         >
                           <Icon className="text-15" />
                         </span>
                       </div>
-                      <div className="flex flex-1 flex-col gap-2 pt-2">
-                        <p className="m-0 text-12 leading-relaxed text-bluegray-500">
+                      <div className="flex flex-col flex-1 gap-2 pt-2">
+                        <p className="m-0 leading-relaxed text-12 text-bluegray-500">
                           {t(item.descKey)}
                         </p>
                         {isDownloadStep ? (
@@ -3459,7 +3887,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                             <a
                               href={SCRAPE_AGENT_ZIP_WIN_URL}
                               download={SCRAPE_AGENT_ZIP_WIN_NAME}
-                              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg bg-bluegray-600 px-2 text-12 font-semibold text-white shadow-sm transition-colors hover:bg-bluegray-700"
+                              className="inline-flex flex-1 gap-1 justify-center items-center px-2 min-w-0 h-9 font-semibold text-white rounded-lg shadow-sm transition-colors bg-bluegray-600 text-12 hover:bg-bluegray-700"
                             >
                               <HiDownload className="text-sm shrink-0" />
                               {t("Windows")}
@@ -3467,7 +3895,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                             <a
                               href={SCRAPE_AGENT_ZIP_MAC_URL}
                               download={SCRAPE_AGENT_ZIP_MAC_NAME}
-                              className="inline-flex h-9 min-w-0 flex-1 items-center justify-center gap-1 rounded-lg border border-bluegray-400 bg-white px-2 text-12 font-semibold text-bluegray-800 shadow-sm transition-colors hover:bg-bluegray-50"
+                              className="inline-flex flex-1 gap-1 justify-center items-center px-2 min-w-0 h-9 font-semibold bg-white rounded-lg border shadow-sm transition-colors border-bluegray-400 text-12 text-bluegray-800 hover:bg-bluegray-50"
                             >
                               <HiDownload className="text-sm shrink-0" />
                               {t("Mac")}
@@ -3491,8 +3919,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 })}
               </ol>
 
-              <div className="border-t border-bluegray-200 pt-3">
-                <p className="m-0 text-10 leading-relaxed text-bluegray-500">
+              <div className="pt-3 border-t border-bluegray-200">
+                <p className="m-0 leading-relaxed text-10 text-bluegray-500">
                   <span className="font-semibold text-accent">{t("Mẹo")}:</span>{" "}
                   {t(
                     "UI báo Agent offline → mở lại BatDau.bat. bấm «Mở Trình duyệt» trước khi cào."
@@ -3505,7 +3933,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       </section>
 
       {/* Tabs: form + SP list + danh sách project đã lưu theo từng tab */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="overflow-hidden bg-white rounded-xl border border-gray-200">
         <TabGroup
           name="scrape-data-sub"
           index={scrapeSubTab}
@@ -3520,20 +3948,20 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         >
           <TabGroup.Tab label={t("Crawl Project")}>
             <div className="flex flex-col">
-              <div className="flex min-h-96 overflow-hidden border-b border-gray-200">
-                <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+              <div className="flex overflow-hidden border-b border-gray-200 min-h-96">
+                <div className="overflow-y-auto p-4 w-80 border-r border-gray-200 shrink-0">
                   {crawlProjectForm}
                 </div>
-                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{productListPanel}</div>
+                <div className="overflow-hidden flex-1 min-w-0 min-h-0">{productListPanel}</div>
               </div>
 
-              <div className="space-y-3 p-4">
+              <div className="p-4 space-y-3">
                 <div className="flex flex-wrap gap-2 justify-between items-center">
                   <div className="flex gap-2 items-center">
                     <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
                       {t("Danh sách Crawl Project")}
                     </p>
-                    <span className="text-10 text-gray-400">
+                    <span className="text-gray-400 text-10">
                       {filteredSessions.length}/{crawlProjectSessions.length}
                     </span>
                   </div>
@@ -3550,7 +3978,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
                 <div className="flex flex-wrap gap-2 items-end">
                   <div>
-                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                    <p className="m-0 mb-1 font-semibold text-gray-500 uppercase text-10">
                       {t("Domain")}
                     </p>
                     <select
@@ -3567,7 +3995,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                     </select>
                   </div>
                   <div>
-                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                    <p className="m-0 mb-1 font-semibold text-gray-500 uppercase text-10">
                       {t("Năm")}
                     </p>
                     <select
@@ -3584,7 +4012,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                     </select>
                   </div>
                   <div>
-                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                    <p className="m-0 mb-1 font-semibold text-gray-500 uppercase text-10">
                       {t("Tháng")}
                     </p>
                     <select
@@ -3601,7 +4029,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                     </select>
                   </div>
                   <div>
-                    <p className="m-0 mb-1 text-10 font-semibold text-gray-500 uppercase">
+                    <p className="m-0 mb-1 font-semibold text-gray-500 uppercase text-10">
                       {t("Ngày")}
                     </p>
                     <select
@@ -3708,7 +4136,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                     <button
                                       type="button"
                                       onClick={() => handleViewSession(s)}
-                                      className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
+                                      className="inline-flex gap-1 items-center px-2 h-7 font-semibold text-teal-800 bg-teal-50 rounded-md border border-teal-200 text-10 hover:bg-teal-100"
                                       title={t("Xem trong Danh sách sản phẩm") as string}
                                     >
                                       <HiEye />
@@ -3722,7 +4150,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                           `scrape-${s.keyword || "export"}-${s.id}.csv`
                                         )
                                       }
-                                      className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
+                                      className="inline-flex gap-1 items-center px-2 h-7 font-semibold text-gray-700 bg-white rounded-md border border-gray-200 text-10 hover:bg-gray-50"
                                     >
                                       <HiDownload />
                                       CSV
@@ -3730,7 +4158,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                     <button
                                       type="button"
                                       onClick={() => void handleDeleteOne(s.id)}
-                                      className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
+                                      className="inline-flex items-center px-2 h-7 font-semibold text-rose-700 bg-rose-50 rounded-md border border-rose-200 text-10 hover:bg-rose-100"
                                     >
                                       <HiOutlineTrash />
                                     </button>
@@ -3771,7 +4199,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           type="button"
                           disabled={safePage <= 1}
                           onClick={() => setPage((p) => Math.max(1, p - 1))}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
                           aria-label={t("Trang trước")}
                         >
                           <HiChevronLeft />
@@ -3811,7 +4239,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                           type="button"
                           disabled={safePage >= totalPages}
                           onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                          className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                          className="inline-flex justify-center items-center w-7 h-7 text-gray-700 bg-white rounded-md border border-gray-200 hover:bg-gray-50 disabled:opacity-40"
                           aria-label={t("Trang sau")}
                         >
                           <HiChevronRight />
@@ -3825,20 +4253,20 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </TabGroup.Tab>
           <TabGroup.Tab label={t("Crawl Giỏ Video")}>
             <div className="flex flex-col">
-              <div className="flex min-h-96 overflow-hidden border-b border-gray-200">
-                <div className="w-80 shrink-0 border-r border-gray-200 p-4 overflow-y-auto">
+              <div className="flex overflow-hidden border-b border-gray-200 min-h-96">
+                <div className="overflow-y-auto p-4 w-80 border-r border-gray-200 shrink-0">
                   {crawlGioVideoForm}
                 </div>
-                <div className="min-h-0 min-w-0 flex-1 overflow-hidden">{gioVideoListPanel}</div>
+                <div className="overflow-hidden flex-1 min-w-0 min-h-0">{gioVideoListPanel}</div>
               </div>
 
-              <div className="space-y-3 p-4">
+              <div className="p-4 space-y-3">
                 <div className="flex flex-wrap gap-2 justify-between items-center">
                   <div className="flex gap-2 items-center">
                     <p className="m-0 text-xs font-semibold tracking-wide text-gray-500 uppercase">
                       {t("Danh sách Crawl Giỏ Video")}
                     </p>
-                    <span className="text-10 text-gray-400">{gioVideoSessions.length}</span>
+                    <span className="text-gray-400 text-10">{gioVideoSessions.length}</span>
                   </div>
                 </div>
 
@@ -3902,7 +4330,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                   <button
                                     type="button"
                                     onClick={() => handleViewGioSession(s)}
-                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-teal-200 bg-teal-50 px-2 text-10 font-semibold text-teal-800 hover:bg-teal-100"
+                                    className="inline-flex gap-1 items-center px-2 h-7 font-semibold text-teal-800 bg-teal-50 rounded-md border border-teal-200 text-10 hover:bg-teal-100"
                                     title={t("Mở lại bảng Giỏ Video") as string}
                                   >
                                     <HiEye />
@@ -3916,7 +4344,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                         `gio-video-${s.name || "export"}-${s.id}.csv`
                                       )
                                     }
-                                    className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 bg-white px-2 text-10 font-semibold text-gray-700 hover:bg-gray-50"
+                                    className="inline-flex gap-1 items-center px-2 h-7 font-semibold text-gray-700 bg-white rounded-md border border-gray-200 text-10 hover:bg-gray-50"
                                   >
                                     <HiDownload />
                                     CSV
@@ -3924,7 +4352,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                                   <button
                                     type="button"
                                     onClick={() => void handleDeleteOne(s.id)}
-                                    className="inline-flex h-7 items-center rounded-md border border-rose-200 bg-rose-50 px-2 text-10 font-semibold text-rose-700 hover:bg-rose-100"
+                                    className="inline-flex items-center px-2 h-7 font-semibold text-rose-700 bg-rose-50 rounded-md border border-rose-200 text-10 hover:bg-rose-100"
                                   >
                                     <HiOutlineTrash />
                                   </button>
@@ -3940,6 +4368,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </div>
             </div>
           </TabGroup.Tab>
+          <TabGroup.Tab label={t("Mapping Account")}>
+            <MappingAccountPanel
+              crawlProjectSessions={crawlProjectSessions}
+              gioVideoSessions={gioVideoSessions}
+              domainLabel={domainLabel}
+              parseScrapedCsvToRaws={parseScrapedCsvToRaws}
+            />
+          </TabGroup.Tab>
         </TabGroup>
       </div>
 
@@ -3954,13 +4390,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         maxWidth="95vw"
       >
         <Dialog.Body>
-          <div className="space-y-4 pt-1">
+          <div className="pt-1 space-y-4">
             <p className="m-0 text-xs text-gray-500">
               {t(
                 "Lọc Giỏ Video bằng AI. Ưu tiên Gateway (endpoint + API key, cùng cách call Flow2 như ai-scene-more), không thì OpenAI/Gemini Key. Chỉ lưu trên trình duyệt."
               )}
             </p>
-            <div className="space-y-3 rounded-xl border border-teal-200 bg-teal-50/40 px-3 py-3">
+            <div className="px-3 py-3 space-y-3 rounded-xl border border-teal-200 bg-teal-50/40">
               <div>
                 <span className="block text-sm font-semibold text-gray-800">
                   {t("Gateway (Endpoint + API Key)")}
@@ -3986,7 +4422,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   placeholder="https://flow2.viettheo.site"
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                  className="px-3 w-full h-10 text-sm text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400"
                 />
               </div>
               <div>
@@ -4005,7 +4441,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                     placeholder="f2api_..."
                     autoComplete="off"
                     spellCheck={false}
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                    className="flex-1 px-3 min-w-0 h-10 text-sm text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400"
                   />
                   <button
                     type="button"
@@ -4031,9 +4467,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   placeholder={DEFAULT_GATEWAY_MODEL}
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                  className="px-3 w-full h-10 text-sm text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400"
                 />
-                <span className="mt-1 block text-10 text-gray-500">
+                <span className="block mt-1 text-gray-500 text-10">
                   {t("Bắt buộc để Gateway sẵn sàng. VD: {{model}}", {
                     model: DEFAULT_GATEWAY_MODEL,
                   })}
@@ -4056,7 +4492,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   placeholder="sk-..."
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                  className="flex-1 px-3 min-w-0 h-10 text-sm text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400"
                 />
                 <button
                   type="button"
@@ -4069,7 +4505,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   type="button"
                   disabled={checkingOpenaiKey}
                   onClick={() => void handleCheckOpenaiKey()}
-                  className={`${aiKeyFieldBtnClass} text-teal-700`}
+                  className={`text-teal-700 ${aiKeyFieldBtnClass}`}
                 >
                   {checkingOpenaiKey ? <RiLoader4Line className="animate-spin" /> : t("Check")}
                 </button>
@@ -4091,7 +4527,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   placeholder="AIza… / AQ…"
                   autoComplete="off"
                   spellCheck={false}
-                  className="h-10 min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-800 outline-none focus:border-teal-400"
+                  className="flex-1 px-3 min-w-0 h-10 text-sm text-gray-800 bg-white rounded-lg border border-gray-300 outline-none focus:border-teal-400"
                 />
                 <button
                   type="button"
@@ -4104,27 +4540,27 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   type="button"
                   disabled={checkingGeminiKey}
                   onClick={() => void handleCheckGeminiKey()}
-                  className={`${aiKeyFieldBtnClass} text-teal-700`}
+                  className={`text-teal-700 ${aiKeyFieldBtnClass}`}
                 >
                   {checkingGeminiKey ? <RiLoader4Line className="animate-spin" /> : t("Check")}
                 </button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-1">
+            <div className="flex gap-2 justify-end pt-1">
               <button
                 type="button"
                 onClick={() => {
                   loadAiKeysFromStorage();
                   setAiKeysDialogOpen(false);
                 }}
-                className="inline-flex h-9 items-center justify-center rounded-lg border border-gray-200 bg-white px-4 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+                className="inline-flex justify-center items-center px-4 h-9 text-sm font-semibold text-gray-700 bg-white rounded-lg border border-gray-200 hover:bg-gray-50"
               >
                 {t("Hủy")}
               </button>
               <button
                 type="button"
                 onClick={handleSaveAiKeys}
-                className="inline-flex h-9 items-center justify-center rounded-lg bg-success px-4 text-sm font-semibold text-white hover:bg-success-dark"
+                className="inline-flex justify-center items-center px-4 h-9 text-sm font-semibold text-white rounded-lg bg-success hover:bg-success-dark"
               >
                 {t("Lưu")}
               </button>
@@ -4143,7 +4579,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         maxWidth="95vw"
       >
         <Dialog.Body>
-          <div className="space-y-4 pt-1">
+          <div className="pt-1 space-y-4">
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700">
                 {t("Tên project")}
@@ -4159,36 +4595,122 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   }
                 }}
                 placeholder="Crawl Project 1"
-                className="h-10 w-full rounded border border-gray-300 px-3 text-sm outline-none focus:border-blue-400"
+                className="px-3 w-full h-10 text-sm rounded border border-gray-300 outline-none focus:border-blue-400"
               />
-              <span className="mt-1 block text-xs text-gray-500">
+              <span className="block mt-1 text-xs text-gray-500">
                 {t("Tên sẽ hiện trong Danh sách cào (CSV)")}
               </span>
             </label>
             <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex gap-3 justify-between items-center">
                 <span className="text-sm font-medium text-gray-700">
-                  {t("Dùng AI generate mô tả & hashtag")}
+                  {t("Thêm Link affiliate Shopee")}
                 </span>
                 <Switch
                   size="sm"
                   dependent
-                  value={saveUseAiSeo}
-                  onChange={(v) => setSaveUseAiSeo(Boolean(v))}
+                  value={saveUseAffiliateShortLink}
+                  onChange={(v) => setSaveUseAffiliateShortLink(Boolean(v))}
                 />
               </div>
               <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
                 {t(
-                  "Nếu chức năng AI được bật thì hệ thống sẽ dựa vào tên sản phẩm mà generate ra mô tả sản phẩm và #hashtags cho sản phẩm đó."
+                  "Bật: chuyển long_link sang short link affiliate Shopee (cần Mở Trình duyệt). Tắt: không rút gọn, không gọi API short link."
                 )}
               </p>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 space-y-3">
+              <div>
+                <div className="flex gap-3 justify-between items-center">
+                  <span
+                    className={`text-sm font-medium ${
+                      hasAnyAi ? "text-gray-700" : "text-gray-400"
+                    }`}
+                  >
+                    {t("Sử dụng AI generate mô tả")}
+                  </span>
+                  <Switch
+                    size="sm"
+                    dependent
+                    value={saveUseAiDescription && hasAnyAi}
+                    className={!hasAnyAi ? "opacity-60" : ""}
+                    onChange={async (v) => {
+                      const on = Boolean(v);
+                      if (!on) {
+                        setSaveUseAiDescription(false);
+                        return;
+                      }
+                      if (!hasAnyAi) {
+                        const ok = await alert.warn?.(
+                          t("AI chưa sẵn sàng"),
+                          t("Vui lòng thêm API key AI để sử dụng tính năng này."),
+                          t("Thêm API Key")
+                        );
+                        if (ok) {
+                          setSaveDialogOpen(false);
+                          openAiKeysDialog();
+                        }
+                        return;
+                      }
+                      setSaveUseAiDescription(true);
+                    }}
+                  />
+                </div>
+                <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
+                  {t(
+                    "Bật: AI tạo mô tả SEO (SP chưa có description). Tắt: giữ nguyên mô tả."
+                  )}
+                </p>
+              </div>
+              <div className="border-t border-gray-200 pt-3">
+                <div className="flex gap-3 justify-between items-center">
+                  <span
+                    className={`text-sm font-medium ${
+                      hasAnyAi ? "text-gray-700" : "text-gray-400"
+                    }`}
+                  >
+                    {t("Sử dụng AI generate hashtag")}
+                  </span>
+                  <Switch
+                    size="sm"
+                    dependent
+                    value={saveUseAiHashtag && hasAnyAi}
+                    className={!hasAnyAi ? "opacity-60" : ""}
+                    onChange={async (v) => {
+                      const on = Boolean(v);
+                      if (!on) {
+                        setSaveUseAiHashtag(false);
+                        return;
+                      }
+                      if (!hasAnyAi) {
+                        const ok = await alert.warn?.(
+                          t("AI chưa sẵn sàng"),
+                          t("Vui lòng thêm API key AI để sử dụng tính năng này."),
+                          t("Thêm API Key")
+                        );
+                        if (ok) {
+                          setSaveDialogOpen(false);
+                          openAiKeysDialog();
+                        }
+                        return;
+                      }
+                      setSaveUseAiHashtag(true);
+                    }}
+                  />
+                </div>
+                <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
+                  {t(
+                    "Bật: AI tạo #hashtags (SP chưa có hashtag). Tắt: giữ nguyên hashtag."
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 disabled={savingProject}
                 onClick={() => setSaveDialogOpen(false)}
-                className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50"
+                className="px-4 h-9 text-sm font-bold text-white bg-gray-600 rounded-lg hover:bg-gray-700 disabled:opacity-50"
               >
                 {t("Hủy")}
               </button>
@@ -4216,7 +4738,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         maxWidth="95vw"
       >
         <Dialog.Body>
-          <div className="space-y-4 pt-1">
+          <div className="pt-1 space-y-4">
             <label className="block">
               <span className="mb-1.5 block text-sm font-medium text-gray-700">
                 {t("Tên project")}
@@ -4232,18 +4754,18 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                   }
                 }}
                 placeholder="Crawl Giỏ Video 1"
-                className="h-10 w-full rounded border border-gray-300 px-3 text-sm outline-none focus:border-blue-400"
+                className="px-3 w-full h-10 text-sm rounded border border-gray-300 outline-none focus:border-blue-400"
               />
-              <span className="mt-1 block text-xs text-gray-500">
+              <span className="block mt-1 text-xs text-gray-500">
                 {t("Lưu riêng danh sách kết quả Giỏ Video (không lẫn Crawl Project).")}
               </span>
             </label>
-            <div className="flex justify-end gap-2">
+            <div className="flex gap-2 justify-end">
               <button
                 type="button"
                 disabled={savingGioProject}
                 onClick={() => setGioSaveDialogOpen(false)}
-                className="h-9 rounded-lg bg-gray-600 px-4 text-sm font-bold text-white hover:bg-gray-700 disabled:opacity-50"
+                className="px-4 h-9 text-sm font-bold text-white bg-gray-600 rounded-lg hover:bg-gray-700 disabled:opacity-50"
               >
                 {t("Hủy")}
               </button>
@@ -4271,10 +4793,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         maxWidth="95vw"
       >
         <Dialog.Body>
-          <div className="space-y-4 pt-1">
+          <div className="pt-1 space-y-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="m-0 min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">
+              <div className="flex gap-3 justify-between items-center">
+                <p className="flex-1 m-0 min-w-0 text-sm font-semibold truncate text-slate-800">
                   {saveProgressStatus || t("Đang xử lý…")}
                 </p>
                 <span
@@ -4289,7 +4811,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               </div>
               {/* Progress fill dùng inline style — tránh Tailwind purge / h-full collapse */}
               <div
-                className="relative w-full overflow-hidden rounded-full"
+                className="overflow-hidden relative w-full rounded-full"
                 style={{ height: 10, backgroundColor: "#e2e8f0" }}
                 role="progressbar"
                 aria-valuenow={saveProgressPercent}
@@ -4324,16 +4846,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
               }}
             >
               <div
-                className="flex items-center justify-between gap-2 px-3 py-2"
+                className="flex gap-2 justify-between items-center px-3 py-2"
                 style={{
                   borderBottom: "1px solid rgba(51,65,85,0.8)",
                   background: "rgba(15,23,42,0.85)",
                 }}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2 items-center">
                   <span
                     className={`inline-block h-2 w-2 rounded-full ${
-                      savingProject ? "animate-pulse bg-teal-400" : "bg-slate-500"
+                      savingProject ? "bg-teal-400 animate-pulse" : "bg-slate-500"
                     }`}
                   />
                   <span
@@ -4398,7 +4920,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
                 type="button"
                 disabled={savingProject}
                 onClick={() => setSaveProgressOpen(false)}
-                className="inline-flex h-9 items-center justify-center rounded-lg bg-teal-600 px-4 text-sm font-semibold text-white hover:bg-teal-700 disabled:opacity-50"
+                className="inline-flex justify-center items-center px-4 h-9 text-sm font-semibold text-white bg-teal-600 rounded-lg hover:bg-teal-700 disabled:opacity-50"
               >
                 {savingProject ? t("Đang chạy…") : t("Đóng")}
               </button>

@@ -195,6 +195,104 @@ export function normalizeApiPriceFields<T extends Record<string, unknown>>(raw: 
   return out;
 }
 
+/**
+ * Field lõi luôn có trên mỗi SP khi cào / lưu CSV.
+ * (hashtags + affiliate_link_short thường bổ sung lúc Lưu project.)
+ */
+export const CRAWL_PRODUCT_CORE_KEYS = [
+  "item_id",
+  "shopid",
+  "name",
+  "shop_name",
+  "hashtags",
+  "seller_commission_rate",
+  "default_commission_rate",
+  "long_link",
+  "affiliate_link_short",
+  "product_link",
+  "image_url",
+  "price",
+  "price_min",
+  "price_max",
+  "sold",
+] as const;
+
+function marketMetaFromHost(marketHost?: string): { mallHost: string; imageCdn: string } {
+  const host = String(marketHost || "affiliate.shopee.vn").toLowerCase();
+  const m = host.match(/^affiliate\.(shopee\..+)$/i);
+  const mallHost = (m?.[1] || "shopee.vn").toLowerCase();
+  const tld = mallHost.replace(/^shopee\./i, "");
+  const cdnRegion = tld.split(".")[0] || "vn";
+  return {
+    mallHost,
+    imageCdn: `https://down-${cdnRegion}.img.susercontent.com/file/`,
+  };
+}
+
+function formatCrawlImageUrl(imageId: unknown, imageCdn: string): string {
+  if (imageId == null || imageId === "") return "";
+  const s = String(imageId);
+  if (/^https?:\/\//i.test(s)) return s;
+  return `${imageCdn}${s}`;
+}
+
+/**
+ * Chuẩn hóa raw SP: đủ field lõi (item_id, shopid, price*, sold, …)
+ * lấy từ top-level hoặc batch_item_for_item_card_full.
+ */
+export function ensureCrawlProductRaw(
+  raw: AffiliateProductRaw,
+  opts?: { marketHost?: string }
+): AffiliateProductRaw {
+  const out = normalizeApiPriceFields({ ...(raw || {}) }) as AffiliateProductRaw;
+  const card = asRecord(out.batch_item_for_item_card_full);
+  const { mallHost, imageCdn } = marketMetaFromHost(opts?.marketHost);
+
+  const itemId = String(pickField(out, card, "item_id", "itemid") ?? "");
+  const shopId = String(pickField(out, card, "shopid", "shop_id") ?? "");
+
+  const fill = (key: string, ...alts: string[]) => {
+    if (out[key] != null && out[key] !== "") return;
+    const v = pickField(out, card, key, ...alts);
+    if (v != null && v !== "") out[key] = v;
+    else if (out[key] == null) out[key] = "";
+  };
+
+  fill("item_id", "itemid");
+  if (!out.item_id && itemId) out.item_id = itemId;
+  fill("shopid", "shop_id");
+  if (!out.shopid && shopId) out.shopid = shopId;
+  fill("name", "product_name");
+  fill("shop_name");
+  fill("seller_commission_rate");
+  fill("default_commission_rate");
+  fill("long_link", "affiliate_link");
+  fill("product_link");
+  fill("price");
+  fill("price_min");
+  fill("price_max");
+  fill("sold", "historical_sold", "sold_count");
+
+  if (out.hashtags == null) out.hashtags = "";
+  if (out.affiliate_link_short == null) out.affiliate_link_short = "";
+
+  if (!out.product_link && shopId && itemId) {
+    out.product_link = `https://${mallHost}/product/${shopId}/${itemId}`;
+  }
+
+  if (!out.image_url) {
+    const imageId = pickField(out, card, "image", "image_url");
+    out.image_url = formatCrawlImageUrl(imageId, imageCdn);
+  }
+
+  // Đảm bảo mọi core key tồn tại (kể cả rỗng) để CSV/UI ổn định
+  for (const key of CRAWL_PRODUCT_CORE_KEYS) {
+    if (out[key] == null) out[key] = "";
+  }
+
+  return out;
+}
+
 export function parseSales(raw: unknown): number {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? Math.round(n) : 0;
@@ -266,7 +364,11 @@ export function mapRawToScrapeRow(
   const shopId = String(pickField(row, card, "shopid", "shop_id") ?? "");
   const commissionPct = pickCommissionPct(row, card);
   const price = parsePriceVnd(pickField(row, card, "price_min", "price", "price_max"));
-  const sales = parseSales(pickField(row, card, "historical_sold", "sold", "sold_count"));
+  // Ưu tiên `sold` (field API hiển thị); fallback historical_sold / sold_count
+  const sales = Math.max(
+    parseSales(pickField(row, card, "sold")),
+    parseSales(pickField(row, card, "historical_sold", "sold_count"))
+  );
   const ctime = Number(pickField(row, card, "ctime"));
   const postedAt = Number.isFinite(ctime) && ctime > 0 ? (ctime < 1e12 ? ctime * 1000 : ctime) : 0;
 

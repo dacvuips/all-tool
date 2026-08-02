@@ -529,7 +529,8 @@ export async function removeAllScrapeCsvSessions(): Promise<void> {
 }
 
 export function downloadCsvText(csv: string, filename: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  // BOM để Excel Windows mở đúng tiếng Việt (UTF-8)
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

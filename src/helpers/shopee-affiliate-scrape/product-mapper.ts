@@ -19,6 +19,7 @@ export const PREFERRED_CSV_KEYS: string[] = [
   "shopid",
   "name",
   "shop_name",
+  "hashtags",
   "seller_commission_rate",
   "default_commission_rate",
   "max_commission_rate",
@@ -27,8 +28,6 @@ export const PREFERRED_CSV_KEYS: string[] = [
   "product_link",
   "image",
   "image_url",
-  "images",
-  "currency",
   "price",
   "price_min",
   "price_max",
@@ -192,7 +191,13 @@ export function flattenProduct(
 
   // Field bổ sung (không có trong API raw)
   row.image_url = formatImageUrl(card.image, market);
-  row.affiliate_link_short = "";
+  row.affiliate_link_short = row.affiliate_link_short || "";
+  if (row.hashtags == null) row.hashtags = "";
+  // Đảm bảo price / sold luôn có key (kể cả rỗng)
+  if (row.price == null) row.price = card.price ?? "";
+  if (row.price_min == null) row.price_min = card.price_min ?? "";
+  if (row.price_max == null) row.price_max = card.price_max ?? "";
+  if (row.sold == null) row.sold = card.sold ?? card.historical_sold ?? "";
 
   return row;
 }

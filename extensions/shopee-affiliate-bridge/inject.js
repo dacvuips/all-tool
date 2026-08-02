@@ -150,7 +150,12 @@
     }
 
     row.image_url = formatImageUrl(card.image, market);
-    row.affiliate_link_short = "";
+    row.affiliate_link_short = row.affiliate_link_short || "";
+    if (row.hashtags == null) row.hashtags = "";
+    if (row.price == null) row.price = card.price ?? "";
+    if (row.price_min == null) row.price_min = card.price_min ?? "";
+    if (row.price_max == null) row.price_max = card.price_max ?? "";
+    if (row.sold == null) row.sold = card.sold ?? card.historical_sold ?? "";
     return row;
   }
 

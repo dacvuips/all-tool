@@ -6,6 +6,7 @@
  * - merged-videos (legacy Blob — fallback đọc)
  * - import-history (phiên import / làm việc)
  * - scrape-csv-sessions (CSV scrape GPM Login/CDP)
+ * - mapping-csv-sessions (CSV Mapping Account)
  * - threads (per-item record; source of truth cho lazy list)
  * - thread-meta (aggregate stats theo sessionId)
  * - users (danh sách tài khoản + item Generate đã gắn)
@@ -15,12 +16,13 @@
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 10;
+const DB_VERSION = 11;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
 const STORE_IMPORT_HISTORY = "import-history";
 const STORE_SCRAPE_CSV = "scrape-csv-sessions";
+const STORE_MAPPING_CSV = "mapping-csv-sessions";
 const STORE_THREADS = "threads";
 const STORE_THREAD_META = "thread-meta";
 const STORE_USERS = "users";
@@ -92,6 +94,24 @@ export type ScrapeCsvSessionRecord = {
   durationMs: number;
 };
 
+/** CSV Mapping Account — kết quả phân bổ SP → username. */
+export type MappingCsvSessionRecord = {
+  id: string;
+  createdAt: number;
+  name: string;
+  sourceKind: "crawl-project" | "gio-video";
+  sourceSessionId: string;
+  sourceSessionName: string;
+  marketHost: string;
+  accountCount: number;
+  /** Số dòng đã map trong CSV */
+  rowCount: number;
+  /** Số SP nguồn */
+  productCount: number;
+  skippedProducts: number;
+  csv: string;
+};
+
 /** Bản ghi 1 luồng (thread) trong 1 session — source of truth cho lazy list. */
 export type ThreadRecord = {
   /** Item id */
@@ -148,6 +168,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_SCRAPE_CSV)) {
         db.createObjectStore(STORE_SCRAPE_CSV, { keyPath: "id" });
+      }
+      if (!db.objectStoreNames.contains(STORE_MAPPING_CSV)) {
+        db.createObjectStore(STORE_MAPPING_CSV, { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains(STORE_THREADS)) {
         const store = db.createObjectStore(STORE_THREADS, { keyPath: "id" });
@@ -437,6 +460,50 @@ export async function idbClearScrapeCsvSessions(): Promise<void> {
     try {
       const tx = db.transaction(STORE_SCRAPE_CSV, "readwrite");
       tx.objectStore(STORE_SCRAPE_CSV).clear();
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
+/** ==================== MAPPING CSV ==================== */
+
+export async function idbGetMappingCsvSessions(): Promise<MappingCsvSessionRecord[]> {
+  try {
+    const db = await openDB();
+    return await new Promise<MappingCsvSessionRecord[]>((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORE_MAPPING_CSV, "readonly");
+        const store = tx.objectStore(STORE_MAPPING_CSV);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(Array.isArray(req.result) ? req.result : []);
+        req.onerror = () => reject(req.error);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get mapping csv sessions failed", err);
+    return [];
+  }
+}
+
+export async function idbPutMappingCsvSession(record: MappingCsvSessionRecord): Promise<void> {
+  await withStore(STORE_MAPPING_CSV, "readwrite", (s) => s.put(record));
+}
+
+export async function idbDeleteMappingCsvSession(id: string): Promise<void> {
+  await withStore(STORE_MAPPING_CSV, "readwrite", (s) => s.delete(id));
+}
+
+export async function idbClearMappingCsvSessions(): Promise<void> {
+  const db = await openDB();
+  await new Promise<void>((resolve, reject) => {
+    try {
+      const tx = db.transaction(STORE_MAPPING_CSV, "readwrite");
+      tx.objectStore(STORE_MAPPING_CSV).clear();
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     } catch (err) {
