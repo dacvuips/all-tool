@@ -45,12 +45,21 @@ type Props = {
   parseScrapedCsvToRaws: (csv: string) => Record<string, unknown>[];
 };
 
+/** Chỉ username — bỏ domain trong tên profile GPM (`user · shopee.vn`). */
+function toMappingUsername(raw: string): string {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  const sep = s.indexOf(" · ");
+  if (sep > 0) s = s.slice(0, sep).trim();
+  return s;
+}
+
 async function loadMappingAccountNames(): Promise<string[]> {
   const users = await loadUsers().catch(() => []);
   const userByProfileId = new Map<string, string>();
   for (const u of users) {
     const pid = String(u.gpmProfileId || "").trim();
-    const username = String(u.username || "").trim();
+    const username = toMappingUsername(String(u.username || ""));
     if (pid && username) userByProfileId.set(pid, username);
   }
 
@@ -60,7 +69,7 @@ async function loadMappingAccountNames(): Promise<string[]> {
       .map((p) => {
         const fromUser = userByProfileId.get(p.id);
         if (fromUser) return fromUser;
-        return String(p.name || "").trim();
+        return toMappingUsername(String(p.name || ""));
       })
       .filter(Boolean);
     if (names.length) return Array.from(new Set(names));
@@ -68,7 +77,9 @@ async function loadMappingAccountNames(): Promise<string[]> {
     // Agent offline — fallback danh sách tài khoản đã gắn
   }
 
-  const fromUsers = users.map((u) => String(u.username || "").trim()).filter(Boolean);
+  const fromUsers = users
+    .map((u) => toMappingUsername(String(u.username || "")))
+    .filter(Boolean);
   return Array.from(new Set(fromUsers));
 }
 
