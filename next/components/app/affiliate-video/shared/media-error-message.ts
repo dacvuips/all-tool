@@ -1,19 +1,21 @@
 /**
  * Chuẩn hoá lỗi generate ảnh/video cho UI end-user.
- * Ẩn mã kỹ thuật (failed: task_timeout_20m, Flow2, PUBLIC_ERROR, …).
+ * Chỉ ẩn mã kỹ thuật (PUBLIC_ERROR_*, failed: task_timeout, Flow2/API provider…).
+ * Các thông báo UX / business khác giữ nguyên.
  */
 
 export const MEDIA_SYSTEM_BUSY_MESSAGE =
   "Hệ thống đang bận, vui lòng nhấp nút tạo lại";
 
-/** Giữ nguyên thông báo UX có chủ đích (dừng, giới hạn concurrency, lưu local, content policy…). */
-const KEEP_ORIGINAL_PATTERNS = [
-  /^đã dừng/i,
-  /^đã huỷ/i,
-  /^đã hủy/i,
-  /cùng lúc/i,
-  /không thể lưu/i,
-  /content policy/i,
+/** Lỗi kỹ thuật từ provider/queue — thay bằng thông báo chung. */
+const TECHNICAL_ERROR_PATTERNS = [
+  /PUBLIC_ERROR_/i,
+  /failed:\s*/i,
+  /task_timeout/i,
+  /Google Labs API error/i,
+  /Aisandbox API error/i,
+  /Flow2\b.*\b(error|thất bại|enqueue)/i,
+  /MEDIA_GENERATION_STATUS_/i,
 ];
 
 export function toUserFriendlyMediaErrorMessage(
@@ -22,7 +24,8 @@ export function toUserFriendlyMediaErrorMessage(
   if (message == null) return null;
   const trimmed = message.trim();
   if (!trimmed) return trimmed;
-  if (KEEP_ORIGINAL_PATTERNS.some((re) => re.test(trimmed))) return trimmed;
-  if (trimmed.includes("Hệ thống đang bận")) return trimmed;
-  return MEDIA_SYSTEM_BUSY_MESSAGE;
+  if (TECHNICAL_ERROR_PATTERNS.some((re) => re.test(trimmed))) {
+    return MEDIA_SYSTEM_BUSY_MESSAGE;
+  }
+  return trimmed;
 }
