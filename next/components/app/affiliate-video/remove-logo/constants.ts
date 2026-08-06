@@ -229,3 +229,97 @@ export function makeCleanedFileName(name: string, kind: RemoveLogoMediaKind): st
       : name.match(/\.(jpe?g|png|webp|gif)$/i)?.[1]?.toLowerCase() || "jpg";
   return `${base}-no-logo.${ext}`;
 }
+
+export function base64ToBlob(base64: string, mimeType: string): Blob | null {
+  const pure = stripToPureBase64(base64);
+  if (!pure) return null;
+  try {
+    const binary = atob(pure);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: normalizeImageMime(mimeType) || mimeType || "application/octet-stream" });
+    return blob.size ? blob : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tạo tên file unique trong ZIP khi trùng tên. */
+export function uniqueZipFileName(used: Set<string>, fileName: string): string {
+  if (!used.has(fileName)) {
+    used.add(fileName);
+    return fileName;
+  }
+  const dot = fileName.lastIndexOf(".");
+  const base = dot > 0 ? fileName.slice(0, dot) : fileName;
+  const ext = dot > 0 ? fileName.slice(dot) : "";
+  let i = 2;
+  let next = `${base}-${i}${ext}`;
+  while (used.has(next)) {
+    i += 1;
+    next = `${base}-${i}${ext}`;
+  }
+  used.add(next);
+  return next;
+}
+
+/**
+ * Tải hàng loạt kết quả đã clear (zip).
+ * @returns số file đã đóng gói
+ */
+export async function downloadHistoryBatchAsZip(
+  items: RemoveLogoHistoryItem[],
+  kind: RemoveLogoMediaKind,
+  onProgress?: (current: number, total: number) => void
+): Promise<number> {
+  const target = items.filter(
+    (it) => it.kind === kind && !!(it.cleanedBase64 || it.cleanedUrl)
+  );
+  if (!target.length) return 0;
+
+  const { default: JSZip } = await import("jszip");
+  const { saveAs } = await import("file-saver");
+  const zip = new JSZip();
+  const usedNames = new Set<string>();
+  let packed = 0;
+
+  for (let i = 0; i < target.length; i++) {
+    const item = target[i];
+    let blob: Blob | null = null;
+
+    if (item.cleanedBase64) {
+      blob = base64ToBlob(
+        item.cleanedBase64,
+        item.cleanedMimeType || item.mimeType || (kind === "video" ? "video/mp4" : "image/jpeg")
+      );
+    }
+
+    if (!blob && item.cleanedUrl) {
+      try {
+        const res = await fetch(item.cleanedUrl);
+        if (res.ok) blob = await res.blob();
+      } catch {
+        // skip
+      }
+    }
+
+    if (!blob?.size) {
+      onProgress?.(i + 1, target.length);
+      continue;
+    }
+
+    const fileName = uniqueZipFileName(usedNames, makeCleanedFileName(item.name, kind));
+    zip.file(fileName, await blob.arrayBuffer());
+    packed += 1;
+    onProgress?.(i + 1, target.length);
+  }
+
+  if (!packed) return 0;
+
+  const date = new Date().toISOString().slice(0, 10);
+  const zipName =
+    kind === "image" ? `remove-logo-images-${date}.zip` : `remove-logo-videos-${date}.zip`;
+  const content = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+  saveAs(content, zipName);
+  return packed;
+}
