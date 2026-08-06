@@ -296,6 +296,7 @@ export const DB_NAME = {
   generateReview: "generate-review",
   affiliateChat: "affiliate-chat",
   wolf: "wolfDB",
+  removeLogo: "remove-logo",
 };
 export const STORE_NAME = {
   generateScene: "generate-scene",
@@ -310,6 +311,7 @@ export const STORE_NAME = {
   wolfSceneImages: "wolf-scene-images",
   wolfSceneVideos: "wolf-scene-videos",
   wolfComposerSettings: "wolf-composer-settings",
+  removeLogoHistory: "remove-logo-history",
 };
 
 /** Phân loại từng loại chat AI (mỗi loại = 1 key IndexedDB riêng) */
@@ -340,6 +342,8 @@ export const CACHE_KEY = {
   lastStoryboardScript: "lastStoryboardScript",
   storyboardInput: "storyboardInput",
   storyboardHistory: "storyboardHistory",
+  /** Lịch sử xóa logo AI */
+  removeLogoHistory: "removeLogoHistory",
   /** Mặc định tự động tải ảnh/video sau khi gen (localStorage) */
   autoDownloadAfterGen: "affiliate-video:autoDownloadAfterGen",
   /** Độ phân giải ảnh khi tự động tải sau gen: 1K | 2K | 4K */

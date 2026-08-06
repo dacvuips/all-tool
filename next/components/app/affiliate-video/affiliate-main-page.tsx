@@ -12,6 +12,7 @@ import {
   RiGridLine,
   RiImage2Fill,
   RiListOrdered,
+  RiMagicLine,
 } from "react-icons/ri";
 
 import { IoAppsSharp } from "react-icons/io5";
@@ -22,6 +23,7 @@ import { AppPage } from "./app/app-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { ElementPage } from "./elements/element-page";
+import { RemoveLogoPage } from "./remove-logo/remove-logo-page";
 import { ReviewPage } from "./review-product/review-page";
 import { AffiliateSingleVideoPage } from "./single/single-video-page";
 import { StoryboardPage } from "./storyboard/storyboard-page";
@@ -90,6 +92,12 @@ export default function AffiliateMainPage() {
       label: t("Storyboard"),
       value: "storyboard",
       component: <StoryboardPage />,
+    },
+    {
+      icon: <RiMagicLine />,
+      label: t("Xóa Logo AI"),
+      value: "remove-logo",
+      component: <RemoveLogoPage />,
     },
 
     {

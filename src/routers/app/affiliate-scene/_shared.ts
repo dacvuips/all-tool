@@ -1,7 +1,7 @@
 import logger from "../../../helpers/logger";
 import { ArtStyleModel } from "../../../libs/dal/art-style/art-style.model";
 import { credentialService } from "../../../libs/dal/credential";
-import { CustomerModel, CustomerStatusEnum } from "../../../libs/dal/customer";
+import { CustomerModel, CustomerStatusEnum, SubscriptionPlanEnum } from "../../../libs/dal/customer";
 import { SettingModel } from "../../../libs/dal/setting";
 import { ObjectToPersonifyModel } from "../../../libs/dal/objectToPersonify/objectToPersonify.model";
 import { AiProviderKeyEnum } from "../../../libs/dal/product";
@@ -298,12 +298,90 @@ export async function checkVideoLimit(customerId: string): Promise<void> {
   }
 }
 
-export async function incrementImageCount(customerId: string): Promise<void> {
-  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.imageCount": 1 } });
+export async function incrementImageCount(customerId: string, amount = 1): Promise<void> {
+  const n = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 1;
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.imageCount": n } });
 }
 
-export async function incrementVideoCount(customerId: string): Promise<void> {
-  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": 1 } });
+export async function incrementVideoCount(customerId: string, amount = 1): Promise<void> {
+  const n = Number.isFinite(amount) && amount > 0 ? Math.floor(amount) : 1;
+  await CustomerModel.findByIdAndUpdate(customerId, { $inc: { "googlePackage.videoCount": n } });
+}
+
+/** Gói Basic trở lên (không dùng cho FREE / TRIAL). */
+const PAID_SUBSCRIPTION_PLANS = new Set<string>([
+  SubscriptionPlanEnum.BASIC,
+  SubscriptionPlanEnum.STANDARD,
+  SubscriptionPlanEnum.PROFESSIONAL,
+  SubscriptionPlanEnum.ENTERPRISE,
+]);
+
+export function isPaidSubscriptionPlan(subscription?: string | null): boolean {
+  return !!subscription && PAID_SUBSCRIPTION_PLANS.has(subscription);
+}
+
+/** Xóa Logo AI chỉ dành cho gói Basic trở lên. */
+export async function assertPaidPackageForWatermark(customerId: string): Promise<void> {
+  const customer = await CustomerModel.findById(customerId)
+    .select("status googlePackage.subscription")
+    .lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+  if (customer.status !== CustomerStatusEnum.ACTIVE) {
+    const err: any = new Error("Tài khoản bị khóa hoặc ngừng kích hoạt");
+    err.statusCode = 403;
+    throw err;
+  }
+  const subscription = customer.googlePackage?.subscription;
+  if (!isPaidSubscriptionPlan(subscription)) {
+    const err: any = new Error(
+      "Chức năng Xóa Logo AI chỉ dành cho gói Basic trở lên. Vui lòng nâng cấp gói để sử dụng."
+    );
+    err.statusCode = 403;
+    throw err;
+  }
+}
+
+/** Số slot còn lại (limit -1 hoặc không set limit hợp lệ → unlimited). */
+export function calcQuotaRemaining(count?: number, limit?: number): number {
+  const used = count || 0;
+  if (limit == null || limit < 0) return Number.MAX_SAFE_INTEGER;
+  return Math.max(0, limit - used);
+}
+
+export async function getImageVideoQuotaRemaining(customerId: string): Promise<{
+  imageRemaining: number;
+  videoRemaining: number;
+  imageCount: number;
+  imageLimit: number;
+  videoCount: number;
+  videoLimit: number;
+}> {
+  const customer = await CustomerModel.findById(customerId)
+    .select(
+      "googlePackage.imageCount googlePackage.imageLimit googlePackage.videoCount googlePackage.videoLimit"
+    )
+    .lean();
+  if (!customer) {
+    const err: any = new Error("Không tìm thấy thông tin khách hàng");
+    err.statusCode = 404;
+    throw err;
+  }
+  const imageCount = customer.googlePackage?.imageCount || 0;
+  const imageLimit = customer.googlePackage?.imageLimit ?? 0;
+  const videoCount = customer.googlePackage?.videoCount || 0;
+  const videoLimit = customer.googlePackage?.videoLimit ?? 0;
+  return {
+    imageCount,
+    imageLimit,
+    videoCount,
+    videoLimit,
+    imageRemaining: calcQuotaRemaining(imageCount, imageLimit),
+    videoRemaining: calcQuotaRemaining(videoCount, videoLimit),
+  };
 }
 
 function buildRequestLimitExceededError(currentCount: number, limit: number): Error {

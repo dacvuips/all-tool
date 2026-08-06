@@ -37,7 +37,7 @@ export default function startExpressApp() {
     compression({
       filter: (req, res) => {
         if (
-          /generation-(element-)?(video|image)|copy-video-generate-image|upsample-(video|image)|storyboard-ai-suggest/.test(
+          /generation-(element-)?(video|image)|copy-video-generate-image|upsample-(video|image)|storyboard-ai-suggest|clean-watermark/.test(
             req.path
           )
         ) {
@@ -47,9 +47,9 @@ export default function startExpressApp() {
       },
     })
   );
-  // Body Parser
-  app.use(json({ limit: "50mb" }));
-  app.use(urlencoded({ extended: true, limit: "50mb" }));
+  // Body Parser — 80mb để chứa video 50MB encode base64 (~67MB + overhead)
+  app.use(json({ limit: "80mb" }));
+  app.use(urlencoded({ extended: true, limit: "80mb" }));
   // Config use cookie
   app.use(cookieParser(config.get<string>("secret")));
   // Auto-generate cart session ID if not exists to cookie
