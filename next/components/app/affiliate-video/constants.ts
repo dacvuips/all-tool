@@ -62,6 +62,12 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
   tipContent: string;
   storyModeType: StoryModeTypeEnum;
   /**
+   * Storyboard: bắt buộc tạo ảnh (tab Ảnh) trước khi tạo video.
+   * - true: giữ luồng image_to_video (gen/upload ảnh → video dùng ảnh đó)
+   * - false (mặc định): ẩn tab Ảnh, video dùng ảnh gốc (storyboard crop) làm tham chiếu
+   */
+  requireImageBeforeVideo?: boolean;
+  /**
    * Chế độ tạo batch ở tab "Đơn":
    * - single_variant: "Tự động" – AI tự tạo nhiều phiên bản dựa trên prompt gốc
    * - story_script: "Tùy chỉnh phân cảnh" – Người dùng tự bố cục phân cảnh

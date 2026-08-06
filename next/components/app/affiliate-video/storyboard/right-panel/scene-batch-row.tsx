@@ -203,8 +203,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     providerContext: storyboardContext,
   });
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
+  const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
+  const hasOriginImage = !!(scene.storyboardCropImage?.imageBytes || "").trim();
 
-  /** Ảnh panel đã cắt từ storyboard – hiển thị phía trên (Ảnh gốc) */
+  /** Ảnh panel đã cắt từ storyboard – hiển thị dưới phần ảnh SP (ngoài tab Ảnh) */
   const storyboardOriginUrl = useMemo(() => {
     const crop = scene.storyboardCropImage;
     if (!crop?.imageBytes) return null;
@@ -492,7 +494,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         </div>
       </div>
 
-      {/* ── Prompt section (product images only) ── */}
+      {/* ── Prompt section (product images + ảnh gốc storyboard) ── */}
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
         {/* Product Select Image */}
         {productImages.length > 0 && (
@@ -553,11 +555,33 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             )}
           </div>
         )}
+
+        {/* Ảnh gốc storyboard – luôn hiện ngoài tab Ảnh, dưới ảnh SP tham chiếu */}
+        {storyboardOriginUrl && (
+          <div className={`${productImages.length > 0 ? "mt-2" : "mt-1.5"}`}>
+            <span className="mr-1 text-xs font-bold tracking-wide uppercase text-amber-700">
+              {t("Ảnh gốc")}
+            </span>
+            <div className="relative mt-1 w-full max-w-xs">
+              <Img
+                showImageOnClick
+                lazyload={false}
+                src={storyboardOriginUrl}
+                alt={`Origin frame - Scene ${scene.sceneNumber}`}
+                className="object-cover rounded-lg border border-amber-200 shadow-sm"
+                ratio169
+              />
+              <span className="absolute left-0 top-1 z-10 px-1 py-0 font-bold text-white bg-opacity-70 rounded-r-full border border-white shadow-sm text-9 bg-success-dark">
+                {t("Ảnh gốc")}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Media tabs (Hình ảnh / Video đơn / Video nối) ── */}
       <SceneCardTabs
-        hideImageTab={isPromptToVideo || !!hideImageColumn}
+        hideImageTab={isPromptToVideo || !!hideImageColumn || !requireImageBeforeVideo}
         hideExtendTab={isPromptToVideo || !nextSceneId}
         forcedTab={forcedTab}
         tabStatus={{
@@ -580,7 +604,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             onGenerateImage={handleGenerateImage}
             onSetImage={handleSetImage}
             onOpenGallery={() => setShowGalleryDialog(true)}
-            originThumbnailUrl={storyboardOriginUrl}
             errorMessage={imageError}
             onStopGeneration={() => void handleStopImageGeneration()}
             generationActionPending={imageActionPending}
@@ -592,11 +615,17 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             generatingVideo={generatingVideo}
             videoProgress={videoProgress}
             isDisabled={isDisabled}
-            hasImage={!!generatedImage}
+            hasImage={requireImageBeforeVideo ? !!generatedImage : hasOriginImage}
             isPromptToVideo={isPromptToVideo}
             aspectRatio={aspectRatio}
             errorMessage={videoError}
-            onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
+            onImageRequired={() =>
+              reportVideoError(
+                requireImageBeforeVideo
+                  ? t("Cần tạo ảnh trước khi tạo video")
+                  : t("Không có ảnh gốc để tạo video")
+              )
+            }
             sceneNumber={scene.sceneNumber}
             onGenerateVideo={() => handleGenerateVideo()}
             onStopGeneration={() => void handleStopVideoGeneration()}

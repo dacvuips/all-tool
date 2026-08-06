@@ -18,6 +18,8 @@ import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFo
 import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
+  elementFormImageToGeneratedImage,
+  resolveAffiliateVideoReferenceImage,
 } from "../shared/affiliateSceneGenerationParams";
 import {
   collectSceneImageFiles,
@@ -80,6 +82,8 @@ export function useBatchActions(
       scriptData?.objectToPersonifyImage ?? affiliateVideoFormConfig?.objectToPersonifyImage,
   });
   const isPromptToVideo = scriptData?.storyModeType === StoryModeTypeEnum.prompt_to_video;
+  /** Storyboard: bắt buộc gen ảnh trước video (mặc định false → dùng ảnh gốc) */
+  const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
   const toast = useToast();
 
   // ─── Lấy concurrency limits từ plan của user ───
@@ -270,6 +274,9 @@ export function useBatchActions(
         } else if (isPromptToVideo) {
           // prompt_to_video mode: no image needed, always pending
           pending++;
+        } else if (!requireImageBeforeVideo && scene.storyboardCropImage?.imageBytes) {
+          // Storyboard dùng ảnh gốc: có crop là tạo video được
+          pending++;
         } else {
           // image_to_video mode: count as pending if it has a generated image OR an imageGenPrompt
           const img = await getGeneratedImage(scene.id);
@@ -284,7 +291,14 @@ export function useBatchActions(
     return () => {
       cancelled = true;
     };
-  }, [scenes, videoBatchRunning, getGeneratedVideo, getGeneratedImage, isPromptToVideo]);
+  }, [
+    scenes,
+    videoBatchRunning,
+    getGeneratedVideo,
+    getGeneratedImage,
+    isPromptToVideo,
+    requireImageBeforeVideo,
+  ]);
 
   // ── Count extend chain status ──
   const [pendingExtendCount, setPendingExtendCount] = useState<number | null>(null);
@@ -816,6 +830,7 @@ export function useBatchActions(
               scene,
               scriptData,
               aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+              requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
             });
             await generateVideo(
               bindSceneJobEnqueue(
@@ -843,6 +858,62 @@ export function useBatchActions(
             removeBatchGeneratingVideoSceneId(scene.id);
           }
           continue;
+        }
+
+        // Storyboard: không bắt buộc tạo ảnh → dùng ảnh gốc làm tham chiếu
+        if (!requireImageBeforeVideo) {
+          const originImage = elementFormImageToGeneratedImage(scene.storyboardCropImage);
+          if (originImage) {
+            try {
+              addBatchGeneratingVideoSceneId(scene.id);
+              reportSceneError?.(scene.id, "video", null);
+              const videoParams = await buildAffiliateVideoGenerateParams({
+                scene,
+                scriptData,
+                aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+                generatedImage: originImage,
+                requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
+              });
+              await generateVideo(
+                bindSceneJobEnqueue(
+                  {
+                    ...videoParams,
+                    onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                    onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+                  },
+                  scene.id,
+                  "video",
+                  registerSceneJob
+                )
+              );
+              completed++;
+              setVideoBatchCompleted(completed);
+            } catch (err: any) {
+              console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
+              reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
+              errors++;
+              setVideoBatchErrors(errors);
+              completed++;
+              setVideoBatchCompleted(completed);
+            } finally {
+              reportSceneProgress?.(scene.id, "video", null);
+              removeBatchGeneratingVideoSceneId(scene.id);
+            }
+            continue;
+          }
+          // Cảnh storyboard thiếu crop → skip/error; scene không có crop vẫn đi luồng gen ảnh
+          if (
+            scene.storyboardSourceIndex != null ||
+            scene.cropRegion ||
+            scene.storyboardCropImage != null
+          ) {
+            reportSceneError?.(scene.id, "video", t("Không có ảnh gốc để tạo video"));
+            errors++;
+            setVideoBatchErrors(errors);
+            completed++;
+            setVideoBatchCompleted(completed);
+            continue;
+          }
         }
 
         let existingImage = await getGeneratedImage(scene.id);
@@ -909,6 +980,7 @@ export function useBatchActions(
             scriptData,
             aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             generatedImage: existingImage,
+            requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
           });
           await generateVideo(
             bindSceneJobEnqueue(
@@ -1028,9 +1100,15 @@ export function useBatchActions(
           continue;
         }
 
-        // Need both images
-        const startImage = await getGeneratedImage(scene.id);
-        const endImage = await getGeneratedImage(nextScene.id);
+        // Need both images (generated tab Ảnh, hoặc ảnh gốc storyboard)
+        let startImage = requireImageBeforeVideo
+          ? await getGeneratedImage(scene.id)
+          : elementFormImageToGeneratedImage(scene.storyboardCropImage) ??
+            (await getGeneratedImage(scene.id));
+        let endImage = requireImageBeforeVideo
+          ? await getGeneratedImage(nextScene.id)
+          : elementFormImageToGeneratedImage(nextScene.storyboardCropImage) ??
+            (await getGeneratedImage(nextScene.id));
 
         if (!startImage || !endImage) {
           // Cannot stitch without both images – skip
@@ -1051,6 +1129,7 @@ export function useBatchActions(
             isStitch: true,
             generatedImage: startImage,
             nextGeneratedImage: endImage,
+            requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
           });
           await generateVideo(
             bindSceneJobEnqueue(
@@ -1205,6 +1284,7 @@ export function useBatchActions(
                 scene,
                 scriptData,
                 aspectRatio: affiliateVideoFormConfig?.aspectRatio,
+                requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
               });
               await generateVideo(
                 bindSceneJobEnqueue(
@@ -1221,8 +1301,13 @@ export function useBatchActions(
               return true;
             }
 
-            let existingImage = await getGeneratedImage(scene.id);
-            if (!existingImage && scene.imageGenPrompt) {
+            let existingImage = resolveAffiliateVideoReferenceImage(
+              scene,
+              await getGeneratedImage(scene.id),
+              affiliateVideoFormConfig?.requireImageBeforeVideo
+            );
+
+            if (!existingImage && requireImageBeforeVideo && scene.imageGenPrompt) {
               addBatchGeneratingSceneId(scene.id);
               reportSceneError?.(scene.id, "image", null);
               const imageParams = await buildAffiliateImageGenerateParams({
@@ -1257,6 +1342,7 @@ export function useBatchActions(
               scriptData,
               aspectRatio: affiliateVideoFormConfig?.aspectRatio,
               generatedImage: existingImage,
+              requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
             });
             await generateVideo(
               bindSceneJobEnqueue(
@@ -1282,8 +1368,14 @@ export function useBatchActions(
 
         if (task.kind === "extend" && task.nextScene) {
           const nextScene = task.nextScene;
-          const startImage = await getGeneratedImage(scene.id);
-          const endImage = await getGeneratedImage(nextScene.id);
+          const startImage = requireImageBeforeVideo
+            ? await getGeneratedImage(scene.id)
+            : elementFormImageToGeneratedImage(scene.storyboardCropImage) ??
+              (await getGeneratedImage(scene.id));
+          const endImage = requireImageBeforeVideo
+            ? await getGeneratedImage(nextScene.id)
+            : elementFormImageToGeneratedImage(nextScene.storyboardCropImage) ??
+              (await getGeneratedImage(nextScene.id));
           if (!startImage || !endImage) return false;
 
           try {
@@ -1296,6 +1388,7 @@ export function useBatchActions(
               isStitch: true,
               generatedImage: startImage,
               nextGeneratedImage: endImage,
+              requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
             });
             await generateVideo(
               bindSceneJobEnqueue(

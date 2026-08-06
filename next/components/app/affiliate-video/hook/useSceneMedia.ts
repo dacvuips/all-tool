@@ -14,6 +14,8 @@ import { resolveObjectToPersonifyImageForApi } from "../elements/utils/elementFo
 import {
   buildAffiliateImageGenerateParams,
   buildAffiliateVideoGenerateParams,
+  elementFormImageToGeneratedImage,
+  resolveAffiliateVideoReferenceImage,
 } from "../shared/affiliateSceneGenerationParams";
 import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
 
@@ -559,32 +561,76 @@ export function useSceneMedia({
     }
 
     try {
+      const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
+
       // Stitch: đọc lại từ IndexedDB — nextGeneratedImage trong state có thể stale
       // nếu cảnh kế đã gen ảnh sau lần load gần nhất của hook này.
       let stitchStartImage = generatedImage;
       let stitchEndImage = nextGeneratedImage;
       if (isStitch) {
-        const [startFromIdb, endFromIdb] = await Promise.all([
-          getGeneratedImage(scene.id),
-          nextSceneId ? getGeneratedImage(nextSceneId) : Promise.resolve(undefined),
-        ]);
-        if (startFromIdb) {
-          stitchStartImage = toUiGeneratedImage(startFromIdb);
-          setGeneratedImage(stitchStartImage);
-        }
-        if (endFromIdb) {
-          stitchEndImage = toUiGeneratedImage(endFromIdb);
-          setNextGeneratedImage(stitchEndImage);
+        const nextScene = scriptData?.scenes?.find((s) => s.id === nextSceneId);
+        const originStart = elementFormImageToGeneratedImage(scene.storyboardCropImage);
+        const originEnd = elementFormImageToGeneratedImage(nextScene?.storyboardCropImage);
+        const useOriginCrops =
+          requireImageBeforeVideo !== true &&
+          hasGeneratedImageData(originStart) &&
+          hasGeneratedImageData(originEnd);
+
+        if (useOriginCrops) {
+          stitchStartImage = originStart;
+          stitchEndImage = originEnd;
+        } else {
+          const [startFromIdb, endFromIdb] = await Promise.all([
+            getGeneratedImage(scene.id),
+            nextSceneId ? getGeneratedImage(nextSceneId) : Promise.resolve(undefined),
+          ]);
+          if (startFromIdb) {
+            stitchStartImage = toUiGeneratedImage(startFromIdb);
+            setGeneratedImage(stitchStartImage);
+          }
+          if (endFromIdb) {
+            stitchEndImage = toUiGeneratedImage(endFromIdb);
+            setNextGeneratedImage(stitchEndImage);
+          }
         }
 
         if (!hasGeneratedImageData(stitchStartImage) || !hasGeneratedImageData(stitchEndImage)) {
-          const message = t(
-            "Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo"
-          );
+          const message =
+            requireImageBeforeVideo !== true &&
+            (scene.storyboardCropImage || nextScene?.storyboardCropImage)
+              ? t(
+                  "Không đủ ảnh gốc để tạo video nối, cần ảnh gốc ở cảnh hiện tại và cảnh tiếp theo"
+                )
+              : t("Không đủ ảnh để tạo video nối, cần ảnh ở cảnh hiện tại và cảnh tiếp theo");
           setExtendVideoError(message);
           reportSceneError?.(scene.id + "::stitch", "extend", message);
           throw new Error("Missing start or end image");
         }
+      }
+
+      const videoRefImage = isStitch
+        ? stitchStartImage
+        : resolveAffiliateVideoReferenceImage(
+            scene,
+            generatedImage,
+            affiliateVideoFormConfig?.requireImageBeforeVideo
+          );
+
+      const isStoryboardScene =
+        !!scene.storyboardCropImage ||
+        scene.storyboardSourceIndex != null ||
+        !!scene.cropRegion;
+
+      if (
+        !isStitch &&
+        requireImageBeforeVideo !== true &&
+        isStoryboardScene &&
+        !hasGeneratedImageData(videoRefImage)
+      ) {
+        const message = t("Không có ảnh gốc để tạo video");
+        setVideoError(message);
+        reportSceneError?.(scene.id, "video", message);
+        throw new Error("Missing origin image");
       }
 
       const videoParams = await buildAffiliateVideoGenerateParams({
@@ -592,8 +638,9 @@ export function useSceneMedia({
         scriptData,
         aspectRatio: affiliateVideoFormConfig?.aspectRatio,
         isStitch,
-        generatedImage: isStitch ? stitchStartImage : generatedImage,
+        generatedImage: videoRefImage,
         nextGeneratedImage: isStitch ? stitchEndImage : undefined,
+        requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
       });
 
       const result = await generateVideo({

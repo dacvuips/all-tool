@@ -35,6 +35,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     sceneHistory,
     selectHistoryItem,
     clearSceneHistory,
+    affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
@@ -44,6 +45,10 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     sceneCount: scenes.length,
     hasProductImages: !!scriptData?.productImages?.length,
   });
+
+  const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
+  const hideImageColumn =
+    storyModeType === StoryModeTypeEnum.prompt_to_video || !requireImageBeforeVideo;
 
   /** Persist scenes to IndexedDB (read-merge-write, no parent state sync) */
   const handlePersistScenes = async (updatedScenes: any[]) => {
@@ -134,7 +139,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
       <SharedBatchListPanel
       scenes={scenes}
       characters={characters}
-      hideImageColumn={storyModeType === StoryModeTypeEnum.prompt_to_video}
+      hideImageColumn={hideImageColumn}
       selectedHistoryId={selectedHistoryId}
       history={
         sceneHistory?.length

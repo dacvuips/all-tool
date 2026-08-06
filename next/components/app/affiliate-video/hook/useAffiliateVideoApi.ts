@@ -160,6 +160,13 @@ export interface GenerateVideoParams {
   >;
   /** Aspect ratio (tuỳ chọn) */
   aspectRatio?: string;
+  /**
+   * Flow2 video_mode:
+   * - frame: khung ảnh (start / start+end)
+   * - component: thành phần (1–3 ảnh tham chiếu)
+   * Mặc định frame khi không truyền.
+   */
+  videoMode?: Flow2VideoModeEnum;
   /** Bật/tắt text (watermark/chữ) trong video tạo ra */
   noText?: boolean;
   /** Tắt thoại / audio trong video */
@@ -1506,6 +1513,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         generateAudio,
         noText,
         voiceDisable,
+        videoMode,
         onProgress,
         onStatusMessage,
         onError,
@@ -1534,7 +1542,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,
-              videoMode: Flow2VideoModeEnum.FRAME,
+              videoMode: videoMode ?? Flow2VideoModeEnum.FRAME,
             },
             _metadata: { sceneId },
           },

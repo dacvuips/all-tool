@@ -28,6 +28,8 @@ interface BatchActionBarProps {
 export function BatchActionBar({ scenes }: BatchActionBarProps) {
   const { t } = useTranslation();
   const storyboardContext = useAffiliateVideoContext();
+  const requireImageBeforeVideo =
+    storyboardContext.affiliateVideoFormConfig?.requireImageBeforeVideo === true;
   const {
     // Voice export dialog
     showVoiceExportDialog,
@@ -127,28 +129,32 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
   } = useBatchActions(scenes, storyboardContext);
 
   const actions = [
-    {
-      id: "batch-create-img",
-      icon: batchRunning ? <RiLoader4Line className="animate-spin" /> : <RiImageFill />,
-      label: batchRunning
-        ? `${t("Đang tạo")} (${batchCompleted}/${batchTotal})`
-        : `${t("Tạo Ảnh")}${
-            pendingImageCount != null && pendingImageCount > 0 ? ` (x${pendingImageCount})` : ""
-          }`,
-      color: batchRunning ? "bg-pink-400 cursor-wait" : "bg-pink-500 hover:bg-pink-600",
-      method: handleCreateAllImage,
-      disabled: batchRunning,
-    },
-    ...(batchRunning
+    ...(requireImageBeforeVideo
       ? [
           {
-            id: "batch-stop",
-            icon: <RiCloseLine />,
-            label: t("Dừng"),
-            color: "bg-red-500 hover:bg-red-600",
-            method: handleStopBatch,
-            disabled: false,
+            id: "batch-create-img",
+            icon: batchRunning ? <RiLoader4Line className="animate-spin" /> : <RiImageFill />,
+            label: batchRunning
+              ? `${t("Đang tạo")} (${batchCompleted}/${batchTotal})`
+              : `${t("Tạo Ảnh")}${
+                  pendingImageCount != null && pendingImageCount > 0 ? ` (x${pendingImageCount})` : ""
+                }`,
+            color: batchRunning ? "bg-pink-400 cursor-wait" : "bg-pink-500 hover:bg-pink-600",
+            method: handleCreateAllImage,
+            disabled: batchRunning,
           },
+          ...(batchRunning
+            ? [
+                {
+                  id: "batch-stop",
+                  icon: <RiCloseLine />,
+                  label: t("Dừng"),
+                  color: "bg-red-500 hover:bg-red-600",
+                  method: handleStopBatch,
+                  disabled: false,
+                },
+              ]
+            : []),
         ]
       : []),
     {

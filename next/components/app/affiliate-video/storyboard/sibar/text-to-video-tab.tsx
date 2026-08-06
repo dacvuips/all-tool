@@ -41,6 +41,7 @@ export const TextToVideoTab = ({ onClose }: { onClose?: () => void }) => {
       language: videoConfig?.language ?? data.language,
       tipContent: videoConfig?.tipContent ?? data.tipContent,
       productImages: videoConfig?.productImages,
+      requireImageBeforeVideo: videoConfig?.requireImageBeforeVideo ?? false,
     };
 
     return handleSubmit?.(mergedData, promptText);
