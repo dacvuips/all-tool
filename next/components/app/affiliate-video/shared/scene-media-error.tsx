@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import {
+  MEDIA_CONTENT_POLICY_MESSAGE,
   MEDIA_SYSTEM_BUSY_MESSAGE,
   toUserFriendlyMediaErrorMessage,
 } from "./media-error-message";
@@ -7,6 +8,7 @@ import {
 function displayMediaError(message: string, t: (key: string) => string): string {
   const normalized = toUserFriendlyMediaErrorMessage(message);
   if (normalized === MEDIA_SYSTEM_BUSY_MESSAGE) return t(MEDIA_SYSTEM_BUSY_MESSAGE);
+  if (normalized === MEDIA_CONTENT_POLICY_MESSAGE) return t(MEDIA_CONTENT_POLICY_MESSAGE);
   return normalized ?? t(MEDIA_SYSTEM_BUSY_MESSAGE);
 }
 

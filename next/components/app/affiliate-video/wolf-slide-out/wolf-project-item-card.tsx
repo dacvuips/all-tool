@@ -15,6 +15,7 @@ import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { GeneratedImageDownloadButtons } from "../shared/generated-image-download-buttons";
 import {
+  MEDIA_CONTENT_POLICY_MESSAGE,
   MEDIA_SYSTEM_BUSY_MESSAGE,
   toUserFriendlyMediaErrorMessage,
 } from "../shared/media-error-message";
@@ -58,6 +59,7 @@ function getAspectPadding(aspectRatio: "16:9" | "9:16", mediaType: WolfProjectIt
 function displayWolfErrorMessage(message: string, t: (key: string) => string): string {
   const normalized = toUserFriendlyMediaErrorMessage(message);
   if (normalized === MEDIA_SYSTEM_BUSY_MESSAGE) return t(MEDIA_SYSTEM_BUSY_MESSAGE);
+  if (normalized === MEDIA_CONTENT_POLICY_MESSAGE) return t(MEDIA_CONTENT_POLICY_MESSAGE);
   return normalized ?? t(MEDIA_SYSTEM_BUSY_MESSAGE);
 }
 
