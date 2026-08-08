@@ -14,7 +14,7 @@ import {
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
 import { Button } from "../../../shared/utilities/form/button";
-import type { MergeVideoKind } from "./batchMergeVideos";
+import { getLastEligibleSceneId, type MergeVideoKind } from "./batchMergeVideos";
 import {
   getGeneratedVideoPreviewSrc,
   hasGeneratedVideoData,
@@ -53,6 +53,8 @@ interface SceneVideoRow {
   sceneNumber: number;
   video: GeneratedVideoLike | null;
   previewSrc: string | null;
+  /** Tab Video nối + phân cảnh cuối: đang dùng video đơn thay vì stitch */
+  isLastSceneNormalVideo?: boolean;
 }
 
 function resolveScenePrompt(scene: MergeSceneItem): string {
@@ -106,13 +108,25 @@ export function BatchMergeVideosDropdown({
   const allSelectableChecked =
     selectableIds.length > 0 && selectableIds.every((sid) => checkedIds.has(sid));
 
+  const lastEligibleSceneId = useMemo(
+    () => getLastEligibleSceneId(sortedScenes.map(({ scene }) => scene)),
+    [sortedScenes]
+  );
+
   const loadRows = useCallback(
     async (kind: MergeTab) => {
       setLoadingList(true);
       try {
         const next: SceneVideoRow[] = [];
         for (const { scene, sceneNumber } of sortedScenes) {
-          const key = kind === "stitch" ? `${scene.id}::stitch` : scene.id;
+          const isLastSceneNormalVideo =
+            kind === "stitch" && lastEligibleSceneId != null && scene.id === lastEligibleSceneId;
+          // Tab Video nối: cảnh cuối lấy video đơn (không có stitch)
+          const key = isLastSceneNormalVideo
+            ? scene.id
+            : kind === "stitch"
+              ? `${scene.id}::stitch`
+              : scene.id;
           const video = (await getGeneratedVideo(key)) ?? null;
           const hasVideo = hasGeneratedVideoData(video);
           next.push({
@@ -120,6 +134,7 @@ export function BatchMergeVideosDropdown({
             sceneNumber,
             video: hasVideo ? video : null,
             previewSrc: hasVideo && video ? getGeneratedVideoPreviewSrc(video) : null,
+            isLastSceneNormalVideo,
           });
         }
         setRows(next);
@@ -128,7 +143,7 @@ export function BatchMergeVideosDropdown({
         setLoadingList(false);
       }
     },
-    [sortedScenes, getGeneratedVideo]
+    [sortedScenes, getGeneratedVideo, lastEligibleSceneId]
   );
 
   useEffect(() => {
@@ -281,7 +296,7 @@ export function BatchMergeVideosDropdown({
                   {t("Không có phân cảnh")}
                 </div>
               ) : (
-                rows.map(({ scene, sceneNumber, video, previewSrc }) => {
+                rows.map(({ scene, sceneNumber, video, previewSrc, isLastSceneNormalVideo }) => {
                   const hasVideo = !!video;
                   const isChecked = checkedIds.has(scene.id);
                   const prompt = resolveScenePrompt(scene);
@@ -312,6 +327,11 @@ export function BatchMergeVideosDropdown({
                       >
                         <div className="text-xs font-semibold text-gray-800">
                           {t("Cảnh")} #{sceneNumber}
+                          {isLastSceneNormalVideo && hasVideo && (
+                            <span className="ml-2 font-normal text-gray-400">
+                              ({t("Video đơn")})
+                            </span>
+                          )}
                           {!hasVideo && (
                             <span className="ml-2 font-normal text-gray-400">
                               ({t("Chưa có video")})

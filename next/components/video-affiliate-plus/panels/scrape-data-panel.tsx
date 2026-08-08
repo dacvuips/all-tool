@@ -109,7 +109,15 @@ const SCRAPE_KEYWORD_AI_LS = "video-affiliate-plus-scrape-keyword-ai";
 const DEFAULT_GATEWAY_MODEL = "gpt-5-5";
 const MIN_AI_KEYWORDS = 200;
 /** Số luồng cào keyword song song — mỗi luồng claim 1 từ khóa khác nhau. */
-const CRAWL_KEYWORD_WORKERS = 3;
+const MIN_CRAWL_KEYWORD_WORKERS = 1;
+const MAX_CRAWL_KEYWORD_WORKERS = 10;
+const DEFAULT_CRAWL_KEYWORD_WORKERS = 3;
+
+function clampCrawlKeywordWorkers(value: unknown): number {
+  const n = Math.floor(Number(value));
+  if (!Number.isFinite(n)) return DEFAULT_CRAWL_KEYWORD_WORKERS;
+  return Math.max(MIN_CRAWL_KEYWORD_WORKERS, Math.min(MAX_CRAWL_KEYWORD_WORKERS, n));
+}
 
 function readScrapeAiKey(storageKey: string): string {
   if (typeof window === "undefined") return "";
@@ -706,8 +714,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
   /** Từ khóa đã cào xong trong phiên hiện tại → chip xanh lá. */
   const [doneKeywords, setDoneKeywords] = useState<string[]>([]);
-  /** Từ khóa đang được worker cào → chip vàng (tối đa CRAWL_KEYWORD_WORKERS). */
+  /** Từ khóa đang được worker cào → chip vàng (tối đa crawlWorkers). */
   const [activeKeywords, setActiveKeywords] = useState<string[]>([]);
+  /** Số luồng cào keyword song song (1–10, mặc định 3). */
+  const [crawlWorkers, setCrawlWorkers] = useState(DEFAULT_CRAWL_KEYWORD_WORKERS);
   const getKeywordsText = () => keywords.join(",");
   const persistKeywords = (list: string[]) => {
     const next = uniqueKeywords(list);
@@ -1905,6 +1915,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setSortType(1);
     setShopTypes([]);
     setProductLimit(20);
+    setCrawlWorkers(DEFAULT_CRAWL_KEYWORD_WORKERS);
     setMinCommissionPct(2);
     setMinSales(10);
     setCommissionReceivedK(0);
@@ -2039,6 +2050,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     const sortLabel = t(SORT_TYPE_LABELS[activeSort] || String(activeSort));
     const shopFilters = orderedShopTypes();
     let scannedRaw = 0;
+    const keywordWorkerLimit = clampCrawlKeywordWorkers(crawlWorkers);
 
     /**
      * Hàng đợi từ khóa dùng chung cho N worker:
@@ -2090,7 +2102,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       const base = t(
         "{{workers}} luồng · {{sort}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}",
         {
-          workers: runningSlotByWorker.size || Math.min(CRAWL_KEYWORD_WORKERS, crawlKeywords.length),
+          workers:
+            runningSlotByWorker.size || Math.min(keywordWorkerLimit, crawlKeywords.length),
           sort: sortLabel,
           scanned: scannedRaw,
           count: matchedCount,
@@ -2229,7 +2242,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     };
 
     try {
-      const workerCount = Math.min(CRAWL_KEYWORD_WORKERS, crawlKeywords.length);
+      const workerCount = Math.min(keywordWorkerLimit, crawlKeywords.length);
       publishStatus(t("Khởi động {{n}} luồng cào…", { n: workerCount }));
       await Promise.all(
         Array.from({ length: workerCount }, (_, i) => runWorker(i + 1))
@@ -2815,9 +2828,34 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </div>
           <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
             {t(
-              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Cào song song {{workers}} luồng — mỗi luồng 1 từ khóa (vàng = đang cào, xanh lá = xong); worker bỏ qua key đã xong/đang chạy. Bật Sử dụng AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm (cần AI Status sẵn sàng). F5 vẫn giữ; Clear mới xóa.",
-              { n: MIN_AI_KEYWORDS, workers: CRAWL_KEYWORD_WORKERS }
+              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Cào song song theo số luồng bên dưới — mỗi luồng 1 từ khóa (vàng = đang cào, xanh lá = xong); worker bỏ qua key đã xong/đang chạy. Bật Sử dụng AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm (cần AI Status sẵn sàng). F5 vẫn giữ; Clear mới xóa.",
+              { n: MIN_AI_KEYWORDS }
             )}
+          </p>
+        </div>
+
+        <div>
+          <label className={fieldLabelClass} htmlFor="scrape-crawl-workers">
+            {t("Số luồng")}
+          </label>
+          <input
+            id="scrape-crawl-workers"
+            type="number"
+            min={MIN_CRAWL_KEYWORD_WORKERS}
+            max={MAX_CRAWL_KEYWORD_WORKERS}
+            step={1}
+            disabled={crawling}
+            value={crawlWorkers}
+            onChange={(e) => setCrawlWorkers(clampCrawlKeywordWorkers(e.target.value))}
+            className={fieldInputClass}
+            aria-label={t("Số luồng")}
+          />
+          <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
+            {t("Số luồng cào song song ({{min}}–{{max}}). Mặc định {{def}}.", {
+              min: MIN_CRAWL_KEYWORD_WORKERS,
+              max: MAX_CRAWL_KEYWORD_WORKERS,
+              def: DEFAULT_CRAWL_KEYWORD_WORKERS,
+            })}
           </p>
         </div>
 

@@ -31,7 +31,10 @@ import {
   handleBatchUpsampleDownloadAction,
   handleBatchUpsampleVideoDownloadAction,
 } from "../../shared/batchDownloadMedia";
-import { mergeSceneVideosAndDownload } from "../../shared/batchMergeVideos";
+import {
+  countAvailableStitchMergeVideos,
+  mergeSceneVideosAndDownload,
+} from "../../shared/batchMergeVideos";
 import {
   collectFailedRetryTasks,
   runBatchRetryWorkerPool,
@@ -318,18 +321,18 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
       }
 
       let pending = 0;
-      let available = 0;
       // Iterate pairs: (scene[0]→scene[1]), (scene[1]→scene[2]), ..., (scene[N-2]→scene[N-1])
       // Last scene (scene[N-1]) is only used as endImage, never as start → excluded
       for (let i = 0; i < eligibleScenes.length - 1; i++) {
         const scene = eligibleScenes[i];
         const existingStitch = await getGeneratedVideo(scene.id + "::stitch");
-        if (existingStitch) {
-          available++;
-        } else {
+        if (!existingStitch) {
           pending++;
         }
       }
+
+      // Tab Ghép video "Video nối": stitch + video đơn phân cảnh cuối
+      const available = await countAvailableStitchMergeVideos(scenes, getGeneratedVideo);
 
       if (!cancelled) {
         setPendingExtendCount(pending);

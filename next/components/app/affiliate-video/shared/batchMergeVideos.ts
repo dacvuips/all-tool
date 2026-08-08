@@ -19,19 +19,53 @@ const HTTP_URL = /^https?:\/\//i;
 
 export type MergeVideoKind = "normal" | "stitch";
 
+function sortScenesByNumber<T extends SceneWithNumber>(scenes: T[]): T[] {
+  return [...scenes].sort(
+    (a, b) => (a.sceneNumber ?? Number.MAX_SAFE_INTEGER) - (b.sceneNumber ?? Number.MAX_SAFE_INTEGER)
+  );
+}
+
+/** Id phân cảnh cuối (không disabled) — scene này không có video nối, dùng video đơn khi ghép. */
+export function getLastEligibleSceneId<T extends SceneWithNumber>(scenes: T[]): string | null {
+  const eligible = sortScenesByNumber(scenes.filter((s) => !s.disabled));
+  return eligible.length > 0 ? eligible[eligible.length - 1].id : null;
+}
+
+/**
+ * Thu thập video để ghép tab "Video nối":
+ * - Các phân cảnh trước cuối: video nối (`id::stitch`)
+ * - Phân cảnh cuối cùng: video đơn (`id`) — vì scene cuối không tạo được stitch
+ */
 export async function collectSceneStitchVideoFiles<T extends SceneWithNumber>(
   scenes: T[],
-  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>
+  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>,
+  options?: {
+    /** Danh sách đầy đủ (chưa filter theo selection) để xác định phân cảnh cuối thật */
+    allScenes?: T[];
+  }
 ): Promise<{ scene: T; vid: GeneratedVideoLike }[]> {
-  const eligible = scenes.filter((s) => !s.disabled);
+  const lastSceneId = getLastEligibleSceneId(options?.allScenes ?? scenes);
+  const eligible = sortScenesByNumber(scenes.filter((s) => !s.disabled));
   const result: { scene: T; vid: GeneratedVideoLike }[] = [];
   for (const scene of eligible) {
-    const vid = await getGeneratedVideo(scene.id + "::stitch");
+    const isLastScene = lastSceneId != null && scene.id === lastSceneId;
+    const vid = isLastScene
+      ? await getGeneratedVideo(scene.id)
+      : await getGeneratedVideo(scene.id + "::stitch");
     if (hasGeneratedVideoData(vid)) {
       result.push({ scene, vid: vid! });
     }
   }
   return result;
+}
+
+/** Số video có thể ghép ở tab Video nối (stitch + video đơn cảnh cuối). */
+export async function countAvailableStitchMergeVideos<T extends SceneWithNumber>(
+  scenes: T[],
+  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>
+): Promise<number> {
+  const items = await collectSceneStitchVideoFiles(scenes, getGeneratedVideo);
+  return items.length;
 }
 
 function getHttpVideoUri(video: GeneratedVideoLike): string | null {
@@ -134,13 +168,15 @@ export async function mergeSceneVideosAndDownload<T extends SceneWithNumber>(opt
 
   const items =
     kind === "stitch"
-      ? await collectSceneStitchVideoFiles(scenes, getGeneratedVideo)
+      ? await collectSceneStitchVideoFiles(scenes, getGeneratedVideo, {
+          allScenes: options.scenes,
+        })
       : await collectSceneVideoFiles(scenes, getGeneratedVideo);
 
   if (items.length < 2) {
     throw new Error(
       kind === "stitch"
-        ? "Cần ít nhất 2 video nối để ghép thành 1 file"
+        ? "Cần ít nhất 2 video (nối + video đơn cảnh cuối) để ghép thành 1 file"
         : "Cần ít nhất 2 video thường để ghép thành 1 file"
     );
   }
