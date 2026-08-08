@@ -715,20 +715,16 @@ export function ThreadManagementPanel({
   const MERGE_DEFER_MS = 400;
 
   const scheduleBackgroundMerge = useCallback(
-    (mergeItemId: string, mergeKey: string, mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
+    (mergeItemId: string, _mergeKey: string, mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
       autoMergeAttemptedRef.current[mergeItemId] = true;
-      setMergingIds((prev) => ({ ...prev, [mergeItemId]: true }));
-      onAddLog(t("Đang nối {{count}} video...", { count: mergeUrls.length }), "info", mergeItemId);
+      onAddLog(
+        t("Xếp hàng nối {{count}} video (1 SP / lần)...", { count: mergeUrls.length }),
+        "info",
+        mergeItemId
+      );
 
       window.setTimeout(() => {
-        if (pauseAllRef.current) {
-          setMergingIds((prev) => {
-            const next = { ...prev };
-            delete next[mergeItemId];
-            return next;
-          });
-          return;
-        }
+        if (pauseAllRef.current) return;
 
         void (async () => {
           const latest =
@@ -737,11 +733,12 @@ export function ThreadManagementPanel({
           if (!latest || pauseAllRef.current) return;
           const urlsToMerge = getMergeableVideoUrls(latest);
           if (urlsToMerge.length < 2) return;
+          // Full pipeline queue trong mergeVideosToIndexedDb — 1 SP load+merge+lưu IDB / lúc
           await executeMergeWithRetry(latest, { urls: urlsToMerge, resetRetryCount: true });
         })();
       }, deferMs);
     },
-    [MERGE_DEFER_MS, executeMergeWithRetry, sessionId, t]
+    [MERGE_DEFER_MS, executeMergeWithRetry, onAddLog, sessionId, t]
   );
 
   const runPendingAutoMerge = useCallback(async () => {
@@ -768,16 +765,20 @@ export function ThreadManagementPanel({
       return;
     }
 
+    // Tuần tự từng SP (pipeline merge cũng serial) — tránh fire-and-forget ồ ạt
     for (const item of pending) {
-      if (batchRunningRef.current) return;
-      scheduleBackgroundMerge(
-        item.id,
-        getMergedVideoStorageKey(item, sessionId),
-        getMergeableVideoUrls(item),
-        0
+      if (batchRunningRef.current || pauseAllRef.current) break;
+      autoMergeAttemptedRef.current[item.id] = true;
+      const urls = getMergeableVideoUrls(item);
+      if (urls.length < 2) continue;
+      onAddLog(
+        t("Xếp hàng nối {{count}} video (1 SP / lần)...", { count: urls.length }),
+        "info",
+        item.id
       );
+      await executeMergeWithRetry(item, { urls, resetRetryCount: true });
     }
-  }, [generatingIds, loadPage, mergingIds, scheduleBackgroundMerge, sessionId]);
+  }, [executeMergeWithRetry, generatingIds, loadPage, mergingIds, onAddLog, sessionId, t]);
 
   // Tự nối lại các item đã có ≥2 video nhưng chưa có merged (và chưa có trong IDB)
   useEffect(() => {
