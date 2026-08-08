@@ -24,6 +24,12 @@ interface PropsType extends ReactProps {
   /** Sticky header (banner + tabs), không scroll theo nội dung */
   stickyHeader?: boolean;
   stickyHeaderClassName?: string;
+  /**
+   * Giữ nội dung tab khi đổi sang tab khác (ẩn bằng CSS) thay vì unmount.
+   * - true: mount tất cả tab ngay từ đầu
+   * - "visited": chỉ mount khi đã mở lần đầu, sau đó giữ (phù hợp crawl nền / form state)
+   */
+  keepMounted?: boolean | "visited";
 }
 
 type TabItem = {
@@ -68,6 +74,7 @@ export function TabGroup({
   beforeHeader = null,
   stickyHeader = false,
   stickyHeaderClassName = "sticky top-14 z-50",
+  keepMounted = false,
   ...props
 }: PropsType) {
   const id = useUUID();
@@ -89,6 +96,21 @@ export function TabGroup({
       ? pendingIndex
       : index!
     : selectedIndex;
+
+  /** Tab đã từng mở — dùng khi keepMounted="visited" */
+  const [visitedTabs, setVisitedTabs] = useState<Set<number>>(
+    () => new Set([index ?? 0])
+  );
+
+  useEffect(() => {
+    if (!keepMounted) return;
+    setVisitedTabs((prev) => {
+      if (prev.has(activeIndex)) return prev;
+      const next = new Set(prev);
+      next.add(activeIndex);
+      return next;
+    });
+  }, [activeIndex, keepMounted]);
 
   useEffect(() => {
     if (activeIndex !== undefined && inkbarRef.current && tabs[activeIndex]) {
@@ -217,7 +239,25 @@ export function TabGroup({
             </div>
           </div>
           <div className={`${bodyClassName}`} style={bodyStyle}>
-            {tabs[activeIndex]?.child}
+            {keepMounted
+              ? tabs.map((tab, tabIndex) => {
+                  const shouldMount =
+                    keepMounted === true || visitedTabs.has(tabIndex);
+                  if (!shouldMount) return null;
+                  const isActive = activeIndex === tabIndex;
+                  return (
+                    <div
+                      key={tabIndex}
+                      hidden={!isActive}
+                      aria-hidden={!isActive}
+                      // hidden + display:none: giữ instance React (state / async crawl) khi đổi tab
+                      className={isActive ? undefined : "hidden"}
+                    >
+                      {tab.child}
+                    </div>
+                  );
+                })
+              : tabs[activeIndex]?.child}
           </div>
         </>
       )}

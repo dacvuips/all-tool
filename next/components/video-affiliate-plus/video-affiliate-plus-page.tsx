@@ -562,6 +562,8 @@ export default function VideoAffiliatePlusPage() {
           flex={false}
           stickyHeader
           stickyHeaderClassName="sticky top-14 z-50 shadow-sm"
+          // Giữ panel đã mở (đặc biệt Cào dữ liệu) — crawl + product list không reset khi đổi tab
+          keepMounted="visited"
           beforeHeader={
             <VideoAffiliatePlusPageHeader
               onBack={() => router.back()}

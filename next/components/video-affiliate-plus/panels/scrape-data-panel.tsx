@@ -108,6 +108,8 @@ const SCRAPE_KEYWORD_AI_LS = "video-affiliate-plus-scrape-keyword-ai";
 /** Fallback model Gateway khi customer để trống — cùng DEFAULT_CHATGPT_MODEL. */
 const DEFAULT_GATEWAY_MODEL = "gpt-5-5";
 const MIN_AI_KEYWORDS = 200;
+/** Số luồng cào keyword song song — mỗi luồng claim 1 từ khóa khác nhau. */
+const CRAWL_KEYWORD_WORKERS = 3;
 
 function readScrapeAiKey(storageKey: string): string {
   if (typeof window === "undefined") return "";
@@ -702,9 +704,10 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
   /** Sử dụng AI khi bắt đầu cào (chỉ khi keywords đang trống + AI Status sẵn sàng). */
   const [keywordAiSuggest, setKeywordAiSuggest] = useState(false);
   const [suggestingKeywords, setSuggestingKeywords] = useState(false);
-  /** Từ khóa đã cào xong trong phiên hiện tại → chip xanh. */
+  /** Từ khóa đã cào xong trong phiên hiện tại → chip xanh lá. */
   const [doneKeywords, setDoneKeywords] = useState<string[]>([]);
-  const [activeKeyword, setActiveKeyword] = useState("");
+  /** Từ khóa đang được worker cào → chip vàng (tối đa CRAWL_KEYWORD_WORKERS). */
+  const [activeKeywords, setActiveKeywords] = useState<string[]>([]);
   const getKeywordsText = () => keywords.join(",");
   const persistKeywords = (list: string[]) => {
     const next = uniqueKeywords(list);
@@ -1999,7 +2002,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     setCrawledProducts([]);
     setCrawledCount(0);
     setDoneKeywords([]);
-    setActiveKeyword("");
+    setActiveKeywords([]);
 
     // Crawl Project chỉ cào SP. Check Giỏ Video chỉ khi đã bật từ nút «Crawl Giỏ Video».
 
@@ -2037,139 +2040,200 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     const shopFilters = orderedShopTypes();
     let scannedRaw = 0;
 
-    try {
-      for (const keyword of crawlKeywords) {
-        if (crawlAbortRef.current || matchedCount >= productLimit) break;
-        const keywordLabel = keyword || t("(không từ khóa)");
-        if (keyword) setActiveKeyword(keyword);
+    /**
+     * Hàng đợi từ khóa dùng chung cho N worker:
+     * - pending → claim thành running (vàng)
+     * - xong / lỗi trang → done (xanh lá)
+     * Worker claim key tiếp theo sẽ bỏ qua key đã done và đang running.
+     */
+    type KeywordSlotStatus = "pending" | "running" | "done";
+    const keywordStatuses: KeywordSlotStatus[] = crawlKeywords.map(() => "pending");
+    /** Index slot đang running theo worker (UI vàng). */
+    const runningSlotByWorker = new Map<number, number>();
 
-        // Giữ đúng sort user chọn; hết ~500 / hết data → sang từ khóa tiếp
-        let pageOffset = 0;
-        let pageNo = 0;
-        let scannedThisKeyword = 0;
+    const syncActiveKeywordsUi = () => {
+      const active: string[] = [];
+      for (const slotIdx of runningSlotByWorker.values()) {
+        const kw = crawlKeywords[slotIdx];
+        if (kw) active.push(kw);
+      }
+      setActiveKeywords(active);
+    };
 
-        while (
-          !crawlAbortRef.current &&
-          matchedCount < productLimit &&
-          pageNo < maxPagesPerKeyword
-        ) {
-          pageNo += 1;
-          setCrawlStatus(
-            t(
-              'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
-              {
-                keyword: keywordLabel,
-                sort: sortLabel,
-                page: pageNo,
-                scanned: scannedRaw,
-                count: matchedCount,
-                limit: productLimit,
-              }
-            )
+    const claimNextKeyword = (workerId: number): { slotIndex: number; keyword: string } | null => {
+      if (crawlAbortRef.current || matchedCount >= productLimit) return null;
+      for (let i = 0; i < crawlKeywords.length; i++) {
+        if (keywordStatuses[i] !== "pending") continue; // bỏ qua done + đang chạy
+        keywordStatuses[i] = "running";
+        runningSlotByWorker.set(workerId, i);
+        syncActiveKeywordsUi();
+        return { slotIndex: i, keyword: crawlKeywords[i] };
+      }
+      return null;
+    };
+
+    const completeKeyword = (workerId: number, slotIndex: number, keyword: string) => {
+      keywordStatuses[slotIndex] = "done";
+      if (runningSlotByWorker.get(workerId) === slotIndex) {
+        runningSlotByWorker.delete(workerId);
+      }
+      syncActiveKeywordsUi();
+      if (keyword) {
+        setDoneKeywords((prev) => (prev.includes(keyword) ? prev : [...prev, keyword]));
+      }
+    };
+
+    const publishStatus = (detail?: string) => {
+      const runningLabels = [...runningSlotByWorker.values()]
+        .map((i) => crawlKeywords[i] || t("(không từ khóa)"))
+        .filter(Boolean);
+      const base = t(
+        "{{workers}} luồng · {{sort}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}",
+        {
+          workers: runningSlotByWorker.size || Math.min(CRAWL_KEYWORD_WORKERS, crawlKeywords.length),
+          sort: sortLabel,
+          scanned: scannedRaw,
+          count: matchedCount,
+          limit: productLimit,
+        }
+      );
+      if (runningLabels.length) {
+        setCrawlStatus(
+          t('{{base}} · đang: {{keys}}{{detail}}', {
+            base,
+            keys: runningLabels.join(" · "),
+            detail: detail ? ` · ${detail}` : "",
+          })
+        );
+      } else if (detail) {
+        setCrawlStatus(`${base} · ${detail}`);
+      } else {
+        setCrawlStatus(base);
+      }
+    };
+
+    const crawlOneKeyword = async (workerId: number, keyword: string) => {
+      const keywordLabel = keyword || t("(không từ khóa)");
+      let pageOffset = 0;
+      let pageNo = 0;
+      let scannedThisKeyword = 0;
+
+      while (
+        !crawlAbortRef.current &&
+        matchedCount < productLimit &&
+        pageNo < maxPagesPerKeyword
+      ) {
+        pageNo += 1;
+        publishStatus(
+          t('W{{w}} "{{keyword}}" tr.{{page}}', {
+            w: workerId,
+            keyword: keywordLabel,
+            page: pageNo,
+          })
+        );
+
+        let page: Awaited<ReturnType<typeof fetchAffiliateProductPage>>;
+        try {
+          page = await fetchAffiliateProductPage({
+            marketHost: openMarketHost,
+            keyword,
+            sortType: activeSort,
+            pageOffset,
+            pageLimit,
+            listType: 0,
+            filterShopTypes: shopFilters,
+          });
+        } catch (pageErr: any) {
+          const msg = String(pageErr?.message || pageErr || "");
+          publishStatus(
+            t('Lỗi W{{w}} tr.{{page}} · bỏ key · {{error}}', {
+              w: workerId,
+              page: pageNo,
+              error: msg.slice(0, 60),
+            })
           );
-
-          let page: Awaited<ReturnType<typeof fetchAffiliateProductPage>>;
-          try {
-            page = await fetchAffiliateProductPage({
-              marketHost: openMarketHost,
-              keyword,
-              sortType: activeSort,
-              pageOffset,
-              pageLimit,
-              listType: 0,
-              filterShopTypes: shopFilters,
-            });
-          } catch (pageErr: any) {
-            const msg = String(pageErr?.message || pageErr || "");
-            // Lỗi tạm → bỏ từ khóa này, sang từ khóa tiếp (không đổi sort)
-            setCrawlStatus(
-              t(
-                'Lỗi trang {{page}} ({{sort}}) · bỏ qua từ khóa · {{error}} · khớp {{count}}/{{limit}}',
-                {
-                  page: pageNo,
-                  sort: sortLabel,
-                  error: msg.slice(0, 80),
-                  count: matchedCount,
-                  limit: productLimit,
-                }
-              )
-            );
-            toast.warn(
-              t("Bỏ qua trang lỗi · sang từ khóa tiếp ({{count}} SP)", {
-                count: matchedCount,
-              })
-            );
-            await new Promise((r) => setTimeout(r, 900));
-            break;
-          }
-
-          if (!page.products.length) break;
-
-          scannedRaw += page.products.length;
-          scannedThisKeyword += page.products.length;
-          setCrawledCount(scannedRaw);
-
-          let newIdsOnPage = 0;
-          for (const raw of page.products) {
-            if (matchedCount >= productLimit) break;
-            const normalizedRaw = ensureCrawlProductRaw(
-              raw as Record<string, unknown>,
-              { marketHost: openMarketHost }
-            );
-            const mapped = mapRawToScrapeRow(normalizedRaw, pool.length);
-            if (!mapped.id || seen.has(mapped.id)) continue;
-            seen.add(mapped.id);
-            newIdsOnPage += 1;
-            const row: ScrapeProductRow = {
-              id: mapped.id,
-              productName: mapped.productName,
-              commissionPct: mapped.commissionPct,
-              sales: mapped.sales,
-              price: mapped.price,
-              commissionReceived: mapped.commissionReceived,
-              postedAt: mapped.postedAt,
-              raw: normalizedRaw,
-            };
-            // Lưu mọi SP unique vào kho — filter HH/lượt bán áp khi hiển thị
-            pool.push(row);
-            setCrawledProducts([...pool]);
-            if (rowPassesSnap(row)) {
-              matchedCount += 1;
-              enqueueGioFromCrawlProduct(row);
-            }
-          }
-
-          setCrawlStatus(
-            t(
-              'Đang cào "{{keyword}}" · {{sort}} · trang {{page}} · đã cào {{scanned}} · khớp {{count}}/{{limit}}',
-              {
-                keyword: keywordLabel,
-                sort: sortLabel,
-                page: pageNo,
-                scanned: scannedRaw,
-                count: matchedCount,
-                limit: productLimit,
-              }
-            )
+          toast.warn(
+            t('Bỏ qua từ khóa "{{keyword}}" (lỗi trang) · {{count}} SP khớp', {
+              keyword: keywordLabel,
+              count: matchedCount,
+            })
           );
-
-          if (matchedCount >= productLimit) break;
-          // Hết data / API lặp / gần cap ~500 → sang từ khóa mới (giữ sort)
-          if (newIdsOnPage === 0) break;
-          if (!page.hasMore) break;
-          if (scannedThisKeyword >= 500) break;
-          pageOffset += pageLimit;
-          await new Promise((r) => setTimeout(r, delayMs));
+          await new Promise((r) => setTimeout(r, 900));
+          return;
         }
 
-        // Từ khóa đã hết lượt request (hết data hoặc đạt limit) → đánh dấu xanh
-        if (keyword) {
-          setDoneKeywords((prev) =>
-            prev.includes(keyword) ? prev : [...prev, keyword]
-          );
-          setActiveKeyword("");
+        if (!page.products.length) break;
+
+        scannedRaw += page.products.length;
+        scannedThisKeyword += page.products.length;
+        setCrawledCount(scannedRaw);
+
+        let newIdsOnPage = 0;
+        for (const raw of page.products) {
+          if (matchedCount >= productLimit) break;
+          const normalizedRaw = ensureCrawlProductRaw(raw as Record<string, unknown>, {
+            marketHost: openMarketHost,
+          });
+          const mapped = mapRawToScrapeRow(normalizedRaw, pool.length);
+          if (!mapped.id || seen.has(mapped.id)) continue;
+          seen.add(mapped.id);
+          newIdsOnPage += 1;
+          const row: ScrapeProductRow = {
+            id: mapped.id,
+            productName: mapped.productName,
+            commissionPct: mapped.commissionPct,
+            sales: mapped.sales,
+            price: mapped.price,
+            commissionReceived: mapped.commissionReceived,
+            postedAt: mapped.postedAt,
+            raw: normalizedRaw,
+          };
+          // Lưu mọi SP unique vào kho — filter HH/lượt bán áp khi hiển thị
+          pool.push(row);
+          setCrawledProducts([...pool]);
+          if (rowPassesSnap(row)) {
+            matchedCount += 1;
+            enqueueGioFromCrawlProduct(row);
+          }
+        }
+
+        publishStatus(
+          t('W{{w}} "{{keyword}}" tr.{{page}}', {
+            w: workerId,
+            keyword: keywordLabel,
+            page: pageNo,
+          })
+        );
+
+        if (matchedCount >= productLimit) break;
+        // Hết data / API lặp / gần cap ~500 → sang từ khóa mới (giữ sort)
+        if (newIdsOnPage === 0) break;
+        if (!page.hasMore) break;
+        if (scannedThisKeyword >= 500) break;
+        pageOffset += pageLimit;
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    };
+
+    const runWorker = async (workerId: number) => {
+      while (!crawlAbortRef.current && matchedCount < productLimit) {
+        const claimed = claimNextKeyword(workerId);
+        if (!claimed) break;
+        try {
+          await crawlOneKeyword(workerId, claimed.keyword);
+        } finally {
+          // Luôn mark done (xanh) sau khi worker rời key — worker khác không claim lại
+          completeKeyword(workerId, claimed.slotIndex, claimed.keyword);
         }
       }
+    };
+
+    try {
+      const workerCount = Math.min(CRAWL_KEYWORD_WORKERS, crawlKeywords.length);
+      publishStatus(t("Khởi động {{n}} luồng cào…", { n: workerCount }));
+      await Promise.all(
+        Array.from({ length: workerCount }, (_, i) => runWorker(i + 1))
+      );
 
       setCrawledCount(scannedRaw);
       const doneMsg = crawlAbortRef.current
@@ -2179,15 +2243,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             scanned: scannedRaw,
           })
         : matchedCount >= productLimit
-        ? t("Hoàn tất · đã cào {{scanned}} · khớp {{count}}", {
-            count: matchedCount,
-            scanned: scannedRaw,
-          })
-        : t("Hết data API · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
-            count: matchedCount,
-            limit: productLimit,
-            scanned: scannedRaw,
-          });
+          ? t("Hoàn tất · đã cào {{scanned}} · khớp {{count}}", {
+              count: matchedCount,
+              scanned: scannedRaw,
+            })
+          : t("Hết data API · đã cào {{scanned}} · khớp {{count}}/{{limit}}", {
+              count: matchedCount,
+              limit: productLimit,
+              scanned: scannedRaw,
+            });
       setCrawlStatus(doneMsg);
       toast.success(
         t("Cào xong: kho {{pool}} SP · khớp lọc {{count}}", {
@@ -2201,7 +2265,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     } finally {
       setCrawling(false);
       crawlingRef.current = false;
-      setActiveKeyword("");
+      setActiveKeywords([]);
       crawlAbortRef.current = false;
       gioCombinedCrawlRef.current = false;
       finishGioLiveIfIdle();
@@ -2669,15 +2733,15 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             <div className="flex flex-wrap items-center gap-1.5">
               {keywords.map((kw, index) => {
                 const done = doneKeywords.includes(kw);
-                const active = activeKeyword === kw;
+                const active = activeKeywords.includes(kw);
                 return (
                   <span
                     key={`${kw}-${index}`}
                     className={`inline-flex max-w-full items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${
                       done
-                        ? "border-teal-300 bg-teal-50 text-teal-800"
+                        ? "border-green-500 bg-green-100 text-green-800"
                         : active
-                          ? "border-amber-300 bg-amber-50 text-amber-900"
+                          ? "border-yellow-400 bg-yellow-100 text-yellow-900"
                           : "border-gray-200 bg-gray-50 text-gray-700"
                     }`}
                   >
@@ -2751,8 +2815,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           </div>
           <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
             {t(
-              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Bật Sử dụng AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm (cần AI Status sẵn sàng). Có sẵn từ khóa thì không gọi AI. F5 vẫn giữ; Clear mới xóa.",
-              { n: MIN_AI_KEYWORDS }
+              "Danh sách từ khóa cách nhau bằng dấu phẩy. Enter hoặc «,» để thêm chip. Cào song song {{workers}} luồng — mỗi luồng 1 từ khóa (vàng = đang cào, xanh lá = xong); worker bỏ qua key đã xong/đang chạy. Bật Sử dụng AI + để trống → khi Bắt đầu cào, AI tạo ≥{{n}} từ khóa Shopee rồi gắn thêm (cần AI Status sẵn sàng). F5 vẫn giữ; Clear mới xóa.",
+              { n: MIN_AI_KEYWORDS, workers: CRAWL_KEYWORD_WORKERS }
             )}
           </p>
         </div>
@@ -3940,6 +4004,8 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
           onChange={setScrapeSubTab}
           flex
           hasInkBar={false}
+          // Giữ Crawl Project / Giỏ Video / Mapping khi đổi sub-tab — crawl nền tiếp tục, form + list không mất
+          keepMounted="visited"
           className="!bg-transparent"
           tabClassName="h-11 justify-center border-r border-gray-200 last:border-r-0 bg-gray-50"
           activeClassName="!text-primary-dark bg-success-light"
