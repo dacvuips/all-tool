@@ -2,6 +2,7 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { CheckoutProvider } from "../../components/index/checkout/provider/checkout-provider";
 import { HomeProvider } from "../../components/index/home/provider/home-provider";
+import { MediaGenerationSuccessTicker } from "../../components/shared/media-generation-success-ticker";
 import { ErrorCatcher } from "../../components/shared/utilities/misc";
 import { useScreen } from "../../lib/hooks/useScreen";
 import { useAuth } from "../../lib/providers/auth-provider";
@@ -68,6 +69,9 @@ export function HomeLayout({ ...props }: LayoutProps) {
 }
 
 export function HomeLayoutContent({ children, ...props }: LayoutProps) {
+  const router = useRouter();
+  const isToolPage = router.pathname.startsWith("/app/");
+
   return (
     <>
       <div className="flex relative flex-col bg-gray-100">
@@ -84,6 +88,11 @@ export function HomeLayoutContent({ children, ...props }: LayoutProps) {
               </CheckoutProvider>
               <PopupNotifyDialog />
             </HomeProvider>
+            {isToolPage && (
+              <div className="sticky top-14 z-40">
+                <MediaGenerationSuccessTicker />
+              </div>
+            )}
             {children}
           </div>
           {/* <Footer /> */}

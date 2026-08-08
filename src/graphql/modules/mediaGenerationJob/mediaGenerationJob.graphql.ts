@@ -1,10 +1,11 @@
 /**
  * GraphQL schema + resolver cho Media Generation Job (ảnh/video).
  *
- * Cung cấp 3 thứ:
- *   - Query  `mediaGenerationJob(id)`         — fallback poll khi socket chưa kết nối.
+ * Cung cấp:
+ *   - Query  `mediaGenerationJob(id)` — fallback poll khi socket chưa kết nối.
+ *   - Query  `recentSucceededMediaGenerationJobs` — ticker job thành công gần đây.
  *   - Mutation `cancelMediaGenerationJob(id)` — user huỷ job đang chạy.
- *   - Mutation `retryMediaGenerationJob(id)`  — thử lại job FAILED.
+ *   - Mutation `retryMediaGenerationJob(id)` — thử lại job FAILED.
  *   - Subscription `mediaGenerationJobChanged(jobId)` — push update realtime.
  *
  * Bảo mật:
@@ -12,16 +13,18 @@
  *   - Filter subscription dùng *cả* `jobId` lẫn `customerId` — đảm bảo không leak
  *     event của user khác.
  *   - Query/mutation kiểm tra `job.customerId === context.id` (không cho phép user A đọc job của B).
+ *   - Ticker chỉ trả name/avatar/type — không kèm resultData.
  */
 import { gql, withFilter } from "apollo-server-express";
 import { CONSTANTS } from "../../../constants/constant.const";
 import { TOKEN_ROLES } from "../../../constants/role.const";
-import { CustomerLoader } from "../../../libs/dal/customer";
+import { CustomerLoader, customerService } from "../../../libs/dal/customer";
 import { Context } from "../../../libs/graphql";
 import { pubsub } from "../../../libs/graphql/pub-sub";
 import { GraphqlResolver } from "../../graphqlResolver";
 import {
   IMediaGenerationJob,
+  MediaGenerationJobStatus,
   mediaGenerationJobService,
 } from "../../../libs/dal/mediaGenerationJob";
 import {
@@ -139,6 +142,17 @@ export default {
       queueWaiting: Int
     }
 
+    """
+    Bản ghi rút gọn cho ticker job thành công gần đây (không kèm resultData).
+    """
+    type RecentSucceededMediaJob {
+      id: String
+      type: String
+      customerName: String
+      customerAvatarUrl: String
+      completedAt: DateTime
+    }
+
     extend type Query {
       """
       Lấy trạng thái 1 job (fallback poll khi socket chưa kết nối).
@@ -149,6 +163,11 @@ export default {
       Danh sách job (admin/staff).
       """
       getAllMediaGenerationJob(q: QueryGetListInput): MediaGenerationJobPageData
+
+      """
+      10 job SUCCEEDED mới nhất (ticker social proof). Không trả resultData.
+      """
+      recentSucceededMediaGenerationJobs(limit: Int): [RecentSucceededMediaJob]
     }
 
     extend type Mutation {
@@ -196,6 +215,58 @@ export default {
           ...result,
           data: (result?.data || []).map((doc: IMediaGenerationJob) => toGraphQLJob(doc)),
         };
+      },
+      recentSucceededMediaGenerationJobs: async (
+        _root: unknown,
+        args: { limit?: number },
+        context: Context
+      ) => {
+        if (!context.isAuth) {
+          throw new Error("Bạn cần đăng nhập");
+        }
+        const limit = Math.min(Math.max(Number(args.limit) || 10, 1), 20);
+        const jobs = (await mediaGenerationJobService.findAll({
+          filter: { status: MediaGenerationJobStatus.SUCCEEDED },
+          order: { completedAt: -1 },
+          limit,
+          select: "_id customerId type completedAt",
+        })) as unknown as Array<{
+          _id: unknown;
+          customerId?: string;
+          type?: string;
+          completedAt?: Date;
+        }>;
+
+        if (!jobs.length) return [];
+
+        const customerIds = Array.from(
+          new Set(jobs.map((j) => j.customerId).filter(Boolean) as string[])
+        );
+        const customers = customerIds.length
+          ? ((await customerService.findAll({
+              filter: { _id: { $in: customerIds } },
+              limit: customerIds.length,
+              select: "_id name avatarUrl",
+            })) as unknown as Array<{
+              _id: unknown;
+              name?: string;
+              avatarUrl?: string;
+            }>)
+          : [];
+        const customerById = new Map(
+          customers.map((c) => [String(c._id), c] as const)
+        );
+
+        return jobs.map((job) => {
+          const customer = job.customerId ? customerById.get(String(job.customerId)) : undefined;
+          return {
+            id: String(job._id),
+            type: job.type ?? null,
+            customerName: customer?.name ?? "Thành viên",
+            customerAvatarUrl: customer?.avatarUrl ?? null,
+            completedAt: job.completedAt ?? null,
+          };
+        });
       },
     },
     Mutation: {

@@ -2,6 +2,7 @@
  * Repository gọi GraphQL cho `MediaGenerationJob`:
  *   - Query   : `getAllMediaGenerationJob` — danh sách (admin)
  *   - Query   : `mediaGenerationJob(id)`     — lấy snapshot trạng thái (fallback poll)
+ *   - Query   : `recentSucceededMediaGenerationJobs` — ticker job thành công gần đây
  *   - Mutation: `cancelMediaGenerationJob`   — huỷ job đang chạy
  *   - Mutation: `retryMediaGenerationJob`  — retry job FAILED
  *   - Subscription: `mediaGenerationJobChanged(jobId)` — push update realtime
@@ -24,6 +25,7 @@ export type MediaGenerationJob<T = unknown> = BaseModel & {
     id?: string;
     email?: string;
     name?: string;
+    avatarUrl?: string;
   } | null;
   type: string;
   status: MediaGenerationJobStatus;
@@ -38,6 +40,45 @@ export type MediaGenerationJob<T = unknown> = BaseModel & {
   completedAt?: string | null;
 };
 
+/** Item ticker job thành công gần đây (không kèm resultData). */
+export type RecentSucceededMediaJob = {
+  id: string;
+  type: string;
+  customerName: string;
+  customerAvatarUrl?: string | null;
+  completedAt?: string | null;
+};
+
+/** Nhãn tiếng Việt cho loại generate (MediaGenerationJobType). */
+export const MEDIA_GENERATION_JOB_TYPE_LABELS: Record<string, string> = {
+  GENERATION_IMAGE: "Tạo ảnh",
+  GENERATION_ELEMENT_IMAGE: "Tạo ảnh hàng loạt",
+  COPY_VIDEO_GENERATE_IMAGE: "Tạo ảnh sao chép",
+  GENERATION_VIDEO: "Tạo video",
+  GENERATION_ELEMENT_VIDEO: "Tạo video hàng loạt",
+  GENERATION_ELEMENT_VIDEO_TO_VIDEO: "Video sang video",
+  GENERATION_REVIEW_IMAGE: "Tạo ảnh review",
+  GENERATION_REVIEW_VIDEO: "Tạo video review",
+  GENERATION_WOLF_VIDEO: "Tạo video Wolf",
+  GENERATION_WOLF_IMAGE: "Tạo ảnh Wolf",
+  GENERATION_SHOPEE_VIDEO: "Tạo video Shopee",
+  API_MEDIA_IMAGE: "Tạo ảnh",
+  API_MEDIA_VIDEO: "Tạo video",
+  API_MEDIA_UPSAMPLE_IMAGE: "Upscale ảnh",
+  API_MEDIA_UPSAMPLE_VIDEO: "Upscale video",
+  GENERATION_SCENE: "Tạo kịch bản",
+  GENERATION_REVIEW_SCENE: "Tạo kịch bản review",
+  STORYBOARD_ANALYSIS: "Phân tích storyboard",
+  SUGGEST_CONFIG: "Gợi ý cấu hình",
+  COPY_VIDEO_ANALYSIS: "Phân tích video sao chép",
+  GENERATION_TRENDING: "Tạo kịch bản trending",
+};
+
+export function getMediaGenerationJobTypeLabel(type?: string | null): string {
+  if (!type) return "Tạo media";
+  return MEDIA_GENERATION_JOB_TYPE_LABELS[type] || type;
+}
+
 const FULL_FRAGMENT = `
   id
   customerId
@@ -45,6 +86,7 @@ const FULL_FRAGMENT = `
     id
     email
     name
+    avatarUrl
   }
   type
   status
@@ -57,6 +99,14 @@ const FULL_FRAGMENT = `
   attempts
   createdAt
   startedAt
+  completedAt
+`;
+
+const RECENT_SUCCEEDED_FRAGMENT = `
+  id
+  type
+  customerName
+  customerAvatarUrl
   completedAt
 `;
 
@@ -84,6 +134,16 @@ class MediaGenerationJobRepository extends CrudRepository<MediaGenerationJob> {
       options: { variables: { id }, fetchPolicy: "no-cache", errorPolicy: "all" },
     });
     return (res.data?.g0 as MediaGenerationJob<T>) ?? null;
+  }
+
+  /** 10 job SUCCEEDED mới nhất (ticker). */
+  async getRecentSucceededJobs(limit = 10): Promise<RecentSucceededMediaJob[]> {
+    const res = await this.query({
+      query: `recentSucceededMediaGenerationJobs(limit: $limit) { ${RECENT_SUCCEEDED_FRAGMENT} }`,
+      variablesParams: "($limit: Int)",
+      options: { variables: { limit }, fetchPolicy: "no-cache", errorPolicy: "all" },
+    });
+    return (res.data?.g0 as RecentSucceededMediaJob[]) ?? [];
   }
 
   /** Huỷ job. Worker (nếu đang chạy) sẽ dừng emit ở milestone tiếp theo. */
