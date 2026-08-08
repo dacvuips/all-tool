@@ -6,7 +6,7 @@ import { TOKEN_ROLES } from "../../../../constants/role.const";
 import cache from "../../../../helpers/cache";
 import { t } from "../../../../helpers/functions/string";
 import { startSession } from "../../../../helpers/mongo";
-import Token from "../../../../helpers/token";
+import Token, { CUSTOMER_TOKEN_EXPIRES_IN } from "../../../../helpers/token";
 import { BaseCommand, BaseUsecase, ForbiddenError } from "../../../core";
 import { CustomerModel, ICustomer } from "../../../dal/customer";
 import { SettingModel } from "../../../dal/setting";
@@ -77,7 +77,12 @@ class CustomerLoginWithGoogleUsecase extends BaseUsecase {
       sessionId: new Types.ObjectId().toString(),
     };
     // generate access token
-    const loginToken = new Token(customer._id, TOKEN_ROLES.CUSTOMER, payload, "1d");
+    const loginToken = new Token(
+      customer._id,
+      TOKEN_ROLES.CUSTOMER,
+      payload,
+      CUSTOMER_TOKEN_EXPIRES_IN
+    );
 
     if (customer.phoneNumber) {
       _.set(

@@ -1,6 +1,7 @@
 /**
  * Ticker ngang: 10 job media thành công mới nhất.
  * Poll ~30s, chạy chậm từ phải sang trái.
+ * Nằm trong document flow (không fixed/sticky) — scroll cùng trang.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -19,7 +20,7 @@ function TickerItem({ job }: { job: RecentSucceededMediaJob }) {
   const typeLabel = getMediaGenerationJobTypeLabel(job.type);
 
   return (
-    <div className="flex flex-shrink-0 gap-1 items-center px-3 h-8 rounded-full bg-emerald-50/80">
+    <div className="flex flex-shrink-0 gap-1 items-center px-3 h-8 bg-emerald-50 rounded-full">
       <Img
         src={job.customerAvatarUrl}
         className="w-6"
@@ -69,7 +70,7 @@ export function MediaGenerationSuccessTicker() {
   if (!customer || !loopItems.length) return null;
 
   return (
-    <div className="overflow-hidden w-full h-9 bg-gradient-to-r from-emerald-50 via-white to-emerald-50">
+    <div className="overflow-hidden relative w-full h-9 bg-gradient-to-r from-emerald-50 via-white to-emerald-50 border-b border-emerald-100/90">
       <div className="flex gap-3 items-center h-full w-max animate-media-success-marquee hover:[animation-play-state:paused]">
         {loopItems.map((job, index) => (
           <TickerItem key={`${job.id}-${index}`} job={job} />
@@ -85,7 +86,7 @@ export function MediaGenerationSuccessTicker() {
           }
         }
         .animate-media-success-marquee {
-          animation: media-success-marquee 45s linear infinite;
+          animation: media-success-marquee 25s linear infinite;
         }
       `}</style>
     </div>

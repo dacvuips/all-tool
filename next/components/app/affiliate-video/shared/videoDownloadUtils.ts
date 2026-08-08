@@ -35,6 +35,13 @@ const PREFER_PROXY_HOST_SUFFIXES = [
   "viettheo.site",
 ];
 
+/** Cùng URL: 1 request dang dở được share (enrich + merge + preview). */
+const _uriBlobInflight = new Map<string, Promise<Blob>>();
+
+/** 404/410 cache ngắn — tránh storm retry proxy cùng link chết. */
+const _uriBlobFailCache = new Map<string, { until: number; error: Error }>();
+const FAIL_CACHE_TTL_MS = 60_000;
+
 function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -53,6 +60,19 @@ function shouldPreferDownloadProxy(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** HTTP 404/410 / link hết hạn — retry không giúp. */
+export function isNonRetryableMediaFetchError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err || "");
+  return (
+    /HTTP\s*404|HTTP\s*410/i.test(msg) ||
+    /Upstream HTTP\s*404|Upstream HTTP\s*410/i.test(msg) ||
+    /proxy\s*404|proxy\s*410/i.test(msg) ||
+    /không còn tồn tại/i.test(msg) ||
+    /không tồn tại hoặc đã hết hạn/i.test(msg) ||
+    /Video URL không còn tồn tại/i.test(msg)
+  );
 }
 
 /** HTTP(S) URL ngoài origin → download-proxy (tránh CORS khi preview / fetch). */
@@ -80,11 +100,8 @@ export function toDownloadProxyUrl(url: string, inline = false): string {
   return `${DOWNLOAD_PROXY_PATH}?${params.toString()}`;
 }
 
-/** Fetch HTTP(S) URL as Blob.
- * Flow2 / media host không CORS → ưu tiên download-proxy.
- * Host khác: thử direct trước, fail thì fallback proxy.
- */
-async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
+/** Fetch HTTP(S) URL as Blob (không dedupe — chỉ gọi qua fetchHttpUriAsBlobDeduped). */
+async function fetchHttpUriAsBlobOnce(url: string): Promise<Blob> {
   const preferProxy = shouldPreferDownloadProxy(url);
 
   const tryProxy = async (): Promise<Blob> => {
@@ -128,12 +145,60 @@ async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
   return tryProxy();
 }
 
-/** Resolve a remote or data URI to a Blob. Data URIs are parsed locally. */
-export async function uriToBlob(uri: string): Promise<Blob> {
-  if (uri.startsWith("data:")) {
-    return dataUrlToBlob(uri);
+async function fetchHttpUriAsBlob(url: string): Promise<Blob> {
+  const key = String(url || "").trim();
+  if (!key) throw new Error("Thiếu URL video");
+
+  const cachedFail = _uriBlobFailCache.get(key);
+  if (cachedFail && cachedFail.until > Date.now()) {
+    throw cachedFail.error;
   }
-  return fetchHttpUriAsBlob(uri);
+
+  const inflight = _uriBlobInflight.get(key);
+  if (inflight) return inflight;
+
+  const promise = fetchHttpUriAsBlobOnce(key)
+    .then((blob) => {
+      _uriBlobFailCache.delete(key);
+      return blob;
+    })
+    .catch((err) => {
+      if (isNonRetryableMediaFetchError(err)) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        _uriBlobFailCache.set(key, { until: Date.now() + FAIL_CACHE_TTL_MS, error });
+      }
+      throw err;
+    })
+    .finally(() => {
+      _uriBlobInflight.delete(key);
+    });
+
+  _uriBlobInflight.set(key, promise);
+  return promise;
+}
+
+/** Resolve a remote or data/blob URI to a Blob. Data URIs are parsed locally. */
+export async function uriToBlob(uri: string): Promise<Blob> {
+  const trimmed = String(uri || "").trim();
+  if (!trimmed) throw new Error("Thiếu URI video");
+
+  if (trimmed.startsWith("data:")) {
+    return dataUrlToBlob(trimmed);
+  }
+
+  if (trimmed.startsWith("blob:")) {
+    const res = await fetch(trimmed);
+    if (!res.ok) {
+      throw new Error(`Blob URL không còn hiệu lực (HTTP ${res.status})`);
+    }
+    const blob = await res.blob();
+    if (!blob || blob.size <= 0) {
+      throw new Error("Blob URL rỗng");
+    }
+    return blob;
+  }
+
+  return fetchHttpUriAsBlob(trimmed);
 }
 
 /** Trigger a browser file download from a Blob. */

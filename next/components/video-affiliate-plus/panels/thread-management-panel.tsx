@@ -169,6 +169,39 @@ function isGenerateRetryableError(err: unknown): boolean {
   );
 }
 
+/** Retry merge khi lỗi tạm; 404/link hết hạn / thiếu binary → không retry. */
+function isMergeRetryableError(err: unknown): boolean {
+  const message = getTaskErrorMessage(err, "").toLowerCase();
+  if (!message) return false;
+  // Link flow2 chết / empty — generate lại, không spammed proxy.
+  if (
+    /http\s*404|http\s*410|proxy\s*404|proxy\s*410|upstream http\s*404|upstream http\s*410/.test(
+      message
+    ) ||
+    message.includes("không còn tồn tại") ||
+    message.includes("không tồn tại hoặc đã hết hạn") ||
+    message.includes("hết hạn") ||
+    message.includes("hãy generate lại") ||
+    message.includes("rỗng") ||
+    message.includes("indexeddb đầy") ||
+    message.includes("cần ít nhất 2 video")
+  ) {
+    return false;
+  }
+  // Lỗi tạm: network / WASM / race tải
+  return (
+    message.includes("timeout") ||
+    message.includes("network") ||
+    message.includes("failed to fetch") ||
+    message.includes("load") ||
+    message.includes("memory") ||
+    message.includes("ffmpeg") ||
+    message.includes("quota") ||
+    message.includes("đang chờ") ||
+    message.includes("thử nối lại")
+  );
+}
+
 /** Giới hạn số job video chạy đồng thời (dùng chung khi Tách Prompt + Bắt đầu nhiều task). */
 function createConcurrencyPool(limit: number) {
   const max = Math.max(1, Math.min(50, Math.round(limit || 1)));
@@ -664,7 +697,7 @@ export function ThreadManagementPanel({
             return true;
           } catch (err: any) {
             const msg = getTaskErrorMessage(err, t("Nối video thất bại"));
-            if (retriesUsed < MAX_MERGE_ERROR_RETRIES) {
+            if (isMergeRetryableError(err) && retriesUsed < MAX_MERGE_ERROR_RETRIES) {
               retriesUsed += 1;
               await patchThread(sessionId, item.id, {
                 error: "",
@@ -3670,38 +3703,53 @@ export function ThreadManagementPanel({
               </button>
             </div>
           ) : (
-            <div className="overflow-auto max-h-[420px] rounded-lg border border-gray-100">
-              <table className="w-full text-xs text-left">
+            <div
+              className="overflow-auto rounded-lg border border-gray-100"
+              style={{ maxHeight: 420 }}
+            >
+              <table className="w-full text-xs text-left table-fixed">
                 <thead className="sticky top-0 text-gray-500 bg-gray-50">
                   <tr>
-                    <th className="px-3 py-2 font-semibold">{t("Thời gian")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Tên")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Domain")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Keyword")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("SP")}</th>
-                    <th className="px-3 py-2 font-semibold">{t("Thực hiện")}</th>
-                    <th className="px-3 py-2 font-semibold" />
+                    <th className="px-3 py-2 w-24 font-semibold">{t("Thời gian")}</th>
+                    <th className="px-3 py-2 w-28 font-semibold">{t("Tên")}</th>
+                    <th className="px-3 py-2 w-28 font-semibold">{t("Domain")}</th>
+                    <th className="px-3 py-2 w-36 font-semibold">{t("Keyword")}</th>
+                    <th className="px-3 py-2 w-12 font-semibold">{t("SP")}</th>
+                    <th className="px-3 py-2 w-20 font-semibold">{t("Thực hiện")}</th>
+                    <th className="px-3 py-2 w-52 font-semibold" />
                   </tr>
                 </thead>
                 <tbody>
                   {scrapeSessions.map((s) => {
                     const busy = importingSessionId === s.id;
+                    const keywordText = String(s.keyword || "").trim() || "—";
                     return (
                       <tr key={s.id} className="border-t border-gray-100 hover:bg-gray-50/80">
                         <td className="px-3 py-2 text-gray-700 whitespace-nowrap">
                           {formatSessionTime(s.createdAt)}
                         </td>
-                        <td
-                          className="px-3 py-2 max-w-[160px] truncate font-semibold text-gray-800"
-                          title={sessionDisplayName(s)}
-                        >
-                          {sessionDisplayName(s)}
+                        <td className="px-3 py-2 min-w-0">
+                          <div
+                            className="truncate font-semibold text-gray-800"
+                            title={sessionDisplayName(s)}
+                          >
+                            {sessionDisplayName(s)}
+                          </div>
                         </td>
-                        <td className="px-3 py-2 max-w-[140px] truncate" title={s.marketHost}>
-                          {domainLabel(s.marketHost)}
+                        <td className="px-3 py-2 min-w-0">
+                          <div className="truncate" title={s.marketHost}>
+                            {domainLabel(s.marketHost)}
+                          </div>
                         </td>
-                        <td className="px-3 py-2 max-w-[120px] truncate" title={s.keyword}>
-                          {s.keyword || "—"}
+                        <td className="px-3 py-2 min-w-0 w-36">
+                          {/* Chỉ keyword scroll ngang trong khung cột — không đẩy layout bảng */}
+                          <div
+                            className="overflow-x-auto max-w-full min-w-0 whitespace-nowrap text-gray-700"
+                            style={{ scrollbarWidth: "thin" }}
+                            title={keywordText === "—" ? undefined : keywordText}
+                          >
+                            {keywordText}
+                          </div>
                         </td>
                         <td className="px-3 py-2 font-semibold text-gray-800">{s.productCount}</td>
                         <td className="px-3 py-2 text-gray-600">{formatDuration(s.durationMs)}</td>

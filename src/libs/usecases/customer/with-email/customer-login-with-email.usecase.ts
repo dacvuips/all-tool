@@ -8,7 +8,7 @@ import cache from "../../../../helpers/cache";
 import Firebase from "../../../../helpers/firebase";
 import { t } from "../../../../helpers/functions/string";
 import { startSession } from "../../../../helpers/mongo";
-import Token from "../../../../helpers/token";
+import Token, { CUSTOMER_TOKEN_EXPIRES_IN } from "../../../../helpers/token";
 import { BaseCommand, BaseUsecase, ForbiddenError } from "../../../core";
 import { CustomerModel, ICustomer } from "../../../dal/customer";
 import { OrderModel } from "../../../dal/order/order.model";
@@ -102,7 +102,12 @@ class CustomerLoginWithEmailUsecase extends BaseUsecase {
       { customerId: customer._id }
     );
     // generate access token
-    const loginToken = new Token(customer._id, TOKEN_ROLES.CUSTOMER, payload, "1d");
+    const loginToken = new Token(
+      customer._id,
+      TOKEN_ROLES.CUSTOMER,
+      payload,
+      CUSTOMER_TOKEN_EXPIRES_IN
+    );
     if (customer.phoneNumber) {
       _.set(
         customer,

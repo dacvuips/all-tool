@@ -6,7 +6,7 @@ import { Types } from "mongoose";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import cache from "../../../helpers/cache";
 import { t } from "../../../helpers/functions/string";
-import Token from "../../../helpers/token";
+import Token, { CUSTOMER_TOKEN_EXPIRES_IN } from "../../../helpers/token";
 import { BaseCommand, BaseUsecase, ForbiddenError } from "../../core";
 import { CustomerModel, ICustomer } from "../../dal/customer";
 import { SettingModel } from "../../dal/setting";
@@ -48,7 +48,12 @@ class CustomerLoginUsecase extends BaseUsecase {
       sessionId: new Types.ObjectId().toString(),
     };
     // generate access token
-    const accessToken = new Token(customer._id, TOKEN_ROLES.CUSTOMER, payload, "1d");
+    const accessToken = new Token(
+      customer._id,
+      TOKEN_ROLES.CUSTOMER,
+      payload,
+      CUSTOMER_TOKEN_EXPIRES_IN
+    );
     _.set(
       customer,
       "phoneNumber",

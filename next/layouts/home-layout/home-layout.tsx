@@ -88,11 +88,7 @@ export function HomeLayoutContent({ children, ...props }: LayoutProps) {
               </CheckoutProvider>
               <PopupNotifyDialog />
             </HomeProvider>
-            {isToolPage && (
-              <div className="sticky top-14 z-40">
-                <MediaGenerationSuccessTicker />
-              </div>
-            )}
+            {isToolPage && <MediaGenerationSuccessTicker />}
             {children}
           </div>
           {/* <Footer /> */}

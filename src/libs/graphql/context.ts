@@ -234,6 +234,8 @@ export class Context {
       secure: true,
       sameSite: "lax",
       path: path,
+      // Giữ cookie tối đa ~1 tháng (khớp JWT customer / default staff)
+      maxAge: 30 * 24 * 60 * 60 * 1000,
     });
   }
 

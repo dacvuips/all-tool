@@ -5,6 +5,10 @@ export enum TokenType {
   STAFF = "STAFF",
   ADMIN = "ADMIN",
 }
+
+/** Thời hạn JWT đăng nhập customer — 1 tháng trước khi buộc login lại. */
+export const CUSTOMER_TOKEN_EXPIRES_IN = "30d";
+
 export default class Token {
   constructor(
     readonly _id: string,
