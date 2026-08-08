@@ -395,6 +395,7 @@ export function ThreadManagementPanel({
   const [mergingIds, setMergingIds] = useState<Record<string, boolean>>({});
   const [batchRunning, setBatchRunning] = useState(false);
   const [downloadingMerged, setDownloadingMerged] = useState(false);
+  const [mergingPendingBatch, setMergingPendingBatch] = useState(false);
   const [clearingIdb, setClearingIdb] = useState(false);
   const pauseAllRef = useRef(false);
   /** threadId → jobId server đang chạy — dùng để cancel khi tạm dừng. */
@@ -855,6 +856,16 @@ export function ThreadManagementPanel({
       error: listMeta?.error ?? 0,
     };
   }, [listMeta, listTotal]);
+
+  /** Ước lượng task cần nối trên trang hiện tại (badge nút; full session scan lúc bấm). */
+  const pendingMergeCount = useMemo(
+    () =>
+      visibleItems.filter(
+        (i) =>
+          isMergeRetryCandidate(i) && !generatingIds[i.id] && !mergingIds[i.id]
+      ).length,
+    [visibleItems, generatingIds, mergingIds]
+  );
 
   const getErrorItems = (list: AffiliatePlusItem[]) =>
     list.filter((i) => i.status === "error" || Boolean(String(i.error || "").trim()));
@@ -2133,6 +2144,91 @@ export function ThreadManagementPanel({
     }
   };
 
+  /**
+   * Nối tất cả task đã đủ video gen (≥2 slot) nhưng chưa có file nối.
+   * Không đụng task đang gen / đang nối; bỏ qua đã có merged.
+   */
+  const handleMergePendingVideos = useCallback(async () => {
+    if (mergingPendingBatch) return;
+
+    setMergingPendingBatch(true);
+    try {
+      const all = await getSessionItems(sessionId);
+      const hydrated = await hydrateMergedVideoUrls(all, sessionId);
+      const pending = hydrated.filter((i) => {
+        if (generatingIds[i.id] || mergingIds[i.id]) return false;
+        return isMergeRetryCandidate(i);
+      });
+
+      if (!pending.length) {
+        toast.info(t("Không có task nào đủ video gen mà chưa nối"));
+        if (hydrated.some((i, idx) => i.mergedVideoUrl !== all[idx]?.mergedVideoUrl)) {
+          void loadPage();
+        }
+        return;
+      }
+
+      onAddLog(
+        t("Nối video: {{count}} task đủ video, chưa nối — chạy tuần tự...", {
+          count: pending.length,
+        }),
+        "info"
+      );
+      toast.info(
+        t("Đang nối {{count}} task...", {
+          count: pending.length,
+        })
+      );
+
+      let ok = 0;
+      let fail = 0;
+      for (const item of pending) {
+        if (pauseAllRef.current) {
+          onAddLog(t("Đã tạm dừng — dừng nối các task còn lại"), "warning", item.id);
+          break;
+        }
+        // Cho phép user bấm Nối lại dù auto-merge đã đánh dấu attempt
+        delete autoMergeAttemptedRef.current[item.id];
+        const urls = getMergeableVideoUrls(item);
+        if (urls.length < 2) continue;
+        const success = await executeMergeWithRetry(item, {
+          urls,
+          resetRetryCount: true,
+        });
+        if (success) ok += 1;
+        else fail += 1;
+      }
+
+      void loadPage();
+      scheduleParentSync();
+      if (ok > 0 && fail === 0) {
+        toast.success(t("Đã nối xong {{count}} task", { count: ok }));
+      } else if (ok > 0) {
+        toast.warn(
+          t("Nối xong {{ok}} task, lỗi {{fail}} task", { ok, fail })
+        );
+      } else if (fail > 0) {
+        toast.error(t("Nối video thất bại cho {{count}} task", { count: fail }));
+      }
+    } catch (err: any) {
+      console.error("[handleMergePendingVideos]", err);
+      toast.error(err?.message || t("Nối video thất bại"));
+    } finally {
+      setMergingPendingBatch(false);
+    }
+  }, [
+    executeMergeWithRetry,
+    generatingIds,
+    loadPage,
+    mergingIds,
+    mergingPendingBatch,
+    onAddLog,
+    scheduleParentSync,
+    sessionId,
+    t,
+    toast,
+  ]);
+
   /** Tạo lại 1 slot variant (gắn vào đúng tab; URL → IDB → base64 ngầm). */
   const regenerateVariantSlot = async (
     itemId: string,
@@ -2744,6 +2840,31 @@ export function ThreadManagementPanel({
                 <HiDownload className="text-base" />
               )}
               {downloadingMerged ? t("Đang tải...") : t("Tải tất cả video nối")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleMergePendingVideos()}
+              disabled={mergingPendingBatch}
+              title={t(
+                "Nối file cho task đã đủ video gen nhưng chưa có video nối (toàn phiên)"
+              )}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
+              style={
+                mergingPendingBatch
+                  ? undefined
+                  : { backgroundColor: "#f5f3ff", borderColor: "#a78bfa", color: "#6d28d9" }
+              }
+            >
+              {mergingPendingBatch ? (
+                <RiLoader4Line className="text-base animate-spin" />
+              ) : (
+                <RiVideoFill className="text-base" />
+              )}
+              {mergingPendingBatch
+                ? t("Đang nối...")
+                : pendingMergeCount > 0
+                ? t("Nối video ({{count}})", { count: pendingMergeCount })
+                : t("Nối video")}
             </button>
           </div>
 
