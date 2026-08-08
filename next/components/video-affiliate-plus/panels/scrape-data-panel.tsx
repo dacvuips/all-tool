@@ -1020,7 +1020,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     persistKeywords([]);
     setKeywordDraft("");
     setDoneKeywords([]);
-    setActiveKeyword("");
+    setActiveKeywords([]);
   };
 
   const handleCheckOpenaiKey = async () => {
@@ -2065,7 +2065,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
 
     const syncActiveKeywordsUi = () => {
       const active: string[] = [];
-      for (const slotIdx of runningSlotByWorker.values()) {
+      for (const slotIdx of Array.from(runningSlotByWorker.values())) {
         const kw = crawlKeywords[slotIdx];
         if (kw) active.push(kw);
       }
@@ -2096,7 +2096,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     };
 
     const publishStatus = (detail?: string) => {
-      const runningLabels = [...runningSlotByWorker.values()]
+      const runningLabels = Array.from(runningSlotByWorker.values())
         .map((i) => crawlKeywords[i] || t("(không từ khóa)"))
         .filter(Boolean);
       const base = t(
