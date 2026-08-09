@@ -55,6 +55,7 @@ import {
   mergeVideosToIndexedDb,
   persistProductVideosWithEnrichment,
   removeMergedVideoFromIndexedDb,
+  resolveMergeableVideoSources,
   resolveMergedPreviewUrl,
   resolveVariantPreviewUrls,
 } from "../merged-video";
@@ -169,37 +170,17 @@ function isGenerateRetryableError(err: unknown): boolean {
   );
 }
 
-/** Retry merge khi lỗi tạm; 404/link hết hạn / thiếu binary → không retry. */
+/** Retry merge tối đa 3 lần; chỉ bỏ qua lỗi không có video / IDB đầy. */
 function isMergeRetryableError(err: unknown): boolean {
   const message = getTaskErrorMessage(err, "").toLowerCase();
-  if (!message) return false;
-  // Link flow2 chết / empty — generate lại, không spammed proxy.
+  if (!message) return true;
   if (
-    /http\s*404|http\s*410|proxy\s*404|proxy\s*410|upstream http\s*404|upstream http\s*410/.test(
-      message
-    ) ||
-    message.includes("không còn tồn tại") ||
-    message.includes("không tồn tại hoặc đã hết hạn") ||
-    message.includes("hết hạn") ||
-    message.includes("hãy generate lại") ||
-    message.includes("rỗng") ||
     message.includes("indexeddb đầy") ||
     message.includes("cần ít nhất 2 video")
   ) {
     return false;
   }
-  // Lỗi tạm: network / WASM / race tải
-  return (
-    message.includes("timeout") ||
-    message.includes("network") ||
-    message.includes("failed to fetch") ||
-    message.includes("load") ||
-    message.includes("memory") ||
-    message.includes("ffmpeg") ||
-    message.includes("quota") ||
-    message.includes("đang chờ") ||
-    message.includes("thử nối lại")
-  );
+  return true;
 }
 
 /** Giới hạn số job video chạy đồng thời (dùng chung khi Tách Prompt + Bắt đầu nhiều task). */
@@ -652,10 +633,23 @@ export function ThreadManagementPanel({
   const executeMergeWithRetry = useCallback(
     async (
       item: AffiliatePlusItem,
-      opts?: { urls?: string[]; resetRetryCount?: boolean; keepErrorVisible?: boolean }
+      opts?: {
+        urls?: string[];
+        slotIndices?: number[];
+        resetRetryCount?: boolean;
+        keepErrorVisible?: boolean;
+      }
     ) => {
-      const urls = opts?.urls || getMergeableVideoUrls(item);
-      if (urls.length < 2) {
+      let urls = opts?.urls;
+      let slotIndices = opts?.slotIndices;
+
+      if (!urls || urls.length < 2) {
+        const resolved = await resolveMergeableVideoSources(item, sessionId);
+        urls = resolved.urls;
+        slotIndices = resolved.slotIndices;
+      }
+
+      if (!urls || urls.length < 2) {
         toast.warn(t("Cần ít nhất 2 video (không bị tắt) để nối"));
         return false;
       }
@@ -682,9 +676,19 @@ export function ThreadManagementPanel({
 
         for (;;) {
           try {
+            // Mỗi lần (kể cả retry) re-resolve: link thật hoặc Blob IDB
+            if (retriesUsed > 0 || !opts?.urls) {
+              const resolved = await resolveMergeableVideoSources(latest, sessionId);
+              if (resolved.urls.length >= 2) {
+                urls = resolved.urls;
+                slotIndices = resolved.slotIndices;
+              }
+            }
+
             const mergedUrl = await mergeVideosToIndexedDb(
               getMergedVideoStorageKey(latest, sessionId),
-              urls
+              urls!,
+              { slotIndices }
             );
             await patchThread(sessionId, item.id, {
               mergedVideoUrl: mergedUrl,
@@ -715,6 +719,8 @@ export function ThreadManagementPanel({
                 "warning",
                 item.id
               );
+              // Chờ ngắn giữa retry — cho enrich Blob kịp ghi
+              await new Promise((r) => setTimeout(r, 800));
               continue;
             }
 
@@ -745,14 +751,16 @@ export function ThreadManagementPanel({
     [onAddLog, scheduleParentSync, sessionId, t, toast]
   );
 
-  /** Hoãn merge ffmpeg — nhường event loop để worker enqueue/poll job generate tiếp theo. */
-  const MERGE_DEFER_MS = 400;
+  /** Sau khi gen xong: chờ 5s rồi nối (blob IDB kịp sẵn). */
+  const MERGE_DEFER_MS = 5000;
 
   const scheduleBackgroundMerge = useCallback(
-    (mergeItemId: string, _mergeKey: string, mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
+    (mergeItemId: string, _mergeKey: string, _mergeUrls: string[], deferMs = MERGE_DEFER_MS) => {
       autoMergeAttemptedRef.current[mergeItemId] = true;
       onAddLog(
-        t("Xếp hàng nối {{count}} video (1 SP / lần)...", { count: mergeUrls.length }),
+        t("Sẽ nối video sau {{sec}}s (ưu tiên link proxy, fallback Blob)...", {
+          sec: Math.round(deferMs / 1000),
+        }),
         "info",
         mergeItemId
       );
@@ -765,10 +773,22 @@ export function ThreadManagementPanel({
             (await getThreadItem(sessionId, mergeItemId)) ||
             itemsRef.current.find((i) => i.id === mergeItemId);
           if (!latest || pauseAllRef.current) return;
-          const urlsToMerge = getMergeableVideoUrls(latest);
-          if (urlsToMerge.length < 2) return;
-          // Full pipeline queue trong mergeVideosToIndexedDb — 1 SP load+merge+lưu IDB / lúc
-          await executeMergeWithRetry(latest, { urls: urlsToMerge, resetRetryCount: true });
+
+          const { urls, slotIndices } = await resolveMergeableVideoSources(latest, sessionId);
+          if (urls.length < 2) {
+            onAddLog(
+              t("Chưa đủ 2 video/Blob để nối — bỏ qua"),
+              "warning",
+              mergeItemId
+            );
+            return;
+          }
+          // Không queue SP — nối ngay (ffmpeg.wasm serial nội bộ)
+          await executeMergeWithRetry(latest, {
+            urls,
+            slotIndices,
+            resetRetryCount: true,
+          });
         })();
       }, deferMs);
     },
@@ -799,18 +819,16 @@ export function ThreadManagementPanel({
       return;
     }
 
-    // Tuần tự từng SP (pipeline merge cũng serial) — tránh fire-and-forget ồ ạt
+    // Tuần tự từng SP — tránh fire-and-forget ồ ạt
     for (const item of pending) {
       if (batchRunningRef.current || pauseAllRef.current) break;
       autoMergeAttemptedRef.current[item.id] = true;
-      const urls = getMergeableVideoUrls(item);
-      if (urls.length < 2) continue;
       onAddLog(
-        t("Xếp hàng nối {{count}} video (1 SP / lần)...", { count: urls.length }),
+        t("Xếp hàng nối video (ưu tiên link proxy, fallback Blob)..."),
         "info",
         item.id
       );
-      await executeMergeWithRetry(item, { urls, resetRetryCount: true });
+      await executeMergeWithRetry(item, { resetRetryCount: true });
     }
   }, [executeMergeWithRetry, generatingIds, loadPage, mergingIds, onAddLog, sessionId, t]);
 
@@ -2189,10 +2207,7 @@ export function ThreadManagementPanel({
         }
         // Cho phép user bấm Nối lại dù auto-merge đã đánh dấu attempt
         delete autoMergeAttemptedRef.current[item.id];
-        const urls = getMergeableVideoUrls(item);
-        if (urls.length < 2) continue;
         const success = await executeMergeWithRetry(item, {
-          urls,
           resetRetryCount: true,
         });
         if (success) ok += 1;

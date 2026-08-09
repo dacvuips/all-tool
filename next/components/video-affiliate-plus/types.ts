@@ -1474,13 +1474,29 @@ export function padVideoSlots(
 
 /** URL dùng để nối — bỏ slot trống và slot bị disable. */
 export function getMergeableVideoUrls(item: AffiliatePlusItem): string[] {
+  return getMergeableVideoSlots(item).map((s) => s.url);
+}
+
+/** Slot có video để nối (giữ index gốc — khớp videoBlobList / IDB). */
+export function getMergeableVideoSlots(
+  item: Pick<AffiliatePlusItem, "videoUrls" | "videoDisabled">
+): Array<{ index: number; url: string }> {
   return (item.videoUrls || [])
     .map((u, idx) => ({
+      index: idx,
       url: String(u || "").trim(),
       disabled: Boolean(item.videoDisabled?.[idx]),
     }))
     .filter((x) => x.url && !x.disabled)
-    .map((x) => x.url);
+    .map(({ index, url }) => ({ index, url }));
+}
+
+/** Có ít nhất 1 source "thật" (http / data / blob). */
+export function isRealMediaUrl(url: string): boolean {
+  const u = String(url || "").trim();
+  if (!u) return false;
+  if (u.startsWith("data:") || u.startsWith("blob:")) return true;
+  return /^https?:\/\//i.test(u);
 }
 
 export type VideoSlotStatus = "pending" | "running" | "success" | "error";

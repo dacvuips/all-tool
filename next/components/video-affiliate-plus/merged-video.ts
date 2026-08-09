@@ -25,80 +25,15 @@ import {
 /** Cùng productId: 1 enrich dang dở được share (merge + persist + UI). */
 const _enrichInflightByKey = new Map<string, Promise<ProductVideoRecord | undefined>>();
 
-// ─── Full merge pipeline queue (1 SP / lúc): load Blob → ffmpeg → lưu IDB ───
-// Trước đây chỉ queue phần ffmpeg → nhiều SP load Blob đồng thời → spike RAM / OOM.
-// Queue này serial toàn bộ pipeline; dedup cùng storageKey + cùng urls.
-
-type MergePipelineJob = {
-  run: () => Promise<void>;
-  resolve: () => void;
-  reject: (err: unknown) => void;
-  onWaiting?: (ahead: number) => void;
-};
-
-let _mergePipelineRunning = false;
-const _mergePipelineQueue: MergePipelineJob[] = [];
-
-/** Job đang bay (queued / running) theo storageKey — dedup cùng urls. */
+/** Job đang bay theo storageKey — dedup cùng urls (không xếp hàng serial toàn app). */
 const _mergeInflightByKey = new Map<
   string,
   { sig: string; promise: Promise<string> }
 >();
 
-function notifyMergePipelineWaiters() {
-  for (let i = 0; i < _mergePipelineQueue.length; i++) {
-    // i==0 sắp chạy / đang chờ drain; ahead = index (0 = next)
-    _mergePipelineQueue[i]?.onWaiting?.(i);
-  }
-}
-
-async function drainMergePipelineQueue() {
-  if (_mergePipelineRunning) return;
-  _mergePipelineRunning = true;
-  try {
-    while (_mergePipelineQueue.length > 0) {
-      const job = _mergePipelineQueue.shift()!;
-      notifyMergePipelineWaiters();
-      try {
-        await job.run();
-        job.resolve();
-      } catch (err) {
-        job.reject(err);
-      }
-      // Nhường event loop + GC giữa 2 SP (Blob/WASM vừa xả)
-      await new Promise<void>((r) => setTimeout(r, 0));
-    }
-  } finally {
-    _mergePipelineRunning = false;
-    // Race: job mới push trong lúc finally
-    if (_mergePipelineQueue.length > 0) {
-      void drainMergePipelineQueue();
-    }
-  }
-}
-
-/**
- * Xếp hàng full pipeline nối video.
- * Chỉ 1 job chạy: load + ffmpeg + IDB.
- */
-function enqueueMergePipeline(
-  run: () => Promise<void>,
-  onWaiting?: (ahead: number) => void
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    _mergePipelineQueue.push({ run, resolve, reject, onWaiting });
-    notifyMergePipelineWaiters();
-    void drainMergePipelineQueue();
-  });
-}
-
-/** Số job đang chờ + 1 nếu đang chạy (debug / UI tùy chọn). */
-export function getMergePipelinePendingCount(): number {
-  return _mergePipelineQueue.length + (_mergePipelineRunning ? 1 : 0);
-}
-
-function urlsSignature(urls: string[]): string {
-  return urls.map((u) => String(u || "").trim()).join("\n");
+function urlsSignature(urls: string[], slotIndices?: number[]): string {
+  const slots = (slotIndices || []).join(",");
+  return `${slots}\n${urls.map((u) => String(u || "").trim()).join("\n")}`;
 }
 
 export type ProductVideoKeySource = {
@@ -525,6 +460,24 @@ export async function persistProductVideosWithEnrichment(
   return preview;
 }
 
+function getVariantBlobAt(
+  record: ProductVideoRecord | undefined,
+  index: number,
+  mime: string
+): Blob | null {
+  if (!record || index < 0) return null;
+  const blobLen = Math.max(
+    record.videoUris?.length || 0,
+    record.videoBlobList?.length || 0
+  );
+  if (index >= blobLen) return null;
+  const blob = record.videoBlobList?.[index];
+  if (blob && blob.size > 0) return blob;
+  const bytes = (record.videoBytesList?.[index] || "").trim();
+  if (bytes) return base64ToBlob(bytes, mime);
+  return null;
+}
+
 function resolveVariantBlobFromRecord(
   record: ProductVideoRecord | undefined,
   url: string,
@@ -534,64 +487,39 @@ function resolveVariantBlobFromRecord(
   if (!record) return null;
 
   const trimmedUrl = String(url || "").trim();
-  if (!trimmedUrl) return null;
-
   const uris = record.videoUris || [];
-  const blobLen = Math.max(uris.length, record.videoBlobList?.length || 0);
 
-  const getBlobAt = (idx: number): Blob | null => {
-    if (idx < 0 || idx >= blobLen) return null;
-    const blob = record.videoBlobList?.[idx];
-    if (blob && blob.size > 0) return blob;
-    const bytes = (record.videoBytesList?.[idx] || "").trim();
-    if (bytes) return base64ToBlob(bytes, mime);
-    return null;
-  };
+  // 1) Binary đúng slot gốc
+  const bySlot = getVariantBlobAt(record, index, mime);
+  if (bySlot) return bySlot;
 
-  // 1) Đúng slot/index khi URI khớp (exact / loose) — an toàn khi clean đã filter disable.
-  if (index >= 0 && index < uris.length) {
-    const atIndex = String(uris[index] || "").trim();
-    if (atIndex && (atIndex === trimmedUrl || urlsLooselyMatch(atIndex, trimmedUrl))) {
-      const byIndex = getBlobAt(index);
-      if (byIndex) return byIndex;
-    }
-  }
+  if (!trimmedUrl || trimmedUrl === "__idb__") return null;
 
-  // 2) Khớp URL chính xác trên videoUris.
+  // 2) Khớp URL chính xác
   const exactIdx = uris.findIndex((u) => String(u || "").trim() === trimmedUrl);
   if (exactIdx >= 0) {
-    const exact = getBlobAt(exactIdx);
+    const exact = getVariantBlobAt(record, exactIdx, mime);
     if (exact) return exact;
   }
 
-  // 3) Khớp loose (flow2 .../id vs .../id/1) — vẫn theo URL, không gộp sai slot khác.
+  // 3) Khớp loose (flow2 .../id vs .../id/1)
   const looseIdx = uris.findIndex((u) => urlsLooselyMatch(String(u || "").trim(), trimmedUrl));
   if (looseIdx >= 0) {
-    const loose = getBlobAt(looseIdx);
+    const loose = getVariantBlobAt(record, looseIdx, mime);
     if (loose) return loose;
   }
 
-  // 4) Full list cùng thứ tự: clean[i] ≈ videoUris[i] — lấy blob theo index dù string lệch nhẹ.
-  if (
-    index >= 0 &&
-    index < uris.length &&
-    uris.length === (record.videoBlobList?.length || 0)
-  ) {
-    const byIndex = getBlobAt(index);
-    if (byIndex) {
-      const atIndex = String(uris[index] || "").trim();
-      if (!atIndex || urlsLooselyMatch(atIndex, trimmedUrl) || atIndex === trimmedUrl) {
-        return byIndex;
-      }
-    }
-  }
-
-  // 5) Chỉ còn blob list (URI rỗng) và index khớp độ dài — mergeable không filter lệch.
-  if (index >= 0 && !uris.length && getBlobAt(index)) {
-    return getBlobAt(index);
-  }
-
   return null;
+}
+
+function isRemoteHttpUrl(url: string): boolean {
+  return /^https?:\/\//i.test(String(url || "").trim());
+}
+
+function isFetchableMediaUrl(url: string): boolean {
+  const u = String(url || "").trim();
+  if (!u || u === "__idb__") return false;
+  return isRemoteHttpUrl(u) || u.startsWith("data:") || u.startsWith("blob:");
 }
 
 async function putMergedVideoWithVerify(
@@ -635,28 +563,39 @@ async function putMergedVideoWithVerify(
 }
 
 /**
- * Core pipeline (không queue). Chỉ gọi từ trong enqueueMergePipeline.
- * load Blob → ffmpeg → lưu merged-videos IDB → marker product-videos.
+ * Core pipeline (không queue).
+ * load Blob: link thật (http → download-proxy) trước → fallback Blob IDB → ffmpeg.
  */
 async function runMergeVideosToIndexedDbPipeline(
   key: string,
   clean: string[],
-  options?: { onProgress?: (ratio: number, message: string) => void }
+  options?: {
+    onProgress?: (ratio: number, message: string) => void;
+    /** Index slot gốc trong videoUrls/videoBlobList (khi clean đã filter disabled). */
+    slotIndices?: number[];
+  }
 ): Promise<string> {
   // Giữ local refs ngắn — null sau khi xong để GC bớt spike
   let blobs: Array<Blob | null> = [];
   let resultBlob: Blob | null = null;
 
   try {
-    options?.onProgress?.(0.02, "Đang lấy video từ IndexedDB...");
+    options?.onProgress?.(0.02, "Đang chuẩn bị video nguồn...");
 
-    // Đọc IDB trước; chỉ enrich khi còn slot thiếu binary local (tránh double-fetch).
     let record = await idbGetProductVideo(key);
     const mime = record?.mimeType || "video/mp4";
-    const missingLocal = clean.some(
-      (url, i) => !resolveVariantBlobFromRecord(record, url, i, mime)
-    );
-    if (missingLocal && (!record || hasPendingVariantBase64(record))) {
+    const slotOf = (i: number) =>
+      options?.slotIndices && options.slotIndices[i] != null
+        ? options.slotIndices[i]!
+        : i;
+
+    // Enrich ngầm chỉ khi có slot không có link thật (sẽ cần Blob local)
+    const needsBlobFallback = clean.some((url, i) => {
+      const u = String(url || "").trim();
+      if (isFetchableMediaUrl(u) && u !== "__idb__") return false;
+      return !getVariantBlobAt(record, slotOf(i), mime);
+    });
+    if (needsBlobFallback && (!record || hasPendingVariantBase64(record))) {
       try {
         await enrichProductVideoBase64(key);
         record = await idbGetProductVideo(key);
@@ -666,29 +605,52 @@ async function runMergeVideosToIndexedDbPipeline(
     }
 
     const mimeAfter = record?.mimeType || mime;
+    const maxSlot = Math.max(
+      clean.length,
+      ...(options?.slotIndices || []).map((n) => n + 1),
+      record?.videoBlobList?.length || 0,
+      record?.videoUris?.length || 0
+    );
     const cachedBlobs: Array<Blob | null> = [...(record?.videoBlobList || [])];
-    while (cachedBlobs.length < clean.length) cachedBlobs.push(null);
+    while (cachedBlobs.length < maxSlot) cachedBlobs.push(null);
     let cacheDirty = false;
 
     for (let i = 0; i < clean.length; i++) {
       const url = clean[i];
+      const slotIdx = slotOf(i);
+      const trimmedUrl = String(url || "").trim();
       options?.onProgress?.(
         0.05 + (i / clean.length) * 0.2,
         `Đang lấy video ${i + 1}/${clean.length}...`
       );
 
-      let blob = resolveVariantBlobFromRecord(record, url, i, mimeAfter);
-      if (!blob) {
+      let blob: Blob | null = null;
+
+      // 1) Ưu tiên link thật qua proxy / fetch (http, blob:, data:)
+      if (isFetchableMediaUrl(trimmedUrl)) {
         try {
-          // uriToBlob dedupe toàn app — share với enrich đang bay (nếu có).
-          blob = await uriToBlob(url);
+          blob = await uriToBlob(trimmedUrl);
+          if (blob && blob.size > 0 && isRemoteHttpUrl(trimmedUrl)) {
+            // Cache local sau khi tải proxy thành công
+            if (!cachedBlobs[slotIdx] || cachedBlobs[slotIdx]!.size <= 0) {
+              cachedBlobs[slotIdx] = blob;
+              cacheDirty = true;
+            }
+          }
         } catch (err: any) {
-          throw new Error(
-            `Không tải được video số ${i + 1} (${url.slice(0, 80)}…). Link flow2 có thể đã hết hạn và chưa kịp lưu IndexedDB — hãy generate lại.\n(${
-              err?.message || err
-            })`
-          );
+          // 2) Link fail → Blob video local (IDB)
+          blob = resolveVariantBlobFromRecord(record, trimmedUrl, slotIdx, mimeAfter);
+          if (!blob) {
+            throw new Error(
+              `Không tải được video số ${i + 1} (${trimmedUrl.slice(0, 80)}…). Link proxy lỗi và chưa có Blob local — hãy generate lại.\n(${
+                err?.message || err
+              })`
+            );
+          }
         }
+      } else {
+        // 3) Không có link thật → lấy Blob video (IndexedDB / legacy base64)
+        blob = resolveVariantBlobFromRecord(record, trimmedUrl, slotIdx, mimeAfter);
       }
 
       if (!blob || blob.size <= 0) {
@@ -696,8 +658,8 @@ async function runMergeVideosToIndexedDbPipeline(
       }
 
       blobs.push(blob);
-      if (!cachedBlobs[i] || cachedBlobs[i]!.size <= 0) {
-        cachedBlobs[i] = blob;
+      if (!cachedBlobs[slotIdx] || cachedBlobs[slotIdx]!.size <= 0) {
+        cachedBlobs[slotIdx] = blob;
         cacheDirty = true;
       }
     }
@@ -706,18 +668,24 @@ async function runMergeVideosToIndexedDbPipeline(
     if (cacheDirty) {
       try {
         const existing = await idbGetProductVideo(key);
+        const uris =
+          existing?.videoUris?.length
+            ? existing.videoUris
+            : Array.from({ length: maxSlot }, (_, idx) => {
+                const j = options?.slotIndices?.indexOf(idx) ?? -1;
+                return j >= 0 ? clean[j] : "";
+              });
         await idbPutProductVideo({
           productId: key,
-          videoUris: existing?.videoUris?.length ? existing.videoUris : clean,
+          videoUris: uris,
           videoBlobList: cachedBlobs,
-          // Không giữ base64 nặng song song với Blob
-          videoBytesList: (existing?.videoUris || clean).map(() => null),
+          videoBytesList: uris.map(() => null),
           mimeType: existing?.mimeType || mimeAfter,
           ...preserveMergedFields(
             existing || {
               productId: key,
-              videoUris: clean,
-              videoBytesList: clean.map(() => null),
+              videoUris: uris,
+              videoBytesList: uris.map(() => null),
               mimeType: mimeAfter,
               mergedVideoBytes: null,
               updatedAt: Date.now(),
@@ -731,7 +699,6 @@ async function runMergeVideosToIndexedDbPipeline(
       }
     }
 
-    // Chỉ đưa Blob non-null cho ffmpeg; giữ độ dài khớp clean
     const inputs = blobs.filter((b): b is Blob => Boolean(b && b.size > 0));
     if (inputs.length < 2) {
       throw new Error("Cần ít nhất 2 video để nối");
@@ -743,20 +710,14 @@ async function runMergeVideosToIndexedDbPipeline(
         : undefined,
     });
 
-    // Input không còn cần — thả sớm trước khi ghi IDB
     for (let i = 0; i < blobs.length; i++) blobs[i] = null;
     blobs = [];
 
     const mimeType = resultBlob.type || "video/mp4";
 
-    /**
-     * Lưu Blob vào store `merged-videos` (riêng) — không phụ thuộc product-videos.
-     * Tránh race: enrich ghi đè product-videos làm mất mergedVideoBlob.
-     */
     await putMergedVideoWithVerify(key, resultBlob, mimeType);
     resultBlob = null;
 
-    // Marker nhẹ trên product-videos (không nhét Blob nối vào đây)
     try {
       const existing = await idbGetProductVideo(key);
       const next: ProductVideoRecord = {
@@ -772,14 +733,12 @@ async function runMergeVideosToIndexedDbPipeline(
       };
       await idbPutProductVideo(next);
     } catch (err) {
-      // Marker fail không sao — Blob đã nằm ở merged-videos
       console.warn("[mergeVideosToIndexedDb] product marker persist failed", err);
     }
 
     options?.onProgress?.(1, "Hoàn tất");
     return MERGED_VIDEO_FILE_NAME;
   } finally {
-    // Dọn refs + terminate WASM giữa các SP — giảm tích lũy heap
     for (let i = 0; i < blobs.length; i++) blobs[i] = null;
     blobs = [];
     resultBlob = null;
@@ -795,43 +754,33 @@ async function runMergeVideosToIndexedDbPipeline(
  * Nối video bằng ffmpeg.wasm trong browser → lưu Blob vào IndexedDB.
  * Thread/UI chỉ giữ tên `merged.mp4`.
  *
- * - Ưu tiên Blob/base64 đã enrich trong IndexedDB (tránh URL flow2 hết hạn)
- * - Thiếu binary → tải URL (direct browser → proxy) rồi cache Blob
- * - **Queue full pipeline** (1 SP / lúc): load Blob → ffmpeg → lưu IDB
- * - Dedup: cùng storageKey + cùng urls đang bay → share 1 promise (không load 2 lần)
+ * - Ưu tiên link thật (http → download-proxy)
+ * - Không có / proxy fail → Blob video IndexedDB
+ * - Không xếp hàng serial giữa các SP (dedup cùng key+urls nếu đang bay)
  */
 export async function mergeVideosToIndexedDb(
   storageKey: string,
   urls: string[],
-  options?: { onProgress?: (ratio: number, message: string) => void }
+  options?: {
+    onProgress?: (ratio: number, message: string) => void;
+    slotIndices?: number[];
+  }
 ): Promise<string> {
   const key = String(storageKey || "").trim();
   if (!key) throw new Error("Thiếu mã sản phẩm để lưu video nối");
 
-  const clean = urls.map((u) => String(u || "").trim()).filter(Boolean);
+  const clean = urls.map((u) => String(u || "").trim());
   if (clean.length < 2) throw new Error("Cần ít nhất 2 video để nối");
 
-  const sig = urlsSignature(clean);
+  const sig = urlsSignature(clean, options?.slotIndices);
   const existing = _mergeInflightByKey.get(key);
   if (existing && existing.sig === sig) {
-    options?.onProgress?.(0.01, "Đang chờ job nối cùng SP...");
+    options?.onProgress?.(0.01, "Đang nối cùng SP...");
     return existing.promise;
   }
 
   const promise = (async () => {
-    await enqueueMergePipeline(
-      async () => {
-        await runMergeVideosToIndexedDbPipeline(key, clean, options);
-      },
-      (ahead) => {
-        if (ahead > 0) {
-          options?.onProgress?.(
-            0,
-            `Đang chờ trong hàng nối (còn ${ahead} SP trước)...`
-          );
-        }
-      }
-    );
+    await runMergeVideosToIndexedDbPipeline(key, clean, options);
     return MERGED_VIDEO_FILE_NAME;
   })();
 
@@ -845,6 +794,40 @@ export async function mergeVideosToIndexedDb(
       _mergeInflightByKey.delete(key);
     }
   }
+}
+
+/**
+ * Nguồn nối: ưu tiên link thật (proxy); không có thì Blob video IDB (`__idb__`).
+ */
+export async function resolveMergeableVideoSources(
+  item: ProductVideoKeySource,
+  sessionId?: string
+): Promise<{ urls: string[]; slotIndices: number[] }> {
+  const urls: string[] = [];
+  const slotIndices: number[] = [];
+  const list = item.videoUrls || [];
+  const disabled = item.videoDisabled || [];
+
+  for (let i = 0; i < list.length; i++) {
+    if (disabled[i]) continue;
+    const raw = String(list[i] || "").trim();
+
+    // 1) Link thật (http / data / blob object URL)
+    if (isFetchableMediaUrl(raw)) {
+      urls.push(raw);
+      slotIndices.push(i);
+      continue;
+    }
+
+    // 2) Không có link thật → Blob IndexedDB
+    const blob = await getGeneratedVideoBlob(item, sessionId, i);
+    if (blob && blob.size > 0) {
+      urls.push("__idb__");
+      slotIndices.push(i);
+    }
+  }
+
+  return { urls, slotIndices };
 }
 
 /**
