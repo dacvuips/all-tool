@@ -51,6 +51,8 @@ export interface AffiliatePlusItem {
   videoSlotErrors?: string[];
   /** Video đã nối — UI/thread chỉ lưu tên `merged.mp4`; binary ở IndexedDB (Blob). */
   mergedVideoUrl: string;
+  /** Đã tải file export (video nối / video gen) xuống máy — hiện dấu check. */
+  mergedDownloaded?: boolean;
   hostPort: string;
   country: string;
   cookie: string;
@@ -1190,6 +1192,7 @@ export function createEmptyItem(partial?: Partial<AffiliatePlusItem>): Affiliate
     videoSlotStatuses: [],
     videoSlotErrors: [],
     mergedVideoUrl: "",
+    mergedDownloaded: false,
     hostPort: "",
     country: "VN",
     cookie: "",

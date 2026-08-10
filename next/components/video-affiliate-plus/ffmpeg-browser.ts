@@ -285,3 +285,67 @@ export async function mergeVideosInBrowser(
   if (!resultBlob) throw new Error("Nối video thất bại — không có kết quả");
   return resultBlob;
 }
+
+/**
+ * Xóa metadata container video (title, creation_time, encoder…) trước khi tải xuống.
+ * Remux stream copy + `-map_metadata -1`; nếu fail trả blob gốc.
+ */
+export async function stripVideoMetadataInBrowser(input: Blob): Promise<Blob> {
+  if (!input || input.size <= 0) return input;
+
+  let resultBlob: Blob | null = null;
+
+  try {
+    await enqueue(async () => {
+      const ff = await getFFmpeg();
+      const inName = "strip_in.mp4";
+      const outName = "strip_out.mp4";
+      try {
+        const buf = new Uint8Array(await input.arrayBuffer());
+        await ff.writeFile(inName, buf);
+
+        // Bỏ metadata file + stream (encoder, creation_time, title…)
+        const code = await ff.exec([
+          "-i",
+          inName,
+          "-map_metadata",
+          "-1",
+          "-map_chapters",
+          "-1",
+          "-c",
+          "copy",
+          "-movflags",
+          "+faststart",
+          "-y",
+          outName,
+        ]);
+        if (code !== 0) {
+          throw new Error(`strip metadata exit ${code}`);
+        }
+
+        const outData = await ff.readFile(outName);
+        if (typeof outData === "string") {
+          throw new Error("ffmpeg strip returned text");
+        }
+        const bytes =
+          outData instanceof Uint8Array ? outData : new Uint8Array(outData as ArrayBuffer);
+        if (bytes.byteLength <= 0) {
+          throw new Error("strip metadata empty");
+        }
+        const ab = bytes.buffer.slice(
+          bytes.byteOffset,
+          bytes.byteOffset + bytes.byteLength
+        ) as ArrayBuffer;
+        resultBlob = new Blob([ab], { type: input.type || "video/mp4" });
+      } finally {
+        await ff.deleteFile(inName).catch(() => undefined);
+        await ff.deleteFile(outName).catch(() => undefined);
+      }
+    });
+  } catch (err) {
+    console.warn("[stripVideoMetadataInBrowser] fallback original", err);
+    return input;
+  }
+
+  return resultBlob || input;
+}

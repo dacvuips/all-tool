@@ -98,6 +98,7 @@ function migrateItem(raw: Record<string, unknown>): AffiliatePlusItem {
     videoDisabled,
     videoFlow2RequestIds,
     mergedVideoUrl,
+    mergedDownloaded: Boolean(raw.mergedDownloaded),
     hostPort: String(raw.hostPort || ""),
     country: String(raw.country || "VN"),
     cookie: String(raw.cookie || ""),

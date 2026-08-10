@@ -29,7 +29,6 @@ import {
 } from "../../../lib/hooks/useMediaGenerationJob";
 import { useToast } from "../../../lib/providers/toast-provider";
 import { useConcurrencyLimits } from "../../app/affiliate-video/hook/useConcurrencyLimits";
-import { zipAndDownload } from "../../app/affiliate-video/shared/batchDownloadMedia";
 import { GeneratedVideoDownloadButtons } from "../../app/affiliate-video/shared/generated-video-download-buttons";
 import { SceneHistoryDropdown } from "../../app/affiliate-video/shared/scene-history-dropdown";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
@@ -42,6 +41,7 @@ import {
   parseAffiliatePlusCSV,
   parseAffiliatePlusExcel,
 } from "../csv-parser";
+import { downloadExportVideoForItem } from "../download-export-video";
 import { ThreadMetaRecord } from "../idb";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import {
@@ -50,8 +50,6 @@ import {
   toListMediaSrcList,
 } from "../media-display-url";
 import {
-  getGeneratedVideoBlob,
-  getMergedVideoBlob,
   getMergedVideoStorageKey,
   hasExistingGeneratedVideo,
   hasMergedVideoRef,
@@ -380,6 +378,11 @@ export function ThreadManagementPanel({
   const [mergingIds, setMergingIds] = useState<Record<string, boolean>>({});
   const [batchRunning, setBatchRunning] = useState(false);
   const [downloadingMerged, setDownloadingMerged] = useState(false);
+  /** Task đang tải file (hiện spinner trên row) */
+  const [downloadingFileIds, setDownloadingFileIds] = useState<Record<string, boolean>>({});
+  const [downloadProgress, setDownloadProgress] = useState<{ current: number; total: number } | null>(
+    null
+  );
   const [mergingPendingBatch, setMergingPendingBatch] = useState(false);
   const [clearingIdb, setClearingIdb] = useState(false);
   const pauseAllRef = useRef(false);
@@ -690,6 +693,7 @@ export function ThreadManagementPanel({
             );
             await patchThread(sessionId, item.id, {
               mergedVideoUrl: mergedUrl,
+              mergedDownloaded: false,
               error: "",
               mergeRetryCount: 0,
               ...(latest.status === "error" ? { status: "stopped" as ThreadStatus } : {}),
@@ -697,6 +701,43 @@ export function ThreadManagementPanel({
             scheduleParentSync();
             autoMergeAttemptedRef.current[item.id] = true;
             onAddLog(t("Đã nối video và lưu IndexedDB"), "success", item.id);
+
+            // Vừa nối xong → tải ngay file ID-sản-phẩm.mp4 (clear metadata)
+            try {
+              setDownloadingFileIds((prev) => ({ ...prev, [item.id]: true }));
+              const okDownload = await downloadExportVideoForItem(latest, {
+                sessionId,
+                kind: "merged",
+                waitMs: 500,
+              });
+              if (okDownload) {
+                await patchThread(sessionId, item.id, { mergedDownloaded: true });
+                scheduleParentSync();
+                onAddLog(
+                  t("Đã tải video nối {{name}}", {
+                    name: String(latest.productId || latest.id).trim() || "video",
+                  }),
+                  "success",
+                  item.id
+                );
+              }
+            } catch (dlErr: any) {
+              console.warn("[autoDownloadMerged]", dlErr);
+              onAddLog(
+                t("Nối xong nhưng tải file lỗi: {{msg}}", {
+                  msg: dlErr?.message || String(dlErr),
+                }),
+                "warning",
+                item.id
+              );
+            } finally {
+              setDownloadingFileIds((prev) => {
+                const next = { ...prev };
+                delete next[item.id];
+                return next;
+              });
+            }
+
             return true;
           } catch (err: any) {
             const msg = getTaskErrorMessage(err, t("Nối video thất bại"));
@@ -1194,12 +1235,13 @@ export function ThreadManagementPanel({
     if (!genConfig) setGenConfig(config);
     // videosPerJob = 1 → không nối; tải luôn video generate. > 1 → video đã nối.
     const downloadGeneratedOnly = Math.max(1, Number(config.videosPerJob) || 1) <= 1;
+    const kind = downloadGeneratedOnly ? ("generated" as const) : ("merged" as const);
 
     const candidates = (await getSessionItems(sessionId)).filter((i) => {
       if (downloadGeneratedOnly) {
         return hasVariantVideoUrls(i) || Boolean(i.productId) || Boolean(i.productLink);
       }
-      return Boolean(i.mergedVideoUrl) || Boolean(i.productId) || Boolean(i.productLink);
+      return hasMergedVideoRef(i.mergedVideoUrl) || Boolean(i.productId) || Boolean(i.productLink);
     });
     if (!candidates.length) {
       toast.warn(
@@ -1211,74 +1253,73 @@ export function ThreadManagementPanel({
     }
 
     setDownloadingMerged(true);
+    setDownloadProgress({ current: 0, total: candidates.length });
+    let okCount = 0;
+    let failCount = 0;
+
     try {
-      const files: { fileName: string; blob: Blob }[] = [];
-      const usedNames = new Set<string>();
+      // Từng video 1: xong file nào → đánh dấu check ngay
+      for (let i = 0; i < candidates.length; i++) {
+        const item = candidates[i];
+        setDownloadProgress({ current: i + 1, total: candidates.length });
+        setDownloadingFileIds((prev) => ({ ...prev, [item.id]: true }));
 
-      for (const item of candidates) {
-        let blob: Blob | null = null;
-        if (downloadGeneratedOnly) {
-          // Slot đầu tiên có URL (videosPerJob = 1 thường chỉ 1 slot)
-          const urls = item.videoUrls || [];
-          const disabled = item.videoDisabled || [];
-          let slot = 0;
-          for (let i = 0; i < Math.max(urls.length, 1); i++) {
-            if (String(urls[i] || "").trim() && !disabled[i]) {
-              slot = i;
-              break;
-            }
+        try {
+          const ok = await downloadExportVideoForItem(item, {
+            sessionId,
+            kind,
+            waitMs: 800,
+          });
+          if (ok) {
+            okCount += 1;
+            await patchThread(sessionId, item.id, { mergedDownloaded: true });
+            scheduleParentSync();
+          } else {
+            failCount += 1;
           }
-          blob = await getGeneratedVideoBlob(item, sessionId, slot);
-        } else {
-          blob = await getMergedVideoBlob(item, sessionId);
+        } catch (err) {
+          console.warn("[handleDownloadAllMerged] item", item.id, err);
+          failCount += 1;
+        } finally {
+          setDownloadingFileIds((prev) => {
+            const next = { ...prev };
+            delete next[item.id];
+            return next;
+          });
         }
-        if (!blob) continue;
-
-        // Luôn đặt tên theo Id sản phẩm.mp4 (vd. 42874449161.mp4)
-        const base =
-          buildMergedVideoFileBase(item) ||
-          getMergedVideoStorageKey(item, sessionId) ||
-          "merged-video";
-        let fileName = `${base}.mp4`;
-        let n = 2;
-        while (usedNames.has(fileName.toLowerCase())) {
-          fileName = `${base}-${n}.mp4`;
-          n += 1;
-        }
-        usedNames.add(fileName.toLowerCase());
-        files.push({ fileName, blob });
       }
 
-      if (!files.length) {
+      await loadPage();
+
+      if (okCount === 0) {
         toast.warn(
           downloadGeneratedOnly
             ? t("Chưa có video generate để tải")
             : t("Chưa có video đã nối để tải")
         );
-        return;
+      } else {
+        onAddLog(
+          downloadGeneratedOnly
+            ? t("Đã tải {{count}} video generate (từng file)", { count: okCount })
+            : t("Đã tải {{count}} video nối (từng file)", { count: okCount }),
+          "success"
+        );
+        toast.success(
+          failCount > 0
+            ? t("Đã tải {{ok}} video, {{fail}} lỗi/thiếu file", {
+                ok: okCount,
+                fail: failCount,
+              })
+            : t("Đã tải {{count}} video", { count: okCount })
+        );
       }
-
-      const stamp = new Date().toISOString().slice(0, 10);
-      const zipName = downloadGeneratedOnly
-        ? `video-generate-${stamp}.zip`
-        : `video-da-noi-${stamp}.zip`;
-      await zipAndDownload(files, zipName);
-      onAddLog(
-        downloadGeneratedOnly
-          ? t("Đã tải {{count}} video generate (ZIP)", { count: files.length })
-          : t("Đã tải {{count}} video đã nối (ZIP)", { count: files.length }),
-        "success"
-      );
-      toast.success(
-        downloadGeneratedOnly
-          ? t("Đã tải {{count}} video generate", { count: files.length })
-          : t("Đã tải {{count}} video đã nối", { count: files.length })
-      );
     } catch (err: any) {
       console.error(err);
       toast.error(err?.message || t("Tải video thất bại"));
     } finally {
       setDownloadingMerged(false);
+      setDownloadProgress(null);
+      setDownloadingFileIds({});
     }
   };
 
@@ -2388,6 +2429,7 @@ export function ThreadManagementPanel({
         error: "",
         countdown: 0,
         mergedVideoUrl: "",
+        mergedDownloaded: false,
       });
       finished = true;
       autoMergeAttemptedRef.current[itemId] = false;
@@ -2543,6 +2585,7 @@ export function ThreadManagementPanel({
     await patchThread(sessionId, itemId, {
       videoDisabled: nextDisabled,
       mergedVideoUrl: "",
+      mergedDownloaded: false,
     });
     scheduleParentSync();
     autoMergeAttemptedRef.current[itemId] = false;
@@ -2847,7 +2890,14 @@ export function ThreadManagementPanel({
               ) : (
                 <HiDownload className="text-base" />
               )}
-              {downloadingMerged ? t("Đang tải...") : t("Tải tất cả video nối")}
+              {downloadingMerged
+                ? downloadProgress
+                  ? t("Đang tải {{current}}/{{total}}...", {
+                      current: downloadProgress.current,
+                      total: downloadProgress.total,
+                    })
+                  : t("Đang tải...")
+                : t("Tải tất cả video nối")}
             </button>
             <button
               type="button"
@@ -3509,6 +3559,8 @@ export function ThreadManagementPanel({
                               {(() => {
                                 const hasMerged = hasMergedVideoRef(item.mergedVideoUrl);
                                 const isMerging = Boolean(mergingIds[item.id]);
+                                const isDownloadingFile = Boolean(downloadingFileIds[item.id]);
+                                const isDownloaded = Boolean(item.mergedDownloaded);
                                 const canMerge = getMergeableVideoUrls(item).length >= 2;
 
                                 if (isMerging) {
@@ -3522,18 +3574,41 @@ export function ThreadManagementPanel({
                                   );
                                 }
 
+                                if (isDownloadingFile) {
+                                  return (
+                                    <div
+                                      className="flex relative justify-center items-center w-9 h-9 text-emerald-600 bg-emerald-50 rounded-full border border-emerald-300 shadow-sm"
+                                      title={t("Đang tải video xuống...")}
+                                    >
+                                      <RiLoader4Line className="text-xl animate-spin" />
+                                    </div>
+                                  );
+                                }
+
                                 if (hasMerged) {
                                   return (
                                     <button
                                       type="button"
                                       onClick={() => void openMergedPreview(item)}
                                       className="flex relative justify-center items-center w-9 h-9 text-white rounded-full border shadow-sm transition-colors bg-success border-success hover:bg-success hover:border-success"
-                                      title={t("Video nối file")}
+                                      title={
+                                        isDownloaded
+                                          ? t("Video nối — đã tải xuống")
+                                          : t("Video nối file")
+                                      }
                                     >
                                       <RiVideoFill className="text-lg text-white" />
                                       <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white text-green-600 shadow-sm ring-1 ring-green-500">
                                         <HiCheck className="text-[11px] font-bold" />
                                       </span>
+                                      {isDownloaded ? (
+                                        <span
+                                          className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-sky-500 text-white shadow-sm ring-1 ring-white"
+                                          title={t("Đã tải xuống") as string}
+                                        >
+                                          <HiDownload className="text-[10px]" />
+                                        </span>
+                                      ) : null}
                                     </button>
                                   );
                                 }
