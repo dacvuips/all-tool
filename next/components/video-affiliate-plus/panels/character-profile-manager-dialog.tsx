@@ -15,6 +15,11 @@ import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import {
+  characterImageMediaKey,
+  putMediaBlobRef,
+  toDisplayMediaSrc,
+} from "../media-blob-store";
+import {
   CharacterPose,
   CharacterProfile,
   buildCharacterAutoPrompt,
@@ -35,15 +40,6 @@ const POSE_LABELS: Record<CharacterPose, string> = {
   sitting: "Ngồi",
   fashion: "Fashion",
 };
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(file);
-  });
-}
 
 export function CharacterProfileManagerDialog({
   isOpen,
@@ -140,7 +136,7 @@ export function CharacterProfileManagerDialog({
       const text = await file.text();
       const parsed = JSON.parse(text);
       const arr = Array.isArray(parsed) ? parsed : [parsed];
-      const imported = arr.map((item: any) =>
+      let imported = arr.map((item: any) =>
         createEmptyCharacterProfile({
           id: item.id || crypto.randomUUID(),
           name: item.name || "Imported",
@@ -165,6 +161,15 @@ export function CharacterProfileManagerDialog({
         toast.warn(t("File không có profile"));
         return;
       }
+      // data: base64 trong file import → Blob IDB
+      const { migrateGenerateConfigMedia, hydrateCharacterMediaObjectUrls } = await import(
+        "../media-blob-store"
+      );
+      const migrated = await migrateGenerateConfigMedia({
+        characters: imported,
+      } as any);
+      imported = migrated.config.characters;
+      await hydrateCharacterMediaObjectUrls(migrated.config);
       setList(imported);
       setActiveId(imported[0].id);
       setDraft(imported[0]);
@@ -208,11 +213,16 @@ export function CharacterProfileManagerDialog({
 
   const onImageSelected = async (file: File) => {
     try {
-      const dataUrl = await readFileAsDataUrl(file);
       const pose = pendingPoseRef.current;
       if (!draft) return;
+      // Blob IDB ngay — không giữ data: base64 trong profile state
+      const ref = await putMediaBlobRef(
+        characterImageMediaKey(draft.id, pose),
+        file,
+        file.type || "image/jpeg"
+      );
       patchDraft({
-        images: { ...draft.images, [pose]: dataUrl },
+        images: { ...draft.images, [pose]: ref },
         previewPose: pose,
       });
       toast.success(t("Đã chọn ảnh {{pose}}", { pose: POSE_LABELS[pose] }));
@@ -259,7 +269,7 @@ export function CharacterProfileManagerDialog({
 
   const previewUrl = useMemo(() => {
     if (!draft) return "";
-    return draft.images[draft.previewPose] || "";
+    return toDisplayMediaSrc(draft.images[draft.previewPose] || "");
   }, [draft]);
 
   const imageCount = draft
@@ -267,7 +277,7 @@ export function CharacterProfileManagerDialog({
     : 0;
   const randomPreviewUrls = draft
     ? (["standing", "sitting", "fashion"] as CharacterPose[])
-        .map((pose) => draft.images[pose])
+        .map((pose) => toDisplayMediaSrc(draft.images[pose]))
         .filter(Boolean)
     : [];
 
@@ -352,7 +362,9 @@ export function CharacterProfileManagerDialog({
             <div className="flex-1 space-y-1 overflow-y-auto p-2">
               {list.map((p) => {
                 const isActive = p.id === activeId;
-                const thumb = p.images.fashion || p.images.standing || p.images.sitting || "";
+                const thumb = toDisplayMediaSrc(
+                  p.images.fashion || p.images.standing || p.images.sitting || ""
+                );
                 return (
                   <button
                     key={p.id}
@@ -659,7 +671,7 @@ export function CharacterProfileManagerDialog({
                               <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg bg-white shadow-sm">
                                 {has ? (
                                   <img
-                                    src={draft.images[pose]}
+                                    src={toDisplayMediaSrc(draft.images[pose])}
                                     alt=""
                                     className="h-full w-full object-cover"
                                   />

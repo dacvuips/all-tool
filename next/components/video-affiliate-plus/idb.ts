@@ -16,10 +16,12 @@
  */
 
 export const VIDEO_AFFILIATE_MANAGER_DB = "video-affiliate-manager";
-const DB_VERSION = 11;
+const DB_VERSION = 12;
 const STORE_CONFIG = "generate-video-config";
 const STORE_PRODUCT_VIDEOS = "product-videos";
 const STORE_MERGED_VIDEOS = "merged-videos";
+/** Ảnh/video binary nhẹ key → Blob (thay data: base64 trong config). */
+const STORE_MEDIA_BLOBS = "media-blobs";
 const STORE_IMPORT_HISTORY = "import-history";
 const STORE_SCRAPE_CSV = "scrape-csv-sessions";
 const STORE_MAPPING_CSV = "mapping-csv-sessions";
@@ -37,6 +39,14 @@ const PROXIES_LIST_KEY = "list";
 const UPLOAD_HISTORY_KEY = "list";
 const SELECTED_UPLOAD_HISTORY_KEY = "selectedId";
 const COOKIE_FETCH_HISTORY_KEY = "list";
+
+/** Binary media gắn key (vd. char/{id}/fashion) — config chỉ giữ ref `__idb_media__:…`. */
+export type MediaBlobRecord = {
+  key: string;
+  blob: Blob;
+  mimeType: string;
+  updatedAt: number;
+};
 
 /** Bản ghi video theo mã sản phẩm — giống pattern scene generate (link/tên + binary local). */
 export type ProductVideoRecord = {
@@ -146,7 +156,11 @@ function openDB(): Promise<IDBDatabase> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("IndexedDB unavailable on server"));
   }
+  // Version lệch (upgrade) → mở lại; không reuse promise cũ
   if (dbPromise && openedDbVersion === DB_VERSION) return dbPromise;
+  if (dbPromise && openedDbVersion !== DB_VERSION) {
+    dbPromise = null;
+  }
 
   openedDbVersion = DB_VERSION;
   dbPromise = new Promise((resolve, reject) => {
@@ -162,6 +176,9 @@ function openDB(): Promise<IDBDatabase> {
       }
       if (!db.objectStoreNames.contains(STORE_MERGED_VIDEOS)) {
         db.createObjectStore(STORE_MERGED_VIDEOS, { keyPath: "itemId" });
+      }
+      if (!db.objectStoreNames.contains(STORE_MEDIA_BLOBS)) {
+        db.createObjectStore(STORE_MEDIA_BLOBS, { keyPath: "key" });
       }
       if (!db.objectStoreNames.contains(STORE_IMPORT_HISTORY)) {
         db.createObjectStore(STORE_IMPORT_HISTORY);
@@ -207,10 +224,12 @@ function openDB(): Promise<IDBDatabase> {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => {
       dbPromise = null;
+      openedDbVersion = 0;
       reject(req.error);
     };
     req.onblocked = () => {
       dbPromise = null;
+      openedDbVersion = 0;
       reject(new Error("[video-affiliate-manager] Database blocked"));
     };
   });
@@ -269,8 +288,63 @@ export async function idbClearConfig(): Promise<void> {
   await withStore(STORE_CONFIG, "readwrite", (s) => s.delete(CONFIG_KEY));
 }
 
+export async function idbPutMediaBlob(
+  key: string,
+  blob: Blob,
+  mimeType = ""
+): Promise<void> {
+  const k = String(key || "").trim();
+  if (!k) throw new Error("media blob key rỗng");
+  const record: MediaBlobRecord = {
+    key: k,
+    blob,
+    mimeType: mimeType || blob.type || "application/octet-stream",
+    updatedAt: Date.now(),
+  };
+  await withStore(STORE_MEDIA_BLOBS, "readwrite", (s) => s.put(record));
+}
+
+export async function idbGetMediaBlob(key: string): Promise<MediaBlobRecord | undefined> {
+  const k = String(key || "").trim();
+  if (!k) return undefined;
+  try {
+    return await withStore<MediaBlobRecord | undefined>(
+      STORE_MEDIA_BLOBS,
+      "readonly",
+      (s) => s.get(k) as IDBRequest<MediaBlobRecord | undefined>
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] get media blob failed", err);
+    return undefined;
+  }
+}
+
+export async function idbDeleteMediaBlob(key: string): Promise<void> {
+  const k = String(key || "").trim();
+  if (!k) return;
+  try {
+    await withStore(STORE_MEDIA_BLOBS, "readwrite", (s) => s.delete(k));
+  } catch (err) {
+    console.warn("[video-affiliate-manager] delete media blob failed", err);
+  }
+}
+
 export async function idbPutProductVideo(record: ProductVideoRecord): Promise<void> {
   await withStore(STORE_PRODUCT_VIDEOS, "readwrite", (s) => s.put(record));
+}
+
+/** Mọi product-video (migrate base64 legacy → Blob). */
+export async function idbGetAllProductVideos(): Promise<ProductVideoRecord[]> {
+  try {
+    return await withStore<ProductVideoRecord[]>(
+      STORE_PRODUCT_VIDEOS,
+      "readonly",
+      (s) => s.getAll() as IDBRequest<ProductVideoRecord[]>
+    );
+  } catch (err) {
+    console.warn("[video-affiliate-manager] getAll product videos failed", err);
+    return [];
+  }
 }
 
 export async function idbGetProductVideo(

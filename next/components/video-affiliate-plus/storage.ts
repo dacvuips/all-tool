@@ -8,6 +8,10 @@ import {
   idbSetUsersList,
 } from "./idb";
 import {
+  hydrateCharacterMediaObjectUrls,
+  migrateGenerateConfigMedia,
+} from "./media-blob-store";
+import {
   AffiliatePlusItem,
   AffiliatePlusLog,
   AffiliatePlusProxy,
@@ -413,32 +417,66 @@ function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): Ge
 /** Load generate-video config từ IndexedDB `video-affiliate-manager`. */
 export async function loadGenerateVideoConfig(): Promise<GenerateVideoConfig> {
   const fromIdb = await idbGetConfig<Partial<GenerateVideoConfig>>();
-  if (fromIdb) return mergeGenerateVideoConfig(fromIdb);
+  let merged: GenerateVideoConfig;
 
-  // Migrate 1 lần từ localStorage cũ (nếu còn)
-  const legacy = readJSON<Partial<GenerateVideoConfig> | null>(GENERATE_VIDEO_CONFIG_KEY, null);
-  if (legacy && Object.keys(legacy).length > 0) {
-    const merged = mergeGenerateVideoConfig(legacy);
-    try {
-      await idbSetConfig(merged);
-      if (typeof window !== "undefined") {
-        localStorage.removeItem(GENERATE_VIDEO_CONFIG_KEY);
+  if (fromIdb) {
+    merged = mergeGenerateVideoConfig(fromIdb);
+  } else {
+    // Migrate 1 lần từ localStorage cũ (nếu còn)
+    const legacy = readJSON<Partial<GenerateVideoConfig> | null>(GENERATE_VIDEO_CONFIG_KEY, null);
+    if (legacy && Object.keys(legacy).length > 0) {
+      merged = mergeGenerateVideoConfig(legacy);
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem(GENERATE_VIDEO_CONFIG_KEY);
+        }
+      } catch {
+        // ignore
       }
-    } catch (err) {
-      console.warn("[video-affiliate-manager] migrate failed", err);
+    } else {
+      merged = mergeGenerateVideoConfig();
     }
-    return merged;
   }
 
-  return mergeGenerateVideoConfig();
+  try {
+    // data: base64 nhân vật → Blob IDB + ref (lần đầu chậm 1 lần, sau đó config nhẹ)
+    const migrated = await migrateGenerateConfigMedia(merged);
+    merged = migrated.config;
+    if (migrated.changed || !fromIdb) {
+      await idbSetConfig(merged);
+    }
+    await hydrateCharacterMediaObjectUrls(merged);
+  } catch (err) {
+    console.warn("[loadGenerateVideoConfig] migrate media failed", err);
+    if (!fromIdb) {
+      try {
+        await idbSetConfig(merged);
+      } catch (persistErr) {
+        console.warn("[loadGenerateVideoConfig] persist failed", persistErr);
+      }
+    }
+  }
+
+  return merged;
 }
 
 /** Lưu generate-video config vào IndexedDB `video-affiliate-manager`. */
 export async function saveGenerateVideoConfig(
   config: GenerateVideoConfig
 ): Promise<GenerateVideoConfig> {
-  const next = mergeGenerateVideoConfig(config);
+  let next = mergeGenerateVideoConfig(config);
+  try {
+    const migrated = await migrateGenerateConfigMedia(next);
+    next = migrated.config;
+  } catch (err) {
+    console.warn("[saveGenerateVideoConfig] migrate media failed", err);
+  }
   await idbSetConfig(next);
+  try {
+    await hydrateCharacterMediaObjectUrls(next);
+  } catch {
+    // ignore
+  }
   return next;
 }
 

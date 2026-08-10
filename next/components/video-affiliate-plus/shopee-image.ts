@@ -75,13 +75,30 @@ async function compressBlobToGenerationImage(blob: Blob, fileName: string): Prom
   return { imageBytes, mimeType };
 }
 
-/** Chấp nhận data URL hoặc http(s) URL → imageBytes nén. */
+/** Chấp nhận data URL, blob:, __idb_media__:, hoặc http(s) → imageBytes nén. */
 export async function prepareShopeeImageInput(input: string): Promise<ShopeeGenerationImage> {
   const value = (input || "").trim();
   if (!value) throw new Error("Thiếu ảnh");
 
   if (value.startsWith("data:")) {
     return compressBlobToGenerationImage(dataUrlToBlob(value), "character.jpg");
+  }
+
+  if (value.startsWith("blob:")) {
+    const res = await fetch(value);
+    if (!res.ok) throw new Error(`Không đọc được blob ảnh (${res.status})`);
+    const blob = await res.blob();
+    return compressBlobToGenerationImage(blob, "character.jpg");
+  }
+
+  // Ref IndexedDB media-blobs (ảnh nhân vật đã migrate khỏi data:)
+  if (value.startsWith("__idb_media__:")) {
+    const { resolveMediaToBlob } = await import("./media-blob-store");
+    const blob = await resolveMediaToBlob(value);
+    if (!blob || blob.size <= 0) {
+      throw new Error("Không tìm thấy ảnh nhân vật trong IndexedDB");
+    }
+    return compressBlobToGenerationImage(blob, "character.jpg");
   }
 
   if (/^https?:\/\//i.test(value)) {
@@ -91,7 +108,10 @@ export async function prepareShopeeImageInput(input: string): Promise<ShopeeGene
     return compressBlobToGenerationImage(blob, "product.jpg");
   }
 
-  // raw base64
+  // raw base64 (chuỗi ngắn hơn data URL) — không chấp nhận blob: prefix sai
+  if (value.length > 2048 || value.includes("://")) {
+    throw new Error("Định dạng ảnh không hỗ trợ");
+  }
   return {
     imageBytes: value.replace(/^data:[^;]+;base64,/, ""),
     mimeType: "image/jpeg",

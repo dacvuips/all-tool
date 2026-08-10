@@ -1404,19 +1404,27 @@ export function ThreadManagementPanel({
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
 
     let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
-    if (useCharacterImage && preview.urls.length) {
-      try {
-        characterPreparedFixed = await Promise.all(
-          preview.urls.map((url) => prepareShopeeImageInput(url))
-        );
-      } catch (err: any) {
-        toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
-        return;
+    if (useCharacterImage) {
+      // Dùng ref/config gốc (http / __idb_media__) — không lấy blob: preview list
+      const character: CharacterProfile | undefined =
+        config.characters.find((c) => c.id === config.characterId) || config.characters[0];
+      const rawUrls = character
+        ? getCharacterImagesForRandomMode(character, config.randomImagesEnabled === true)
+        : [];
+      if (rawUrls.length) {
+        try {
+          characterPreparedFixed = await Promise.all(
+            rawUrls.map((url) => prepareShopeeImageInput(url))
+          );
+        } catch (err: any) {
+          toast.error(t("Không xử lý được ảnh nhân vật: {{msg}}", { msg: err?.message || "" }));
+          return;
+        }
+      } else {
+        onAddLog(t("Không có ảnh nhân vật — generate chỉ với ảnh sản phẩm"), "info");
       }
     } else if (!useCharacterImage) {
       onAddLog(t("Đã tắt ảnh nhân vật — generate chỉ với ảnh sản phẩm"), "info");
-    } else {
-      onAddLog(t("Không có ảnh nhân vật — generate chỉ với ảnh sản phẩm"), "info");
     }
 
     const runJob = async (

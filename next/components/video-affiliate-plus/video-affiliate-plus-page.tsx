@@ -23,6 +23,7 @@ import {
   updateImportHistoryCount,
 } from "./import-history";
 import { hydrateMergedVideoUrls } from "./merged-video";
+import { migrateProductVideoBytesToBlobsInBackground } from "./media-blob-store";
 import { LogsPanel } from "./panels/logs-panel";
 import { ProxiesPanel } from "./panels/proxies-panel";
 import { ScrapeDataPanel } from "./panels/scrape-data-panel";
@@ -311,6 +312,8 @@ export default function VideoAffiliatePlusPage() {
       .catch((err) => console.warn("[video-affiliate-plus] load proxies failed", err));
     setLogs(loadLogs());
     setSettings(loadSettings());
+    // Nền: base64 video cũ trong product-videos → Blob (không block UI)
+    void migrateProductVideoBytesToBlobsInBackground();
     return () => {
       cancelled = true;
       if (countSyncTimerRef.current) clearTimeout(countSyncTimerRef.current);
