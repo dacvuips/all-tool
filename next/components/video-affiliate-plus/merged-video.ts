@@ -21,6 +21,7 @@ import {
   idbPutProductVideo,
   ProductVideoRecord,
 } from "./idb";
+import { toLightThreadMediaRef, toLightThreadMediaRefs } from "./media-display-url";
 
 /** Cùng productId: 1 enrich dang dở được share (merge + persist + UI). */
 const _enrichInflightByKey = new Map<string, Promise<ProductVideoRecord | undefined>>();
@@ -215,19 +216,27 @@ function isDataUrl(url: string): boolean {
     .startsWith("data:");
 }
 
-/** Preview variant: ưu tiên base64 legacy → link qua proxy. Blob → resolveVariantPreviewUrls. */
+/**
+ * Preview variant refs (nhẹ) — không trả data: base64.
+ * Binary → marker; http → proxy; materialize blob: chỉ trong resolveVariantPreviewUrls.
+ */
 export function getVariantPreviewUrls(record: ProductVideoRecord): string[] {
-  const mime = record.mimeType || "video/mp4";
   return (record.videoUris || []).map((uri, idx) => {
-    const bytes = record.videoBytesList?.[idx];
-    if (bytes) return `data:${mime};base64,${bytes}`;
+    const bytes = (record.videoBytesList?.[idx] || "").trim();
+    if (bytes) return `__idb_bytes__:${idx}`;
     const trimmed = String(uri || "").trim();
-    if (!trimmed) return "";
-    if (isDataUrl(trimmed)) return trimmed;
+    if (!trimmed) {
+      if (record.videoBlobList?.[idx] && record.videoBlobList[idx]!.size > 0) {
+        return `__idb_blob__:${idx}`;
+      }
+      return "";
+    }
+    if (isDataUrl(trimmed)) return `__idb_data__:${idx}`;
     // Có Blob local → placeholder; resolveVariantPreviewUrls tạo object URL
     if (record.videoBlobList?.[idx] && record.videoBlobList[idx]!.size > 0) {
       return `__idb_blob__:${idx}`;
     }
+    if (trimmed.startsWith("blob:")) return `__idb_blob__:${idx}`;
     return toDownloadProxyUrl(trimmed, true);
   });
 }
@@ -466,11 +475,6 @@ function getVariantBlobAt(
   mime: string
 ): Blob | null {
   if (!record || index < 0) return null;
-  const blobLen = Math.max(
-    record.videoUris?.length || 0,
-    record.videoBlobList?.length || 0
-  );
-  if (index >= blobLen) return null;
   const blob = record.videoBlobList?.[index];
   if (blob && blob.size > 0) return blob;
   const bytes = (record.videoBytesList?.[index] || "").trim();
@@ -869,9 +873,10 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
         };
       }
 
-      const videoUrls = rec?.videoUris?.length
-        ? rec.videoUris.map((u) => String(u || "").trim())
-        : item.videoUrls || [];
+      // List/thread: chỉ link http(s) hoặc marker — không gắn data:/blob:
+      const videoUrls = toLightThreadMediaRefs(
+        rec?.videoUris?.length ? rec.videoUris : item.videoUrls || []
+      );
       const videoDisabled = videoUrls.map((_, idx) => Boolean(item.videoDisabled?.[idx]));
 
       // Migrate legacy base64 → Blob (một lần, nền)
@@ -907,14 +912,12 @@ export async function hydrateMergedVideoUrls<T extends ProductVideoKeySource>(
         }
       }
 
-      // UI/thread: chỉ tên — giống scene chỉ lưu name
+      // UI/thread: chỉ marker/name — không data:/blob:
       const nextMerged = hasFile
         ? MERGED_VIDEO_FILE_NAME
         : isMergedVideoIdbMarker(prevMerged)
         ? MERGED_VIDEO_FILE_NAME
-        : prevMerged.startsWith("blob:") || prevMerged.startsWith("data:")
-        ? ""
-        : prevMerged;
+        : toLightThreadMediaRef(prevMerged);
 
       return {
         ...item,
@@ -961,30 +964,97 @@ export async function resolveVariantPreviewUrls(
   const fromItem = item.videoUrls || [];
   const count = Math.max(slotCount || 0, rec?.videoUris?.length || 0, fromItem.length, 1);
 
-  if (rec?.videoUris?.length) {
-    const previews = getVariantPreviewUrls(rec);
-    return Array.from({ length: count }, (_, i) => {
-      const p = previews[i] || "";
-      if (p.startsWith("__idb_blob__:")) {
-        const blob = rec!.videoBlobList?.[i];
-        if (blob && blob.size > 0) {
-          try {
-            return URL.createObjectURL(blob);
-          } catch {
-            return "";
-          }
+  const materializeSlot = (i: number, previewOrUrl: string): string => {
+    const p = String(previewOrUrl || "").trim();
+    const mime = rec?.mimeType || "video/mp4";
+
+    if (p.startsWith("__idb_blob__:")) {
+      const blob = rec?.videoBlobList?.[i];
+      if (blob && blob.size > 0) {
+        try {
+          return URL.createObjectURL(blob);
+        } catch {
+          return "";
         }
+      }
+      return "";
+    }
+
+    if (p.startsWith("__idb_bytes__:")) {
+      const bytes = (rec?.videoBytesList?.[i] || "").trim();
+      if (!bytes) return "";
+      try {
+        return URL.createObjectURL(base64ToBlob(bytes, mime));
+      } catch {
         return "";
       }
-      return p;
-    });
+    }
+
+    if (p.startsWith("__idb_data__:")) {
+      const raw = String(rec?.videoUris?.[i] || fromItem[i] || "").trim();
+      if (isDataUrl(raw)) {
+        try {
+          return URL.createObjectURL(dataUrlToBlob(raw));
+        } catch {
+          return "";
+        }
+      }
+      return "";
+    }
+
+    if (isDataUrl(p)) {
+      try {
+        return URL.createObjectURL(dataUrlToBlob(p));
+      } catch {
+        return "";
+      }
+    }
+
+    // không đưa blob: “trôi” vào list — luôn recreate từ IDB nếu có
+    if (p.startsWith("blob:")) {
+      const blob = getVariantBlobAt(rec, i, mime);
+      if (blob) {
+        try {
+          return URL.createObjectURL(blob);
+        } catch {
+          return "";
+        }
+      }
+      return "";
+    }
+
+    return p;
+  };
+
+  if (rec?.videoUris?.length) {
+    const previews = getVariantPreviewUrls(rec);
+    return Array.from({ length: count }, (_, i) => materializeSlot(i, previews[i] || ""));
   }
 
   return Array.from({ length: count }, (_, i) => {
     const trimmed = String(fromItem[i] || "").trim();
-    if (!trimmed) return "";
-    if (isDataUrl(trimmed) || trimmed.startsWith("blob:")) return trimmed;
-    const blob = rec?.videoBlobList?.[i];
+    if (!trimmed) {
+      const blob = getVariantBlobAt(rec, i, rec?.mimeType || "video/mp4");
+      if (blob) {
+        try {
+          return URL.createObjectURL(blob);
+        } catch {
+          return "";
+        }
+      }
+      return "";
+    }
+    if (isDataUrl(trimmed)) {
+      try {
+        return URL.createObjectURL(dataUrlToBlob(trimmed));
+      } catch {
+        return "";
+      }
+    }
+    if (trimmed.startsWith("blob:")) {
+      return materializeSlot(i, `__idb_blob__:${i}`);
+    }
+    const blob = getVariantBlobAt(rec, i, rec?.mimeType || "video/mp4");
     if (blob && blob.size > 0) {
       try {
         return URL.createObjectURL(blob);

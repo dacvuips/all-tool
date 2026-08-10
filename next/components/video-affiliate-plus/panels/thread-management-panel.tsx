@@ -45,6 +45,11 @@ import {
 import { ThreadMetaRecord } from "../idb";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import {
+  toLightThreadMediaRef,
+  toListMediaSrc,
+  toListMediaSrcList,
+} from "../media-display-url";
+import {
   getGeneratedVideoBlob,
   getMergedVideoBlob,
   getMergedVideoStorageKey,
@@ -239,7 +244,8 @@ function getCharacterPreview(config: GenerateVideoConfig): {
     };
   }
   const randomEnabled = config.randomImagesEnabled === true;
-  const urls = getCharacterImagesForRandomMode(character, randomEnabled);
+  // List: chỉ blob:/http — không nhét data: base64 vào state/DOM
+  const urls = toListMediaSrcList(getCharacterImagesForRandomMode(character, randomEnabled));
   return {
     urls,
     name: character.characterName || character.name || "",
@@ -273,7 +279,7 @@ function getSlotCharacterPreviews(config: GenerateVideoConfig): Array<{
       };
     }
     const randomEnabled = slot.randomImagesEnabled === true;
-    const urls = getCharacterImagesForRandomMode(character, randomEnabled);
+    const urls = toListMediaSrcList(getCharacterImagesForRandomMode(character, randomEnabled));
     return {
       slotIndex,
       urls,
@@ -866,6 +872,12 @@ export function ThreadManagementPanel({
       error: listMeta?.error ?? 0,
     };
   }, [listMeta, listTotal]);
+
+  /** Ảnh nhân vật list — tính 1 lần/config (đã lighten blob:), không rebuild data: mỗi hàng. */
+  const lightSlotCharacterPreviews = useMemo(
+    () => (genConfig ? getSlotCharacterPreviews(genConfig) : []),
+    [genConfig]
+  );
 
   /** Ước lượng task cần nối trên trang hiện tại (badge nút; full session scan lúc bấm). */
   const pendingMergeCount = useMemo(
@@ -1505,9 +1517,9 @@ export function ThreadManagementPanel({
               const fromUris = (
                 (result.data.videoUris?.length ? result.data.videoUris : []) as string[]
               )
-                .map((u) => String(u || "").trim())
+                .map((u) => toLightThreadMediaRef(u))
                 .filter(Boolean);
-              const singleUri = String(result.data.videoUri || "").trim();
+              const singleUri = toLightThreadMediaRef(result.data.videoUri || "");
               return Array.from(new Set(fromUris.length ? fromUris : singleUri ? [singleUri] : []));
             };
 
@@ -2329,14 +2341,14 @@ export function ThreadManagementPanel({
       });
 
       const fromUris = ((result.data.videoUris?.length ? result.data.videoUris : []) as string[])
-        .map((u) => String(u || "").trim())
+        .map((u) => toLightThreadMediaRef(u))
         .filter(Boolean);
-      const singleUri = String(result.data.videoUri || "").trim();
+      const singleUri = toLightThreadMediaRef(result.data.videoUri || "");
       const newUri = fromUris[0] || singleUri;
       if (!newUri) throw new Error(t("Không nhận được video"));
 
       const nextUrls = Array.from({ length: slotCount }, (_, i) =>
-        i === slotIndex ? newUri : String(target.videoUrls?.[i] || "").trim()
+        i === slotIndex ? newUri : toLightThreadMediaRef(target.videoUrls?.[i] || "")
       );
       const nextDisabled = Array.from({ length: slotCount }, (_, i) =>
         Boolean(target.videoDisabled?.[i])
@@ -2722,7 +2734,7 @@ export function ThreadManagementPanel({
               className="inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium"
               style={(() => {
                 const enabled = genConfig?.splitPrompt
-                  ? getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                  ? lightSlotCharacterPreviews.some((s) => s.enabled)
                   : genConfig?.useCharacterImage !== false;
                 return enabled
                   ? { backgroundColor: "#eef2ff", borderColor: "#a5b4fc", color: "#4338ca" }
@@ -2730,9 +2742,9 @@ export function ThreadManagementPanel({
               })()}
               title={
                 genConfig?.splitPrompt
-                  ? ((genConfig && getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                  ? (lightSlotCharacterPreviews.some((s) => s.enabled)
                       ? t("Tách Prompt — bật/tắt ảnh nhân vật cho tất cả Video - N")
-                      : t("Tách Prompt — đang tắt ảnh nhân vật mọi tab")) as string)
+                      : t("Tách Prompt — đang tắt ảnh nhân vật mọi tab")) as string
                   : genConfig?.useCharacterImage === false
                   ? (t("Đang tắt — generate chỉ dùng ảnh sản phẩm") as string)
                   : (t("Đang bật — generate kèm ảnh nhân vật") as string)
@@ -2744,7 +2756,7 @@ export function ThreadManagementPanel({
                 dependent
                 value={
                   genConfig?.splitPrompt
-                    ? getSlotCharacterPreviews(genConfig).some((s) => s.enabled)
+                    ? lightSlotCharacterPreviews.some((s) => s.enabled)
                     : genConfig?.useCharacterImage !== false
                 }
                 onChange={(value) => {
@@ -3105,24 +3117,27 @@ export function ThreadManagementPanel({
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
-                            {item.imageUrl ? (
+                            {(() => {
+                              const productThumb = toListMediaSrc(item.imageUrl);
+                              return productThumb ? (
                               <button
                                 type="button"
-                                onClick={() => setZoomImage(item.imageUrl)}
+                                onClick={() => setZoomImage(productThumb)}
                                 title={t("Xem ảnh sản phẩm")}
                                 className="rounded-lg border border-gray-200 transition-colors hover:border-sky-400"
                               >
                                 <img
-                                  src={item.imageUrl}
+                                  src={productThumb}
                                   alt={item.productName || t("Ảnh sản phẩm")}
                                   className="object-cover w-16 h-16 rounded-lg cursor-zoom-in"
                                 />
                               </button>
-                            ) : (
+                              ) : (
                               <div className="flex justify-center items-center w-16 h-16 text-gray-400 bg-gray-100 rounded-lg border border-gray-200">
                                 <HiOutlinePhotograph className="text-xl" />
                               </div>
-                            )}
+                              );
+                            })()}
                             <button
                               type="button"
                               onClick={() => openEdit(item, "imageUrl")}
@@ -3135,9 +3150,7 @@ export function ThreadManagementPanel({
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-center">
                             {(() => {
-                              const slotPreviews = genConfig
-                                ? getSlotCharacterPreviews(genConfig)
-                                : [];
+                              const slotPreviews = lightSlotCharacterPreviews;
                               const showSplit =
                                 Boolean(genConfig?.splitPrompt) && slotPreviews.length > 1;
                               const hasAnyUrl = slotPreviews.some((s) => s.urls.length > 0);
@@ -3173,7 +3186,7 @@ export function ThreadManagementPanel({
                                     <div className="flex flex-wrap justify-center gap-1">
                                       {single.urls.map((url, imageIdx) => (
                                         <button
-                                          key={`${url}-${imageIdx}`}
+                                          key={`char-${imageIdx}`}
                                           type="button"
                                           onClick={() => setZoomImage(url)}
                                           title={single.name || t("Ảnh nhân vật từ config")}
