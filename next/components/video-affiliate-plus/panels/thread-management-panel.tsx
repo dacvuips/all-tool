@@ -79,7 +79,6 @@ import { buildShopeeVideoImages, prepareShopeeImageInput } from "../shopee-image
 import { loadGenerateVideoConfig, saveGenerateVideoConfig } from "../storage";
 import { ThreadRunner } from "../thread-runner";
 import {
-  countSelectedInSession,
   DEFAULT_SESSION_ID,
   getSessionItems,
   getSessionMeta,
@@ -332,7 +331,6 @@ export function ThreadManagementPanel({
   const [listTotal, setListTotal] = useState(0);
   const [listTotalMatched, setListTotalMatched] = useState(0);
   const [listLoading, setListLoading] = useState(false);
-  const [selectedCount, setSelectedCount] = useState(0);
   const [hasMergedVideos, setHasMergedVideos] = useState(false);
   const [filterBucket, setFilterBucket] = useState<
     "all" | "waiting" | "uploading" | "success" | "error"
@@ -446,10 +444,9 @@ export function ThreadManagementPanel({
       const offset = (Math.max(1, pageNum) - 1) * limit;
       setListLoading(true);
       try {
-        const [pageResult, meta, selected, hasMerged] = await Promise.all([
+        const [pageResult, meta, hasMerged] = await Promise.all([
           queryThreadPage(requestedSessionId, { offset, limit, q, bucket }),
           getSessionMeta(requestedSessionId),
-          countSelectedInSession(requestedSessionId),
           sessionHasMergedVideos(requestedSessionId),
         ]);
         if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
@@ -459,7 +456,6 @@ export function ThreadManagementPanel({
         setListTotalMatched(pageResult.totalMatched);
         setListTotal(pageResult.total);
         setListMeta(meta);
-        setSelectedCount(selected);
         setHasMergedVideos(hasMerged);
       } catch (err) {
         if (gen !== loadGenRef.current || sessionIdRef.current !== requestedSessionId) return;
@@ -486,7 +482,6 @@ export function ThreadManagementPanel({
     setListTotal(0);
     setListTotalMatched(0);
     setListMeta(null);
-    setSelectedCount(0);
     setHasMergedVideos(false);
 
     let cancelled = false;
@@ -512,9 +507,6 @@ export function ThreadManagementPanel({
       if (ev.sessionId !== sessionId) return;
       if (ev.type === "patch") {
         setVisibleItems((prev) => prev.map((i) => (i.id === ev.id ? ev.next : i)));
-        if ("selected" in ev.patch) {
-          void countSelectedInSession(sessionId).then(setSelectedCount);
-        }
         if ("mergedVideoUrl" in ev.patch) {
           void sessionHasMergedVideos(sessionId).then(setHasMergedVideos);
         }
@@ -909,9 +901,6 @@ export function ThreadManagementPanel({
     const next = await patchThread(sessionId, id, patch);
     if (next) {
       setVisibleItems((prev) => prev.map((i) => (i.id === id ? next : i)));
-      if ("selected" in patch) {
-        setSelectedCount(await countSelectedInSession(sessionId));
-      }
       scheduleParentSync();
     }
   };
@@ -1134,7 +1123,6 @@ export function ThreadManagementPanel({
         setListTotal(0);
         setListTotalMatched(0);
         setListMeta(null);
-        setSelectedCount(0);
         setHasMergedVideos(false);
         await loadPage();
       }
@@ -1174,7 +1162,6 @@ export function ThreadManagementPanel({
       setListTotal(0);
       setListTotalMatched(0);
       setListMeta(null);
-      setSelectedCount(0);
       setHasMergedVideos(false);
       await loadPage();
       onAddLog(t("Đã xóa IndexedDB Generate Video (kèm video cache)"), "warning");
@@ -1290,11 +1277,12 @@ export function ThreadManagementPanel({
     }
 
     const allItems = await getSessionItems(sessionId);
+    // Mặc định chạy hết task trong phiên; ids chỉ khi bấm Chạy từng dòng
     const candidates = ids?.length
       ? allItems.filter((i) => ids.includes(i.id))
-      : allItems.filter((i) => i.selected);
+      : allItems;
     if (!candidates.length) {
-      toast.warn(t("Chưa bật switch luồng nào để chạy"));
+      toast.warn(t("Chưa có task nào để chạy"));
       return;
     }
 
@@ -1339,7 +1327,7 @@ export function ThreadManagementPanel({
       toast.warn(
         skippedDone.length
           ? t("Tất cả luồng đã có video — không cần generate lại")
-          : t("Chưa bật switch luồng nào để chạy")
+          : t("Chưa có task nào để chạy")
       );
       return;
     }
@@ -2069,17 +2057,18 @@ export function ThreadManagementPanel({
     toast.success(t("Đã tạm dừng"));
   };
 
-  /** Xóa hẳn các luồng đang tick (checkbox). */
-  const handleDeleteSelected = async () => {
+  /** Xóa toàn bộ task trong phiên (không còn checkbox chọn từng dòng). */
+  const handleDeleteAllTasks = async () => {
     const all = await getSessionItems(sessionId);
-    const selected = all.filter((i) => i.selected);
-    if (!selected.length) {
-      toast.warn(t("Chọn ít nhất một task để xóa"));
+    if (!all.length) {
+      toast.warn(t("Chưa có task nào để xóa"));
       return;
     }
-    if (!confirm(t("Xóa {{count}} task đã chọn?", { count: selected.length }))) return;
-    await cancelServerJobs(selected.map((i) => i.id));
-    selected.forEach((i) => {
+    if (!confirm(t("Xóa toàn bộ {{count}} task trong phiên này?", { count: all.length }))) {
+      return;
+    }
+    await cancelServerJobs(all.map((i) => i.id));
+    all.forEach((i) => {
       if (i.mergedVideoUrl?.startsWith("blob:")) {
         try {
           URL.revokeObjectURL(i.mergedVideoUrl);
@@ -2091,22 +2080,11 @@ export function ThreadManagementPanel({
     });
     await removeThreads(
       sessionId,
-      selected.map((i) => i.id)
+      all.map((i) => i.id)
     );
     await loadPage();
     scheduleParentSync();
-    onAddLog(t("Đã xóa {{count}} tasks", { count: selected.length }), "warning");
-  };
-
-  /** Chỉ bỏ tick — không xóa luồng. */
-  const clearSelection = () => {
-    if (!selectedCount) {
-      toast.warn(t("Chưa có mục nào được chọn"));
-      return;
-    }
-    const n = selectedCount;
-    updateAll((item) => (item.selected ? { ...item, selected: false } : item));
-    toast.info(t("Đã bỏ chọn {{count}} mục", { count: n }));
+    onAddLog(t("Đã xóa {{count}} tasks", { count: all.length }), "warning");
   };
 
   const handleDelete = async (id: string) => {
@@ -2570,12 +2548,6 @@ export function ThreadManagementPanel({
     toast.success(t("Đã cập nhật"));
   };
 
-  const toggleSelectAll = (checked: boolean) => {
-    applyToVisible((i) => ({ ...i, selected: checked }));
-  };
-
-  const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((i) => i.selected);
-
   const normalizedTerm = useMemo(() => normalizeSearch(searchTerm), [searchTerm]);
 
   const handleSaveGenerateConfig = (config: GenerateVideoConfig, promptForAll: string) => {
@@ -2825,18 +2797,19 @@ export function ThreadManagementPanel({
             </button>
             <button
               type="button"
-              onClick={() => void handleDeleteSelected()}
-              disabled={selectedCount === 0}
+              onClick={() => void handleDeleteAllTasks()}
+              disabled={stats.total === 0}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               style={
-                selectedCount === 0
+                stats.total === 0
                   ? undefined
                   : { backgroundColor: "#fff1f2", borderColor: "#fb7185", color: "#e11d48" }
               }
+              title={t("Xóa toàn bộ task trong phiên hiện tại") as string}
             >
               <HiOutlineTrash className="text-base" />
               {t("Xóa Tasks")}
-              {selectedCount > 0 ? ` (${selectedCount})` : ""}
+              {stats.total > 0 ? ` (${stats.total})` : ""}
             </button>
             <button
               type="button"
@@ -2906,13 +2879,14 @@ export function ThreadManagementPanel({
             <button
               type="button"
               onClick={() => handleStart()}
-              disabled={selectedCount === 0 || batchRunning}
+              disabled={stats.total === 0 || batchRunning}
               className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
               style={
-                selectedCount === 0 || batchRunning
+                stats.total === 0 || batchRunning
                   ? undefined
                   : { backgroundColor: "#dbeafe", borderColor: "#60a5fa", color: "#1d4ed8" }
               }
+              title={t("Chạy generate cho toàn bộ task (bỏ qua task đã có video)") as string}
             >
               <HiPlay className="text-base" />
               {batchRunning ? t("Đang chạy...") : t("Bắt Đầu")}
@@ -2936,22 +2910,6 @@ export function ThreadManagementPanel({
             >
               <HiOutlinePause className="text-base" />
               {t("Tạm Dừng")}
-            </button>
-            <button
-              type="button"
-              onClick={clearSelection}
-              disabled={selectedCount === 0}
-              className="inline-flex gap-1.5 items-center px-3 h-9 text-sm font-semibold rounded-lg border transition-opacity disabled:cursor-not-allowed disabled:opacity-40"
-              style={
-                selectedCount === 0
-                  ? undefined
-                  : { backgroundColor: "#f1f5f9", borderColor: "#94a3b8", color: "#475569" }
-              }
-              title={t("Bỏ tick các mục đã chọn — không xóa task") as string}
-            >
-              <HiBan className="text-base" />
-              {t("Xóa Chọn")}
-              {selectedCount > 0 ? ` (${selectedCount})` : ""}
             </button>
           </div>
         </div>
@@ -3046,14 +3004,6 @@ export function ThreadManagementPanel({
               <table className={panelListClasses.table}>
                 <thead>
                   <tr className={panelListClasses.theadTr}>
-                    <th className={`${panelListClasses.th} w-12`}>
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={(e) => toggleSelectAll(e.target.checked)}
-                        className={panelListClasses.checkbox}
-                      />
-                    </th>
                     <th className={`${panelListClasses.th} w-10 text-left`}>#</th>
                     <th
                       className={`${panelListClasses.th} text-left`}
@@ -3076,7 +3026,7 @@ export function ThreadManagementPanel({
                 <tbody className={panelListClasses.tbody}>
                   {visibleItems.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className={panelListClasses.emptyMatch}>
+                      <td colSpan={6} className={panelListClasses.emptyMatch}>
                         {t("Không có luồng nào khớp tìm kiếm.")}
                       </td>
                     </tr>
@@ -3088,18 +3038,9 @@ export function ThreadManagementPanel({
                       <tr
                         key={item.id}
                         className={panelListRowClass({
-                          selected: item.selected,
                           error: Boolean(item.error),
                         })}
                       >
-                        <td className={panelListClasses.td}>
-                          <input
-                            type="checkbox"
-                            checked={item.selected}
-                            onChange={(e) => updateItem(item.id, { selected: e.target.checked })}
-                            className={panelListClasses.checkbox}
-                          />
-                        </td>
                         <td className={`${panelListClasses.td} font-mono text-xs text-gray-400`}>
                           {idx + 1}
                         </td>
