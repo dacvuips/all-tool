@@ -81,6 +81,7 @@ export default [
         const result = await upsampleImageWithFlow2({
           resolution,
           flow2RequestId,
+          customerId: context.id,
           onProgress: async (progress, message) => {
             send({
               type: "progress",
@@ -105,6 +106,7 @@ export default [
             url: result.imageUrl,
             jobId: result.upsampleJobId,
             kind: "image",
+            customerId: context.id,
           });
           imageBytes = downloaded.buffer.toString("base64");
           mimeType = downloaded.mimeType || result.mimeType;

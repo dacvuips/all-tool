@@ -68,6 +68,7 @@ export async function runImagePipeline(args: RunImagePipelineArgs): Promise<Gene
     imageModel,
     imageInputs: orderedInputs,
     imageInputTypes: new Array(orderedInputs.length).fill("reference"),
+    customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },

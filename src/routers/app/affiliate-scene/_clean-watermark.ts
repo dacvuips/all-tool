@@ -143,8 +143,11 @@ export async function cleanWatermarkViaFlow2(args: {
   kind: CleanWatermarkKind;
   dataUrl: string;
   returnMode?: "base64" | "url" | "both";
+  customerId?: string;
 }): Promise<Flow2CleanWatermarkResult> {
-  const { baseUrl, token } = await getFlow2Config();
+  const { baseUrl, token } = await getFlow2Config(
+    args.customerId ? { customerId: args.customerId } : undefined
+  );
   const returnMode = args.returnMode || "both";
   const body: Record<string, string> =
     args.kind === "video"

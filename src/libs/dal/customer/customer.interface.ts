@@ -62,6 +62,13 @@ export type GooglePackage = {
   expiryPackageDate?: Date; // Ngày hết hạn gói
 };
 
+/** API generate ảnh/video riêng của customer (Flow2 / captcha proxy). */
+export type GeneratedCustomAPI = {
+  active?: boolean;
+  endpoint?: string;
+  APIKey?: string;
+};
+
 export type ICustomer = TimestampEntity & {
   code?: string; // Mã khách hàng
   name?: string; // Tên khách hàng
@@ -85,4 +92,6 @@ export type ICustomer = TimestampEntity & {
   district?: string;
   ward?: string;
   googlePackage?: GooglePackage; // Gói Google (subscription, limits, counts)
+  /** API generate ảnh/video riêng — khi active=true dùng endpoint + APIKey của customer */
+  generatedCustomAPI?: GeneratedCustomAPI;
 };

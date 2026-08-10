@@ -58,6 +58,7 @@ export interface CallAisandboxImageParams {
   captchaRetry?: {
     actionType?: string;
     logPrefix: string;
+    customerId?: string;
     onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxImageParams>;
   };
 }
@@ -213,6 +214,7 @@ export async function callAisandboxImageAPI(
         const freshCaptcha = await fetchCaptchaData({
           type: retry.actionType,
           logPrefix: retry.logPrefix,
+          customerId: retry.customerId,
         });
         // captcha mới — caller cung cấp params mới (có thể đổi headers/accessToken/...)
         current = await retry.onRefresh(freshCaptcha);

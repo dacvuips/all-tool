@@ -60,6 +60,7 @@ export default [
 
         const result = await upsampleVideoWithFlow2({
           flow2RequestId,
+          customerId: context.id,
           onProgress: async (progress, message) => {
             send({
               type: "progress",
@@ -79,6 +80,7 @@ export default [
           url: result.videoUri,
           jobId: result.upsampleJobId,
           kind: "video",
+          customerId: context.id,
         });
         const videoBytes = downloaded.buffer.toString("base64");
         const mimeType = downloaded.mimeType || result.mimeType;

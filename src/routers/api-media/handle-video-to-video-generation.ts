@@ -102,6 +102,7 @@ interface CallAisandboxParams {
   captchaRetry?: {
     actionType?: string;
     logPrefix: string;
+    customerId?: string;
     onRefresh: (captcha: CaptchaResponseData) => Promise<CallAisandboxParams>;
   };
 }
@@ -133,6 +134,7 @@ export async function callAisandboxVideoAPI(
         const freshCaptcha = await fetchCaptchaData({
           type: retry.actionType,
           logPrefix: retry.logPrefix,
+          customerId: retry.customerId,
         });
         current = await retry.onRefresh(freshCaptcha);
         continue;

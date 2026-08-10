@@ -28,6 +28,8 @@ export type Flow2CreateImageRequestParams = {
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
   /** Gọi ngay sau khi Flow2 trả request_id — dùng lưu lên job để hủy khi user cancel */
   onRequestCreated?: (requestId: string) => void | Promise<void>;
+  /** Customer dùng custom Flow2 API khi generatedCustomAPI.active */
+  customerId?: string;
 };
 
 export type GeneratedImage = {
@@ -74,17 +76,20 @@ export async function createFlow2ImageRequest(
       ? params.imageInputTypes
       : new Array(image_base64s.length).fill("reference");
 
-  return createFlow2Request({
-    type: "gen_image",
-    params: {
-      prompt: params.prompt,
-      aspect_ratio: params.aspectRatio || "16:9",
-      image_base64s,
-      image_input_types,
-      image_model: params.imageModel || DEFAULT_IMAGE_MODEL,
-      variant_count: Math.max(1, params.variantCount || 1),
+  return createFlow2Request(
+    {
+      type: "gen_image",
+      params: {
+        prompt: params.prompt,
+        aspect_ratio: params.aspectRatio || "16:9",
+        image_base64s,
+        image_input_types,
+        image_model: params.imageModel || DEFAULT_IMAGE_MODEL,
+        variant_count: Math.max(1, params.variantCount || 1),
+      },
     },
-  });
+    params.customerId ? { customerId: params.customerId } : undefined
+  );
 }
 
 function collectImageLikeStrings(value: unknown, out: string[], forceDive = false): void {
@@ -198,6 +203,7 @@ export async function waitForFlow2ImageResult(params: {
   timeoutMs?: number;
   pollIntervalMs?: number;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  customerId?: string;
 }): Promise<GeneratedImage[]> {
   return waitForFlow2Result({
     requestId: params.requestId,
@@ -209,6 +215,7 @@ export async function waitForFlow2ImageResult(params: {
     waitingProgressMessage: "Đang chờ Flow2 xử lý ảnh...",
     doneProgressMessage: "Flow2 đã tạo ảnh xong, đang xử lý kết quả...",
     logTag: "image",
+    customerId: params.customerId,
   });
 }
 
@@ -232,8 +239,12 @@ export async function generateImageWithFlow2(
       const images = await waitForFlow2ImageResult({
         requestId: created.requestId,
         onProgress: params.onProgress,
+        customerId: params.customerId,
       });
-      const statusData = await getFlow2RequestStatus(created.requestId);
+      const statusData = await getFlow2RequestStatus(
+        created.requestId,
+        params.customerId ? { customerId: params.customerId } : undefined
+      );
       const imagesWithMeta = images.map((image, index) => {
         const upscale = pickFlow2UpscaleFields(statusData, index);
         return {

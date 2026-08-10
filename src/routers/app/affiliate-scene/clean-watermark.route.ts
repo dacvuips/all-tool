@@ -182,6 +182,7 @@ export default [
               kind,
               dataUrl: validated.dataUrl,
               returnMode: body.returnMode || "both",
+              customerId: context.id,
             });
 
             const mediaBase64 = (result.media_base64 || "").trim();

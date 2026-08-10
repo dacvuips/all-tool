@@ -23,6 +23,12 @@ export type GooglePackage = {
   expiryPackageDate?: Date;
 };
 
+export type GeneratedCustomAPI = {
+  active?: boolean;
+  endpoint?: string;
+  APIKey?: string;
+};
+
 export interface Customer extends BaseModel {
   code?: string; // Mã khách hàng
   name?: string; // Tên khách hàng
@@ -43,6 +49,7 @@ export interface Customer extends BaseModel {
   district?: string;
   ward?: string;
   googlePackage?: GooglePackage; // Gói Google
+  generatedCustomAPI?: GeneratedCustomAPI;
 }
 export class CustomerRepository extends CrudRepository<Customer> {
   apiName: string = "Customer";
@@ -119,6 +126,11 @@ export class CustomerRepository extends CrudRepository<Customer> {
       imageStreamCount: Int
       videoStreamCount: Int
       expiryPackageDate: DateTime
+    }
+    generatedCustomAPI {
+      active: Boolean
+      endpoint: String
+      APIKey: String
     }
   `);
 

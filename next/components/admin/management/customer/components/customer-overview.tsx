@@ -298,11 +298,26 @@ function ProfileForm({ setCustomer, ...props }: Props) {
   return (
     <Form<Customer>
       grid
-      defaultValues={props.customer}
+      defaultValues={{
+        ...props.customer,
+        generatedCustomAPI: {
+          active: false,
+          endpoint: "",
+          APIKey: "",
+          ...(props.customer?.generatedCustomAPI || {}),
+        },
+      }}
       onSubmit={async (data) => {
         await CustomerService.update({
           id: props.customer.id,
-          data,
+          data: {
+            ...data,
+            generatedCustomAPI: {
+              active: !!data.generatedCustomAPI?.active,
+              endpoint: (data.generatedCustomAPI?.endpoint || "").trim(),
+              APIKey: (data.generatedCustomAPI?.APIKey || "").trim(),
+            },
+          },
         })
           .then((res) => {
             toast.success(t("Cập nhật khách hàng thành công"));
@@ -347,6 +362,28 @@ function ProfileForm({ setCustomer, ...props }: Props) {
       <Field label={t("Email")} name="email" cols={sm ? 6 : 12}>
         <Input />
       </Field>
+
+      {user.role == UserRoleEnum.ADMIN && (
+        <>
+          <Form.Title title={t("API generate tùy chỉnh")} />
+          <Field
+            label={t("Bật API riêng")}
+            name="generatedCustomAPI.active"
+            cols={12}
+            tooltip={t(
+              "Khi bật, generate ảnh/video dùng endpoint và API Key của customer thay vì cấu hình hệ thống"
+            )}
+          >
+            <Switch />
+          </Field>
+          <Field label={t("Endpoint")} name="generatedCustomAPI.endpoint" cols={sm ? 6 : 12}>
+            <Input placeholder="https://example.com" />
+          </Field>
+          <Field label={t("API Key")} name="generatedCustomAPI.APIKey" cols={sm ? 6 : 12}>
+            <Input type="password" placeholder={t("Nhập API Key")} />
+          </Field>
+        </>
+      )}
 
       <Form.Footer
         cancelText=""

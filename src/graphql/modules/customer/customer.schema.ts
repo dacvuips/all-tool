@@ -46,6 +46,8 @@ const schema = gql`
     ward: String
     "Gói Google"
     googlePackage: GooglePackageInput
+    "API generate ảnh/video tùy chỉnh"
+    generatedCustomAPI: GeneratedCustomAPIInput
   }
 
   type Customer {
@@ -91,7 +93,28 @@ const schema = gql`
     ward: String
     "Gói Google"
     googlePackage: GooglePackage
+    "API generate ảnh/video tùy chỉnh"
+    generatedCustomAPI: GeneratedCustomAPI
   }
+
+  type GeneratedCustomAPI {
+    "Bật dùng API riêng của customer"
+    active: Boolean
+    "Endpoint API generate"
+    endpoint: String
+    "API Key generate"
+    APIKey: String
+  }
+
+  input GeneratedCustomAPIInput {
+    "Bật dùng API riêng của customer"
+    active: Boolean
+    "Endpoint API generate"
+    endpoint: String
+    "API Key generate"
+    APIKey: String
+  }
+
   type CustomerIntro {
     "Đơn hàng"
     order: Boolean

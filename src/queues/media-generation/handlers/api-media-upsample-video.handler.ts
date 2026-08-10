@@ -32,6 +32,7 @@ export async function handleApiMediaUpsampleVideo(
 
   const result = await upsampleVideoWithFlow2({
     flow2RequestId: payload.flow2RequestId.trim(),
+    customerId: job.customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },

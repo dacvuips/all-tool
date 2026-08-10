@@ -66,6 +66,7 @@ export async function runFlow2VideoPipeline(
     variantCount,
     imageInputs: images,
     videoMode: resolvedVideoMode,
+    customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },

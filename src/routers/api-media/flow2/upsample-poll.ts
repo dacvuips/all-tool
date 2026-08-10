@@ -89,6 +89,7 @@ export async function waitForUpsampleJobDone(
     pollIntervalMs?: number;
     onProgress?: (progress: number, message?: string) => void | Promise<void>;
     progressLabel?: string;
+    customerId?: string;
   }
 ): Promise<Flow2StatusResponse> {
   const timeoutMs = options?.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS;
@@ -96,10 +97,11 @@ export async function waitForUpsampleJobDone(
   const label = options?.progressLabel || "upscale";
   const startedAt = Date.now();
   let pollCount = 0;
+  const flow2Opts = options?.customerId ? { customerId: options.customerId } : undefined;
 
   while (Date.now() - startedAt < timeoutMs) {
     pollCount += 1;
-    const statusData = await getFlow2RequestStatus(upsampleJobId);
+    const statusData = await getFlow2RequestStatus(upsampleJobId, flow2Opts);
     const status = pickStatus(statusData);
 
     if (isFlow2FailedStatus(status)) {
@@ -166,7 +168,8 @@ function pushResultHttpUrl(found: string[], value: unknown): void {
 
 export async function resolveUpsampleImageUrl(
   upsampleJobId: string,
-  statusData?: Flow2StatusResponse
+  statusData?: Flow2StatusResponse,
+  options?: { customerId?: string }
 ): Promise<string> {
   const found: string[] = [];
 
@@ -187,7 +190,7 @@ export async function resolveUpsampleImageUrl(
     return preferred[0];
   }
 
-  const { baseUrl } = await getFlow2Config();
+  const { baseUrl } = await getFlow2Config(options);
   const derived = buildFlow2DerivedImageUrl(baseUrl, upsampleJobId);
   logger.warn(
     `[flow2-upsample] Không có URL trong status job=${upsampleJobId} — fallback derived=${derived} status=${
@@ -199,7 +202,8 @@ export async function resolveUpsampleImageUrl(
 
 export async function resolveUpsampleVideoUrl(
   upsampleJobId: string,
-  statusData?: Flow2StatusResponse
+  statusData?: Flow2StatusResponse,
+  options?: { customerId?: string }
 ): Promise<string> {
   const found: string[] = [];
 
@@ -218,7 +222,7 @@ export async function resolveUpsampleVideoUrl(
     return preferred[0];
   }
 
-  const { baseUrl } = await getFlow2Config();
+  const { baseUrl } = await getFlow2Config(options);
   const derived = buildFlow2DerivedVideoUrl(baseUrl, upsampleJobId);
   logger.warn(
     `[flow2-upsample] Không có URL video trong status job=${upsampleJobId} — fallback derived=${derived} status=${
@@ -275,11 +279,14 @@ export async function fetchFlow2UpsampleMediaBytes(options: {
   kind: "image" | "video";
   retries?: number;
   retryDelayMs?: number;
+  customerId?: string;
 }): Promise<{ buffer: Buffer; mimeType: string; finalUrl: string }> {
   const { url, jobId, kind } = options;
   const retries = options.retries ?? 5;
   const retryDelayMs = options.retryDelayMs ?? 2_000;
-  const { baseUrl, token } = await getFlow2Config();
+  const { baseUrl, token } = await getFlow2Config(
+    options.customerId ? { customerId: options.customerId } : undefined
+  );
   const candidates = buildUpsampleDownloadCandidates(url, jobId, baseUrl, kind);
 
   let lastError: Error | undefined;

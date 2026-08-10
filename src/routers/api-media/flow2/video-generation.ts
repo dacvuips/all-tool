@@ -52,6 +52,8 @@ export type Flow2CreateVideoRequestParams = {
   variantCount?: number;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
   onRequestCreated?: (requestId: string) => void | Promise<void>;
+  /** Customer dùng custom Flow2 API khi generatedCustomAPI.active */
+  customerId?: string;
 };
 
 export type GeneratedVideo = {
@@ -183,10 +185,12 @@ async function normalizeResultVideo(value: string): Promise<GeneratedVideo> {
 }
 
 export async function extractFlow2Videos(
-  statusData: Flow2StatusResponse
+  statusData: Flow2StatusResponse,
+  options?: { customerId?: string }
 ): Promise<GeneratedVideo[]> {
   const requestId = pickFlow2RequestId(statusData);
   const resultPayload = pickFlow2ResultPayload(statusData);
+  const flow2Opts = options?.customerId ? { customerId: options.customerId } : undefined;
   if (resultPayload) {
     const structuredUrls = collectFlow2VideoUrls(resultPayload);
     if (structuredUrls.length > 0) {
@@ -198,7 +202,7 @@ export async function extractFlow2Videos(
     }
 
     if (requestId) {
-      const { baseUrl } = await getFlow2Config();
+      const { baseUrl } = await getFlow2Config(flow2Opts);
       const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
       logger.info(
         `[flow2-video] Không có video_urls — derive link requestId=${requestId} poll_mode=${
@@ -232,7 +236,7 @@ export async function extractFlow2Videos(
   }
 
   if (requestId) {
-    const { baseUrl } = await getFlow2Config();
+    const { baseUrl } = await getFlow2Config(flow2Opts);
     const derivedUrl = buildFlow2DerivedVideoUrl(baseUrl, requestId);
     logger.info(
       `[flow2-video] Flow2 trả base64/data URL — dùng link derive requestId=${requestId} url=${derivedUrl}`
@@ -249,17 +253,21 @@ export async function createFlow2VideoRequest(
   const imageInputs = (params.imageInputs || []).slice(0, MAX_FLOW2_VIDEO_IMAGES);
   const aspect_ratio = params.aspectRatio || "16:9";
   const video_quality = params.videoQuality || DEFAULT_VIDEO_QUALITY;
+  const flow2Opts = params.customerId ? { customerId: params.customerId } : undefined;
 
   // Text-to-video — không cần ảnh, không có video_mode
   if (imageInputs.length === 0) {
-    return createFlow2Request({
-      type: "gen_text_video",
-      params: {
-        prompt: params.prompt,
-        aspect_ratio,
-        video_quality,
+    return createFlow2Request(
+      {
+        type: "gen_text_video",
+        params: {
+          prompt: params.prompt,
+          aspect_ratio,
+          video_quality,
+        },
       },
-    });
+      flow2Opts
+    );
   }
 
   // Image-to-video — bắt buộc có video_mode (frame | component)
@@ -276,17 +284,20 @@ export async function createFlow2VideoRequest(
   const image_base64s = await Promise.all(imageInputs.map(normalizeImageToDataUrl));
   const variant_count = Math.max(1, Math.min(5, Math.round(params.variantCount || 1)));
 
-  return createFlow2Request({
-    type: "gen_image_video",
-    params: {
-      prompt: params.prompt,
-      aspect_ratio,
-      image_base64s,
-      video_mode,
-      video_quality,
-      variant_count,
+  return createFlow2Request(
+    {
+      type: "gen_image_video",
+      params: {
+        prompt: params.prompt,
+        aspect_ratio,
+        image_base64s,
+        video_mode,
+        video_quality,
+        variant_count,
+      },
     },
-  });
+    flow2Opts
+  );
 }
 
 export async function waitForFlow2VideoResult(params: {
@@ -294,17 +305,19 @@ export async function waitForFlow2VideoResult(params: {
   timeoutMs?: number;
   pollIntervalMs?: number;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  customerId?: string;
 }): Promise<GeneratedVideo[]> {
   return waitForFlow2Result({
     requestId: params.requestId,
     timeoutMs: params.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS,
     pollIntervalMs: params.pollIntervalMs,
     onProgress: params.onProgress,
-    extract: extractFlow2Videos,
+    extract: (statusData) => extractFlow2Videos(statusData, { customerId: params.customerId }),
     emptyResultMessage: "Flow2 hoàn tất nhưng không có video đầu ra",
     waitingProgressMessage: "Đang chờ Flow2 xử lý video...",
     doneProgressMessage: "Flow2 đã tạo video xong, đang xử lý kết quả...",
     logTag: "video",
+    customerId: params.customerId,
   });
 }
 
@@ -328,6 +341,7 @@ export async function generateVideoWithFlow2(
       const videos = await waitForFlow2VideoResult({
         requestId: created.requestId,
         onProgress: params.onProgress,
+        customerId: params.customerId,
       });
       return { requestId: created.requestId, video: videos[0], videos };
     },

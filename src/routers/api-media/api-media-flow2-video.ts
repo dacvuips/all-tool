@@ -57,6 +57,7 @@ export type CreateApiMediaFlow2VideoParams = {
   imageInputs?: Flow2ImageInput[];
   videoInputs?: Array<string | { imageBytes: string; mimeType?: string }>;
   videoMode?: Flow2VideoMode;
+  customerId?: string;
 };
 
 export async function createApiMediaFlow2VideoRequest(
@@ -66,20 +67,24 @@ export async function createApiMediaFlow2VideoRequest(
   const video_quality = params.videoQuality || "lite_relaxed";
   const imageInputs = params.imageInputs || [];
   const videoInputs = params.videoInputs || [];
+  const flow2Opts = params.customerId ? { customerId: params.customerId } : undefined;
 
   const durationFields =
     params.videoDurationS != null ? { video_duration_s: params.videoDurationS } : {};
 
   if (imageInputs.length === 0 && videoInputs.length === 0) {
-    return createFlow2Request({
-      type: "gen_text_video",
-      params: {
-        prompt: params.prompt,
-        aspect_ratio,
-        video_quality,
-        ...durationFields,
+    return createFlow2Request(
+      {
+        type: "gen_text_video",
+        params: {
+          prompt: params.prompt,
+          aspect_ratio,
+          video_quality,
+          ...durationFields,
+        },
       },
-    });
+      flow2Opts
+    );
   }
 
   if (!params.videoMode) {
@@ -92,18 +97,21 @@ export async function createApiMediaFlow2VideoRequest(
       ? await Promise.all(videoInputs.map(normalizeVideoToDataUrl))
       : undefined;
 
-  return createFlow2Request({
-    type: "gen_image_video",
-    params: {
-      prompt: params.prompt,
-      aspect_ratio,
-      image_base64s,
-      video_mode: params.videoMode,
-      video_quality,
-      ...durationFields,
-      ...(video_base64s?.length ? { video_base64s } : {}),
+  return createFlow2Request(
+    {
+      type: "gen_image_video",
+      params: {
+        prompt: params.prompt,
+        aspect_ratio,
+        image_base64s,
+        video_mode: params.videoMode,
+        video_quality,
+        ...durationFields,
+        ...(video_base64s?.length ? { video_base64s } : {}),
+      },
     },
-  });
+    flow2Opts
+  );
 }
 
 export async function generateApiMediaVideoWithFlow2(
@@ -129,6 +137,7 @@ export async function generateApiMediaVideoWithFlow2(
       const videos = await waitForFlow2VideoResult({
         requestId: created.requestId,
         onProgress: params.onProgress,
+        customerId: params.customerId,
       });
       return { requestId: created.requestId, video: videos[0] };
     },
@@ -171,6 +180,7 @@ export async function runApiMediaVideoFlow2(
 
   const { requestId, video } = await generateApiMediaVideoWithFlow2({
     ...flow2Params,
+    customerId,
     onProgress,
     onRequestCreated: options.onRequestCreated,
   });
@@ -178,7 +188,7 @@ export async function runApiMediaVideoFlow2(
   logger.info(`[${logPrefix}] Flow2 request ${requestId} hoàn tất (user ${customerId})`);
   await safeProgress(onProgress, 95, "Đang hoàn tất dữ liệu video...");
 
-  const videoUri = await resolveFlow2VideoHttpUrl(video.videoUri, requestId);
+  const videoUri = await resolveFlow2VideoHttpUrl(video.videoUri, requestId, { customerId });
 
   return {
     videoUri,

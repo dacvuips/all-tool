@@ -202,7 +202,8 @@ export function buildFlow2DerivedImageUrl(apiBaseUrl: string, requestId: string)
  */
 export async function resolveFlow2VideoHttpUrl(
   videoUri: string,
-  requestId: string
+  requestId: string,
+  options?: Flow2ConfigOptions
 ): Promise<string> {
   const trimmed = videoUri.trim();
   if (isHttpUrl(trimmed)) {
@@ -214,7 +215,7 @@ export async function resolveFlow2VideoHttpUrl(
     throw new Error("Không có link video và thiếu requestId để tạo URL tải");
   }
 
-  const { baseUrl } = await getFlow2Config();
+  const { baseUrl } = await getFlow2Config(options);
   return buildFlow2DerivedVideoUrl(baseUrl, id);
 }
 
@@ -369,7 +370,43 @@ export async function fetchFlow2WithRetry(url: string, init: RequestInit): Promi
   throw lastError;
 }
 
-export async function getFlow2Config(): Promise<{ baseUrl: string; token: string }> {
+export type Flow2ConfigOptions = {
+  /** Khi có customerId — ưu tiên generatedCustomAPI của customer nếu active */
+  customerId?: string;
+};
+
+/**
+ * Lấy baseUrl + token Flow2 cho gen ảnh/video.
+ * Ưu tiên `customer.generatedCustomAPI` khi active + đủ endpoint/APIKey;
+ * ngược lại dùng setting hệ thống `recaptcha-api-secret-key`.
+ */
+export async function getFlow2Config(
+  options?: Flow2ConfigOptions | string
+): Promise<{ baseUrl: string; token: string }> {
+  const customerId =
+    typeof options === "string" ? options : options?.customerId;
+
+  if (customerId) {
+    try {
+      // Lazy import để tránh circular dependency với customer/DAL
+      const { CustomerModel } = await import("../../../libs/dal/customer/customer.model");
+      const customer = await CustomerModel.findById(customerId)
+        .select("generatedCustomAPI")
+        .lean<{ generatedCustomAPI?: { active?: boolean; endpoint?: string; APIKey?: string } }>();
+      const custom = customer?.generatedCustomAPI;
+      if (custom?.active && custom?.endpoint?.trim() && custom?.APIKey?.trim()) {
+        return {
+          baseUrl: custom.endpoint.trim().replace(/\/+$/, ""),
+          token: custom.APIKey.trim(),
+        };
+      }
+    } catch (err: any) {
+      logger.warn(
+        `[flow2] Không đọc được generatedCustomAPI của customer ${customerId}: ${err?.message} — fallback setting hệ thống`
+      );
+    }
+  }
+
   const links = await getApiSetting(FLOW2_SETTING_KEY);
   const selected = links.find((item) => item?.url && item?.apiKey);
   if (!selected) {
@@ -409,11 +446,14 @@ export function looksLikeRawBase64(value: string, minLength = 128): boolean {
   return /^[A-Za-z0-9+/=\s]+$/.test(trimmed);
 }
 
-export async function createFlow2Request(body: {
-  type: string;
-  params: Record<string, unknown>;
-}): Promise<{ requestId: string; raw: Record<string, unknown> }> {
-  const { baseUrl, token } = await getFlow2Config();
+export async function createFlow2Request(
+  body: {
+    type: string;
+    params: Record<string, unknown>;
+  },
+  options?: Flow2ConfigOptions
+): Promise<{ requestId: string; raw: Record<string, unknown> }> {
+  const { baseUrl, token } = await getFlow2Config(options);
 
   const resp = await fetchFlow2WithRetry(`${baseUrl}/api/requests`, {
     method: "POST",
@@ -443,8 +483,11 @@ export async function createFlow2Request(body: {
   return { requestId, raw: data };
 }
 
-export async function getFlow2RequestStatus(requestId: string): Promise<Flow2StatusResponse> {
-  const { baseUrl, token } = await getFlow2Config();
+export async function getFlow2RequestStatus(
+  requestId: string,
+  options?: Flow2ConfigOptions
+): Promise<Flow2StatusResponse> {
+  const { baseUrl, token } = await getFlow2Config(options);
   const resp = await fetchFlow2WithRetry(`${baseUrl}/api/requests/${requestId}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -484,14 +527,17 @@ function isFlow2ActiveCancellableStatus(status: string): boolean {
  * Hủy 1 task Flow2 (gen_image / gen_video) — chỉ khi status queued hoặc running.
  * Best-effort: không throw; trả false nếu không hủy được.
  */
-export async function cancelFlow2Request(requestId: string): Promise<boolean> {
+export async function cancelFlow2Request(
+  requestId: string,
+  options?: Flow2ConfigOptions
+): Promise<boolean> {
   const id = requestId?.trim();
   if (!id) return false;
 
-  const { baseUrl, token } = await getFlow2Config();
+  const { baseUrl, token } = await getFlow2Config(options);
 
   try {
-    const statusData = await getFlow2RequestStatus(id);
+    const statusData = await getFlow2RequestStatus(id, options);
     const status = pickStatus(statusData);
     if (!isFlow2ActiveCancellableStatus(status)) {
       logger.info(
@@ -649,13 +695,17 @@ export async function waitForFlow2Result<T>(params: {
   waitingProgressMessage: string;
   doneProgressMessage: string;
   logTag: string;
+  customerId?: string;
 }): Promise<T[]> {
   const timeoutMs = params.timeoutMs ?? FLOW2_GENERATION_TIMEOUT_MS;
   const pollIntervalMs = params.pollIntervalMs || 2_500;
   const startedAt = Date.now();
+  const flow2Opts: Flow2ConfigOptions | undefined = params.customerId
+    ? { customerId: params.customerId }
+    : undefined;
 
   while (Date.now() - startedAt < timeoutMs) {
-    const statusData = await getFlow2RequestStatus(params.requestId);
+    const statusData = await getFlow2RequestStatus(params.requestId, flow2Opts);
     const status = pickStatus(statusData);
 
     if (isFlow2FailedStatus(status) || hasImmediateError(statusData)) {

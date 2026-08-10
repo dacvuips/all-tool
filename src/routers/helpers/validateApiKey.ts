@@ -247,13 +247,14 @@ export function applyFreshCaptchaCredentials<T extends Record<string, any>>(
 export async function runWithCaptchaRetry<T>(opts: {
   type?: string;
   logPrefix: string;
+  customerId?: string;
   fn: (captcha: CaptchaResponseData) => Promise<T>;
 }): Promise<T> {
-  const { type, logPrefix, fn } = opts;
+  const { type, logPrefix, fn, customerId } = opts;
   let lastError: any;
 
   for (let attempt = 1; attempt <= CAPTCHA_GENERATION_MAX_RETRIES; attempt++) {
-    const captcha = await fetchCaptchaData({ type, logPrefix });
+    const captcha = await fetchCaptchaData({ type, logPrefix, customerId });
     try {
       return await fn(captcha);
     } catch (err: any) {
@@ -271,13 +272,44 @@ export async function runWithCaptchaRetry<T>(opts: {
   throw lastError;
 }
 
-export async function fetchCaptchaData<T extends IApiToken>(opts: {
+export async function fetchCaptchaData(opts: {
   type?: string;
   logPrefix: string;
+  customerId?: string;
 }): Promise<CaptchaResponseData> {
-  const { type, logPrefix } = opts;
-  // Lấy links (shuffle ngẫu nhiên mỗi lần gọi)
-  const links = await getApiSetting("recaptcha-api-secret-key");
+  const { type, logPrefix, customerId } = opts;
+
+  // Ưu tiên generatedCustomAPI của customer (active + endpoint + APIKey)
+  let links: ApiLinkData[] | null = null;
+  if (customerId) {
+    try {
+      const { CustomerModel } = await import("../../libs/dal/customer/customer.model");
+      const customer = await CustomerModel.findById(customerId)
+        .select("generatedCustomAPI")
+        .lean<{ generatedCustomAPI?: { active?: boolean; endpoint?: string; APIKey?: string } }>();
+      const custom = customer?.generatedCustomAPI;
+      if (custom?.active && custom?.endpoint?.trim() && custom?.APIKey?.trim()) {
+        links = [
+          {
+            url: custom.endpoint.trim().replace(/\/+$/, ""),
+            apiKey: custom.APIKey.trim(),
+          },
+        ];
+        logger.info(
+          `[${logPrefix}] Dùng generatedCustomAPI của customer ${customerId}`
+        );
+      }
+    } catch (err: any) {
+      logger.warn(
+        `[${logPrefix}] Không đọc được generatedCustomAPI (${customerId}): ${err?.message} — fallback setting hệ thống`
+      );
+    }
+  }
+
+  // Lấy links hệ thống (shuffle ngẫu nhiên mỗi lần gọi)
+  if (!links) {
+    links = await getApiSetting("recaptcha-api-secret-key");
+  }
 
   /**
    * Mọi request captcha xếp hàng FIFO, tối thiểu 10s giữa hai lần gọi API (Redis + local chain).
@@ -290,12 +322,12 @@ export async function fetchCaptchaData<T extends IApiToken>(opts: {
       retryWithThrottleGate(
         async () => {
           let lastError: any = null;
-          const validLinkCount = links.filter((l) => l?.url).length;
+          const validLinkCount = links!.filter((l) => l?.url).length;
           const maxLinkAttempts = Math.max(validLinkCount * 3, 3);
           let linkAttempts = 0;
 
           while (linkAttempts++ < maxLinkAttempts) {
-            const selectedLink = await acquireCaptchaLinkWithSlot(links, logPrefix);
+            const selectedLink = await acquireCaptchaLinkWithSlot(links!, logPrefix);
 
             try {
               const captchaUrl = type ? `${selectedLink.url}?action=${type}` : selectedLink.url;

@@ -37,6 +37,7 @@ export async function handleApiMediaUpsampleImage(
   const result = await upsampleImageWithFlow2({
     resolution: payload.resolution || "4K",
     flow2RequestId: payload.flow2RequestId.trim(),
+    customerId: job.customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);
     },

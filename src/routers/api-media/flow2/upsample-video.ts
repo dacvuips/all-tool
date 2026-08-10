@@ -25,8 +25,10 @@ export type UpsampledVideoResult = {
 export async function upsampleVideoWithFlow2(params: {
   flow2RequestId: string;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  customerId?: string;
 }): Promise<UpsampledVideoResult> {
-  const { baseUrl, token } = await getFlow2Config();
+  const flow2Opts = params.customerId ? { customerId: params.customerId } : undefined;
+  const { baseUrl, token } = await getFlow2Config(flow2Opts);
   const sourceRequestId = params.flow2RequestId.trim();
   const { onProgress } = params;
 
@@ -65,13 +67,14 @@ export async function upsampleVideoWithFlow2(params: {
   const statusData = await waitForUpsampleJobDone(upsampleJobId, {
     onProgress,
     progressLabel: "upscale video 1080p",
+    customerId: params.customerId,
   });
 
   if (onProgress) {
     await onProgress(90, "Đang lấy link video 1080p...");
   }
 
-  const videoUri = await resolveUpsampleVideoUrl(upsampleJobId, statusData);
+  const videoUri = await resolveUpsampleVideoUrl(upsampleJobId, statusData, flow2Opts);
 
   logger.info(
     `[flow2-upsample-video] Hoàn tất source=${sourceRequestId} job=${upsampleJobId} url=${videoUri}`

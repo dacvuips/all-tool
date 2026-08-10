@@ -17,6 +17,7 @@ export type UpsampleImageWithFlow2Params = {
   resolution: UpsampleResolution;
   flow2RequestId: string;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
+  customerId?: string;
 };
 
 export type UpsampledImageResult = {
@@ -49,7 +50,8 @@ function buildUpsampleBody(params: UpsampleImageWithFlow2Params): Record<string,
 export async function upsampleImageWithFlow2(
   params: UpsampleImageWithFlow2Params
 ): Promise<UpsampledImageResult> {
-  const { baseUrl, token } = await getFlow2Config();
+  const flow2Opts = params.customerId ? { customerId: params.customerId } : undefined;
+  const { baseUrl, token } = await getFlow2Config(flow2Opts);
   const sourceRequestId = params.flow2RequestId.trim();
   const { onProgress, resolution } = params;
   const body = JSON.stringify(buildUpsampleBody(params));
@@ -89,6 +91,7 @@ export async function upsampleImageWithFlow2(
   const statusData = await waitForUpsampleJobDone(upsampleJobId, {
     onProgress,
     progressLabel: `upscale ảnh ${resolution}`,
+    customerId: params.customerId,
   });
 
   if (onProgress) {
@@ -112,7 +115,7 @@ export async function upsampleImageWithFlow2(
     };
   }
 
-  const imageUrl = await resolveUpsampleImageUrl(upsampleJobId, statusData);
+  const imageUrl = await resolveUpsampleImageUrl(upsampleJobId, statusData, flow2Opts);
   logger.info(
     `[flow2-upsample-image] Hoàn tất ${resolution} source=${sourceRequestId} job=${upsampleJobId} url=${imageUrl}`
   );

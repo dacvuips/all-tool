@@ -64,6 +64,14 @@ const customerSchema = new Schema(
       },
       default: {},
     },
+    generatedCustomAPI: {
+      type: {
+        active: { type: Boolean, default: false },
+        endpoint: { type: String },
+        APIKey: { type: String },
+      },
+      default: undefined,
+    },
   },
   { timestamps: true }
 );

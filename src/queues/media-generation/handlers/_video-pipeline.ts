@@ -122,6 +122,7 @@ export async function runVideoPipeline(args: RunVideoPipelineArgs): Promise<Poll
   const captchaRetry: any = {
     actionType: ActionEnum.VIDEO_GENERATION,
     logPrefix,
+    customerId,
     onRefresh: async (freshCaptcha: CaptchaResponseData) => {
       const uploaded = await uploadAll(freshCaptcha);
       return { ...buildParams(freshCaptcha, uploaded), captchaRetry };
@@ -132,6 +133,7 @@ export async function runVideoPipeline(args: RunVideoPipelineArgs): Promise<Poll
   const captcha = await fetchCaptchaData({
     type: ActionEnum.VIDEO_GENERATION,
     logPrefix,
+    customerId,
   });
 
   await emitter.progress(

@@ -440,7 +440,7 @@ export async function markMediaJobCancelled(jobId: string, customerId: string): 
       ? existing.metadata.flow2RequestId.trim()
       : "";
   if (flow2RequestId) {
-    await cancelFlow2Request(flow2RequestId);
+    await cancelFlow2Request(flow2RequestId, { customerId });
   }
 
   const doc = await model.findOneAndUpdate(
