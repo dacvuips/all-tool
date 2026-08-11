@@ -2043,19 +2043,25 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     };
     let matchedCount = 0;
     const pageLimit = 20;
-    const delayMs = 450;
+    const keywordWorkerLimit = clampCrawlKeywordWorkers(crawlWorkers);
+    // Nhiều luồng → giãn delay trang để cookie/session bớt bị rate
+    const delayMs = 450 + Math.max(0, keywordWorkerLimit - 1) * 120;
     // Shopee cap ~500 SP / keyword+sort → ~25 trang; dư buffer nhẹ
     const maxPagesPerKeyword = 30;
     const activeSort = Number(sortType) || 1;
     const sortLabel = t(SORT_TYPE_LABELS[activeSort] || String(activeSort));
     const shopFilters = orderedShopTypes();
     let scannedRaw = 0;
-    const keywordWorkerLimit = clampCrawlKeywordWorkers(crawlWorkers);
+    /** Key đã fail 1 lần — cho claim lại 1 vòng; fail lần 2 mới bỏ hẳn. */
+    const keywordFailCount = new Map<number, number>();
+    const KEYWORD_MAX_FAILS = 2;
+    const PAGE_MAX_RETRIES = 4;
 
     /**
      * Hàng đợi từ khóa dùng chung cho N worker:
      * - pending → claim thành running (vàng)
-     * - xong / lỗi trang → done (xanh lá)
+     * - xong / bỏ hẳn → done (xanh lá)
+     * - lỗi tạm: pending lại (tối đa KEYWORD_MAX_FAILS)
      * Worker claim key tiếp theo sẽ bỏ qua key đã done và đang running.
      */
     type KeywordSlotStatus = "pending" | "running" | "done";
@@ -2084,7 +2090,24 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       return null;
     };
 
-    const completeKeyword = (workerId: number, slotIndex: number, keyword: string) => {
+    const completeKeyword = (
+      workerId: number,
+      slotIndex: number,
+      keyword: string,
+      opts?: { requeue?: boolean }
+    ) => {
+      if (opts?.requeue) {
+        const fails = (keywordFailCount.get(slotIndex) || 0) + 1;
+        keywordFailCount.set(slotIndex, fails);
+        if (fails < KEYWORD_MAX_FAILS) {
+          keywordStatuses[slotIndex] = "pending";
+          if (runningSlotByWorker.get(workerId) === slotIndex) {
+            runningSlotByWorker.delete(workerId);
+          }
+          syncActiveKeywordsUi();
+          return;
+        }
+      }
       keywordStatuses[slotIndex] = "done";
       if (runningSlotByWorker.get(workerId) === slotIndex) {
         runningSlotByWorker.delete(workerId);
@@ -2125,11 +2148,13 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       }
     };
 
-    const crawlOneKeyword = async (workerId: number, keyword: string) => {
+    /** true = hoàn tất bình thường (hoặc hết trang); false = lỗi trang, có thể requeue. */
+    const crawlOneKeyword = async (workerId: number, keyword: string): Promise<boolean> => {
       const keywordLabel = keyword || t("(không từ khóa)");
       let pageOffset = 0;
       let pageNo = 0;
       let scannedThisKeyword = 0;
+      let pageRetry = 0;
 
       while (
         !crawlAbortRef.current &&
@@ -2156,23 +2181,45 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             listType: 0,
             filterShopTypes: shopFilters,
           });
+          pageRetry = 0;
         } catch (pageErr: any) {
           const msg = String(pageErr?.message || pageErr || "");
+          pageRetry += 1;
+          if (pageRetry < PAGE_MAX_RETRIES && !crawlAbortRef.current) {
+            publishStatus(
+              t('W{{w}} "{{keyword}}" tr.{{page}} retry {{n}}/{{max}}', {
+                w: workerId,
+                keyword: keywordLabel,
+                page: pageNo,
+                n: pageRetry,
+                max: PAGE_MAX_RETRIES,
+              })
+            );
+            pageNo -= 1; // thử lại cùng offset
+            await new Promise((r) =>
+              setTimeout(r, 900 * pageRetry + Math.floor(Math.random() * 400))
+            );
+            continue;
+          }
           publishStatus(
-            t('Lỗi W{{w}} tr.{{page}} · bỏ key · {{error}}', {
+            t('Lỗi W{{w}} tr.{{page}} · tạm rời key · {{error}}', {
               w: workerId,
               page: pageNo,
-              error: msg.slice(0, 60),
+              error: msg.slice(0, 80),
             })
           );
           toast.warn(
-            t('Bỏ qua từ khóa "{{keyword}}" (lỗi trang) · {{count}} SP khớp', {
-              keyword: keywordLabel,
-              count: matchedCount,
-            })
+            t(
+              'Từ khóa "{{keyword}}" lỗi trang (đã khớp tổng {{count}}) — sẽ thử lại sau · {{error}}',
+              {
+                keyword: keywordLabel,
+                count: matchedCount,
+                error: msg.slice(0, 50),
+              }
+            )
           );
-          await new Promise((r) => setTimeout(r, 900));
-          return;
+          await new Promise((r) => setTimeout(r, 600));
+          return false;
         }
 
         if (!page.products.length) break;
@@ -2226,6 +2273,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         pageOffset += pageLimit;
         await new Promise((r) => setTimeout(r, delayMs));
       }
+      return true;
     };
 
     const runWorker = async (workerId: number) => {
@@ -2233,10 +2281,16 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         const claimed = claimNextKeyword(workerId);
         if (!claimed) break;
         try {
-          await crawlOneKeyword(workerId, claimed.keyword);
-        } finally {
-          // Luôn mark done (xanh) sau khi worker rời key — worker khác không claim lại
-          completeKeyword(workerId, claimed.slotIndex, claimed.keyword);
+          const ok = await crawlOneKeyword(workerId, claimed.keyword);
+          if (ok) {
+            completeKeyword(workerId, claimed.slotIndex, claimed.keyword);
+          } else {
+            // Lỗi trang: requeue tối đa 1 lần, lần 2 bỏ hẳn
+            completeKeyword(workerId, claimed.slotIndex, claimed.keyword, { requeue: true });
+            await new Promise((r) => setTimeout(r, 700 + Math.floor(Math.random() * 500)));
+          }
+        } catch {
+          completeKeyword(workerId, claimed.slotIndex, claimed.keyword, { requeue: true });
         }
       }
     };
@@ -2851,11 +2905,14 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
             aria-label={t("Số luồng")}
           />
           <p className="m-0 mt-1.5 text-xs leading-relaxed text-gray-500">
-            {t("Số luồng cào song song ({{min}}–{{max}}). Mặc định {{def}}.", {
-              min: MIN_CRAWL_KEYWORD_WORKERS,
-              max: MAX_CRAWL_KEYWORD_WORKERS,
-              def: DEFAULT_CRAWL_KEYWORD_WORKERS,
-            })}
+            {t(
+              "Số luồng cào song song ({{min}}–{{max}}). Mặc định {{def}}. Lưu ý: session cookie 1 trình duyệt — request trang được giới hạn 2 song song + retry; quá cao dễ rate/antibot.",
+              {
+                min: MIN_CRAWL_KEYWORD_WORKERS,
+                max: MAX_CRAWL_KEYWORD_WORKERS,
+                def: DEFAULT_CRAWL_KEYWORD_WORKERS,
+              }
+            )}
           </p>
         </div>
 

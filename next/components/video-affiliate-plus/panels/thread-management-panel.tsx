@@ -651,7 +651,14 @@ export function ThreadManagementPanel({
       }
 
       if (!urls || urls.length < 2) {
-        toast.warn(t("Cần ít nhất 2 video (không bị tắt) để nối"));
+        const needTwo = t("Cần ít nhất 2 video (không bị tắt) để nối");
+        // Lỗi trên row — không toast (tránh spam khi batch)
+        await patchThread(sessionId, item.id, {
+          error: needTwo,
+          countdown: 0,
+        });
+        scheduleParentSync();
+        onAddLog(needTwo, "warning", item.id);
         return false;
       }
 
@@ -770,7 +777,7 @@ export function ThreadManagementPanel({
             });
             scheduleParentSync();
             onAddLog(t("Nối video thất bại: {{msg}}", { msg }), "error", item.id);
-            toast.error(msg);
+            // Không toast.error — hiện text dưới cột video trên row
             setVideoPreview((prev) =>
               prev?.kind === "merged" && prev.itemId === item.id
                 ? { ...prev, urls: [], error: msg }
@@ -2258,15 +2265,29 @@ export function ThreadManagementPanel({
       if (ok > 0 && fail === 0) {
         toast.success(t("Đã nối xong {{count}} task", { count: ok }));
       } else if (ok > 0) {
+        // Chỉ tóm tắt — chi tiết lỗi từng task nằm ở cột error trên row
+        onAddLog(
+          t("Nối xong {{ok}} task, lỗi {{fail}} task (xem text trên từng dòng)", {
+            ok,
+            fail,
+          }),
+          "warning"
+        );
         toast.warn(
-          t("Nối xong {{ok}} task, lỗi {{fail}} task", { ok, fail })
+          t("Nối xong {{ok}} · lỗi {{fail}} (xem từng dòng)", { ok, fail })
         );
       } else if (fail > 0) {
-        toast.error(t("Nối video thất bại cho {{count}} task", { count: fail }));
+        onAddLog(
+          t("Nối video: {{count}} task lỗi — xem text trên từng dòng", { count: fail }),
+          "error"
+        );
+        toast.warn(
+          t("{{count}} task nối lỗi — xem text trên dòng", { count: fail })
+        );
       }
     } catch (err: any) {
       console.error("[handleMergePendingVideos]", err);
-      toast.error(err?.message || t("Nối video thất bại"));
+      onAddLog(err?.message || t("Nối video thất bại"), "error");
     } finally {
       setMergingPendingBatch(false);
     }
@@ -3648,7 +3669,7 @@ export function ThreadManagementPanel({
                             </div>
                             {item.error ? (
                               <div
-                                className="w-full max-w-[160px] text-center text-10 leading-snug text-danger line-clamp-3"
+                                className="w-full max-w-[220px] text-left text-10 leading-snug text-danger whitespace-pre-wrap break-words"
                                 title={
                                   getRetryCounterLabel(item)
                                     ? `${item.error} (${getRetryCounterLabel(item)})`
@@ -3657,7 +3678,7 @@ export function ThreadManagementPanel({
                               >
                                 {item.error}
                                 {getRetryCounterLabel(item)
-                                  ? ` (${getRetryCounterLabel(item)})`
+                                  ? `\n(${getRetryCounterLabel(item)})`
                                   : ""}
                               </div>
                             ) : null}

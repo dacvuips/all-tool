@@ -36,6 +36,34 @@ export type CdpBridgeStatus = {
   agentOnline: boolean;
 };
 
+/**
+ * Giới hạn song song gọi Agent /product-page.
+ * 10 luồng UI vẫn claim nhiều keyword, nhưng HTTP/cookie 1 session bị rate/antibot nếu dồn 10 request cùng lúc.
+ */
+const MAX_PRODUCT_PAGE_INFLIGHT = 2;
+let productPageInflight = 0;
+const productPageWaiters: Array<() => void> = [];
+
+async function withProductPageSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (productPageInflight >= MAX_PRODUCT_PAGE_INFLIGHT) {
+    await new Promise<void>((resolve) => {
+      productPageWaiters.push(resolve);
+    });
+  }
+  productPageInflight += 1;
+  try {
+    return await fn();
+  } finally {
+    productPageInflight = Math.max(0, productPageInflight - 1);
+    const next = productPageWaiters.shift();
+    if (next) next();
+  }
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 /** Chi tiết Local Agent + CDP/session (cookie hoặc CDP còn sống). */
 export async function getCdpBridgeStatus(timeoutMs = 5000): Promise<CdpBridgeStatus> {
   const agent = await probeScrapeAgent(Math.min(2500, timeoutMs));
@@ -92,65 +120,90 @@ function isTransientProductPageError(message: string): boolean {
     msg.includes("econnreset") ||
     msg.includes("econnrefused") ||
     msg.includes("network") ||
-    msg.includes("fetch failed")
+    msg.includes("fetch failed") ||
+    msg.includes("timeout") ||
+    msg.includes("thời gian chờ") ||
+    msg.includes("429") ||
+    msg.includes("too many") ||
+    msg.includes("rate limit") ||
+    msg.includes("busy") ||
+    // antibot / auth tạm — retry backoff
+    msg.includes("http 401") ||
+    msg.includes("http 403") ||
+    msg.includes("antibot") ||
+    msg.includes("90309999") ||
+    msg.includes("hết hạn") ||
+    msg.includes("captcha")
   );
+}
+
+async function fetchAffiliateProductPageOnce(
+  input: AffiliateProductPageRequest,
+  timeoutMs: number
+): Promise<AffiliateProductPageResult> {
+  const { res, json } = await agentFetch("/product-page", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    timeoutMs,
+    body: JSON.stringify({
+      marketHost: input.marketHost,
+      keyword: input.keyword,
+      sortType: input.sortType,
+      pageOffset: input.pageOffset,
+      pageLimit: input.pageLimit ?? 20,
+      listType: input.listType ?? 0,
+      filterShopTypes: input.filterShopTypes || [],
+    }),
+  });
+  if (!res.ok || !json?.ok) {
+    throw new Error(
+      json?.message ||
+        `Lấy sản phẩm thất bại (HTTP ${res.status}). Bấm «Mở Trình duyệt» (GPM Login qua Agent) rồi thử lại.`
+    );
+  }
+  return {
+    ok: true,
+    products: Array.isArray(json.products) ? json.products : [],
+    hasMore: Boolean(json.hasMore),
+    totalCount: typeof json.totalCount === "number" ? json.totalCount : null,
+    keyword: String(json.keyword || input.keyword || ""),
+    marketHost: String(json.marketHost || input.marketHost || ""),
+  };
 }
 
 export async function fetchAffiliateProductPage(
   input: AffiliateProductPageRequest,
   timeoutMs = 90000
 ): Promise<AffiliateProductPageResult> {
-  const agent = await probeScrapeAgent(2500);
-  if (!agent.online) {
-    throw new Error(
-      agent.message ||
-        `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
-    );
-  }
-
-  const maxAttempts = 3;
-  let lastErr: Error | null = null;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const { res, json } = await agentFetch("/product-page", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        timeoutMs,
-        body: JSON.stringify({
-          marketHost: input.marketHost,
-          keyword: input.keyword,
-          sortType: input.sortType,
-          pageOffset: input.pageOffset,
-          pageLimit: input.pageLimit ?? 20,
-          listType: input.listType ?? 0,
-          filterShopTypes: input.filterShopTypes || [],
-        }),
-      });
-      if (!res.ok || !json?.ok) {
-        throw new Error(
-          json?.message ||
-            "Lấy sản phẩm thất bại. Bấm «Mở Trình duyệt» (GPM Login qua Agent) rồi thử lại."
-        );
-      }
-      return {
-        ok: true,
-        products: Array.isArray(json.products) ? json.products : [],
-        hasMore: Boolean(json.hasMore),
-        totalCount: typeof json.totalCount === "number" ? json.totalCount : null,
-        keyword: String(json.keyword || input.keyword || ""),
-        marketHost: String(json.marketHost || input.marketHost || ""),
-      };
-    } catch (err: any) {
-      const message =
-        err?.message || "Hết thời gian chờ. Kiểm tra Agent + GPM Login còn mở và thử lại.";
-      lastErr = new Error(message);
-      if (!isTransientProductPageError(message) || attempt >= maxAttempts) break;
-      await new Promise((r) => setTimeout(r, 700 * attempt));
+  return withProductPageSlot(async () => {
+    const agent = await probeScrapeAgent(2500);
+    if (!agent.online) {
+      throw new Error(
+        agent.message ||
+          `Chưa thấy Local Agent (${SCRAPE_AGENT_BASE}). Mở Shopee Scrape Agent (BatDau.bat / .exe).`
+      );
     }
-  }
 
-  throw lastErr || new Error("Lấy sản phẩm thất bại.");
+    const maxAttempts = 5;
+    let lastErr: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await fetchAffiliateProductPageOnce(input, timeoutMs);
+      } catch (err: any) {
+        const message =
+          err?.message || "Hết thời gian chờ. Kiểm tra Agent + GPM Login còn mở và thử lại.";
+        lastErr = new Error(message);
+        if (!isTransientProductPageError(message) || attempt >= maxAttempts) break;
+        // Backoff + jitter — giảm dồn 10 luồng đụng rate/antibot
+        const base = 800 * attempt;
+        const jitter = Math.floor(Math.random() * 500);
+        await sleepMs(base + jitter);
+      }
+    }
+
+    throw lastErr || new Error("Lấy sản phẩm thất bại.");
+  });
 }
 
 /**
