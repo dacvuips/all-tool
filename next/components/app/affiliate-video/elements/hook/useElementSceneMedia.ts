@@ -26,6 +26,7 @@ import {
   resolveElementServiceImageType,
 } from "../utils/elementSceneGenerationParams";
 import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../../shared/generatedMediaUtils";
+import { useGeneratedMediaReplaceReload } from "../../shared/useGeneratedMediaReplaceReload";
 import { GeneratedImageData, GeneratedVideoData, useElementApi } from "./useElementApi";
 
 // ── Params ─────────────────────────────────────────────────────────────────
@@ -395,6 +396,19 @@ export function useElementSceneMedia({
       });
     });
   }, [scene.id, isBatchGeneratingExtendVideo, getGeneratedVideo, saveGeneratedVideo]);
+
+  useGeneratedMediaReplaceReload({
+    sceneId: scene.id,
+    nextSceneId,
+    getGeneratedImage,
+    getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
+    setGeneratedImage: (data) => setGeneratedImage(data),
+    setNextGeneratedImage: (data) => setNextGeneratedImage(data),
+    setGeneratedVideo: (data) => setGeneratedVideo(data),
+    setGeneratedExtendVideo: (data) => setGeneratedExtendVideo(data),
+  });
 
   // // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateImage

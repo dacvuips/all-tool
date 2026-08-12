@@ -56,6 +56,8 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     generateVideo,
     getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     generateAudioTTS,
   } = useCopyVideoApi();
   const {
@@ -1450,7 +1452,10 @@ export function useCopyVideoBatchActions(scenes: CopyVideoScene[]) {
     // Merge videos (ffmpeg)
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 

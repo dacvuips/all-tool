@@ -1,3 +1,5 @@
+import { requestCleanWatermark } from "../remove-logo/hook/cleanWatermarkClient";
+import { base64ToBlob as watermarkBase64ToBlob, stripToPureBase64 } from "../remove-logo/constants";
 import { base64ToBlob, toDownloadProxyUrl, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
 
 /** Metadata Flow2 lưu sau gen_image — dùng upscale 4K. */
@@ -608,6 +610,99 @@ export async function resumePendingGeneratedVideoBase64<T extends GeneratedVideo
   }
 }
 
+/** Queue ClearWatermark 1 ảnh / lần — sau gen image. */
+let clearGeneratedImageQueue: Promise<void> = Promise.resolve();
+
+function enqueueClearGeneratedImage<T>(fn: () => Promise<T>): Promise<T> {
+  const run = clearGeneratedImageQueue.then(fn, fn);
+  clearGeneratedImageQueue = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+async function tryClearGeneratedImageWatermark<T extends GeneratedImageLike>(
+  image: T,
+  clientId: string
+): Promise<T | null> {
+  try {
+    const input = await generatedImageToApiBase64Input(image);
+    const result = await requestCleanWatermark([
+      {
+        clientId,
+        kind: "image",
+        mediaBase64: input.imageBytes,
+        mimeType: input.mimeType,
+        name: `${clientId}.jpg`,
+      },
+    ]);
+    const processed =
+      result.processed.find((p) => p.clientId === clientId) || result.processed[0];
+    if (!processed) {
+      if (result.skipped[0]?.reason) {
+        console.warn("[tryClearGeneratedImageWatermark] skip:", result.skipped[0].reason);
+      }
+      return null;
+    }
+
+    let blob: Blob | null = null;
+    if (processed.mediaBase64) {
+      blob = watermarkBase64ToBlob(
+        stripToPureBase64(processed.mediaBase64),
+        processed.mimeType || input.mimeType
+      );
+    }
+    if (!blob?.size && processed.url) {
+      blob = await fetchUrlToBlob(processed.url, processed.mimeType || input.mimeType);
+    }
+    if (!blob?.size) return null;
+
+    return toUiGeneratedImage({
+      ...image,
+      mediaBlob: blob,
+      mimeType: processed.mimeType || blob.type || input.mimeType,
+      imageBytes: "",
+      previewUrl: undefined,
+    } as T);
+  } catch (err) {
+    console.warn("[tryClearGeneratedImageWatermark]", err);
+    return null;
+  }
+}
+
+/**
+ * Sau gen: ClearWatermark rồi lưu blob đã xóa. Lỗi/hết hạn mức → fallback blob gốc.
+ */
+async function persistImageAfterClearWatermark<T extends GeneratedImageLike>(
+  sceneId: string,
+  image: T,
+  storage: MediaPersistStorage<T>,
+  onUpdate?: (data: T) => void
+): Promise<T> {
+  return enqueueClearGeneratedImage(async () => {
+    const source = hasStoredGeneratedImageBinary(image)
+      ? image
+      : await enrichGeneratedImageWithBase64(image);
+
+    const cleared = hasStoredGeneratedImageBinary(source)
+      ? await tryClearGeneratedImageWatermark(source, sceneId)
+      : null;
+    const toSave = cleared || source;
+
+    if (!hasStoredGeneratedImageBinary(toSave)) {
+      const ui = toUiGeneratedImage(image);
+      onUpdate?.(ui);
+      return ui;
+    }
+
+    await storage.set(sceneId, toPersistGeneratedImage(toSave));
+    const ui = toUiGeneratedImage(toSave);
+    onUpdate?.(ui);
+    return ui;
+  });
+}
+
 /** Ảnh còn link HTTP chưa có binary local — cần enrich khi refresh. */
 export function hasPendingGeneratedImageBinary(
   img: GeneratedImageLike | null | undefined
@@ -641,12 +736,12 @@ export async function resumePendingGeneratedImageBinary<T extends GeneratedImage
   }
 
   try {
-    const enriched = await enrichGeneratedImageWithBase64(image);
-    if (!hasStoredGeneratedImageBinary(enriched)) return toUiGeneratedImage(image);
-    await storage.set(sceneId, toPersistGeneratedImage(enriched));
-    const ui = toUiGeneratedImage(enriched);
-    options?.onUpdate?.(ui);
-    return ui;
+    return await persistImageAfterClearWatermark(
+      sceneId,
+      image,
+      storage,
+      options?.onUpdate
+    );
   } catch (err) {
     console.warn("[resumePendingGeneratedImageBinary]", err);
     return toUiGeneratedImage(image);
@@ -655,13 +750,19 @@ export async function resumePendingGeneratedImageBinary<T extends GeneratedImage
 
 /**
  * Lưu link vào IndexedDB ngay (hiển thị trước).
- * Enrich Blob chạy ngầm — React nhận bản UI nhẹ (không base64 string).
+ * ClearWatermark chạy ngầm — xong thì thay blob + blob URL ảnh đã xóa logo.
  */
 export async function persistGeneratedImageWithEnrichment<T extends GeneratedImageLike>(
   sceneId: string,
   raw: Partial<T> | undefined | null,
   storage: MediaPersistStorage<T>,
-  options?: { onUpdate?: (data: T) => void }
+  options?: {
+    onUpdate?: (data: T) => void;
+    /** Sau khi clear/fallback có blob — dùng auto-download ảnh đã xóa logo */
+    onReady?: (data: T) => void;
+    /** true: chờ clear xong mới return (Wolf asset). Mặc định false — hiện link trước */
+    waitForClear?: boolean;
+  }
 ): Promise<T | undefined> {
   const preview = normalizeGeneratedImageFromApi(raw);
   if (!preview) return undefined;
@@ -671,18 +772,24 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
   const initialUi = toUiGeneratedImage(initial);
   options?.onUpdate?.(initialUi);
 
-  void (async () => {
-    try {
-      if (hasStoredGeneratedImageBinary(initial)) return;
-      const enriched = await enrichGeneratedImageWithBase64(initial);
-      if (!hasStoredGeneratedImageBinary(enriched)) return;
-      await storage.set(sceneId, toPersistGeneratedImage(enriched));
-      options?.onUpdate?.(toUiGeneratedImage(enriched));
-    } catch (err) {
-      console.warn("[persistGeneratedImageWithEnrichment]", err);
+  const runClear = persistImageAfterClearWatermark(
+    sceneId,
+    initial,
+    storage,
+    (data) => {
+      options?.onUpdate?.(data);
+      options?.onReady?.(data);
     }
-  })();
+  ).catch((err) => {
+    console.warn("[persistGeneratedImageWithEnrichment]", err);
+    return initialUi;
+  });
 
+  if (options?.waitForClear) {
+    return await runClear;
+  }
+
+  void runClear;
   return initialUi;
 }
 

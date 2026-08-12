@@ -264,7 +264,7 @@ export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
 export const FLOW2_SYSTEM_BUSY_MESSAGE =
   "Hệ thống hiện đang bận, vui lòng chờ hoặc liên hệ admin";
 
-const FLOW2_GATEWAY_BUSY_STATUS_CODES = new Set([502, 503, 504, 530]);
+const FLOW2_GATEWAY_BUSY_STATUS_CODES = new Set([502, 503, 504, 524, 530]);
 
 function isCloudflareErrorHtml(text: string): boolean {
   const normalized = text.trim().toLowerCase();
@@ -294,8 +294,13 @@ export function throwFlow2HttpError(logPrefix: string, status: number, errText: 
     logger.warn(
       `[flow2] ${logPrefix} ${status} (gateway/busy): ${summarizeFlow2ErrorBody(errText, 200)}`
     );
-    const err: any = new Error(FLOW2_SYSTEM_BUSY_MESSAGE);
-    err.statusCode = 502;
+    const isTimeout = status === 524 || status === 504;
+    const err: any = new Error(
+      isTimeout
+        ? "Yêu cầu quá lâu, máy chủ bị timeout. Vui lòng thử lại."
+        : FLOW2_SYSTEM_BUSY_MESSAGE
+    );
+    err.statusCode = isTimeout ? 504 : 502;
     err.isGatewayBusyError = true;
     throw err;
   }

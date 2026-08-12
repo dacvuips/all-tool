@@ -383,11 +383,21 @@ export function useWolfWorkspaceGeneration() {
       }
     ): Promise<WolfProjectItem> => {
       const { onItemUpdated, onSceneMediaUpdated } = callbacks ?? {};
-      await persistGeneratedImageWithEnrichment(item.sceneId, imageData, sceneImageDB, {
-        onUpdate: (data) => onSceneMediaUpdated?.(item.sceneId, { sceneImage: data }),
-      });
+      const persisted = await persistGeneratedImageWithEnrichment(
+        item.sceneId,
+        imageData,
+        sceneImageDB,
+        {
+          waitForClear: true,
+          onUpdate: (data) => onSceneMediaUpdated?.(item.sceneId, { sceneImage: data }),
+        }
+      );
 
-      const asset = await generatedImageToWolfAsset(projectId, imageData, t("Ảnh đã tạo"));
+      const asset = await generatedImageToWolfAsset(
+        projectId,
+        persisted || imageData,
+        t("Ảnh đã tạo")
+      );
       if (!asset) {
         const failedItem: WolfProjectItem = {
           ...item,

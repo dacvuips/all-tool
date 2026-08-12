@@ -18,6 +18,7 @@ import {
   resolveAffiliateVideoReferenceImage,
 } from "../shared/affiliateSceneGenerationParams";
 import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
+import { useGeneratedMediaReplaceReload } from "../shared/useGeneratedMediaReplaceReload";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -427,6 +428,19 @@ export function useSceneMedia({
       });
     });
   }, [scene.id, isBatchGeneratingExtendVideo, getGeneratedVideo, saveGeneratedVideo]);
+
+  useGeneratedMediaReplaceReload({
+    sceneId: scene.id,
+    nextSceneId,
+    getGeneratedImage,
+    getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
+    setGeneratedImage: (data) => setGeneratedImage(data),
+    setNextGeneratedImage: (data) => setNextGeneratedImage(data),
+    setGeneratedVideo: (data) => setGeneratedVideo(data),
+    setGeneratedExtendVideo: (data) => setGeneratedExtendVideo(data),
+  });
 
   // ─────────────────────────────────────────────────────────────────────────
   // handleGenerateImage

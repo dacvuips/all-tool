@@ -65,6 +65,8 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     generateVideo,
     getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     generateAudioTTS,
   } = useReviewApi();
   const {
@@ -1379,7 +1381,10 @@ export function useReviewBatchActions(scenes: ReviewScene[]) {
     // Merge videos (ffmpeg)
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 

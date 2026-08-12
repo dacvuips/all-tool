@@ -1450,7 +1450,15 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
           sceneId,
           resultImages[0],
           imageDB,
-          { onUpdate: onMediaUpdate }
+          {
+            onUpdate: onMediaUpdate,
+            onReady: (ready) =>
+              triggerAutoDownloadAfterImageGen(ready, {
+                autoDownload,
+                sceneNumber,
+                autoDownloadImageResolution,
+              }),
+          }
         );
         if (!imageData) {
           const message = "Không nhận được ảnh từ API";
@@ -1460,11 +1468,6 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         }
 
         onProgress?.(100);
-        triggerAutoDownloadAfterImageGen(imageData, {
-          autoDownload,
-          sceneNumber,
-          autoDownloadImageResolution,
-        });
         return imageData;
       } catch (err: any) {
         onProgress?.(0);

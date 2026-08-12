@@ -3,7 +3,8 @@
  * Ảnh: Erasio (Gemini sparkle) · Video: crop/inpaint
  */
 import logger from "../../../helpers/logger";
-import { getFlow2Config } from "../../api-media/flow2/_shared";
+import { getFlow2Config, throwFlow2HttpError } from "../../api-media/flow2/_shared";
+import { isTimeoutOr524Error } from "./_ai-retry";
 
 export const WATERMARK_IMAGE_MAX_BYTES = 10 * 1024 * 1024; // 10MB
 export const WATERMARK_VIDEO_MAX_BYTES = 50 * 1024 * 1024; // 50MB
@@ -154,114 +155,127 @@ export async function cleanWatermarkViaFlow2(args: {
       ? { video_base64: args.dataUrl, return_mode: returnMode }
       : { image_base64: args.dataUrl, return_mode: returnMode };
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
+  const maxAttempts = 3;
+  let lastError: any;
 
-  try {
-    const resp = await fetch(`${baseUrl}/api/watermark/clean`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10 * 60 * 1000);
 
-    const text = await resp.text();
-    let json: unknown = null;
     try {
-      json = text ? JSON.parse(text) : null;
-    } catch {
-      json = null;
-    }
-
-    if (!resp.ok) {
-      const msg =
-        (isRecord(json) && (String(json.message || json.error || "") || "")) ||
-        text?.slice(0, 300) ||
-        `Flow2 watermark clean lỗi HTTP ${resp.status}`;
-      logger.error(`[clean-watermark] Flow2 ${resp.status}: ${msg}`);
-      const err: any = new Error(msg);
-      err.statusCode = resp.status >= 400 && resp.status < 600 ? resp.status : 502;
-      throw err;
-    }
-
-    if (!isRecord(json)) {
-      throw Object.assign(new Error("Flow2 watermark clean trả về không hợp lệ"), {
-        statusCode: 502,
+      const resp = await fetch(`${baseUrl}/api/watermark/clean`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
       });
-    }
 
-    // Hỗ trợ payload bọc trong data / result
-    const payload: Record<string, unknown> = isRecord(json.data)
-      ? { ...json, ...(json.data as Record<string, unknown>) }
-      : isRecord(json.result)
-      ? { ...json, ...(json.result as Record<string, unknown>) }
-      : json;
-
-    let mediaBase64Raw =
-      (typeof payload.media_base64 === "string" && payload.media_base64) ||
-      (typeof payload.image_base64 === "string" && payload.image_base64) ||
-      (typeof payload.video_base64 === "string" && payload.video_base64) ||
-      (typeof payload.base64 === "string" && payload.base64) ||
-      (typeof payload.data_url === "string" && payload.data_url) ||
-      "";
-
-    const mediaUrl =
-      (typeof payload.url === "string" && payload.url) ||
-      (typeof payload.Link === "string" && payload.Link) ||
-      (typeof payload.image_url === "string" && payload.image_url) ||
-      (typeof payload.video_url === "string" && payload.video_url) ||
-      undefined;
-
-    let mimeType =
-      (typeof payload.mime_type === "string" && payload.mime_type) ||
-      (args.kind === "video" ? "video/mp4" : "image/jpeg");
-
-    // Chỉ có URL → tải bytes để client luôn có base64 xem preview
-    if (!mediaBase64Raw && mediaUrl) {
+      const text = await resp.text();
+      let json: unknown = null;
       try {
-        const fetched = await fetchMediaUrlAsBase64(mediaUrl, token);
-        mediaBase64Raw = fetched.base64;
-        if (fetched.mimeType) mimeType = fetched.mimeType;
-      } catch (fetchErr: any) {
-        logger.warn(`[clean-watermark] Tải media URL thất bại: ${fetchErr?.message}`);
+        json = text ? JSON.parse(text) : null;
+      } catch {
+        json = null;
       }
-    }
 
-    if (!mediaBase64Raw && !mediaUrl) {
-      throw Object.assign(new Error("Flow2 không trả về media đã xóa watermark"), {
-        statusCode: 502,
-      });
-    }
+      if (!resp.ok) {
+        const jsonMsg =
+          isRecord(json) && (String(json.message || json.error || "") || "");
+        throwFlow2HttpError("watermark/clean", resp.status, jsonMsg || text || "");
+      }
 
-    return {
-      success: payload.success !== false,
-      cleaned: payload.cleaned !== false,
-      kind: (payload.kind as CleanWatermarkKind) || args.kind,
-      mime_type: mimeType,
-      media_base64: mediaBase64Raw ? stripDataUrlPrefix(mediaBase64Raw).pureBase64 : undefined,
-      url: mediaUrl,
-      Link: typeof payload.Link === "string" ? payload.Link : undefined,
-      request_id:
-        typeof payload.request_id === "string"
-          ? payload.request_id
-          : typeof payload.requestId === "string"
-          ? payload.requestId
-          : undefined,
-      elapsed_seconds:
-        typeof payload.elapsed_seconds === "number" ? payload.elapsed_seconds : undefined,
-      message: typeof payload.message === "string" ? payload.message : undefined,
-    };
-  } catch (err: any) {
-    if (err?.name === "AbortError") {
-      throw Object.assign(new Error("Timeout khi xóa watermark (quá 10 phút)"), {
-        statusCode: 504,
-      });
+      if (!isRecord(json)) {
+        throw Object.assign(new Error("Flow2 watermark clean trả về không hợp lệ"), {
+          statusCode: 502,
+        });
+      }
+
+      // Hỗ trợ payload bọc trong data / result
+      const payload: Record<string, unknown> = isRecord(json.data)
+        ? { ...json, ...(json.data as Record<string, unknown>) }
+        : isRecord(json.result)
+        ? { ...json, ...(json.result as Record<string, unknown>) }
+        : json;
+
+      let mediaBase64Raw =
+        (typeof payload.media_base64 === "string" && payload.media_base64) ||
+        (typeof payload.image_base64 === "string" && payload.image_base64) ||
+        (typeof payload.video_base64 === "string" && payload.video_base64) ||
+        (typeof payload.base64 === "string" && payload.base64) ||
+        (typeof payload.data_url === "string" && payload.data_url) ||
+        "";
+
+      const mediaUrl =
+        (typeof payload.url === "string" && payload.url) ||
+        (typeof payload.Link === "string" && payload.Link) ||
+        (typeof payload.image_url === "string" && payload.image_url) ||
+        (typeof payload.video_url === "string" && payload.video_url) ||
+        undefined;
+
+      let mimeType =
+        (typeof payload.mime_type === "string" && payload.mime_type) ||
+        (args.kind === "video" ? "video/mp4" : "image/jpeg");
+
+      // Chỉ có URL → tải bytes để client luôn có base64 xem preview
+      if (!mediaBase64Raw && mediaUrl) {
+        try {
+          const fetched = await fetchMediaUrlAsBase64(mediaUrl, token);
+          mediaBase64Raw = fetched.base64;
+          if (fetched.mimeType) mimeType = fetched.mimeType;
+        } catch (fetchErr: any) {
+          logger.warn(`[clean-watermark] Tải media URL thất bại: ${fetchErr?.message}`);
+        }
+      }
+
+      if (!mediaBase64Raw && !mediaUrl) {
+        throw Object.assign(new Error("Flow2 không trả về media đã xóa watermark"), {
+          statusCode: 502,
+        });
+      }
+
+      return {
+        success: payload.success !== false,
+        cleaned: payload.cleaned !== false,
+        kind: (payload.kind as CleanWatermarkKind) || args.kind,
+        mime_type: mimeType,
+        media_base64: mediaBase64Raw ? stripDataUrlPrefix(mediaBase64Raw).pureBase64 : undefined,
+        url: mediaUrl,
+        Link: typeof payload.Link === "string" ? payload.Link : undefined,
+        request_id:
+          typeof payload.request_id === "string"
+            ? payload.request_id
+            : typeof payload.requestId === "string"
+            ? payload.requestId
+            : undefined,
+        elapsed_seconds:
+          typeof payload.elapsed_seconds === "number" ? payload.elapsed_seconds : undefined,
+        message: typeof payload.message === "string" ? payload.message : undefined,
+      };
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        lastError = Object.assign(new Error("Timeout khi xóa watermark (quá 10 phút)"), {
+          statusCode: 504,
+        });
+      } else {
+        lastError = err;
+      }
+
+      const canRetry =
+        attempt < maxAttempts &&
+        (isTimeoutOr524Error(lastError) || lastError?.isGatewayBusyError);
+      if (!canRetry) throw lastError;
+
+      logger.warn(
+        `[clean-watermark] Flow2 timeout/524 (${args.kind}, attempt ${attempt}/${maxAttempts}): ${lastError?.message}. Thử lại...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+    } finally {
+      clearTimeout(timeout);
     }
-    throw err;
-  } finally {
-    clearTimeout(timeout);
   }
+
+  throw lastError;
 }

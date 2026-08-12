@@ -15,6 +15,7 @@ import {
   RiVideoFill,
 } from "react-icons/ri";
 import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
+import { BatchClearWatermarkDialog } from "../../shared/batch-clear-watermark-dialog";
 import { BatchMergeVideosDropdown } from "../../shared/batch-merge-videos-dropdown";
 import { VoiceExportDialog } from "../../shared/voice-export-dialog";
 import { ReviewScene } from "../constants";
@@ -108,7 +109,10 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     // Merge videos
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 
@@ -206,6 +210,10 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
       mergeVideosDropdown: true as const,
     },
     {
+      id: "batch-clear-watermark",
+      clearWatermarkDialog: true as const,
+    },
+    {
       id: "batch-retry-video",
       icon: retryRunning ? <RiLoader4Line className="animate-spin" /> : <RiRefreshLine />,
       label: retryRunning
@@ -289,6 +297,31 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
                   disabled={batchRunning || videoBatchRunning || extendBatchRunning || downloading || downloadingVideo}
                   onMergeNormal={handleMergeNormalVideos}
                   onMergeStitch={handleMergeStitchVideos}
+                />
+              );
+            }
+
+            if ("clearWatermarkDialog" in action && action.clearWatermarkDialog) {
+              return (
+                <BatchClearWatermarkDialog
+                  key={action.id}
+                  id={action.id}
+                  scenes={scenes}
+                  getGeneratedImage={getGeneratedImage}
+                  getGeneratedVideo={getGeneratedVideo}
+                  saveGeneratedImage={saveGeneratedImage}
+                  saveGeneratedVideo={saveGeneratedVideo}
+                  availableImageCount={availableImageCount}
+                  availableVideoCount={availableVideoCount}
+                  availableExtendCount={availableExtendCount}
+                  disabled={
+                    batchRunning ||
+                    videoBatchRunning ||
+                    extendBatchRunning ||
+                    downloading ||
+                    downloadingVideo ||
+                    mergingVideos
+                  }
                 />
               );
             }

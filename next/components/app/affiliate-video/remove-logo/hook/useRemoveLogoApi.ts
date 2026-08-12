@@ -3,7 +3,8 @@
  */
 import { useCallback } from "react";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { RemoveLogoMediaKind, toDataUrl } from "../constants";
+import { RemoveLogoMediaKind } from "../constants";
+import { requestCleanWatermark } from "./cleanWatermarkClient";
 
 export type CleanWatermarkRequestItem = {
   clientId: string;
@@ -67,29 +68,7 @@ export function useRemoveLogoApi() {
       items: CleanWatermarkRequestItem[],
       options?: { refreshCustomer?: boolean }
     ): Promise<CleanWatermarkResponse> => {
-      const payload = {
-        items: items.map((item) => ({
-          clientId: item.clientId,
-          kind: item.kind,
-          mediaBase64: toDataUrl(item.mediaBase64, item.mimeType),
-          mimeType: item.mimeType,
-          name: item.name,
-        })),
-        returnMode: "both" as const,
-      };
-
-      const resp = await fetch("/api/app/clean-watermark/", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = (await resp.json().catch(() => ({}))) as CleanWatermarkResponse;
-
-      if (!resp.ok) {
-        throw new Error(data?.message || `Lỗi xóa watermark (${resp.status})`);
-      }
+      const data = await requestCleanWatermark(items);
 
       // Chỉ refresh gói sau từng file khi gọi 1 item (tránh gọi quá nhiều)
       if (options?.refreshCustomer !== false && items.length === 1) {

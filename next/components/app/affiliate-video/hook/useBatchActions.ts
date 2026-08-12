@@ -54,8 +54,15 @@ export function useBatchActions(
   providerContext?: AffiliateVideoProviderSlice
 ) {
   const { t } = useTranslation();
-  const { generateImage, generateVideo, getGeneratedImage, getGeneratedVideo, generateAudioTTS } =
-    useAffiliateVideoApi();
+  const {
+    generateImage,
+    generateVideo,
+    getGeneratedImage,
+    getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
+    generateAudioTTS,
+  } = useAffiliateVideoApi();
   const singleContext = useAffiliateVideoContext();
   const {
     scriptData: contextScriptData,
@@ -1587,7 +1594,10 @@ export function useBatchActions(
     // Merge videos (ffmpeg)
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 

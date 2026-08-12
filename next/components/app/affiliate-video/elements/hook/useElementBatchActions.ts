@@ -72,6 +72,8 @@ export function useCopyVideoBatchActions(
     generateVideo,
     getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     generateAudioTTS,
   } = useElementApi();
   const {
@@ -1394,7 +1396,10 @@ export function useCopyVideoBatchActions(
     // Merge videos (ffmpeg)
     mergingVideos,
     mergeVideosLabel,
+    getGeneratedImage,
     getGeneratedVideo,
+    saveGeneratedImage,
+    saveGeneratedVideo,
     handleMergeNormalVideos,
     handleMergeStitchVideos,
 
