@@ -81,8 +81,8 @@ function recordHasVariantVideos(rec?: ProductVideoRecord | null): boolean {
 }
 
 /** Đã có ít nhất 1 variant trên item (URL không rỗng). */
-export function hasVariantVideoUrls(item: ProductVideoKeySource): boolean {
-  return (item.videoUrls || []).some((u) => String(u || "").trim());
+export function hasVariantVideoUrls(item: { videoUrls?: string[] } | null | undefined): boolean {
+  return (item?.videoUrls || []).some((u) => String(u || "").trim());
 }
 
 /**

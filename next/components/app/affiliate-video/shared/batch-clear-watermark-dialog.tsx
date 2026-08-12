@@ -161,7 +161,7 @@ export function BatchClearWatermarkDialog({
   const checkedInTab = selectableIds.filter((sid) => checkedIds.has(sid)).length;
   const allCheckedIds = useMemo(() => {
     const valid = new Set([...imageRows, ...videoRows].map((r) => r.id));
-    return [...checkedIds].filter((id) => valid.has(id));
+    return Array.from(checkedIds).filter((id) => valid.has(id));
   }, [checkedIds, imageRows, videoRows]);
   const canClearNow = allCheckedIds.length > 0 && !running && !loadingList;
 
