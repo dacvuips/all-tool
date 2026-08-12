@@ -1,5 +1,6 @@
 import { requestCleanWatermark } from "../remove-logo/hook/cleanWatermarkClient";
 import { base64ToBlob as watermarkBase64ToBlob, stripToPureBase64 } from "../remove-logo/constants";
+import { notifyGeneratedMediaReplaced } from "./generatedMediaReplaceBus";
 import { base64ToBlob, toDownloadProxyUrl, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
 
 /** Metadata Flow2 lưu sau gen_image — dùng upscale 4K. */
@@ -142,8 +143,8 @@ export function hasGeneratedVideoData(video: GeneratedVideoLike | null | undefin
  * Không ưu tiên data:base64 để tránh DOM/heap phình khi nhiều phân cảnh.
  */
 export function getGeneratedImagePreviewSrc(img: GeneratedImageLike): string {
-  if (img.previewUrl) return img.previewUrl;
   if (img.mediaBlob) return getOrCreateBlobPreviewUrl(img.mediaBlob);
+  if (img.previewUrl) return img.previewUrl;
   const remote = getGeneratedImageUrl(img);
   if (remote) return remote;
   if ((img.imageBytes || "").trim()) {
@@ -156,8 +157,8 @@ export function getGeneratedImagePreviewSrc(img: GeneratedImageLike): string {
  * Preview video: blob:/previewUrl → mediaBlob → proxy(HTTP) → legacy data:.
  */
 export function getGeneratedVideoPreviewSrc(video: GeneratedVideoLike): string | null {
-  if (video.previewUrl) return video.previewUrl;
   if (video.mediaBlob) return getOrCreateBlobPreviewUrl(video.mediaBlob);
+  if (video.previewUrl) return video.previewUrl;
   if ((video.videoBytes || "").trim()) {
     // Legacy — tránh khi đã hydrate; giữ để bản IDB cũ còn chạy
     return `data:${video.mimeType || "video/mp4"};base64,${stripBase64Payload(video.videoBytes!)}`;
@@ -612,6 +613,8 @@ export async function resumePendingGeneratedVideoBase64<T extends GeneratedVideo
 
 /** Queue ClearWatermark 1 ảnh / lần — sau gen image. */
 let clearGeneratedImageQueue: Promise<void> = Promise.resolve();
+/** Job clear theo scene — tránh resumePending chạy lại với snapshot URL cũ. */
+const inflightImageClearJobs = new Map<string, Promise<any>>();
 
 function enqueueClearGeneratedImage<T>(fn: () => Promise<T>): Promise<T> {
   const run = clearGeneratedImageQueue.then(fn, fn);
@@ -620,6 +623,10 @@ function enqueueClearGeneratedImage<T>(fn: () => Promise<T>): Promise<T> {
     () => undefined
   );
   return run;
+}
+
+export function rememberClearedGeneratedImage<T>(sceneId: string, ui: T): void {
+  inflightImageClearJobs.set(sceneId, Promise.resolve(ui));
 }
 
 async function tryClearGeneratedImageWatermark<T extends GeneratedImageLike>(
@@ -671,6 +678,47 @@ async function tryClearGeneratedImageWatermark<T extends GeneratedImageLike>(
   }
 }
 
+/** Link gốc / binary hiện có → blob UI. Dùng khi ClearWatermark lỗi. */
+async function fallbackOriginalImageToBlob<T extends GeneratedImageLike>(image: T): Promise<T> {
+  const fromLocal = await ensureGeneratedImageBinary(image);
+  if (fromLocal.mediaBlob) {
+    return toUiGeneratedImage({
+      ...fromLocal,
+      imageBytes: "",
+      previewUrl: undefined,
+    } as T);
+  }
+
+  const fromUrl = await enrichGeneratedImageWithBase64(image);
+  if (fromUrl.mediaBlob) {
+    return toUiGeneratedImage({
+      ...fromUrl,
+      imageBytes: "",
+      previewUrl: undefined,
+    } as T);
+  }
+
+  return toUiGeneratedImage(image);
+}
+
+async function persistResolvedGeneratedImage<T extends GeneratedImageLike>(
+  sceneId: string,
+  image: T,
+  storage: MediaPersistStorage<T>,
+  onUpdate?: (data: T) => void
+): Promise<T> {
+  const ui = hasStoredGeneratedImageBinary(image)
+    ? toUiGeneratedImage(image)
+    : await fallbackOriginalImageToBlob(image);
+
+  if (hasStoredGeneratedImageBinary(ui)) {
+    await storage.set(sceneId, toPersistGeneratedImage(ui));
+  }
+  onUpdate?.(ui);
+  notifyGeneratedMediaReplaced({ sceneId, kind: "image", image: ui });
+  return ui;
+}
+
 /**
  * Sau gen: ClearWatermark rồi lưu blob đã xóa. Lỗi/hết hạn mức → fallback blob gốc.
  */
@@ -680,27 +728,51 @@ async function persistImageAfterClearWatermark<T extends GeneratedImageLike>(
   storage: MediaPersistStorage<T>,
   onUpdate?: (data: T) => void
 ): Promise<T> {
-  return enqueueClearGeneratedImage(async () => {
-    const source = hasStoredGeneratedImageBinary(image)
-      ? image
-      : await enrichGeneratedImageWithBase64(image);
-
-    const cleared = hasStoredGeneratedImageBinary(source)
-      ? await tryClearGeneratedImageWatermark(source, sceneId)
-      : null;
-    const toSave = cleared || source;
-
-    if (!hasStoredGeneratedImageBinary(toSave)) {
-      const ui = toUiGeneratedImage(image);
-      onUpdate?.(ui);
-      return ui;
-    }
-
-    await storage.set(sceneId, toPersistGeneratedImage(toSave));
-    const ui = toUiGeneratedImage(toSave);
+  const existing = inflightImageClearJobs.get(sceneId);
+  if (existing) {
+    const ui = (await existing) as T;
     onUpdate?.(ui);
     return ui;
+  }
+
+  const job = enqueueClearGeneratedImage(async () => {
+    try {
+      const source = hasStoredGeneratedImageBinary(image)
+        ? await ensureGeneratedImageBinary(image)
+        : await enrichGeneratedImageWithBase64(image);
+
+      let cleared: T | null = null;
+      try {
+        if (hasStoredGeneratedImageBinary(source)) {
+          cleared = await tryClearGeneratedImageWatermark(source, sceneId);
+        }
+      } catch (err) {
+        console.warn("[persistImageAfterClearWatermark] clear failed", err);
+      }
+
+      if (cleared && hasStoredGeneratedImageBinary(cleared)) {
+        return persistResolvedGeneratedImage(sceneId, cleared, storage, onUpdate);
+      }
+
+      // Clear lỗi / skip / hết hạn mức → lấy link gốc chuyển blob
+      const originalBlob = await fallbackOriginalImageToBlob(
+        source.mediaBlob ? source : image
+      );
+      return persistResolvedGeneratedImage(sceneId, originalBlob, storage, onUpdate);
+    } catch (err) {
+      console.warn("[persistImageAfterClearWatermark] fallback original url → blob", err);
+      const originalBlob = await fallbackOriginalImageToBlob(image);
+      return persistResolvedGeneratedImage(sceneId, originalBlob, storage, onUpdate);
+    }
   });
+
+  inflightImageClearJobs.set(sceneId, job);
+  try {
+    return await job;
+  } catch (err) {
+    inflightImageClearJobs.delete(sceneId);
+    throw err;
+  }
 }
 
 /** Ảnh còn link HTTP chưa có binary local — cần enrich khi refresh. */
@@ -720,6 +792,13 @@ export async function resumePendingGeneratedImageBinary<T extends GeneratedImage
   storage: MediaPersistStorage<T>,
   options?: { onUpdate?: (data: T) => void }
 ): Promise<T> {
+  const inflight = inflightImageClearJobs.get(sceneId);
+  if (inflight) {
+    const ui = (await inflight) as T;
+    options?.onUpdate?.(ui);
+    return ui;
+  }
+
   if (!hasPendingGeneratedImageBinary(image)) {
     const ensured = await ensureGeneratedImageBinary(image);
     // Migrate legacy base64 → mediaBlob trong IDB
@@ -744,6 +823,17 @@ export async function resumePendingGeneratedImageBinary<T extends GeneratedImage
     );
   } catch (err) {
     console.warn("[resumePendingGeneratedImageBinary]", err);
+    try {
+      const fallback = await fallbackOriginalImageToBlob(image);
+      if (hasStoredGeneratedImageBinary(fallback)) {
+        await storage.set(sceneId, toPersistGeneratedImage(fallback));
+        options?.onUpdate?.(fallback);
+        notifyGeneratedMediaReplaced({ sceneId, kind: "image", image: fallback });
+        return fallback;
+      }
+    } catch (fallbackErr) {
+      console.warn("[resumePendingGeneratedImageBinary] fallback blob", fallbackErr);
+    }
     return toUiGeneratedImage(image);
   }
 }
@@ -767,6 +857,8 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
   const preview = normalizeGeneratedImageFromApi(raw);
   if (!preview) return undefined;
 
+  inflightImageClearJobs.delete(sceneId);
+
   const initial = await ensureGeneratedImageBinary(preview);
   await storage.set(sceneId, toPersistGeneratedImage(initial));
   const initialUi = toUiGeneratedImage(initial);
@@ -780,9 +872,22 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
       options?.onUpdate?.(data);
       options?.onReady?.(data);
     }
-  ).catch((err) => {
+  ).catch(async (err) => {
     console.warn("[persistGeneratedImageWithEnrichment]", err);
-    return initialUi;
+    try {
+      const fallback = await fallbackOriginalImageToBlob(initial);
+      if (hasStoredGeneratedImageBinary(fallback)) {
+        await storage.set(sceneId, toPersistGeneratedImage(fallback));
+      }
+      options?.onUpdate?.(fallback);
+      options?.onReady?.(fallback);
+      rememberClearedGeneratedImage(sceneId, fallback);
+      notifyGeneratedMediaReplaced({ sceneId, kind: "image", image: fallback });
+      return fallback;
+    } catch (fallbackErr) {
+      console.warn("[persistGeneratedImageWithEnrichment] fallback blob", fallbackErr);
+      return initialUi;
+    }
   });
 
   if (options?.waitForClear) {

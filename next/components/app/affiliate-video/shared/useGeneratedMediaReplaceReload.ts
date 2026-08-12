@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import { subscribeGeneratedMediaReplaced } from "./generatedMediaReplaceBus";
 import {
   hasPendingGeneratedVideoBase64,
-  resumePendingGeneratedImageBinary,
   resumePendingGeneratedVideoBase64,
   toUiGeneratedImage,
   toUiGeneratedVideo,
@@ -40,24 +39,31 @@ export function useGeneratedMediaReplaceReload(args: {
     return subscribeGeneratedMediaReplaced((event) => {
       if (event.kind === "image") {
         if (event.sceneId === sceneId) {
-          void getGeneratedImage(sceneId).then(async (img) => {
-            if (!img) return;
-            await resumePendingGeneratedImageBinary(
-              sceneId,
-              img,
-              { set: saveGeneratedImage },
-              { onUpdate: (data) => setGeneratedImage(data) }
-            );
-          });
+          if (event.image) {
+            setGeneratedImage(toUiGeneratedImage(event.image));
+          } else {
+            void getGeneratedImage(sceneId).then((img) => {
+              if (!img) return;
+              setGeneratedImage(toUiGeneratedImage(img));
+            });
+          }
         }
         if (nextSceneId && event.sceneId === nextSceneId) {
-          void getGeneratedImage(nextSceneId).then((img) => {
-            setNextGeneratedImage(img ? toUiGeneratedImage(img) : null);
-          });
+          if (event.image) {
+            setNextGeneratedImage(toUiGeneratedImage(event.image));
+          } else {
+            void getGeneratedImage(nextSceneId).then((img) => {
+              setNextGeneratedImage(img ? toUiGeneratedImage(img) : null);
+            });
+          }
         }
       }
 
       if (event.kind === "video" && event.sceneId === sceneId) {
+        if (event.video) {
+          setGeneratedVideo(toUiGeneratedVideo(event.video));
+          return;
+        }
         void getGeneratedVideo(sceneId).then(async (vid) => {
           if (!vid) return;
           setGeneratedVideo(toUiGeneratedVideo(vid));
@@ -72,6 +78,10 @@ export function useGeneratedMediaReplaceReload(args: {
       }
 
       if (event.kind === "extend" && event.sceneId === sceneId) {
+        if (event.video) {
+          setGeneratedExtendVideo(toUiGeneratedVideo(event.video));
+          return;
+        }
         const stitchId = `${sceneId}::stitch`;
         void getGeneratedVideo(stitchId).then(async (vid) => {
           if (!vid) return;

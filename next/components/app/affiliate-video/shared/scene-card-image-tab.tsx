@@ -154,6 +154,7 @@ export function SceneCardImageTab({
             {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
             <div className="relative w-full">
               <Img
+                key={getGeneratedImagePreviewSrc(generatedImage) || sceneNumber}
                 showImageOnClick
                 lazyload={false}
                 percent={parseFloat(imagePaddingTop)}

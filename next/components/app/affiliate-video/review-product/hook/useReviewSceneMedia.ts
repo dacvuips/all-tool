@@ -466,7 +466,9 @@ export function useReviewSceneMedia({
       });
 
       if (result) {
-        setGeneratedImage(result);
+        setGeneratedImage((prev) =>
+          prev?.mediaBlob && !result.mediaBlob ? prev : toUiGeneratedImage(result)
+        );
         setImageError(null);
         reportSceneError?.(scene.id, "image", null);
         imageGenActions.markGenerationEnded(false);

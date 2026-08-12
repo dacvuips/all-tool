@@ -6,6 +6,10 @@ export type GeneratedMediaReplaceKind = "image" | "video" | "extend";
 export type GeneratedMediaReplaceEvent = {
   sceneId: string;
   kind: GeneratedMediaReplaceKind;
+  /** Ảnh đã thay — scene card áp dụng ngay, không đợi đọc lại IDB */
+  image?: any;
+  /** Video đã thay */
+  video?: any;
 };
 
 type Listener = (event: GeneratedMediaReplaceEvent) => void;

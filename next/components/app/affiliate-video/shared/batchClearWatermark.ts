@@ -5,6 +5,7 @@ import type { CleanWatermarkProcessed } from "../remove-logo/hook/useRemoveLogoA
 import { base64ToBlob as watermarkBase64ToBlob, stripToPureBase64 } from "../remove-logo/constants";
 import {
   fetchUrlToBlob,
+  rememberClearedGeneratedImage,
   toUiGeneratedImage,
   toUiGeneratedVideo,
   type GeneratedImageLike,
@@ -70,7 +71,8 @@ export async function persistCleanedImage<T extends GeneratedImageLike>(args: {
     triggerBlobDownload(args.blob, args.fileName);
   }
   await args.save(args.sceneId, next);
-  notifyGeneratedMediaReplaced({ sceneId: args.sceneId, kind: "image" });
+  rememberClearedGeneratedImage(args.sceneId, next);
+  notifyGeneratedMediaReplaced({ sceneId: args.sceneId, kind: "image", image: next });
   return next;
 }
 
@@ -93,6 +95,7 @@ export async function persistCleanedVideo<T extends GeneratedVideoLike>(args: {
   notifyGeneratedMediaReplaced({
     sceneId: args.sceneId,
     kind: args.isStitch ? "extend" : "video",
+    video: next,
   });
   return next;
 }
