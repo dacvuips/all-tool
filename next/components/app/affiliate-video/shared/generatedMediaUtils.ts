@@ -1141,18 +1141,39 @@ export async function downloadUpsampled4kImage(
   return downloadUpsampledImage(img, fileName, "4K");
 }
 
-/** Ưu tiên mediaBlob; legacy videoBytes; fallback videoUri. */
+/** Ưu tiên mediaBlob; legacy videoBytes; remote URI; hết hạn → blob:/previewUrl. */
 export async function generatedVideoToBlob(video: GeneratedVideoLike): Promise<Blob> {
-  if (video.mediaBlob) return video.mediaBlob;
+  if (video.mediaBlob && video.mediaBlob.size > 0) return video.mediaBlob;
   if ((video.videoBytes || "").trim()) {
     return base64ToBlob(stripBase64Payload(video.videoBytes!), video.mimeType || "video/mp4");
   }
 
-  const uri = (video.videoUri || "").trim();
-  if (!uri) {
-    throw new Error("Thiếu dữ liệu video (URI hoặc blob)");
+  const remote = (video.videoUri || "").trim();
+  const preview = (video.previewUrl || "").trim();
+  const fromSrc = getGeneratedVideoPreviewSrc(video) || "";
+  const candidates: string[] = [];
+  const push = (u: string) => {
+    if (u && candidates.indexOf(u) < 0) candidates.push(u);
+  };
+  if (remote && !remote.startsWith("blob:") && !remote.startsWith("data:")) {
+    push(remote);
   }
-  return uriToBlob(uri);
+  push(preview);
+  push(fromSrc);
+  push(remote);
+
+  let lastErr: Error | null = null;
+  for (let i = 0; i < candidates.length; i++) {
+    try {
+      const blob = await uriToBlob(candidates[i]);
+      if (blob && blob.size > 0) return blob;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      console.warn("[generatedVideoToBlob] miss, thử blob/preview", lastErr.message);
+    }
+  }
+
+  throw lastErr || new Error("Thiếu dữ liệu video (URI hoặc blob)");
 }
 
 export async function downloadGeneratedVideo(
@@ -1292,14 +1313,18 @@ export async function downloadVideoAtResolution(
   resolution: VideoDownloadResolution
 ): Promise<void> {
   if (resolution === "1080p") {
-    const blob = await fetchUpsampled1080pVideoBlob(video);
-    const ext = mimeTypeToFileExtension(blob.type || video.mimeType, "mp4");
-    const downloadName = buildUpsampledVideoFileName(fileName, resolution).replace(
-      /\.[^.]+$/,
-      `.${ext}`
-    );
-    triggerBlobDownload(blob, downloadName);
-    return;
+    try {
+      const blob = await fetchUpsampled1080pVideoBlob(video);
+      const ext = mimeTypeToFileExtension(blob.type || video.mimeType, "mp4");
+      const downloadName = buildUpsampledVideoFileName(fileName, resolution).replace(
+        /\.[^.]+$/,
+        `.${ext}`
+      );
+      triggerBlobDownload(blob, downloadName);
+      return;
+    } catch (err) {
+      console.warn("[downloadVideoAtResolution] 1080p miss → blob/720p", err);
+    }
   }
 
   await downloadGeneratedVideo(video, fileName);

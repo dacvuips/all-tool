@@ -37,6 +37,20 @@ function enqueueDownloadJob<T>(job: () => Promise<T>): Promise<T> {
   return run;
 }
 
+async function withTimeout<T>(job: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      job,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} quá ${Math.round(ms / 1000)}s`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /** Tên file: ID sản phẩm.mp4 */
 export function buildExportVideoFileName(item: {
   productId?: string;
@@ -62,10 +76,10 @@ function firstGeneratedSlot(item: ExportItem): number {
   return 0;
 }
 
-/** Lấy blob video (nối / generate) + clear metadata. */
+/** Lấy blob video (nối / generate). Tải hàng loạt: không strip ffmpeg (dễ treo sau ~100 file). */
 export async function resolveExportVideoBlob(
   item: ExportItem,
-  opts: { sessionId?: string; kind: ExportDownloadKind }
+  opts: { sessionId?: string; kind: ExportDownloadKind; stripMetadata?: boolean }
 ): Promise<Blob | null> {
   let blob: Blob | null = null;
 
@@ -82,9 +96,12 @@ export async function resolveExportVideoBlob(
 
   if (!blob || blob.size <= 0) return null;
 
+  if (opts.stripMetadata === false) return blob;
+
   try {
-    return await stripVideoMetadataInBrowser(blob);
-  } catch {
+    return await withTimeout(stripVideoMetadataInBrowser(blob), 20000, "Xóa metadata");
+  } catch (err) {
+    console.warn("[resolveExportVideoBlob] strip skip", err);
     return blob;
   }
 }
@@ -103,6 +120,19 @@ export async function saveExportBlobToDisk(
   dirHandle?: FileSystemDirectoryHandle | null
 ): Promise<void> {
   if (dirHandle) {
+    const dir = dirHandle as FileSystemDirectoryHandle & {
+      queryPermission?: (opts: { mode: "readwrite" }) => Promise<PermissionState>;
+      requestPermission?: (opts: { mode: "readwrite" }) => Promise<PermissionState>;
+    };
+    if (dir.queryPermission && dir.requestPermission) {
+      const perm = await dir.queryPermission({ mode: "readwrite" });
+      if (perm !== "granted") {
+        const next = await dir.requestPermission({ mode: "readwrite" });
+        if (next !== "granted") {
+          throw new Error("Chưa cấp quyền ghi thư mục");
+        }
+      }
+    }
     const file = await dirHandle.getFileHandle(fileName, { create: true });
     const writable = await file.createWritable();
     try {
@@ -128,9 +158,13 @@ export async function downloadExportVideoForItem(
     /** Delay giữa file khi fallback saveAs (ms). */
     waitMs?: number;
     dirHandle?: FileSystemDirectoryHandle | null;
+    stripMetadata?: boolean;
+    /** Tải hàng loạt: không vào queue chung + timeout từng file. */
+    bulk?: boolean;
+    timeoutMs?: number;
   }
 ): Promise<boolean> {
-  return enqueueDownloadJob(async () => {
+  const run = async () => {
     const blob = await resolveExportVideoBlob(item, opts);
     if (!blob) return false;
 
@@ -142,7 +176,13 @@ export async function downloadExportVideoForItem(
       await new Promise((r) => setTimeout(r, opts.waitMs ?? 900));
     }
     return true;
-  });
+  };
+
+  const timeoutMs = opts.timeoutMs ?? (opts.bulk ? 45000 : 90000);
+  const bounded = () => withTimeout(run(), timeoutMs, "Tải video");
+
+  if (opts.bulk) return bounded();
+  return enqueueDownloadJob(bounded);
 }
 
 export function exportStorageKeyHint(

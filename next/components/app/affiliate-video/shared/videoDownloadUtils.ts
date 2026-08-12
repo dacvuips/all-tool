@@ -100,13 +100,23 @@ export function toDownloadProxyUrl(url: string, inline = false): string {
   return `${DOWNLOAD_PROXY_PATH}?${params.toString()}`;
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, ms = 25000): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Fetch HTTP(S) URL as Blob (không dedupe — chỉ gọi qua fetchHttpUriAsBlobDeduped). */
 async function fetchHttpUriAsBlobOnce(url: string): Promise<Blob> {
   const preferProxy = shouldPreferDownloadProxy(url);
 
   const tryProxy = async (): Promise<Blob> => {
     const proxyUrl = toDownloadProxyUrl(url);
-    const proxyRes = await fetch(proxyUrl);
+    const proxyRes = await fetchWithTimeout(proxyUrl);
     if (proxyRes.ok) {
       return proxyRes.blob();
     }
@@ -128,7 +138,7 @@ async function fetchHttpUriAsBlobOnce(url: string): Promise<Blob> {
 
   // Direct browser fetch — CDN/cookie thực tế
   try {
-    const res = await fetch(url, { credentials: "omit", mode: "cors" });
+    const res = await fetchWithTimeout(url, { credentials: "omit", mode: "cors" });
     if (res.ok) {
       return res.blob();
     }

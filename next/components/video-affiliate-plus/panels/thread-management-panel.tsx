@@ -1267,16 +1267,20 @@ export function ThreadManagementPanel({
     const downloadGeneratedOnly = Math.max(1, Number(config.videosPerJob) || 1) <= 1;
     const kind: ExportDownloadKind = downloadGeneratedOnly ? "generated" : "auto";
 
-    const candidates = (await getSessionItems(sessionId)).filter((i) => {
-      return (
-        hasVariantVideoUrls(i) ||
-        hasMergedVideoRef(i.mergedVideoUrl) ||
-        Boolean(i.productId) ||
-        Boolean(i.productLink)
-      );
+    const allItems = await getSessionItems(sessionId);
+    const candidates = allItems.filter((i) => {
+      if (i.mergedDownloaded) return false;
+      return hasVariantVideoUrls(i) || hasMergedVideoRef(i.mergedVideoUrl);
     });
     if (!candidates.length) {
-      toast.warn(t("Chưa có video để tải"));
+      const already = allItems.filter((i) => i.mergedDownloaded).length;
+      toast.warn(
+        already > 0
+          ? t("Đã lưu hết video ({{count}} file). Bấm tải từng dòng nếu muốn lưu lại.", {
+              count: already,
+            })
+          : t("Chưa có video để tải")
+      );
       return;
     }
 
@@ -1295,9 +1299,13 @@ export function ThreadManagementPanel({
           const ok = await downloadExportVideoForItem(item, {
             sessionId,
             kind,
-            waitMs: 900,
+            waitMs: 400,
             dirHandle,
+            stripMetadata: false,
+            bulk: true,
+            timeoutMs: 45000,
           });
+          await new Promise((r) => setTimeout(r, 30));
           if (ok) {
             okCount += 1;
             await patchThread(sessionId, item.id, { mergedDownloaded: true });
@@ -4294,7 +4302,8 @@ export function ThreadManagementPanel({
                               previewItem?.videoFlow2RequestIds?.[idx] || ""
                             ).trim();
                             const downloadVideo = {
-                              videoUri: remoteUri || src,
+                              videoUri: remoteUri || (src.startsWith("blob:") ? "" : src),
+                              previewUrl: src || undefined,
                               flow2RequestId: flow2RequestId || undefined,
                               mimeType: "video/mp4",
                             };
