@@ -22,7 +22,7 @@ import {
   ThreadRecord,
 } from "./idb";
 import { AffiliatePlusItem, ThreadStatus } from "./types";
-import { toPersistedMergedVideoUrl } from "./merged-video";
+import { hasMergedVideoRef, hasVariantVideoUrls, toPersistedMergedVideoUrl } from "./merged-video";
 
 export const DEFAULT_SESSION_ID = "default";
 
@@ -287,13 +287,20 @@ export async function countSelectedInSession(sessionId: string): Promise<number>
   return records.filter((r) => Boolean((r.data as { selected?: boolean })?.selected)).length;
 }
 
-/** Session có ít nhất 1 video đã nối (hoặc productId để tra IDB). */
+/** Session có video để tải (nối, generate 1 file, hoặc productId để tra IDB). */
 export async function sessionHasMergedVideos(sessionId: string): Promise<boolean> {
   if (!sessionId) return false;
   const records = await idbGetThreadsBySession(sessionId);
   return records.some((r) => {
-    const d = r.data as { mergedVideoUrl?: string; productId?: string; productLink?: string };
-    return Boolean(d.mergedVideoUrl?.trim() || d.productId?.trim() || d.productLink?.trim());
+    const d = r.data as {
+      mergedVideoUrl?: string;
+      productId?: string;
+      productLink?: string;
+      videoUrls?: string[];
+    };
+    if (hasMergedVideoRef(d.mergedVideoUrl)) return true;
+    if (hasVariantVideoUrls(d)) return true;
+    return Boolean(d.productId?.trim() || d.productLink?.trim());
   });
 }
 
