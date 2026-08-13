@@ -13,6 +13,7 @@ export default {
       isPrivate: false,
       isSecret: false,
       isActive: false,
+      sort: 2,
       value: "Ngưng hoạt động",
     },
   ],

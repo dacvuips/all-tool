@@ -36,6 +36,7 @@ const customerSchema = new Schema(
     bankVerifiedId: { type: String },
     hasReward: { type: Boolean, default: false },
     hasActivatedTrial: { type: Boolean, default: false },
+    acceptedTermsOfService: { type: Boolean, default: false },
     intro: {
       type: {
         order: Boolean,

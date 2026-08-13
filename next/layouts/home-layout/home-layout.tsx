@@ -14,6 +14,7 @@ import { Footer } from "./components/footer";
 import { GroupsWidget } from "./components/groups-widget";
 import { PopupNotifyDialog } from "./components/popup-notify-dialog";
 import { SelectCategoryGlobalDialog } from "./components/select-category-global-dialog";
+import { TermsOfServiceDialog } from "./components/terms-of-service-dialog";
 import { UpdatePhoneNumberDialog } from "./components/update-phone-number-dialog";
 import { HomeLayoutProvider } from "./provider/home-layout-provider";
 
@@ -48,6 +49,7 @@ export function HomeLayout({ ...props }: LayoutProps) {
             {/* {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />} */}
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
+            <TermsOfServiceDialog />
             {/* {customer && (
               <ChatProvider senderRole="CUSTOMER">
                 <ChatWidget senderRole="CUSTOMER" senderId={customer?._id} />

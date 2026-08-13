@@ -48,6 +48,8 @@ const schema = gql`
     googlePackage: GooglePackageInput
     "API generate ảnh/video tùy chỉnh"
     generatedCustomAPI: GeneratedCustomAPIInput
+    "Đã chấp nhận điều khoản sử dụng dịch vụ"
+    acceptedTermsOfService: Boolean
   }
 
   type Customer {
@@ -83,6 +85,8 @@ const schema = gql`
     hasReward: Boolean
     "Đã kích hoạt gói dùng thử"
     hasActivatedTrial: Boolean
+    "Đã chấp nhận điều khoản sử dụng dịch vụ"
+    acceptedTermsOfService: Boolean
     "Giới thiệu"
     intro: CustomerIntro
     "Tỉnh/Thành phố"

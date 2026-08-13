@@ -1,10 +1,15 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { RiLock2Line } from "react-icons/ri";
 
 import { useTranslation } from "react-i18next";
+import {
+  TERMS_OF_SERVICE_SAMPLE_HTML,
+  TERMS_OF_SERVICE_SETTING_KEY,
+} from "../../../../../lib/constants/terms-of-service.sample";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Setting } from "../../../../../lib/repo";
 import {
+  Button,
   Editor,
   Field,
   ImageInput,
@@ -26,6 +31,7 @@ export function SettingItem({ setting, ...props }: PropTypes) {
   const { t } = useTranslation();
   const ref = useRef();
   const { user } = useAuth();
+  const [htmlEditorKey, setHtmlEditorKey] = useState(0);
   const onSettingValueChanged = (value: any) => {
     props.onChange({ ...setting, value });
   };
@@ -162,18 +168,39 @@ export function SettingItem({ setting, ...props }: PropTypes) {
             />
           ),
           html: (
-            <Field name={setting.name} noError>
-              <Editor
-                maxHeight="calc(100vh - 150px)"
-                readOnly={setting.readOnly}
-                name={setting.name}
-                noBorder
-                defaultValue={setting.value}
-                value={setting.value}
-                placeholder={t("Nội dung và lý do ngưng hoạt động sàn")}
-                onChange={(val) => onSettingValueChanged(val)}
-              />
-            </Field>
+            <div>
+              {setting.key === TERMS_OF_SERVICE_SETTING_KEY && (
+                <div className="flex justify-end mb-2">
+                  <Button
+                    small
+                    gray
+                    text={t("Reset về mẫu")}
+                    disabled={setting.readOnly}
+                    onClick={() => {
+                      onSettingValueChanged(TERMS_OF_SERVICE_SAMPLE_HTML);
+                      setHtmlEditorKey((key) => key + 1);
+                    }}
+                  />
+                </div>
+              )}
+              <Field name={setting.name} noError>
+                <Editor
+                  key={`${setting.id}-${htmlEditorKey}`}
+                  maxHeight="calc(100vh - 150px)"
+                  readOnly={setting.readOnly}
+                  name={setting.name}
+                  noBorder
+                  defaultValue={setting.value}
+                  value={setting.value}
+                  placeholder={
+                    setting.key === TERMS_OF_SERVICE_SETTING_KEY
+                      ? t("Nội dung điều khoản sử dụng dịch vụ")
+                      : t("Nội dung và lý do ngưng hoạt động sàn")
+                  }
+                  onChange={(val) => onSettingValueChanged(val)}
+                />
+              </Field>
+            </div>
           ),
         }[setting.type]
       }

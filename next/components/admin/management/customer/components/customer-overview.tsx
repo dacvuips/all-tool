@@ -149,6 +149,29 @@ function ProfileHeader({ customer, setCustomer, loadAll, refreshList }: Props) {
             >
               {customer.hasActivatedTrial ? t("Đã kích hoạt 1 lần") : t("Chưa kích hoạt")}
             </div>
+            <div className="text-sm font-semibold text-gray-600 pb-0.5 mt-2">
+              {t("Điều khoản sử dụng dịch vụ")}
+            </div>
+            <Switch
+              placeholder={
+                customer.acceptedTermsOfService
+                  ? t("Đã chấp nhận điều khoản")
+                  : t("Chưa chấp nhận điều khoản")
+              }
+              className="whitespace-nowrap"
+              readOnly={!userPermission("EDIT_CUSTOMER")}
+              value={!!customer.acceptedTermsOfService}
+              onChange={async (val) => {
+                if (!userPermission("EDIT_CUSTOMER")) return;
+                await CustomerService.update({
+                  id: customer.id,
+                  data: { acceptedTermsOfService: val },
+                }).then((res) => {
+                  setCustomer(res);
+                  refreshList?.();
+                });
+              }}
+            />
             <div className="text-sm font-semibold text-gray-600 pb-0.5 mt-2">{t("Trạng thái")}</div>
             <div
               className={`uppercase font-semibold text-base text-${

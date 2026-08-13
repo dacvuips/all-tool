@@ -19,6 +19,7 @@ export namespace SettingResource {
     isActive?: boolean;
     isPrivate?: boolean;
     isSecret?: boolean;
+    sort?: number;
   };
   export type ConfigSchema = {
     slug: string;

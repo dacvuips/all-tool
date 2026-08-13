@@ -16,8 +16,14 @@ export default async function execute() {
   configFiles
     .filter((f: any) => /(.*).js$/.test(f))
     .map((f: any) => {
-      const { default: schema } = require(f);
-      schemas.push(schema);
+      try {
+        const { default: schema } = require(f);
+        if (schema?.slug && Array.isArray(schema.settings)) {
+          schemas.push(schema);
+        }
+      } catch (err) {
+        logger.error(`Không load được file cấu hình ${f}`, err);
+      }
     });
 
   for (const group of schemas) {
@@ -38,10 +44,18 @@ export default async function execute() {
           ...setting,
           groupId: settingGroup._id.toString(),
         });
-      } else if (oldSetting.isPrivate !== setting.isPrivate) {
-        console.log("Cập nhật isPrivate cho", setting.name);
-        oldSetting.isPrivate = setting.isPrivate;
-        await oldSetting.save();
+      } else {
+        let changed = false;
+        if (oldSetting.isPrivate !== setting.isPrivate) {
+          console.log("Cập nhật isPrivate cho", setting.name);
+          oldSetting.isPrivate = setting.isPrivate;
+          changed = true;
+        }
+        if (setting.sort != null && oldSetting.sort !== setting.sort) {
+          oldSetting.sort = setting.sort;
+          changed = true;
+        }
+        if (changed) await oldSetting.save();
       }
     }
     await settingGroup.save();

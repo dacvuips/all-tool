@@ -87,6 +87,7 @@ export type ICustomer = TimestampEntity & {
   bankVerified?: any; //Ngân hàng đã xác thực
   hasReward?: boolean; // Có thưởng
   hasActivatedTrial?: boolean; // Đã kích hoạt gói dùng thử
+  acceptedTermsOfService?: boolean; // Đã chấp nhận điều khoản sử dụng dịch vụ
   intro?: CustomerIntro; // Giới thiệu
   province?: string;
   district?: string;

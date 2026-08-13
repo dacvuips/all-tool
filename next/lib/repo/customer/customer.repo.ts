@@ -44,6 +44,7 @@ export interface Customer extends BaseModel {
   bankVerifiedId?: string; // Ngân hàng đã xác thực
   hasReward?: boolean; // Có thưởng
   hasActivatedTrial?: boolean; // Đã kích hoạt gói dùng thử
+  acceptedTermsOfService?: boolean; // Đã chấp nhận điều khoản sử dụng dịch vụ
   intro?: CustomerIntro; // giới thiệu
   province?: string;
   district?: string;
@@ -76,6 +77,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     rewardPoint: Int
     bankVerifiedId:String
     hasActivatedTrial
+    acceptedTermsOfService
     googlePackage {
       subscription: String
       videoCount: Int
@@ -112,6 +114,7 @@ export class CustomerRepository extends CrudRepository<Customer> {
     bankVerifiedId:String
     hasReward
     hasActivatedTrial
+    acceptedTermsOfService
     province: String
     district: String
     ward: String
@@ -153,6 +156,11 @@ export class CustomerRepository extends CrudRepository<Customer> {
   async customerIntroCard() {
     return await this.mutate({
       mutation: `customerIntroCard`,
+    }).then((res) => res.data.g0);
+  }
+  async customerAcceptTermsOfService() {
+    return await this.mutate({
+      mutation: `customerAcceptTermsOfService`,
     }).then((res) => res.data.g0);
   }
   async customerRegister(data: {
