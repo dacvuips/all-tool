@@ -11,6 +11,7 @@ export interface DialogProps extends ReactProps {
   overlayClass?: string;
   dialogClass?: string;
   extraDialogClass?: string;
+  extraDialogStyle?: React.CSSProperties;
   headerClass?: string;
   extraHeaderClass?: string;
   bodyClass?: string;
@@ -41,6 +42,7 @@ export function Dialog({
   overlayClass = "fixed w-full h-full top-0",
   dialogClass = "relative bg-white shadow-md rounded-2xl m-auto",
   extraDialogClass = "",
+  extraDialogStyle = {},
   headerClass = "relative flex px-5 py-1 box-content bg-slate-50 z-5 border-top rounded-t z-10",
   extraHeaderClass = "",
   bodyClass = "relative pl-5 pr-5 pb-5 bg-white rounded-2xl",
@@ -170,6 +172,7 @@ export function Dialog({
           width,
           maxWidth: mobileSizeMode || isSlideFromBottom ? undefined : maxWidth,
           minWidth: minWidth,
+          ...extraDialogStyle,
         }}
         onClick={onClick}
       >

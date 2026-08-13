@@ -63,25 +63,26 @@ export function TermsOfServiceDialog() {
       isOpen
       hasCloseIcon={false}
       width={720}
-      maxWidth="92vw"
+      maxWidth="94vw"
       slideFromBottom="none"
-      title={""}
-      extraDialogClass="overflow-hidden"
-      extraBodyClass="rounded-none rounded-b-none"
-      extraFooterClass="rounded-b-2xl"
+      title={"Điều khoản sử dụng dịch vụ"}
+      wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex flex-col items-center overflow-hidden px-3 pt-20 pb-3 no-scrollbar"
+      extraDialogClass="overflow-hidden flex flex-col w-full flex-1 min-h-0 my-0"
+      extraDialogStyle={{ margin: 0, maxHeight: "calc(100dvh - 3.5rem - 12px)" }}
+      extraBodyClass="rounded-none rounded-b-none flex flex-col flex-1 min-h-0 overflow-hidden  pb-3"
+      extraFooterClass="rounded-b-2xl flex-shrink-0"
       onOverlayClick={() => {}}
     >
       <Dialog.Body>
         <div
           ref={contentRef}
-          className="pr-2 -mt-2 ck-content v-scrollbar"
-          style={{ maxHeight: "min(60vh, 520px)" }}
+          className="flex-1 pr-2 min-h-0 ck-content v-scrollbar"
           onScroll={checkReachedBottom}
           dangerouslySetInnerHTML={{
             __html: sanitizeCkEditorContent(termsSetting.value),
           }}
         />
-        <div className="pt-4 mt-4 border-t border-gray-200">
+        <div className="flex-shrink-0 pt-3 mt-3 border-t border-gray-200">
           <Checkbox
             readOnly={!hasReachedBottom}
             value={hasRead}
@@ -99,9 +100,13 @@ export function TermsOfServiceDialog() {
         </div>
       </Dialog.Body>
       <Dialog.Footer>
-        <div className="flex justify-end w-full">
+        <div
+          className="flex justify-end w-full"
+          style={{ paddingBottom: "max(8px, env(safe-area-inset-bottom))" }}
+        >
           <Button
             primary
+            className="w-full sm:w-auto"
             text={t("Đồng ý")}
             disabled={!hasRead}
             isLoading={submitting}
