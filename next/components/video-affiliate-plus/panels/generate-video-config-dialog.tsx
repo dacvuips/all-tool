@@ -33,6 +33,7 @@ import {
   getDefaultPrompt,
   isSlotPromptConfigured,
   listCharacterImages,
+  normalizeScheduleTime,
 } from "../types";
 import { CharacterProfileManagerDialog } from "./character-profile-manager-dialog";
 
@@ -139,6 +140,36 @@ function SectionCard({
         <h3 className="m-0 text-xs font-bold tracking-wider text-gray-800 uppercase">{title}</h3>
       </div>
       <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+function ConfigSwitchRow({
+  title,
+  description,
+  value,
+  onChange,
+}: {
+  title: string;
+  description: string;
+  value: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <div
+      className={`flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5 ${
+        value ? "border-indigo-200 bg-indigo-50" : "border-gray-200 bg-white"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className={`text-xs font-bold ${value ? "text-indigo-800" : "text-gray-900"}`}>
+          {title}
+        </div>
+        <div className={`mt-0.5 text-10 leading-relaxed ${value ? "text-indigo-700" : "text-gray-500"}`}>
+          {description}
+        </div>
+      </div>
+      <Switch size="sm" dependent value={value} onChange={(v) => onChange(Boolean(v))} />
     </div>
   );
 }
@@ -298,6 +329,18 @@ export function GenerateVideoConfigDialog({
     setActiveSlotIndex((i) => Math.min(i, videosPerJob - 1));
   };
 
+  const patchCharacterImageConfig = (
+    partial: Partial<
+      Pick<GenerateVideoConfig, "useCharacterImage" | "randomImagesEnabled" | "randomImagesPrompt">
+    >
+  ) => {
+    setConfig((c) => {
+      const next = { ...c, ...partial };
+      next.videoSlots = ensureVideoSlots(next);
+      return next;
+    });
+  };
+
   const setSplitPrompt = (enabled: boolean) => {
     setConfig((c) => {
       const next = { ...c, splitPrompt: enabled };
@@ -364,8 +407,8 @@ export function GenerateVideoConfigDialog({
     } else if (key === "checkTotal") {
       setPromptDraft(
         buildCheckTotalPrompt(prompts, character, {
-          enabled: activeSlot.randomImagesEnabled,
-          prompt: activeSlot.randomImagesPrompt,
+          enabled: config.randomImagesEnabled,
+          prompt: config.randomImagesPrompt,
         })
       );
     } else {
@@ -390,8 +433,8 @@ export function GenerateVideoConfigDialog({
 
     const character = getSelectedCharacter(config, workingCharacterId);
     const randomOverride = {
-      enabled: activeSlot.randomImagesEnabled,
-      prompt: activeSlot.randomImagesPrompt,
+      enabled: config.randomImagesEnabled,
+      prompt: config.randomImagesPrompt,
     };
     let nextPrompts = { ...workingPrompts };
 
@@ -534,8 +577,8 @@ export function GenerateVideoConfigDialog({
       const slots = ensureVideoSlots(config).map((slot) => {
         const character = getSelectedCharacter(config, slot.characterId);
         const checkTotal = buildCheckTotalPrompt(slot.prompts, character, {
-          enabled: slot.randomImagesEnabled,
-          prompt: slot.randomImagesPrompt,
+          enabled: config.randomImagesEnabled,
+          prompt: config.randomImagesPrompt,
         });
         const activePrompt = buildActivePromptFromSlot(
           { ...slot, prompts: { ...slot.prompts, checkTotal } },
@@ -558,9 +601,9 @@ export function GenerateVideoConfigDialog({
         voice: root.voice,
         techniqueId: root.techniqueId,
         characterId: root.characterId,
-        useCharacterImage: root.useCharacterImage,
-        randomImagesEnabled: root.randomImagesEnabled,
-        randomImagesPrompt: root.randomImagesPrompt,
+        useCharacterImage: config.useCharacterImage !== false,
+        randomImagesEnabled: config.randomImagesEnabled === true,
+        randomImagesPrompt: String(config.randomImagesPrompt || ""),
         actionV1Id: root.actionV1Id,
         actionV2Id: root.actionV2Id,
         imageModel: root.imageModel,
@@ -649,8 +692,8 @@ export function GenerateVideoConfigDialog({
         workingPrompts,
         getSelectedCharacter(config, workingCharacterId),
         {
-          enabled: activeSlot.randomImagesEnabled,
-          prompt: activeSlot.randomImagesPrompt,
+          enabled: config.randomImagesEnabled,
+          prompt: config.randomImagesPrompt,
         }
       ).trim();
     }
@@ -732,21 +775,193 @@ export function GenerateVideoConfigDialog({
                   </div>
                 </FieldRow>
               </div>
-              <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="text-xs font-bold text-teal-900">{t("Tách Prompt")}</div>
-                  <div className="mt-0.5 text-10 leading-relaxed text-teal-800">
-                    {t(
-                      'Nếu kích hoạt thì sẽ tách ra từng job riêng theo "Số video mỗi job" mỗi job là 1 lần Generate và 1 prompt khác nhau'
-                    )}
+              <div className="mt-4 space-y-2.5">
+                <div
+                  className={`rounded-xl border px-3 py-2.5 ${
+                    config.autoRerunEnabled !== false
+                      ? "border-indigo-200 bg-indigo-50"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div
+                        className={`text-xs font-bold ${
+                          config.autoRerunEnabled !== false ? "text-indigo-800" : "text-gray-900"
+                        }`}
+                      >
+                        {t("Tự chạy Bắt Đầu theo giờ")}
+                      </div>
+                      <div
+                        className={`mt-0.5 text-10 leading-relaxed ${
+                          config.autoRerunEnabled !== false ? "text-indigo-700" : "text-gray-500"
+                        }`}
+                      >
+                        {t(
+                          "Đến giờ đã chọn thì tự bấm Bắt Đầu — generate lại từ đầu (theo switch bỏ qua sản phẩm đã generate)."
+                        )}
+                      </div>
+                    </div>
+                    <Switch
+                      size="sm"
+                      dependent
+                      value={config.autoRerunEnabled !== false}
+                      onChange={(value) =>
+                        setConfig((c) => ({ ...c, autoRerunEnabled: Boolean(value) }))
+                      }
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center mt-3">
+                    <span className="text-xs font-medium text-gray-600 whitespace-nowrap">
+                      {t("Chạy lại lúc")}
+                    </span>
+                    <input
+                      type="time"
+                      value={normalizeScheduleTime(config.autoRerunTime)}
+                      disabled={config.autoRerunEnabled === false}
+                      onChange={(e) =>
+                        setConfig((c) => ({
+                          ...c,
+                          autoRerunTime: normalizeScheduleTime(e.target.value, c.autoRerunTime),
+                        }))
+                      }
+                      className="h-8 rounded-lg border border-gray-200 bg-white px-2 text-xs font-semibold text-gray-800 outline-none focus:border-indigo-400 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                    />
                   </div>
                 </div>
-                <Switch
-                  size="sm"
-                  dependent
-                  value={Boolean(config.splitPrompt)}
-                  onChange={(value) => setSplitPrompt(Boolean(value))}
+                <ConfigSwitchRow
+                  title={t("Bỏ qua sản phẩm đã generate")}
+                  description={t(
+                    "Bật: Bắt Đầu bỏ qua sản phẩm đã có video (như hiện tại). Tắt: generate lại cả video đã gen. Mặc định tắt."
+                  )}
+                  value={config.skipGeneratedProducts === true}
+                  onChange={(value) =>
+                    setConfig((c) => ({ ...c, skipGeneratedProducts: Boolean(value) }))
+                  }
                 />
+                <ConfigSwitchRow
+                  title={t("Tách Prompt")}
+                  description={t(
+                    'Nếu kích hoạt thì sẽ tách ra từng job riêng theo "Số video mỗi job" mỗi job là 1 lần Generate và 1 prompt khác nhau'
+                  )}
+                  value={Boolean(config.splitPrompt)}
+                  onChange={setSplitPrompt}
+                />
+                <ConfigSwitchRow
+                  title={t("Tự động tải file nối sau khi generate")}
+                  description={t(
+                    "Bật: generate xong (và nối nếu ≥ 2 video mỗi job) thì tự tải 1 file xuống, tên = ID sản phẩm. Tắt: chỉ lưu, tải bằng nút Tải tất cả / Tải video."
+                  )}
+                  value={config.autoDownloadAfterGen !== false}
+                  onChange={(value) =>
+                    setConfig((c) => ({ ...c, autoDownloadAfterGen: Boolean(value) }))
+                  }
+                />
+                <ConfigSwitchRow
+                  title={t("Bỏ qua file đã tải")}
+                  description={t(
+                    "Bật: Tải tất cả / tự tải bỏ qua video đã tải. Tắt: tải lại hết, kể cả file đã tải."
+                  )}
+                  value={config.skipDownloadedFiles !== false}
+                  onChange={(value) =>
+                    setConfig((c) => ({ ...c, skipDownloadedFiles: Boolean(value) }))
+                  }
+                />
+                <ConfigSwitchRow
+                  title={t("Dùng ảnh nhân vật")}
+                  description={t(
+                    "Bật: gửi ảnh nhân vật + ảnh sản phẩm. Tắt: chỉ gửi ảnh sản phẩm khi generate. Áp dụng cho mọi Video."
+                  )}
+                  value={config.useCharacterImage !== false}
+                  onChange={(value) =>
+                    patchCharacterImageConfig({ useCharacterImage: Boolean(value) })
+                  }
+                />
+                {config.useCharacterImage !== false ? (
+                  <div
+                    className={`rounded-xl border px-3 py-2.5 ${
+                      config.randomImagesEnabled
+                        ? "border-indigo-200 bg-indigo-50"
+                        : "border-gray-200 bg-white"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div
+                          className={`text-xs font-bold ${
+                            config.randomImagesEnabled ? "text-indigo-800" : "text-gray-900"
+                          }`}
+                        >
+                          {t("Ảnh ngẫu nhiên")}
+                        </div>
+                        <div
+                          className={`mt-0.5 text-10 leading-relaxed ${
+                            config.randomImagesEnabled ? "text-indigo-700" : "text-gray-500"
+                          }`}
+                        >
+                          {t(
+                            "Bật để gửi toàn bộ ảnh model vào generate và cộng prompt riêng vào Check Prompt Tổng. Áp dụng cho mọi Video."
+                          )}
+                        </div>
+                      </div>
+                      <Switch
+                        size="sm"
+                        dependent
+                        value={config.randomImagesEnabled === true}
+                        onChange={(value) =>
+                          patchCharacterImageConfig({ randomImagesEnabled: Boolean(value) })
+                        }
+                      />
+                    </div>
+                    {config.randomImagesEnabled ? (
+                      <div className="mt-3 space-y-2">
+                        <label className="mb-1 block text-xs font-semibold text-gray-700">
+                          {t("Prompt Ảnh Ngẫu Nhiên")}
+                        </label>
+                        <textarea
+                          value={config.randomImagesPrompt || ""}
+                          onChange={(e) =>
+                            patchCharacterImageConfig({ randomImagesPrompt: e.target.value })
+                          }
+                          rows={3}
+                          className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none focus:border-indigo-400"
+                          placeholder={t(
+                            "Prompt này chỉ được gắn vào Check Prompt Tổng khi bật Ảnh ngẫu nhiên."
+                          )}
+                        />
+                        {(() => {
+                          const characters = config.splitPrompt
+                            ? videoSlots.map((slot) =>
+                                getSelectedCharacter(config, slot.characterId)
+                              )
+                            : [getSelectedCharacter(config)];
+                          const counts = characters.map((character) =>
+                            character ? listCharacterImages(character).length : 0
+                          );
+                          const minCount = counts.length ? Math.min(...counts) : 0;
+                          if (minCount <= 1) {
+                            return (
+                              <p className="m-0 text-10 leading-relaxed text-rose-600">
+                                {t(
+                                  "Nhân vật đang chọn mới có {{count}} ảnh (standing/sitting/fashion). Ảnh ngẫu nhiên cần ≥2 ảnh trong Quản lý Nhân Vật — nếu chỉ 1 file thì generate cũng chỉ gửi 1 ảnh.",
+                                  { count: minCount }
+                                )}
+                              </p>
+                            );
+                          }
+                          return (
+                            <p className="m-0 text-10 leading-relaxed text-indigo-800">
+                              {t(
+                                "Sẽ gửi {{count}} ảnh model khi generate. Áp dụng cho mọi Video (kể cả Tách Prompt).",
+                                { count: minCount }
+                              )}
+                            </p>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             </SectionCard>
 
@@ -822,8 +1037,8 @@ export function GenerateVideoConfigDialog({
                               workingPrompts,
                               getSelectedCharacter(config, workingCharacterId),
                               {
-                                enabled: activeSlot.randomImagesEnabled,
-                                prompt: activeSlot.randomImagesPrompt,
+                                enabled: config.randomImagesEnabled,
+                                prompt: config.randomImagesPrompt,
                               }
                             ).trim()
                           : !!workingPrompts[btn.key]?.trim();
@@ -926,7 +1141,7 @@ export function GenerateVideoConfigDialog({
                         value: o.id,
                         label: o.name,
                       }))}
-                      disabled={activeSlot.useCharacterImage === false}
+                      disabled={config.useCharacterImage === false}
                     />
                     <button
                       type="button"
@@ -937,86 +1152,6 @@ export function GenerateVideoConfigDialog({
                     </button>
                   </FieldRow>
                   </div>
-
-                  <div className="flex items-start justify-between gap-3 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="text-xs font-bold text-indigo-800">
-                        {t("Dùng ảnh nhân vật")}
-                      </div>
-                      <div className="mt-0.5 text-10 text-indigo-700">
-                        {t(
-                          "Bật: gửi ảnh nhân vật + ảnh sản phẩm. Tắt: chỉ gửi ảnh sản phẩm khi generate."
-                        )}
-                      </div>
-                    </div>
-                    <Switch
-                      size="sm"
-                      dependent
-                      value={activeSlot.useCharacterImage !== false}
-                      onChange={(value) => patchSlot({ useCharacterImage: Boolean(value) })}
-                    />
-                  </div>
-
-                  {activeSlot.useCharacterImage !== false ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-xs font-bold text-amber-800">
-                            {t("Ảnh ngẫu nhiên")}
-                          </div>
-                          <div className="mt-0.5 text-10 text-amber-700">
-                            {t(
-                              "Bật để gửi toàn bộ ảnh model vào generate và cộng prompt riêng vào Check Prompt Tổng."
-                            )}
-                          </div>
-                        </div>
-                        <Switch
-                          size="sm"
-                          dependent
-                          value={activeSlot.randomImagesEnabled === true}
-                          onChange={(value) => patchSlot({ randomImagesEnabled: Boolean(value) })}
-                        />
-                      </div>
-                      {activeSlot.randomImagesEnabled ? (
-                        <div className="mt-3 space-y-2">
-                          <label className="mb-1 block text-xs font-semibold text-gray-700">
-                            {t("Prompt Ảnh Ngẫu Nhiên")}
-                          </label>
-                          <textarea
-                            value={activeSlot.randomImagesPrompt || ""}
-                            onChange={(e) => patchSlot({ randomImagesPrompt: e.target.value })}
-                            rows={3}
-                            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm leading-relaxed text-gray-800 outline-none focus:border-amber-400"
-                            placeholder={t(
-                              "Prompt này chỉ được gắn vào Check Prompt Tổng khi bật Ảnh ngẫu nhiên."
-                            )}
-                          />
-                          {(() => {
-                            const character = getSelectedCharacter(config, activeSlot.characterId);
-                            const imgCount = character ? listCharacterImages(character).length : 0;
-                            if (imgCount <= 1) {
-                              return (
-                                <p className="m-0 text-10 leading-relaxed text-rose-600">
-                                  {t(
-                                    "Nhân vật này mới có {{count}} ảnh (standing/sitting/fashion). Ảnh ngẫu nhiên cần ≥2 ảnh trong Quản lý Nhân Vật — nếu chỉ 1 file thì cột ngoài cũng chỉ hiện 1 ảnh.",
-                                    { count: imgCount }
-                                  )}
-                                </p>
-                              );
-                            }
-                            return (
-                              <p className="m-0 text-10 leading-relaxed text-amber-800">
-                                {t(
-                                  "Sẽ gửi {{count}} ảnh model khi generate tab này. V1–V4 cùng nhân vật sẽ hiện cùng bộ ảnh.",
-                                  { count: imgCount }
-                                )}
-                              </p>
-                            );
-                          })()}
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
 
                   <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-x-4">
                   {(

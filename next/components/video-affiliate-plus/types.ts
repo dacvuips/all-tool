@@ -149,8 +149,9 @@ export interface GenerateVideoSlotConfig {
   voice: string;
   techniqueId: string;
   characterId: string;
+  /** Kế thừa từ Cấu Hình Tổng Thể — không chỉnh theo từng Video. */
   useCharacterImage: boolean;
-  /** Bật gửi toàn bộ ảnh model + cộng prompt ảnh ngẫu nhiên (theo từng Video). */
+  /** Kế thừa từ Cấu Hình Tổng Thể. */
   randomImagesEnabled: boolean;
   randomImagesPrompt: string;
   actionV1Id: string;
@@ -169,11 +170,11 @@ export interface GenerateVideoConfig {
   techniqueId: string;
   characterId: string;
   /**
-   * Bật/tắt gửi ảnh nhân vật khi generate.
+   * Cấu Hình Tổng Thể — bật/tắt gửi ảnh nhân vật khi generate (mọi Video).
    * false → chỉ dùng ảnh sản phẩm.
    */
   useCharacterImage: boolean;
-  /** Bật ảnh ngẫu nhiên (root / khi không tách prompt). */
+  /** Cấu Hình Tổng Thể — bật ảnh ngẫu nhiên cho mọi Video. */
   randomImagesEnabled: boolean;
   randomImagesPrompt: string;
   actionV1Id: string;
@@ -194,6 +195,27 @@ export interface GenerateVideoConfig {
    * Sau khi đủ slot mới nối file.
    */
   splitPrompt: boolean;
+  /**
+   * Generate xong (và nối nếu ≥2 video) thì tự tải file xuống (tên = ID sản phẩm).
+   * Tắt: chỉ lưu IndexedDB, tải bằng nút Tải tất cả / Tải video.
+   */
+  autoDownloadAfterGen: boolean;
+  /**
+   * Tải tất cả / tự tải: bỏ qua video đã đánh dấu tải.
+   * Tắt: tải lại hết, kể cả file đã tải.
+   */
+  skipDownloadedFiles: boolean;
+  /**
+   * Tự chạy Bắt Đầu mỗi ngày vào `autoRerunTime` (generate lại từ đầu).
+   */
+  autoRerunEnabled: boolean;
+  /** Giờ chạy lại hằng ngày, dạng HH:mm (vd. 07:00). */
+  autoRerunTime: string;
+  /**
+   * Bật: Bắt Đầu bỏ qua sản phẩm đã có video (hành vi cũ).
+   * Tắt: generate lại cả sản phẩm đã gen. Mặc định tắt.
+   */
+  skipGeneratedProducts: boolean;
   /** Cấu hình theo từng video khi splitPrompt = true (độ dài = videosPerJob). */
   videoSlots: GenerateVideoSlotConfig[];
   /** @deprecated Không còn dùng khi Bắt Đầu — concurrency lấy từ customer.videoStreamCount */
@@ -1170,10 +1192,32 @@ export const DEFAULT_GENERATE_VIDEO_CONFIG: GenerateVideoConfig = {
   videoModel: "0-credit",
   videosPerJob: 2,
   splitPrompt: false,
+  autoDownloadAfterGen: true,
+  skipDownloadedFiles: true,
+  autoRerunEnabled: true,
+  autoRerunTime: "07:00",
+  skipGeneratedProducts: false,
   videoSlots: [],
   threadCount: 5,
   quality: "720p",
 };
+
+/** Chuẩn hoá giờ chạy lại → HH:mm. */
+export function normalizeScheduleTime(value: unknown, fallback = "07:00"): string {
+  const raw = String(value || "").trim();
+  const matched = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!matched) return fallback;
+  const hour = Math.min(23, Math.max(0, Number(matched[1])));
+  const minute = Math.min(59, Math.max(0, Number(matched[2])));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+export function formatScheduleDisplay(time: string): string {
+  const normalized = normalizeScheduleTime(time);
+  const hour = Number(normalized.split(":")[0]);
+  return `${normalized} ${hour < 12 ? "SA" : "CH"}`;
+}
 
 export function createEmptyItem(partial?: Partial<AffiliatePlusItem>): AffiliatePlusItem {
   return {
@@ -1319,11 +1363,8 @@ export function createSlotConfigFromRoot(config: GenerateVideoConfig): GenerateV
     techniqueId: config.techniqueId,
     characterId: config.characterId,
     useCharacterImage: config.useCharacterImage !== false,
-    randomImagesEnabled:
-      config.randomImagesEnabled === true || Boolean(character?.randomImagesEnabled),
-    randomImagesPrompt:
-      config.randomImagesPrompt ||
-      (character?.randomImagesEnabled ? String(character.randomImagesPrompt || "") : ""),
+    randomImagesEnabled: config.randomImagesEnabled === true,
+    randomImagesPrompt: String(config.randomImagesPrompt || ""),
     actionV1Id: config.actionV1Id,
     actionV2Id: config.actionV2Id,
     imageModel: config.imageModel,
@@ -1385,20 +1426,27 @@ export function ensureVideoSlots(config: GenerateVideoConfig): GenerateVideoSlot
   const slots: GenerateVideoSlotConfig[] = [];
   for (let i = 0; i < count; i++) {
     if (existing[i]) {
-      slots.push(normalizeSlotConfig(existing[i], root));
+      slots.push(
+        applyRootCharacterImageFlags(normalizeSlotConfig(existing[i], root), config)
+      );
       continue;
     }
     if (i === 0) {
-      slots.push(normalizeSlotConfig(null, root));
+      slots.push(applyRootCharacterImageFlags(normalizeSlotConfig(null, root), config));
       continue;
     }
     // Slot mới: giữ setting video từ tab 1, prompt trống → generate sẽ lấy prompt tab 1
     const base = slots[0] || root;
-    slots.push({
-      ...base,
-      prompts: createEmptyPromptConfig(),
-      activePrompt: "",
-    });
+    slots.push(
+      applyRootCharacterImageFlags(
+        {
+          ...base,
+          prompts: createEmptyPromptConfig(),
+          activePrompt: "",
+        },
+        config
+      )
+    );
   }
   return slots;
 }
@@ -1447,6 +1495,19 @@ export function resolveEffectiveSlotPrompt(
   return buildActivePromptFromSlot(slot, config.characters).trim() || prompt0;
 }
 
+/** Ảnh nhân vật / ảnh ngẫu nhiên lấy từ Cấu Hình Tổng Thể, áp dụng mọi slot. */
+export function applyRootCharacterImageFlags(
+  slot: GenerateVideoSlotConfig,
+  config: GenerateVideoConfig
+): GenerateVideoSlotConfig {
+  return {
+    ...slot,
+    useCharacterImage: config.useCharacterImage !== false,
+    randomImagesEnabled: config.randomImagesEnabled === true,
+    randomImagesPrompt: String(config.randomImagesPrompt || ""),
+  };
+}
+
 /** Lấy config hiệu lực cho 1 slot — không tách thì dùng root. */
 export function resolveSlotConfig(
   config: GenerateVideoConfig,
@@ -1454,7 +1515,9 @@ export function resolveSlotConfig(
 ): GenerateVideoSlotConfig {
   if (!config.splitPrompt) return createSlotConfigFromRoot(config);
   const slots = ensureVideoSlots(config);
-  return slots[Math.min(Math.max(0, slotIndex), slots.length - 1)] || createSlotConfigFromRoot(config);
+  const slot =
+    slots[Math.min(Math.max(0, slotIndex), slots.length - 1)] || createSlotConfigFromRoot(config);
+  return applyRootCharacterImageFlags(slot, config);
 }
 
 export function getTotalVideos(item: AffiliatePlusItem): number {

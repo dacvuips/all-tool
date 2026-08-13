@@ -113,6 +113,19 @@ export async function pickExportDirectory(): Promise<FileSystemDirectoryHandle |
   return picker({ mode: "readwrite", startIn: "downloads" });
 }
 
+/** File đã có trong thư mục đã chọn (không tạo mới). */
+export async function exportFileExistsInDir(
+  dirHandle: FileSystemDirectoryHandle,
+  fileName: string
+): Promise<boolean> {
+  try {
+    await dirHandle.getFileHandle(fileName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Ghi 1 file xuống đĩa ngay (thư mục đã chọn hoặc saveAs). */
 export async function saveExportBlobToDisk(
   blob: Blob,

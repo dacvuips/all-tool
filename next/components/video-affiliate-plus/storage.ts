@@ -378,6 +378,16 @@ function clampVideosPerJob(value: unknown, fallback = 2): number {
   return Math.min(4, Math.max(1, Math.round(n)));
 }
 
+function normalizeScheduleTime(value: unknown, fallback = "07:00"): string {
+  const raw = String(value || "").trim();
+  const matched = raw.match(/^(\d{1,2}):(\d{2})/);
+  if (!matched) return fallback;
+  const hour = Math.min(23, Math.max(0, Number(matched[1])));
+  const minute = Math.min(59, Math.max(0, Number(matched[2])));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return fallback;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): GenerateVideoConfig {
   const data = raw || {};
   const characters = data.characters?.length
@@ -398,6 +408,14 @@ function mergeGenerateVideoConfig(raw?: Partial<GenerateVideoConfig> | null): Ge
     threadCount,
     videosPerJob,
     splitPrompt: Boolean(data.splitPrompt),
+    autoDownloadAfterGen: data.autoDownloadAfterGen !== false,
+    skipDownloadedFiles: data.skipDownloadedFiles !== false,
+    autoRerunEnabled: data.autoRerunEnabled !== false,
+    autoRerunTime: normalizeScheduleTime(
+      data.autoRerunTime || (data as { scheduleTime?: string }).scheduleTime,
+      DEFAULT_GENERATE_VIDEO_CONFIG.autoRerunTime
+    ),
+    skipGeneratedProducts: data.skipGeneratedProducts === true,
     // Bản ghi cũ chưa có field → mặc định bật ảnh nhân vật
     useCharacterImage: data.useCharacterImage !== false,
     randomImagesEnabled: data.randomImagesEnabled === true,
