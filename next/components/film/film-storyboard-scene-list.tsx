@@ -36,7 +36,12 @@ export default function FilmStoryboardSceneList({
         ) : (
           scenes.map((scene) => {
             const selected = scene.id === selectedId;
-            const snippet = scene.summary || scene.action || scene.dialogue || "";
+            const sceneTitle =
+              scene.title?.trim() ||
+              scene.summary?.trim() ||
+              `${t("Cảnh quay")} #${scene.index}`;
+            const snippet =
+              scene.summary || scene.action || scene.dialogue || scene.atmosphere || "";
             const short =
               snippet.length > 90 ? `${snippet.slice(0, 90)}…` : snippet || t("Chưa có mô tả");
             const charCount = scene.characterNames?.length || 0;
@@ -63,10 +68,17 @@ export default function FilmStoryboardSceneList({
                     #{String(scene.index).padStart(2, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-semibold text-gray-800">
-                        {scene.shotSize || t("Cảnh quay")}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs font-semibold text-gray-900 truncate" title={sceneTitle}>
+                        {sceneTitle}
                       </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                      {scene.shotSize && (
+                        <span className="text-10 font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          {scene.shotSize}
+                        </span>
+                      )}
                       <span className="text-10 text-gray-400">
                         {charCount} {t("Nhân vật")}
                       </span>

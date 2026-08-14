@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiPlus, HiSparkles } from "react-icons/hi";
+import { useToast } from "../../lib/providers/toast-provider";
+import { Switch } from "../shared/utilities/form";
 import { FilmEpisodeRecord } from "./film-types";
 
 type Props = {
   episode: FilmEpisodeRecord | null;
   onSave: (content: string) => Promise<void>;
+  /** Có tập trước (index > 1) — bật được Kế thừa nội dung trước */
+  canInheritPrevious?: boolean;
   /** Nút Trích xuất — gọi sau khi đã lưu nội dung nếu dirty */
-  onExtract?: (content: string) => void | Promise<void>;
+  onExtract?: (content: string, options?: { inheritPrevious?: boolean }) => void | Promise<void>;
 };
 
 function countWords(text: string): number {
@@ -17,17 +21,28 @@ function countWords(text: string): number {
   return trimmed.split(/\s+/).filter(Boolean).length;
 }
 
-export default function FilmOriginalContentPanel({ episode, onSave, onExtract }: Props) {
+export default function FilmOriginalContentPanel({
+  episode,
+  onSave,
+  canInheritPrevious = false,
+  onExtract,
+}: Props) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [content, setContent] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [inheritPrevious, setInheritPrevious] = useState(false);
 
   useEffect(() => {
     setContent(episode?.originalContent || "");
     setDirty(false);
   }, [episode?.id, episode?.originalContent]);
+
+  useEffect(() => {
+    setInheritPrevious(false);
+  }, [episode?.id]);
 
   const wordCount = useMemo(() => countWords(content), [content]);
   const canExtract = !!episode && content.trim().length > 0 && !extracting && !saving;
@@ -54,8 +69,12 @@ export default function FilmOriginalContentPanel({ episode, onSave, onExtract }:
     try {
       await persistIfNeeded();
       if (onExtract) {
-        await onExtract(content);
+        await onExtract(content, {
+          inheritPrevious: canInheritPrevious && inheritPrevious,
+        });
       }
+    } catch (err: any) {
+      toast.error(err?.message || t("Trích xuất thất bại"));
     } finally {
       setExtracting(false);
     }
@@ -77,12 +96,26 @@ export default function FilmOriginalContentPanel({ episode, onSave, onExtract }:
             <span className="w-7 h-7 rounded-full bg-blue-600 text-white text-10 font-bold flex items-center justify-center flex-shrink-0">
               01
             </span>
-            <h2 className="text-base font-bold text-gray-900 m-0 truncate">
-              {t("Nội dung gốc")}
-            </h2>
+            <h2 className="text-base font-bold text-gray-900 m-0 truncate">{t("Nội dung gốc")}</h2>
           </div>
 
           <div className="flex items-center gap-3 flex-shrink-0">
+            <div
+              title={
+                canInheritPrevious
+                  ? t("Ghép Tiêu đề + Tổng quan cảnh quay của tập trước vào prompt trích xuất")
+                  : t("Chỉ dùng được từ tập 2 trở đi")
+              }
+            >
+              <Switch
+                size="sm"
+                className="min-h-0 text-xs whitespace-nowrap"
+                readOnly={!canInheritPrevious || extracting}
+                value={canInheritPrevious && inheritPrevious}
+                onChange={(v) => setInheritPrevious(!!v)}
+                placeholder={t("Kế thừa nội dung cốt lỗi tập trước")}
+              />
+            </div>
             <span className="text-xs sm:text-sm text-gray-400 whitespace-nowrap">
               {wordCount.toLocaleString("vi-VN")} {t("từ")}
             </span>

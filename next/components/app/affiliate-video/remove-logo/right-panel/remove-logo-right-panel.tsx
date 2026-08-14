@@ -90,14 +90,16 @@ export function RemoveLogoRightPanel() {
   const isDownloading = downloadingKind !== null;
 
   return (
-    <div className="flex overflow-hidden flex-col flex-1 h-full bg-amber-50/40">
-      <div className="flex flex-shrink-0 gap-2 justify-between items-center px-4 py-3 bg-white border-b border-gray-200">
-        <div className="flex gap-2 items-center min-w-0">
+    <div className="flex overflow-hidden flex-col flex-1 min-w-0 w-full h-full bg-amber-50/40">
+      <div className="flex flex-col flex-shrink-0 gap-2 px-4 py-3 bg-white border-b border-gray-200 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div className="flex flex-shrink-0 gap-2 items-center">
           <div className="flex justify-center items-center w-8 h-8 text-white rounded-full bg-primary">
             <RiHistoryLine className="text-white" />
           </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-bold text-slate-800">{t("Kết quả & Lịch sử")}</h2>
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 whitespace-nowrap">
+              {t("Kết quả & Lịch sử")}
+            </h2>
             <p className="text-xs text-slate-500">
               {history.length
                 ? t("{{count}} mục đã lưu (IndexedDB)", { count: history.length })
@@ -105,12 +107,12 @@ export function RemoveLogoRightPanel() {
             </p>
           </div>
         </div>
-        <div className="flex flex-shrink-0 flex-wrap gap-1.5 justify-end items-center">
+        <div className="flex flex-wrap gap-1.5 items-center sm:justify-end">
           <button
             type="button"
             disabled={!imageCount || isDownloading}
             onClick={() => handleBatchDownload("image")}
-            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold text-primary bg-primary-light rounded-lg border border-primary/20 disabled:opacity-40 hover:bg-primary/10 transition-colors"
+            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-primary bg-primary-light rounded-lg border border-primary/20 disabled:opacity-40 hover:bg-primary/10 transition-colors"
             title={t("Tải tất cả ảnh đã xóa logo (ZIP)")}
           >
             {downloadingKind === "image" ? (
@@ -126,7 +128,7 @@ export function RemoveLogoRightPanel() {
             type="button"
             disabled={!videoCount || isDownloading}
             onClick={() => handleBatchDownload("video")}
-            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold text-primary bg-primary-light rounded-lg border border-primary/20 disabled:opacity-40 hover:bg-primary/10 transition-colors"
+            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-primary bg-primary-light rounded-lg border border-primary/20 disabled:opacity-40 hover:bg-primary/10 transition-colors"
             title={t("Tải tất cả video đã xóa logo (ZIP)")}
           >
             {downloadingKind === "video" ? (
@@ -142,7 +144,7 @@ export function RemoveLogoRightPanel() {
             type="button"
             disabled={!history.length || isDownloading}
             onClick={handleClearAll}
-            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold text-danger bg-red-50 rounded-lg border border-red-100 disabled:opacity-40 hover:bg-red-100 transition-colors"
+            className="flex gap-1.5 items-center px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-danger bg-red-50 rounded-lg border border-red-100 disabled:opacity-40 hover:bg-red-100 transition-colors"
           >
             <RiDeleteBinLine className="text-danger" />
             {t("Xóa toàn bộ lịch sử")}

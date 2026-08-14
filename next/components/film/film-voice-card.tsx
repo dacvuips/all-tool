@@ -1,31 +1,43 @@
+/**
+ * Card 1 lời thoại — tab Tạo giọng (sau khi tách field Thoại).
+ */
 import { useTranslation } from "react-i18next";
 import { HiMicrophone } from "react-icons/hi";
-import { FilmSceneRecord } from "./film-types";
+import { SceneMediaError } from "../app/affiliate-video/shared/scene-media-error";
+import {
+  dialogueLineCreating,
+  dialogueLineReady,
+  type FilmVoiceListItem,
+} from "./film-dialogue";
+import type { FilmDialogueLineRecord, FilmSceneRecord } from "./film-types";
 
 type Props = {
-  scene: FilmSceneRecord;
-  onCreateVoice?: (scene: FilmSceneRecord) => void;
+  item: FilmVoiceListItem;
+  onCreateVoice?: (item: FilmVoiceListItem) => void;
 };
 
+/** @deprecated dùng buildFilmVoiceListItems + dialogueLineReady */
 export function sceneVoiceReady(scene: FilmSceneRecord): boolean {
+  if (scene.dialogueLines?.length) {
+    return scene.dialogueLines.every(dialogueLineReady);
+  }
   return scene.voiceStatus === "ready" || !!scene.voiceUrl;
 }
 
 export function sceneVoiceCreating(scene: FilmSceneRecord): boolean {
+  if (scene.dialogueLines?.length) {
+    return scene.dialogueLines.some(dialogueLineCreating);
+  }
   return scene.voiceStatus === "creating";
 }
 
 export function sceneDialogueText(scene: FilmSceneRecord): string {
-  return (
-    scene.dialogue?.trim() ||
-    scene.summary?.trim() ||
-    scene.action?.trim() ||
-    ""
-  );
+  return scene.dialogue?.trim() || "";
 }
 
 export function sceneHasDialogue(scene: FilmSceneRecord): boolean {
-  return sceneDialogueText(scene).length > 0;
+  if (sceneDialogueText(scene)) return true;
+  return (scene.dialogueLines?.length || 0) > 0;
 }
 
 /** WAV placeholder ngắn để audio player hiển thị được (chưa TTS thật). */
@@ -55,7 +67,6 @@ export function buildPlaceholderVoiceUrl(durationSec = 3): string {
   writeStr(36, "data");
   view.setUint32(40, dataSize, true);
 
-  // soft tone so progress bar moves when playing
   for (let i = 0; i < numSamples; i++) {
     const t = i / sampleRate;
     const env = Math.min(1, t * 4) * Math.min(1, (duration - t) * 4);
@@ -69,19 +80,19 @@ export function buildPlaceholderVoiceUrl(durationSec = 3): string {
   return `data:audio/wav;base64,${btoa(binary)}`;
 }
 
-export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
+export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
   const { t } = useTranslation();
-  const indexLabel = `#${String(scene.index).padStart(2, "0")}`;
-  const speaker =
-    scene.speakerName?.trim() ||
-    scene.characterNames?.[0]?.trim() ||
-    t("Nhân vật");
-  const text = sceneDialogueText(scene) || t("Chưa có thoại");
-  const ready = sceneVoiceReady(scene);
-  const creating = sceneVoiceCreating(scene);
+  const { scene, line, lineIndex } = item;
+  const sceneLabel = `#${String(scene.index).padStart(2, "0")}`;
+  const lineLabel = `${lineIndex}`;
+  const speaker = line.character?.trim() || t("Nhân vật");
+  const text = line.line?.trim() || t("Chưa có thoại");
+  const ready = dialogueLineReady(line);
+  const creating = dialogueLineCreating(line);
   const metaParts = [
-    scene.shotSize || t("Cảnh quay"),
-    `${scene.durationSec ?? 0}s`,
+    `${t("Cảnh")} ${sceneLabel}`,
+    `${t("Câu")} ${lineLabel}`,
+    scene.shotSize || null,
     scene.location?.trim() || null,
   ].filter(Boolean);
 
@@ -95,7 +106,9 @@ export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3.5 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="text-sm font-bold text-gray-800">{indexLabel}</span>
+          <span className="text-sm font-bold text-gray-800">
+            {sceneLabel}.{lineLabel}
+          </span>
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-10 font-semibold bg-blue-50 text-blue-600 border border-blue-100">
             {speaker}
           </span>
@@ -111,12 +124,14 @@ export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
 
       <p className="text-xs text-gray-400 m-0">{metaParts.join(" · ")}</p>
 
+      <SceneMediaError message={line.voiceError} />
+
       {ready && !creating ? (
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-1 border-t border-gray-50 mt-0.5">
           <audio
             controls
             preload="metadata"
-            src={scene.voiceUrl || undefined}
+            src={line.voiceUrl || undefined}
             className="w-full flex-1 min-w-0 h-9"
             style={{ maxHeight: 36 }}
           >
@@ -124,7 +139,7 @@ export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
           </audio>
           <button
             type="button"
-            onClick={() => onCreateVoice?.(scene)}
+            onClick={() => onCreateVoice?.(item)}
             className="flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors self-end sm:self-auto"
           >
             {t("Tạo lại")}
@@ -145,7 +160,7 @@ export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
           <button
             type="button"
             disabled={creating}
-            onClick={() => onCreateVoice?.(scene)}
+            onClick={() => onCreateVoice?.(item)}
             className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer transition-colors ${
               creating
                 ? "bg-blue-50 text-blue-600 cursor-wait"
@@ -166,3 +181,6 @@ export default function FilmVoiceCard({ scene, onCreateVoice }: Props) {
     </div>
   );
 }
+
+// re-export for consumers still typing line
+export type { FilmDialogueLineRecord };

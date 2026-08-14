@@ -1,6 +1,35 @@
 import axios from "axios";
 import { Request, Response } from "express";
 
+/** HTML entity &amp; / &#38; trong query khi copy từ outerHTML */
+function decodeHtmlAmpersands(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&#0*38;/g, "&")
+    .replace(/&#x0*26;/gi, "&");
+}
+
+/**
+ * true khi inline=1 đúng, hoặc query bị entity hoá: `&amp;inline=1` → key `amp;inline`
+ */
+function resolveInlinePreview(query: Request["query"]): boolean {
+  const raw = query.inline;
+  if (raw === "1" || raw === "true" || (Array.isArray(raw) && (raw[0] === "1" || raw[0] === "true"))) {
+    return true;
+  }
+  // &amp;inline=1 không tách param → key literal "amp;inline"
+  const mangled = (query as Record<string, unknown>)["amp;inline"];
+  if (mangled === "1" || mangled === "true") return true;
+  if (Array.isArray(mangled) && (mangled[0] === "1" || mangled[0] === "true")) return true;
+  return false;
+}
+
+function pickUrlParam(query: Request["query"]): string {
+  const raw = query.url;
+  const s = Array.isArray(raw) ? String(raw[0] || "") : String(raw || "");
+  return decodeHtmlAmpersands(s.trim());
+}
+
 export default [
   {
     method: "get",
@@ -8,10 +37,23 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        const { url, inline } = req.query;
-        const inlinePreview = inline === "1" || inline === "true";
+        const inlinePreview = resolveInlinePreview(req.query);
+        let url = pickUrlParam(req.query);
 
-        if (!url || typeof url !== "string") {
+        // Nếu client dán nhầm cả URL proxy vào param url — bóc target thật
+        if (url.includes("/api/file/download-proxy")) {
+          try {
+            const nested = new URL(url, "http://localhost");
+            const nestedTarget = nested.searchParams.get("url");
+            if (nestedTarget) {
+              url = decodeHtmlAmpersands(nestedTarget);
+            }
+          } catch {
+            // keep url
+          }
+        }
+
+        if (!url) {
           return res.status(400).json({ error: "URL parameter is required" });
         }
 
@@ -57,6 +99,9 @@ export default [
         res.setHeader("Content-Type", contentType);
         if (!inlinePreview) {
           res.setHeader("Content-Disposition", "attachment");
+        } else {
+          // Explicit inline so browsers + <video> play instead of force-download
+          res.setHeader("Content-Disposition", "inline");
         }
         res.setHeader("Access-Control-Allow-Origin", "*");
         if (response.headers["accept-ranges"]) {

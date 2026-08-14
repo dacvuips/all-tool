@@ -69,6 +69,45 @@ export abstract class BaseQueue extends EventEmitter {
   }
 
   /**
+   * Flag: queue id đã gọi Queue#process. Bee-queue chỉ cho process 1 lần / instance.
+   */
+  private _processApplied: Record<string, boolean> = {};
+  /** Debounce recreate worker sau Redis abort (tránh loop). */
+  private _restartAfterRedisErrorAt: Record<string, number> = {};
+
+  /**
+   * Tạo lại worker bee-queue (instance mới + process 1 lần).
+   *
+   * **Không** dùng `Queue#destroy()` (xoá job trong Redis) + `process` lại trên cùng instance
+   * → bee-queue ném `Cannot call Queue#process twice`, consumer chết, job kẹt waiting/0%.
+   */
+  private recreateWorker(id: string): void {
+    const existing = this._queues[id];
+    if (existing) {
+      try {
+        // Đóng sync-fire; instance mới dùng connection Redis shared (không destroy keys).
+        const maybePromise = (existing as any).close(0);
+        if (maybePromise && typeof maybePromise.then === "function") {
+          maybePromise.catch((err: any) => {
+            this.logger.warn(
+              `[${this.name}:${id}] close queue before recreate: ${err?.message || err}`
+            );
+          });
+        }
+        existing.removeAllListeners();
+      } catch (err: any) {
+        this.logger.warn(
+          `[${this.name}:${id}] close queue before recreate: ${err?.message || err}`
+        );
+      }
+      delete this._queues[id];
+      this._processApplied[id] = false;
+    }
+    // queue() tạo instance mới và applyProcessToQueue một lần
+    this.queue(id);
+  }
+
+  /**
    * Khởi động lại bee-queue consumer khi job kẹt ở `waiting` (Redis ECONNRESET / worker im lặng).
    * Idempotent — gọi nhiều lần an toàn.
    */
@@ -76,15 +115,13 @@ export abstract class BaseQueue extends EventEmitter {
     if (!id) {
       id = IS_DEBUG ? "dev" : "prod";
     }
-    const q = this.getQueueIfExists(id);
-    if (!q) {
-      this.queue(id);
-      this.logger.warn(`[${this.name}:${id}] Consumer started (queue was missing)`);
-      return;
-    }
     try {
-      q.destroy();
-      this.applyProcessToQueue(id);
+      if (!this.getQueueIfExists(id)) {
+        this.queue(id);
+        this.logger.warn(`[${this.name}:${id}] Consumer started (queue was missing)`);
+        return;
+      }
+      this.recreateWorker(id);
       this.logger.warn(`[${this.name}:${id}] Consumer restarted`);
     } catch (err) {
       this.logger.error(`[${this.name}:${id}] restartQueueConsumer lỗi`, err);
@@ -162,12 +199,7 @@ export abstract class BaseQueue extends EventEmitter {
         isWorker: true,
         ...queueOptions,
       });
-      // // Add Queue to QueueManager
-      // QueueManager.instance.addQueue(`${id}:${this.name}`, this._queues[id], {
-      //   name: this.name,
-      //   prefix: id,
-      //   concurrency: this.concurrency,
-      // });
+      this.bindQueueErrorHandler(id);
 
       if (true) {
         if (uniqueWorker) {
@@ -214,17 +246,24 @@ export abstract class BaseQueue extends EventEmitter {
 
   private applyProcessToQueue(id: string) {
     try {
-      const { uniqueWorker, ...queueOptions } = this.options;
+      if (this._processApplied[id] && this._queues[id]) {
+        this.logger.warn(
+          `[${this.name}:${id}] process already applied — skip (use recreateWorker to rebind)`
+        );
+        return;
+      }
       this._queues[id].process(this.concurrency, (job) => {
         return this.process(job).catch((err) => {
           this.logger.error("Error when process job", err);
           throw err;
         });
       });
+      this._processApplied[id] = true;
       // Check Stalled Job
       this.checkStalledJob(id);
     } catch (err) {
       this.logger.error("Error when apply process to queue", err);
+      this._processApplied[id] = false;
     }
   }
 
@@ -243,12 +282,7 @@ export abstract class BaseQueue extends EventEmitter {
         isWorker: true,
         ...queueOptions,
       });
-      // QueueManager.instance.removeQueue(`${id}:${this.name}`);
-      // QueueManager.instance.addQueue(`${id}:${this.name}`, this._queues[id], {
-      //   name: this.name,
-      //   prefix: id,
-      //   concurrency: this.concurrency,
-      // });
+      this.bindQueueErrorHandler(id);
     } catch (err) {
       this.logger.error("Error when remove process to queue", err);
     }
@@ -275,8 +309,7 @@ export abstract class BaseQueue extends EventEmitter {
                   this.logger.warn(
                     `[${this.name}:${id}] Phantom active count — recreate queue worker`
                   );
-                  this._queues[id].destroy();
-                  this.applyProcessToQueue(id);
+                  this.recreateWorker(id);
                 }
               }
               this.logger.info(`Processing [${active}/${waiting}]`);
@@ -290,7 +323,45 @@ export abstract class BaseQueue extends EventEmitter {
   }
   protected abstract process(job: Job<any>): Promise<any>;
 
-  private handleQueueError(err: Error) {
-    this.logger.error("Queue error::::" + err.message);
+  private bindQueueErrorHandler(id: string) {
+    const q = this._queues[id];
+    if (!q) return;
+    q.on("error", (err: Error) => this.handleQueueError(id, err));
+  }
+
+  private isRedisAbortError(err: any): boolean {
+    const code = String(err?.code || "");
+    const msg = String(err?.message || "");
+    return (
+      code === "UNCERTAIN_STATE" ||
+      code === "NR_CLOSED" ||
+      /connection lost/i.test(msg) ||
+      /ECONNRESET|ECONNREFUSED|ETIMEDOUT/i.test(msg)
+    );
+  }
+
+  private handleQueueError(id: string, err: Error) {
+    if (this.isRedisAbortError(err)) {
+      this.logger.warn(
+        `[${this.name}:${id}] Redis abort (BRPOPLPUSH) — ${err.message}`
+      );
+      const now = Date.now();
+      const last = this._restartAfterRedisErrorAt[id] || 0;
+      if (now - last < 4000) return;
+      this._restartAfterRedisErrorAt[id] = now;
+      setTimeout(() => {
+        try {
+          this.restartQueueConsumer(id);
+        } catch (restartErr: any) {
+          this.logger.error(
+            `[${this.name}:${id}] restart after Redis abort failed: ${
+              restartErr?.message || restartErr
+            }`
+          );
+        }
+      }, 1500);
+      return;
+    }
+    this.logger.error(`[${this.name}:${id}] Queue error: ${err.message}`, err);
   }
 }

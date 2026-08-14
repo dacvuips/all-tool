@@ -11,27 +11,51 @@ import {
   HiVideoCamera,
   HiViewGrid,
 } from "react-icons/hi";
+import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { Button } from "../shared/utilities/form";
-import type { FilmStoryboardTab } from "./film-storyboard-panel";
-import FilmShotFrameDialog, {
-  FilmShotFrameGenerateInput,
+import type { FilmAttachOption } from "./film-attach-fields";
+import type { FilmAttachIssueKind } from "./film-attachment-validate";
+import {
+  FILM_MEDIA_CARD_GRID_CLASS,
+  FILM_MEDIA_CARD_GRID_PAD_CLASS,
+} from "./film-media-card-grid";
+import {
+  type FilmShotFrameGenerateInput,
+  resolveFilmShotFrameActivePrompt,
 } from "./film-shot-frame-dialog";
 import FilmShotImageCard, {
   sceneFrameCreating,
   sceneFrameReady,
 } from "./film-shot-image-card";
-import { FilmCharacterRecord, FilmSceneRecord } from "./film-types";
+import type { FilmStoryboardTab } from "./film-storyboard-panel";
+import { FilmAspectRatio, FilmCharacterRecord, FilmPropRecord, FilmSceneImageRecord, FilmSceneRecord } from "./film-types";
 
 type Props = {
   scenes: FilmSceneRecord[];
   characters: FilmCharacterRecord[];
+  aspectRatio?: FilmAspectRatio;
+  storyboardImagePromptStyle?: string | null;
   onCreateFrame: (input: FilmShotFrameGenerateInput) => Promise<void>;
+  onStopFrame?: (scene: FilmSceneRecord) => void | Promise<void>;
+  stopPendingIds?: Record<string, true>;
+  onSetFrameImage?: (scene: FilmSceneRecord, image: GeneratedImageData) => Promise<void>;
   onBulkCreateFrames?: () => Promise<void>;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
+  /** Click tiêu đề card → mở đúng phân cảnh trong Chuỗi Cảnh quay */
+  onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
+  propsList?: FilmPropRecord[];
+  sceneImages?: FilmSceneImageRecord[];
+  onOpenAttachEntity?: (kind: FilmAttachIssueKind, option: FilmAttachOption) => void;
+  onDetachAttach?: (scene: FilmSceneRecord, kind: FilmAttachIssueKind, name: string) => void;
+  onSuggestSafePrompt?: (scene: FilmSceneRecord) => Promise<void> | void;
+  onFramePromptSourceChange?: (
+    scene: FilmSceneRecord,
+    source: "main" | "suggested"
+  ) => Promise<void> | void;
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
-  { id: "storyboard", label: "Tạo Storyboard" },
+  { id: "storyboard", label: "Tạo Chuỗi Cảnh quay" },
   { id: "voice", label: "Tạo Giọng" },
   { id: "shot_images", label: "Ảnh Cảnh quay" },
   { id: "create_video", label: "Tạo video" },
@@ -40,14 +64,25 @@ const TABS: { id: FilmStoryboardTab; label: string }[] = [
 export default function FilmShotImagesPanel({
   scenes,
   characters,
+  aspectRatio = "9:16",
+  storyboardImagePromptStyle,
   onCreateFrame,
+  onStopFrame,
+  stopPendingIds,
+  onSetFrameImage,
   onBulkCreateFrames,
   onTabNavigate,
+  onOpenStoryboardScene,
+  propsList = [],
+  sceneImages = [],
+  onOpenAttachEntity,
+  onDetachAttach,
+  onSuggestSafePrompt,
+  onFramePromptSourceChange,
 }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<FilmStoryboardTab>("shot_images");
   const [busy, setBusy] = useState(false);
-  const [editScene, setEditScene] = useState<FilmSceneRecord | null>(null);
 
   const readyCount = scenes.filter(sceneFrameReady).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
@@ -58,14 +93,17 @@ export default function FilmShotImagesPanel({
     if (id !== "shot_images") onTabNavigate?.(id);
   };
 
-  const openDialog = (scene: FilmSceneRecord) => {
-    if (sceneFrameCreating(scene) || busy) return;
-    // use latest scene from list
-    const current = scenes.find((s) => s.id === scene.id) || scene;
-    setEditScene(current);
-  };
+  /** Tạo ngay — ưu tiên prompt đề xuất AI nếu đang chọn */
+  const handleCreate = async (scene: FilmSceneRecord) => {
+    if (busy || sceneFrameCreating(scene)) return;
+    const latest = scenes.find((s) => s.id === scene.id) || scene;
+    if (sceneFrameCreating(latest)) return;
 
-  const handleGenerate = async (input: FilmShotFrameGenerateInput) => {
+    const input: FilmShotFrameGenerateInput = {
+      scene: latest,
+      prompt: resolveFilmShotFrameActivePrompt(latest, storyboardImagePromptStyle),
+    };
+
     setBusy(true);
     try {
       await onCreateFrame(input);
@@ -108,9 +146,9 @@ export default function FilmShotImagesPanel({
       </div>
 
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
-        <div className="px-4 sm:px-5 py-4 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div className="px-4 sm:px-5 py-1 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div className="flex items-start gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl  flex items-center justify-center flex-shrink-0">
               <HiVideoCamera className="text-lg text-gray-500" />
             </div>
             <div>
@@ -150,35 +188,77 @@ export default function FilmShotImagesPanel({
               icon={<HiViewGrid />}
               className="!rounded-lg"
               disabled
-              title={t("Sắp ra mắt")}
+              tooltip={t("Sắp ra mắt")}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
+        <div className={FILM_MEDIA_CARD_GRID_PAD_CLASS}>
           {scenes.length === 0 ? (
             <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
               <p className="text-sm text-gray-500 m-0">
-                {t("Chưa có cảnh quay. Tạo storyboard trước rồi quay lại bước này.")}
+                {t("Chưa có cảnh quay. Tạo Chuỗi Cảnh quay trước rồi quay lại bước này.")}
               </p>
               <Button
                 outline
-                text={t("Mở Storyboard")}
+                text={t("Mở Chuỗi Cảnh quay")}
                 className="!rounded-lg"
                 onClick={() => onTabNavigate?.("storyboard")}
               />
             </div>
           ) : (
-            scenes
-              .slice()
-              .sort((a, b) => a.index - b.index)
-              .map((scene) => (
-                <FilmShotImageCard
-                  key={scene.id}
-                  scene={scene}
-                  onCreateFrame={openDialog}
-                />
-              ))
+            <div className={FILM_MEDIA_CARD_GRID_CLASS}>
+              {scenes
+                .slice()
+                .sort((a, b) => a.index - b.index)
+                .map((scene) => (
+                  <FilmShotImageCard
+                    key={scene.id}
+                    scene={scene}
+                    aspectRatio={aspectRatio}
+                    storyboardImagePromptStyle={storyboardImagePromptStyle}
+                    hideVideoTab
+                    onCreateFrame={(s) => {
+                      void handleCreate(s);
+                    }}
+                    onStopFrame={
+                      onStopFrame
+                        ? (s) => {
+                            void onStopFrame(s);
+                          }
+                        : undefined
+                    }
+                    generationActionPending={!!stopPendingIds?.[scene.id]}
+                    onSetFrameImage={
+                      onSetFrameImage
+                        ? (s, image) => {
+                            void onSetFrameImage(s, image);
+                          }
+                        : undefined
+                    }
+                    onTitleClick={onOpenStoryboardScene}
+                    characters={characters}
+                    propsList={propsList}
+                    sceneImages={sceneImages}
+                    onOpenAttachEntity={onOpenAttachEntity}
+                    onDetachAttach={onDetachAttach}
+                    onSuggestSafePrompt={
+                      onSuggestSafePrompt
+                        ? (s) => {
+                            void onSuggestSafePrompt(s);
+                          }
+                        : undefined
+                    }
+                    onFramePromptSourceChange={
+                      onFramePromptSourceChange
+                        ? (s, source) => {
+                            void onFramePromptSourceChange(s, source);
+                          }
+                        : undefined
+                    }
+                  />
+                ))}
+            </div>
           )}
         </div>
 
@@ -221,14 +301,6 @@ export default function FilmShotImagesPanel({
           </button>
         </div>
       </div>
-
-      <FilmShotFrameDialog
-        isOpen={!!editScene}
-        scene={editScene}
-        characters={characters}
-        onClose={() => setEditScene(null)}
-        onGenerate={handleGenerate}
-      />
     </div>
   );
 }

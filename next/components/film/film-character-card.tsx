@@ -1,122 +1,304 @@
+/**
+ * Card hình ảnh nhân vật + list vật phẩm kèm.
+ */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiPencil, HiPhotograph, HiUser } from "react-icons/hi";
-import FilmMediaZoom, { FilmMediaZoomItem } from "./film-media-zoom";
-import { FilmCharacterRecord, filmCharacterRoleLabel } from "./film-types";
+import { HiPencil, HiTrash } from "react-icons/hi";
+import { HiDocumentDuplicate } from "react-icons/hi2";
+import { useToast } from "../../lib/providers/toast-provider";
+import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
+import { SceneCardImageTab } from "../app/affiliate-video/shared/scene-card-image-tab";
+import {
+  readFilmLinkedPropDnd,
+  type FilmCatalogKind,
+} from "./film-catalog-pick-dialog";
+import { FILM_CHARACTER_PROP_ASPECT_RATIO } from "./film-aspect";
+import type { FilmCharacterImageGenerateInput } from "./film-character-image-dialog";
+import { filmEntityToGeneratedImage } from "./film-entity-to-generated-image";
+import FilmImageGalleryDialog from "./film-image-gallery-dialog";
+import FilmLinkedPropsBlock from "./film-linked-props-block";
+import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
+import {
+  FilmCharacterRecord,
+  FilmEpisodeRecord,
+  FilmPropRecord,
+  filmCharacterRoleLabel,
+} from "./film-types";
+
+/** Tối đa ảnh reference gửi khi gen ảnh NV */
+export const FILM_CHARACTER_PROP_REF_LIMIT = 10;
 
 type Props = {
   character: FilmCharacterRecord;
+  linkedProps?: FilmPropRecord[];
+  episodes?: FilmEpisodeRecord[];
+  aspectRatio?: "16:9" | "9:16";
+  suggestingProps?: boolean;
   onEdit?: (c: FilmCharacterRecord) => void;
+  onDelete?: (c: FilmCharacterRecord) => void;
+  onClone?: (c: FilmCharacterRecord) => void;
   onCreate?: (c: FilmCharacterRecord) => void;
+  onStopGeneration?: () => void;
+  generationActionPending?: boolean;
+  onSetImage?: (c: FilmCharacterRecord, image: GeneratedImageData) => void;
+  onSuggestProps?: (c: FilmCharacterRecord) => void | Promise<void>;
+  onCreatePropImage?: (input: FilmPropImageGenerateInput) => Promise<void>;
+  onCreateCharacterWithPropRefs?: (input: FilmCharacterImageGenerateInput) => Promise<void>;
+  /** Thêm vật phẩm thủ công (tên + mô tả) và gắn vào nhân vật */
+  onAddCharacterProp?: (input: {
+    character: FilmCharacterRecord;
+    name: string;
+    description: string;
+  }) => Promise<void>;
+  onOpenCatalog?: (character: FilmCharacterRecord) => void;
+  onMoveLinkedProp?: (input: {
+    fromKind: FilmCatalogKind;
+    fromId: string;
+    toKind: FilmCatalogKind;
+    toId: string;
+    propName: string;
+  }) => void;
+  onUnlinkLinkedProp?: (prop: FilmPropRecord) => void;
+  /** Bật/tắt gắn thẻ tập phim */
+  onToggleEpisode?: (c: FilmCharacterRecord, episodeId: string) => void;
 };
 
-const TILE_BG = [
-  "from-yellow-400 to-orange-500",
-  "from-blue-400 to-blue-600",
-  "from-green-400 to-blue-600",
-  "from-purple-400 to-purple-600",
-];
-
-export default function FilmCharacterCard({ character, onEdit, onCreate }: Props) {
+export default function FilmCharacterCard({
+  character,
+  linkedProps = [],
+  episodes = [],
+  suggestingProps = false,
+  onEdit,
+  onDelete,
+  onClone,
+  onCreate,
+  onStopGeneration,
+  generationActionPending = false,
+  onSetImage,
+  onSuggestProps,
+  onCreatePropImage,
+  onCreateCharacterWithPropRefs,
+  onAddCharacterProp,
+  onOpenCatalog,
+  onMoveLinkedProp,
+  onUnlinkLinkedProp,
+  onToggleEpisode,
+}: Props) {
   const { t } = useTranslation();
-  const [zoom, setZoom] = useState<FilmMediaZoomItem | null>(null);
-  const urls = (character.imageUrls || []).filter(Boolean);
-  if (!urls.length && character.imageUrl) urls.push(character.imageUrl);
-
-  const created = character.status === "created" || urls.length > 0;
+  const toast = useToast();
+  const [galleryOpen, setGalleryOpen] = useState(false);
+  const [dropActive, setDropActive] = useState(false);
+  const ar = FILM_CHARACTER_PROP_ASPECT_RATIO;
   const roleLabel = filmCharacterRoleLabel(character.role);
-  const initial = (character.name || "?").trim().charAt(0).toUpperCase() || "?";
+  const creating = character.status === "creating";
+  const progress =
+    typeof character.mediaJobProgress === "number"
+      ? Math.max(0, Math.min(100, Math.round(character.mediaJobProgress)))
+      : creating
+      ? 5
+      : 0;
+  const generatedImage = filmEntityToGeneratedImage(character);
+  const busy = creating || suggestingProps;
+
+  const applyImage = (image: GeneratedImageData) => {
+    if (onSetImage) {
+      onSetImage(character, image);
+      return;
+    }
+    toast.info(t("Gán ảnh nhân vật chưa được hỗ trợ."));
+  };
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
-      <div className="relative aspect-w-4 aspect-h-3 bg-gray-100">
-        {urls.length > 0 ? (
-          <div
-            className={`h-full w-full grid gap-0.5 ${
-              urls.length === 1
-                ? "grid-cols-1"
-                : urls.length === 2
-                  ? "grid-cols-2"
-                  : "grid-cols-2 grid-rows-2"
-            }`}
-          >
-            {urls.slice(0, 4).map((src, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={`${src}_${i}`}
-                src={src}
-                alt={character.name}
-                className="w-full h-full object-cover cursor-zoom-in"
-                onClick={() => setZoom({ src, type: "image" })}
-              />
-            ))}
-          </div>
-        ) : created ? (
-          <div className="h-full w-full grid grid-cols-2 grid-rows-2 gap-0.5">
-            {TILE_BG.map((bg, i) => (
-              <div
-                key={i}
-                className={`bg-gradient-to-br ${bg} flex items-center justify-center text-white font-bold text-lg opacity-90`}
-              >
-                {initial}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center text-gray-300 gap-2">
-            <HiUser className="text-4xl" />
-            <span className="text-xs">{t("Chưa có ảnh")}</span>
-          </div>
-        )}
-
-        {created && (
-          <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-10 font-semibold bg-green-500 text-white shadow-sm">
-            {t("Đã tạo")}
-          </span>
-        )}
-
-        <button
-          type="button"
-          title={t("Sửa")}
-          onClick={() => onEdit?.(character)}
-          className="absolute top-2 right-2 w-8 h-8 rounded-lg bg-white bg-opacity-95 border border-gray-100 shadow-sm flex items-center justify-center text-gray-500 hover:text-blue-600 hover:border-blue-200 cursor-pointer"
-        >
-          <HiPencil className="text-sm" />
-        </button>
-      </div>
-
-      <div className="p-3 flex-1 flex flex-col">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h4 className="text-sm font-bold text-gray-900 m-0 truncate">{character.name}</h4>
-            <span className="inline-flex mt-1 px-2 py-0.5 rounded-md text-10 font-medium bg-gray-100 text-gray-600">
-              {roleLabel}
-            </span>
-          </div>
-          <HiPhotograph className="text-gray-300 text-lg flex-shrink-0 mt-0.5" />
+    <div
+      id={`film-entity-card-${character.id}`}
+      className={`flex overflow-hidden relative flex-col h-full min-h-0 bg-white rounded-lg border border-gray-200 shadow-sm group transition-all hover:border-primary ${
+        dropActive ? "!border-primary ring-2 ring-primary/30" : ""
+      }`}
+      onDragOver={
+        onMoveLinkedProp
+          ? (e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+              setDropActive(true);
+            }
+          : undefined
+      }
+      onDragLeave={
+        onMoveLinkedProp
+          ? (e) => {
+              if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+              setDropActive(false);
+            }
+          : undefined
+      }
+      onDrop={
+        onMoveLinkedProp
+          ? (e) => {
+              e.preventDefault();
+              setDropActive(false);
+              const payload = readFilmLinkedPropDnd(e);
+              if (!payload || payload.fromKind !== "character") return;
+              if (payload.fromId === character.id) return;
+              onMoveLinkedProp({
+                ...payload,
+                toKind: "character",
+                toId: character.id,
+              });
+            }
+          : undefined
+      }
+    >
+      <div className="flex relative gap-2 items-center px-3 py-2 min-w-0 border-b border-gray-100">
+        <div className="flex-1 min-w-0">
+          <h4 className="m-0 text-sm font-bold text-gray-900 truncate">{character.name}</h4>
+          {roleLabel ? (
+            <p className="m-0 mt-0.5 text-10 text-gray-400 truncate">{roleLabel}</p>
+          ) : null}
         </div>
-
-        <div className="mt-3 flex items-center gap-2">
-          <span
-            className={`flex-1 text-center text-xs font-semibold py-1.5 rounded-lg ${
-              created
-                ? "bg-green-50 text-green-600 border border-green-100"
-                : "bg-yellow-50 text-yellow-600 border border-yellow-100"
-            }`}
-          >
-            {created ? t("Đã tạo") : t("Chưa tạo")}
-          </span>
+        <div className="flex absolute top-0 right-1 z-10 gap-1 items-center opacity-0 transition duration-200 ease-out transform translate-y-1 group-hover:opacity-100 group-hover:translate-y-0">
+          {onClone ? (
+            <button
+              type="button"
+              title={t("Clone nhân vật")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClone(character);
+              }}
+              disabled={busy}
+              className="flex justify-center items-center w-7 h-7 text-gray-500 bg-white bg-opacity-95 rounded-lg border border-gray-100 shadow-sm cursor-pointer hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <HiDocumentDuplicate className="text-sm" />
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => onCreate?.(character)}
-            className="flex-1 text-center text-xs font-semibold py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white border-0 cursor-pointer"
+            title={t("Sửa")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit?.(character);
+            }}
+            className="flex justify-center items-center w-7 h-7 text-gray-500 bg-white bg-opacity-95 rounded-lg border border-gray-100 shadow-sm cursor-pointer hover:text-blue-600 hover:border-blue-200"
           >
-            {t("Tạo")}
+            <HiPencil className="text-sm" />
           </button>
+          {onDelete ? (
+            <button
+              type="button"
+              title={t("Xóa")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(character);
+              }}
+              disabled={busy}
+              className="flex justify-center items-center w-7 h-7 text-gray-500 bg-white bg-opacity-95 rounded-lg border border-gray-100 shadow-sm cursor-pointer hover:text-red-600 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <HiTrash className="text-sm" />
+            </button>
+          ) : null}
         </div>
       </div>
 
-      <FilmMediaZoom media={zoom} onClose={() => setZoom(null)} />
+      {episodes.length > 0 ? (
+        <div className="px-3 py-1.5 border-b border-gray-50 flex flex-wrap gap-1 items-center">
+          <span className="text-10 font-semibold text-gray-400 uppercase tracking-wide mr-0.5">
+            {t("Tập hiển thị")}
+          </span>
+          {episodes.map((ep) => {
+            const on = (character.episodeIds || []).includes(ep.id);
+            const label =
+              episodes.length > 4 ? String(ep.index) : ep.title || t("Tập {{n}}", { n: ep.index });
+            return (
+              <button
+                key={ep.id}
+                type="button"
+                disabled={busy || !onToggleEpisode}
+                title={ep.title || t("Tập {{n}}", { n: ep.index })}
+                onClick={() => onToggleEpisode?.(character, ep.id)}
+                className={`inline-flex items-center px-1.5 py-0.5 rounded text-10 font-semibold border cursor-pointer disabled:opacity-40 ${
+                  on
+                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                    : "bg-white text-gray-400 border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {!(character.episodeIds && character.episodeIds.length) ? (
+            <span className="font-medium text-amber-600 text-10">
+              {t("Chưa gán tập — không hiện trong gắn NV")}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="flex flex-col flex-1 gap-2 p-2 min-h-0 sm:p-3">
+        <div className="flex-shrink-0">
+          <SceneCardImageTab
+            aspectRatio={ar}
+            uniformFrame
+            generatedImage={generatedImage}
+            generatingImage={creating}
+            imageProgress={progress}
+            sceneNumber={(character.sortOrder ?? 0) + 1}
+            errorMessage={character.mediaError}
+            onGenerateImage={() => onCreate?.(character)}
+            onStopGeneration={onStopGeneration}
+            generationActionPending={generationActionPending}
+            onSetImage={applyImage}
+            onOpenGallery={() => setGalleryOpen(true)}
+          />
+        </div>
+
+        <FilmLinkedPropsBlock
+          linkedProps={linkedProps}
+          suggesting={suggestingProps}
+          parentBusy={creating}
+          suggestLabel={t("Gợi ý vật phẩm nhân vật")}
+          regenWithRefsLabel={t("Gen lại ảnh NV + ref vật phẩm")}
+          emptyHint={
+            onSuggestProps
+              ? t("Chưa có phụ kiện — gợi ý AI hoặc thêm thủ công.")
+              : t("Chưa có phụ kiện — bấm Thêm để nhập tên và mô tả.")
+          }
+          onSuggest={onSuggestProps ? () => onSuggestProps(character) : undefined}
+          onCreatePropImage={onCreatePropImage}
+          onAddLinkedProp={
+            onAddCharacterProp
+              ? async ({ name, description }) => {
+                  await onAddCharacterProp({ character, name, description });
+                }
+              : undefined
+          }
+          onOpenCatalog={onOpenCatalog ? () => onOpenCatalog(character) : undefined}
+          ownerKind="character"
+          ownerId={character.id}
+          onMoveLinkedProp={onMoveLinkedProp}
+          onUnlinkLinkedProp={onUnlinkLinkedProp}
+          onRegenWithPropRefs={
+            onCreateCharacterWithPropRefs
+              ? async ({ propIds, propNamesInPrompt }) => {
+                  await onCreateCharacterWithPropRefs({
+                    character,
+                    prompt: "",
+                    propIds,
+                    propNamesInPrompt,
+                  });
+                }
+              : undefined
+          }
+        />
+      </div>
+
+      <FilmImageGalleryDialog
+        isOpen={galleryOpen}
+        onClose={() => setGalleryOpen(false)}
+        title={t("Gallery ảnh nhân vật")}
+        onSelect={(image) => {
+          setGalleryOpen(false);
+          applyImage(image);
+        }}
+      />
     </div>
   );
 }

@@ -13,12 +13,12 @@ export const FILM_WORKSPACE_STEPS: FilmWorkspaceStep[] = [
   {
     id: "storyboard",
     section: "script",
-    label: "Storyboard",
+    label: "Chuỗi Cảnh quay",
   },
   {
     id: "character_images",
     section: "production",
-    label: "Hình ảnh Nhân vật",
+    label: "Nhân vật",
   },
   {
     id: "props",
@@ -28,7 +28,7 @@ export const FILM_WORKSPACE_STEPS: FilmWorkspaceStep[] = [
   {
     id: "scene_images",
     section: "production",
-    label: "Ảnh Cảnh",
+    label: "Bối cảnh",
   },
   {
     id: "voice",
@@ -44,6 +44,11 @@ export const FILM_WORKSPACE_STEPS: FilmWorkspaceStep[] = [
     id: "create_video",
     section: "production",
     label: "Tạo video",
+  },
+  {
+    id: "settings",
+    section: "settings",
+    label: "Setting",
   },
 ];
 

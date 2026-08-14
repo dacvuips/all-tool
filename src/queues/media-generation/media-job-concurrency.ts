@@ -48,6 +48,8 @@ export const IMAGE_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
 
   MediaGenerationJobType.GENERATION_WOLF_IMAGE,
 
+  MediaGenerationJobType.FILM_GENERATION_IMAGE,
+
 ];
 
 
@@ -67,6 +69,8 @@ export const VIDEO_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
   MediaGenerationJobType.GENERATION_WOLF_VIDEO,
 
   MediaGenerationJobType.GENERATION_SHOPEE_VIDEO,
+
+  MediaGenerationJobType.FILM_GENERATION_VIDEO,
 
 ];
 

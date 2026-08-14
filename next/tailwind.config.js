@@ -288,6 +288,7 @@ module.exports = {
       textColor:['checked'],
       scale: ['active', 'group-hover'],
       opacity: ["disabled"],
+      translate: ['group-hover'],
     },
   },
   plugins: [require("@tailwindcss/aspect-ratio")],

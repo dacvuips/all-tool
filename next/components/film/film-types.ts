@@ -59,6 +59,22 @@ export type FilmProjectRecord = {
   artStyleLabel: string;
   aspectRatio: FilmAspectRatio;
   narration: FilmNarration;
+  /**
+   * Prompt mẫu tạo ảnh — per project (Setting).
+   * Rỗng / thiếu → dùng template code mặc định.
+   * Placeholder: xem film-*-image-prompt.ts
+   */
+  characterImagePromptTemplate?: string;
+  propImagePromptTemplate?: string;
+  locationImagePromptTemplate?: string;
+  /**
+   * Prompt storyboard chung (Setting).
+   * Khi lưu Setting — field có giá trị sẽ ghi vào mọi phân cảnh (imagePrompt / videoPrompt / audioPrompt).
+   * Dùng cho Ảnh cảnh quay (kèm tham chiếu ảnh nhân vật/vật phẩm/bối cảnh).
+   */
+  storyboardImagePrompt?: string;
+  storyboardVideoPrompt?: string;
+  storyboardAudioPrompt?: string;
   /** 0–100, denormalized cho progress bar ở list */
   progress: number;
   /** Denormalized count cho card list */
@@ -94,9 +110,10 @@ export type FilmWorkspaceStepId =
   | "scene_images"
   | "voice"
   | "shot_images"
-  | "create_video";
+  | "create_video"
+  | "settings";
 
-export type FilmWorkspaceStepSection = "script" | "production";
+export type FilmWorkspaceStepSection = "script" | "production" | "settings";
 
 export type FilmWorkspaceStep = {
   id: FilmWorkspaceStepId;
@@ -111,7 +128,7 @@ export type FilmWorkspaceStep = {
 /** Nhân vật — store: characters (keyPath: id, index: projectId) */
 export type FilmCharacterRole = "main" | "antagonist" | "supporting" | "extra";
 
-export type FilmCharacterStatus = "pending" | "created" | "failed";
+export type FilmCharacterStatus = "pending" | "creating" | "created" | "failed";
 
 export type FilmCharacterRecord = {
   id: string;
@@ -119,12 +136,34 @@ export type FilmCharacterRecord = {
   name: string;
   /** Main / Antagonist / Supporting... */
   role?: FilmCharacterRole | string;
+  /** Ngoại hình / tính cách (không gồm trang phục) */
   description?: string;
+  /** Clothing & Accessories — trang phục, phụ kiện */
+  clothingAccessories?: string;
+  /**
+   * Tên vật phẩm gợi ý / gắn cho nhân vật (khớp FilmPropRecord.name trong tab Vật phẩm).
+   */
+  propNames?: string[];
+  /**
+   * Gắn thẻ tập phim — ảnh / gắn nhân vật trong Chuỗi Cảnh quay
+   * chỉ hiện khi episode hiện tại nằm trong danh sách này.
+   * Rỗng / thiếu → chưa gán (không hiện trong attach theo tập).
+   */
+  episodeIds?: string[];
+  /** Prompt instruction khi tạo ảnh character sheet */
+  imagePrompt?: string;
   /** Ảnh chính */
   imageUrl?: string;
   /** Gallery poses */
   imageUrls?: string[];
+  /** Binary local (IndexedDB) — ưu tiên preview, tránh CORS URL Flow2 */
+  imageBlob?: Blob;
   status?: FilmCharacterStatus;
+  /** Media job đang chạy (đổi tab / đóng dialog vẫn resume) */
+  mediaJobId?: string;
+  mediaJobProgress?: number;
+  /** Lỗi generate ảnh — hiển thị inline trên card (không toast) */
+  mediaError?: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -133,7 +172,7 @@ export type FilmCharacterRecord = {
 /** Vật phẩm — store: props (keyPath: id, index: projectId) */
 export type FilmPropCategory = "weapon" | "container" | "prop" | "clothing" | "other";
 
-export type FilmPropStatus = "pending" | "created" | "failed";
+export type FilmPropStatus = "pending" | "creating" | "created" | "failed";
 
 export type FilmPropRecord = {
   id: string;
@@ -141,9 +180,26 @@ export type FilmPropRecord = {
   name: string;
   category?: FilmPropCategory | string;
   description?: string;
+  /**
+   * Vật phẩm kèm / phụ kiện liên quan (khớp FilmPropRecord.name khác).
+   * Dùng gợi ý AI + ref khi gen ảnh vật phẩm.
+   */
+  propNames?: string[];
+  /**
+   * Gắn thẻ tập — Gắn Vật phẩm trong Chuỗi Cảnh quay theo tập.
+   * Rỗng → chưa gán (không hiện trong attach theo tập).
+   */
+  episodeIds?: string[];
+  /** Prompt instruction khi tạo ảnh prop product shot */
+  imagePrompt?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  imageBlob?: Blob;
   status?: FilmPropStatus;
+  mediaJobId?: string;
+  mediaJobProgress?: number;
+  /** Lỗi generate ảnh — hiển thị inline trên card */
+  mediaError?: string;
   locked?: boolean;
   sortOrder: number;
   createdAt: string;
@@ -158,15 +214,48 @@ export type FilmSceneImageRecord = {
   projectId: string;
   /** Tên địa điểm / cảnh (vd. Hoa Quả Sơn) */
   name: string;
-  /** Ngữ cảnh: Ngày, Tối, sau khi đuổi đi... */
+  /** Ngữ cảnh tình huống: sau mưa, sau trận chiến... */
   context?: string;
+  /**
+   * Time of Day / ánh sáng điện ảnh
+   * e.g. Golden Hour, Harsh Noon, Rainy Night, Blue Hour
+   */
+  timeOfDay?: string;
   description?: string;
+  /**
+   * Vật phẩm / set dressing gợi ý gắn bối cảnh (khớp FilmPropRecord.name).
+   */
+  propNames?: string[];
+  /**
+   * Gắn thẻ tập — Gắn Cảnh trong Chuỗi Cảnh quay theo tập.
+   */
+  episodeIds?: string[];
+  /** Prompt instruction khi tạo ảnh location sheet */
+  imagePrompt?: string;
   imageUrl?: string;
   imageUrls?: string[];
+  imageBlob?: Blob;
   status?: FilmSceneImageStatus;
+  mediaJobId?: string;
+  mediaJobProgress?: number;
+  /** Lỗi generate ảnh — hiển thị inline trên card */
+  mediaError?: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+};
+
+/** Một lời thoại (tách từ field dialogue) — dùng tab Tạo giọng */
+export type FilmDialogueLineRecord = {
+  id: string;
+  character: string;
+  line: string;
+  voiceStatus?: "pending" | "creating" | "ready" | "error";
+  voiceUrl?: string;
+  voiceError?: string;
+  voiceSource?: "catalog" | "custom_id" | "minimax";
+  voiceId?: string;
+  voiceLabel?: string;
 };
 
 /** Phân cảnh / cảnh quay — store: scenes (keyPath: id, indexes: projectId, episodeId) */
@@ -194,31 +283,93 @@ export type FilmSceneRecord = {
   characterNames?: string[];
   /** Tên vật phẩm gắn */
   propNames?: string[];
-  /** Gắn cảnh (tag) */
+  /** Tên bối cảnh gắn (multi — cùng pattern characterNames) */
+  locationNames?: string[];
+  /** Gắn cảnh (tag) — legacy / primary, đồng bộ với locationNames[0] */
   sceneTag?: string;
   /** Hành động */
   action?: string;
-  /** Mô tả hình ảnh */
+  /** Mô tả hình ảnh cảnh quay */
   visualDescription?: string;
-  /** Thoại / kể chuyện */
+  /** Không khí / cảm xúc cảnh */
+  atmosphere?: string;
+  /** Thoại / kể chuyện — format "Tên: thoại" mỗi dòng */
   dialogue?: string;
+  /**
+   * Thoại đã tách từng lời (Tạo giọng).
+   * Đồng bộ từ `dialogue` khi save / mở tab voice.
+   */
+  dialogueLines?: FilmDialogueLineRecord[];
   /** Prompt ảnh */
   imagePrompt?: string;
+  /** User đã sửa tay Prompt ảnh — không tự ghép đè */
+  imagePromptCustom?: boolean;
   /** Prompt video */
   videoPrompt?: string;
+  /** User đã sửa tay Prompt video — không tự ghép đè */
+  videoPromptCustom?: boolean;
   /** Prompt âm thanh */
   audioPrompt?: string;
+  /** User đã sửa tay Prompt âm thanh — không tự ghép đè */
+  audioPromptCustom?: boolean;
+  /** [MOTION] chuyển động camera + nhân vật */
+  motionPrompt?: string;
+  /** [AUDIO] ambience / nền âm */
+  audioAmbience?: string;
+  /** [SFX] */
+  sfx?: string;
+  /** [MUSIC] */
+  music?: string;
+  /** [VOICE] giới tính, pitch, tốc độ, tuổi giọng, cảm xúc (không phải lời thoại) */
+  voiceDirection?: string;
   /** Trạng thái media preview (storyboard) */
   mediaStatus?: "pending" | "ready" | "error";
   /** Khung hình Ảnh Cảnh quay */
   frameStatus?: "pending" | "creating" | "ready" | "error";
   frameImageUrl?: string;
+  /** Binary local khung hình */
+  frameImageBlob?: Blob;
+  frameMediaJobId?: string;
+  frameMediaProgress?: number;
+  /** Lỗi tạo khung hình — hiển thị trên card */
+  frameError?: string;
+  /**
+   * Prompt AI viết lại để tránh content policy (Ảnh Cảnh quay).
+   * Không ghi đè `imagePrompt` chính của phân cảnh.
+   */
+  frameSuggestedPrompt?: string;
+  /** Tóm tắt thay đổi từ AI */
+  frameSuggestSummary?: string;
+  /**
+   * Prompt dùng khi gen ảnh:
+   * - suggested (mặc định nếu có frameSuggestedPrompt)
+   * - main = imagePrompt / prompt phân cảnh
+   */
+  framePromptSource?: "main" | "suggested";
+  frameSuggestStatus?: "idle" | "loading" | "ready" | "error";
+  frameSuggestError?: string;
   /** Video tạo từ khung hình */
   videoStatus?: "pending" | "creating" | "ready" | "error";
   videoUrl?: string;
+  /** Job poll resume (FILM_GENERATION_VIDEO) */
+  videoMediaJobId?: string;
+  videoMediaProgress?: number;
+  /** Lỗi tạo video — hiển thị trên card */
+  videoError?: string;
+  /**
+   * Ảnh tham chiếu khi Tạo video (số slot: Bắt đầu=1, Start-End=2, Thành phần=3).
+   * Mặc định slot đầu = ảnh khung phân cảnh.
+   */
+  videoRefSlots?: Array<{
+    imageUrl?: string;
+    imageBlob?: Blob;
+    name?: string;
+  } | null>;
   /** Giọng / TTS cho thoại */
   voiceStatus?: "pending" | "creating" | "ready" | "error";
   voiceUrl?: string;
+  /** Lỗi tạo giọng — hiển thị trên card */
+  voiceError?: string;
   /** Nguồn giọng: catalog | custom_id | minimax */
   voiceSource?: "catalog" | "custom_id" | "minimax";
   voiceId?: string;
@@ -324,10 +475,13 @@ export function buildFilmScenesForEpisode(
     durationSec: 8,
     characterNames: [],
     propNames: [],
+    locationNames: [],
     sceneTag: "",
     action: "",
     visualDescription: "",
+    atmosphere: "",
     dialogue: "",
+    dialogueLines: [],
     imagePrompt: "",
     videoPrompt: "",
     audioPrompt: "",
@@ -389,10 +543,13 @@ export function buildStoryboardScenesFromContent(
       durationSec: 8 + (i % 5),
       characterNames: [],
       propNames: [],
+      locationNames: [],
       sceneTag: "",
       action: snippet,
       visualDescription: snippet,
+      atmosphere: "",
       dialogue: "",
+      dialogueLines: [],
       imagePrompt: "",
       videoPrompt: "",
       audioPrompt: "",
@@ -426,10 +583,18 @@ export function collectCharacterNamesFromScenes(scenes: FilmSceneRecord[]): stri
       const t = n.trim();
       if (t) set.add(t);
     }
-    // "Tên: lời thoại"
+    // "Tên: lời thoại" — mọi dòng
     const dialogue = s.dialogue || "";
-    const m = dialogue.match(/^([^:\n]{2,40})\s*:/);
-    if (m?.[1]) set.add(m[1].trim());
+    const re = /(?:^|\n)\s*([^:\n]{2,40}?)\s*:/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(dialogue))) {
+      const n = m[1]?.trim();
+      if (n) set.add(n);
+    }
+    for (const dl of s.dialogueLines || []) {
+      const n = dl.character?.trim();
+      if (n) set.add(n);
+    }
   }
   return Array.from(set);
 }
@@ -439,8 +604,9 @@ export function extractCharacterNamesFromText(text: string): string[] {
   if (!text?.trim()) return [];
   const set = new Set<string>();
   // "Tên: " trên đầu dòng
-  const nameColon = text.matchAll(/(?:^|\n)\s*([A-ZÀ-Ỹ][\wÀ-ỹ' ]{1,30})\s*:/g);
-  for (const m of nameColon) {
+  const re = /(?:^|\n)\s*([A-ZÀ-Ỹ][\wÀ-ỹ' ]{1,30})\s*:/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
     const n = m[1]?.trim();
     if (n && n.length >= 2 && n.length <= 40) set.add(n);
   }
@@ -460,6 +626,10 @@ export function buildFilmCharactersFromNames(
     name,
     role: DEFAULT_ROLES[Math.min(i, DEFAULT_ROLES.length - 1)],
     description: "",
+    clothingAccessories: "",
+    propNames: [],
+    episodeIds: [],
+    imagePrompt: "",
     imageUrl: "",
     imageUrls: [],
     status: "pending" as FilmCharacterStatus,
@@ -482,6 +652,102 @@ export function filmCharacterRoleLabel(role?: string): string {
     default:
       return role || "Supporting";
   }
+}
+
+export function createEmptyFilmCharacter(
+  projectId: string,
+  index: number,
+  name?: string,
+  episodeIds?: string[]
+): FilmCharacterRecord {
+  const now = new Date().toISOString();
+  return {
+    id: createFilmId("ch"),
+    projectId,
+    name: name || `Nhân vật ${index + 1}`,
+    role: "supporting",
+    description: "",
+    clothingAccessories: "",
+    propNames: [],
+    episodeIds: episodeIds?.length ? [...episodeIds] : [],
+    imagePrompt: "",
+    imageUrl: "",
+    imageUrls: [],
+    status: "pending",
+    sortOrder: index,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** Entity (NV / VP / Bối cảnh) gắn thẻ tập → hiện trong attach của tập đó */
+export function filmEntityLinkedToEpisode(
+  entity: { episodeIds?: string[] },
+  episodeId: string | null | undefined
+): boolean {
+  if (!episodeId) return true;
+  const ids = entity.episodeIds;
+  if (!ids || ids.length === 0) return false;
+  return ids.includes(episodeId);
+}
+
+/** Nhân vật gắn thẻ tập phim → hiện trong Gắn Nhân vật của tập đó */
+export function filmCharacterLinkedToEpisode(
+  character: Pick<FilmCharacterRecord, "episodeIds">,
+  episodeId: string | null | undefined
+): boolean {
+  return filmEntityLinkedToEpisode(character, episodeId);
+}
+
+export function filmPropLinkedToEpisode(
+  prop: Pick<FilmPropRecord, "episodeIds">,
+  episodeId: string | null | undefined
+): boolean {
+  return filmEntityLinkedToEpisode(prop, episodeId);
+}
+
+export function filmLocationLinkedToEpisode(
+  location: Pick<FilmSceneImageRecord, "episodeIds">,
+  episodeId: string | null | undefined
+): boolean {
+  return filmEntityLinkedToEpisode(location, episodeId);
+}
+
+/** Tên clone không trùng trong list hiện có */
+export function nextFilmEntityCloneName(
+  baseName: string,
+  existingNames: string[],
+  fallback = "Bản sao"
+): string {
+  const taken = new Set(existingNames.map((n) => n.trim().toLowerCase()).filter(Boolean));
+  const root = (baseName || fallback).trim() || fallback;
+  let n = 1;
+  while (true) {
+    const candidate = n === 1 ? `${root} (bản sao)` : `${root} (bản sao ${n})`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
+    n += 1;
+  }
+}
+
+export function nextFilmCharacterCloneName(
+  baseName: string,
+  existingNames: string[]
+): string {
+  return nextFilmEntityCloneName(baseName, existingNames, "Nhân vật");
+}
+
+export function nextFilmPropCloneName(
+  baseName: string,
+  existingNames: string[]
+): string {
+  return nextFilmEntityCloneName(baseName, existingNames, "Vật phẩm");
+}
+
+export function nextFilmLocationCloneName(
+  baseName: string,
+  existingNames: string[]
+): string {
+  return nextFilmEntityCloneName(baseName, existingNames, "Bối cảnh");
 }
 
 const DEFAULT_PROP_CATEGORIES: FilmPropCategory[] = [
@@ -516,6 +782,9 @@ export function buildFilmPropsFromNames(
     name,
     category: categories?.[i] || DEFAULT_PROP_CATEGORIES[Math.min(i, DEFAULT_PROP_CATEGORIES.length - 1)],
     description: "",
+    propNames: [],
+    episodeIds: [],
+    imagePrompt: "",
     imageUrl: "",
     imageUrls: [],
     status: "pending" as FilmPropStatus,
@@ -543,7 +812,12 @@ export function filmPropCategoryLabel(category?: string): string {
   }
 }
 
-export function createEmptyFilmProp(projectId: string, index: number, name?: string): FilmPropRecord {
+export function createEmptyFilmProp(
+  projectId: string,
+  index: number,
+  name?: string,
+  episodeIds?: string[]
+): FilmPropRecord {
   const now = new Date().toISOString();
   return {
     id: createFilmId("pr"),
@@ -551,6 +825,9 @@ export function createEmptyFilmProp(projectId: string, index: number, name?: str
     name: name || `Vật phẩm ${index}`,
     category: "prop",
     description: "",
+    propNames: [],
+    episodeIds: episodeIds?.length ? [...episodeIds] : [],
+    imagePrompt: "",
     imageUrl: "",
     imageUrls: [],
     status: "pending",
@@ -585,7 +862,11 @@ export function buildFilmSceneImagesFromLocations(
     projectId,
     name: loc.name,
     context: loc.context || "Ngày",
+    timeOfDay: loc.context || "Daylight",
     description: "",
+    propNames: [],
+    episodeIds: [],
+    imagePrompt: "",
     imageUrl: "",
     imageUrls: [],
     status: "pending" as FilmSceneImageStatus,
@@ -598,7 +879,8 @@ export function buildFilmSceneImagesFromLocations(
 export function createEmptyFilmSceneImage(
   projectId: string,
   index: number,
-  name?: string
+  name?: string,
+  episodeIds?: string[]
 ): FilmSceneImageRecord {
   const now = new Date().toISOString();
   return {
@@ -606,7 +888,11 @@ export function createEmptyFilmSceneImage(
     projectId,
     name: name || `Cảnh ${index}`,
     context: "Ngày",
+    timeOfDay: "Daylight",
     description: "",
+    propNames: [],
+    episodeIds: episodeIds?.length ? [...episodeIds] : [],
+    imagePrompt: "",
     imageUrl: "",
     imageUrls: [],
     status: "pending",

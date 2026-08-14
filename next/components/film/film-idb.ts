@@ -35,6 +35,19 @@ import {
   buildFilmProjectRecord,
   buildFilmScenesForEpisode,
 } from "./film-types";
+import { buildFilmSceneImagePrompt } from "./film-scene-image-prompt";
+import {
+  buildFilmSceneAudioPrompt,
+  buildFilmSceneVideoPrompt,
+} from "./film-scene-video-prompt";
+import {
+  FILM_DEFAULT_LANGUAGE,
+  FILM_DEFAULT_SYSTEM_INSTRUCTION,
+  FILM_LANGUAGE_META_KEY,
+  FILM_SYSTEM_INSTRUCTION_META_KEY,
+  isFilmLanguageValue,
+  type FilmLanguageValue,
+} from "./film-screenplay-system-instruction";
 
 // ── Open / upgrade ───────────────────────────────────────────────────────────
 
@@ -309,6 +322,129 @@ export async function updateFilmProject(
 
   await putFilmProject(updated);
   return updated;
+}
+
+export type FilmProjectImagePromptTemplatesInput = {
+  characterImagePromptTemplate: string;
+  propImagePromptTemplate: string;
+  locationImagePromptTemplate: string;
+};
+
+/**
+ * Lưu prompt mẫu Nhân vật / Vật phẩm / Bối cảnh theo dự án.
+ * Chuỗi rỗng hoặc trùng mặc định → xoá custom (fallback template code).
+ */
+export async function updateFilmProjectImagePromptTemplates(
+  id: string,
+  input: FilmProjectImagePromptTemplatesInput,
+  defaults: {
+    character: string;
+    prop: string;
+    location: string;
+  }
+): Promise<FilmProjectRecord> {
+  const existing = await getFilmProject(id);
+  if (!existing) {
+    throw new Error(`[film-idb] Project not found: ${id}`);
+  }
+
+  const normalize = (value: string, fallback: string): string | undefined => {
+    const next = String(value ?? "").trim();
+    if (!next) return undefined;
+    if (next === fallback.trim()) return undefined;
+    return next;
+  };
+
+  const updated: FilmProjectRecord = {
+    ...existing,
+    characterImagePromptTemplate: normalize(
+      input.characterImagePromptTemplate,
+      defaults.character
+    ),
+    propImagePromptTemplate: normalize(input.propImagePromptTemplate, defaults.prop),
+    locationImagePromptTemplate: normalize(
+      input.locationImagePromptTemplate,
+      defaults.location
+    ),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await putFilmProject(updated);
+  return updated;
+}
+
+export type FilmProjectStoryboardPromptsInput = {
+  storyboardImagePrompt: string;
+  storyboardVideoPrompt: string;
+  storyboardAudioPrompt: string;
+};
+
+/**
+ * Lưu prompt storyboard chung + (nếu field có giá trị) ghi sang mọi scene của dự án.
+ */
+export async function updateFilmProjectStoryboardPrompts(
+  id: string,
+  input: FilmProjectStoryboardPromptsInput
+): Promise<{ project: FilmProjectRecord; updatedScenes: FilmSceneRecord[] }> {
+  const existing = await getFilmProject(id);
+  if (!existing) {
+    throw new Error(`[film-idb] Project not found: ${id}`);
+  }
+
+  const image = String(input.storyboardImagePrompt ?? "").trim();
+  const video = String(input.storyboardVideoPrompt ?? "").trim();
+  const audio = String(input.storyboardAudioPrompt ?? "").trim();
+  const now = new Date().toISOString();
+
+  const project: FilmProjectRecord = {
+    ...existing,
+    storyboardImagePrompt: image || undefined,
+    storyboardVideoPrompt: video || undefined,
+    storyboardAudioPrompt: audio || undefined,
+    updatedAt: now,
+  };
+  await putFilmProject(project);
+
+  const scenes = await getFilmScenesByProject(id);
+  const updatedScenes: FilmSceneRecord[] = [];
+  if (image || video || audio) {
+    for (const s of scenes) {
+      let changed = false;
+      const next: FilmSceneRecord = { ...s, updatedAt: now };
+      // Prompt ảnh = ngữ nghĩa scene + style Setting (không đè một chuỗi giống nhau)
+      const builtImage = image
+        ? buildFilmSceneImagePrompt(s, image)
+        : next.imagePrompt;
+      if (image && !next.imagePromptCustom && builtImage && next.imagePrompt !== builtImage) {
+        next.imagePrompt = builtImage;
+        changed = true;
+      }
+      // Prompt video = Cỡ cảnh / Góc máy / Lia máy / thoại + style Setting
+      const builtVideo = video
+        ? buildFilmSceneVideoPrompt(s, video)
+        : next.videoPrompt;
+      if (video && !next.videoPromptCustom && builtVideo && next.videoPrompt !== builtVideo) {
+        next.videoPrompt = builtVideo;
+        changed = true;
+      } else if (video && !next.videoPromptCustom && !builtVideo && next.videoPrompt !== video) {
+        next.videoPrompt = video;
+        changed = true;
+      }
+      const builtAudio = buildFilmSceneAudioPrompt(s, audio || undefined);
+      if (builtAudio && !next.audioPromptCustom && next.audioPrompt !== builtAudio) {
+        next.audioPrompt = builtAudio;
+        changed = true;
+      } else if (audio && !next.audioPromptCustom && !builtAudio && next.audioPrompt !== audio) {
+        next.audioPrompt = audio;
+        changed = true;
+      }
+      if (!changed) continue;
+      await putFilmScene(next);
+      updatedScenes.push(next);
+    }
+  }
+
+  return { project, updatedScenes };
 }
 
 export async function deleteFilmProject(id: string): Promise<void> {
@@ -716,6 +852,39 @@ export async function getFilmMeta<T = unknown>(key: string): Promise<T | undefin
 export async function setFilmMeta(key: string, value: unknown): Promise<void> {
   const record: FilmMetaRecord = { value, updatedAt: new Date().toISOString() };
   await withStoreRequest(FILM_STORE.meta, "readwrite", (s) => s.put(record, key));
+}
+
+// ── System instruction (screenplay) ──────────────────────────────────────────
+
+/** Đọc systemInstruction đã lưu; fallback về template mặc định. */
+export async function getFilmSystemInstruction(): Promise<string> {
+  const saved = await getFilmMeta<string>(FILM_SYSTEM_INSTRUCTION_META_KEY);
+  if (typeof saved === "string" && saved.trim()) return saved;
+  return FILM_DEFAULT_SYSTEM_INSTRUCTION;
+}
+
+/** Lưu systemInstruction (chuỗi rỗng → xóa để fallback default). */
+export async function setFilmSystemInstruction(value: string): Promise<void> {
+  const next = String(value ?? "").trim();
+  if (!next) {
+    await setFilmMeta(FILM_SYSTEM_INSTRUCTION_META_KEY, "");
+    return;
+  }
+  await setFilmMeta(FILM_SYSTEM_INSTRUCTION_META_KEY, next);
+}
+
+/** Đọc ngôn ngữ output screenplay; fallback Vietnamese. */
+export async function getFilmOutputLanguage(): Promise<FilmLanguageValue> {
+  const saved = await getFilmMeta<string>(FILM_LANGUAGE_META_KEY);
+  if (typeof saved === "string" && isFilmLanguageValue(saved)) return saved;
+  return FILM_DEFAULT_LANGUAGE;
+}
+
+/** Lưu ngôn ngữ output screenplay. */
+export async function setFilmOutputLanguage(value: string): Promise<FilmLanguageValue> {
+  const next = isFilmLanguageValue(value) ? value : FILM_DEFAULT_LANGUAGE;
+  await setFilmMeta(FILM_LANGUAGE_META_KEY, next);
+  return next;
 }
 
 // ── Migrate legacy localStorage → IndexedDB (1 lần) ──────────────────────────

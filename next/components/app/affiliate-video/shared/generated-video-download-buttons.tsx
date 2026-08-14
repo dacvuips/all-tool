@@ -1,6 +1,6 @@
 /**
  * generated-video-download-buttons.tsx
- * Nút tải video 720p (gốc) + 1080p (upsample Flow2) — inline hoặc popover.
+ * Nút tải video 720p (gốc) + 1080p (upsample Flow2) — inline, popover hoặc overlay.
  */
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,7 +22,12 @@ export interface GeneratedVideoDownloadButtonsProps {
   fileName: string;
   disabled?: boolean;
   className?: string;
+  /** inline: nút + popover; overlay: góc trong video (hover) — giống ảnh 1K/2K/4K */
+  variant?: "inline" | "overlay";
 }
+
+const OVERLAY_BTN =
+  "flex justify-center items-center min-w-7 h-7 px-1.5 text-10 font-bold bg-white rounded-full border border-slate-200 shadow-sm transition-colors hover:bg-slate-50 disabled:opacity-50";
 
 const POPOVER_RES_BTN =
   "flex justify-center items-center min-w-8 h-7 px-2 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed";
@@ -58,11 +63,43 @@ function PopoverResolutionButton({
   );
 }
 
+function OverlayResolutionButton({
+  label,
+  toneClass,
+  loading,
+  disabled,
+  title,
+  onClick,
+}: {
+  label: string;
+  toneClass: string;
+  loading: boolean;
+  disabled?: boolean;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled || loading}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`${OVERLAY_BTN} ${toneClass}`}
+    >
+      {loading ? <RiLoader4Line className="text-xs animate-spin" /> : label}
+    </button>
+  );
+}
+
 export function GeneratedVideoDownloadButtons({
   video,
   fileName,
   disabled = false,
   className,
+  variant = "inline",
 }: GeneratedVideoDownloadButtonsProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -90,6 +127,36 @@ export function GeneratedVideoDownloadButtons({
       setLoadingRes(null);
     }
   };
+
+  if (variant === "overlay") {
+    return (
+      <div
+        className={`absolute bottom-2 left-2 z-20 flex gap-1 transition-opacity ${
+          disabled ? "opacity-40 pointer-events-none" : "opacity-0 group-hover:opacity-100"
+        }`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <OverlayResolutionButton
+          label="720p"
+          toneClass="text-green-600 hover:bg-green-50"
+          loading={loadingRes === "720p"}
+          disabled={disabled}
+          title={t("Tải video 720p")}
+          onClick={() => void handleDownload("720p")}
+        />
+        {hasFlow2Upsample1080pVideoMeta(video) && (
+          <OverlayResolutionButton
+            label="1080p"
+            toneClass="text-violet-600 hover:bg-violet-50"
+            loading={loadingRes === "1080p"}
+            disabled={disabled}
+            title={t("Tải video 1080p")}
+            onClick={() => void handleDownload("1080p")}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <>

@@ -1,20 +1,72 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiOutlineX } from "react-icons/hi";
+import { useToast } from "../../lib/providers/toast-provider";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
+import { getFilmEntityImageSrc } from "./api/generate-film-media";
+import {
+  checkFilmCharactersHaveImages,
+  filmAttachEntityHasImage,
+} from "./film-attachment-validate";
 import FilmMediaZoom from "./film-media-zoom";
+import { buildFilmSceneImagePrompt, resolveFilmSceneImagePrompt } from "./film-scene-image-prompt";
 import {
   FilmCharacterRecord,
   FilmSceneRecord,
+  filmCharacterLinkedToEpisode,
   filmCharacterRoleLabel,
 } from "./film-types";
 
 export type FilmShotFrameGenerateInput = {
   scene: FilmSceneRecord;
+  /** Prompt ảnh phân cảnh — ưu tiên `imagePrompt` (Prompt ảnh) */
   prompt: string;
-  characterIds: string[];
+  /** @deprecated — refs lấy từ Gắn Cảnh / NV / VP; giữ optional tương thích */
+  characterIds?: string[];
 };
+
+export function buildFilmShotFrameDefaultPrompt(
+  scene: FilmSceneRecord,
+  globalStyle?: string | null
+): string {
+  const stored = String(scene.imagePrompt || "").trim();
+  if (stored) return stored;
+  return resolveFilmSceneImagePrompt(scene, globalStyle) || buildFilmSceneImagePrompt(scene, globalStyle);
+}
+
+/** Prompt thực sự gửi Image API — ưu tiên đề xuất AI khi đang chọn suggested. */
+export function resolveFilmShotFrameActivePrompt(
+  scene: FilmSceneRecord,
+  globalStyle?: string | null
+): string {
+  const suggested = String(scene.frameSuggestedPrompt || "").trim();
+  const source = scene.framePromptSource;
+  if (suggested && source !== "main") {
+    return suggested;
+  }
+  return buildFilmShotFrameDefaultPrompt(scene, globalStyle);
+}
+
+/** Chọn character id đã có ảnh, ưu tiên khớp characterNames của scene */
+export function defaultFilmShotFrameCharacterIds(
+  scene: FilmSceneRecord,
+  characters: FilmCharacterRecord[]
+): string[] {
+  const names = new Set(
+    (scene.characterNames || []).map((n) => n.trim().toLowerCase()).filter(Boolean)
+  );
+  const inEpisode = characters.filter((c) =>
+    filmCharacterLinkedToEpisode(c, scene.episodeId)
+  );
+  const withImage = inEpisode.filter((c) => filmAttachEntityHasImage(c));
+  if (names.size === 0) {
+    return withImage.slice(0, 2).map((c) => c.id);
+  }
+  return withImage
+    .filter((c) => names.has(c.name.trim().toLowerCase()))
+    .map((c) => c.id);
+}
 
 type Props = {
   isOpen: boolean;
@@ -24,27 +76,12 @@ type Props = {
   onGenerate: (input: FilmShotFrameGenerateInput) => Promise<void>;
 };
 
-function buildDefaultPrompt(scene: FilmSceneRecord): string {
-  const raw =
-    scene.imagePrompt?.trim() ||
-    scene.visualDescription?.trim() ||
-    scene.summary?.trim() ||
-    scene.action?.trim() ||
-    "";
-  if (raw) return raw;
-  const shot = scene.shotSize || "wide shot";
-  const loc = scene.location || "scene";
-  return `${shot}, ${loc}, cinematic lighting, film still`;
-}
-
-function defaultSelectedIds(scene: FilmSceneRecord, characters: FilmCharacterRecord[]): string[] {
-  const names = new Set(
-    (scene.characterNames || []).map((n) => n.trim().toLowerCase()).filter(Boolean)
+function sceneFrameReadyForTitle(scene: FilmSceneRecord): boolean {
+  return (
+    scene.frameStatus === "ready" ||
+    !!scene.frameImageUrl ||
+    scene.mediaStatus === "ready"
   );
-  if (names.size === 0) {
-    return characters.slice(0, 2).map((c) => c.id);
-  }
-  return characters.filter((c) => names.has(c.name.trim().toLowerCase())).map((c) => c.id);
 }
 
 export default function FilmShotFrameDialog({
@@ -55,20 +92,23 @@ export default function FilmShotFrameDialog({
   onGenerate,
 }: Props) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [prompt, setPrompt] = useState("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [zoomThumb, setZoomThumb] = useState<string | null>(null);
 
-  const sortedCharacters = useMemo(
-    () => [...characters].sort((a, b) => a.sortOrder - b.sortOrder),
-    [characters]
-  );
+  const sortedCharacters = useMemo(() => {
+    const list = scene?.episodeId
+      ? characters.filter((c) => filmCharacterLinkedToEpisode(c, scene.episodeId))
+      : characters;
+    return [...list].sort((a, b) => a.sortOrder - b.sortOrder);
+  }, [characters, scene?.episodeId]);
 
   useEffect(() => {
     if (!isOpen || !scene) return;
-    setPrompt(buildDefaultPrompt(scene));
-    setSelectedIds(defaultSelectedIds(scene, sortedCharacters));
+    setPrompt(buildFilmShotFrameDefaultPrompt(scene));
+    setSelectedIds(defaultFilmShotFrameCharacterIds(scene, sortedCharacters));
     setSubmitting(false);
   }, [isOpen, scene, sortedCharacters]);
 
@@ -82,6 +122,11 @@ export default function FilmShotFrameDialog({
     if (!scene || submitting) return;
     const text = prompt.trim();
     if (!text) return;
+    const refCheck = checkFilmCharactersHaveImages(sortedCharacters, selectedIds);
+    if (!refCheck.ok) {
+      toast.error(refCheck.message);
+      return;
+    }
     setSubmitting(true);
     try {
       await onGenerate({
@@ -142,13 +187,14 @@ export default function FilmShotFrameDialog({
               </label>
               {sortedCharacters.length === 0 ? (
                 <p className="text-sm text-gray-400 m-0 py-2">
-                  {t("Chưa có nhân vật. Tạo Hình ảnh Nhân vật trước để tham chiếu.")}
+                  {t("Chưa có nhân vật. Tạo Nhân vật trước để tham chiếu.")}
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {sortedCharacters.map((ch) => {
                     const selected = selectedIds.includes(ch.id);
-                    const thumb = ch.imageUrl || ch.imageUrls?.[0];
+                    const thumb = getFilmEntityImageSrc(ch);
+                    const hasImg = filmAttachEntityHasImage(ch);
                     const initial = (ch.name || "?").trim().charAt(0).toUpperCase() || "?";
                     return (
                       <button
@@ -157,7 +203,9 @@ export default function FilmShotFrameDialog({
                         onClick={() => toggleCharacter(ch.id)}
                         className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-colors cursor-pointer bg-white ${
                           selected
-                            ? "border-blue-500 ring-1 ring-blue-200 shadow-sm"
+                            ? hasImg
+                              ? "border-blue-500 ring-1 ring-blue-200 shadow-sm"
+                              : "border-amber-400 ring-1 ring-amber-200 shadow-sm"
                             : "border-gray-200 hover:border-blue-200 hover:bg-blue-50"
                         }`}
                       >
@@ -181,8 +229,14 @@ export default function FilmShotFrameDialog({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-bold text-gray-900 truncate">{ch.name}</div>
-                          <div className="text-xs text-gray-400 m-0 mt-0.5">
-                            {filmCharacterRoleLabel(ch.role)}
+                          <div
+                            className={`text-xs m-0 mt-0.5 ${
+                              hasImg ? "text-gray-400" : "text-amber-600"
+                            }`}
+                          >
+                            {hasImg
+                              ? filmCharacterRoleLabel(ch.role)
+                              : t("Chưa có ảnh")}
                           </div>
                         </div>
                       </button>
@@ -217,13 +271,5 @@ export default function FilmShotFrameDialog({
         onClose={() => setZoomThumb(null)}
       />
     </Dialog>
-  );
-}
-
-function sceneFrameReadyForTitle(scene: FilmSceneRecord): boolean {
-  return (
-    scene.frameStatus === "ready" ||
-    !!scene.frameImageUrl ||
-    scene.mediaStatus === "ready"
   );
 }

@@ -42,6 +42,14 @@ const _uriBlobInflight = new Map<string, Promise<Blob>>();
 const _uriBlobFailCache = new Map<string, { until: number; error: Error }>();
 const FAIL_CACHE_TTL_MS = 60_000;
 
+/** OuterHTML / copy-paste hay biến `&` thành `&amp;` — decode lại trước khi parse. */
+function decodeHtmlAmpersands(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&#0*38;/g, "&")
+    .replace(/&#x0*26;/gi, "&");
+}
+
 function isHttpUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -75,28 +83,62 @@ export function isNonRetryableMediaFetchError(err: unknown): boolean {
   );
 }
 
-/** HTTP(S) URL ngoài origin → download-proxy (tránh CORS khi preview / fetch). */
+/**
+ * HTTP(S) URL ngoài origin → download-proxy (tránh CORS khi preview / fetch).
+ * Luôn build `?...&inline=1` với `&` thật (URLSearchParams). Không dùng `&amp;`.
+ * Nếu truyền sẵn path proxy (có thể dính &amp;), normalize lại.
+ */
 export function toDownloadProxyUrl(url: string, inline = false): string {
-  const trimmed = url.trim();
-  if (!trimmed || trimmed.startsWith("data:") || trimmed.startsWith(DOWNLOAD_PROXY_PATH)) {
-    return trimmed;
+  const raw = decodeHtmlAmpersands(String(url || "").trim());
+  if (!raw || raw.startsWith("data:") || raw.startsWith("blob:")) {
+    return raw;
   }
-  if (!isHttpUrl(trimmed)) {
-    return trimmed;
+
+  // Đã là proxy (relative hoặc absolute cùng path)
+  const proxyPathIdx = raw.indexOf(DOWNLOAD_PROXY_PATH);
+  if (proxyPathIdx >= 0) {
+    try {
+      const absolute =
+        raw.startsWith("http://") || raw.startsWith("https://")
+          ? raw
+          : `http://local.invalid${raw.startsWith("/") ? "" : "/"}${raw}`;
+      const parsed = new URL(absolute);
+      const target = decodeHtmlAmpersands(parsed.searchParams.get("url") || "");
+      if (target && isHttpUrl(target)) {
+        const wantInline =
+          inline ||
+          parsed.searchParams.get("inline") === "1" ||
+          parsed.searchParams.get("inline") === "true";
+        const params = new URLSearchParams();
+        params.set("url", target);
+        if (wantInline) params.set("inline", "1");
+        return `${DOWNLOAD_PROXY_PATH}?${params.toString()}`;
+      }
+    } catch {
+      // fall through
+    }
+    // path-only already proxy — return decoded ampersands form
+    return raw.startsWith("http") ? raw : raw.slice(proxyPathIdx);
+  }
+
+  if (!isHttpUrl(raw)) {
+    return raw;
   }
   if (typeof window !== "undefined") {
     try {
-      if (new URL(trimmed).origin === window.location.origin) {
-        return trimmed;
+      if (new URL(raw).origin === window.location.origin) {
+        return raw;
       }
     } catch {
-      return trimmed;
+      return raw;
     }
   }
-  const params = new URLSearchParams({ url: trimmed });
+  const params = new URLSearchParams();
+  params.set("url", raw);
   if (inline) {
     params.set("inline", "1");
   }
+  // URLSearchParams luôn join bằng `&` (không phải &amp;)
   return `${DOWNLOAD_PROXY_PATH}?${params.toString()}`;
 }
 

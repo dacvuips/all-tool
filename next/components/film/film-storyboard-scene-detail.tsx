@@ -1,20 +1,94 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
   HiDotsVertical,
+  HiPencil,
+  HiRefresh,
   HiShare,
   HiThumbDown,
   HiThumbUp,
 } from "react-icons/hi";
+import { FilmEntityAttachField, type FilmAttachOption } from "./film-attach-fields";
+import {
+  countFilmSceneAttachSlots,
+  FILM_SCENE_ATTACH_IMAGE_LIMIT,
+  getFilmSceneLocationNames,
+} from "./film-attachment-validate";
+import {
+  FILM_CAMERA_ANGLE_OPTIONS,
+  FILM_CAMERA_MOVEMENT_OPTIONS,
+  FILM_SHOT_SIZE_OPTIONS,
+  filmSelectOptionsWithCurrent,
+  resolveFilmCameraAngleValue,
+  resolveFilmCameraMovementValue,
+  resolveFilmShotSizeValue,
+} from "./film-shot-options";
 import { FilmSceneRecord } from "./film-types";
 
 type Props = {
   scene: FilmSceneRecord | null;
-  allCharacterNames?: string[];
-  allPropNames?: string[];
+  imagePromptDefault?: string;
+  videoPromptDefault?: string;
+  audioPromptDefault?: string;
+  characterOptions?: FilmAttachOption[];
+  propOptions?: FilmAttachOption[];
+  sceneLocationOptions?: FilmAttachOption[];
   onChange: (patch: Partial<FilmSceneRecord>) => void;
+  /** Icon Gắn → mở tab production + scroll tới card ảnh entity */
+  onOpenAttachEntity?: (
+    kind: "character" | "prop" | "location",
+    option: FilmAttachOption
+  ) => void;
 };
+
+function PromptField({
+  label,
+  value,
+  defaultValue,
+  rows,
+  placeholder,
+  hint,
+  onChangeValue,
+  onReset,
+}: {
+  label: string;
+  value: string;
+  defaultValue: string;
+  rows: number;
+  placeholder: string;
+  hint: string;
+  onChangeValue: (next: string) => void;
+  onReset: () => void;
+}) {
+  const { t } = useTranslation();
+  const canReset = (value || "").trim() !== (defaultValue || "").trim();
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <label className="block text-xs font-medium text-gray-500 m-0">{label}</label>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={!canReset}
+          title={t("Reset về prompt mặc định")}
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-10 font-semibold border-0 bg-transparent cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+        >
+          <HiRefresh className="text-xs" />
+          {t("Reset")}
+        </button>
+      </div>
+      <textarea
+        value={value}
+        onChange={(e) => onChangeValue(e.target.value)}
+        className={textareaClass}
+        rows={rows}
+        placeholder={placeholder}
+      />
+      <p className="text-10 text-gray-400 m-0 mt-1">{hint}</p>
+    </div>
+  );
+}
 
 function Field({
   label,
@@ -33,91 +107,55 @@ function Field({
 
 const inputClass =
   "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-white";
+const selectClass = `${inputClass} cursor-pointer appearance-auto`;
 const textareaClass = `${inputClass} resize-y min-h-18 leading-relaxed`;
 
-function TagInput({
-  values,
+function ShotSelect({
+  value,
   options,
   onChange,
-  placeholder,
+  emptyLabel,
 }: {
-  values: string[];
-  options?: string[];
-  onChange: (next: string[]) => void;
-  placeholder?: string;
+  value: string;
+  options: string[];
+  onChange: (next: string) => void;
+  emptyLabel: string;
 }) {
-  const { t } = useTranslation();
-  const [draft, setDraft] = useState("");
-  const remaining = (options || []).filter((o) => !values.includes(o));
-
-  const add = (name: string) => {
-    const n = name.trim();
-    if (!n || values.includes(n)) return;
-    onChange([...values, n]);
-    setDraft("");
-  };
-
   return (
-    <div className="rounded-xl border border-gray-200 p-2.5 bg-white">
-      <div className="flex flex-wrap gap-1.5 mb-2">
-        {values.map((v) => (
-          <span
-            key={v}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700"
-          >
-            {v}
-            <button
-              type="button"
-              className="border-0 bg-transparent text-blue-400 hover:text-blue-700 cursor-pointer p-0 leading-none"
-              onClick={() => onChange(values.filter((x) => x !== v))}
-            >
-              ×
-            </button>
-          </span>
-        ))}
-        {values.length === 0 && (
-          <span className="text-xs text-gray-400">{placeholder || t("Chưa gắn")}</span>
-        )}
-      </div>
-      <div className="flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              add(draft);
-            }
-          }}
-          placeholder={t("Thêm...")}
-          className="flex-1 text-xs border-0 outline-none bg-transparent text-gray-700 placeholder-gray-400"
-        />
-      </div>
-      {remaining.length > 0 && (
-        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-gray-50">
-          {remaining.slice(0, 8).map((o) => (
-            <button
-              key={o}
-              type="button"
-              onClick={() => add(o)}
-              className="px-2 py-0.5 rounded-md text-10 text-gray-500 bg-gray-50 hover:bg-gray-100 border-0 cursor-pointer"
-            >
-              + {o}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={selectClass}
+    >
+      <option value="">{emptyLabel}</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
   );
 }
 
 export default function FilmStoryboardSceneDetail({
   scene,
-  allCharacterNames = [],
-  allPropNames = [],
+  imagePromptDefault = "",
+  videoPromptDefault = "",
+  audioPromptDefault = "",
+  characterOptions = [],
+  propOptions = [],
+  sceneLocationOptions = [],
   onChange,
+  onOpenAttachEntity,
 }: Props) {
   const { t } = useTranslation();
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+
+  useEffect(() => {
+    setEditingTitle(false);
+    setTitleDraft(scene?.title || "");
+  }, [scene?.id]);
 
   if (!scene) {
     return (
@@ -127,25 +165,71 @@ export default function FilmStoryboardSceneDetail({
     );
   }
 
-  const headerTitle =
-    scene.summary || scene.action
-      ? `${(scene.summary || scene.action || "").slice(0, 48)}${
-          (scene.summary || scene.action || "").length > 48 ? "…" : ""
-        } - ${scene.shotSize || ""}`
-      : scene.title || "";
+  const sceneTitle = scene.title?.trim() || "";
+
+  const startEditTitle = () => {
+    setTitleDraft(scene.title || "");
+    setEditingTitle(true);
+  };
+
+  const commitTitle = () => {
+    const next = titleDraft.trim();
+    if (next !== (scene.title || "").trim()) {
+      onChange({ title: next });
+    }
+    setEditingTitle(false);
+  };
 
   return (
     <div className="h-full min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
       <div className="px-4 sm:px-5 py-3.5 border-b border-gray-50 flex-shrink-0">
-        <div className="flex items-baseline gap-2 flex-wrap">
-          <h3 className="text-base font-bold text-gray-900 m-0">
-            {t("Cảnh quay")} #{scene.index}
+        <div className="flex items-center gap-2 min-w-0">
+          <h3 className="text-base font-bold text-gray-900 m-0 min-w-0 flex items-center gap-2">
+            <span className="flex-shrink-0">#{scene.index}</span>
+            {editingTitle ? (
+              <input
+                autoFocus
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={commitTitle}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setTitleDraft(scene.title || "");
+                    setEditingTitle(false);
+                  }
+                }}
+                placeholder={t("Tiêu đề")}
+                className="m-0 min-w-0 flex-1 px-1.5 py-0.5 text-sm font-semibold text-gray-800 bg-white rounded border border-blue-300 outline-none focus:border-blue-500"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={startEditTitle}
+                className="min-w-0 flex items-center gap-1.5 border-0 bg-transparent p-0 cursor-pointer group"
+                title={t("Nhấp để sửa tiêu đề")}
+              >
+                <span
+                  className={`font-semibold truncate min-w-0 ${
+                    sceneTitle
+                      ? "text-gray-700 group-hover:text-blue-700"
+                      : "text-gray-400 italic"
+                  }`}
+                >
+                  {sceneTitle || t("Tiêu đề")}
+                </span>
+                <HiPencil className="flex-shrink-0 text-sm text-gray-400 group-hover:text-blue-600" />
+              </button>
+            )}
           </h3>
-          <span className="text-sm text-gray-400">{scene.durationSec || 0}s</span>
+          <span className="text-sm text-gray-400 flex-shrink-0 ml-auto">
+            {scene.durationSec || 0}s
+          </span>
         </div>
-        {headerTitle && (
-          <p className="text-xs text-gray-500 m-0 mt-1 line-clamp-1">{headerTitle}</p>
-        )}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-6">
@@ -179,9 +263,7 @@ export default function FilmStoryboardSceneDetail({
                 </span>
               </div>
             </div>
-            <div className="w-full xl:w-48 flex-shrink-0 rounded-xl bg-gray-100 border border-gray-200 min-h-28 flex items-center justify-center text-sm text-gray-400">
-              {t("Chờ tạo")}
-            </div>
+          
           </div>
         </section>
 
@@ -190,119 +272,104 @@ export default function FilmStoryboardSceneDetail({
           <div className="text-10 font-bold tracking-wider text-gray-400 uppercase mb-3">
             {t("Cấu trúc Cảnh quay")}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Field label={t("Tiêu đề")}>
-              <input
-                value={scene.title || ""}
-                onChange={(e) => onChange({ title: e.target.value })}
-                className={inputClass}
-              />
-            </Field>
-            <Field label={t("Cỡ cảnh")}>
-              <input
-                value={scene.shotSize || ""}
-                onChange={(e) => onChange({ shotSize: e.target.value })}
-                className={inputClass}
-                placeholder={t("Toàn cảnh / Trung cảnh...")}
-              />
-            </Field>
-            <Field label={t("Góc máy")}>
-              <input
-                value={scene.cameraAngle || ""}
-                onChange={(e) => onChange({ cameraAngle: e.target.value })}
-                className={inputClass}
-              />
-            </Field>
-            <Field label={t("Lia máy")}>
-              <input
-                value={scene.cameraMovement || ""}
-                onChange={(e) => onChange({ cameraMovement: e.target.value })}
-                className={inputClass}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label={t("Gắn Nhân vật")}>
-                <TagInput
-                  values={scene.characterNames || []}
-                  options={allCharacterNames}
-                  onChange={(characterNames) => onChange({ characterNames })}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label={t("Gắn Vật phẩm")}>
-                <TagInput
-                  values={scene.propNames || []}
-                  options={allPropNames}
-                  onChange={(propNames) => onChange({ propNames })}
-                />
-              </Field>
-            </div>
-            <Field label={t("Gắn Cảnh")}>
-              <input
-                value={scene.sceneTag || ""}
-                onChange={(e) => onChange({ sceneTag: e.target.value })}
-                className={inputClass}
-                placeholder={t("Chọn / nhập cảnh")}
-              />
-            </Field>
-            <Field label={t("Địa điểm")}>
-              <input
-                value={scene.location || ""}
-                onChange={(e) => onChange({ location: e.target.value })}
-                className={inputClass}
-              />
-            </Field>
-            <Field label={t("Thời lượng (giây)")}>
-              <input
-                type="number"
-                min={1}
-                value={scene.durationSec ?? 8}
-                onChange={(e) =>
-                  onChange({ durationSec: Math.max(1, parseInt(e.target.value, 10) || 1) })
-                }
-                className={inputClass}
-              />
-            </Field>
-          </div>
-        </section>
-
-        {/* Semantics */}
-        <section>
-          <div className="text-10 font-bold tracking-wider text-gray-400 uppercase mb-3">
-            {t("Ngữ nghĩa")}
-          </div>
           <div className="space-y-3">
-            <Field label={t("Hành động")}>
-              <textarea
-                value={scene.action || ""}
-                onChange={(e) => onChange({ action: e.target.value })}
-                className={textareaClass}
-                rows={3}
-              />
-            </Field>
-            <Field label={t("Mô tả hình ảnh")}>
-              <textarea
-                value={scene.visualDescription || ""}
-                onChange={(e) => onChange({ visualDescription: e.target.value })}
-                className={textareaClass}
-                rows={3}
-              />
-            </Field>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label={t("Cỡ cảnh")}>
+                <ShotSelect
+                  value={resolveFilmShotSizeValue(scene.shotSize)}
+                  options={filmSelectOptionsWithCurrent(
+                    FILM_SHOT_SIZE_OPTIONS,
+                    resolveFilmShotSizeValue(scene.shotSize)
+                  )}
+                  emptyLabel={t("— Chọn cỡ cảnh —")}
+                  onChange={(shotSize) => onChange({ shotSize })}
+                />
+              </Field>
+              <Field label={t("Góc máy")}>
+                <ShotSelect
+                  value={resolveFilmCameraAngleValue(scene.cameraAngle)}
+                  options={filmSelectOptionsWithCurrent(
+                    FILM_CAMERA_ANGLE_OPTIONS,
+                    resolveFilmCameraAngleValue(scene.cameraAngle)
+                  )}
+                  emptyLabel={t("— Chọn góc máy —")}
+                  onChange={(cameraAngle) => onChange({ cameraAngle })}
+                />
+              </Field>
+              <Field label={t("Lia máy")}>
+                <ShotSelect
+                  value={resolveFilmCameraMovementValue(scene.cameraMovement)}
+                  options={filmSelectOptionsWithCurrent(
+                    FILM_CAMERA_MOVEMENT_OPTIONS,
+                    resolveFilmCameraMovementValue(scene.cameraMovement)
+                  )}
+                  emptyLabel={t("— Chọn lia máy —")}
+                  onChange={(cameraMovement) => onChange({ cameraMovement })}
+                />
+              </Field>
+            </div>
+            <div className="space-y-3">
+              <Field label={t("Gắn Nhân vật")}>
+                <FilmEntityAttachField
+                  values={scene.characterNames || []}
+                  options={characterOptions}
+                  usedSlots={countFilmSceneAttachSlots(scene)}
+                  maxSlots={FILM_SCENE_ATTACH_IMAGE_LIMIT}
+                  onChange={(characterNames) => onChange({ characterNames })}
+                  onOpenOption={
+                    onOpenAttachEntity
+                      ? (opt) => onOpenAttachEntity("character", opt)
+                      : undefined
+                  }
+                  openOptionTitle={t("Mở ảnh nhân vật")}
+                />
+              </Field>
+              <Field label={t("Gắn Vật phẩm")}>
+                <FilmEntityAttachField
+                  values={scene.propNames || []}
+                  options={propOptions}
+                  usedSlots={countFilmSceneAttachSlots(scene)}
+                  maxSlots={FILM_SCENE_ATTACH_IMAGE_LIMIT}
+                  onChange={(propNames) => onChange({ propNames })}
+                  onOpenOption={
+                    onOpenAttachEntity
+                      ? (opt) => onOpenAttachEntity("prop", opt)
+                      : undefined
+                  }
+                  openOptionTitle={t("Mở ảnh vật phẩm")}
+                />
+              </Field>
+              <Field label={t("Gắn Cảnh")}>
+                <FilmEntityAttachField
+                  values={getFilmSceneLocationNames(scene).slice(0, 1)}
+                  options={sceneLocationOptions}
+                  usedSlots={countFilmSceneAttachSlots(scene)}
+                  maxSlots={FILM_SCENE_ATTACH_IMAGE_LIMIT}
+                  maxItems={1}
+                  required
+                  emptyLabel={t("Bắt buộc gắn đúng 1 bối cảnh")}
+                  onChange={(locationNames) => {
+                    const only = (locationNames || [])
+                      .map((n) => n.trim())
+                      .filter(Boolean)
+                      .slice(0, 1);
+                    const first = only[0] || "";
+                    onChange({
+                      locationNames: only,
+                      sceneTag: first,
+                      location: first,
+                    });
+                  }}
+                  onOpenOption={
+                    onOpenAttachEntity
+                      ? (opt) => onOpenAttachEntity("location", opt)
+                      : undefined
+                  }
+                  openOptionTitle={t("Mở ảnh bối cảnh")}
+                />
+              </Field>
+            </div>
           </div>
-        </section>
-
-        {/* Dialogue */}
-        <section>
-          <Field label={t("Thoại / Kể chuyện")}>
-            <textarea
-              value={scene.dialogue || ""}
-              onChange={(e) => onChange({ dialogue: e.target.value })}
-              className={textareaClass}
-              rows={2}
-              placeholder={t("Tên nhân vật: lời thoại...")}
-            />
-          </Field>
         </section>
 
         {/* Prompts */}
@@ -310,37 +377,71 @@ export default function FilmStoryboardSceneDetail({
           <div className="flex items-center justify-between mb-3">
             <div className="text-sm font-bold text-gray-800">{t("Prompt")}</div>
             <span className="text-10 text-gray-400">
-              {t("Cho ảnh, video, nhạc, âm thanh")}
+              {t("Cho ảnh, video, nhạc, âm thanh · cấu hình chung ở Setting")}
             </span>
           </div>
           <div className="space-y-3">
-            <Field label={t("Prompt ảnh")}>
-              <textarea
-                value={scene.imagePrompt || ""}
-                onChange={(e) => onChange({ imagePrompt: e.target.value })}
-                className={textareaClass}
-                rows={3}
-                placeholder="Wide shot, daylight..."
-              />
-            </Field>
-            <Field label={t("Prompt video")}>
-              <textarea
-                value={scene.videoPrompt || ""}
-                onChange={(e) => onChange({ videoPrompt: e.target.value })}
-                className={textareaClass}
-                rows={4}
-                placeholder="[MOTION] ... [AUDIO] ..."
-              />
-            </Field>
-            <Field label={t("Prompt âm thanh")}>
-              <textarea
-                value={scene.audioPrompt || ""}
-                onChange={(e) => onChange({ audioPrompt: e.target.value })}
-                className={textareaClass}
-                rows={2}
-                placeholder="Wind and footsteps..."
-              />
-            </Field>
+            <PromptField
+              label={t("Prompt ảnh")}
+              value={scene.imagePrompt || ""}
+              defaultValue={imagePromptDefault}
+              rows={6}
+              placeholder={t(
+                "Sẽ tự ghép: Cỡ cảnh · Góc máy · [Hành động nhân vật] · [Hình ảnh cảnh quay] · [Không khí cảnh]"
+              )}
+              hint={t(
+                "Mặc định ghép từ Cỡ cảnh, Góc máy và 3 khối [Hành động nhân vật] / [Hình ảnh cảnh quay] / [Không khí cảnh]. Có thể sửa tay, Reset để lấy lại mặc định."
+              )}
+              onChangeValue={(imagePrompt) =>
+                onChange({ imagePrompt, imagePromptCustom: true })
+              }
+              onReset={() =>
+                onChange({
+                  imagePrompt: imagePromptDefault,
+                  imagePromptCustom: false,
+                })
+              }
+            />
+            <PromptField
+              label={t("Prompt video")}
+              value={scene.videoPrompt || ""}
+              defaultValue={videoPromptDefault}
+              rows={10}
+              placeholder={t(
+                "Sẽ tự ghép: Cỡ cảnh · Góc máy · Lia máy · [Hành động nhân vật] · [Hình ảnh cảnh quay] · [Không khí cảnh] · [MOTION] [AUDIO] [SFX] [MUSIC] [VOICE] [DIALOGUE]"
+              )}
+              hint={t(
+                "Mặc định ghép từ cấu trúc cảnh, 3 khối ngữ nghĩa, rồi [MOTION]/[AUDIO]/[SFX]/[MUSIC]/[VOICE]/[DIALOGUE]. Có thể sửa tay, Reset để lấy lại mặc định."
+              )}
+              onChangeValue={(videoPrompt) =>
+                onChange({ videoPrompt, videoPromptCustom: true })
+              }
+              onReset={() =>
+                onChange({
+                  videoPrompt: videoPromptDefault,
+                  videoPromptCustom: false,
+                })
+              }
+            />
+            <PromptField
+              label={t("Prompt âm thanh")}
+              value={scene.audioPrompt || ""}
+              defaultValue={audioPromptDefault}
+              rows={8}
+              placeholder={t("Sẽ tự ghép: [AUDIO] [SFX] [MUSIC] [VOICE]")}
+              hint={t(
+                "Mặc định ghép 4 khối [AUDIO], [SFX], [MUSIC], [VOICE]. Có thể sửa tay, Reset để lấy lại mặc định."
+              )}
+              onChangeValue={(audioPrompt) =>
+                onChange({ audioPrompt, audioPromptCustom: true })
+              }
+              onReset={() =>
+                onChange({
+                  audioPrompt: audioPromptDefault,
+                  audioPromptCustom: false,
+                })
+              }
+            />
           </div>
 
           <div className="flex items-center justify-end gap-1 mt-3 pt-2">

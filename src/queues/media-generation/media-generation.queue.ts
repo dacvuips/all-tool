@@ -228,6 +228,11 @@ export async function enqueueMediaGenerationJob(
   options?: { delayMs?: number }
 ): Promise<void> {
   try {
+    // Đảm bảo processor đã gắn (server/hot-reload có thể mất consumer)
+    if (!mediaGenerationQueue.getQueueIfExists()) {
+      mediaGenerationQueue.defaultQueue();
+    }
+
     let beeJob = mediaGenerationQueue.queue().createJob({ jobId });
     const delayMs = options?.delayMs ?? 0;
     if (delayMs > 0) {
@@ -239,10 +244,58 @@ export async function enqueueMediaGenerationJob(
         delayMs > 0 ? ` delay=${delayMs}ms` : ""
       }`
     );
+
+    // Kick consumer nếu queue im lặng (waiting>0 active=0 / active mồ côi)
+    void kickMediaQueueConsumerIfStuck().catch((err) =>
+      logger.warn(`[MediaGenerationQueue] kick after enqueue: ${err?.message}`)
+    );
   } catch (err: any) {
     logger.error(`[MediaGenerationQueue] enqueue lỗi: ${err?.message}`);
     throw err;
   }
+}
+
+/**
+ * Khi bee-queue consumer chết: job nằm waiting/active ghost, Mongo progress = 0.
+ * Gọi sau mỗi enqueue + trong orphan sweep.
+ */
+export async function kickMediaQueueConsumerIfStuck(): Promise<boolean> {
+  const status = await getMediaGenerationQueueStatus();
+  if (!status.running) {
+    mediaGenerationQueue.defaultQueue();
+    logger.warn("[MediaGenerationQueue] kick: queue not running — defaultQueue()");
+    return true;
+  }
+
+  // active mồ côi chặn pickup waiting (worker chết, slot active ảo)
+  if (status.active > 0) {
+    const q = mediaGenerationQueue.getQueueIfExists();
+    if (q) {
+      try {
+        const activeJobs = await q.getJobs("active", { start: 0, size: 50 });
+        if (activeJobs.length === 0 && status.active > 0) {
+          logger.warn(
+            `[MediaGenerationQueue] kick: phantom active=${status.active} — restart consumer`
+          );
+          mediaGenerationQueue.restartQueueConsumer();
+          return true;
+        }
+      } catch {
+        // ignore health race
+      }
+    }
+  }
+
+  if (status.waiting > 0 && status.active === 0) {
+    logger.warn(
+      `[MediaGenerationQueue] kick: waiting=${status.waiting} active=0 — clear stalled + restart`
+    );
+    await recoverStalledBeeJobsOnStartup();
+    mediaGenerationQueue.restartQueueConsumer();
+    return true;
+  }
+
+  return false;
 }
 
 /** Status snapshot dùng cho health-check */
@@ -383,11 +436,22 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
       consumerRestarted = true;
       logger.warn("[MediaGenerationQueue] Queue chưa chạy — đã khởi động consumer");
     } else if (status.waiting > 0 && status.active === 0) {
+      await recoverStalledBeeJobsOnStartup();
       mediaGenerationQueue.restartQueueConsumer();
       consumerRestarted = true;
       logger.warn(
         `[MediaGenerationQueue] Restart consumer: waiting=${status.waiting}, active=${status.active}`
       );
+    } else if (status.active > 0) {
+      // active ảo (worker chết) → dọn + restart nếu mongo còn QUEUED chờ
+      const cleared = await recoverStalledBeeJobsOnStartup();
+      if (cleared > 0) {
+        mediaGenerationQueue.restartQueueConsumer();
+        consumerRestarted = true;
+        logger.warn(
+          `[MediaGenerationQueue] Cleared ${cleared} stalled active + restart consumer`
+        );
+      }
     }
 
     const staleCutoff = new Date(Date.now() - MEDIA_JOB_ORPHANED_QUEUED_MS);
@@ -417,14 +481,31 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
         await mediaGenerationJobService.updateOne(jobId, {
           message: "Đang thử lại (tự động khôi phục hàng đợi)...",
         } as any);
-        await enqueueMediaGenerationJob(jobId);
+        // re-enqueue content without nested kick storm — kick once after loop
+        {
+          if (!mediaGenerationQueue.getQueueIfExists()) {
+            mediaGenerationQueue.defaultQueue();
+          }
+          let beeJob = mediaGenerationQueue.queue().createJob({ jobId });
+          await beeJob.save();
+          logger.warn(`[MediaGenerationQueue] Re-enqueue orphaned QUEUED jobId=${jobId}`);
+        }
         requeued++;
-        logger.warn(`[MediaGenerationQueue] Re-enqueue orphaned QUEUED jobId=${jobId}`);
       } catch (err: any) {
         logger.error(
           `[MediaGenerationQueue] Re-enqueue orphaned QUEUED jobId=${jobId} lỗi: ${err?.message}`
         );
       }
+    }
+
+    // Sau khi requeue job Mongo — luôn dọn active + restart để worker thật pickup
+    if (requeued > 0) {
+      await recoverStalledBeeJobsOnStartup();
+      mediaGenerationQueue.restartQueueConsumer();
+      consumerRestarted = true;
+    } else {
+      const kicked = await kickMediaQueueConsumerIfStuck();
+      if (kicked) consumerRestarted = true;
     }
 
     if (consumerRestarted || requeued > 0) {

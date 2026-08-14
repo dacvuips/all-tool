@@ -11,31 +11,88 @@ import {
   HiThumbUp,
   HiVideoCamera,
 } from "react-icons/hi";
+import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
+import { FilmProductionTab } from "./film-character-images-panel";
+import FilmEditDialogShell, {
+  FILM_EDIT_DIALOG_BODY_CLASS,
+  FILM_EDIT_DIALOG_CLASS,
+  FILM_EDIT_DIALOG_FOOTER_CLASS,
+  FILM_EDIT_DIALOG_HEADER_CLASS,
+  FILM_EDIT_DIALOG_WRAPPER_CLASS,
+  FILM_EDIT_PROMPT_TEXTAREA_CLASS,
+  FILM_EDIT_PROMPT_TEXTAREA_STYLE,
+} from "./film-edit-dialog-shell";
+import { useFilmEntityCardFocus } from "./film-entity-card-focus";
+import { FILM_MEDIA_CARD_GRID_CLASS, FILM_MEDIA_CARD_GRID_PAD_CLASS } from "./film-media-card-grid";
 import FilmPropCard from "./film-prop-card";
+import { FilmCatalogPickDialog, type FilmCatalogKind, type FilmCatalogPickItem } from "./film-catalog-pick-dialog";
+import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
+import { buildFilmPropImagePrompt } from "./film-prop-image-prompt";
 import {
+  FilmAspectRatio,
+  FilmCharacterRecord,
+  FilmEpisodeRecord,
   FilmPropCategory,
   FilmPropRecord,
+  FilmSceneImageRecord,
   filmPropCategoryLabel,
 } from "./film-types";
-import { FilmProductionTab } from "./film-character-images-panel";
 
 type Props = {
   props: FilmPropRecord[];
+  allPropsForLink?: FilmPropRecord[];
+  episodes?: FilmEpisodeRecord[];
+  aspectRatio?: FilmAspectRatio;
+  /** Prompt mẫu Setting dự án */
+  promptTemplate?: string | null;
   onPropsChange: (next: FilmPropRecord[]) => void;
   onSaveProp: (p: FilmPropRecord) => Promise<void>;
   onExtractProps: () => Promise<void>;
   onBulkCreate: () => Promise<void>;
-  onAddProp: () => Promise<void>;
+  onAddProp: (name?: string) => Promise<void | FilmPropRecord | undefined>;
+  onDeleteProp: (p: FilmPropRecord) => Promise<void>;
+  onCloneProp?: (p: FilmPropRecord) => Promise<void | FilmPropRecord | undefined>;
+  onCreatePropImage?: (input: FilmPropImageGenerateInput) => Promise<void>;
+  onCreatePropWithCompanionRefs?: (input: FilmPropImageGenerateInput) => Promise<void>;
+  onStopPropImage?: (p: FilmPropRecord) => void | Promise<void>;
+  stopPendingIds?: Record<string, true>;
+  onSetPropImage?: (p: FilmPropRecord, image: GeneratedImageData) => Promise<void>;
+  onSuggestPropCompanions?: (p: FilmPropRecord) => Promise<void>;
+  onAddPropCompanion?: (input: {
+    prop: FilmPropRecord;
+    name: string;
+    description: string;
+  }) => Promise<void>;
+  characters?: FilmCharacterRecord[];
+  sceneImages?: FilmSceneImageRecord[];
+  onLinkCatalogItems?: (
+    prop: FilmPropRecord,
+    items: FilmCatalogPickItem[]
+  ) => Promise<void>;
+  onMoveLinkedProp?: (input: {
+    fromKind: FilmCatalogKind;
+    fromId: string;
+    toKind: FilmCatalogKind;
+    toId: string;
+    propName: string;
+  }) => void;
+  onUnlinkLinkedProp?: (input: {
+    kind: FilmCatalogKind;
+    ownerId: string;
+    propName: string;
+  }) => void;
   onTabNavigate?: (tab: FilmProductionTab) => void;
+  focusEntityId?: string | null;
+  onFocusEntityConsumed?: () => void;
 };
 
 const TABS: { id: FilmProductionTab; label: string }[] = [
   { id: "extract_characters", label: "Trích xuất Nhân vật Cảnh" },
-  { id: "character_images", label: "Hình ảnh Nhân vật" },
+  { id: "character_images", label: "Nhân vật" },
   { id: "props", label: "Vật phẩm" },
-  { id: "scene_images", label: "Ảnh Cảnh" },
+  { id: "scene_images", label: "Bối cảnh" },
 ];
 
 const CATEGORY_OPTIONS: { value: FilmPropCategory; label: string }[] = [
@@ -48,30 +105,82 @@ const CATEGORY_OPTIONS: { value: FilmPropCategory; label: string }[] = [
 
 export default function FilmPropsPanel({
   props,
+  allPropsForLink,
+  episodes = [],
+  aspectRatio = "16:9",
+  promptTemplate,
   onPropsChange,
   onSaveProp,
   onExtractProps,
   onBulkCreate,
   onAddProp,
+  onDeleteProp,
+  onCloneProp,
+  onCreatePropImage,
+  onCreatePropWithCompanionRefs,
+  onStopPropImage,
+  stopPendingIds,
+  onSetPropImage,
+  onSuggestPropCompanions,
+  onAddPropCompanion,
+  characters = [],
+  sceneImages = [],
+  onLinkCatalogItems,
+  onMoveLinkedProp,
+  onUnlinkLinkedProp,
   onTabNavigate,
+  focusEntityId = null,
+  onFocusEntityConsumed,
 }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<FilmProductionTab>("props");
   const [busy, setBusy] = useState(false);
+
+  useFilmEntityCardFocus(focusEntityId, onFocusEntityConsumed);
+
+  useEffect(() => {
+    if (focusEntityId) setTab("props");
+  }, [focusEntityId]);
+  const [suggestingId, setSuggestingId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FilmPropRecord | null>(null);
+  const [catalogOwner, setCatalogOwner] = useState<FilmPropRecord | null>(null);
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState<string>("prop");
   const [editDesc, setEditDesc] = useState("");
+  const [editPrompt, setEditPrompt] = useState("");
+  const [editEpisodeIds, setEditEpisodeIds] = useState<string[]>([]);
+
+  const pool = allPropsForLink || props;
+
+  const resolveLinkedProps = (p: FilmPropRecord): FilmPropRecord[] => {
+    const names = (p.propNames || []).map((n) => n.trim()).filter(Boolean);
+    if (!names.length) return [];
+    const byKey = new Map(pool.map((x) => [x.name.trim().toLowerCase(), x]));
+    const out: FilmPropRecord[] = [];
+    const seen = new Set<string>();
+    for (const n of names) {
+      const k = n.toLowerCase();
+      if (seen.has(k) || k === p.name.trim().toLowerCase()) continue;
+      seen.add(k);
+      const hit = byKey.get(k);
+      if (hit) out.push(hit);
+    }
+    return out;
+  };
 
   useEffect(() => {
     if (!editTarget) return;
     setEditName(editTarget.name);
     setEditCategory(editTarget.category || "prop");
     setEditDesc(editTarget.description || "");
-  }, [editTarget]);
+    setEditEpisodeIds([...(editTarget.episodeIds || [])]);
+    setEditPrompt(
+      editTarget.imagePrompt?.trim() || buildFilmPropImagePrompt(editTarget, promptTemplate)
+    );
+  }, [editTarget, promptTemplate]);
 
   const pendingCount = props.filter(
-    (p) => p.status !== "created" && !(p.imageUrls?.length || p.imageUrl)
+    (p) => p.status !== "created" && p.status !== "creating" && !(p.imageUrls?.length || p.imageUrl)
   ).length;
   const allDone = props.length > 0 && pendingCount === 0;
 
@@ -80,14 +189,29 @@ export default function FilmPropsPanel({
     if (id !== "props") onTabNavigate?.(id);
   };
 
-  const simulateCreate = async (p: FilmPropRecord) => {
-    const updated: FilmPropRecord = {
-      ...p,
-      status: "created",
-      updatedAt: new Date().toISOString(),
-    };
-    onPropsChange(props.map((x) => (x.id === updated.id ? updated : x)));
-    await onSaveProp(updated);
+  /** Tạo ngay — không mở modal */
+  const handleCreate = async (p: FilmPropRecord) => {
+    if (busy || p.status === "creating") return;
+    const latest = props.find((x) => x.id === p.id) || p;
+    if (latest.status === "creating") return;
+    const prompt = latest.imagePrompt?.trim() || buildFilmPropImagePrompt(latest, promptTemplate);
+    setBusy(true);
+    try {
+      if (onCreatePropImage) {
+        await onCreatePropImage({ prop: latest, prompt });
+        return;
+      }
+      const updated: FilmPropRecord = {
+        ...latest,
+        imagePrompt: prompt,
+        status: "created",
+        updatedAt: new Date().toISOString(),
+      };
+      onPropsChange(props.map((x) => (x.id === updated.id ? updated : x)));
+      await onSaveProp(updated);
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleBulk = async () => {
@@ -110,17 +234,71 @@ export default function FilmPropsPanel({
     }
   };
 
+  const handleDelete = async (p: FilmPropRecord) => {
+    if (busy || p.status === "creating") return;
+    setBusy(true);
+    try {
+      await onDeleteProp(p);
+      if (editTarget?.id === p.id) setEditTarget(null);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleClone = async (p: FilmPropRecord) => {
+    if (busy || !onCloneProp) return;
+    setBusy(true);
+    try {
+      await onCloneProp(p);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleSuggest = async (p: FilmPropRecord) => {
+    if (!onSuggestPropCompanions || suggestingId) return;
+    setSuggestingId(p.id);
+    try {
+      await onSuggestPropCompanions(p);
+    } finally {
+      setSuggestingId(null);
+    }
+  };
+
+  const handleToggleEpisode = async (p: FilmPropRecord, episodeId: string) => {
+    const ids = new Set(p.episodeIds || []);
+    if (ids.has(episodeId)) ids.delete(episodeId);
+    else ids.add(episodeId);
+    const next: FilmPropRecord = {
+      ...p,
+      episodeIds: Array.from(ids),
+      updatedAt: new Date().toISOString(),
+    };
+    onPropsChange(props.map((x) => (x.id === next.id ? next : x)));
+    await onSaveProp(next);
+  };
+
   const saveEdit = async () => {
     if (!editTarget) return;
-    const updated: FilmPropRecord = {
+    const draft: FilmPropRecord = {
       ...editTarget,
       name: editName.trim() || editTarget.name,
       category: editCategory,
-      description: editDesc,
+      description: editDesc.trim(),
+      episodeIds: [...editEpisodeIds],
+      imagePrompt:
+        editPrompt.trim() ||
+        buildFilmPropImagePrompt(
+          {
+            name: editName.trim() || editTarget.name,
+            description: editDesc.trim(),
+          },
+          promptTemplate
+        ),
       updatedAt: new Date().toISOString(),
     };
-    onPropsChange(props.map((x) => (x.id === updated.id ? updated : x)));
-    await onSaveProp(updated);
+    onPropsChange(props.map((x) => (x.id === draft.id ? draft : x)));
+    await onSaveProp(draft);
     setEditTarget(null);
   };
 
@@ -148,9 +326,9 @@ export default function FilmPropsPanel({
       </div>
 
       <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
-        <div className="px-4 sm:px-5 py-4 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div className="px-4 sm:px-5 py-1 border-b border-gray-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
           <div className="flex items-start gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
+            <div className="w-9 h-9 rounded-xl  flex items-center justify-center flex-shrink-0">
               <HiVideoCamera className="text-lg text-gray-500" />
             </div>
             <div>
@@ -187,11 +365,11 @@ export default function FilmPropsPanel({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+        <div className={FILM_MEDIA_CARD_GRID_PAD_CLASS}>
           {props.length === 0 ? (
             <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-3">
               <p className="text-sm text-gray-500 m-0">
-                {t("Chưa có vật phẩm. Trích xuất từ storyboard hoặc thêm thủ công.")}
+                {t("Chưa có vật phẩm. Trích xuất từ Chuỗi Cảnh quay hoặc thêm thủ công.")}
               </p>
               <div className="flex gap-2 flex-wrap justify-center">
                 <Button
@@ -211,13 +389,52 @@ export default function FilmPropsPanel({
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            <div className={FILM_MEDIA_CARD_GRID_CLASS}>
               {props.map((p) => (
                 <FilmPropCard
                   key={p.id}
                   prop={p}
+                  linkedProps={resolveLinkedProps(p)}
+                  episodes={episodes}
+                  suggestingProps={suggestingId === p.id}
                   onEdit={setEditTarget}
-                  onCreate={simulateCreate}
+                  onDelete={handleDelete}
+                  onClone={onCloneProp ? handleClone : undefined}
+                  onCreate={handleCreate}
+                  onStopGeneration={
+                    onStopPropImage
+                      ? () => {
+                          void onStopPropImage(p);
+                        }
+                      : undefined
+                  }
+                  generationActionPending={!!stopPendingIds?.[p.id]}
+                  onSuggestProps={onSuggestPropCompanions ? handleSuggest : undefined}
+                  onCreatePropImage={onCreatePropImage}
+                  onCreatePropWithCompanionRefs={onCreatePropWithCompanionRefs}
+                  onAddLinkedProp={onAddPropCompanion}
+                  onOpenCatalog={
+                    onLinkCatalogItems ? (pr) => setCatalogOwner(pr) : undefined
+                  }
+                  onMoveLinkedProp={onMoveLinkedProp}
+                  onUnlinkLinkedProp={
+                    onUnlinkLinkedProp
+                      ? (linked) =>
+                          onUnlinkLinkedProp({
+                            kind: "prop",
+                            ownerId: p.id,
+                            propName: linked.name,
+                          })
+                      : undefined
+                  }
+                  onToggleEpisode={handleToggleEpisode}
+                  onSetImage={
+                    onSetPropImage
+                      ? (pr, image) => {
+                          void onSetPropImage(pr, image);
+                        }
+                      : undefined
+                  }
                 />
               ))}
             </div>
@@ -267,65 +484,147 @@ export default function FilmPropsPanel({
       <Dialog
         isOpen={!!editTarget}
         onClose={() => setEditTarget(null)}
-        width={440}
-        maxWidth="94vw"
+        title={t("Sửa vật phẩm")}
+        width={560}
+        maxWidth="95vw"
         slideFromBottom="none"
-        dialogClass="relative overflow-hidden rounded-2xl bg-white shadow-xl"
-        bodyClass="relative bg-white"
-        hasCloseIcon={false}
+        wrapperClass={FILM_EDIT_DIALOG_WRAPPER_CLASS}
+        dialogClass={FILM_EDIT_DIALOG_CLASS}
+        headerClass={FILM_EDIT_DIALOG_HEADER_CLASS}
+        bodyClass={FILM_EDIT_DIALOG_BODY_CLASS}
+        footerClass={FILM_EDIT_DIALOG_FOOTER_CLASS}
       >
         <Dialog.Body>
-          <div className="px-5 pt-5 pb-4">
-            <h3 className="text-base font-bold text-gray-900 m-0 mb-4">{t("Sửa vật phẩm")}</h3>
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("Tên")}</label>
-                <input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                  {t("Danh mục")}
-                </label>
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 bg-white"
-                >
-                  {CATEGORY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {filmPropCategoryLabel(o.value)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1.5">
-                  {t("Mô tả")}
-                </label>
-                <textarea
-                  value={editDesc}
-                  onChange={(e) => setEditDesc(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-y"
-                />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-5">
-              <Button outline text={t("Hủy")} className="!rounded-xl" onClick={() => setEditTarget(null)} />
-              <Button
-                primary
-                text={t("Lưu")}
-                className="!rounded-xl !bg-blue-600 hover:!bg-blue-700"
-                onClick={saveEdit}
+          <FilmEditDialogShell>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("Tên")}</label>
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
               />
             </div>
-          </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                {t("Danh mục")}
+              </label>
+              <select
+                value={editCategory}
+                onChange={(e) => setEditCategory(e.target.value)}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 bg-white"
+              >
+                {CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {filmPropCategoryLabel(o.value)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("Mô tả")}</label>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={3}
+                placeholder={t("Physical characteristics / visual description…")}
+                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 resize-y"
+                style={{ maxHeight: 120 }}
+              />
+            </div>
+            {episodes.length > 0 ? (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                  {t("Hiển thị ở tập")}
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {episodes.map((ep) => {
+                    const on = editEpisodeIds.includes(ep.id);
+                    return (
+                      <button
+                        key={ep.id}
+                        type="button"
+                        onClick={() =>
+                          setEditEpisodeIds((prev) =>
+                            on ? prev.filter((id) => id !== ep.id) : [...prev, ep.id]
+                          )
+                        }
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border cursor-pointer ${
+                          on
+                            ? "bg-blue-50 border-blue-200 text-blue-700"
+                            : "bg-white border-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {ep.title || t("Tập {{n}}", { n: ep.index })}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1.5">
+                {t("Prompt instruction")}
+              </label>
+              <textarea
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                rows={5}
+                className={FILM_EDIT_PROMPT_TEXTAREA_CLASS}
+                style={FILM_EDIT_PROMPT_TEXTAREA_STYLE}
+              />
+              <button
+                type="button"
+                className="mt-1.5 text-xs text-blue-600 bg-transparent border-0 cursor-pointer p-0 hover:underline"
+                onClick={() =>
+                  setEditPrompt(
+                    buildFilmPropImagePrompt(
+                      {
+                        name: editName.trim() || editTarget?.name || "",
+                        description: editDesc.trim(),
+                      },
+                      promptTemplate
+                    )
+                  )
+                }
+              >
+                {t("Đặt lại prompt mặc định")}
+              </button>
+            </div>
+          </FilmEditDialogShell>
         </Dialog.Body>
+        <Dialog.Footer>
+          <Button
+            outline
+            text={t("Hủy")}
+            className="!rounded-xl"
+            onClick={() => setEditTarget(null)}
+          />
+          <Button
+            primary
+            text={t("Lưu")}
+            className="!rounded-xl !bg-blue-600 hover:!bg-blue-700"
+            onClick={saveEdit}
+          />
+        </Dialog.Footer>
       </Dialog>
+
+      <FilmCatalogPickDialog
+        isOpen={!!catalogOwner}
+        onClose={() => setCatalogOwner(null)}
+        title={t("Thêm vật phẩm cho {{name}}", {
+          name: catalogOwner?.name || "",
+        })}
+        characters={characters}
+        propsList={pool}
+        sceneImages={sceneImages}
+        excludeNames={catalogOwner?.propNames || []}
+        excludeIds={catalogOwner ? [catalogOwner.id] : []}
+        onConfirm={async (items) => {
+          if (catalogOwner && onLinkCatalogItems) {
+            await onLinkCatalogItems(catalogOwner, items);
+          }
+        }}
+      />
     </div>
   );
 }

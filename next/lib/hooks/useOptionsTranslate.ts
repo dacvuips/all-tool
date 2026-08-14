@@ -723,6 +723,11 @@ export const useOptionsTranslation = () => {
       label: t("Google Labs"),
       image: "/assets/img/flow.png",
     },
+    {
+      value: AiProviderKeyEnum.CHATGPT_GATEWAY_KEY,
+      label: t("ChatGPT Gateway"),
+      image: "/assets/img/openai.png",
+    },
   ];
   const SPEED_MODE_OPTIONS: { label: string; value: SpeedMode }[] = [
     { label: t("Nhanh"), value: "fast" },

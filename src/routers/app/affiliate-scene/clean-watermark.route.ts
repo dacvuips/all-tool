@@ -2,12 +2,9 @@
  * POST /api/app/clean-watermark/
  * Xóa logo / watermark ảnh & video qua Flow2 (sync base64).
  *
- * Kiểm tra mỗi request:
- * 1) Token đăng nhập (Context.auth)
- * 2) Customer tồn tại + status ACTIVE + sàn không bị block
- * 3) Gói Basic+ — chặn FREE/TRIAL
- * 4) Hạn mức ảnh/video còn slot (đọc lại DB trước mỗi item)
- * 5) Chỉ $inc imageCount/videoCount khi item thành công có media_base64
+ * `countUsage: true` — chỉ tab Xóa Logo AI (`/app/affiliate-video?tab=remove-logo`):
+ *   gói Basic+, kiểm tra hạn mức, $inc imageCount/videoCount khi thành công.
+ * Các lần gọi khác (film generate, v.v.) không trừ hạn mức customer.
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
@@ -81,8 +78,6 @@ export default [
 
         // 2) Customer tồn tại / ACTIVE / sàn không block
         await assertCustomerMediaGenerationAllowed(context.id);
-        // 3) Gói Basic trở lên
-        await assertPaidPackageForWatermark(context.id);
 
         const body = req.body as {
           items?: CleanWatermarkItemInput[];
@@ -92,7 +87,16 @@ export default [
           name?: string;
           clientId?: string;
           returnMode?: "base64" | "url" | "both";
+          /** Chỉ tab Xóa Logo AI được trừ hạn mức */
+          countUsage?: boolean;
         };
+
+        const countUsage = body?.countUsage === true;
+
+        // Tab Xóa Logo AI: gói Basic+
+        if (countUsage) {
+          await assertPaidPackageForWatermark(context.id);
+        }
 
         let items: CleanWatermarkItemInput[] = Array.isArray(body?.items) ? body.items : [];
         if (!items.length && body?.mediaBase64) {
@@ -138,24 +142,25 @@ export default [
             continue;
           }
 
-          // 4) Đọc lại hạn mức từ DB trước mỗi item
-          const quotaLive = await getImageVideoQuotaRemaining(context.id);
-          const remaining =
-            kind === "image" ? quotaLive.imageRemaining : quotaLive.videoRemaining;
+          if (countUsage) {
+            const quotaLive = await getImageVideoQuotaRemaining(context.id);
+            const remaining =
+              kind === "image" ? quotaLive.imageRemaining : quotaLive.videoRemaining;
 
-          if (remaining <= 0) {
-            skipped.push({
-              clientId,
-              name,
-              kind,
-              success: false,
-              reason:
-                kind === "image"
-                  ? `Hết hạn mức ảnh (${quotaLive.imageCount}/${quotaLive.imageLimit}). Vui lòng nâng cấp gói hoặc chờ reset hạn mức vào ngày mai.`
-                  : `Hết hạn mức video (${quotaLive.videoCount}/${quotaLive.videoLimit}). Vui lòng nâng cấp gói hoặc chờ reset hạn mức vào ngày mai.`,
-              code: "QUOTA_EXCEEDED",
-            });
-            continue;
+            if (remaining <= 0) {
+              skipped.push({
+                clientId,
+                name,
+                kind,
+                success: false,
+                reason:
+                  kind === "image"
+                    ? `Hết hạn mức ảnh (${quotaLive.imageCount}/${quotaLive.imageLimit}). Vui lòng nâng cấp gói hoặc chờ reset hạn mức vào ngày mai.`
+                    : `Hết hạn mức video (${quotaLive.videoCount}/${quotaLive.videoLimit}). Vui lòng nâng cấp gói hoặc chờ reset hạn mức vào ngày mai.`,
+                code: "QUOTA_EXCEEDED",
+              });
+              continue;
+            }
           }
 
           let validated: ReturnType<typeof validateMediaPayload>;
@@ -198,13 +203,14 @@ export default [
               continue;
             }
 
-            // 5) Trừ lượt ngay sau khi thành công
-            if (kind === "image") {
-              await incrementImageCount(context.id, 1);
-              imagesUsed += 1;
-            } else {
-              await incrementVideoCount(context.id, 1);
-              videosUsed += 1;
+            if (countUsage) {
+              if (kind === "image") {
+                await incrementImageCount(context.id, 1);
+                imagesUsed += 1;
+              } else {
+                await incrementVideoCount(context.id, 1);
+                videosUsed += 1;
+              }
             }
 
             processed.push({

@@ -13,6 +13,7 @@ import {
   RiGalleryLine,
   RiImageFill,
   RiLoader4Line,
+  RiMagicFill,
   RiUploadCloud2Line,
 } from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
@@ -56,6 +57,8 @@ export interface SceneCardImageTabProps {
   sceneTimestamp?: string;
   /** Lỗi tạo/upload ảnh (hiển thị inline) */
   errorMessage?: string | null;
+  /** Thay khối lỗi mặc định (film: chip item chưa có ảnh) */
+  errorSlot?: React.ReactNode;
 
   /** Số nút gắn ảnh vào ô tham chiếu (bằng số slot) */
   slotAssignCount?: number;
@@ -69,6 +72,11 @@ export interface SceneCardImageTabProps {
   /** Dừng khi đang generate (hover loader) */
   onStopGeneration?: () => void;
   generationActionPending?: boolean;
+  /**
+   * Khung empty / loading / ảnh đã gen cùng một aspect (film).
+   * Tool mặc định: false (empty h-20 như cũ).
+   */
+  uniformFrame?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -87,12 +95,14 @@ export function SceneCardImageTab({
   originThumbnailLoading,
   sceneTimestamp,
   errorMessage,
+  errorSlot,
   slotAssignCount = 0,
   assignedSlotIndices = [],
   onAssignToSlot,
   generateButtonId,
   onStopGeneration,
   generationActionPending = false,
+  uniformFrame = false,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,7 +124,52 @@ export function SceneCardImageTab({
     }
   };
 
-  const imagePaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
+  const imagePaddingTop = `${paddingPct}%`;
+
+  /** Khung rỗng / loading khớp kích thước khung ảnh */
+  const renderUniformPlaceholder = (inner: React.ReactNode, clickable?: boolean) => (
+    <div className="relative w-full">
+      <div style={{ paddingTop: imagePaddingTop }} className="w-full" />
+      {clickable ? (
+        <button
+          id={generateButtonId}
+          type="button"
+          onClick={onGenerateImage}
+          className="absolute inset-0 flex flex-col justify-center items-center w-full h-full bg-gray-50 rounded-md border-2 border-gray-200 border-dashed transition-all cursor-pointer hover:border-pink-300 hover:bg-pink-50 group"
+        >
+          {inner}
+        </button>
+      ) : (
+        <div className="absolute inset-0 flex flex-col justify-center items-center w-full h-full bg-gray-50 rounded-md border-2 border-pink-200 border-dashed">
+          {inner}
+        </div>
+      )}
+    </div>
+  );
+
+  /** Upload + Gallery — dùng khi đã có ảnh hoặc empty (chưa gen vẫn gán ảnh) */
+  const renderUploadGalleryButtons = () => (
+    <>
+      <Button
+        onClick={() => fileInputRef.current?.click()}
+        icon={<RiUploadCloud2Line />}
+        placement="bottom"
+        className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
+        iconClassName="text-xl font-bold"
+        tooltip={t("Upload ảnh")}
+      />
+      <Button
+        onClick={onOpenGallery}
+        icon={<RiGalleryLine />}
+        placement="bottom"
+        className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
+        iconClassName="text-xl font-bold"
+        tooltip={t("Chọn từ Gallery")}
+      />
+    </>
+  );
+
   return (
     <div className={`flex flex-col gap-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
       {/* ── Origin Thumbnail (copy-video / storyboard) ── */}
@@ -148,19 +203,19 @@ export function SceneCardImageTab({
       )}
 
       {/* ── Generated Image section ── */}
-      <div className="flex gap-2 justify-center items-center group">
+      <div className="flex gap-2 justify-center items-center group w-full">
         {generatedImage ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
             {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
-            <div className="relative w-full">
+            <div className="relative w-full rounded-md overflow-hidden border-2 border-transparent transition-all hover:border-primary hover:shadow-lg">
               <Img
                 key={getGeneratedImagePreviewSrc(generatedImage) || sceneNumber}
                 showImageOnClick
                 lazyload={false}
-                percent={parseFloat(imagePaddingTop)}
+                percent={paddingPct}
                 src={getGeneratedImagePreviewSrc(generatedImage)}
                 alt={`Scene ${sceneNumber}`}
-                className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm"
+                className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm object-cover"
               />
               {slotAssignCount > 0 && onAssignToSlot && (
                 <div className="absolute top-0 left-0 z-10 flex gap-1.5 p-1">
@@ -217,36 +272,55 @@ export function SceneCardImageTab({
                   tooltip={t("Tạo lại")}
                 />
               )}
-              {/* Upload ảnh */}
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                icon={<RiUploadCloud2Line />}
-                placement="bottom"
-                className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Upload ảnh")}
-              />
-              {/* Gallery */}
-              <Button
-                onClick={onOpenGallery}
-                icon={<RiGalleryLine />}
-                placement="bottom"
-                className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
-                iconClassName="text-xl font-bold"
-                tooltip={t("Chọn từ Gallery")}
-              />
+              {renderUploadGalleryButtons()}
             </div>
           </div>
         ) : generatingImage ? (
-          <SceneMediaGenerationProgress
-            variant="image"
-            progress={imageProgress}
-            layout="card"
-            actionPending={generationActionPending}
-            onStop={onStopGeneration}
-          />
+          uniformFrame ? (
+            renderUniformPlaceholder(
+              <SceneMediaGenerationProgress
+                variant="image"
+                progress={imageProgress}
+                layout="card"
+                actionPending={generationActionPending}
+                onStop={onStopGeneration}
+              />
+            )
+          ) : (
+            <SceneMediaGenerationProgress
+              variant="image"
+              progress={imageProgress}
+              layout="card"
+              actionPending={generationActionPending}
+              onStop={onStopGeneration}
+            />
+          )
+        ) : uniformFrame ? (
+          /* Empty film: khung Tạo ảnh + Upload / Gallery (chưa có ảnh → không hiện Tạo lại) */
+          <div className="flex flex-col gap-1.5 items-center w-full">
+            {renderUniformPlaceholder(
+              <>
+                <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-2xl mb-0.5" />
+                <span className="text-xs font-medium text-gray-400 group-hover:text-pink-500">
+                  {t("Tạo ảnh")}
+                </span>
+              </>,
+              true
+            )}
+            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+              <Button
+                onClick={onGenerateImage}
+                icon={<RiMagicFill />}
+                placement="bottom"
+                className="w-8 h-8 rounded-lg bg-pink-50 text-pink-500"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Tạo ảnh")}
+              />
+              {renderUploadGalleryButtons()}
+            </div>
+          </div>
         ) : (
-          /* ── Default: nút tạo ảnh ── */
+          /* ── Default tool: nút tạo ảnh compact ── */
           <button
             id={generateButtonId}
             onClick={onGenerateImage}
@@ -269,7 +343,7 @@ export function SceneCardImageTab({
         onChange={handleFileUpload}
       />
 
-      <SceneMediaError message={errorMessage} />
+      {errorSlot ?? <SceneMediaError message={errorMessage} />}
     </div>
   );
 }
