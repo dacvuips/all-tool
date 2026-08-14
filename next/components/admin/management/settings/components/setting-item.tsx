@@ -108,11 +108,19 @@ export function SettingItem({ setting, ...props }: PropTypes) {
               onChange={onSettingValueChanged}
             />
           ),
-          string: (
+          string: setting.isSecret ? (
+            <Textarea
+              rows={3}
+              readOnly={setting.readOnly}
+              value={setting.value}
+              onChange={onSettingValueChanged}
+            />
+          ) : (
             <Input
               readOnly={setting.readOnly}
               value={setting.value}
               onChange={onSettingValueChanged}
+              stringLength={4000}
             />
           ),
           number: (
