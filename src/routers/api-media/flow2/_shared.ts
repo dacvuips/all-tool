@@ -264,6 +264,23 @@ export const FLOW2_SETTING_KEY = "recaptcha-api-secret-key";
 export const FLOW2_SYSTEM_BUSY_MESSAGE =
   "Hệ thống hiện đang bận, vui lòng chờ hoặc liên hệ admin";
 
+/** Upscale 1080p / 2K / 4K khi request gốc Flow2 hết hạn (request_not_found / 404). */
+export const UPSAMPLE_SOURCE_EXPIRED_MESSAGE =
+  "File không tồn tại hoặc đã quá hạn, generate lại file khác rồi tải lại hoặc tải chất lượng mặc định";
+
+export function isUpsampleSourceNotFoundError(err: unknown): boolean {
+  const status = Number((err as { statusCode?: number })?.statusCode);
+  const text = String((err as { message?: string })?.message || "");
+  if (status === 404) return true;
+  return /request[_\s-]?not[_\s-]?found/i.test(text) || /\b404\b/.test(text);
+}
+
+export function toUpsampleUserErrorMessage(err: unknown, fallback: string): string {
+  if (isUpsampleSourceNotFoundError(err)) return UPSAMPLE_SOURCE_EXPIRED_MESSAGE;
+  const message = String((err as { message?: string })?.message || "").trim();
+  return message || fallback;
+}
+
 const FLOW2_GATEWAY_BUSY_STATUS_CODES = new Set([502, 503, 504, 524, 530]);
 
 function isCloudflareErrorHtml(text: string): boolean {

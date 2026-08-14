@@ -6,10 +6,8 @@
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
-import {
-  upsampleImageWithFlow2,
-  UpsampleResolution,
-} from "../../api-media/flow2/upsample-image";
+import { upsampleImageWithFlow2, UpsampleResolution } from "../../api-media/flow2/upsample-image";
+import { toUpsampleUserErrorMessage } from "../../api-media/flow2/_shared";
 import { fetchFlow2UpsampleMediaBytes } from "../../api-media/flow2/upsample-poll";
 import {
   initGenerationSSE,
@@ -140,16 +138,13 @@ export default [
         res.end();
       } catch (err: any) {
         logger.error(`[upsample-image] Lỗi: ${err?.message}`);
+        const userMessage = toUpsampleUserErrorMessage(err, "Lỗi upscale ảnh");
         if (sseStarted) {
-          sendGenerationSSEError(
-            res,
-            err?.message || "Lỗi upscale ảnh",
-            err?.statusCode || 500
-          );
+          sendGenerationSSEError(res, userMessage, err?.statusCode || 500);
           return;
         }
         const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi upscale ảnh" });
+        res.status(status).json({ message: userMessage });
       }
     },
   },

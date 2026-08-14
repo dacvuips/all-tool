@@ -13,12 +13,14 @@ import {
   RiImage2Fill,
   RiListOrdered,
   RiMagicLine,
+  RiMicLine,
 } from "react-icons/ri";
 
 import { IoAppsSharp } from "react-icons/io5";
 import { useScreen } from "../../../lib/hooks/useScreen";
 import { TrendingTypeEnum } from "../../../lib/repo/list/trending.repo";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
+import { VoicePage } from "../voice/voice-page";
 import { AppPage } from "./app/app-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
@@ -100,6 +102,12 @@ export default function AffiliateMainPage() {
       component: <RemoveLogoPage />,
     },
 
+    {
+      icon: <RiMicLine />,
+      label: t("Voice"),
+      value: "voice",
+      component: <VoicePage />,
+    },
     {
       icon: <RiImage2Fill />,
       label: t("Làm Phim"),

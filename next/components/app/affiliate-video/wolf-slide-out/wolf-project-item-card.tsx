@@ -14,6 +14,7 @@ import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { GeneratedImageDownloadButtons } from "../shared/generated-image-download-buttons";
+import { GeneratedVideoDownloadButtons } from "../shared/generated-video-download-buttons";
 import {
   MEDIA_CONTENT_POLICY_MESSAGE,
   MEDIA_SYSTEM_BUSY_MESSAGE,
@@ -198,12 +199,18 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
     );
   };
 
-  const renderVideoPreview = () => (
-    <>
-      <div
-        className="overflow-hidden relative w-full rounded-md border-2 border-purple-300 shadow-sm"
-        style={{ paddingTop }}
-      >
+  const renderVideoPreview = () => {
+    const videoFileName = `wolf-${item.id.slice(0, 8)}.${mimeTypeToFileExtension(
+      sceneVideo?.mimeType,
+      "mp4"
+    )}`;
+
+    return (
+      <>
+        <div
+          className="overflow-hidden relative w-full rounded-md border-2 border-purple-300 shadow-sm"
+          style={{ paddingTop }}
+        >
         <video
           src={videoSrc!}
           className="object-cover absolute inset-0 w-full h-full cursor-pointer"
@@ -229,15 +236,24 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
             <RiLoader4Line className="text-xl text-purple-500 animate-spin" />
           </div>
         )}
-      </div>
-      <VideoDialog
-        videoUrl={videoSrc!}
-        isOpen={showVideoModal}
-        onClose={() => setShowVideoModal(false)}
-        aspectRatio={aspectRatio}
-      />
-    </>
-  );
+        {sceneVideo && !isGenerating && (
+          <GeneratedVideoDownloadButtons
+            variant="overlay"
+            video={sceneVideo}
+            fileName={videoFileName}
+            disabled={isActionPending}
+          />
+        )}
+        </div>
+        <VideoDialog
+          videoUrl={videoSrc!}
+          isOpen={showVideoModal}
+          onClose={() => setShowVideoModal(false)}
+          aspectRatio={aspectRatio}
+        />
+      </>
+    );
+  };
 
   const renderVideoPlaceholder = () => (
     <div

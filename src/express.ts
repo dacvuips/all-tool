@@ -122,6 +122,7 @@ function useHelmet(app: express.Application) {
               "'self'",
               "blob:",
               "data:",
+              "https:",
               "https://flow-content.google",
               "https://flow2.viettheo.site",
             ],

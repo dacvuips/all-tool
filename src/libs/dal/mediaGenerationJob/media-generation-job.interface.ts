@@ -75,6 +75,18 @@ export enum MediaGenerationJobType {
   COPY_VIDEO_ANALYSIS = "COPY_VIDEO_ANALYSIS",
   /** POST /api/app/generation-trending/ — AI tạo kịch bản trending (JSON) */
   GENERATION_TRENDING = "GENERATION_TRENDING",
+  /**
+   * POST /api/app/film/generate-image/
+   * Film short-project — gen ảnh (character sheet / prop / location / shot frame)
+   * Phân biệt job với GENERATION_IMAGE (affiliate)
+   */
+  FILM_GENERATION_IMAGE = "FILM_GENERATION_IMAGE",
+  /**
+   * POST /api/app/film/generate-video/
+   * Film short-project — gen video phân cảnh
+   * Phân biệt job với GENERATION_VIDEO (affiliate)
+   */
+  FILM_GENERATION_VIDEO = "FILM_GENERATION_VIDEO",
 }
 
 /** Output cuối khi job tạo ảnh thành công (1 hoặc nhiều ảnh base64/url) */

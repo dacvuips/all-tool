@@ -37,19 +37,13 @@ import { useLocale } from "../lib/providers/locale-provider";
 import { Pagination, QueryInput } from "../lib/repo/crud.repo";
 import { NotificationService, NOTIFY_FRAGMENT } from "../lib/repo/notification/notification.repo";
 
-import {
-  formatSubscription,
-  getPackageClasses,
-  getPackageStyle,
-  GooglePackagePopoverContent,
-} from "../components/admin/management/customer/components/customer-google-package-cell";
+import { PackageUsageQuota } from "../components/shared/package-usage-quota";
 import { SettingsModal } from "../components/app/affiliate-video/single/sibar/text-to-video-modal";
 import { useCheckoutContext } from "../components/index/checkout/provider/checkout-provider";
 import { CartDropdown as CartDropdownComponent } from "../components/shared/cart/cart-dropdown";
 import { NotifyDropdown } from "../components/shared/common/notify-dropdown";
 import { parseNumber } from "../lib/helpers/parser";
 import { credentialCustomerService, Order, PaymentStatus } from "../lib/repo";
-import { SubscriptionPlanEnum } from "../lib/repo/customer/customer.repo";
 import { AiProviderKeyEnum } from "../lib/repo/product/productApp.repo";
 import { CardMenu } from "./home-layout/components/card-menu";
 import { HomePageDeactiveDialog } from "./home-layout/components/home-page-deactive-dialog";
@@ -120,6 +114,10 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
   const isToolPage = router.pathname.startsWith("/app/");
+  const isFilmPage = router.pathname.startsWith("/film");
+  const showPackageQuota = isToolPage || isFilmPage;
+  const tab = Array.isArray(router.query.tab) ? router.query.tab[0] : router.query.tab;
+  const showHeaderApiKey = isToolPage && tab === "app";
 
   return (
     <>
@@ -142,19 +140,19 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
               <ServicesNavDropdown />
             </div>
 
-            {/* ── Affiliate Video: Right side actions ── */}
-            {customer && isToolPage && (
+            {/* ── Tool / Film: Right side actions ── */}
+            {customer && showPackageQuota && (
               <div className="flex items-center gap-1.5 flex-shrink-0 ml-auto">
-                {/* Hướng dẫn */}
-                <Button
-                  outline
-                  className="px-2 h-8 rounded-md"
-                  icon={<RiBookOpenLine className="text-lg" />}
-                  text={t("Hướng dẫn")}
-                  href="https://docs.google.com/spreadsheets/d/1EWgT-5Ig9LcTK47Sr2UfyIXRW4y2C6oTTFV7AkFbM_I/edit?usp=sharing"
-                  targetBlank
-                />{" "}
-                {/* Bảng giá */}
+                {isToolPage && (
+                  <Button
+                    outline
+                    className="px-2 h-8 rounded-md"
+                    icon={<RiBookOpenLine className="text-lg" />}
+                    text={t("Hướng dẫn")}
+                    href="https://docs.google.com/spreadsheets/d/1EWgT-5Ig9LcTK47Sr2UfyIXRW4y2C6oTTFV7AkFbM_I/edit?usp=sharing"
+                    targetBlank
+                  />
+                )}
                 <Button
                   outline
                   className="px-2 h-8 rounded-md"
@@ -162,19 +160,20 @@ function DesktopHeader({ shopCode, order, ...props }: HeaderProps) {
                   text={t("Bảng giá")}
                   href="/app/affiliate-video/pricing"
                 />
-                {/* API Key status */}
-                <Button
-                  onClick={() =>
-                    !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
-                  }
-                  outline
-                  className="px-2 h-8 rounded-md"
-                  success={keyReady}
-                  gray={!keyReady}
-                  icon={<RiKey2Line className="text-lg" />}
-                  asyncLoading={false}
-                  text={t("API Key")}
-                />{" "}
+                {showHeaderApiKey && (
+                  <Button
+                    onClick={() =>
+                      !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                    }
+                    outline
+                    className="px-2 h-8 rounded-md"
+                    success={keyReady}
+                    gray={!keyReady}
+                    icon={<RiKey2Line className="text-lg" />}
+                    asyncLoading={false}
+                    text={t("API Key")}
+                  />
+                )}
                 <PackageUsageQuota />
               </div>
             )}
@@ -332,6 +331,10 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
   const hasKey = !!credentialId;
   const keyReady = hasKey && credentialActive;
   const isToolPage = router.pathname.startsWith("/app/");
+  const isFilmPage = router.pathname.startsWith("/film");
+  const showPackageQuota = isToolPage || isFilmPage;
+  const tab = Array.isArray(router.query.tab) ? router.query.tab[0] : router.query.tab;
+  const showHeaderApiKey = isToolPage && tab === "app";
 
   return (
     <>
@@ -377,16 +380,16 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
             ) : (
               <div className="flex flex-row gap-4 justify-between items-center">
                 <div className="flex flex-row gap-2 items-center">
-                  {customer && isToolPage && screenSm && (
+                  {customer && showPackageQuota && screenSm && (
                     <>
-                      {/* Hướng dẫn (mobile) */}
-                      <Button
-                        outline
-                        className="px-2 h-8 rounded-md"
-                        icon={<RiBookOpenLine className="text-lg" />}
-                        text={screenMd ? t("Hướng dẫn") : undefined}
-                      />
-                      {/* Bảng giá (mobile) */}
+                      {isToolPage && (
+                        <Button
+                          outline
+                          className="px-2 h-8 rounded-md"
+                          icon={<RiBookOpenLine className="text-lg" />}
+                          text={screenMd ? t("Hướng dẫn") : undefined}
+                        />
+                      )}
                       <Button
                         outline
                         className="px-2 h-8 rounded-md"
@@ -394,20 +397,21 @@ function MobileHeader({ name, order, ...props }: HeaderProps) {
                         text={screenMd ? t("Bảng giá") : undefined}
                         href="/app/affiliate-video/pricing"
                       />
-                      {/* Affiliate Video: API Key status (mobile) */}
-                      <Button
-                        onClick={() =>
-                          !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
-                        }
-                        outline
-                        className="px-2 h-8 rounded-md"
-                        success={keyReady}
-                        gray={!keyReady}
-                        icon={<RiKey2Line className="text-lg" />}
-                        asyncLoading={false}
-                        text={screenMd ? t("API Key") : undefined}
-                      />
-                      <PackageUsageQuota compact />
+                      {showHeaderApiKey && (
+                        <Button
+                          onClick={() =>
+                            !customer ? setOpenCustomerLoginDialog(true) : setShowSettings(true)
+                          }
+                          outline
+                          className="px-2 h-8 rounded-md"
+                          success={keyReady}
+                          gray={!keyReady}
+                          icon={<RiKey2Line className="text-lg" />}
+                          asyncLoading={false}
+                          text={screenMd ? t("API Key") : undefined}
+                        />
+                      )}
+                      <PackageUsageQuota />
                     </>
                   )}
                   {screenMd && <SelectLanguage mode="mobile" />}
@@ -742,32 +746,6 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
         </>
       )}
     </div>
-  );
-}
-
-function PackageUsageQuota({ compact = false }: { compact?: boolean }) {
-  const { t } = useTranslation();
-  const { customer } = useAuth();
-  const packageRef = useRef();
-  const subscription = customer?.googlePackage?.subscription;
-  const packageStyle = getPackageStyle(subscription || SubscriptionPlanEnum.TRIAL);
-  const packageClasses = getPackageClasses(packageStyle);
-  const subscriptionLabel = subscription ? formatSubscription(subscription) : t("Dùng thử");
-
-  return (
-    <>
-      <div
-        ref={packageRef}
-        className={`flex overflow-hidden items-center h-8 text-sm rounded-lg cursor-default ${packageClasses.container}`}
-      >
-        <span className={`px-2.5 font-semibold whitespace-nowrap ${packageStyle.text}`}>
-          {t("Gói")}: <span className="uppercase">{subscriptionLabel}</span>
-        </span>
-      </div>
-      <Popover reference={packageRef} trigger="hover" placement="bottom" arrow maxWidth={320}>
-        <GooglePackagePopoverContent googlePackage={customer?.googlePackage} />
-      </Popover>
-    </>
   );
 }
 

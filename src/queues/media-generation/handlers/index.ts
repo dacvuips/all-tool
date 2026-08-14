@@ -35,6 +35,8 @@ import { handleApiMediaImage } from "./api-media-image.handler";
 import { handleApiMediaVideo } from "./api-media-video.handler";
 import { handleApiMediaUpsampleImage } from "./api-media-upsample-image.handler";
 import { handleApiMediaUpsampleVideo } from "./api-media-upsample-video.handler";
+import { handleFilmGenerationImage } from "./film-generation-image.handler";
+import { handleFilmGenerationVideo } from "./film-generation-video.handler";
 import { handleStoryboardAnalysis } from "./storyboard-analysis.handler";
 import { handleSuggestConfig } from "./suggest-config.handler";
 
@@ -73,6 +75,8 @@ export const HANDLER_REGISTRY: Record<MediaGenerationJobType, MediaJobHandler> =
   [MediaGenerationJobType.SUGGEST_CONFIG]: handleSuggestConfig,
   [MediaGenerationJobType.COPY_VIDEO_ANALYSIS]: handleCopyVideoAnalysis,
   [MediaGenerationJobType.GENERATION_TRENDING]: handleGenerationTrending,
+  [MediaGenerationJobType.FILM_GENERATION_IMAGE]: handleFilmGenerationImage,
+  [MediaGenerationJobType.FILM_GENERATION_VIDEO]: handleFilmGenerationVideo,
 };
 
 /**
