@@ -92,17 +92,18 @@ function UsageRow({
   limit?: number;
   progressClass?: string;
 }) {
-  const pct = limit > 0 ? Math.min((count / limit) * 100, 100) : 0;
+  const unlimited = limit === -1;
+  const pct = !unlimited && limit > 0 ? Math.min((count / limit) * 100, 100) : 0;
   return (
     <div className="text-xs">
       <div className="flex justify-between gap-2 text-gray-600">
         <span>{label}</span>
         <span className="font-medium text-gray-900 whitespace-nowrap">
           {count}
-          <span className="text-gray-400 font-normal"> / {limit}</span>
+          <span className="text-gray-400 font-normal"> / {unlimited ? "∞" : limit}</span>
         </span>
       </div>
-      {limit > 0 && (
+      {!unlimited && limit > 0 && (
         <div className="mt-0.5 h-1 rounded-full bg-gray-200 overflow-hidden">
           <div
             className={`h-full rounded-full ${pct >= 100 ? "bg-red-500" : progressClass}`}
@@ -147,6 +148,10 @@ export function GooglePackagePopoverContent({ googlePackage }: { googlePackage?:
       <DetailRow
         label={t("Generation text")}
         value={`${pkg?.requestCount ?? 0} / ${pkg?.requestLimit ?? 0}`}
+      />
+      <DetailRow
+        label={t("Text credit")}
+        value={`${pkg?.textCreditCount ?? 0} / ${pkg?.textCreditLimit === -1 ? "∞" : pkg?.textCreditLimit ?? 0}`}
       />
       <DetailRow label={t("Luồng video đồng thời")} value={pkg?.videoStreamCount ?? 0} />
       <DetailRow label={t("Luồng ảnh đồng thời")} value={pkg?.imageStreamCount ?? 0} />
@@ -203,6 +208,12 @@ export function CustomerGooglePackageCell({ googlePackage }: { googlePackage?: G
             label={t("Text")}
             count={pkg.requestCount}
             limit={pkg.requestLimit}
+            progressClass={packageStyle.progress}
+          />
+          <UsageRow
+            label={t("Text credit")}
+            count={pkg.textCreditCount}
+            limit={pkg.textCreditLimit}
             progressClass={packageStyle.progress}
           />
         </div>

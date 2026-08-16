@@ -5,6 +5,7 @@ import {
   RiGamepadLine,
   RiLayoutTop2Line,
   RiLoader4Line,
+  RiMicLine,
   RiPlantLine,
   RiSettings3Line,
   RiShoppingBag3Line,
@@ -36,6 +37,11 @@ export const ADMIN_SIDEBAR_MENUS = [
         title: "Khách hàng",
         path: "/admin/management/customers",
         icon: <RiUserStarFill />,
+      },
+      {
+        title: "Điểm Voice",
+        path: "/admin/management/text-credit-usages",
+        icon: <RiMicLine />,
       },
       {
         title: "Cửa hàng",

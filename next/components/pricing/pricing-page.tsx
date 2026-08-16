@@ -41,6 +41,7 @@ interface PlanConfig {
   videoLimit: number;
   imageLimit: number;
   requestLimit: number;
+  textCreditLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
@@ -143,6 +144,7 @@ export default function PricingPage() {
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
             requestLimit: getValue("request-limit"),
+            textCreditLimit: getValue("text-credit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
             price: getValue("price"),
@@ -174,6 +176,7 @@ export default function PricingPage() {
         "ngày"
       )}`
     );
+    features.push(`${t("Tối đa")} ${formatNumber(config.textCreditLimit)} ${t("điểm Voice")}`);
     features.push(
       `${t("Tối đa")} ${formatNumber(config.videoStreamCount)} ${t("luồng video cùng lúc")}`
     );

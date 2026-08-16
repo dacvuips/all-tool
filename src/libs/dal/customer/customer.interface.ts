@@ -57,6 +57,8 @@ export type GooglePackage = {
   imageLimit?: number; // Giới hạn ảnh
   requestCount?: number; // Số lần generation text đã dùng
   requestLimit?: number; // Giới hạn generation text
+  textCreditCount?: number; // Điểm Voice đã dùng
+  textCreditLimit?: number; // Giới hạn Điểm Voice
   imageStreamCount?: number; // Số luồng ảnh đồng thời
   videoStreamCount?: number; // Số luồng video đồng thời
   expiryPackageDate?: Date; // Ngày hết hạn gói

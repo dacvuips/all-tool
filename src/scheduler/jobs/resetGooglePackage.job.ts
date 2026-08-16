@@ -3,6 +3,7 @@ import moment from "moment-timezone";
 
 import logger from "../../helpers/logger";
 import { CustomerModel } from "../../libs/dal/customer/customer.model";
+import { snapshotGooglePackage } from "../../libs/dal/customer/google-package.snapshot";
 import { SubscriptionPlanEnum } from "../../libs/dal/customer/customer.interface";
 import {
   PackageTransactionTypeEnum,
@@ -16,6 +17,7 @@ type PackageLimitsConfig = {
   videoLimit: number;
   imageLimit: number;
   requestLimit: number;
+  textCreditLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
 };
@@ -24,6 +26,7 @@ const FREE_LIMITS_FALLBACK: PackageLimitsConfig = {
   videoLimit: 5,
   imageLimit: 10,
   requestLimit: 5,
+  textCreditLimit: 0,
   imageStreamCount: 1,
   videoStreamCount: 1,
 };
@@ -71,6 +74,7 @@ async function loadAllPackageLimitsFromSettings(): Promise<Map<string, PackageLi
       `pk-${plan}-video-limit`,
       `pk-${plan}-image-limit`,
       `pk-${plan}-request-limit`,
+      `pk-${plan}-text-credit`,
       `pk-${plan}-image-stream-count`,
       `pk-${plan}-video-stream-count`
     );
@@ -78,8 +82,11 @@ async function loadAllPackageLimitsFromSettings(): Promise<Map<string, PackageLi
 
   const values = await SettingHelper.loadMany(keys);
   const byKey = new Map(keys.map((k, i) => [k, values[i]]));
-  const num = (plan: string, suffix: string, fallback = 0) =>
-    Number(byKey.get(`pk-${plan}-${suffix}`)) || fallback;
+  const num = (plan: string, suffix: string, fallback = 0) => {
+    const raw = byKey.get(`pk-${plan}-${suffix}`);
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : fallback;
+  };
 
   const result = new Map<string, PackageLimitsConfig>();
   for (const plan of PACKAGE_PLANS) {
@@ -88,6 +95,7 @@ async function loadAllPackageLimitsFromSettings(): Promise<Map<string, PackageLi
       videoLimit: num(plan, "video-limit", fallback?.videoLimit ?? 0),
       imageLimit: num(plan, "image-limit", fallback?.imageLimit ?? 0),
       requestLimit: num(plan, "request-limit", fallback?.requestLimit ?? 0),
+      textCreditLimit: num(plan, "text-credit", fallback?.textCreditLimit ?? 0),
       imageStreamCount: num(plan, "image-stream-count", fallback?.imageStreamCount ?? 0),
       videoStreamCount: num(plan, "video-stream-count", fallback?.videoStreamCount ?? 0),
     });
@@ -100,6 +108,7 @@ function buildLimitUpdateSet(limits: PackageLimitsConfig): Record<string, number
     "googlePackage.videoLimit": limits.videoLimit,
     "googlePackage.imageLimit": limits.imageLimit,
     "googlePackage.requestLimit": limits.requestLimit,
+    "googlePackage.textCreditLimit": limits.textCreditLimit,
     "googlePackage.imageStreamCount": limits.imageStreamCount,
     "googlePackage.videoStreamCount": limits.videoStreamCount,
   };
@@ -110,6 +119,7 @@ function limitsChanged(pkg: Record<string, any>, limits: PackageLimitsConfig): b
     pkg.videoLimit !== limits.videoLimit ||
     pkg.imageLimit !== limits.imageLimit ||
     pkg.requestLimit !== limits.requestLimit ||
+    pkg.textCreditLimit !== limits.textCreditLimit ||
     pkg.imageStreamCount !== limits.imageStreamCount ||
     pkg.videoStreamCount !== limits.videoStreamCount
   );
@@ -134,6 +144,7 @@ export class ResetGooglePackageJob {
         videoCount: 0,
         imageCount: 0,
         requestCount: 0,
+        textCreditCount: 0,
         ...freeLimits,
       };
 
@@ -177,6 +188,7 @@ export class ResetGooglePackageJob {
               "googlePackage.videoCount": 0,
               "googlePackage.imageCount": 0,
               "googlePackage.requestCount": 0,
+              "googlePackage.textCreditCount": 0,
             };
 
             if (planLimits) {
@@ -194,18 +206,7 @@ export class ResetGooglePackageJob {
             resetCount++;
           } else if (isExpiredPaidPackage(pkg, now)) {
             // Gói hết hạn → hạ xuống Free với thông số từ settings
-            const beforeSnapshot: PackageTransactionSnapshot = {
-              subscription: pkg.subscription,
-              videoCount: pkg.videoCount,
-              videoLimit: pkg.videoLimit,
-              imageCount: pkg.imageCount,
-              imageLimit: pkg.imageLimit,
-              requestCount: pkg.requestCount,
-              requestLimit: pkg.requestLimit,
-              imageStreamCount: pkg.imageStreamCount,
-              videoStreamCount: pkg.videoStreamCount,
-              expiryPackageDate: pkg.expiryPackageDate,
-            };
+            const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
 
             const afterSnapshot: PackageTransactionSnapshot = {
               ...freeDefaults,
@@ -223,6 +224,8 @@ export class ResetGooglePackageJob {
                   "googlePackage.imageLimit": freeDefaults.imageLimit,
                   "googlePackage.requestCount": freeDefaults.requestCount,
                   "googlePackage.requestLimit": freeDefaults.requestLimit,
+                  "googlePackage.textCreditCount": freeDefaults.textCreditCount,
+                  "googlePackage.textCreditLimit": freeDefaults.textCreditLimit,
                   "googlePackage.imageStreamCount": freeDefaults.imageStreamCount,
                   "googlePackage.videoStreamCount": freeDefaults.videoStreamCount,
                 },

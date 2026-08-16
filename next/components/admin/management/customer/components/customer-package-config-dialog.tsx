@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiCheck, HiPencil, HiPhotograph, HiSave, HiVideoCamera } from "react-icons/hi";
-import { RiFlowChart, RiStackLine } from "react-icons/ri";
+import { RiFlowChart, RiMicLine, RiStackLine } from "react-icons/ri";
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import {
@@ -75,6 +75,7 @@ interface PlanConfig {
   videoLimit: number;
   imageLimit: number;
   requestLimit: number;
+  textCreditLimit: number;
   imageStreamCount: number;
   videoStreamCount: number;
   price: number;
@@ -97,6 +98,8 @@ function buildFieldValuesFromPackage(pkg: GooglePackage | undefined): Record<str
     imageCount: pkg.imageCount ?? 0,
     requestLimit: pkg.requestLimit ?? 0,
     requestCount: pkg.requestCount ?? 0,
+    textCreditLimit: pkg.textCreditLimit ?? 0,
+    textCreditCount: pkg.textCreditCount ?? 0,
     videoStreamCount: pkg.videoStreamCount ?? 0,
     imageStreamCount: pkg.imageStreamCount ?? 0,
     expiryPackageDate: pkg.expiryPackageDate
@@ -153,6 +156,20 @@ const EDITABLE_FIELDS: {
     label: "Generation text đã dùng",
     icon: <RiStackLine className="text-base" />,
     iconColor: "text-pink-400",
+    type: "number",
+  },
+  {
+    key: "textCreditLimit",
+    label: "Giới hạn text credit",
+    icon: <RiMicLine className="text-base" />,
+    iconColor: "text-rose-500",
+    type: "number",
+  },
+  {
+    key: "textCreditCount",
+    label: "Text credit đã dùng",
+    icon: <RiMicLine className="text-base" />,
+    iconColor: "text-rose-400",
     type: "number",
   },
   {
@@ -223,6 +240,7 @@ export function CustomerPackageConfigDialog({
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
             requestLimit: getValue("request-limit"),
+            textCreditLimit: getValue("text-credit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
             price: getValue("price"),
@@ -389,6 +407,19 @@ export function CustomerPackageConfigDialog({
                             <HiPhotograph className="text-base text-green-500" />
                             <span>
                               {t("Ảnh")}: <strong>{formatNumber(config.imageLimit)}</strong>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <RiStackLine className="text-base text-pink-500" />
+                            <span>
+                              {t("Text")}: <strong>{formatNumber(config.requestLimit)}</strong>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <RiMicLine className="text-base text-rose-500" />
+                            <span>
+                              {t("Text credit")}:{" "}
+                              <strong>{formatNumber(config.textCreditLimit)}</strong>
                             </span>
                           </div>
                           <div className="flex items-center gap-2">

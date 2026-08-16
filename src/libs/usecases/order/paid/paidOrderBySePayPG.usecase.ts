@@ -17,6 +17,7 @@ import { ForbiddenError } from "../../../core/errors";
 import { ApiMediaSubscriptionPlanEnum, apiMediaTokenService } from "../../../dal/apiMediaToken";
 import { createApiMediaTokenCredentials } from "../../../../routers/api-media/api-media-key";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../dal/customer";
+import { snapshotGooglePackage } from "../../../dal/customer/google-package.snapshot";
 import { IntroduceModel } from "../../../dal/introduce";
 import { InsertNotification, NotificationTarget } from "../../../dal/notification";
 import { OrderStatusEnum, OrderTypeEnum, PaymentStatus } from "../../../dal/order/order.interface";
@@ -427,18 +428,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const pkg = (customer as any).googlePackage || {};
 
     // Snapshot BEFORE
-    const beforeSnapshot: PackageTransactionSnapshot = {
-      subscription: pkg.subscription,
-      videoCount: pkg.videoCount,
-      videoLimit: pkg.videoLimit,
-      imageCount: pkg.imageCount,
-      imageLimit: pkg.imageLimit,
-      requestCount: pkg.requestCount,
-      requestLimit: pkg.requestLimit,
-      imageStreamCount: pkg.imageStreamCount,
-      videoStreamCount: pkg.videoStreamCount,
-      expiryPackageDate: pkg.expiryPackageDate,
-    };
+    const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
 
     // Lấy thông số gói từ Setting
     const planKey = PaidOrderBySePayPGUsecase.PLAN_KEY_MAP[subscriptionPlan];
@@ -460,6 +450,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
       videoLimit: getValue("video-limit"),
       imageLimit: getValue("image-limit"),
       requestLimit: getValue("request-limit"),
+      textCreditLimit: getValue("text-credit"),
       imageStreamCount: getValue("image-stream-count"),
       videoStreamCount: getValue("video-stream-count"),
     };
@@ -484,11 +475,13 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
           "googlePackage.videoLimit": packageConfig.videoLimit,
           "googlePackage.imageLimit": packageConfig.imageLimit,
           "googlePackage.requestLimit": packageConfig.requestLimit,
+          "googlePackage.textCreditLimit": packageConfig.textCreditLimit,
           "googlePackage.imageStreamCount": packageConfig.imageStreamCount,
           "googlePackage.videoStreamCount": packageConfig.videoStreamCount,
           "googlePackage.videoCount": 0,
           "googlePackage.imageCount": 0,
           "googlePackage.requestCount": 0,
+          "googlePackage.textCreditCount": 0,
           "googlePackage.expiryPackageDate": expiryPackageDate,
         },
       },
@@ -498,18 +491,7 @@ class PaidOrderBySePayPGUsecase extends BaseUsecase {
     const updatedPkg = (updatedCustomer as any)?.googlePackage || {};
 
     // Snapshot AFTER
-    const afterSnapshot: PackageTransactionSnapshot = {
-      subscription: updatedPkg.subscription,
-      videoCount: updatedPkg.videoCount,
-      videoLimit: updatedPkg.videoLimit,
-      imageCount: updatedPkg.imageCount,
-      imageLimit: updatedPkg.imageLimit,
-      requestCount: updatedPkg.requestCount,
-      requestLimit: updatedPkg.requestLimit,
-      imageStreamCount: updatedPkg.imageStreamCount,
-      videoStreamCount: updatedPkg.videoStreamCount,
-      expiryPackageDate: updatedPkg.expiryPackageDate,
-    };
+    const afterSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(updatedPkg);
 
     // Ghi log PackageTransaction
     await PackageTransactionModel.create({

@@ -4,17 +4,17 @@ import { SettingResource } from "../../../../libs/shared/interfaces/settingResou
 const Type = SettingResource.Type;
 
 /**
- * Admin Settings → nhóm "MicroX Voice"
+ * Admin Settings → nhóm "Viettheo Voice"
  * Key dùng cho tab Speech | Voice (proxy backend).
  */
 export default {
-  slug: "MicroX Voice",
-  name: t("MicroX Voice"),
-  desc: t("Cấu hình API MicroX cho tab Voice (TTS, clone, conversion, STT)"),
+  slug: "VietTheo Voice",
+  name: t("VietTheo Voice"),
+  desc: t("Cấu hình API VietTheo cho tab Voice (TTS, clone, conversion, STT)"),
   settings: [
     {
       key: "microx-voice-base-url",
-      name: t("MicroX Base URL"),
+      name: t("VietTheo Base URL"),
       type: Type.string,
       isPrivate: true,
       desc: t("Ví dụ https://www.microx.app/api/v1"),
@@ -22,7 +22,7 @@ export default {
     },
     {
       key: "microx-voice-api-key",
-      name: t("MicroX API Key"),
+      name: t("VietTheo API Key"),
       type: Type.string,
       isPrivate: true,
       isSecret: true,

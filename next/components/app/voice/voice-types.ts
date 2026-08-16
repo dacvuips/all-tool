@@ -1,10 +1,12 @@
 export type VoiceToolId =
   | "voices"
+  | "mine"
   | "tts"
   | "conversion"
   | "clone"
   | "stt"
-  | "cleanup";
+  | "cleanup"
+  | "cut";
 
 export type MicroxJobStatus = "processing" | "completed" | "failed" | string;
 
@@ -68,17 +70,57 @@ export type ExtractedJobMedia = {
   texts: { label: string; value: string }[];
 };
 
+export function isVoiceToolAudioPath(value: string): boolean {
+  return /^\/api\/app\/voice\/jobs\/[^/]+\/output\/?/i.test(value);
+}
+
+function isSttSegment(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const rec = value as Record<string, unknown>;
+  if (typeof rec.text !== "string" || rec.text.trim().length < 2) return false;
+  return (
+    Array.isArray(rec.words) ||
+    rec.language_code != null ||
+    rec.transcription_id != null ||
+    typeof rec.audio_duration_secs === "number"
+  );
+}
+
 export function extractJobMedia(job: unknown): ExtractedJobMedia {
   const urls: string[] = [];
   const voiceIds: string[] = [];
   const texts: { label: string; value: string }[] = [];
 
+  const pushText = (label: string, raw: string) => {
+    const value = raw.trim();
+    if (value.length < 2) return;
+    if (texts.some((item) => item.label === label && item.value === value)) return;
+    texts.push({ label, value });
+  };
+
   const visit = (value: unknown, key = "") => {
     if (value == null) return;
+    if (isSttSegment(value)) {
+      pushText("text", String(value.text));
+      if (typeof value.srt === "string") pushText("srt", value.srt);
+      if (typeof value.vtt === "string") pushText("vtt", value.vtt);
+      return;
+    }
     if (typeof value === "string") {
       const v = value.trim();
       if (!v) return;
-      if (/^https?:\/\//i.test(v) && !urls.includes(v)) urls.push(v);
+      if (
+        (v.startsWith("[") || v.startsWith("{")) &&
+        /"language_code"|"transcription_id"|"words"/.test(v)
+      ) {
+        try {
+          visit(JSON.parse(v), key);
+          return;
+        } catch {
+          // not JSON transcript
+        }
+      }
+      if (isVoiceToolAudioPath(v) && !urls.includes(v)) urls.push(v);
       else if (/^(voice_|clone_)/.test(v) && !voiceIds.includes(v)) voiceIds.push(v);
       else if (
         (key === "text" ||
@@ -88,7 +130,7 @@ export function extractJobMedia(job: unknown): ExtractedJobMedia {
           key === "vtt") &&
         v.length > 1
       ) {
-        texts.push({ label: key, value: v });
+        pushText(key, v);
       }
       return;
     }
@@ -98,6 +140,7 @@ export function extractJobMedia(job: unknown): ExtractedJobMedia {
     }
     if (typeof value === "object") {
       for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+        if (k === "words") continue;
         visit(v, k);
       }
     }
@@ -105,4 +148,48 @@ export function extractJobMedia(job: unknown): ExtractedJobMedia {
 
   visit(job);
   return { urls, voiceIds, texts };
+}
+
+export type SttWord = { text: string; start: number; end: number };
+
+export function extractSttWords(job: unknown): SttWord[] {
+  const words: SttWord[] = [];
+  const visit = (value: unknown) => {
+    if (value == null) return;
+    if (isSttSegment(value) && Array.isArray(value.words)) {
+      value.words.forEach((item) => {
+        if (!item || typeof item !== "object") return;
+        const rec = item as Record<string, unknown>;
+        if (String(rec.type || "") === "spacing") return;
+        const text = String(rec.text || "").trim();
+        if (!text) return;
+        words.push({
+          text,
+          start: Number(rec.start) || 0,
+          end: Number(rec.end) || 0,
+        });
+      });
+      return;
+    }
+    if (typeof value === "string") {
+      const v = value.trim();
+      if ((v.startsWith("[") || v.startsWith("{")) && /"words"/.test(v)) {
+        try {
+          visit(JSON.parse(v));
+        } catch {
+          // ignore
+        }
+      }
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+      return;
+    }
+    if (typeof value === "object") {
+      Object.values(value as Record<string, unknown>).forEach(visit);
+    }
+  };
+  visit(job);
+  return words;
 }

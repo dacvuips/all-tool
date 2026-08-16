@@ -8,6 +8,7 @@ import {
   PackageTransactionSnapshot,
   PackageTransactionTypeEnum,
 } from "../../../libs/dal/packageTransaction/package-transaction.interface";
+import { snapshotGooglePackage } from "../../../libs/dal/customer/google-package.snapshot";
 import { PackageTransactionModel } from "../../../libs/dal/packageTransaction/package-transaction.model";
 import { Context } from "../../../libs/graphql";
 import { NotificationBuilder } from "../notification/notificationBuilder";
@@ -21,6 +22,8 @@ export default {
       imageCount: Int
       requestCount: Int
       requestLimit: Int
+      textCreditCount: Int
+      textCreditLimit: Int
       imageStreamCount: Int
       videoStreamCount: Int
       expiryPackageDate: DateTime
@@ -45,18 +48,7 @@ export default {
         const pkg = customer.googlePackage || {};
 
         // Snapshot BEFORE
-        const beforeSnapshot: PackageTransactionSnapshot = {
-          subscription: pkg.subscription,
-          videoCount: pkg.videoCount,
-          videoLimit: pkg.videoLimit,
-          imageCount: pkg.imageCount,
-          imageLimit: pkg.imageLimit,
-          requestCount: pkg.requestCount,
-          requestLimit: pkg.requestLimit,
-          imageStreamCount: pkg.imageStreamCount,
-          videoStreamCount: pkg.videoStreamCount,
-          expiryPackageDate: pkg.expiryPackageDate,
-        };
+        const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
 
         // Chỉ cập nhật những field được gửi lên (không null/undefined)
         const updateFields: Record<string, any> = {};
@@ -85,6 +77,18 @@ export default {
         if (data.requestLimit !== undefined && data.requestLimit !== null) {
           updateFields["googlePackage.requestLimit"] = data.requestLimit;
           changedFields.push(`requestLimit: ${pkg.requestLimit ?? "N/A"} → ${data.requestLimit}`);
+        }
+        if (data.textCreditCount !== undefined && data.textCreditCount !== null) {
+          updateFields["googlePackage.textCreditCount"] = data.textCreditCount;
+          changedFields.push(
+            `textCreditCount: ${pkg.textCreditCount ?? "N/A"} → ${data.textCreditCount}`
+          );
+        }
+        if (data.textCreditLimit !== undefined && data.textCreditLimit !== null) {
+          updateFields["googlePackage.textCreditLimit"] = data.textCreditLimit;
+          changedFields.push(
+            `textCreditLimit: ${pkg.textCreditLimit ?? "N/A"} → ${data.textCreditLimit}`
+          );
         }
         if (data.imageStreamCount !== undefined && data.imageStreamCount !== null) {
           updateFields["googlePackage.imageStreamCount"] = data.imageStreamCount;
@@ -118,18 +122,7 @@ export default {
         const updatedPkg = updatedCustomer.googlePackage || {};
 
         // Snapshot AFTER
-        const afterSnapshot: PackageTransactionSnapshot = {
-          subscription: updatedPkg.subscription,
-          videoCount: updatedPkg.videoCount,
-          videoLimit: updatedPkg.videoLimit,
-          imageCount: updatedPkg.imageCount,
-          imageLimit: updatedPkg.imageLimit,
-          requestCount: updatedPkg.requestCount,
-          requestLimit: updatedPkg.requestLimit,
-          imageStreamCount: updatedPkg.imageStreamCount,
-          videoStreamCount: updatedPkg.videoStreamCount,
-          expiryPackageDate: updatedPkg.expiryPackageDate,
-        };
+        const afterSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(updatedPkg);
 
         // Ghi log PackageTransaction
         await PackageTransactionModel.create({

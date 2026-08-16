@@ -1,8 +1,9 @@
 /**
- * Proxy MicroX Voice API — key chỉ nằm server-side.
+ * Proxy VietTheo Voice API — key chỉ nằm server-side.
  *
  * GET  /api/app/voice/account/
  * GET  /api/app/voice/voices/
+ * GET  /api/app/voice/voices/:id/preview/
  * GET  /api/app/voice/jobs/:id/
  * POST /api/app/voice/text-to-speech/
  * POST /api/app/voice/voice-conversion/
@@ -14,12 +15,17 @@ import { Request, Response } from "express";
 import multer from "multer";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import { Context } from "../../../libs/graphql";
+import { assertVoiceGenerationAllowed, authVoiceCustomer } from "./_access";
 import {
   audioFileFromMulter,
   microxFetch,
+  microxFetchJobOutput,
+  microxFetchVoicePreview,
   newIdempotencyKey,
+  sanitizeJobForClient,
   sendRouteError,
 } from "./_microx";
+import { assertTextCreditRemaining, maybeConsumeTextCreditFromJob } from "./_text-credit";
 
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
@@ -38,10 +44,27 @@ function parseAudioUpload(req: Request, res: Response, next: (err?: unknown) => 
   });
 }
 
-function authVoice(req: Request) {
-  const context = new Context({ req });
-  context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+async function authVoicePaid(req: Request) {
+  const context = authVoiceCustomer(req);
+  await assertVoiceGenerationAllowed(context);
   return context;
+}
+
+async function authVoiceCreate(req: Request) {
+  const context = await authVoicePaid(req);
+  await assertTextCreditRemaining(context.id);
+  return context;
+}
+
+async function sendVoiceJob(
+  res: Response,
+  status: number,
+  data: any,
+  customerId: string,
+  tool: string
+) {
+  await maybeConsumeTextCreditFromJob(customerId, data, tool);
+  res.status(status === 202 ? 202 : 200).json({ success: true, data: sanitizeJobForClient(data) });
 }
 
 function requireAudio(req: Request) {
@@ -64,7 +87,8 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = new Context({ req });
+        await context.auth(TOKEN_ROLES.ADMIN_STAFF);
         const { data } = await microxFetch("/account");
         res.json({ success: true, data });
       } catch (err: any) {
@@ -78,7 +102,7 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        authVoiceCustomer(req);
         const q = req.query || {};
         const { data } = await microxFetch("/voices", {
           query: {
@@ -87,6 +111,9 @@ export default [
             gender: q.gender as string,
             capability: q.capability as string,
             query: q.query as string,
+            accent: q.accent as string,
+            engine: q.engine as string,
+            sort: q.sort as string,
             page: q.page as string,
             limit: q.limit as string,
           },
@@ -99,17 +126,60 @@ export default [
   },
   {
     method: "get",
+    path: "/api/app/voice/voices/:id/preview/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        authVoiceCustomer(req);
+        const id = String(req.params.id || "").trim();
+        if (!id || !/^(voice_|clone_)/.test(id)) {
+          return res.status(400).json({ message: "Voice id không hợp lệ" });
+        }
+        const { buffer, contentType } = await microxFetchVoicePreview(id);
+        res.setHeader("Content-Type", contentType || "audio/mpeg");
+        res.setHeader("Cache-Control", "private, max-age=300");
+        res.send(buffer);
+      } catch (err: any) {
+        sendRouteError(res, err);
+      }
+    },
+  },
+  {
+    method: "get",
     path: "/api/app/voice/jobs/:id/",
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoicePaid(req);
         const id = String(req.params.id || "").trim();
         if (!id) {
           return res.status(400).json({ message: "Thiếu job id" });
         }
         const { data } = await microxFetch(`/jobs/${encodeURIComponent(id)}`);
-        res.json({ success: true, data });
+        const tool = String(req.query.tool || "").trim();
+        await maybeConsumeTextCreditFromJob(context.id, data, tool);
+        res.json({ success: true, data: sanitizeJobForClient(data) });
+      } catch (err: any) {
+        sendRouteError(res, err);
+      }
+    },
+  },
+  {
+    method: "get",
+    path: "/api/app/voice/jobs/:id/output/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        await authVoicePaid(req);
+        const id = String(req.params.id || "").trim();
+        if (!id) {
+          return res.status(400).json({ message: "Thiếu job id" });
+        }
+        const index = Math.max(0, Number(req.query.index) || 0);
+        const { buffer, contentType } = await microxFetchJobOutput(id, index);
+        res.setHeader("Content-Type", contentType || "audio/mpeg");
+        res.setHeader("Cache-Control", "private, max-age=60");
+        res.send(buffer);
       } catch (err: any) {
         sendRouteError(res, err);
       }
@@ -121,7 +191,7 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoiceCreate(req);
         const body = (req.body || {}) as {
           voice_id?: string;
           text?: string;
@@ -145,7 +215,7 @@ export default [
             creativity: Number.isFinite(creativity) ? creativity : 0.5,
           },
         });
-        res.status(status === 202 ? 202 : 200).json({ success: true, data });
+        await sendVoiceJob(res, status, data, context.id, "tts");
       } catch (err: any) {
         sendRouteError(res, err);
       }
@@ -157,7 +227,7 @@ export default [
     midd: [parseAudioUpload],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoiceCreate(req);
         const file = requireAudio(req);
         const voiceId = String(req.body?.voice_id || "").trim();
         if (!voiceId) return res.status(400).json({ message: "Thiếu voice_id" });
@@ -176,7 +246,7 @@ export default [
           idempotencyKey: newIdempotencyKey("conversion"),
           form,
         });
-        res.status(status === 202 ? 202 : 200).json({ success: true, data });
+        await sendVoiceJob(res, status, data, context.id, "conversion");
       } catch (err: any) {
         sendRouteError(res, err);
       }
@@ -188,7 +258,7 @@ export default [
     midd: [parseAudioUpload],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoiceCreate(req);
         const file = requireAudio(req);
         const name = String(req.body?.name || "").trim();
         if (!name) return res.status(400).json({ message: "Thiếu tên giọng clone" });
@@ -204,7 +274,7 @@ export default [
           idempotencyKey: newIdempotencyKey("clone"),
           form,
         });
-        res.status(status === 202 ? 202 : 200).json({ success: true, data });
+        await sendVoiceJob(res, status, data, context.id, "clone");
       } catch (err: any) {
         sendRouteError(res, err);
       }
@@ -216,7 +286,7 @@ export default [
     midd: [parseAudioUpload],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoiceCreate(req);
         const file = requireAudio(req);
         const form = new FormData();
         const audio = audioFileFromMulter(file);
@@ -227,7 +297,7 @@ export default [
           idempotencyKey: newIdempotencyKey("stt"),
           form,
         });
-        res.status(status === 202 ? 202 : 200).json({ success: true, data });
+        await sendVoiceJob(res, status, data, context.id, "stt");
       } catch (err: any) {
         sendRouteError(res, err);
       }
@@ -239,7 +309,7 @@ export default [
     midd: [parseAudioUpload],
     action: async (req: Request, res: Response) => {
       try {
-        authVoice(req);
+        const context = await authVoiceCreate(req);
         const file = requireAudio(req);
         const form = new FormData();
         const audio = audioFileFromMulter(file);
@@ -250,7 +320,7 @@ export default [
           idempotencyKey: newIdempotencyKey("cleanup"),
           form,
         });
-        res.status(status === 202 ? 202 : 200).json({ success: true, data });
+        await sendVoiceJob(res, status, data, context.id, "cleanup");
       } catch (err: any) {
         sendRouteError(res, err);
       }
