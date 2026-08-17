@@ -202,7 +202,7 @@ export function hydrateScenesDialogueLines(
 }
 
 export function dialogueLineReady(line: FilmDialogueLineRecord): boolean {
-  return line.voiceStatus === "ready" || !!line.voiceUrl;
+  return line.voiceStatus === "ready" || !!line.voiceUrl || !!line.voiceBlob;
 }
 
 export function dialogueLineCreating(line: FilmDialogueLineRecord): boolean {
@@ -255,9 +255,49 @@ export function buildFilmVoiceSpeakerRoster(
   });
 }
 
-/** Flatten scenes → list card Tạo giọng */
-export function buildFilmVoiceListItems(scenes: FilmSceneRecord[]): FilmVoiceListItem[] {
-  const sorted = [...scenes].sort((a, b) => a.index - b.index);
+/** Tất cả nhân vật dự án (+ tên chỉ có trong thoại) — tab Tạo giọng. */
+export function buildFilmVoiceCharacterRoster(
+  characters: FilmCharacterRecord[],
+  items: FilmVoiceListItem[] = []
+): FilmVoiceSpeakerItem[] {
+  const lineCounts = new Map<string, number>();
+  for (const item of items) {
+    const name = item.line.character?.trim();
+    if (!name) continue;
+    const k = name.toLowerCase();
+    lineCounts.set(k, (lineCounts.get(k) || 0) + 1);
+  }
+
+  const roster: FilmVoiceSpeakerItem[] = [...characters]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name, "vi"))
+    .map((c) => ({
+      key: c.id,
+      name: c.name,
+      lineCount: lineCounts.get(c.name.trim().toLowerCase()) || 0,
+      character: c,
+    }));
+
+  const seen = new Set(roster.map((r) => r.name.trim().toLowerCase()));
+  for (const sp of buildFilmVoiceSpeakerRoster(items, characters)) {
+    const k = sp.name.trim().toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    roster.push(sp);
+  }
+  return roster;
+}
+
+/** Flatten scenes → list card Tạo giọng (sort tập → cảnh) */
+export function buildFilmVoiceListItems(
+  scenes: FilmSceneRecord[],
+  episodeOrder?: Map<string, number>
+): FilmVoiceListItem[] {
+  const sorted = [...scenes].sort((a, b) => {
+    const epA = episodeOrder?.get(a.episodeId) ?? 0;
+    const epB = episodeOrder?.get(b.episodeId) ?? 0;
+    if (epA !== epB) return epA - epB;
+    return a.index - b.index;
+  });
   const items: FilmVoiceListItem[] = [];
   for (const scene of sorted) {
     const lines = syncSceneDialogueLines(scene);
@@ -297,4 +337,87 @@ export function patchSceneDialogueLine(
     voiceUrl: dialogueLines.find(dialogueLineReady)?.voiceUrl || scene.voiceUrl || "",
     updatedAt: new Date().toISOString(),
   };
+}
+
+/** Chỉ gắn voiceId / voiceLabel từ nhân vật — không copy blob / audio data. */
+export function applyCharacterVoiceLinksToScenes(
+  scenes: FilmSceneRecord[],
+  characters: FilmCharacterRecord[]
+): { scenes: FilmSceneRecord[]; changed: FilmSceneRecord[] } {
+  const byName = new Map(
+    characters
+      .map((c) => [c.name.trim().toLowerCase(), c] as const)
+      .filter(([k]) => !!k)
+  );
+  const changed: FilmSceneRecord[] = [];
+  const next = scenes.map((scene) => {
+    const lines = scene.dialogueLines;
+    if (!lines?.length) return scene;
+    let dirty = false;
+    const dialogueLines = lines.map((line) => {
+      const ch = byName.get(line.character?.trim().toLowerCase() || "");
+      const voiceId = ch?.voiceId?.trim() || "";
+      const voiceLabel = ch?.voiceLabel?.trim() || "";
+      if (!voiceId && !voiceLabel) return line;
+      if (line.voiceId === voiceId && (line.voiceLabel || "") === voiceLabel) return line;
+      dirty = true;
+      return {
+        ...line,
+        voiceId: voiceId || line.voiceId,
+        voiceLabel: voiceLabel || line.voiceLabel,
+      };
+    });
+    if (!dirty) return scene;
+    const patched: FilmSceneRecord = {
+      ...scene,
+      dialogueLines,
+      updatedAt: new Date().toISOString(),
+    };
+    changed.push(patched);
+    return patched;
+  });
+  return { scenes: next, changed };
+}
+
+/** Gỡ voiceId/voiceLabel trên dòng thoại của nhân vật (không xóa file audio đã tạo). */
+export function stripCharacterVoiceLinksFromScenes(
+  scenes: FilmSceneRecord[],
+  characterName: string
+): { scenes: FilmSceneRecord[]; changed: FilmSceneRecord[] } {
+  const name = characterName.trim().toLowerCase();
+  if (!name) return { scenes, changed: [] };
+  const changed: FilmSceneRecord[] = [];
+  const next = scenes.map((scene) => {
+    if (!scene.dialogueLines?.length) return scene;
+    let dirty = false;
+    const dialogueLines = scene.dialogueLines.map((line) => {
+      if (line.character?.trim().toLowerCase() !== name) return line;
+      if (!line.voiceId?.trim() && !line.voiceLabel?.trim()) return line;
+      dirty = true;
+      return { ...line, voiceId: undefined, voiceLabel: undefined };
+    });
+    if (!dirty) return scene;
+    const patched: FilmSceneRecord = {
+      ...scene,
+      dialogueLines,
+      updatedAt: new Date().toISOString(),
+    };
+    changed.push(patched);
+    return patched;
+  });
+  return { scenes: next, changed };
+}
+
+/** Giọng gắn nhân vật (link) — ưu tiên hơn voice trên dòng thoại. */
+export function resolveDialogueLineVoiceLink(
+  line: Pick<FilmDialogueLineRecord, "character" | "voiceId" | "voiceLabel">,
+  characters: FilmCharacterRecord[] = []
+): { voiceId: string; voiceLabel: string } {
+  const name = line.character?.trim().toLowerCase() || "";
+  const ch = name
+    ? characters.find((c) => c.name.trim().toLowerCase() === name)
+    : undefined;
+  const voiceId = (ch?.voiceId || line.voiceId || "").trim();
+  const voiceLabel = (ch?.voiceLabel || line.voiceLabel || "").trim();
+  return { voiceId, voiceLabel };
 }

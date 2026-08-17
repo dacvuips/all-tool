@@ -74,16 +74,22 @@ export function MyVoicesPanel({
   heading,
   emptyText,
   showToolTag = false,
+  onSelect,
+  selectText,
+  defaultView,
 }: {
   records?: VoiceResultRecord[];
   heading?: string;
   emptyText?: string;
   showToolTag?: boolean;
+  onSelect?: (record: VoiceResultRecord) => void;
+  selectText?: string;
+  defaultView?: VoiceCatalogView;
 }) {
   const { t } = useTranslation();
   const { library, removeHistory } = useVoiceContext();
   const source = records || library;
-  const [view, setView] = useState<VoiceCatalogView>("grid");
+  const [view, setView] = useState<VoiceCatalogView>(defaultView || "grid");
   const [zipping, setZipping] = useState(false);
   const [filters, setFilters] = useState<VoiceFilterValue>({
     capability: "",
@@ -208,7 +214,20 @@ export function MyVoicesPanel({
                   accentColor={meta.color}
                   onDownload={() => downloadOne(item)}
                   onClear={() => void removeHistory(item.id)}
+                  onPick={onSelect ? () => onSelect(item) : undefined}
                 />
+                {onSelect ? (
+                  <div className="px-2 pb-2">
+                    <button
+                      type="button"
+                      onClick={() => onSelect(item)}
+                      className="w-full h-8 text-xs font-semibold text-white rounded-lg border-0 cursor-pointer"
+                      style={{ background: meta.color }}
+                    >
+                      {selectText || t("Dùng giọng này")}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             );
           })}

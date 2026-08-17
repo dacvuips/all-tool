@@ -17,9 +17,12 @@ import {
 } from "./voice-idb";
 import type { MicroxJob, VoiceToolId } from "./voice-types";
 
+type VoiceLayout = "split" | "stack";
+
 type VoiceContextValue = {
   tool: VoiceToolId;
   setTool: (tool: VoiceToolId) => void;
+  layout: VoiceLayout;
   credits: string;
   running: boolean;
   progress: string;
@@ -79,7 +82,20 @@ function urlsFromResults(list: VoiceResultRecord[]): Record<string, string> {
   return map;
 }
 
-export function VoiceProvider({ children }: { children: React.ReactNode }) {
+export function VoiceProvider({
+  children,
+  syncUrl = true,
+  initialTool,
+  allowedTools,
+  layout = "split",
+}: {
+  children: React.ReactNode;
+  /** Đồng bộ tab với query `voiceTab` (tắt khi nhúng trong modal Film) */
+  syncUrl?: boolean;
+  initialTool?: VoiceToolId;
+  allowedTools?: VoiceToolId[];
+  layout?: VoiceLayout;
+}) {
   const { t } = useTranslation();
   const router = useRouter();
   const { customer, loadCustomer } = useAuth();
@@ -88,9 +104,18 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
   const createBlockedReason = voiceCreateBlockReason(customer, marketplaceStopped);
   const canCreate = canCreateVoice(customer, marketplaceStopped);
   const ownerId = voiceOwnerIdOf(customerIdOf(customer));
-  const [tool, setToolState] = useState<VoiceToolId>(
-    () => parseVoiceToolId(router.query[VOICE_TAB_QUERY_KEY]) || voiceTabFromLocation() || "tts"
-  );
+  const allowed = allowedTools?.length ? allowedTools : null;
+  const fallbackTool: VoiceToolId =
+    (initialTool && (!allowed || allowed.includes(initialTool)) && initialTool) ||
+    allowed?.[0] ||
+    "tts";
+  const [tool, setToolState] = useState<VoiceToolId>(() => {
+    if (!syncUrl) return fallbackTool;
+    const fromUrl =
+      parseVoiceToolId(router.query[VOICE_TAB_QUERY_KEY]) || voiceTabFromLocation();
+    if (fromUrl && (!allowed || allowed.includes(fromUrl))) return fromUrl;
+    return fallbackTool;
+  });
   const credits = useMemo(() => {
     const count = customer?.googlePackage?.textCreditCount ?? 0;
     const limit = customer?.googlePackage?.textCreditLimit ?? 0;
@@ -153,6 +178,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
 
   const writeVoiceTab = useCallback(
     (next: VoiceToolId) => {
+      if (!syncUrl) return;
       if (!router.isReady) return;
       if (router.query[VOICE_TAB_QUERY_KEY] === next) return;
       void router.replace(
@@ -164,31 +190,34 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
         { shallow: true }
       );
     },
-    [router]
+    [router, syncUrl]
   );
 
   useEffect(() => {
+    if (!syncUrl) return;
     if (!router.isReady) return;
     const parsed = parseVoiceToolId(router.query[VOICE_TAB_QUERY_KEY]);
     if (!parsed) {
       writeVoiceTab(tool);
       return;
     }
+    if (allowed && !allowed.includes(parsed)) return;
     if (parsed === tool) return;
     setToolState(parsed);
     setJob(null);
     setError("");
-  }, [router.isReady, router.query[VOICE_TAB_QUERY_KEY]]);
+  }, [router.isReady, router.query[VOICE_TAB_QUERY_KEY], syncUrl]);
 
   const setTool = useCallback(
     (next: VoiceToolId) => {
+      if (allowed && !allowed.includes(next)) return;
       setToolState(next);
       setJob(null);
       setError("");
       setProgress("");
       writeVoiceTab(next);
     },
-    [writeVoiceTab]
+    [writeVoiceTab, allowed]
   );
 
   const cancelRun = useCallback(() => {
@@ -378,6 +407,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     () => ({
       tool,
       setTool,
+      layout,
       credits,
       running,
       progress,
@@ -399,6 +429,7 @@ export function VoiceProvider({ children }: { children: React.ReactNode }) {
     [
       tool,
       setTool,
+      layout,
       credits,
       running,
       progress,

@@ -14,6 +14,11 @@ import {
 } from "./film-catalog-pick-dialog";
 import { FILM_CHARACTER_PROP_ASPECT_RATIO } from "./film-aspect";
 import type { FilmCharacterImageGenerateInput } from "./film-character-image-dialog";
+import FilmCharacterVoiceIcon, {
+  clearFilmCharacterVoice,
+  filmCharacterHasVoice,
+  FilmCharacterVoiceUnlinkButton,
+} from "./film-character-voice-icon";
 import { filmEntityToGeneratedImage } from "./film-entity-to-generated-image";
 import FilmImageGalleryDialog from "./film-image-gallery-dialog";
 import FilmLinkedPropsBlock from "./film-linked-props-block";
@@ -61,6 +66,7 @@ type Props = {
   onUnlinkLinkedProp?: (prop: FilmPropRecord) => void;
   /** Bật/tắt gắn thẻ tập phim */
   onToggleEpisode?: (c: FilmCharacterRecord, episodeId: string) => void;
+  onRemoveVoice?: (c: FilmCharacterRecord) => void | Promise<void>;
 };
 
 export default function FilmCharacterCard({
@@ -83,6 +89,7 @@ export default function FilmCharacterCard({
   onMoveLinkedProp,
   onUnlinkLinkedProp,
   onToggleEpisode,
+  onRemoveVoice,
 }: Props) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -150,7 +157,18 @@ export default function FilmCharacterCard({
     >
       <div className="flex relative gap-2 items-center px-3 py-2 min-w-0 border-b border-gray-100">
         <div className="flex-1 min-w-0">
-          <h4 className="m-0 text-sm font-bold text-gray-900 truncate">{character.name}</h4>
+          <div className="flex gap-1.5 items-center min-w-0">
+            <h4 className="m-0 text-sm font-bold text-gray-900 truncate">{character.name}</h4>
+            <FilmCharacterVoiceIcon character={character} onEdit={onEdit} />
+            {filmCharacterHasVoice(character) && onRemoveVoice ? (
+              <FilmCharacterVoiceUnlinkButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void onRemoveVoice(character);
+                }}
+              />
+            ) : null}
+          </div>
           {roleLabel ? (
             <p className="m-0 mt-0.5 text-10 text-gray-400 truncate">{roleLabel}</p>
           ) : null}

@@ -51,11 +51,16 @@ import {
 import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
 import {
+  applyCharacterVoiceLinksToScenes,
   buildFilmVoiceListItems,
+  dialogueLineCreating,
   dialogueLineReady,
   hydrateScenesDialogueLines,
   patchSceneDialogueLine,
+  resolveDialogueLineVoiceLink,
+  stripCharacterVoiceLinksFromScenes,
   withSyncedDialogueLines,
+  type FilmVoiceListItem,
 } from "./film-dialogue";
 import {
   countScenesReferencingName,
@@ -165,8 +170,10 @@ import {
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
-import { buildPlaceholderVoiceUrl } from "./film-voice-card";
-import type { FilmVoiceGenerateInput } from "./film-voice-dialog";
+import {
+  generateFilmDialogueVoiceBlob,
+  type FilmVoiceGenerateInput,
+} from "./film-voice-generate";
 import FilmVoicePanel from "./film-voice-panel";
 import FilmWorkspaceSidebar from "./film-workspace-sidebar";
 
@@ -198,7 +205,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   const router = useRouter();
   const toast = useToast();
   const alert = useAlert();
-  const { customer } = useAuth();
+  const { customer, loadCustomer } = useAuth();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
 
   const [loading, setLoading] = useState(true);
@@ -554,6 +561,24 @@ export default function FilmWorkspace({ projectId }: Props) {
     const idx = filmEpisodeIndexFromQuery(router.query.ep, episodes.length);
     setActiveEpisodeIndex((cur) => (cur === idx ? cur : idx));
   }, [router.isReady, router.query.ep, episodes.length]);
+
+  useEffect(() => {
+    if (activeStep !== "voice" || !project?.id || !characters.length) return;
+    let cancelled = false;
+    void (async () => {
+      const rows = await getFilmScenesByProject(project.id);
+      if (cancelled) return;
+      const { scenes: linked, changed } = applyCharacterVoiceLinksToScenes(rows, characters);
+      if (!changed.length) return;
+      for (const s of changed) await putFilmScene(s);
+      if (cancelled) return;
+      const patchMap = new Map(linked.map((s) => [s.id, s]));
+      setScenes((prev) => prev.map((s) => patchMap.get(s.id) || s));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStep, project?.id, characters]);
 
   const selectActiveEpisode = useCallback(
     (idx: number) => {
@@ -1025,10 +1050,29 @@ export default function FilmWorkspace({ projectId }: Props) {
       const [patched] = renameEntityNameInCharacters([toSave], oldName, newName);
       toSave = { ...patched, name: newName };
     }
+    const hadVoice = !!(prev?.voiceId?.trim() || prev?.voiceLabel?.trim() || prev?.voicePreviewBlob);
+    const hasVoice = !!(toSave.voiceId?.trim() || toSave.voiceLabel?.trim() || toSave.voicePreviewBlob);
     await putFilmCharacter(toSave);
-    setCharacters((prevList) =>
-      prevList.map((x) => (x.id === toSave.id ? toSave : x))
-    );
+    const nextCharacters = characters.map((x) => (x.id === toSave.id ? toSave : x));
+    setCharacters(nextCharacters);
+    if (!project) return;
+    const allRows = await getFilmScenesByProject(project.id);
+    let linkedScenes = allRows;
+    let changed: FilmSceneRecord[] = [];
+    if (hadVoice && !hasVoice) {
+      const stripped = stripCharacterVoiceLinksFromScenes(allRows, toSave.name);
+      linkedScenes = stripped.scenes;
+      changed = stripped.changed;
+    } else {
+      const linked = applyCharacterVoiceLinksToScenes(allRows, nextCharacters);
+      linkedScenes = linked.scenes;
+      changed = linked.changed;
+    }
+    if (changed.length) {
+      const patchMap = new Map(linkedScenes.map((s) => [s.id, s]));
+      setScenes((prev) => prev.map((s) => patchMap.get(s.id) || s));
+      for (const s of changed) await putFilmScene(s);
+    }
   };
 
   /** Poll job nền → cập nhật character; đổi tab / đóng dialog không cancel. */
@@ -4013,30 +4057,41 @@ export default function FilmWorkspace({ projectId }: Props) {
     }
   };
 
+  const refreshTextCredits = async () => {
+    try {
+      await loadCustomer();
+    } catch {
+      // ignore — credit hiển thị sẽ cập nhật lần load sau
+    }
+  };
+
   const handleCreateVoice = async (input: FilmVoiceGenerateInput) => {
-    const { scene, dialogueLineId, source, voiceId, voiceLabel } = input;
-    if (!dialogueLineId) return;
+    const { scene, dialogueLineId, text, voiceId, voiceLabel } = input;
+    if (!dialogueLineId || !voiceId?.trim()) return;
+    const trimmedText = String(text || "").trim();
+    if (!trimmedText) return;
+
     const current = scenes.find((s) => s.id === scene.id) || scene;
     const creating = patchSceneDialogueLine(current, dialogueLineId, {
-      voiceSource: source,
-      voiceId,
-      voiceLabel,
+      voiceId: voiceId.trim(),
+      voiceLabel: voiceLabel?.trim() || voiceId.trim(),
       voiceStatus: "creating",
       voiceError: undefined,
     });
     setScenes((prev) => prev.map((x) => (x.id === creating.id ? creating : x)));
     await putFilmScene(creating);
+
     try {
-      await delay(1000);
+      const blob = await generateFilmDialogueVoiceBlob(trimmedText, voiceId);
       const done = patchSceneDialogueLine(creating, dialogueLineId, {
         voiceStatus: "ready",
-        voiceUrl: buildPlaceholderVoiceUrl(
-          Math.max(2, Math.min(12, Math.ceil((current.durationSec || 3) / 2)))
-        ),
+        voiceBlob: blob,
+        voiceUrl: "",
         voiceError: undefined,
       });
       setScenes((prev) => prev.map((x) => (x.id === done.id ? done : x)));
       await putFilmScene(done);
+      await refreshTextCredits();
     } catch (err: any) {
       const failed = patchSceneDialogueLine(creating, dialogueLineId, {
         voiceStatus: "error",
@@ -4044,44 +4099,64 @@ export default function FilmWorkspace({ projectId }: Props) {
       });
       setScenes((prev) => prev.map((x) => (x.id === failed.id ? failed : x)));
       await putFilmScene(failed);
+      throw err;
     }
   };
 
-  const handleBulkCreateVoices = async () => {
-    const pending = buildFilmVoiceListItems(scenes).filter(
-      (item) => !dialogueLineReady(item.line)
-    );
+  const handleBulkCreateVoices = async (items: FilmVoiceListItem[]) => {
+    const pending = items.filter((item) => {
+      if (dialogueLineReady(item.line) || dialogueLineCreating(item.line)) return false;
+      const linked = resolveDialogueLineVoiceLink(item.line, characters);
+      return !!linked.voiceId?.trim();
+    });
     if (!pending.length) return;
 
     let next = [...scenes];
     for (const item of pending) {
       const scene = next.find((s) => s.id === item.scene.id);
       if (!scene) continue;
+      const linked = resolveDialogueLineVoiceLink(item.line, characters);
       const patched = patchSceneDialogueLine(scene, item.line.id, {
         voiceStatus: "creating",
         voiceError: undefined,
+        voiceId: linked.voiceId,
+        voiceLabel: linked.voiceLabel || linked.voiceId,
       });
       next = next.map((s) => (s.id === patched.id ? patched : s));
     }
     setScenes(next);
     for (const s of next) await putFilmScene(s);
-
-    await delay(1200);
 
     for (const item of pending) {
       const scene = next.find((s) => s.id === item.scene.id);
       if (!scene) continue;
-      const patched = patchSceneDialogueLine(scene, item.line.id, {
-        voiceStatus: "ready",
-        voiceUrl: buildPlaceholderVoiceUrl(
-          Math.max(2, Math.min(12, Math.ceil((scene.durationSec || 3) / 2)))
-        ),
-        voiceError: undefined,
-      });
-      next = next.map((s) => (s.id === patched.id ? patched : s));
+      const linked = resolveDialogueLineVoiceLink(item.line, characters);
+      const text = item.line.line?.trim();
+      if (!text || !linked.voiceId) continue;
+      try {
+        const blob = await generateFilmDialogueVoiceBlob(text, linked.voiceId);
+        const patched = patchSceneDialogueLine(scene, item.line.id, {
+          voiceStatus: "ready",
+          voiceBlob: blob,
+          voiceUrl: "",
+          voiceError: undefined,
+          voiceId: linked.voiceId,
+          voiceLabel: linked.voiceLabel || linked.voiceId,
+        });
+        next = next.map((s) => (s.id === patched.id ? patched : s));
+        setScenes((prev) => prev.map((s) => (s.id === patched.id ? patched : s)));
+        await putFilmScene(patched);
+        await refreshTextCredits();
+      } catch (err: any) {
+        const failed = patchSceneDialogueLine(scene, item.line.id, {
+          voiceStatus: "error",
+          voiceError: String(err?.message || t("Tạo giọng thất bại")),
+        });
+        next = next.map((s) => (s.id === failed.id ? failed : s));
+        setScenes((prev) => prev.map((s) => (s.id === failed.id ? failed : s)));
+        await putFilmScene(failed);
+      }
     }
-    for (const s of next) await putFilmScene(s);
-    setScenes(next);
   };
 
   if (loading) {
@@ -4546,8 +4621,13 @@ export default function FilmWorkspace({ projectId }: Props) {
 
           {activeStep === "voice" && (
             <FilmVoicePanel
+              projectId={project.id}
               scenes={scenes}
               characters={characters}
+              episodes={episodes}
+              promptTemplate={project.characterImagePromptTemplate}
+              onCharactersChange={setCharacters}
+              onSaveCharacter={handleSaveCharacter}
               onCreateVoice={handleCreateVoice}
               onBulkCreateVoices={handleBulkCreateVoices}
               onDownloadAll={() => {

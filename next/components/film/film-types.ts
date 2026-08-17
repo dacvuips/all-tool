@@ -164,6 +164,13 @@ export type FilmCharacterRecord = {
   mediaJobProgress?: number;
   /** Lỗi generate ảnh — hiển thị inline trên card (không toast) */
   mediaError?: string;
+  /** Voice_id gắn nhân vật (TTS / clone từ tab Voice) */
+  voiceId?: string;
+  /** Tên hiển thị của giọng */
+  voiceLabel?: string;
+  /** Audio mẫu để nghe tại chỗ trong modal sửa */
+  voicePreviewBlob?: Blob;
+  voiceResultId?: string;
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -252,6 +259,8 @@ export type FilmDialogueLineRecord = {
   line: string;
   voiceStatus?: "pending" | "creating" | "ready" | "error";
   voiceUrl?: string;
+  /** Audio đã tạo — lưu IDB */
+  voiceBlob?: Blob;
   voiceError?: string;
   voiceSource?: "catalog" | "custom_id" | "minimax";
   voiceId?: string;

@@ -259,11 +259,12 @@ function VoiceFormShell({
   onSubmit: () => void;
 }) {
   const { t } = useTranslation();
-  const { error, canCreate, createBlockedReason } = useVoiceContext();
+  const { error, canCreate, createBlockedReason, layout } = useVoiceContext();
   const blocked = !canCreate;
+  const stacked = layout === "stack";
   return (
-    <div className="flex overflow-hidden flex-col flex-1 min-h-0">
-      <div className="overflow-y-auto flex-1 min-h-0 v-scrollbar">
+    <div className={stacked ? "flex flex-col" : "flex overflow-hidden flex-col flex-1 min-h-0"}>
+      <div className={stacked ? "" : "overflow-y-auto flex-1 min-h-0 v-scrollbar"}>
         <div className="px-4 pt-1 pb-3 space-y-4">
           {children}
           {blocked ? (

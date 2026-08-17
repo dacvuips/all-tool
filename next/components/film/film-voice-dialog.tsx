@@ -4,23 +4,16 @@ import { HiOutlineX } from "react-icons/hi";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
 import type { FilmVoiceListItem } from "./film-dialogue";
-import type { FilmSceneRecord } from "./film-types";
+import type { FilmVoiceGenerateInput } from "./film-voice-generate";
 
-export type FilmVoiceSource = "catalog" | "custom_id" | "minimax";
+export type { FilmVoiceGenerateInput } from "./film-voice-generate";
 
-export type FilmVoiceOption = {
+type FilmVoiceSource = "catalog" | "custom_id" | "minimax";
+
+type FilmVoiceOption = {
   id: string;
   name: string;
   tags: string;
-};
-
-export type FilmVoiceGenerateInput = {
-  scene: FilmSceneRecord;
-  /** id dòng thoại đã tách; thiếu = legacy scene-level */
-  dialogueLineId: string;
-  source: FilmVoiceSource;
-  voiceId: string;
-  voiceLabel: string;
 };
 
 type Props = {
@@ -63,15 +56,20 @@ export default function FilmVoiceDialog({ isOpen, item, onClose, onConfirm }: Pr
 
   useEffect(() => {
     if (!isOpen || !line) return;
-    const src = line.voiceSource || "minimax";
+    const voiceId = line.voiceId || "";
+    const inCatalog = CATALOG_VOICES.some((o) => o.id === voiceId);
+    const inMinimax = MINIMAX_VOICES.some((o) => o.id === voiceId);
+    const src =
+      line.voiceSource ||
+      (voiceId && !inCatalog && !inMinimax ? "custom_id" : "minimax");
     setSource(src);
     if (src === "custom_id") {
-      setCustomId(line.voiceId || "");
+      setCustomId(voiceId);
       setSelectedId("");
     } else if (src === "catalog") {
-      setSelectedId(line.voiceId || CATALOG_VOICES[0].id);
+      setSelectedId(voiceId || CATALOG_VOICES[0].id);
     } else {
-      setSelectedId(line.voiceId || MINIMAX_VOICES[0].id);
+      setSelectedId(voiceId || MINIMAX_VOICES[0].id);
     }
     setSubmitting(false);
   }, [isOpen, line]);
@@ -111,7 +109,7 @@ export default function FilmVoiceDialog({ isOpen, item, onClose, onConfirm }: Pr
       await onConfirm({
         scene,
         dialogueLineId: line.id,
-        source,
+        text: lineText,
         voiceId: voice.id,
         voiceLabel: voice.label,
       });

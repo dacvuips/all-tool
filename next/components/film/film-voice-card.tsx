@@ -1,18 +1,22 @@
 /**
  * Card 1 lời thoại — tab Tạo giọng (sau khi tách field Thoại).
  */
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiMicrophone } from "react-icons/hi";
 import { SceneMediaError } from "../app/affiliate-video/shared/scene-media-error";
 import {
   dialogueLineCreating,
   dialogueLineReady,
+  resolveDialogueLineVoiceLink,
   type FilmVoiceListItem,
 } from "./film-dialogue";
-import type { FilmDialogueLineRecord, FilmSceneRecord } from "./film-types";
+import type { FilmCharacterRecord, FilmDialogueLineRecord, FilmSceneRecord } from "./film-types";
 
 type Props = {
   item: FilmVoiceListItem;
+  characters?: FilmCharacterRecord[];
+  episodeLabel?: string;
   onCreateVoice?: (item: FilmVoiceListItem) => void;
 };
 
@@ -80,16 +84,34 @@ export function buildPlaceholderVoiceUrl(durationSec = 3): string {
   return `data:audio/wav;base64,${btoa(binary)}`;
 }
 
-export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
+export default function FilmVoiceCard({
+  item,
+  characters = [],
+  episodeLabel,
+  onCreateVoice,
+}: Props) {
   const { t } = useTranslation();
   const { scene, line, lineIndex } = item;
   const sceneLabel = `#${String(scene.index).padStart(2, "0")}`;
   const lineLabel = `${lineIndex}`;
   const speaker = line.character?.trim() || t("Nhân vật");
+  const linkedVoice = resolveDialogueLineVoiceLink(line, characters);
+  const hasVoiceLink = !!(linkedVoice.voiceId || linkedVoice.voiceLabel);
   const text = line.line?.trim() || t("Chưa có thoại");
   const ready = dialogueLineReady(line);
   const creating = dialogueLineCreating(line);
+  const [audioSrc, setAudioSrc] = useState("");
+
+  useEffect(() => {
+    if (line.voiceBlob) {
+      const url = URL.createObjectURL(line.voiceBlob);
+      setAudioSrc(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setAudioSrc(line.voiceUrl || "");
+  }, [line.voiceBlob, line.voiceUrl]);
   const metaParts = [
+    episodeLabel || null,
     `${t("Cảnh")} ${sceneLabel}`,
     `${t("Câu")} ${lineLabel}`,
     scene.shotSize || null,
@@ -112,6 +134,11 @@ export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-10 font-semibold bg-blue-50 text-blue-600 border border-blue-100">
             {speaker}
           </span>
+          {linkedVoice.voiceLabel || linkedVoice.voiceId ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-semibold bg-green-50 text-green-700 border border-green-100 max-w-[12rem] truncate">
+              {linkedVoice.voiceLabel || linkedVoice.voiceId}
+            </span>
+          ) : null}
         </div>
         <span
           className={`flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded-md text-10 font-semibold border ${statusBadge.className}`}
@@ -131,7 +158,7 @@ export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
           <audio
             controls
             preload="metadata"
-            src={line.voiceUrl || undefined}
+            src={audioSrc || undefined}
             className="w-full flex-1 min-w-0 h-9"
             style={{ maxHeight: 36 }}
           >
@@ -139,8 +166,14 @@ export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
           </audio>
           <button
             type="button"
+            disabled={!hasVoiceLink}
             onClick={() => onCreateVoice?.(item)}
-            className="flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors self-end sm:self-auto"
+            title={hasVoiceLink ? t("Tạo lại") : t("Gắn giọng cho nhân vật trước")}
+            className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border transition-colors self-end sm:self-auto ${
+              hasVoiceLink
+                ? "border-gray-200 bg-white text-gray-700 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+                : "border-gray-100 bg-gray-50 text-gray-300 cursor-not-allowed"
+            }`}
           >
             {t("Tạo lại")}
           </button>
@@ -159,12 +192,19 @@ export default function FilmVoiceCard({ item, onCreateVoice }: Props) {
           </div>
           <button
             type="button"
-            disabled={creating}
+            disabled={creating || !hasVoiceLink}
             onClick={() => onCreateVoice?.(item)}
-            className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 cursor-pointer transition-colors ${
+            title={
+              hasVoiceLink
+                ? t("Tạo Giọng")
+                : t("Gắn giọng cho nhân vật trước")
+            }
+            className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 transition-colors ${
               creating
                 ? "bg-blue-50 text-blue-600 cursor-wait"
-                : "bg-blue-600 hover:bg-blue-700 text-white"
+                : hasVoiceLink
+                  ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
+                  : "bg-gray-100 text-gray-300 cursor-not-allowed"
             }`}
           >
             {creating ? (
