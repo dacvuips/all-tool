@@ -267,6 +267,14 @@ export async function kickMediaQueueConsumerIfStuck(): Promise<boolean> {
     return true;
   }
 
+  const inMemoryRunning = mediaGenerationQueue.getInMemoryRunningCount();
+  if (inMemoryRunning > 0) {
+    logger.info(
+      `[MediaGenerationQueue] kick: skip restart — ${inMemoryRunning} in-memory job(s) running`
+    );
+    return false;
+  }
+
   // active mồ côi chặn pickup waiting (worker chết, slot active ảo)
   if (status.active > 0) {
     const q = mediaGenerationQueue.getQueueIfExists();
@@ -325,6 +333,40 @@ export async function wakeMediaGenerationQueue(): Promise<{
     queueActive: queueStatus.active,
     queueWaiting: queueStatus.waiting,
   };
+}
+
+let wakeDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let wakeInFlight: ReturnType<typeof wakeMediaGenerationQueue> | null = null;
+
+/**
+ * Debounce wake queue sau enqueue — tránh gọi recovery sweep mỗi POST (tốn Redis/Mongo, dễ race).
+ * Admin vẫn gọi `wakeMediaGenerationQueue()` trực tiếp khi cần.
+ */
+export function scheduleWakeMediaGenerationQueue(debounceMs = 3000): void {
+  if (wakeDebounceTimer) return;
+  wakeDebounceTimer = setTimeout(() => {
+    wakeDebounceTimer = null;
+    if (wakeInFlight) return;
+    wakeInFlight = wakeMediaGenerationQueue()
+      .catch((err: any) => {
+        logger.warn(`[MediaGenerationQueue] debounced wake lỗi: ${err?.message || err}`);
+        return {
+          consumerRestarted: false,
+          orphanedRequeued: 0,
+          staleRequeued: 0,
+          staleFailed: 0,
+          queueRunning: false,
+          queueActive: 0,
+          queueWaiting: 0,
+        };
+      })
+      .finally(() => {
+        wakeInFlight = null;
+      });
+  }, debounceMs);
+  if (typeof wakeDebounceTimer.unref === "function") {
+    wakeDebounceTimer.unref();
+  }
 }
 
 /**
@@ -649,6 +691,14 @@ let mediaJobStaleRecoveryTimer: ReturnType<typeof setInterval> | null = null;
  */
 export async function recoverStalledBeeJobsOnStartup(): Promise<number> {
   try {
+    const inMemoryRunning = mediaGenerationQueue.getInMemoryRunningCount();
+    if (inMemoryRunning > 0) {
+      logger.warn(
+        `[MediaGenerationQueue] Skip orphaned bee-job cleanup — ${inMemoryRunning} in-memory job(s) running`
+      );
+      return 0;
+    }
+
     const q = mediaGenerationQueue.queue();
     const activeJobs = await q.getJobs("active", { start: 0, size: 500 });
     if (activeJobs.length === 0) return 0;

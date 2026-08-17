@@ -77,7 +77,8 @@ export class MediaGenerationJobError extends Error {
       | "JOB_TIMEOUT"
       | "UNKNOWN",
     public readonly jobId?: string,
-    public readonly httpStatus?: number
+    public readonly httpStatus?: number,
+    public readonly retryAfterMs?: number
   ) {
     super(message);
     this.name = "MediaGenerationJobError";
@@ -87,6 +88,19 @@ export class MediaGenerationJobError extends Error {
 const DEFAULT_POLL_INTERVAL = 8000;
 /** Số lần poll liên tiếp không thấy job trên server → dừng theo dõi */
 const JOB_MISSING_POLL_THRESHOLD = 2;
+
+function parseRetryAfterHeader(res: Response): number | undefined {
+  const header = res.headers.get("Retry-After");
+  if (!header) return undefined;
+  const sec = Number(header);
+  if (Number.isFinite(sec) && sec > 0) return sec * 1000;
+  const dateMs = Date.parse(header);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    return delta > 0 ? delta : undefined;
+  }
+  return undefined;
+}
 
 export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
   /** Theo dõi mọi "instance" run() đang sống để cleanup khi unmount */
@@ -148,7 +162,8 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
             (err as any)?.message || `Lỗi ${res.status}`,
             "ENQUEUE_FAILED",
             undefined,
-            res.status
+            res.status,
+            parseRetryAfterHeader(res)
           );
         }
         const data = await res.json();

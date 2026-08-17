@@ -21,6 +21,7 @@
  */
 
 import { CustomerModel } from "../../libs/dal/customer";
+import redis from "../../helpers/redis";
 
 import {
 
@@ -77,6 +78,10 @@ export const VIDEO_MEDIA_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
 
 
 export type MediaStreamCategory = "image" | "video";
+
+/** TTL cache 429 khi hết slot — tránh spam Mongo mỗi 2s từ nhiều tab/luồng FE. */
+const STREAM_BLOCKED_KEY_PREFIX = "media:stream-blocked:";
+const STREAM_BLOCKED_TTL_SEC = 10;
 
 
 
@@ -237,6 +242,15 @@ export async function assertMediaStreamAvailable(
 ): Promise<void> {
 
   const category = getMediaStreamCategory(type);
+  const blockedKey = `${STREAM_BLOCKED_KEY_PREFIX}${customerId}:${category}`;
+
+  const blockedMessage = await redis.get(blockedKey);
+  if (blockedMessage) {
+    const err: any = new Error(blockedMessage);
+    err.statusCode = 429;
+    err.retryAfterMs = STREAM_BLOCKED_TTL_SEC * 1000;
+    throw err;
+  }
 
   const limit = await getMediaStreamLimit(customerId, category);
 
@@ -260,13 +274,14 @@ export async function assertMediaStreamAvailable(
 
     const label = category === "image" ? "ảnh" : "video";
 
-    const err: any = new Error(
+    const message = `Bạn đã đạt giới hạn luồng tạo ${label} (${activeCount}/${limit}). Vui lòng đợi job hiện tại hoàn thành.`;
 
-      `Bạn đã đạt giới hạn luồng tạo ${label} (${activeCount}/${limit}). Vui lòng đợi job hiện tại hoàn thành.`
+    await redis.setex(blockedKey, STREAM_BLOCKED_TTL_SEC, message);
 
-    );
+    const err: any = new Error(message);
 
     err.statusCode = 429;
+    err.retryAfterMs = STREAM_BLOCKED_TTL_SEC * 1000;
 
     throw err;
 

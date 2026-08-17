@@ -22,7 +22,8 @@ import {
   buildMediaJobDataKey,
   saveMediaJobPayload,
 } from "../../../queues/media-generation/media-job-data";
-import { enqueueMediaGenerationJob } from "../../../queues/media-generation/media-generation.queue";
+import { enqueueMediaGenerationJob, scheduleWakeMediaGenerationQueue } from "../../../queues/media-generation/media-generation.queue";
+import { assertMediaEnqueueRateLimit } from "./media-enqueue-rate-limit";
 import {
   FAILED_JOB_RETENTION_MS,
   scheduleTerminalMediaJobDeletion,
@@ -49,6 +50,9 @@ export async function createAndEnqueueMediaJob(
   args: CreateAndEnqueueArgs,
   options?: CreateAndEnqueueOptions
 ): Promise<CreateAndEnqueueResult> {
+  // 0. Chặn spam enqueue (retry 429 liên tục → 504 gateway)
+  await assertMediaEnqueueRateLimit(args.customerId);
+
   // 1. Kiểm tra customer ACTIVE và sàn chưa ngưng hoạt động
   await assertCustomerMediaGenerationAllowed(args.customerId);
 
@@ -101,6 +105,8 @@ export async function createAndEnqueueMediaJob(
     wrapped.statusCode = 503;
     throw wrapped;
   }
+
+  scheduleWakeMediaGenerationQueue();
 
   return {
     jobId: createdJobId,

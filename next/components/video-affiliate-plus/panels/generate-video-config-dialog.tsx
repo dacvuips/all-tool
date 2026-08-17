@@ -775,6 +775,17 @@ export function GenerateVideoConfigDialog({
                   </div>
                 </FieldRow>
               </div>
+              <div className="mt-4 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2.5">
+                <div className="text-xs font-bold text-teal-900">
+                  {t("Chạy song song theo số luồng gói")}
+                </div>
+                <div className="mt-0.5 text-10 leading-relaxed text-teal-800">
+                  {t(
+                    "Tối đa {{n}} job video cùng lúc. Sản phẩm còn lại xếp hàng, job xong thì job kế tiếp vào — không spam hết danh sách.",
+                    { n: Math.max(1, Math.round(VIDEO_CONCURRENCY || 1)) }
+                  )}
+                </div>
+              </div>
               <div className="mt-4 space-y-2.5">
                 <div
                   className={`rounded-xl border px-3 py-2.5 ${

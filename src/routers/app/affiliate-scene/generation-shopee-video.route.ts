@@ -15,7 +15,6 @@ import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { FLOW2_VIDEO_MODE } from "../../api-media/flow2/video-mode";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
-import { wakeMediaGenerationQueue } from "../../../queues/media-generation/media-generation.queue";
 import { checkVideoLimit } from "./_shared";
 
 function mapVideoModelToQuality(videoModel?: string): string {
@@ -139,15 +138,6 @@ export default [
           metadata: { source: "video-affiliate-plus", ..._metadata },
         });
 
-        // Đánh thức consumer nếu Redis reconnect muộn / job kẹt waiting
-        try {
-          await wakeMediaGenerationQueue();
-        } catch (wakeErr: any) {
-          logger.warn(
-            `[generation-shopee-video] wake queue: ${wakeErr?.message || wakeErr}`
-          );
-        }
-
         logger.info(
           `[generation-shopee-video] Enqueued jobId=${jobId} images=${images.length} variant_count=${variantCount} quality=${videoQuality}`
         );
@@ -156,6 +146,10 @@ export default [
       } catch (err: any) {
         logger.error(`[generation-shopee-video] Lỗi enqueue: ${err?.message}`);
         const status = err?.statusCode || 500;
+        const retryAfterMs = Number(err?.retryAfterMs);
+        if (Number.isFinite(retryAfterMs) && retryAfterMs > 0) {
+          res.setHeader("Retry-After", String(Math.ceil(retryAfterMs / 1000)));
+        }
         res.status(status).json({ message: err?.message || "Lỗi server" });
       }
     },
