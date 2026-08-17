@@ -7,7 +7,7 @@ import { Logger } from "winston";
 
 import redis from "../helpers/redis";
 import logger from "../helpers/logger";
-import { SharedRedisClient } from "../helpers/sharedRedisClient";
+import { isRedisUnavailableError, SharedRedisClient } from "../helpers/sharedRedisClient";
 import { IS_DEBUG } from "../libs/shared";
 
 type QueueOptions = QueueSettings & {
@@ -190,10 +190,16 @@ export abstract class BaseQueue extends EventEmitter {
     }
   }
 
-  /** Trạng thái queue: running = worker đã start và queue phản hồi, active/waiting từ Redis. */
+  /** Trạng thái queue: running = worker đã start; redisUnhealthy = Redis tạm mất (không phải consumer chết). */
   async getQueueStatus(
     id?: string
-  ): Promise<{ running: boolean; active: number; waiting: number; newestJob?: string }> {
+  ): Promise<{
+    running: boolean;
+    active: number;
+    waiting: number;
+    newestJob?: string;
+    redisUnhealthy?: boolean;
+  }> {
     const q = this.getQueueIfExists(id);
     if (!q) {
       return { running: false, active: 0, waiting: 0 };
@@ -201,7 +207,10 @@ export abstract class BaseQueue extends EventEmitter {
     try {
       const health = await q.checkHealth();
       return { running: true, ...health };
-    } catch {
+    } catch (err: any) {
+      if (isRedisUnavailableError(err)) {
+        return { running: true, active: 0, waiting: 0, redisUnhealthy: true };
+      }
       return { running: false, active: 0, waiting: 0 };
     }
   }
@@ -355,6 +364,10 @@ export abstract class BaseQueue extends EventEmitter {
       const stallIntervalMs = this.options.stallIntervalMs ?? 60000;
       this._queues[id].checkStalledJobs(stallIntervalMs, (err, stalled) => {
         if (err) {
+          if (isRedisUnavailableError(err)) {
+            this.logger.warn(`Skip stalled-job check — Redis chưa sẵn sàng: ${err.message}`);
+            return;
+          }
           this.logger.error("Error when check stalled job", err);
         }
         if (stalled > 0) {
@@ -378,6 +391,10 @@ export abstract class BaseQueue extends EventEmitter {
             }
           })
           .catch((err) => {
+            if (isRedisUnavailableError(err)) {
+              this.logger.warn(`Skip queue health check — Redis chưa sẵn sàng: ${err.message}`);
+              return;
+            }
             this.logger.error("Error when check queue status", err);
           });
       });
@@ -392,14 +409,7 @@ export abstract class BaseQueue extends EventEmitter {
   }
 
   private isRedisAbortError(err: any): boolean {
-    const code = String(err?.code || "");
-    const msg = String(err?.message || "");
-    return (
-      code === "UNCERTAIN_STATE" ||
-      code === "NR_CLOSED" ||
-      /connection lost/i.test(msg) ||
-      /ECONNRESET|ECONNREFUSED|ETIMEDOUT/i.test(msg)
-    );
+    return isRedisUnavailableError(err);
   }
 
   private handleQueueError(id: string, err: Error) {
@@ -418,15 +428,18 @@ export abstract class BaseQueue extends EventEmitter {
       if (now - last < 4000) return;
       this._restartAfterRedisErrorAt[id] = now;
       setTimeout(() => {
-        try {
-          this.restartQueueConsumer(id);
-        } catch (restartErr: any) {
-          this.logger.error(
-            `[${this.name}:${id}] restart after Redis abort failed: ${
-              restartErr?.message || restartErr
-            }`
-          );
-        }
+        SharedRedisClient.instance
+          .waitUntilReady(15000)
+          .then(() => {
+            this.restartQueueConsumer(id);
+          })
+          .catch((restartErr: any) => {
+            this.logger.warn(
+              `[${this.name}:${id}] skip consumer restart — Redis chưa sẵn sàng: ${
+                restartErr?.message || restartErr
+              }`
+            );
+          });
       }, 1500);
       return;
     }

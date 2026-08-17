@@ -64,9 +64,12 @@ export function fetchVoices(params: VoiceListParams = {}) {
   return requestJson<MicroxVoicesPage>(`/api/app/voice/voices/${suffix}`);
 }
 
-export function fetchVoiceJob(id: string, tool?: string) {
+export function fetchVoiceJob(id: string, tool?: string, signal?: AbortSignal) {
   const qs = tool ? `?tool=${encodeURIComponent(tool)}` : "";
-  return requestJson<MicroxJob>(`/api/app/voice/jobs/${encodeURIComponent(id)}/${qs}`);
+  return requestJson<MicroxJob>(
+    `/api/app/voice/jobs/${encodeURIComponent(id)}/${qs}`,
+    signal ? { signal } : undefined
+  );
 }
 
 export function voicePreviewUrl(voiceId: string): string {
@@ -75,15 +78,19 @@ export function voicePreviewUrl(voiceId: string): string {
   return `/api/app/voice/voices/${encodeURIComponent(id)}/preview/`;
 }
 
-export function createTextToSpeech(input: {
-  voice_id: string;
-  text: string;
-  speed: number;
-  creativity: number;
-}) {
+export function createTextToSpeech(
+  input: {
+    voice_id: string;
+    text: string;
+    speed: number;
+    creativity: number;
+  },
+  signal?: AbortSignal
+) {
   return requestJson<MicroxJob>("/api/app/voice/text-to-speech/", {
     method: "POST",
     body: JSON.stringify(input),
+    signal,
   });
 }
 
@@ -158,7 +165,7 @@ export async function pollVoiceJob(
   const sig = signal || voiceAbortSignal;
   while (Date.now() - started < MAX_WAIT_MS) {
     if (sig?.aborted) throw new DOMException("Đã dừng", "AbortError");
-    const job = await fetchVoiceJob(jobId, tool);
+    const job = await fetchVoiceJob(jobId, tool, sig);
     onTick?.(job);
     const status = String(job?.status || "").toLowerCase();
     if (status === "completed" || status === "failed") return job;
@@ -189,10 +196,17 @@ export function voiceJobOutputUrl(jobId: string, index = 0): string {
   return `/api/app/voice/jobs/${encodeURIComponent(id)}/output/?index=${index}`;
 }
 
-export async function fetchVoiceJobOutputBlob(jobId: string, index = 0): Promise<Blob | null> {
+export async function fetchVoiceJobOutputBlob(
+  jobId: string,
+  index = 0,
+  signal?: AbortSignal
+): Promise<Blob | null> {
   const url = voiceJobOutputUrl(jobId, index);
   if (!url) return null;
-  const res = await fetch(url, { credentials: "include" });
+  const res = await fetch(url, {
+    credentials: "include",
+    signal: signal || voiceAbortSignal || undefined,
+  });
   if (!res.ok) return null;
   const blob = await res.blob();
   const type = (blob.type || "").toLowerCase();

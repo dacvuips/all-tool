@@ -1,10 +1,11 @@
 import _ from "lodash";
-import { MainConnection } from "../helpers/mongo";
+import { MainConnection, waitForMainConnection } from "../helpers/mongo";
 import { loadMigration } from "../helpers/autoloader";
 import logger from "../helpers/logger";
 
 class MigrationLoader {
   async start() {
+    await waitForMainConnection();
     /** Load migration */
     const migrations = await loadMigration();
     const collection = MainConnection.collection("migrations");

@@ -1,21 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAuth } from "../../lib/providers/auth-provider";
 import {
   HiAnnotation,
   HiDotsVertical,
   HiDownload,
   HiOutlinePhotograph,
-  HiPencil,
   HiShare,
   HiSparkles,
   HiThumbDown,
   HiThumbUp,
   HiVideoCamera,
 } from "react-icons/hi";
+import { useAuth } from "../../lib/providers/auth-provider";
 import { Button } from "../shared/utilities/form";
 import { getFilmEntityImageSrc } from "./api/generate-film-media";
-import { getFilmScenesByProject } from "./film-idb";
+import FilmCharacterVoiceDialog, {
+  type FilmCharacterVoicePick,
+} from "./film-character-voice-dialog";
+import FilmCharacterVoiceIcon, {
+  clearFilmCharacterVoice,
+  filmCharacterHasVoice,
+  FilmCharacterVoiceCreateButton,
+  FilmCharacterVoiceUnlinkButton,
+} from "./film-character-voice-icon";
 import {
   buildFilmVoiceCharacterRoster,
   buildFilmVoiceListItems,
@@ -25,19 +32,11 @@ import {
   resolveDialogueLineVoiceLink,
   type FilmVoiceListItem,
 } from "./film-dialogue";
-import FilmCharacterEditDialog from "./film-character-edit-dialog";
-import FilmCharacterVoiceDialog, {
-  type FilmCharacterVoicePick,
-} from "./film-character-voice-dialog";
-import FilmCharacterVoiceIcon, {
-  clearFilmCharacterVoice,
-  filmCharacterHasVoice,
-  FilmCharacterVoiceUnlinkButton,
-} from "./film-character-voice-icon";
-import FilmVoiceConfigDialog from "./film-voice-config-dialog";
+import { getFilmScenesByProject } from "./film-idb";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
 import { FilmCharacterRecord, FilmEpisodeRecord, FilmSceneRecord } from "./film-types";
 import FilmVoiceCard from "./film-voice-card";
+import FilmVoiceConfigDialog from "./film-voice-config-dialog";
 import type { FilmVoiceGenerateInput } from "./film-voice-generate";
 
 type Props = {
@@ -49,7 +48,11 @@ type Props = {
   onSaveCharacter?: (c: FilmCharacterRecord) => Promise<void>;
   onCharactersChange?: (next: FilmCharacterRecord[]) => void;
   onCreateVoice: (input: FilmVoiceGenerateInput) => Promise<void>;
+  onStopVoice?: (item: FilmVoiceListItem) => Promise<void> | void;
   onBulkCreateVoices?: (items: FilmVoiceListItem[]) => Promise<void>;
+  onStopBulkVoices?: () => Promise<void> | void;
+  /** Scene đang tạo hàng loạt (mọi tập) — cập nhật list theo bộ lọc nhân vật/tập */
+  overlayScenes?: FilmSceneRecord[] | null;
   onDownloadAll?: () => void;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
 };
@@ -66,11 +69,14 @@ export default function FilmVoicePanel({
   scenes,
   characters = [],
   episodes = [],
-  promptTemplate,
+  promptTemplate: _promptTemplate,
   onSaveCharacter,
   onCharactersChange,
   onCreateVoice,
+  onStopVoice,
   onBulkCreateVoices,
+  onStopBulkVoices,
+  overlayScenes,
   onDownloadAll,
   onTabNavigate,
 }: Props) {
@@ -78,7 +84,6 @@ export default function FilmVoicePanel({
   const { customer } = useAuth();
   const [tab, setTab] = useState<FilmStoryboardTab>("voice");
   const [busy, setBusy] = useState(false);
-  const [editCharacter, setEditCharacter] = useState<FilmCharacterRecord | null>(null);
   const [voiceEditCharacter, setVoiceEditCharacter] = useState<FilmCharacterRecord | null>(null);
   const [voiceConfigOpen, setVoiceConfigOpen] = useState(false);
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
@@ -109,6 +114,15 @@ export default function FilmVoicePanel({
       return map.size ? Array.from(map.values()) : prev;
     });
   }, [scenes, projectId]);
+
+  useEffect(() => {
+    if (!overlayScenes?.length) return;
+    setAllScenes((prev) => {
+      const map = new Map(prev.map((s) => [s.id, s]));
+      for (const s of overlayScenes) map.set(s.id, s);
+      return Array.from(map.values());
+    });
+  }, [overlayScenes]);
 
   const episodeOrder = useMemo(
     () => new Map(episodes.map((ep) => [ep.id, ep.index])),
@@ -151,8 +165,9 @@ export default function FilmVoicePanel({
     () =>
       visibleList.filter((item) => {
         if (dialogueLineReady(item.line) || dialogueLineCreating(item.line)) return false;
+        if (!item.line.line?.trim()) return false;
         const linked = resolveDialogueLineVoiceLink(item.line, characters);
-        return !!(linked.voiceId || linked.voiceLabel);
+        return !!linked.voiceId?.trim();
       }).length,
     [visibleList, characters]
   );
@@ -224,8 +239,9 @@ export default function FilmVoicePanel({
     if (busy || !onBulkCreateVoices || !bulkEligibleCount) return;
     const targets = visibleList.filter((item) => {
       if (dialogueLineReady(item.line) || dialogueLineCreating(item.line)) return false;
+      if (!item.line.line?.trim()) return false;
       const linked = resolveDialogueLineVoiceLink(item.line, characters);
-      return !!(linked.voiceId || linked.voiceLabel);
+      return !!linked.voiceId?.trim();
     });
     if (!targets.length) return;
     setBusy(true);
@@ -303,15 +319,25 @@ export default function FilmVoicePanel({
           </div>
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {onBulkCreateVoices && (
-              <Button
-                outline
-                small
-                text={t("Tạo hàng loạt")}
-                className="!rounded-lg"
-                onClick={handleBulk}
-                isLoading={busy || anyCreating}
-                disabled={!bulkEligibleCount}
-              />
+              anyCreating && onStopBulkVoices ? (
+                <Button
+                  outline
+                  small
+                  text={t("Dừng tạo")}
+                  className="!rounded-lg"
+                  onClick={() => void onStopBulkVoices()}
+                />
+              ) : (
+                <Button
+                  outline
+                  small
+                  text={t("Tạo hàng loạt")}
+                  className="!rounded-lg"
+                  onClick={handleBulk}
+                  isLoading={busy}
+                  disabled={!bulkEligibleCount}
+                />
+              )
             )}
             <Button
               outline
@@ -368,51 +394,38 @@ export default function FilmVoicePanel({
                           )}
                         </div>
                         <div className="min-w-0 flex-1">
-                          <span
-                            className={`block truncate text-sm font-bold ${
-                              active ? "text-blue-800" : "text-gray-800"
-                            }`}
-                          >
-                            {sp.name}
-                          </span>
+                          <div className="flex items-center justify-between gap-0.5 min-w-0">
+                            <span
+                              className={`block truncate text-sm font-bold ${
+                                active ? "text-blue-800" : "text-gray-800"
+                              }`}
+                            >
+                              {sp.name}
+                            </span>
+                            <div className="flex items-center gap-0.5">
+                            {sp.character ? (
+                              <FilmCharacterVoiceCreateButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setVoiceEditCharacter(sp.character);
+                                }}
+                              />
+                            ) : null}
+                            <FilmCharacterVoiceIcon character={sp.character} />
+                            {sp.character && filmCharacterHasVoice(sp.character) ? (
+                              <FilmCharacterVoiceUnlinkButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void removeCharacterVoice(sp.character!);
+                                }}
+                              />
+                            ) : null}
+                            </div>
+                          </div>
                           {sp.lineCount > 0 ? (
                             <span className="block text-10 text-gray-400">
                               {sp.lineCount} {t("câu")}
                             </span>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-shrink-0 items-center gap-0.5">
-                          {sp.character ? (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setVoiceEditCharacter(sp.character);
-                              }}
-                              title={t("Sửa giọng")}
-                              aria-label={t("Sửa giọng")}
-                              className="inline-flex items-center justify-center w-6 h-6 rounded-md border-0 bg-transparent text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
-                            >
-                              <HiPencil className="text-sm" />
-                            </button>
-                          ) : null}
-                          <FilmCharacterVoiceIcon
-                            character={sp.character}
-                            onEdit={
-                              sp.character
-                                ? (c) => {
-                                    setEditCharacter(c);
-                                  }
-                                : undefined
-                            }
-                          />
-                          {sp.character && filmCharacterHasVoice(sp.character) ? (
-                            <FilmCharacterVoiceUnlinkButton
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void removeCharacterVoice(sp.character!);
-                              }}
-                            />
                           ) : null}
                         </div>
                       </button>
@@ -491,6 +504,7 @@ export default function FilmVoicePanel({
                   characters={characters}
                   episodeLabel={episodeLabelById.get(item.scene.episodeId)}
                   onCreateVoice={createVoiceForItem}
+                  onStopVoice={onStopVoice}
                 />
               ))
             )}
@@ -537,20 +551,6 @@ export default function FilmVoicePanel({
           </button>
         </div>
       </div>
-
-      <FilmCharacterEditDialog
-        character={editCharacter}
-        episodes={episodes}
-        promptTemplate={promptTemplate}
-        onClose={() => setEditCharacter(null)}
-        onSave={async (draft) => {
-          onCharactersChange?.(
-            characters.map((x) => (x.id === draft.id ? draft : x))
-          );
-          await onSaveCharacter?.(draft);
-          setEditCharacter(null);
-        }}
-      />
 
       <FilmVoiceConfigDialog
         isOpen={voiceConfigOpen}

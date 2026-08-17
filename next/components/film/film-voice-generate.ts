@@ -7,6 +7,8 @@ import {
 
 import type { FilmSceneRecord } from "./film-types";
 
+export const FILM_VOICE_BULK_CONCURRENCY = 3;
+
 export type FilmVoiceGenerateInput = {
   scene: FilmSceneRecord;
   dialogueLineId: string;
@@ -28,32 +30,44 @@ function jobErrorMessage(job: unknown, fallback: string): string {
   return msg || fallback;
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+  if (signal?.aborted) throw new DOMException("Đã dừng", "AbortError");
+}
+
 /** Gọi API TTS với voice_id + text, trả về blob audio. */
 export async function generateFilmDialogueVoiceBlob(
   text: string,
-  voiceId: string
+  voiceId: string,
+  signal?: AbortSignal
 ): Promise<Blob> {
   const trimmedText = String(text || "").trim();
   const trimmedVoiceId = String(voiceId || "").trim();
   if (!trimmedText) throw new Error("Chưa có nội dung thoại");
   if (!trimmedVoiceId) throw new Error("Chưa gắn giọng cho nhân vật");
+  throwIfAborted(signal);
 
-  const job = await createTextToSpeech({
-    voice_id: trimmedVoiceId,
-    text: trimmedText,
-    speed: 1,
-    creativity: 0.5,
-  });
+  const job = await createTextToSpeech(
+    {
+      voice_id: trimmedVoiceId,
+      text: trimmedText,
+      speed: 1,
+      creativity: 0.5,
+    },
+    signal
+  );
+  throwIfAborted(signal);
   const id = jobIdOf(job);
   if (!id) throw new Error("Không nhận được job ID");
 
-  const done = await pollVoiceJob(id, undefined, undefined, "tts");
+  const done = await pollVoiceJob(id, undefined, signal, "tts");
+  throwIfAborted(signal);
   const status = String(done?.status || "").toLowerCase();
   if (status === "failed") {
     throw new Error(jobErrorMessage(done, "Tạo giọng thất bại"));
   }
 
-  const blob = await fetchVoiceJobOutputBlob(id, 0);
+  const blob = await fetchVoiceJobOutputBlob(id, 0, signal);
+  throwIfAborted(signal);
   if (!blob || blob.size < 32) {
     throw new Error("Không tải được file âm thanh");
   }

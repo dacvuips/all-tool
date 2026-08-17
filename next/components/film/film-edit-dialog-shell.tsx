@@ -17,7 +17,8 @@ export const FILM_EDIT_DIALOG_CLASS =
 export const FILM_EDIT_DIALOG_HEADER_CLASS =
   "relative flex items-center px-5 py-2 box-content bg-white z-5 rounded-t border-b border-gray-100";
 
-export const FILM_EDIT_DIALOG_BODY_CLASS = "relative flex-1 min-h-0 p-0 overflow-hidden bg-white";
+export const FILM_EDIT_DIALOG_BODY_CLASS =
+  "relative flex-1 min-h-0 p-0 pb-4 overflow-hidden bg-white";
 
 export const FILM_EDIT_DIALOG_FOOTER_CLASS =
   "relative flex-shrink-0 flex justify-end items-center gap-2 px-5 pt-3 pb-4 bg-white border-t border-gray-100 z-5";

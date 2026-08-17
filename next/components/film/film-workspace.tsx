@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft, HiLightningBolt, HiRefresh } from "react-icons/hi";
 import { RiKey2Line } from "react-icons/ri";
@@ -8,6 +8,7 @@ import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
+import { isVoiceAbortError } from "../app/voice/voice-api";
 import { Button } from "../shared/utilities/form";
 import {
   applyFilmExtractResult,
@@ -58,7 +59,9 @@ import {
   hydrateScenesDialogueLines,
   patchSceneDialogueLine,
   resolveDialogueLineVoiceLink,
+  stopSceneDialogueVoice,
   stripCharacterVoiceLinksFromScenes,
+  withDialogueLineOnScene,
   withSyncedDialogueLines,
   type FilmVoiceListItem,
 } from "./film-dialogue";
@@ -171,10 +174,16 @@ import {
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
 import {
+  FILM_VOICE_BULK_CONCURRENCY,
   generateFilmDialogueVoiceBlob,
   type FilmVoiceGenerateInput,
 } from "./film-voice-generate";
 import FilmVoicePanel from "./film-voice-panel";
+import {
+  FILM_STEP_QUERY_KEY,
+  filmStepFromLocation,
+  parseFilmWorkspaceStepId,
+} from "./film-workspace-steps";
 import FilmWorkspaceSidebar from "./film-workspace-sidebar";
 
 type Props = {
@@ -212,7 +221,9 @@ export default function FilmWorkspace({ projectId }: Props) {
   const [project, setProject] = useState<FilmProjectRecord | null>(null);
   const [episodes, setEpisodes] = useState<FilmEpisodeRecord[]>([]);
   const [activeEpisodeIndex, setActiveEpisodeIndex] = useState(0);
-  const [activeStep, setActiveStep] = useState<FilmWorkspaceStepId>("original_content");
+  const [activeStep, setActiveStep] = useState<FilmWorkspaceStepId>(
+    () => filmStepFromLocation() || "original_content"
+  );
   /** Click tiêu đề Ảnh Cảnh quay → chọn phân cảnh khi mở Chuỗi Cảnh quay */
   const [storyboardFocusSceneId, setStoryboardFocusSceneId] = useState<string | null>(null);
   /** Card production focus (từ icon Gắn storyboard) */
@@ -228,6 +239,18 @@ export default function FilmWorkspace({ projectId }: Props) {
   const [hasOriginalContent, setHasOriginalContent] = useState(false);
   /** ID entity đang cancel job (spinner nút Dừng) */
   const [stopPendingIds, setStopPendingIds] = useState<Record<string, true>>({});
+  const voiceAbortRef = useRef(new Map<string, AbortController>());
+  const voiceBulkAbortRef = useRef<AbortController | null>(null);
+  const voiceBulkRunningRef = useRef(false);
+  const [voiceSceneOverlay, setVoiceSceneOverlay] = useState<FilmSceneRecord[] | null>(null);
+
+  useEffect(() => {
+    return () => {
+      voiceBulkAbortRef.current?.abort();
+      voiceAbortRef.current.forEach((ac) => ac.abort());
+      voiceAbortRef.current.clear();
+    };
+  }, []);
   /** Mode ảnh tham chiếu Tạo video (Start / Start-End / Thành Phần) */
   const [videoRefMode, setVideoRefMode] = useState<FilmVideoRefMode>("start");
 
@@ -564,14 +587,15 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   useEffect(() => {
     if (activeStep !== "voice" || !project?.id || !characters.length) return;
+    if (voiceBulkRunningRef.current) return;
     let cancelled = false;
     void (async () => {
       const rows = await getFilmScenesByProject(project.id);
-      if (cancelled) return;
+      if (cancelled || voiceBulkRunningRef.current) return;
       const { scenes: linked, changed } = applyCharacterVoiceLinksToScenes(rows, characters);
       if (!changed.length) return;
       for (const s of changed) await putFilmScene(s);
-      if (cancelled) return;
+      if (cancelled || voiceBulkRunningRef.current) return;
       const patchMap = new Map(linked.map((s) => [s.id, s]));
       setScenes((prev) => prev.map((s) => patchMap.get(s.id) || s));
     })();
@@ -579,6 +603,31 @@ export default function FilmWorkspace({ projectId }: Props) {
       cancelled = true;
     };
   }, [activeStep, project?.id, characters]);
+
+  const selectActiveStep = useCallback(
+    (step: FilmWorkspaceStepId) => {
+      setActiveStep(step);
+      if (!router.isReady) return;
+      if (String(router.query[FILM_STEP_QUERY_KEY] ?? "") === step) return;
+      void router.replace(
+        {
+          pathname: router.pathname,
+          query: { ...router.query, [FILM_STEP_QUERY_KEY]: step },
+        },
+        undefined,
+        { shallow: true }
+      );
+    },
+    [router]
+  );
+
+  /** Giữ đúng bước sidebar từ `?step=` khi reload / back-forward (shallow). */
+  useEffect(() => {
+    if (!router.isReady) return;
+    const parsed = parseFilmWorkspaceStepId(router.query[FILM_STEP_QUERY_KEY]);
+    if (!parsed) return;
+    setActiveStep((cur) => (cur === parsed ? cur : parsed));
+  }, [router.isReady, router.query[FILM_STEP_QUERY_KEY]]);
 
   const selectActiveEpisode = useCallback(
     (idx: number) => {
@@ -731,7 +780,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         }
       ) + ` (${providerLabel})`
     );
-    setActiveStep("storyboard");
+    selectActiveStep("storyboard");
   };
 
   const handleSaveScene = async (scene: FilmSceneRecord) => {
@@ -4065,11 +4114,26 @@ export default function FilmWorkspace({ projectId }: Props) {
     }
   };
 
+  const filmVoiceAbortKey = (sceneId: string, lineId: string) => `${sceneId}:${lineId}`;
+
+  const persistStoppedVoiceLine = (scene: FilmSceneRecord, dialogueLineId: string) => {
+    const line = scene.dialogueLines?.find((l) => l.id === dialogueLineId);
+    if (!line || line.voiceStatus !== "creating") return scene;
+    const stopped = stopSceneDialogueVoice(scene, dialogueLineId);
+    void putFilmScene(stopped);
+    return stopped;
+  };
+
   const handleCreateVoice = async (input: FilmVoiceGenerateInput) => {
     const { scene, dialogueLineId, text, voiceId, voiceLabel } = input;
     if (!dialogueLineId || !voiceId?.trim()) return;
     const trimmedText = String(text || "").trim();
     if (!trimmedText) return;
+
+    const key = filmVoiceAbortKey(scene.id, dialogueLineId);
+    voiceAbortRef.current.get(key)?.abort();
+    const ac = new AbortController();
+    voiceAbortRef.current.set(key, ac);
 
     const current = scenes.find((s) => s.id === scene.id) || scene;
     const creating = patchSceneDialogueLine(current, dialogueLineId, {
@@ -4082,7 +4146,8 @@ export default function FilmWorkspace({ projectId }: Props) {
     await putFilmScene(creating);
 
     try {
-      const blob = await generateFilmDialogueVoiceBlob(trimmedText, voiceId);
+      const blob = await generateFilmDialogueVoiceBlob(trimmedText, voiceId, ac.signal);
+      if (ac.signal.aborted) throw new DOMException("Đã dừng", "AbortError");
       const done = patchSceneDialogueLine(creating, dialogueLineId, {
         voiceStatus: "ready",
         voiceBlob: blob,
@@ -4093,71 +4158,226 @@ export default function FilmWorkspace({ projectId }: Props) {
       await putFilmScene(done);
       await refreshTextCredits();
     } catch (err: any) {
+      if (isVoiceAbortError(err) || ac.signal.aborted) {
+        setScenes((prev) =>
+          prev.map((x) => (x.id === scene.id ? persistStoppedVoiceLine(x, dialogueLineId) : x))
+        );
+        return;
+      }
       const failed = patchSceneDialogueLine(creating, dialogueLineId, {
         voiceStatus: "error",
         voiceError: String(err?.message || t("Tạo giọng thất bại")),
       });
       setScenes((prev) => prev.map((x) => (x.id === failed.id ? failed : x)));
       await putFilmScene(failed);
-      throw err;
+    } finally {
+      if (voiceAbortRef.current.get(key) === ac) voiceAbortRef.current.delete(key);
     }
   };
 
   const handleBulkCreateVoices = async (items: FilmVoiceListItem[]) => {
     const pending = items.filter((item) => {
       if (dialogueLineReady(item.line) || dialogueLineCreating(item.line)) return false;
+      if (!item.line.line?.trim()) return false;
       const linked = resolveDialogueLineVoiceLink(item.line, characters);
       return !!linked.voiceId?.trim();
     });
     if (!pending.length) return;
 
-    let next = [...scenes];
-    for (const item of pending) {
-      const scene = next.find((s) => s.id === item.scene.id);
-      if (!scene) continue;
-      const linked = resolveDialogueLineVoiceLink(item.line, characters);
-      const patched = patchSceneDialogueLine(scene, item.line.id, {
-        voiceStatus: "creating",
-        voiceError: undefined,
-        voiceId: linked.voiceId,
-        voiceLabel: linked.voiceLabel || linked.voiceId,
-      });
-      next = next.map((s) => (s.id === patched.id ? patched : s));
-    }
-    setScenes(next);
-    for (const s of next) await putFilmScene(s);
+    voiceBulkAbortRef.current?.abort();
+    const bulkAc = new AbortController();
+    voiceBulkAbortRef.current = bulkAc;
+    voiceBulkRunningRef.current = true;
 
+    const occupiedLineIds = new Set(pending.map((item) => item.line.id));
+    const sceneById = new Map<string, FilmSceneRecord>();
+    for (const scene of scenes) sceneById.set(scene.id, scene);
     for (const item of pending) {
-      const scene = next.find((s) => s.id === item.scene.id);
-      if (!scene) continue;
+      const base = sceneById.get(item.scene.id) || item.scene;
+      sceneById.set(item.scene.id, withDialogueLineOnScene(base, item.line, occupiedLineIds));
+    }
+    const sceneTail = new Map<string, Promise<void>>();
+
+    const patchLine = (
+      sceneId: string,
+      lineId: string,
+      patch: Parameters<typeof patchSceneDialogueLine>[2],
+      match?: { character?: string; line?: string }
+    ) => {
+      const prev = sceneTail.get(sceneId) || Promise.resolve();
+      const task = prev.then(async () => {
+        const current = sceneById.get(sceneId);
+        if (!current) return null;
+        const next = patchSceneDialogueLine(current, lineId, patch, match);
+        sceneById.set(sceneId, next);
+        await putFilmScene(next);
+        setVoiceSceneOverlay([next]);
+        setScenes((rows) => {
+          if (!rows.some((s) => s.id === sceneId)) return rows;
+          return rows.map((s) => (s.id === sceneId ? next : s));
+        });
+        return next;
+      });
+      sceneTail.set(
+        sceneId,
+        task.then(
+          () => undefined,
+          () => undefined
+        )
+      );
+      return task;
+    };
+
+    const runOne = async (item: FilmVoiceListItem) => {
+      if (bulkAc.signal.aborted) return;
       const linked = resolveDialogueLineVoiceLink(item.line, characters);
       const text = item.line.line?.trim();
-      if (!text || !linked.voiceId) continue;
+      if (!text || !linked.voiceId?.trim()) return;
+
+      const key = filmVoiceAbortKey(item.scene.id, item.line.id);
+      const ac = new AbortController();
+      voiceAbortRef.current.set(key, ac);
+      const onAbort = () => ac.abort();
+      bulkAc.signal.addEventListener("abort", onAbort, { once: true });
+
       try {
-        const blob = await generateFilmDialogueVoiceBlob(text, linked.voiceId);
-        const patched = patchSceneDialogueLine(scene, item.line.id, {
-          voiceStatus: "ready",
-          voiceBlob: blob,
-          voiceUrl: "",
-          voiceError: undefined,
-          voiceId: linked.voiceId,
-          voiceLabel: linked.voiceLabel || linked.voiceId,
-        });
-        next = next.map((s) => (s.id === patched.id ? patched : s));
-        setScenes((prev) => prev.map((s) => (s.id === patched.id ? patched : s)));
-        await putFilmScene(patched);
+        await patchLine(
+          item.scene.id,
+          item.line.id,
+          {
+            voiceStatus: "creating",
+            voiceError: undefined,
+            voiceId: linked.voiceId,
+            voiceLabel: linked.voiceLabel || linked.voiceId,
+          },
+          item.line
+        );
+
+        const blob = await generateFilmDialogueVoiceBlob(text, linked.voiceId, ac.signal);
+        if (ac.signal.aborted || bulkAc.signal.aborted) {
+          await patchLine(
+            item.scene.id,
+            item.line.id,
+            {
+              voiceStatus: item.line.voiceBlob || item.line.voiceUrl ? "ready" : "pending",
+              voiceError: undefined,
+            },
+            item.line
+          );
+          return;
+        }
+        await patchLine(
+          item.scene.id,
+          item.line.id,
+          {
+            voiceStatus: "ready",
+            voiceBlob: blob,
+            voiceUrl: "",
+            voiceError: undefined,
+            voiceId: linked.voiceId,
+            voiceLabel: linked.voiceLabel || linked.voiceId,
+          },
+          item.line
+        );
         await refreshTextCredits();
       } catch (err: any) {
-        const failed = patchSceneDialogueLine(scene, item.line.id, {
-          voiceStatus: "error",
-          voiceError: String(err?.message || t("Tạo giọng thất bại")),
-        });
-        next = next.map((s) => (s.id === failed.id ? failed : s));
-        setScenes((prev) => prev.map((s) => (s.id === failed.id ? failed : s)));
-        await putFilmScene(failed);
+        if (isVoiceAbortError(err) || ac.signal.aborted || bulkAc.signal.aborted) {
+          await patchLine(
+            item.scene.id,
+            item.line.id,
+            {
+              voiceStatus: item.line.voiceBlob || item.line.voiceUrl ? "ready" : "pending",
+              voiceError: undefined,
+            },
+            item.line
+          );
+          return;
+        }
+        await patchLine(
+          item.scene.id,
+          item.line.id,
+          {
+            voiceStatus: "error",
+            voiceError: String(err?.message || t("Tạo giọng thất bại")),
+          },
+          item.line
+        );
+      } finally {
+        bulkAc.signal.removeEventListener("abort", onAbort);
+        if (voiceAbortRef.current.get(key) === ac) voiceAbortRef.current.delete(key);
       }
+    };
+
+    try {
+      let cursor = 0;
+      const worker = async () => {
+        while (!bulkAc.signal.aborted) {
+          const index = cursor++;
+          if (index >= pending.length) return;
+          try {
+            await runOne(pending[index]);
+          } catch {
+            // giữ worker lấy câu tiếp theo trong cùng bộ lọc
+          }
+        }
+      };
+      const pool = Math.min(FILM_VOICE_BULK_CONCURRENCY, pending.length);
+      await Promise.all(Array.from({ length: pool }, () => worker()));
+      await Promise.all(Array.from(sceneTail.values()));
+
+      if (bulkAc.signal.aborted) {
+        for (const item of pending) {
+          const scene = sceneById.get(item.scene.id);
+          const line = scene?.dialogueLines?.find((l) => l.id === item.line.id);
+          if (!line || line.voiceStatus !== "creating") continue;
+          await patchLine(
+            item.scene.id,
+            item.line.id,
+            {
+              voiceStatus: line.voiceBlob || line.voiceUrl ? "ready" : "pending",
+              voiceError: undefined,
+            },
+            item.line
+          );
+        }
+      }
+    } finally {
+      if (voiceBulkAbortRef.current === bulkAc) voiceBulkAbortRef.current = null;
+      voiceBulkRunningRef.current = false;
+      setVoiceSceneOverlay(null);
     }
   };
+
+  const handleStopVoice = useCallback(async (item: FilmVoiceListItem) => {
+    const key = filmVoiceAbortKey(item.scene.id, item.line.id);
+    voiceAbortRef.current.get(key)?.abort();
+    const latest = scenes.find((s) => s.id === item.scene.id);
+    if (!latest) return;
+    const stopped = persistStoppedVoiceLine(latest, item.line.id);
+    if (stopped === latest) return;
+    setScenes((prev) => prev.map((x) => (x.id === stopped.id ? stopped : x)));
+  }, [scenes]);
+
+  const handleStopBulkVoices = useCallback(async () => {
+    voiceBulkAbortRef.current?.abort();
+    voiceAbortRef.current.forEach((ac) => ac.abort());
+    const toSave: FilmSceneRecord[] = [];
+    setScenes((prev) =>
+      prev.map((scene) => {
+        const creatingLines = (scene.dialogueLines || []).filter(
+          (l) => l.voiceStatus === "creating"
+        );
+        if (!creatingLines.length) return scene;
+        let next = scene;
+        for (const line of creatingLines) {
+          next = stopSceneDialogueVoice(next, line.id);
+        }
+        toSave.push(next);
+        return next;
+      })
+    );
+    for (const s of toSave) await putFilmScene(s);
+  }, []);
 
   if (loading) {
     return (
@@ -4326,7 +4546,7 @@ export default function FilmWorkspace({ projectId }: Props) {
               text={t("Bắt đầu sản xuất")}
               icon={<HiLightningBolt />}
               className="!rounded-lg !bg-blue-600 hover:!bg-blue-700"
-              onClick={() => setActiveStep("character_images")}
+              onClick={() => selectActiveStep("character_images")}
             />
           </div>
         </div>
@@ -4363,7 +4583,7 @@ export default function FilmWorkspace({ projectId }: Props) {
           progressDone={doneSteps.length}
           doneStepIds={doneSteps}
           loadingStepIds={loadingSteps}
-          onStepChange={setActiveStep}
+          onStepChange={selectActiveStep}
           onRefresh={load}
         />
 
@@ -4417,7 +4637,7 @@ export default function FilmWorkspace({ projectId }: Props) {
                       ? "props"
                       : "scene_images";
                 setProductionFocusEntityId(null);
-                setActiveStep(step);
+                selectActiveStep(step);
                 if (id) {
                   requestAnimationFrame(() => {
                     setProductionFocusEntityId(id);
@@ -4425,9 +4645,9 @@ export default function FilmWorkspace({ projectId }: Props) {
                 }
               }}
               onTabNavigate={(tab) => {
-                if (tab === "voice") setActiveStep("voice");
-                else if (tab === "shot_images") setActiveStep("shot_images");
-                else if (tab === "create_video") setActiveStep("create_video");
+                if (tab === "voice") selectActiveStep("voice");
+                else if (tab === "shot_images") selectActiveStep("shot_images");
+                else if (tab === "create_video") selectActiveStep("create_video");
               }}
             />
           )}
@@ -4467,8 +4687,8 @@ export default function FilmWorkspace({ projectId }: Props) {
               }
               onFocusEntityConsumed={() => setProductionFocusEntityId(null)}
               onTabNavigate={(tab) => {
-                if (tab === "props") setActiveStep("props");
-                else if (tab === "scene_images") setActiveStep("scene_images");
+                if (tab === "props") selectActiveStep("props");
+                else if (tab === "scene_images") selectActiveStep("scene_images");
               }}
             />
           )}
@@ -4507,9 +4727,9 @@ export default function FilmWorkspace({ projectId }: Props) {
               onFocusEntityConsumed={() => setProductionFocusEntityId(null)}
               onTabNavigate={(tab) => {
                 if (tab === "character_images" || tab === "extract_characters") {
-                  setActiveStep("character_images");
+                  selectActiveStep("character_images");
                 } else if (tab === "scene_images") {
-                  setActiveStep("scene_images");
+                  selectActiveStep("scene_images");
                 }
               }}
             />
@@ -4551,9 +4771,9 @@ export default function FilmWorkspace({ projectId }: Props) {
               onFocusEntityConsumed={() => setProductionFocusEntityId(null)}
               onTabNavigate={(tab) => {
                 if (tab === "character_images" || tab === "extract_characters") {
-                  setActiveStep("character_images");
+                  selectActiveStep("character_images");
                 } else if (tab === "props") {
-                  setActiveStep("props");
+                  selectActiveStep("props");
                 }
               }}
             />
@@ -4573,13 +4793,13 @@ export default function FilmWorkspace({ projectId }: Props) {
               onSuggestSafePrompt={handleSuggestSafeShotFramePrompt}
               onFramePromptSourceChange={handleFramePromptSourceChange}
               onTabNavigate={(tab) => {
-                if (tab === "storyboard") setActiveStep("storyboard");
-                else if (tab === "voice") setActiveStep("voice");
-                else if (tab === "create_video") setActiveStep("create_video");
+                if (tab === "storyboard") selectActiveStep("storyboard");
+                else if (tab === "voice") selectActiveStep("voice");
+                else if (tab === "create_video") selectActiveStep("create_video");
               }}
               onOpenStoryboardScene={(scene) => {
                 setStoryboardFocusSceneId(scene.id);
-                setActiveStep("storyboard");
+                selectActiveStep("storyboard");
               }}
               propsList={propsList}
               sceneImages={sceneImages}
@@ -4592,7 +4812,7 @@ export default function FilmWorkspace({ projectId }: Props) {
                       ? "props"
                       : "scene_images";
                 setProductionFocusEntityId(null);
-                setActiveStep(step);
+                selectActiveStep(step);
                 if (id) {
                   requestAnimationFrame(() => {
                     setProductionFocusEntityId(id);
@@ -4629,14 +4849,17 @@ export default function FilmWorkspace({ projectId }: Props) {
               onCharactersChange={setCharacters}
               onSaveCharacter={handleSaveCharacter}
               onCreateVoice={handleCreateVoice}
+              onStopVoice={handleStopVoice}
               onBulkCreateVoices={handleBulkCreateVoices}
+              onStopBulkVoices={handleStopBulkVoices}
+              overlayScenes={voiceSceneOverlay}
               onDownloadAll={() => {
                 console.info("[Film] Download all voice audio (not implemented)");
               }}
               onTabNavigate={(tab) => {
-                if (tab === "storyboard") setActiveStep("storyboard");
-                else if (tab === "shot_images") setActiveStep("shot_images");
-                else if (tab === "create_video") setActiveStep("create_video");
+                if (tab === "storyboard") selectActiveStep("storyboard");
+                else if (tab === "shot_images") selectActiveStep("shot_images");
+                else if (tab === "create_video") selectActiveStep("create_video");
               }}
             />
           )}
@@ -4657,13 +4880,13 @@ export default function FilmWorkspace({ projectId }: Props) {
                 console.info("[Film] Download all videos (not implemented)");
               }}
               onTabNavigate={(tab) => {
-                if (tab === "storyboard") setActiveStep("storyboard");
-                else if (tab === "voice") setActiveStep("voice");
-                else if (tab === "shot_images") setActiveStep("shot_images");
+                if (tab === "storyboard") selectActiveStep("storyboard");
+                else if (tab === "voice") selectActiveStep("voice");
+                else if (tab === "shot_images") selectActiveStep("shot_images");
               }}
               onOpenStoryboardScene={(scene) => {
                 setStoryboardFocusSceneId(scene.id);
-                setActiveStep("storyboard");
+                selectActiveStep("storyboard");
               }}
             />
           )}

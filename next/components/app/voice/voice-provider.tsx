@@ -226,9 +226,6 @@ export function VoiceProvider({
     setRunning(false);
     setProgress("");
     setError("");
-    void import("../../video-affiliate-plus/ffmpeg-browser")
-      .then((mod) => mod.abortFfmpegBrowser())
-      .catch(() => undefined);
   }, []);
 
   const run = useCallback(

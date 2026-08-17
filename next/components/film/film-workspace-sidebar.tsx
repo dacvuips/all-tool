@@ -7,11 +7,10 @@ import {
   HiChip,
   HiCog,
   HiCollection,
-  HiMicrophone,
   HiPlay,
   HiViewGrid,
 } from "react-icons/hi";
-import { RiCloseLine, RiLoader4Line, RiMenuLine } from "react-icons/ri";
+import { RiCloseLine, RiLoader4Line, RiMenuLine, RiUserVoiceLine } from "react-icons/ri";
 import { FilmWorkspaceStep, FilmWorkspaceStepId } from "./film-types";
 import { FILM_PRODUCTION_PROGRESS_TOTAL, FILM_WORKSPACE_STEPS } from "./film-workspace-steps";
 
@@ -39,7 +38,7 @@ function stepIcon(item: FilmWorkspaceStep, active: boolean) {
     case "scene_images":
       return <HiCamera className={className} />;
     case "voice":
-      return <HiMicrophone className={className} />;
+      return <RiUserVoiceLine className={className} />;
     case "shot_images":
       return <HiCamera className={className} />;
     case "create_video":

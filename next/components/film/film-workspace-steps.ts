@@ -63,3 +63,21 @@ export const FILM_PRODUCTION_PROGRESS_STEPS: FilmWorkspaceStepId[] = [
 ];
 
 export const FILM_PRODUCTION_PROGRESS_TOTAL = FILM_PRODUCTION_PROGRESS_STEPS.length;
+
+/** Query param sidebar workspace (`?step=scene_images`) */
+export const FILM_STEP_QUERY_KEY = "step";
+
+export function parseFilmWorkspaceStepId(value: unknown): FilmWorkspaceStepId | null {
+  const id = Array.isArray(value) ? value[0] : value;
+  if (typeof id !== "string" || !id.trim()) return null;
+  return FILM_WORKSPACE_STEPS.some((item) => item.id === id)
+    ? (id as FilmWorkspaceStepId)
+    : null;
+}
+
+export function filmStepFromLocation(): FilmWorkspaceStepId | null {
+  if (typeof window === "undefined") return null;
+  return parseFilmWorkspaceStepId(
+    new URLSearchParams(window.location.search).get(FILM_STEP_QUERY_KEY)
+  );
+}

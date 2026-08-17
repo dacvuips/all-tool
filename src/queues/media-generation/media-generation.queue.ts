@@ -23,6 +23,7 @@
 import { Job } from "bee-queue";
 import { BaseQueue } from "../../base/baseQueue";
 import logger from "../../helpers/logger";
+import { isRedisUnavailableError, SharedRedisClient } from "../../helpers/sharedRedisClient";
 import {
   IMediaGenerationJob,
   isMediaJobTerminal,
@@ -471,7 +472,23 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
   let requeued = 0;
 
   try {
+    try {
+      await SharedRedisClient.instance.waitUntilReady(10000);
+    } catch (err: any) {
+      logger.warn(
+        `[MediaGenerationQueue] Redis chưa sẵn sàng — bỏ qua khôi phục QUEUED: ${err?.message}`
+      );
+      return { consumerRestarted: false, requeued: 0 };
+    }
+
     const status = await getMediaGenerationQueueStatus();
+
+    if (status.redisUnhealthy) {
+      logger.warn(
+        "[MediaGenerationQueue] Redis chưa sẵn sàng — bỏ qua khôi phục QUEUED trong sweep này"
+      );
+      return { consumerRestarted: false, requeued: 0 };
+    }
 
     if (!status.running) {
       mediaGenerationQueue.defaultQueue();
@@ -558,7 +575,13 @@ export async function recoverOrphanedQueuedMediaJobs(): Promise<{
 
     return { consumerRestarted, requeued };
   } catch (err: any) {
-    logger.error(`[MediaGenerationQueue] recoverOrphanedQueuedMediaJobs lỗi: ${err?.message}`);
+    if (isRedisUnavailableError(err)) {
+      logger.warn(
+        `[MediaGenerationQueue] Bỏ qua khôi phục QUEUED — Redis chưa sẵn sàng: ${err?.message}`
+      );
+    } else {
+      logger.error(`[MediaGenerationQueue] recoverOrphanedQueuedMediaJobs lỗi: ${err?.message}`);
+    }
     return { consumerRestarted: false, requeued: 0 };
   }
 }
@@ -639,7 +662,13 @@ export async function recoverStaleProcessingMediaJobs(): Promise<{
     }
     return { requeued, failed };
   } catch (err: any) {
-    logger.error(`[MediaGenerationQueue] recoverStaleProcessingMediaJobs lỗi: ${err?.message}`);
+    if (isRedisUnavailableError(err)) {
+      logger.warn(
+        `[MediaGenerationQueue] Bỏ qua khôi phục PROCESSING — Redis chưa sẵn sàng: ${err?.message}`
+      );
+    } else {
+      logger.error(`[MediaGenerationQueue] recoverStaleProcessingMediaJobs lỗi: ${err?.message}`);
+    }
     return { requeued: 0, failed: 0 };
   }
 }
@@ -690,42 +719,62 @@ let mediaJobStaleRecoveryTimer: ReturnType<typeof setInterval> | null = null;
  * sẽ enqueue lại từ Mongo.
  */
 export async function recoverStalledBeeJobsOnStartup(): Promise<number> {
-  try {
-    const inMemoryRunning = mediaGenerationQueue.getInMemoryRunningCount();
-    if (inMemoryRunning > 0) {
-      logger.warn(
-        `[MediaGenerationQueue] Skip orphaned bee-job cleanup — ${inMemoryRunning} in-memory job(s) running`
-      );
+  const maxAttempts = 4;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      await SharedRedisClient.instance.waitUntilReady(15000);
+
+      const inMemoryRunning = mediaGenerationQueue.getInMemoryRunningCount();
+      if (inMemoryRunning > 0) {
+        logger.warn(
+          `[MediaGenerationQueue] Skip orphaned bee-job cleanup — ${inMemoryRunning} in-memory job(s) running`
+        );
+        return 0;
+      }
+
+      const q = mediaGenerationQueue.queue();
+      const activeJobs = await q.getJobs("active", { start: 0, size: 500 });
+      if (activeJobs.length === 0) return 0;
+
+      let removed = 0;
+      for (const beeJob of activeJobs) {
+        try {
+          const mongoJobId = (beeJob as any).data?.jobId;
+          await beeJob.remove();
+          removed++;
+          logger.warn(
+            `[MediaGenerationQueue] Xóa bee-job active mồ côi beeJobId=${beeJob.id} mongoJobId=${mongoJobId}`
+          );
+        } catch (err: any) {
+          logger.error(`[MediaGenerationQueue] remove bee-job ${beeJob.id} lỗi: ${err?.message}`);
+        }
+      }
+      if (removed > 0) {
+        logger.warn(
+          `[MediaGenerationQueue] Đã dọn ${removed} bee-job active mồ côi — sẽ re-enqueue từ Mongo`
+        );
+      }
+      return removed;
+    } catch (err: any) {
+      if (isRedisUnavailableError(err) && attempt < maxAttempts) {
+        const delayMs = Math.min(attempt * 1500, 5000);
+        logger.warn(
+          `[MediaGenerationQueue] Redis chưa sẵn sàng (lần ${attempt}/${maxAttempts}) — thử lại sau ${delayMs}ms`
+        );
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+        continue;
+      }
+      if (isRedisUnavailableError(err)) {
+        logger.warn(
+          `[MediaGenerationQueue] Bỏ qua recover stalled bee-job — Redis chưa sẵn sàng: ${err?.message}`
+        );
+        return 0;
+      }
+      logger.error(`[MediaGenerationQueue] recoverStalledBeeJobsOnStartup lỗi: ${err?.message}`);
       return 0;
     }
-
-    const q = mediaGenerationQueue.queue();
-    const activeJobs = await q.getJobs("active", { start: 0, size: 500 });
-    if (activeJobs.length === 0) return 0;
-
-    let removed = 0;
-    for (const beeJob of activeJobs) {
-      try {
-        const mongoJobId = (beeJob as any).data?.jobId;
-        await beeJob.remove();
-        removed++;
-        logger.warn(
-          `[MediaGenerationQueue] Xóa bee-job active mồ côi beeJobId=${beeJob.id} mongoJobId=${mongoJobId}`
-        );
-      } catch (err: any) {
-        logger.error(`[MediaGenerationQueue] remove bee-job ${beeJob.id} lỗi: ${err?.message}`);
-      }
-    }
-    if (removed > 0) {
-      logger.warn(
-        `[MediaGenerationQueue] Đã dọn ${removed} bee-job active mồ côi — sẽ re-enqueue từ Mongo`
-      );
-    }
-    return removed;
-  } catch (err: any) {
-    logger.error(`[MediaGenerationQueue] recoverStalledBeeJobsOnStartup lỗi: ${err?.message}`);
-    return 0;
   }
+  return 0;
 }
 
 /** Bật sweep định kỳ — idempotent, gọi 1 lần khi worker start. */
@@ -763,7 +812,6 @@ export function startStaleProcessingRecoverySweep(): void {
     );
   };
 
-  run();
   mediaJobStaleRecoveryTimer = setInterval(run, MEDIA_JOB_STALE_RECOVERY_SWEEP_INTERVAL_MS);
   if (typeof mediaJobStaleRecoveryTimer.unref === "function") {
     mediaJobStaleRecoveryTimer.unref();

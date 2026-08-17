@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,6 +15,7 @@ import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/
 import { Button } from "../shared/utilities/form";
 import FilmCharacterCard from "./film-character-card";
 import FilmCharacterEditDialog from "./film-character-edit-dialog";
+import type { FilmCharacterVoicePick } from "./film-character-voice-dialog";
 import { clearFilmCharacterVoice } from "./film-character-voice-icon";
 import { FilmCatalogPickDialog, type FilmCatalogKind, type FilmCatalogPickItem } from "./film-catalog-pick-dialog";
 import type { FilmCharacterImageGenerateInput } from "./film-character-image-dialog";
@@ -28,6 +30,10 @@ import {
   FilmPropRecord,
   FilmSceneImageRecord,
 } from "./film-types";
+
+const FilmCharacterVoiceDialog = dynamic(() => import("./film-character-voice-dialog"), {
+  ssr: false,
+});
 
 export type FilmProductionTab =
   | "extract_characters"
@@ -127,6 +133,7 @@ export default function FilmCharacterImagesPanel({
   const [busy, setBusy] = useState(false);
   const [suggestingId, setSuggestingId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FilmCharacterRecord | null>(null);
+  const [voiceEditCharacter, setVoiceEditCharacter] = useState<FilmCharacterRecord | null>(null);
   const [catalogOwner, setCatalogOwner] = useState<FilmCharacterRecord | null>(null);
 
   useFilmEntityCardFocus(focusEntityId, onFocusEntityConsumed);
@@ -419,6 +426,7 @@ export default function FilmCharacterImagesPanel({
                           }
                         : undefined
                     }
+                    onCreateVoice={setVoiceEditCharacter}
                     onRemoveVoice={
                       onSaveCharacter
                         ? async (ch) => {
@@ -483,6 +491,28 @@ export default function FilmCharacterImagesPanel({
         promptTemplate={promptTemplate}
         onClose={() => setEditTarget(null)}
         onSave={saveEdit}
+      />
+
+      <FilmCharacterVoiceDialog
+        isOpen={!!voiceEditCharacter}
+        characterName={voiceEditCharacter?.name}
+        onClose={() => setVoiceEditCharacter(null)}
+        onPick={async (voice: FilmCharacterVoicePick) => {
+          if (!voiceEditCharacter) return;
+          const draft: FilmCharacterRecord = {
+            ...voiceEditCharacter,
+            voiceId: voice.voiceId,
+            voiceLabel: voice.voiceLabel,
+            voicePreviewBlob: voice.voicePreviewBlob,
+            voiceResultId: voice.voiceResultId || undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          onCharactersChange(
+            characters.map((x) => (x.id === draft.id ? draft : x))
+          );
+          await onSaveCharacter(draft);
+          setVoiceEditCharacter(null);
+        }}
       />
 
       <FilmCatalogPickDialog

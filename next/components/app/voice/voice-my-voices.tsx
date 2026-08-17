@@ -77,6 +77,7 @@ export function MyVoicesPanel({
   onSelect,
   selectText,
   defaultView,
+  layout = "page",
 }: {
   records?: VoiceResultRecord[];
   heading?: string;
@@ -85,6 +86,7 @@ export function MyVoicesPanel({
   onSelect?: (record: VoiceResultRecord) => void;
   selectText?: string;
   defaultView?: VoiceCatalogView;
+  layout?: "page" | "modal";
 }) {
   const { t } = useTranslation();
   const { library, removeHistory } = useVoiceContext();
@@ -173,7 +175,7 @@ export function MyVoicesPanel({
             type="button"
             disabled={!items.length || zipping}
             onClick={() => void downloadAll()}
-            className="inline-flex gap-1.5 items-center px-3 h-9 text-xs font-semibold text-white rounded-lg border-0 disabled:cursor-default"
+            className="inline-flex gap-1.5 mt-2 items-center px-3 h-9 v-scrollbar text-xs font-semibold text-white rounded-lg border-0 disabled:cursor-default"
             style={{ background: items.length && !zipping ? "#4f46e5" : "#d1d5db" }}
           >
             <RiDownload2Line className="text-base" />
@@ -192,7 +194,9 @@ export function MyVoicesPanel({
           className={
             view === "list"
               ? "flex flex-col gap-3"
-              : "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+              : layout === "modal"
+                ? "grid grid-cols-1 gap-4 md:grid-cols-2"
+                : "grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
           }
         >
           {items.map((item) => {

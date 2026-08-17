@@ -13,7 +13,6 @@ import {
   jobIdOf,
   pollVoiceJob,
 } from "./voice-api";
-import { prepareSpeechAudioChunksInBrowser } from "../../video-affiliate-plus/ffmpeg-browser";
 import { VoiceAudioField, VoiceRangeField } from "./voice-audio-field";
 import { VoiceCatalogCard } from "./voice-catalog-card";
 import {
@@ -563,6 +562,10 @@ export function SpeechToTextPanel() {
       onSubmit={() =>
         run(async () => {
           if (!file) throw new Error(t("Chọn file audio"));
+          const { prepareSpeechAudioChunksInBrowser } = await import(
+            /* webpackChunkName: "ffmpeg-browser" */
+            "../../video-affiliate-plus/ffmpeg-browser"
+          );
           const chunks = await prepareSpeechAudioChunksInBrowser(file, {
             fileName: file.name,
             mimeType: file.type,

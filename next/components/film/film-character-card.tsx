@@ -17,6 +17,7 @@ import type { FilmCharacterImageGenerateInput } from "./film-character-image-dia
 import FilmCharacterVoiceIcon, {
   clearFilmCharacterVoice,
   filmCharacterHasVoice,
+  FilmCharacterVoiceCreateButton,
   FilmCharacterVoiceUnlinkButton,
 } from "./film-character-voice-icon";
 import { filmEntityToGeneratedImage } from "./film-entity-to-generated-image";
@@ -66,6 +67,7 @@ type Props = {
   onUnlinkLinkedProp?: (prop: FilmPropRecord) => void;
   /** Bật/tắt gắn thẻ tập phim */
   onToggleEpisode?: (c: FilmCharacterRecord, episodeId: string) => void;
+  onCreateVoice?: (c: FilmCharacterRecord) => void;
   onRemoveVoice?: (c: FilmCharacterRecord) => void | Promise<void>;
 };
 
@@ -89,6 +91,7 @@ export default function FilmCharacterCard({
   onMoveLinkedProp,
   onUnlinkLinkedProp,
   onToggleEpisode,
+  onCreateVoice,
   onRemoveVoice,
 }: Props) {
   const { t } = useTranslation();
@@ -159,7 +162,15 @@ export default function FilmCharacterCard({
         <div className="flex-1 min-w-0">
           <div className="flex gap-1.5 items-center min-w-0">
             <h4 className="m-0 text-sm font-bold text-gray-900 truncate">{character.name}</h4>
-            <FilmCharacterVoiceIcon character={character} onEdit={onEdit} />
+            {onCreateVoice ? (
+              <FilmCharacterVoiceCreateButton
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCreateVoice(character);
+                }}
+              />
+            ) : null}
+            <FilmCharacterVoiceIcon character={character} />
             {filmCharacterHasVoice(character) && onRemoveVoice ? (
               <FilmCharacterVoiceUnlinkButton
                 onClick={(e) => {

@@ -34,6 +34,7 @@ import {
   removeSilenceInBrowser,
   reverseMediaInBrowser,
   trimMediaInBrowser,
+  abortFfmpegBrowser,
 } from "../../video-affiliate-plus/ffmpeg-browser";
 import { VoiceWaveformPlayer } from "./voice-catalog-card";
 import { FEATURE_TEXT_LABEL, resultFeatureOf, type VoiceResultRecord } from "./voice-idb";
@@ -1272,7 +1273,10 @@ export function CutVideoPanel() {
         {running ? (
           <button
             type="button"
-            onClick={cancelRun}
+            onClick={() => {
+              abortFfmpegBrowser();
+              cancelRun();
+            }}
             className="flex gap-1.5 justify-center items-center w-full h-10 text-sm font-semibold text-white bg-gray-700 rounded-full border-0"
           >
             <RiCloseLine className="text-lg text-white" />
@@ -1382,7 +1386,10 @@ export function CutVideoResults() {
           <span className="flex-1 min-w-0 truncate">{progress || t("Đang xử lý...")}</span>
           <button
             type="button"
-            onClick={cancelRun}
+            onClick={() => {
+              abortFfmpegBrowser();
+              cancelRun();
+            }}
             className="flex-shrink-0 px-2.5 h-7 text-xs font-semibold text-white bg-gray-700 rounded-lg border-0"
           >
             {t("Dừng")}

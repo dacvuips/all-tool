@@ -209,6 +209,19 @@ export function dialogueLineCreating(line: FilmDialogueLineRecord): boolean {
   return line.voiceStatus === "creating";
 }
 
+/** Dừng tạo giọng: giữ audio cũ nếu có, không ghi lỗi. */
+export function stopSceneDialogueVoice(
+  scene: FilmSceneRecord,
+  lineId: string
+): FilmSceneRecord {
+  const line = scene.dialogueLines?.find((l) => l.id === lineId);
+  const hasAudio = !!(line?.voiceBlob || line?.voiceUrl);
+  return patchSceneDialogueLine(scene, lineId, {
+    voiceStatus: hasAudio ? "ready" : "pending",
+    voiceError: undefined,
+  });
+}
+
 /** Nhân vật xuất hiện trong thoại (tab Tạo giọng) */
 export type FilmVoiceSpeakerItem = {
   key: string;
@@ -301,10 +314,11 @@ export function buildFilmVoiceListItems(
   const items: FilmVoiceListItem[] = [];
   for (const scene of sorted) {
     const lines = syncSceneDialogueLines(scene);
+    const syncedScene: FilmSceneRecord = { ...scene, dialogueLines: lines };
     lines.forEach((line, i) => {
       items.push({
         key: `${scene.id}:${line.id}`,
-        scene,
+        scene: syncedScene,
         line,
         lineIndex: i + 1,
       });
@@ -313,16 +327,66 @@ export function buildFilmVoiceListItems(
   return items;
 }
 
+/**
+ * Gắn 1 dòng thoại vào scene theo id (hoặc character+text), giữ nguyên các dòng khác.
+ * `occupiedIds` tránh đè dòng trùng nội dung đã dành cho câu khác trong cùng hàng đợi.
+ */
+export function withDialogueLineOnScene(
+  scene: FilmSceneRecord,
+  line: FilmDialogueLineRecord,
+  occupiedIds?: Set<string>
+): FilmSceneRecord {
+  const lines = (
+    scene.dialogueLines?.length ? scene.dialogueLines : syncSceneDialogueLines(scene)
+  ).map((l) => ({ ...l }));
+  const byId = lines.findIndex((l) => l.id === line.id);
+  if (byId >= 0) {
+    lines[byId] = { ...lines[byId], ...line };
+    return { ...scene, dialogueLines: lines };
+  }
+  const byText = lines.findIndex((l) => {
+    if (l.character.trim().toLowerCase() !== line.character.trim().toLowerCase()) return false;
+    if (l.line.trim() !== line.line.trim()) return false;
+    if (occupiedIds?.has(l.id) && l.id !== line.id) return false;
+    return true;
+  });
+  if (byText >= 0) {
+    lines[byText] = { ...lines[byText], ...line };
+    return { ...scene, dialogueLines: lines };
+  }
+  return { ...scene, dialogueLines: [...lines, line] };
+}
+
 /** Cập nhật 1 dialogue line trong scene */
 export function patchSceneDialogueLine(
   scene: FilmSceneRecord,
   lineId: string,
-  patch: Partial<FilmDialogueLineRecord>
+  patch: Partial<FilmDialogueLineRecord>,
+  match?: Pick<FilmDialogueLineRecord, "character" | "line">
 ): FilmSceneRecord {
   const lines = syncSceneDialogueLines(scene);
-  const dialogueLines = lines.map((l) =>
-    l.id === lineId ? { ...l, ...patch } : l
-  );
+  let found = false;
+  let dialogueLines = lines.map((l) => {
+    if (l.id !== lineId) return l;
+    found = true;
+    return { ...l, ...patch };
+  });
+  if (!found && match) {
+    const ch = match.character?.trim().toLowerCase() || "";
+    const text = match.line?.trim() || "";
+    dialogueLines = lines.map((l) => {
+      if (found) return l;
+      if (
+        ch &&
+        l.character.trim().toLowerCase() === ch &&
+        l.line.trim() === text
+      ) {
+        found = true;
+        return { ...l, id: lineId, ...patch };
+      }
+      return l;
+    });
+  }
   return {
     ...scene,
     dialogueLines,

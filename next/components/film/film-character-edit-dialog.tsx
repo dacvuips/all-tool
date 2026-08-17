@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiMicLine } from "react-icons/ri";
+import { RiUserVoiceLine } from "react-icons/ri";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
 import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
@@ -243,7 +243,7 @@ export default function FilmCharacterEditDialog({
                 <Button
                   outline
                   text={t("Tạo giọng")}
-                  icon={<RiMicLine />}
+                  icon={<RiUserVoiceLine />}
                   className="!rounded-xl"
                   onClick={() => setVoiceModalOpen(true)}
                 />

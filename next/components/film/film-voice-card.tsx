@@ -3,7 +3,9 @@
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiMicrophone } from "react-icons/hi";
+import { RiCloseLine, RiUserVoiceLine } from "react-icons/ri";
+import { VoiceWaveformPlayer } from "../app/voice/voice-catalog-card";
+import { getVoiceTool } from "../app/voice/voice-tools-config";
 import { SceneMediaError } from "../app/affiliate-video/shared/scene-media-error";
 import {
   dialogueLineCreating,
@@ -13,11 +15,14 @@ import {
 } from "./film-dialogue";
 import type { FilmCharacterRecord, FilmDialogueLineRecord, FilmSceneRecord } from "./film-types";
 
+const TTS_WAVE_COLOR = getVoiceTool("tts").color;
+
 type Props = {
   item: FilmVoiceListItem;
   characters?: FilmCharacterRecord[];
   episodeLabel?: string;
   onCreateVoice?: (item: FilmVoiceListItem) => void;
+  onStopVoice?: (item: FilmVoiceListItem) => void;
 };
 
 /** @deprecated dùng buildFilmVoiceListItems + dialogueLineReady */
@@ -89,6 +94,7 @@ export default function FilmVoiceCard({
   characters = [],
   episodeLabel,
   onCreateVoice,
+  onStopVoice,
 }: Props) {
   const { t } = useTranslation();
   const { scene, line, lineIndex } = item;
@@ -135,8 +141,9 @@ export default function FilmVoiceCard({
             {speaker}
           </span>
           {linkedVoice.voiceLabel || linkedVoice.voiceId ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-semibold bg-green-50 text-green-700 border border-green-100 max-w-[12rem] truncate">
-              {linkedVoice.voiceLabel || linkedVoice.voiceId}
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-green-50 text-green-700 border border-green-100 max-w-[12rem]">
+              <RiUserVoiceLine className="text-xs flex-shrink-0" />
+              <span className="truncate">{linkedVoice.voiceLabel || linkedVoice.voiceId}</span>
             </span>
           ) : null}
         </div>
@@ -155,15 +162,9 @@ export default function FilmVoiceCard({
 
       {ready && !creating ? (
         <div className="flex flex-col sm:flex-row sm:items-center gap-2.5 pt-1 border-t border-gray-50 mt-0.5">
-          <audio
-            controls
-            preload="metadata"
-            src={audioSrc || undefined}
-            className="w-full flex-1 min-w-0 h-9"
-            style={{ maxHeight: 36 }}
-          >
-            {t("Trình duyệt không hỗ trợ audio.")}
-          </audio>
+          <div className="w-full flex-1 min-w-0">
+            <VoiceWaveformPlayer src={audioSrc} color={TTS_WAVE_COLOR} />
+          </div>
           <button
             type="button"
             disabled={!hasVoiceLink}
@@ -190,32 +191,37 @@ export default function FilmVoiceCard({
               <span className="truncate">{t("Chưa tạo file âm thanh")}</span>
             )}
           </div>
-          <button
-            type="button"
-            disabled={creating || !hasVoiceLink}
-            onClick={() => onCreateVoice?.(item)}
-            title={
-              hasVoiceLink
-                ? t("Tạo Giọng")
-                : t("Gắn giọng cho nhân vật trước")
-            }
-            className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 transition-colors ${
-              creating
-                ? "bg-blue-50 text-blue-600 cursor-wait"
-                : hasVoiceLink
+          {creating ? (
+            <button
+              type="button"
+              onClick={() => onStopVoice?.(item)}
+              disabled={!onStopVoice}
+              title={t("Dừng tạo")}
+              className="flex-shrink-0 inline-flex items-center justify-center gap-1 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 bg-gray-700 hover:bg-gray-800 text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RiCloseLine className="text-sm" />
+              {t("Dừng tạo")}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={!hasVoiceLink}
+              onClick={() => onCreateVoice?.(item)}
+              title={
+                hasVoiceLink
+                  ? t("Tạo Giọng")
+                  : t("Gắn giọng cho nhân vật trước")
+              }
+              className={`flex-shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold border-0 transition-colors ${
+                hasVoiceLink
                   ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer"
                   : "bg-gray-100 text-gray-300 cursor-not-allowed"
-            }`}
-          >
-            {creating ? (
-              t("Đang tạo...")
-            ) : (
-              <>
-                <HiMicrophone className="text-sm" />
-                {t("Tạo Giọng")}
-              </>
-            )}
-          </button>
+              }`}
+            >
+              <RiUserVoiceLine className="text-sm" />
+              {t("Tạo Giọng")}
+            </button>
+          )}
         </div>
       )}
     </div>

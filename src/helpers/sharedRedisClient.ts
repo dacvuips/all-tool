@@ -3,6 +3,13 @@ import { createClient } from "redis";
 import { t } from "./functions/string";
 import logger from "./logger";
 
+export function isRedisUnavailableError(err: unknown): boolean {
+  const msg = String((err as { message?: string })?.message || err || "");
+  return /ready check failed|connection lost|command aborted|ECONNRESET|ECONNREFUSED|Stream isn't writeable|Connection is closed|Redis ready timeout|NR_CLOSED|UNCERTAIN_STATE/i.test(
+    msg
+  );
+}
+
 export class SharedRedisClient {
   private readonly logger = logger.child({ _reqId: SharedRedisClient.name });
   private static _instance: SharedRedisClient;
@@ -42,7 +49,10 @@ export class SharedRedisClient {
       const code = String(error?.code || "");
       const msg = String(error?.message || error || "");
       // Mất socket khi đang BRPOPLPUSH — không crash process, chỉ log.
-      if (code === "UNCERTAIN_STATE" || /connection lost/i.test(msg)) {
+      if (
+        code === "UNCERTAIN_STATE" ||
+        /connection lost|ready check failed|command aborted/i.test(msg)
+      ) {
         this.logger.warn(`Redis command aborted (will reconnect): ${msg}`);
         return;
       }
@@ -56,6 +66,39 @@ export class SharedRedisClient {
     });
     this._client.on("ready", () => {
       this.logger.info("Shared Redis client ready");
+    });
+  }
+
+  public isReady(): boolean {
+    return Boolean((this._client as { ready?: boolean }).ready);
+  }
+
+  public async waitUntilReady(timeoutMs = 20000): Promise<void> {
+    const client = this._client as {
+      ready?: boolean;
+      once: (event: string, cb: () => void) => void;
+      removeListener: (event: string, cb: () => void) => void;
+    };
+    if (client.ready) return;
+
+    await new Promise<void>((resolve, reject) => {
+      if (client.ready) {
+        resolve();
+        return;
+      }
+      const onReady = () => {
+        cleanup();
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Redis ready timeout"));
+      }, timeoutMs);
+      const cleanup = () => {
+        clearTimeout(timer);
+        client.removeListener("ready", onReady);
+      };
+      client.once("ready", onReady);
     });
   }
 

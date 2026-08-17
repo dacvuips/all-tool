@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiSpeakerWave, HiXMark } from "react-icons/hi2";
-import { RiPauseFill } from "react-icons/ri";
+import { RiPauseFill, RiUserVoiceLine } from "react-icons/ri";
 import { voicePreviewUrl } from "../app/voice/voice-api";
 import type { FilmCharacterRecord } from "./film-types";
 
@@ -53,13 +53,32 @@ export function FilmCharacterVoiceUnlinkButton({
   );
 }
 
-type Props = {
-  character?: FilmCharacterRecord | null;
-  onEdit?: (c: FilmCharacterRecord) => void;
+type CreateButtonProps = {
+  onClick: (e: React.MouseEvent<HTMLButtonElement>) => void;
   className?: string;
 };
 
-export default function FilmCharacterVoiceIcon({ character, onEdit, className = "" }: Props) {
+export function FilmCharacterVoiceCreateButton({ onClick, className = "" }: CreateButtonProps) {
+  const { t } = useTranslation();
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={t("Tạo giọng")}
+      aria-label={t("Tạo giọng")}
+      className={`inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-md border-0 bg-transparent text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer ${className}`}
+    >
+      <RiUserVoiceLine className="text-base" />
+    </button>
+  );
+}
+
+type Props = {
+  character?: FilmCharacterRecord | null;
+  className?: string;
+};
+
+export default function FilmCharacterVoiceIcon({ character, className = "" }: Props) {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -86,8 +105,9 @@ export default function FilmCharacterVoiceIcon({ character, onEdit, className = 
     audioRef.current = null;
   }, [character?.id, character?.voiceId, character?.voicePreviewBlob]);
 
+  if (!hasVoice || !character) return null;
+
   const resolveSrc = () => {
-    if (!character) return "";
     if (character.voicePreviewBlob) {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
       const url = URL.createObjectURL(character.voicePreviewBlob);
@@ -100,15 +120,8 @@ export default function FilmCharacterVoiceIcon({ character, onEdit, className = 
 
   const handleClick = async (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
-    if (!hasVoice || !character) {
-      if (character) onEdit?.(character);
-      return;
-    }
     const src = resolveSrc();
-    if (!src) {
-      onEdit?.(character);
-      return;
-    }
+    if (!src) return;
     let audio = audioRef.current;
     if (!audio) {
       audio = new Audio(src);
@@ -136,18 +149,10 @@ export default function FilmCharacterVoiceIcon({ character, onEdit, className = 
       type="button"
       onClick={(e) => void handleClick(e)}
       className={`inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-md border-0 bg-transparent cursor-pointer ${
-        playing
-          ? "text-red-500 hover:bg-red-50"
-          : hasVoice
-          ? "text-green-500 hover:bg-green-50"
-          : "text-gray-300 hover:bg-gray-100"
+        playing ? "text-red-500 hover:bg-red-50" : "text-green-500 hover:bg-green-50"
       } ${className}`}
-      title={
-        hasVoice ? t("Nghe thử giọng") : t("Tạo giọng — mở Sửa nhân vật")
-      }
-      aria-label={
-        hasVoice ? t("Nghe thử giọng") : t("Tạo giọng — mở Sửa nhân vật")
-      }
+      title={t("Nghe thử giọng")}
+      aria-label={t("Nghe thử giọng")}
     >
       {playing ? <RiPauseFill className="text-base" /> : <HiSpeakerWave className="text-base" />}
     </button>

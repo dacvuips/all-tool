@@ -1,19 +1,19 @@
 /**
- * Modal gắn giọng cho nhân vật — tab Tạo giọng / Nhân bản giọng xếp dọc
- * (tái dùng form + kết quả của Voice, không sidebar trái-phải).
+ * Modal gắn giọng cho nhân vật — tab Tạo giọng / Nhân bản giọng / Danh sách giọng.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiLoader4Line, RiPauseFill, RiVolumeUpLine } from "react-icons/ri";
-import { Dialog } from "../shared/utilities/dialog/dialog";
+import { HiSpeakerWave } from "react-icons/hi2";
+import { RiLoader4Line, RiPauseFill } from "react-icons/ri";
 import { jobIdOf, voicePreviewUrl } from "../app/voice/voice-api";
 import type { VoiceResultRecord } from "../app/voice/voice-idb";
 import { VoiceJobResult } from "../app/voice/voice-job-result";
 import { MyVoicesPanel } from "../app/voice/voice-my-voices";
 import { VoiceProvider, useVoiceContext } from "../app/voice/voice-provider";
-import { TextToSpeechPanel, VoiceClonePanel } from "../app/voice/voice-tools";
+import { TextToSpeechPanel, VoiceClonePanel, VoicesCatalogPanel } from "../app/voice/voice-tools";
 import { getVoiceTool } from "../app/voice/voice-tools-config";
-import { voiceIdOf, type VoiceToolId } from "../app/voice/voice-types";
+import { voiceIdOf, type MicroxVoice, type VoiceToolId } from "../app/voice/voice-types";
+import { Dialog } from "../shared/utilities/dialog/dialog";
 import {
   FILM_EDIT_DIALOG_BODY_CLASS,
   FILM_EDIT_DIALOG_CLASS,
@@ -36,9 +36,10 @@ type DialogProps = {
   onPick: (voice: FilmCharacterVoicePick) => void;
 };
 
-const FILM_CHARACTER_VOICE_TOOLS: VoiceToolId[] = ["tts", "clone"];
+export const FILM_CHARACTER_VOICE_TOOLS: VoiceToolId[] = ["voices", "tts", "clone"];
 
-const MODAL_TABS = [
+export const FILM_CHARACTER_VOICE_TABS = [
+  { id: "voices" as const, labelKey: "Danh sách giọng" },
   { id: "tts" as const, labelKey: "Tạo giọng" },
   { id: "clone" as const, labelKey: "Nhân bản giọng" },
 ];
@@ -58,6 +59,44 @@ export function recordToPick(record: VoiceResultRecord): FilmCharacterVoicePick 
   };
 }
 
+export function catalogVoiceToPick(voice: MicroxVoice): FilmCharacterVoicePick | null {
+  const voiceId = voiceIdOf(voice);
+  if (!voiceId) return null;
+  const voiceLabel =
+    String(voice.name || voice.display_name || voiceId).trim() || voiceId;
+  return { voiceId, voiceLabel };
+}
+
+function FilmCharacterVoiceRunningBanner({
+  color,
+  onStop,
+}: {
+  color: string;
+  onStop: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="flex gap-2 items-center px-3 py-2 text-sm rounded-xl border"
+      style={{
+        color,
+        background: `${color}14`,
+        borderColor: `${color}55`,
+      }}
+    >
+      <RiLoader4Line className="text-lg animate-spin" style={{ color }} />
+      <span className="flex-1">{t("Đang xử lý job...")}</span>
+      <button
+        type="button"
+        onClick={onStop}
+        className="flex-shrink-0 px-2.5 h-7 text-xs font-semibold text-white bg-gray-700 rounded-lg border-0 cursor-pointer"
+      >
+        {t("Dừng")}
+      </button>
+    </div>
+  );
+}
+
 function FilmCharacterVoiceBody({
   characterName,
   onPick,
@@ -66,20 +105,34 @@ function FilmCharacterVoiceBody({
   onPick: (voice: FilmCharacterVoicePick) => void;
 }) {
   const { t } = useTranslation();
-  const { tool, setTool, credits, running, job, history, removeHistory, cancelRun } =
+  const { tool, setTool, credits, running, job, history, library, removeHistory, cancelRun } =
     useVoiceContext();
   const active = getVoiceTool(tool);
+  const listMeta = getVoiceTool("voices");
+  const listTab = tool === "voices";
   const currentJobId = jobIdOf(job);
-  const currentRecord = history.find((item) => item.jobId === currentJobId);
+  const currentRecord =
+    history.find((item) => item.jobId === currentJobId) ||
+    library.find((item) => item.jobId === currentJobId);
+
+  const ttsRecords = useMemo(
+    () => library.filter((item) => item.tool === "tts"),
+    [library]
+  );
 
   const handleSelect = (record: VoiceResultRecord) => {
     const pick = recordToPick(record);
     if (pick) onPick(pick);
   };
 
+  const handleCatalogPick = (voice: MicroxVoice) => {
+    const pick = catalogVoiceToPick(voice);
+    if (pick) onPick(pick);
+  };
+
   return (
     <div
-      className="overflow-y-auto overscroll-contain"
+      className="overflow-y-auto overscroll-contain v-scrollbar"
       style={{ maxHeight: "calc(100vh - 10rem)" }}
     >
       <div className="px-5 pt-3 pb-2">
@@ -89,7 +142,7 @@ function FilmCharacterVoiceBody({
           </p>
         ) : null}
         <div className="flex gap-1 p-1 rounded-xl bg-gray-50 border border-gray-100">
-          {MODAL_TABS.map((tab) => {
+          {FILM_CHARACTER_VOICE_TABS.map((tab) => {
             const meta = getVoiceTool(tab.id);
             const selected = tool === tab.id;
             return (
@@ -97,14 +150,14 @@ function FilmCharacterVoiceBody({
                 key={tab.id}
                 type="button"
                 onClick={() => setTool(tab.id)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer"
+                className="flex-1 inline-flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-xs font-bold border-0 cursor-pointer"
                 style={{
                   color: selected ? meta.color : "#6b7280",
                   background: selected ? `${meta.color}14` : "transparent",
                 }}
               >
-                <meta.Icon className="text-base" style={{ color: selected ? meta.color : "#9ca3af" }} />
-                {t(tab.labelKey)}
+                <meta.Icon className="text-base flex-shrink-0" style={{ color: selected ? meta.color : "#9ca3af" }} />
+                <span className="truncate">{t(tab.labelKey)}</span>
               </button>
             );
           })}
@@ -114,65 +167,73 @@ function FilmCharacterVoiceBody({
         </p>
       </div>
 
-      <div className="border-t border-gray-100">
-        {tool === "tts" ? <TextToSpeechPanel /> : <VoiceClonePanel />}
-      </div>
-
-      <div className="px-5 pb-5 pt-2 space-y-3 border-t border-gray-100 bg-amber-50/40">
-        <div className="flex gap-2 items-center pt-2">
-          <div
-            className="flex justify-center items-center w-8 h-8 rounded-full"
-            style={{ background: `${active.color}22` }}
-          >
-            <active.Icon className="text-lg" style={{ color: active.color }} />
+      {!listTab ? (
+        <>
+          <div className="border-t border-gray-100">
+            {tool === "tts" ? <TextToSpeechPanel /> : <VoiceClonePanel />}
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 m-0">{t(active.resultTitleKey)}</h2>
-            <p className="text-xs text-slate-500 m-0">{t("Chọn một giọng bên dưới để gắn cho nhân vật.")}</p>
-          </div>
-        </div>
-
-        {running ? (
-          <div
-            className="flex gap-2 items-center px-3 py-2 text-sm rounded-xl border"
-            style={{
-              color: active.color,
-              background: `${active.color}14`,
-              borderColor: `${active.color}55`,
-            }}
-          >
-            <RiLoader4Line className="text-lg animate-spin" style={{ color: active.color }} />
-            <span className="flex-1">{t("Đang xử lý job...")}</span>
-            <button
-              type="button"
-              onClick={cancelRun}
-              className="flex-shrink-0 px-2.5 h-7 text-xs font-semibold text-white bg-gray-700 rounded-lg border-0 cursor-pointer"
+          {running ? (
+            <div className="px-5 py-3 border-t border-gray-100">
+              <FilmCharacterVoiceRunningBanner color={active.color} onStop={cancelRun} />
+            </div>
+          ) : currentRecord?.blobs?.length ? (
+            <div className="px-5 py-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setTool("voices")}
+                className="w-full h-9 text-xs font-semibold rounded-lg border-0 cursor-pointer"
+                style={{ color: listMeta.color, background: `${listMeta.color}14` }}
+              >
+                {t("Giọng đã tạo — chọn trong Danh sách giọng")}
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <div className="px-5 pb-12 pt-2 space-y-4 border-t border-gray-100 bg-amber-50/40">
+          <div className="flex gap-2 items-center pt-2">
+            <div
+              className="flex justify-center items-center w-8 h-8 rounded-full"
+              style={{ background: `${listMeta.color}22` }}
             >
-              {t("Dừng")}
-            </button>
+              <listMeta.Icon className="text-lg" style={{ color: listMeta.color }} />
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-slate-800 m-0">{t("Danh sách giọng")}</h2>
+              <p className="text-xs text-slate-500 m-0">
+                {t("Chọn giọng đã tạo hoặc giọng có sẵn để gắn cho nhân vật.")}
+              </p>
+            </div>
           </div>
-        ) : null}
 
-        {running && (job || currentRecord) ? (
-          <div className="bg-white p-2 rounded-md">
-            <VoiceJobResult
-              job={currentRecord?.job || job}
-              record={currentRecord}
-              loading={!currentRecord?.blobs?.length}
-              onDelete={currentRecord ? (id) => void removeHistory(id) : undefined}
-            />
-          </div>
-        ) : null}
+          {running ? (
+            <FilmCharacterVoiceRunningBanner color={active.color} onStop={cancelRun} />
+          ) : null}
 
-        <MyVoicesPanel
-          records={history}
-          heading={t(active.resultTitleKey)}
-          emptyText={t("Chưa có kết quả. Điền form phía trên rồi chạy để lưu giọng vào đây.")}
-          defaultView="list"
-          onSelect={handleSelect}
-          selectText={t("Dùng giọng này")}
-        />
-      </div>
+          {running && (job || currentRecord) ? (
+            <div className="bg-white p-2 rounded-md">
+              <VoiceJobResult
+                job={currentRecord?.job || job}
+                record={currentRecord}
+                loading={!currentRecord?.blobs?.length}
+                onDelete={currentRecord ? (id) => void removeHistory(id) : undefined}
+              />
+            </div>
+          ) : null}
+
+          <MyVoicesPanel
+            records={ttsRecords}
+            heading={t("Giọng đã tạo")}
+            emptyText={t("Chưa có giọng từ tab Tạo giọng. Tạo xong rồi chọn tại đây.")}
+            defaultView="grid"
+            layout="modal"
+            onSelect={handleSelect}
+            selectText={t("Dùng giọng này")}
+          />
+
+          <VoicesCatalogPanel layout="modal" onPick={handleCatalogPick} />
+        </div>
+      )}
     </div>
   );
 }
@@ -198,12 +259,13 @@ export default function FilmCharacterVoiceDialog({
       dialogClass={FILM_EDIT_DIALOG_CLASS}
       headerClass={FILM_EDIT_DIALOG_HEADER_CLASS}
       bodyClass={FILM_EDIT_DIALOG_BODY_CLASS}
+      
     >
       <Dialog.Body>
         {isOpen ? (
           <VoiceProvider
             syncUrl={false}
-            initialTool="tts"
+            initialTool="voices"
             allowedTools={FILM_CHARACTER_VOICE_TOOLS}
             layout="stack"
           >
@@ -276,7 +338,7 @@ export function FilmCharacterVoicePlayButton({
       aria-label={t("Nghe thử")}
       className="inline-flex items-center justify-center w-8 h-8 rounded-lg border-0 bg-blue-50 text-blue-600 hover:bg-blue-100 cursor-pointer disabled:opacity-40 disabled:cursor-default flex-shrink-0"
     >
-      {playing ? <RiPauseFill className="text-lg" /> : <RiVolumeUpLine className="text-lg" />}
+      {playing ? <RiPauseFill className="text-lg" /> : <HiSpeakerWave className="text-lg" />}
     </button>
   );
 }
