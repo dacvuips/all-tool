@@ -1534,12 +1534,6 @@ export function ThreadManagementPanel({
     const useCharacterImage = config.useCharacterImage !== false;
     // Ảnh nhân vật theo switch cấu hình — tắt thì chỉ dùng ảnh sản phẩm
 
-    const missingProduct = targets.filter((i) => !i.imageUrl?.trim());
-    if (missingProduct.length) {
-      toast.warn(t("{{count}} luồng thiếu ảnh sản phẩm", { count: missingProduct.length }));
-      return;
-    }
-
     const prompt = buildActivePromptFromConfig(config).trim() || config.activePrompt?.trim() || "";
     if (config.splitPrompt) {
       const prompt0 = resolveEffectiveSlotPrompt(config, 0);
