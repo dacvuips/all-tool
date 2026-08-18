@@ -12,6 +12,7 @@ import {
   HiVideoCamera,
 } from "react-icons/hi";
 import { useAuth } from "../../lib/providers/auth-provider";
+import { useToast } from "../../lib/providers/toast-provider";
 import { Button } from "../shared/utilities/form";
 import { getFilmEntityImageSrc } from "./api/generate-film-media";
 import FilmCharacterVoiceDialog, {
@@ -37,6 +38,7 @@ import type { FilmStoryboardTab } from "./film-storyboard-panel";
 import { FilmCharacterRecord, FilmEpisodeRecord, FilmSceneRecord } from "./film-types";
 import FilmVoiceCard from "./film-voice-card";
 import FilmVoiceConfigDialog from "./film-voice-config-dialog";
+import { downloadFilmVoicesZip } from "./film-voice-download";
 import type { FilmVoiceGenerateInput } from "./film-voice-generate";
 
 type Props = {
@@ -53,7 +55,6 @@ type Props = {
   onStopBulkVoices?: () => Promise<void> | void;
   /** Scene đang tạo hàng loạt (mọi tập) — cập nhật list theo bộ lọc nhân vật/tập */
   overlayScenes?: FilmSceneRecord[] | null;
-  onDownloadAll?: () => void;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
 };
 
@@ -77,13 +78,14 @@ export default function FilmVoicePanel({
   onBulkCreateVoices,
   onStopBulkVoices,
   overlayScenes,
-  onDownloadAll,
   onTabNavigate,
 }: Props) {
   const { t } = useTranslation();
   const { customer } = useAuth();
+  const toast = useToast();
   const [tab, setTab] = useState<FilmStoryboardTab>("voice");
   const [busy, setBusy] = useState(false);
+  const [zipping, setZipping] = useState(false);
   const [voiceEditCharacter, setVoiceEditCharacter] = useState<FilmCharacterRecord | null>(null);
   const [voiceConfigOpen, setVoiceConfigOpen] = useState(false);
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
@@ -253,6 +255,22 @@ export default function FilmVoicePanel({
     }
   };
 
+  const handleDownloadZip = async () => {
+    if (zipping || !readyCount) return;
+    setZipping(true);
+    try {
+      const count = await downloadFilmVoicesZip(visibleList, episodeLabelById);
+      if (!count) {
+        toast.warn(t("Chưa có file âm thanh để tải."));
+        return;
+      }
+    } catch (err: any) {
+      toast.error(err?.message || t("Tải zip thất bại"));
+    } finally {
+      setZipping(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 gap-3 relative">
       <div className="flex items-center gap-1 flex-wrap">
@@ -345,8 +363,9 @@ export default function FilmVoicePanel({
               text={t("Tải xuống âm thanh (.zip)")}
               icon={<HiDownload />}
               className="!rounded-lg"
-              onClick={() => onDownloadAll?.()}
-              disabled={!readyCount}
+              onClick={() => void handleDownloadZip()}
+              isLoading={zipping}
+              disabled={!readyCount || zipping}
             />
           </div>
         </div>

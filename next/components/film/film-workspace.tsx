@@ -4853,9 +4853,6 @@ export default function FilmWorkspace({ projectId }: Props) {
               onBulkCreateVoices={handleBulkCreateVoices}
               onStopBulkVoices={handleStopBulkVoices}
               overlayScenes={voiceSceneOverlay}
-              onDownloadAll={() => {
-                console.info("[Film] Download all voice audio (not implemented)");
-              }}
               onTabNavigate={(tab) => {
                 if (tab === "storyboard") selectActiveStep("storyboard");
                 else if (tab === "shot_images") selectActiveStep("shot_images");
