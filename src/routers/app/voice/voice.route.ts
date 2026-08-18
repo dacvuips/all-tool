@@ -10,12 +10,26 @@
  * POST /api/app/voice/voice-clones/
  * POST /api/app/voice/speech-to-text/
  * POST /api/app/voice/audio-cleanup/
+ * POST /api/app/voice/free-gen-audio/
+ * GET  /api/app/voice/free-gen-audio/:id/
+ * GET  /api/app/voice/free-gen-audio/:id/output/
  */
 import { Request, Response } from "express";
 import multer from "multer";
 import { TOKEN_ROLES } from "../../../constants/role.const";
+import {
+  IMediaGenerationJob,
+  mediaGenerationJobService,
+  MediaGenerationJobStatus,
+  MediaGenerationJobType,
+} from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
+import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { assertVoiceGenerationAllowed, authVoiceCustomer } from "./_access";
+import {
+  fetchFreeGenAudioBytes,
+  sanitizeFreeGenAudioJobForClient,
+} from "./_free-gen-audio";
 import {
   audioFileFromMulter,
   microxFetch,
@@ -78,6 +92,61 @@ function requireAudio(req: Request) {
 function appendOptional(form: FormData, key: string, value: unknown) {
   if (value === undefined || value === null || String(value).trim() === "") return;
   form.append(key, String(value));
+}
+
+function mapMediaJobStatusToVoiceJob(status: MediaGenerationJobStatus | string): string {
+  switch (status) {
+    case MediaGenerationJobStatus.SUCCEEDED:
+      return "completed";
+    case MediaGenerationJobStatus.FAILED:
+    case MediaGenerationJobStatus.CANCELLED:
+      return "failed";
+    default:
+      return "processing";
+  }
+}
+
+function sanitizeFreeGenAudioMediaJob(job: IMediaGenerationJob | null) {
+  const rootResult =
+    job?.resultData && typeof job.resultData === "object"
+      ? (job.resultData as Record<string, unknown>)
+      : null;
+  const rawResult =
+    rootResult?.data && typeof rootResult.data === "object"
+      ? (rootResult.data as Record<string, unknown>)
+      : rootResult;
+  const nestedResult =
+    rawResult?.result && typeof rawResult.result === "object"
+      ? (rawResult.result as Record<string, unknown>)
+      : rawResult;
+  const data = sanitizeFreeGenAudioJobForClient({
+    id: String((job as any)?._id || ""),
+    status: mapMediaJobStatusToVoiceJob(String(job?.status || "") as MediaGenerationJobStatus),
+    result: nestedResult || {},
+  } as any);
+  if (job?.errorMessage) {
+    (data as any).message = job.errorMessage;
+    (data as any).error = job.errorMessage;
+  }
+  return data;
+}
+
+async function getOwnedMediaJob(req: Request): Promise<IMediaGenerationJob> {
+  const context = authVoiceCustomer(req);
+  const id = String(req.params.id || "").trim();
+  const job = (await mediaGenerationJobService.findOne({
+    _id: id,
+  })) as unknown as IMediaGenerationJob | null;
+  if (!job) {
+    throw Object.assign(new Error("Không tìm thấy job"), { statusCode: 404 });
+  }
+  if (job.customerId !== context.id) {
+    throw Object.assign(new Error("Bạn không có quyền truy cập job này"), { statusCode: 403 });
+  }
+  if (job.type !== MediaGenerationJobType.VOICE_FREE_GEN_AUDIO) {
+    throw Object.assign(new Error("Job không thuộc gen audio miễn phí"), { statusCode: 400 });
+  }
+  return job;
 }
 
 export default [
@@ -321,6 +390,86 @@ export default [
           form,
         });
         await sendVoiceJob(res, status, data, context.id, "cleanup");
+      } catch (err: any) {
+        sendRouteError(res, err);
+      }
+    },
+  },
+  {
+    method: "post",
+    path: "/api/app/voice/free-gen-audio/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        const context = authVoiceCustomer(req);
+        const body = (req.body || {}) as { text?: string; voice?: string };
+        const text = String(body.text || "").trim();
+        const voice = String(body.voice || "").trim().toLowerCase();
+        if (!text) return res.status(400).json({ message: "Thiếu text" });
+        if (!voice) return res.status(400).json({ message: "Thiếu voice" });
+
+        const { jobId, status } = await createAndEnqueueMediaJob(
+          {
+            customerId: context.id,
+            type: MediaGenerationJobType.VOICE_FREE_GEN_AUDIO,
+            requestPayload: { text, voice },
+            metadata: { module: "voice", tool: "free-gen-audio" },
+          },
+          { skipStreamCheck: true }
+        );
+
+        res.status(202).json({
+          success: true,
+          jobId,
+          status,
+          type: MediaGenerationJobType.VOICE_FREE_GEN_AUDIO,
+          data: sanitizeFreeGenAudioJobForClient({
+            id: jobId,
+            status: "processing",
+            result: {},
+          } as any),
+        });
+      } catch (err: any) {
+        sendRouteError(res, err);
+      }
+    },
+  },
+  {
+    method: "get",
+    path: "/api/app/voice/free-gen-audio/:id/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        const job = await getOwnedMediaJob(req);
+        res.json({ success: true, data: sanitizeFreeGenAudioMediaJob(job) });
+      } catch (err: any) {
+        sendRouteError(res, err);
+      }
+    },
+  },
+  {
+    method: "get",
+    path: "/api/app/voice/free-gen-audio/:id/output/",
+    midd: [],
+    action: async (req: Request, res: Response) => {
+      try {
+        const job = await getOwnedMediaJob(req);
+        const resultData =
+          job.resultData && typeof job.resultData === "object"
+            ? (job.resultData as Record<string, unknown>)
+            : null;
+        const nested =
+          resultData?.data && typeof resultData.data === "object"
+            ? (resultData.data as Record<string, unknown>)
+            : resultData;
+        const flow2RequestId = String(nested?.flow2RequestId || "").trim();
+        if (!flow2RequestId) {
+          return res.status(404).json({ message: "Job chưa có audio đầu ra" });
+        }
+        const { buffer, contentType } = await fetchFreeGenAudioBytes(flow2RequestId, job.customerId);
+        res.setHeader("Content-Type", contentType || "audio/mpeg");
+        res.setHeader("Cache-Control", "private, max-age=300");
+        res.send(buffer);
       } catch (err: any) {
         sendRouteError(res, err);
       }

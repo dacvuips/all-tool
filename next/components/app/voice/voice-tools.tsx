@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiMoneyDollarCircleLine, RiUserVoiceLine } from "react-icons/ri";
 import { GenerateAiIcon } from "../../../public/assets/svg/generate-ai";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
+import { createFreeGenAudio } from "./free-voice-api";
+import { FREE_GEN_AUDIO_VOICES } from "./free-voice-voices";
 import {
   createAudioCleanup,
   createSpeechToText,
@@ -205,10 +207,12 @@ function VoiceSubmitButton({
   text,
   disabled,
   onClick,
+  showCreditIcon = true,
 }: {
   text: string;
   disabled?: boolean;
   onClick: () => void;
+  showCreditIcon?: boolean;
 }) {
   const { running, tool, cancelRun } = useVoiceContext();
   const { t } = useTranslation();
@@ -239,7 +243,9 @@ function VoiceSubmitButton({
         >
           <GenerateAiIcon color="#fff" />
           <span className="text-white">{text}</span>
-          <RiMoneyDollarCircleLine className="text-lg text-white" title="$" />
+          {showCreditIcon ? (
+            <RiMoneyDollarCircleLine className="text-lg text-white" title="$" />
+          ) : null}
         </button>
       )}
     </div>
@@ -251,15 +257,19 @@ function VoiceFormShell({
   submitText,
   disabled,
   onSubmit,
+  showCreditIcon = true,
+  blockedReason,
 }: {
   children: React.ReactNode;
   submitText: string;
   disabled?: boolean;
   onSubmit: () => void;
+  showCreditIcon?: boolean;
+  blockedReason?: string;
 }) {
   const { t } = useTranslation();
   const { error, canCreate, createBlockedReason, layout } = useVoiceContext();
-  const blocked = !canCreate;
+  const blocked = blockedReason ?? (!canCreate ? createBlockedReason : "");
   const stacked = layout === "stack";
   return (
     <div className={stacked ? "flex flex-col" : "flex overflow-hidden flex-col flex-1 min-h-0"}>
@@ -267,12 +277,17 @@ function VoiceFormShell({
         <div className="px-4 pt-1 pb-3 space-y-4">
           {children}
           {blocked ? (
-            <p className="text-xs text-amber-700">{t(createBlockedReason)}</p>
+            <p className="text-xs text-amber-700">{t(blocked)}</p>
           ) : null}
           {error && <div className="text-sm text-red-600">{t(error)}</div>}
         </div>
       </div>
-      <VoiceSubmitButton text={submitText} disabled={disabled || blocked} onClick={onSubmit} />
+      <VoiceSubmitButton
+        text={submitText}
+        disabled={disabled || Boolean(blocked)}
+        onClick={onSubmit}
+        showCreditIcon={showCreditIcon}
+      />
     </div>
   );
 }
@@ -405,7 +420,7 @@ export function VoiceIdPicker({
   );
 }
 
-export function TextToSpeechPanel() {
+export function PaidTextToSpeechPanel() {
   const { t } = useTranslation();
   const { running, run } = useVoiceContext();
   const [voiceId, setVoiceId] = useState("voice_67365ff1907f816ddc906026");
@@ -450,6 +465,112 @@ export function TextToSpeechPanel() {
         onChange={setCreativity}
       />
     </VoiceFormShell>
+  );
+}
+
+function FreeTextToSpeechPanel() {
+  const { t } = useTranslation();
+  const { runFreeGenAudio } = useVoiceContext();
+  const { color } = getVoiceTool("tts");
+  const [voice, setVoice] = useState(FREE_GEN_AUDIO_VOICES[0]?.id || "achernar");
+  const [text, setText] = useState("Chào các bạn, tôi là Thái");
+
+  return (
+    <VoiceFormShell
+      submitText={t("Tạo giọng nói")}
+      showCreditIcon={false}
+      disabled={!text.trim() || !voice}
+      blockedReason=""
+      onSubmit={() =>
+        runFreeGenAudio(
+          () =>
+            createFreeGenAudio({
+              text: text.trim(),
+              voice,
+            }),
+          { voiceId: voice, feature: t("Tạo giọng miễn phí") }
+        )
+      }
+    ><p className="text-xs text-gray-500  " style={{ color }}>
+    {t("Miễn phí — không trừ text credit")}
+  </p>
+      <div>
+        <div className="mb-1 text-xs font-medium text-gray-600">{t("Voice")}</div>
+        <select
+          className="px-3 py-2 w-full text-sm rounded-lg border bg-white"
+          value={voice}
+          onChange={(e) => setVoice(e.target.value)}
+        >
+          {FREE_GEN_AUDIO_VOICES.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name} — {item.description}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div>
+        <div className="mb-1 text-xs font-medium text-gray-600">{t("Nội dung")}</div>
+        <textarea
+          rows={6}
+          className="px-3 py-2 w-full text-sm rounded-lg border"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={50000}
+        />
+      </div>
+      
+    </VoiceFormShell>
+  );
+}
+
+type TtsTier = "free" | "paid";
+
+function TextToSpeechTierTabs({
+  tier,
+  onChange,
+}: {
+  tier: TtsTier;
+  onChange: (tier: TtsTier) => void;
+}) {
+  const { t } = useTranslation();
+  const { color } = getVoiceTool("tts");
+  return (
+    <div className="flex gap-1 p-1 mx-4 mt-2 rounded-lg bg-gray-50 border border-gray-100">
+      {(
+        [
+          { id: "free" as const, label: t("Miễn phí") },
+          { id: "paid" as const, label: t("Thu phí") },
+        ] as const
+      ).map((tab) => {
+        const selected = tier === tab.id;
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => onChange(tab.id)}
+            className="flex-1 px-2 py-2 text-xs font-bold rounded-md border-0 cursor-pointer"
+            style={{
+              color: selected ? color : "#6b7280",
+              background: selected ? `${color}14` : "transparent",
+            }}
+          >
+            {tab.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function TextToSpeechPanel() {
+  const [tier, setTier] = useState<TtsTier>("free");
+  return (
+    <div className="flex overflow-hidden flex-col flex-1 min-h-0">
+      <TextToSpeechTierTabs tier={tier} onChange={setTier} />
+      <div className="flex overflow-hidden flex-col flex-1 min-h-0">
+        {tier === "paid" ? <PaidTextToSpeechPanel /> : <FreeTextToSpeechPanel />}
+      </div>
+    </div>
   );
 }
 

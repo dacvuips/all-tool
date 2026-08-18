@@ -4,6 +4,13 @@ import { useRouter } from "next/router";
 import { useAuth } from "../../../lib/providers/auth-provider";
 import { useSettingPublic } from "../../../lib/hooks/useSettingPublic";
 import { isVoiceAbortError, jobIdOf, pollVoiceJob, setVoiceAbortSignal } from "./voice-api";
+import {
+  cancelFreeGenAudioJob,
+  createFreeGenAudio,
+  isFreeGenAudioJob,
+  pollFreeGenAudioJob,
+  setFreeGenAudioAbortSignal,
+} from "./free-voice-api";
 import { canCreateVoice, customerIdOf, voiceCreateBlockReason } from "./voice-access";
 import { getVoiceTool, parseVoiceToolId, voiceTabFromLocation, VOICE_TAB_QUERY_KEY } from "./voice-tools-config";
 import {
@@ -37,6 +44,10 @@ type VoiceContextValue = {
   run: (
     start: () => Promise<MicroxJob>,
     meta?: { voiceId?: string; sourceFile?: File; feature?: string }
+  ) => Promise<MicroxJob | null>;
+  runFreeGenAudio: (
+    start: () => Promise<MicroxJob>,
+    meta?: { voiceId?: string; feature?: string }
   ) => Promise<MicroxJob | null>;
   runLocal: (
     task: (onProgress: (message: string) => void) => Promise<void>
@@ -221,12 +232,17 @@ export function VoiceProvider({
   );
 
   const cancelRun = useCallback(() => {
+    const currentJobId = jobIdOf(job);
+    if (currentJobId && isFreeGenAudioJob(job)) {
+      void cancelFreeGenAudioJob(currentJobId).catch(() => undefined);
+    }
     abortRef.current?.abort();
     setVoiceAbortSignal(null);
+    setFreeGenAudioAbortSignal(null);
     setRunning(false);
     setProgress("");
     setError("");
-  }, []);
+  }, [job]);
 
   const run = useCallback(
     async (start: () => Promise<MicroxJob>, meta?: { voiceId?: string; sourceFile?: File; feature?: string }) => {
@@ -238,6 +254,7 @@ export function VoiceProvider({
       const ac = new AbortController();
       abortRef.current = ac;
       setVoiceAbortSignal(ac.signal);
+      setFreeGenAudioAbortSignal(ac.signal);
       setRunning(true);
       setError("");
       try {
@@ -277,6 +294,7 @@ export function VoiceProvider({
       } finally {
         if (abortRef.current === ac) {
           setVoiceAbortSignal(null);
+          setFreeGenAudioAbortSignal(null);
           abortRef.current = null;
           setRunning(false);
         }
@@ -285,12 +303,67 @@ export function VoiceProvider({
     [canCreate, createBlockedReason, tool, ownerId, refreshHistory, loadCustomer, t]
   );
 
+  const runFreeGenAudio = useCallback(
+    async (start: () => Promise<MicroxJob>, meta?: { voiceId?: string; feature?: string }) => {
+      if (!ownerId) {
+        setError(t("Vui lòng đăng nhập"));
+        return null;
+      }
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setVoiceAbortSignal(ac.signal);
+      setFreeGenAudioAbortSignal(ac.signal);
+      setRunning(true);
+      setError("");
+      try {
+        throwIfAborted();
+        const created = await start();
+        throwIfAborted();
+        setJob(created);
+        const id = jobIdOf(created);
+        const status = String(created?.status || "").toLowerCase();
+        let done = created;
+        if (id && status !== "completed" && status !== "failed") {
+          done = await pollFreeGenAudioJob(id, setJob, ac.signal);
+          throwIfAborted();
+          setJob(done);
+        }
+        if (String(done?.status || "").toLowerCase() === "failed") {
+          throw new Error(t("Job thất bại"));
+        }
+        throwIfAborted();
+        await persistCompletedVoiceJob(done, tool, ownerId, meta?.voiceId, null, [
+          { label: FEATURE_TEXT_LABEL, value: meta?.feature || t("Tạo giọng miễn phí") },
+        ]);
+        await refreshHistory(tool, ownerId);
+        return done;
+      } catch (err: any) {
+        if (isVoiceAbortError(err) || ac.signal.aborted) {
+          setError("");
+          return null;
+        }
+        setError(t(err?.message || "Lỗi"));
+        return null;
+      } finally {
+        if (abortRef.current === ac) {
+          setVoiceAbortSignal(null);
+          setFreeGenAudioAbortSignal(null);
+          abortRef.current = null;
+          setRunning(false);
+        }
+      }
+    },
+    [ownerId, tool, refreshHistory, t]
+  );
+
   const runLocal = useCallback(
     async (task: (onProgress: (message: string) => void) => Promise<void>) => {
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
       setVoiceAbortSignal(ac.signal);
+      setFreeGenAudioAbortSignal(ac.signal);
       setRunning(true);
       setError("");
       setProgress("");
@@ -311,6 +384,7 @@ export function VoiceProvider({
       } finally {
         if (abortRef.current === ac) {
           setVoiceAbortSignal(null);
+          setFreeGenAudioAbortSignal(null);
           abortRef.current = null;
           setRunning(false);
           setProgress("");
@@ -417,6 +491,7 @@ export function VoiceProvider({
       createBlockedReason,
       ownerId,
       run,
+      runFreeGenAudio,
       runLocal,
       saveLocalMedia,
       saveLocalMediaBatch,
@@ -439,6 +514,7 @@ export function VoiceProvider({
       createBlockedReason,
       ownerId,
       run,
+      runFreeGenAudio,
       runLocal,
       saveLocalMedia,
       saveLocalMediaBatch,

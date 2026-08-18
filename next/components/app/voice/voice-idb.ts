@@ -1,3 +1,5 @@
+import { fetchFreeGenAudioOutputBlob, freeGenAudioOutputUrl, isFreeGenAudioJob } from "./free-voice-api";
+import { freeGenAudioVoiceLabel } from "./free-voice-voices";
 import { fetchVoices, fetchVoiceJobOutputBlob, jobIdOf, voiceJobOutputUrl } from "./voice-api";
 import {
   extractJobMedia,
@@ -202,12 +204,16 @@ export async function persistCompletedVoiceJob(
     mimeTypes.push(sourceFile.type || "audio/mpeg");
   } else if (tool !== "stt") {
     const fetchCount = Math.max(media.urls.length, 1);
+    const fetchOutputBlob = isFreeGenAudioJob(job)
+      ? fetchFreeGenAudioOutputBlob
+      : fetchVoiceJobOutputBlob;
+    const outputUrlOf = isFreeGenAudioJob(job) ? freeGenAudioOutputUrl : voiceJobOutputUrl;
     for (let i = 0; i < fetchCount; i += 1) {
-      const blob = await fetchVoiceJobOutputBlob(jobId, i);
+      const blob = await fetchOutputBlob(jobId, i);
       if (!blob || blob.size < 32) continue;
       blobs.push(blob);
       mimeTypes.push(blob.type || "audio/mpeg");
-      urls.push(voiceJobOutputUrl(jobId, i));
+      urls.push(outputUrlOf(jobId, i));
     }
   }
 
@@ -224,9 +230,10 @@ export async function persistCompletedVoiceJob(
       return;
     }
     const rec = node as Record<string, unknown>;
+    const outputUrlOf = isFreeGenAudioJob(job) ? freeGenAudioOutputUrl : voiceJobOutputUrl;
     for (const [k, v] of Object.entries(rec)) {
       if (typeof v === "string" && /^https?:\/\//i.test(v)) {
-        rec[k] = voiceJobOutputUrl(jobId, 0);
+        rec[k] = outputUrlOf(jobId, 0);
       } else {
         visit(v);
       }
@@ -244,6 +251,9 @@ export async function persistCompletedVoiceJob(
     voiceId: voiceId || existing?.voiceId || "",
     voice:
       existing?.voice ||
+      (isFreeGenAudioJob(job) && voiceId
+        ? { id: voiceId, voice_id: voiceId, name: freeGenAudioVoiceLabel(voiceId) }
+        : null) ||
       (await resolveVoice(voiceId)) ||
       (sourceName ? { id: jobId, voice_id: jobId, name: sourceName } : null),
     urls: urls.length ? urls : existing?.urls || [],

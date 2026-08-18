@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiDeleteBinLine, RiFileCopyLine } from "react-icons/ri";
 import { VoiceCatalogCard, VoiceWaveformPlayer } from "./voice-catalog-card";
+import { freeGenAudioOutputUrl, isFreeGenAudioJob } from "./free-voice-api";
 import { fetchVoices, jobIdOf, voiceJobOutputUrl } from "./voice-api";
 import { FEATURE_TEXT_LABEL, resultFeatureOf, type VoiceResultRecord } from "./voice-idb";
 import { useSavedVoices } from "./voice-saved";
@@ -54,7 +55,9 @@ export function VoiceJobResult({ job, loading, record, onDelete }: Props) {
     [job, record?.job]
   );
   const jobId = record?.jobId || jobIdOf(job);
-  const fallbackOutput = jobId ? voiceJobOutputUrl(jobId, 0) : "";
+  const activeJob = record?.job || job;
+  const outputUrlOf = isFreeGenAudioJob(activeJob) ? freeGenAudioOutputUrl : voiceJobOutputUrl;
+  const fallbackOutput = jobId ? outputUrlOf(jobId, 0) : "";
   const urls =
     blobUrls.length > 0
       ? blobUrls

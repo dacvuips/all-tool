@@ -39,6 +39,7 @@ import { handleFilmGenerationImage } from "./film-generation-image.handler";
 import { handleFilmGenerationVideo } from "./film-generation-video.handler";
 import { handleStoryboardAnalysis } from "./storyboard-analysis.handler";
 import { handleSuggestConfig } from "./suggest-config.handler";
+import { handleVoiceFreeGenAudio } from "./voice-free-gen-audio.handler";
 
 export type MediaJobHandlerResult =
   | MediaGenerationImageResult
@@ -77,6 +78,7 @@ export const HANDLER_REGISTRY: Record<MediaGenerationJobType, MediaJobHandler> =
   [MediaGenerationJobType.GENERATION_TRENDING]: handleGenerationTrending,
   [MediaGenerationJobType.FILM_GENERATION_IMAGE]: handleFilmGenerationImage,
   [MediaGenerationJobType.FILM_GENERATION_VIDEO]: handleFilmGenerationVideo,
+  [MediaGenerationJobType.VOICE_FREE_GEN_AUDIO]: handleVoiceFreeGenAudio,
 };
 
 /**
