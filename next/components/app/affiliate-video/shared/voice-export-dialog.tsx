@@ -18,7 +18,7 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 import { Dialog } from "../../../shared/utilities/dialog/dialog";
-import { Button, Select } from "../../../shared/utilities/form";
+import { Select } from "../../../shared/utilities/form";
 import {
   createFreeGenAudio,
   fetchFreeGenAudioOutputBlobWithRetry,
@@ -52,6 +52,50 @@ import {
 
 const TTS_WAVE_COLOR = getVoiceTool("tts").color;
 const VOICE_BATCH_CONCURRENCY = 3;
+const DIALOGUE_INPUT_MAX = 450;
+
+function dialogueInputOverLimit(text: string): boolean {
+  return text.length > DIALOGUE_INPUT_MAX;
+}
+
+function DialogueTextarea({
+  value,
+  onChange,
+  rows = 3,
+  className = "",
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  rows?: number;
+  className?: string;
+  placeholder?: string;
+}) {
+  const { t } = useTranslation();
+  const overLimit = dialogueInputOverLimit(value);
+
+  return (
+    <div>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value.slice(0, DIALOGUE_INPUT_MAX))}
+        rows={rows}
+        placeholder={placeholder}
+        className={`w-full px-2.5 py-2 text-xs leading-relaxed text-gray-700 bg-white rounded-lg border outline-none resize-y min-h-[4.5rem] focus:ring-1 ${
+          overLimit
+            ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+            : "border-gray-200 focus:border-purple-400 focus:ring-purple-200"
+        } ${className}`}
+      />
+      <div
+        className={`mt-1 text-right text-10 leading-none ${overLimit ? "font-semibold text-red-500" : "text-gray-400"}`}
+      >
+        {value.length}/{DIALOGUE_INPUT_MAX}
+        {overLimit ? ` — ${t("Vượt giới hạn {{max}} ký tự", { max: DIALOGUE_INPUT_MAX })}` : null}
+      </div>
+    </div>
+  );
+} 
 
 export type DialogueItem = {
   sceneId: string;
@@ -142,7 +186,7 @@ function TierTabs({
   const { t } = useTranslation();
   return (
     <div className="space-y-1.5">
-      <div className="flex gap-1 p-1 rounded-lg bg-gray-50 border border-gray-100">
+      <div className="flex gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100">
         {(["free", "paid"] as TtsTier[]).map((id) => {
           const selected = tier === id;
           return (
@@ -162,7 +206,7 @@ function TierTabs({
         })}
       </div>
       {tier === "paid" && textCredits ? (
-        <p className="text-xs text-gray-500 m-0">
+        <p className="m-0 text-xs text-gray-500">
           {t("Text credit")}: <span className="font-semibold text-gray-700">{textCredits}</span>
         </p>
       ) : null}
@@ -176,7 +220,7 @@ function FreeVoiceSelect({ value, onChange }: { value: string; onChange: (v: str
     <div>
       <div className="mb-1 text-xs font-medium text-gray-600">{t("Giọng (Miễn phí)")}</div>
       <select
-        className="px-3 py-2 w-full text-sm rounded-lg border bg-white"
+        className="px-3 py-2 w-full text-sm bg-white rounded-lg border"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >
@@ -223,10 +267,10 @@ function VoiceAssignmentPicker({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full px-3   text-left bg-white rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50"
+        className="px-3 w-full text-left bg-white rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50"
       >
         {value ? (
-          <span className="block text-12 font-semibold text-gray-800 truncate">
+          <span className="block font-semibold text-gray-800 truncate text-12">
             {String(value.name || value.display_name || voiceIdOf(value))}
           </span>
         ) : (
@@ -490,7 +534,7 @@ function MergedTtsSection({
           <FreeVoiceSelect value={freeVoice} onChange={setFreeVoice} />
           <button
             type="button"
-            disabled={freeGenerating || !dialogueExportText}
+            disabled={freeGenerating || !dialogueExportText || dialogueInputOverLimit(dialogueExportText)}
             onClick={() => void handleGenerateFree()}
             className="flex gap-1.5 justify-center items-center w-full h-9 text-sm font-semibold text-white rounded-full border-0 cursor-pointer disabled:opacity-60"
             style={{ background: freeGenerating ? "#a78bfa" : "#8b5cf6" }}
@@ -526,7 +570,7 @@ function MergedTtsSection({
           </div>
           <button
             type="button"
-            disabled={paidGenerating || !dialogueExportText || !voiceIdOf(selectedVoice)}
+            disabled={paidGenerating || !dialogueExportText || !voiceIdOf(selectedVoice) || dialogueInputOverLimit(dialogueExportText)}
             onClick={() => void handleGeneratePaid()}
             className="flex gap-1.5 justify-center items-center w-full h-9 text-sm font-semibold text-white rounded-full border-0 cursor-pointer disabled:opacity-60"
             style={{ background: paidGenerating ? "#a78bfa" : "#8b5cf6" }}
@@ -611,6 +655,7 @@ function SplitDialogueItem({
   onStateChange,
   onChangeText,
   onSaveText,
+  isDirty,
   persistItemAudio,
 }: {
   item: DialogueItem;
@@ -621,6 +666,7 @@ function SplitDialogueItem({
   onStateChange: (state: Partial<ItemAudioState>) => void;
   onChangeText: (text: string) => void;
   onSaveText: () => void;
+  isDirty: boolean;
   persistItemAudio?: (
     item: DialogueItem,
     blob: Blob,
@@ -725,12 +771,12 @@ function SplitDialogueItem({
   }, [itemState.audioUrl, item.label]);
 
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-gray-200">
       <div className="flex gap-2 items-center px-3 py-2 bg-gray-50 border-b border-gray-100">
-        <span className="flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-full bg-purple-100 text-purple-700 text-xs font-bold">
+        <span className="flex flex-shrink-0 justify-center items-center w-5 h-5 text-xs font-bold text-purple-700 bg-purple-100 rounded-full">
           {index + 1}
         </span>
-        <span className="text-xs font-semibold text-gray-700 truncate min-w-0">{item.label}</span>
+        <span className="min-w-0 text-xs font-semibold text-gray-700 truncate">{item.label}</span>
         <div className="flex-1 min-w-0">
           {tier === "free" ? (
             <select
@@ -756,14 +802,15 @@ function SplitDialogueItem({
           disabled={
             itemState.generating ||
             !item.text ||
+            dialogueInputOverLimit(item.text) ||
             (tier === "paid" && !voiceIdOf(itemState.selectedPaidVoice || globalPaidVoice))
           }
           onClick={() => void handleGenerate()}
-          className="flex-shrink-0 flex gap-1 items-center px-2 h-6 text-xs font-semibold text-white rounded-lg border-0 cursor-pointer disabled:opacity-60"
+          className="flex flex-shrink-0 gap-1 items-center px-2 h-6 text-xs font-semibold text-white rounded-lg border-0 cursor-pointer disabled:opacity-60"
           style={{ background: itemState.generating ? "#a78bfa" : "#8b5cf6" }}
         >
           {itemState.generating ? (
-            <RiLoader4Line className="animate-spin text-xs" />
+            <RiLoader4Line className="text-xs animate-spin" />
           ) : (
             <RiMagicLine className="text-xs" />
           )}
@@ -771,26 +818,24 @@ function SplitDialogueItem({
         </button>
       </div>
       <div className="px-3 py-2">
-        <textarea
-          value={item.text}
-          onChange={(e) => onChangeText(e.target.value)}
-          rows={3}
-          className="w-full px-2.5 py-2 text-xs leading-relaxed text-gray-700 bg-white rounded-lg border border-gray-200 outline-none resize-y min-h-[4.5rem] focus:border-purple-400 focus:ring-1 focus:ring-purple-200"
-        />
-        <div className="flex justify-end mt-1.5">
-          <button
-            type="button"
-            onClick={onSaveText}
-            className="flex items-center gap-1 px-2.5 h-6 text-xs font-semibold text-white rounded-md border-0 cursor-pointer"
-            style={{ background: "#8b5cf6" }}
-          >
-            <RiSaveLine className="text-sm" />
-            {t("Lưu")}
-          </button>
-        </div>
+        <DialogueTextarea value={item.text} onChange={onChangeText} rows={3} />
+        {isDirty ? (
+          <div className="flex justify-end mt-1.5">
+            <button
+              type="button"
+              onClick={onSaveText}
+              disabled={dialogueInputOverLimit(item.text)}
+              className="inline-flex items-center gap-1.5 px-2 h-6 text-10 font-semibold text-white rounded-md border-0 cursor-pointer disabled:opacity-60 bg-primary"
+            
+            >
+              <RiSaveLine className="text-xs shrink-0" />
+              <span>{t("Lưu")}</span>
+            </button>
+          </div>
+        ) : null}
       </div>
       {itemState.audioUrl && (
-        <div className="px-3 pb-2 pt-1 border-t border-gray-100">
+        <div className="px-3 pt-1 pb-2 border-t border-gray-100">
           <VoiceWaveformPlayer
             src={itemState.audioUrl}
             color={TTS_WAVE_COLOR}
@@ -826,6 +871,7 @@ function SplitDialogueSection({
   saveGeneratedAudio,
   onChangeItemText,
   onSaveItemText,
+  isItemDirty,
 }: {
   tier: TtsTier;
   isOpen: boolean;
@@ -844,6 +890,7 @@ function SplitDialogueSection({
   saveGeneratedAudio?: SaveGeneratedAudioFn;
   onChangeItemText: (index: number, text: string) => void;
   onSaveItemText: (item: DialogueItem) => void;
+  isItemDirty: (item: DialogueItem) => boolean;
 }) {
   const { t } = useTranslation();
   const [globalFreeVoice, setGlobalFreeVoice] = useState(
@@ -1074,7 +1121,7 @@ function SplitDialogueSection({
               {t("Giọng cho tất cả thoại")}
             </div>
             <select
-              className="px-3 py-2 w-full text-sm rounded-lg border bg-white"
+              className="px-3 py-2 w-full text-sm bg-white rounded-lg border"
               value={globalFreeVoice}
               onChange={(e) => {
                 const next = e.target.value;
@@ -1122,7 +1169,7 @@ function SplitDialogueSection({
           <button
             type="button"
             onClick={() => void handleBatchGenerate()}
-            disabled={items.length === 0}
+            disabled={items.length === 0 || items.some((item) => dialogueInputOverLimit(item.text))}
             className="flex flex-1 gap-1.5 justify-center items-center h-9 text-xs font-semibold text-white rounded-full border-0 cursor-pointer disabled:opacity-60"
             style={{ background: batchRunning ? "#dc2626" : "#8b5cf6" }}
           >
@@ -1150,13 +1197,13 @@ function SplitDialogueSection({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 mt-3 overflow-y-auto v-scrollbar">
+      <div className="overflow-y-auto flex-1 mt-3 min-h-0 v-scrollbar">
         {items.length === 0 ? (
           <div className="py-4 text-xs text-center text-gray-400 rounded-xl border border-gray-200 border-dashed">
             {t("Không có Dialogue")}
           </div>
         ) : (
-          <div className="space-y-2 pr-1">
+          <div className="pr-1 space-y-2">
             {items.map((item, i) => (
               <SplitDialogueItem
                 key={item.sceneId || i}
@@ -1168,6 +1215,7 @@ function SplitDialogueSection({
                 onStateChange={(patch) => updateItem(i, patch)}
                 onChangeText={(text) => onChangeItemText(i, text)}
                 onSaveText={() => onSaveItemText(item)}
+                isDirty={isItemDirty(item)}
                 persistItemAudio={persistItemAudio}
               />
             ))}
@@ -1207,6 +1255,7 @@ export function VoiceExportDialog({
   const [localItems, setLocalItems] = useState<DialogueItem[]>(dialogueItems ?? []);
   const [mergedDraft, setMergedDraft] = useState(dialogueExportText);
   const [savingDialogue, setSavingDialogue] = useState(false);
+  const [committedTexts, setCommittedTexts] = useState<Record<string, string>>({});
 
   const textCredits = useMemo(() => {
     const count = customer?.googlePackage?.textCreditCount ?? 0;
@@ -1218,7 +1267,12 @@ export function VoiceExportDialog({
   useEffect(() => {
     if (!isOpen) return;
     const next = dialogueItems ?? [];
+    const saved: Record<string, string> = {};
+    next.forEach((item) => {
+      saved[item.sceneId] = item.text;
+    });
     setLocalItems(next);
+    setCommittedTexts(saved);
     setMergedDraft(next.length ? buildMergedDialogueText(next) : dialogueExportText);
   }, [isOpen, dialogueItems, dialogueExportText]);
 
@@ -1242,10 +1296,25 @@ export function VoiceExportDialog({
     });
   }, []);
 
+  const isItemDirty = useCallback(
+    (item: DialogueItem) => item.text !== (committedTexts[item.sceneId] ?? ""),
+    [committedTexts]
+  );
+
+  const committedMergedText = useMemo(
+    () =>
+      localItems
+        .map((item) => `"${String(committedTexts[item.sceneId] ?? "").replace(/"/g, "")}"`)
+        .join(", "),
+    [localItems, committedTexts]
+  );
+  const isMergedDirty = mergedDraft !== committedMergedText;
+
   const handleSaveItemText = useCallback(
     async (item: DialogueItem) => {
       const latest = localItems.find((row) => row.sceneId === item.sceneId) || item;
       await onSaveDialogue?.([{ sceneId: latest.sceneId, text: latest.text }]);
+      setCommittedTexts((prev) => ({ ...prev, [latest.sceneId]: latest.text }));
       toast.success(t("Đã lưu thoại"));
     },
     [onSaveDialogue, localItems, toast, t]
@@ -1257,7 +1326,12 @@ export function VoiceExportDialog({
     try {
       const nextItems = applyMergedDraftToItems(mergedDraft, localItems);
       setLocalItems(nextItems);
-      await onSaveDialogue(nextItems.map((item) => ({ sceneId: item.sceneId, text: item.text })));
+      const saved: Record<string, string> = {};
+      nextItems.forEach((row) => {
+        saved[row.sceneId] = row.text;
+      });
+      setCommittedTexts((prev) => ({ ...prev, ...saved }));
+      await onSaveDialogue(nextItems.map((row) => ({ sceneId: row.sceneId, text: row.text })));
       toast.success(t("Đã lưu thoại"));
     } finally {
       setSavingDialogue(false);
@@ -1316,7 +1390,7 @@ export function VoiceExportDialog({
 
             <div>
               <div className="flex justify-between items-center mb-2">
-                <div className="flex items-center gap-3">
+                <div className="flex gap-3 items-center">
                   <span className="text-sm font-semibold text-gray-700">Dialogue</span>
                   <label className="flex items-center gap-1.5 cursor-pointer select-none">
                     <div
@@ -1333,42 +1407,51 @@ export function VoiceExportDialog({
                   </label>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button
+                  <button
+                    type="button"
                     onClick={handleCopyLocalDialogue}
                     disabled={!(mergeDialogue ? mergedDraft : localItems.some((item) => item.text))}
-                    className="!h-7 !px-2.5 text-xs"
-                    icon={copiedLocal ? <RiCheckLine /> : <RiClipboardLine />}
-                    outline
+                    className="inline-flex items-center gap-1.5 h-6 px-2 text-10 font-semibold text-gray-700 bg-white rounded-md border border-gray-200 cursor-pointer hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {copiedLocal ? t("Đã chép") : t("Copy")}
-                  </Button>
-                  {mergeDialogue ? (
-                    <Button
+                    {copiedLocal ? (
+                      <RiCheckLine className="text-xs shrink-0" />
+                    ) : (
+                      <RiClipboardLine className="text-xs shrink-0" />
+                    )}
+                    <span>{copiedLocal ? t("Đã chép") : t("Copy")}</span>
+                  </button>
+                  {mergeDialogue && isMergedDirty ? (
+                    <button
+                      type="button"
                       onClick={() => void handleSaveMerged()}
-                      disabled={savingDialogue}
-                      className="!h-7 !px-2.5 text-xs"
-                      icon={savingDialogue ? <RiLoader4Line className="animate-spin" /> : <RiSaveLine />}
-                      primary
+                      disabled={savingDialogue || dialogueInputOverLimit(mergedDraft)}
+                      className="inline-flex items-center gap-1.5 h-6 px-2 text-10 font-semibold text-white rounded-md border-0 cursor-pointer disabled:opacity-60"
+                      style={{ background: "#8b5cf6" }}
                     >
-                      {savingDialogue ? t("Đang lưu") : t("Lưu")}
-                    </Button>
+                      {savingDialogue ? (
+                        <RiLoader4Line className="text-xs animate-spin shrink-0" />
+                      ) : (
+                        <RiSaveLine className="text-xs shrink-0" />
+                      )}
+                      <span>{savingDialogue ? t("Đang lưu") : t("Lưu")}</span>
+                    </button>
                   ) : null}
                 </div>
               </div>
 
               {mergeDialogue ? (
-                <textarea
+                <DialogueTextarea
                   value={mergedDraft}
-                  onChange={(e) => setMergedDraft(e.target.value)}
+                  onChange={setMergedDraft}
                   rows={8}
-                  className="overflow-y-auto px-4 py-3 w-full max-h-40 text-xs leading-relaxed text-gray-700 bg-white rounded-xl border border-gray-200 outline-none resize-y v-scrollbar focus:border-purple-400 focus:ring-1 focus:ring-purple-200"
+                  className="px-4 py-3 max-h-40 rounded-xl"
                   placeholder={t("Nhập thoại...")}
                 />
               ) : null}
             </div>
           </div>
 
-          <div className="flex flex-col flex-1 min-h-0 py-3 border-t border-gray-100">
+          <div className="flex flex-col flex-1 py-3 min-h-0 border-t border-gray-100">
             {mergeDialogue ? (
               <MergedTtsSection
                 tier={tier}
@@ -1404,6 +1487,7 @@ export function VoiceExportDialog({
                 saveGeneratedAudio={saveGeneratedAudio}
                 onChangeItemText={handleChangeItemText}
                 onSaveItemText={(item) => void handleSaveItemText(item)}
+                isItemDirty={isItemDirty}
               />
             )}
           </div>
