@@ -42,6 +42,7 @@ import {
   collectFailedRetryTasks,
   runBatchRetryWorkerPool,
 } from "../../shared/batchRetryFailed";
+import { dialogueTextForTts } from "../../shared/voice-export-audio-cache";
 import { useElementApi } from "./useElementApi";
 
 // ─── Concurrency limits (fallback defaults) ───
@@ -75,6 +76,8 @@ export function useCopyVideoBatchActions(
     saveGeneratedImage,
     saveGeneratedVideo,
     generateAudioTTS,
+    getGeneratedAudio,
+    saveGeneratedAudio,
   } = useElementApi();
   const {
     addBatchGeneratingSceneId,
@@ -85,6 +88,7 @@ export function useCopyVideoBatchActions(
     reportSceneProgress,
     getSceneErrors,
     scriptData,
+    updateScriptData,
     elementFormConfig,
     registerSceneJob,
   } = useElementContext();
@@ -122,15 +126,31 @@ export function useCopyVideoBatchActions(
   const [dialogueCopied, setDialogueCopied] = useState(false);
   const [audioCopied, setAudioCopied] = useState(false);
 
-  /** Aggregate all dialogue from enabled scenes */
-  const dialogueExportText = useMemo(() => {
-    const eligibleScenes = scenes.filter((s) => !s.disabled);
-    if (eligibleScenes.length === 0) return "";
-    return eligibleScenes
-      .filter((s) => s.original_content)
-      .map((s) => `"${s.original_content}"`)
-      .join("\n");
+  /** Individual dialogue items per scene — gồm cả scene đang tắt / thoại trống để sửa và lưu */
+  const dialogueItems = useMemo(() => {
+    return scenes.map((s) => ({
+      sceneId: s.id,
+      label: `Scene ${s.sceneNumber ?? ""}`.trim(),
+      text: String(s.original_content || ""),
+    }));
   }, [scenes]);
+
+  /** Aggregate all dialogue from scenes */
+  const dialogueExportText = useMemo(() => {
+    return scenes.map((s) => `"${s.original_content || ""}"`).join(", ");
+  }, [scenes]);
+
+  const handleSaveDialogue = useCallback(
+    async (updates: { sceneId: string; text: string }[]) => {
+      if (!scriptData?.scenes || !updateScriptData) return;
+      const byId = new Map(updates.map((p) => [p.sceneId, p.text]));
+      const nextScenes = scriptData.scenes.map((s) =>
+        byId.has(s.id) ? { ...s, original_content: byId.get(s.id) ?? s.original_content } : s
+      );
+      updateScriptData({ ...scriptData, scenes: nextScenes });
+    },
+    [scriptData, updateScriptData]
+  );
 
   /** Aggregate voice profile – copy-video analysis doesn't have global voice config */
   const audioExportText = useMemo(() => {
@@ -169,7 +189,7 @@ export function useCopyVideoBatchActions(
       const cacheKey = `voice-export-${Date.now()}`;
       const audioData = await generateAudioTTS({
         cacheKey,
-        text: dialogueExportText,
+        text: dialogueTextForTts(dialogueExportText),
         voiceName: ttsVoiceName,
         stylePrompt: audioExportText ? `Voice style: ${audioExportText}` : undefined,
       });
@@ -1308,9 +1328,11 @@ export function useCopyVideoBatchActions(
     setShowVoiceExportDialog,
     dialogueCopied,
     audioCopied,
+    dialogueItems,
     dialogueExportText,
     audioExportText,
     handleCopyDialogue,
+    handleSaveDialogue,
     handleCopyAudio,
 
     // TTS
@@ -1321,6 +1343,8 @@ export function useCopyVideoBatchActions(
     ttsAudioRef,
     handleGenerateTTS,
     handleDownloadTTSAudio,
+    getGeneratedAudio,
+    saveGeneratedAudio,
 
     // Batch image generation
     batchRunning,

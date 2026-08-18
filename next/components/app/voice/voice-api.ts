@@ -213,3 +213,55 @@ export async function fetchVoiceJobOutputBlob(
   if (type.includes("json") || type.includes("text/html")) return null;
   return blob;
 }
+
+const OUTPUT_RETRY_MS = 1500;
+const OUTPUT_RETRY_MAX = 12;
+
+function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Đã dừng", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Đã dừng", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isValidAudioBlob(blob: Blob | null | undefined): blob is Blob {
+  if (!blob || blob.size < 32) return false;
+  const type = (blob.type || "").toLowerCase();
+  return !type.includes("json") && !type.includes("text/html");
+}
+
+/** Tải blob output MicroX — retry khi job vừa completed nhưng file chưa sẵn sàng. */
+export async function fetchVoiceJobOutputBlobWithRetry(
+  jobId: string,
+  index = 0,
+  signal?: AbortSignal
+): Promise<Blob | null> {
+  const id = String(jobId || "").trim();
+  if (!id) return null;
+
+  for (let attempt = 0; attempt < OUTPUT_RETRY_MAX; attempt += 1) {
+    if (signal?.aborted) throw new DOMException("Đã dừng", "AbortError");
+    const blob = await fetchVoiceJobOutputBlob(id, index, signal);
+    if (isValidAudioBlob(blob)) return blob;
+    if (attempt < OUTPUT_RETRY_MAX - 1) await sleepMs(OUTPUT_RETRY_MS, signal);
+  }
+  return null;
+}
+
+export function voiceJobErrorMessage(job: MicroxJob | null | undefined): string {
+  if (!job || typeof job !== "object") return "";
+  const rec = job as Record<string, unknown>;
+  for (const key of ["message", "error", "errorMessage"]) {
+    const value = String(rec[key] || "").trim();
+    if (value) return value;
+  }
+  return "";
+}

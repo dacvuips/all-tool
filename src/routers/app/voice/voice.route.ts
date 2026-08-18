@@ -25,8 +25,10 @@ import {
 } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { getFlow2Config } from "../../api-media/flow2/_shared";
 import { assertVoiceGenerationAllowed, authVoiceCustomer } from "./_access";
 import {
+  collectFreeGenAudioUrls,
   fetchFreeGenAudioBytes,
   sanitizeFreeGenAudioJobForClient,
 } from "./_free-gen-audio";
@@ -119,11 +121,13 @@ function sanitizeFreeGenAudioMediaJob(job: IMediaGenerationJob | null) {
     rawResult?.result && typeof rawResult.result === "object"
       ? (rawResult.result as Record<string, unknown>)
       : rawResult;
+  const mediaJobId = String((job as any)?._id || "").trim();
   const data = sanitizeFreeGenAudioJobForClient({
-    id: String((job as any)?._id || ""),
+    id: mediaJobId,
     status: mapMediaJobStatusToVoiceJob(String(job?.status || "") as MediaGenerationJobStatus),
     result: nestedResult || {},
   } as any);
+  if (mediaJobId) data.id = mediaJobId;
   if (job?.errorMessage) {
     (data as any).message = job.errorMessage;
     (data as any).error = job.errorMessage;
@@ -463,6 +467,29 @@ export default [
             ? (resultData.data as Record<string, unknown>)
             : resultData;
         const flow2RequestId = String(nested?.flow2RequestId || "").trim();
+        const storedUrls = collectFreeGenAudioUrls(nested);
+        const { token } = await getFlow2Config(
+          job.customerId ? { customerId: job.customerId } : undefined
+        );
+
+        for (const audioUrl of storedUrls) {
+          for (const useAuth of [true, false]) {
+            try {
+              const resp = await fetch(audioUrl, {
+                headers: useAuth ? { Authorization: `Bearer ${token}` } : undefined,
+              });
+              if (!resp.ok) continue;
+              const buffer = Buffer.from(await resp.arrayBuffer());
+              if (buffer.length < 32) continue;
+              res.setHeader("Content-Type", resp.headers.get("content-type") || "audio/mpeg");
+              res.setHeader("Cache-Control", "private, max-age=300");
+              return res.send(buffer);
+            } catch {
+              // thử URL / auth kế tiếp
+            }
+          }
+        }
+
         if (!flow2RequestId) {
           return res.status(404).json({ message: "Job chưa có audio đầu ra" });
         }

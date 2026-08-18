@@ -13,6 +13,7 @@ import {
 } from "./media-generation";
 import logger from "../helpers/logger";
 import { waitForMainConnection } from "../helpers/mongo";
+import { ensureRedisReady } from "../helpers/redis";
 import { SharedRedisClient } from "../helpers/sharedRedisClient";
 
 export function startQueues(): void {
@@ -29,6 +30,7 @@ async function startQueuesAsync(): Promise<void> {
 
   try {
     await SharedRedisClient.instance.waitUntilReady(20000);
+    await ensureRedisReady(20000);
   } catch (err: any) {
     logger.warn(
       `[startQueues] Redis chưa ready — vẫn start worker, recovery sẽ retry: ${err?.message || err}`

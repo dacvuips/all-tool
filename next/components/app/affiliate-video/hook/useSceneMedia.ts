@@ -32,6 +32,7 @@ import type { SceneProgressKind } from "./useSceneProgressBroadcast";
 /** Context slice từ provider module (storyboard/trending dùng provider riêng, không phải single). */
 export type AffiliateVideoProviderSlice = Partial<{
   scriptData: ScriptData | null;
+  setScriptData: (data: ScriptData | null) => void;
   affiliateVideoFormConfig: AffiliateVideoFormConfig;
   batchGeneratingSceneIdsRef: React.MutableRefObject<Set<string>>;
   batchGeneratingVideoSceneIdsRef: React.MutableRefObject<Set<string>>;

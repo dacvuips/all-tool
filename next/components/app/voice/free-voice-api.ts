@@ -84,6 +84,80 @@ export async function fetchFreeGenAudioOutputBlob(
   return blob;
 }
 
+const OUTPUT_RETRY_MS = 1500;
+const OUTPUT_RETRY_MAX = 12;
+
+function sleepMs(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Đã dừng", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(resolve, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Đã dừng", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function isValidAudioBlob(blob: Blob | null | undefined): blob is Blob {
+  if (!blob || blob.size < 32) return false;
+  const type = (blob.type || "").toLowerCase();
+  return !type.includes("json") && !type.includes("text/html");
+}
+
+export function freeGenAudioUrlsFromJob(job: MicroxJob | null | undefined): string[] {
+  const result = job && typeof job === "object" ? (job as { result?: unknown }).result : null;
+  if (!result || typeof result !== "object") return [];
+  const rec = result as Record<string, unknown>;
+  const urls: string[] = [];
+  const push = (value: unknown) => {
+    if (typeof value !== "string") return;
+    const trimmed = value.trim();
+    if (/^https?:\/\//i.test(trimmed) && !urls.includes(trimmed)) urls.push(trimmed);
+  };
+  if (Array.isArray(rec.audio_urls)) rec.audio_urls.forEach(push);
+  push(rec.Link);
+  push(rec.link);
+  push(rec.url);
+  return urls;
+}
+
+/** Tải blob output — retry proxy API rồi fallback URL trực tiếp từ job result. */
+export async function fetchFreeGenAudioOutputBlobWithRetry(
+  mediaJobId: string,
+  index = 0,
+  signal?: AbortSignal,
+  job?: MicroxJob | null
+): Promise<Blob | null> {
+  const id = String(mediaJobId || "").trim();
+  if (!id) return null;
+
+  for (let attempt = 0; attempt < OUTPUT_RETRY_MAX; attempt += 1) {
+    if (signal?.aborted) throw new DOMException("Đã dừng", "AbortError");
+    const blob = await fetchFreeGenAudioOutputBlob(id, index, signal);
+    if (isValidAudioBlob(blob)) return blob;
+    if (attempt < OUTPUT_RETRY_MAX - 1) await sleepMs(OUTPUT_RETRY_MS, signal);
+  }
+
+  for (const url of freeGenAudioUrlsFromJob(job)) {
+    try {
+      const res = await fetch(url, {
+        credentials: "include",
+        signal: signal || freeGenAudioAbortSignal || undefined,
+      });
+      if (!res.ok) continue;
+      const blob = await res.blob();
+      if (isValidAudioBlob(blob)) return blob;
+    } catch {
+      // thử URL kế tiếp
+    }
+  }
+  return null;
+}
+
 const FREE_GEN_AUDIO_POLL_MS = 2000;
 const FREE_GEN_AUDIO_MAX_WAIT_MS = 5 * 60 * 1000;
 

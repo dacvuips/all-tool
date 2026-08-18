@@ -325,6 +325,8 @@ export interface UseAffiliateVideoApiReturn {
    */
   getGeneratedAudio: (cacheKey: string) => Promise<GeneratedAudioData | undefined>;
 
+  saveGeneratedAudio: (cacheKey: string, audioData: GeneratedAudioData) => Promise<void>;
+
   /**
    * Lấy toàn bộ lịch sử generate scene từ IndexedDB.
    */
@@ -813,6 +815,13 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
     [audioDB]
   );
 
+  const saveGeneratedAudio = useCallback(
+    async (cacheKey: string, audioData: GeneratedAudioData): Promise<void> => {
+      await audioDB.set(cacheKey, audioData);
+    },
+    [audioDB]
+  );
+
   // ── getSceneHistory – lấy lịch sử generate scene ──
   const getSceneHistory = useCallback(async (): Promise<SceneHistoryItem[]> => {
     if (!customer?._id) return [];
@@ -840,6 +849,7 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
     suggestConfig,
     generateAudioTTS,
     getGeneratedAudio,
+    saveGeneratedAudio,
     getSceneHistory,
     clearSceneHistory,
     generateVideoToVideo,

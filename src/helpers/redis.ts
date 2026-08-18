@@ -45,13 +45,9 @@ export const createRedisClient = () => {
         password: redisConfig.password,
         keyPrefix: redisConfig.prefix,
         lazyConnect: true,
-        // config retry strategy
-        retryStrategy: (times) => {
-          if (times > 10) {
-            return undefined;
-          }
-          return Math.min(times * 50, 2000);
-        },
+        // Giữ reconnect — đừng dừng sau 10 lần (bee-queue / enqueue sẽ "Connection is closed").
+        retryStrategy: (times) => Math.min(times * 200, 5000),
+        maxRetriesPerRequest: null,
       });
   }
 
@@ -100,5 +96,43 @@ const getRedisNodes = () => {
 const redis = createRedisClient();
 
 export const PrefixKey = redisConfig.prefix;
+
+/** Chờ ioredis sẵn sàng; reconnect nếu socket đã đóng. */
+export async function ensureRedisReady(timeoutMs = 15000): Promise<void> {
+  const client = redis as Redis;
+  const status = () => String((client as { status?: string }).status || "");
+  if (status() === "ready") return;
+
+  if (status() === "wait" || status() === "end" || status() === "close") {
+    try {
+      await client.connect();
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      if (!/already connected|already connecting/i.test(msg)) {
+        throw err;
+      }
+    }
+  }
+
+  if (status() === "ready") return;
+
+  await new Promise<void>((resolve, reject) => {
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      cleanup();
+      const err: any = new Error("Redis ready timeout");
+      err.statusCode = 503;
+      reject(err);
+    }, timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timer);
+      client.removeListener("ready", onReady);
+    };
+    client.once("ready", onReady);
+  });
+}
 
 export default redis;

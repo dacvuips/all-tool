@@ -1,6 +1,6 @@
-import { fetchFreeGenAudioOutputBlob, freeGenAudioOutputUrl, isFreeGenAudioJob } from "./free-voice-api";
+import { fetchFreeGenAudioOutputBlobWithRetry, freeGenAudioOutputUrl, isFreeGenAudioJob } from "./free-voice-api";
 import { freeGenAudioVoiceLabel } from "./free-voice-voices";
-import { fetchVoices, fetchVoiceJobOutputBlob, jobIdOf, voiceJobOutputUrl } from "./voice-api";
+import { fetchVoiceJobOutputBlobWithRetry, fetchVoices, jobIdOf, voiceJobOutputUrl } from "./voice-api";
 import {
   extractJobMedia,
   voiceIdOf,
@@ -205,8 +205,8 @@ export async function persistCompletedVoiceJob(
   } else if (tool !== "stt") {
     const fetchCount = Math.max(media.urls.length, 1);
     const fetchOutputBlob = isFreeGenAudioJob(job)
-      ? fetchFreeGenAudioOutputBlob
-      : fetchVoiceJobOutputBlob;
+      ? (id: string, i: number) => fetchFreeGenAudioOutputBlobWithRetry(id, i, undefined, job)
+      : fetchVoiceJobOutputBlobWithRetry;
     const outputUrlOf = isFreeGenAudioJob(job) ? freeGenAudioOutputUrl : voiceJobOutputUrl;
     for (let i = 0; i < fetchCount; i += 1) {
       const blob = await fetchOutputBlob(jobId, i);

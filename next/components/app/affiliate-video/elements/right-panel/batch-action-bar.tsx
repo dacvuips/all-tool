@@ -34,9 +34,10 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     showVoiceExportDialog,
     setShowVoiceExportDialog,
     dialogueCopied,
-    dialogueExportText,
+    dialogueItems,    dialogueExportText,
     audioExportText,
     handleCopyDialogue,
+    handleSaveDialogue,
     handleCopyAudio,
 
     // TTS
@@ -47,6 +48,8 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     ttsAudioRef,
     handleGenerateTTS,
     handleDownloadTTSAudio,
+    getGeneratedAudio,
+    saveGeneratedAudio,
 
     // Batch image generation
     batchRunning,
@@ -505,9 +508,11 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
         isOpen={showVoiceExportDialog}
         onClose={() => setShowVoiceExportDialog(false)}
         dialogueCopied={dialogueCopied}
+        dialogueItems={dialogueItems}
         dialogueExportText={dialogueExportText}
         audioExportText={audioExportText}
         handleCopyDialogue={handleCopyDialogue}
+        onSaveDialogue={handleSaveDialogue}
         ttsGenerating={ttsGenerating}
         ttsAudioUrl={ttsAudioUrl}
         ttsVoiceName={ttsVoiceName}
@@ -515,7 +520,10 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
         ttsAudioRef={ttsAudioRef}
         handleGenerateTTS={handleGenerateTTS}
         handleDownloadTTSAudio={handleDownloadTTSAudio}
+        getGeneratedAudio={getGeneratedAudio}
+        saveGeneratedAudio={saveGeneratedAudio}
       />
     </>
   );
 }
+
