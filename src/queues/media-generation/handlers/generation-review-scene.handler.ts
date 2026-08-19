@@ -1,22 +1,20 @@
 /**
- * Handler GENERATION_REVIEW_SCENE — Flow2 gen_text tạo kịch bản review product (JSON).
+ * Handler GENERATION_REVIEW_SCENE — AI tạo kịch bản review product (JSON) qua Flow2 gen_text.
  */
 import {
   IMediaGenerationJob,
   MediaGenerationJsonResult,
 } from "../../../libs/dal/mediaGenerationJob";
 import {
-  DEFAULT_FLOW2_TEXT_MODEL,
   generateTextWithFlow2,
-  MAX_FLOW2_TEXT_IMAGES,
   type Flow2TextResult,
 } from "../../../routers/api-media/flow2/text-generation";
 import { ReviewOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
 import {
+  ReviewFormConfig,
   assertNonEmptyScenesArray,
   buildImageReferenceNotes,
   collectOrderedReviewReferenceImages,
-  filterReferenceImages,
   getImageDisplayName,
   incrementRequestCount,
   interpolateTemplate,
@@ -24,9 +22,7 @@ import {
   parseGeminiJsonResponse,
   resolveArtStylePrompt,
   resolveReferenceImagesForGemini,
-  ReviewFormConfig,
   unwrapAiJsonPayload,
-  type ReferenceImageInput,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { MediaJobEmitter } from "../job-emitter";
 import { loadMediaJobPayload } from "../media-job-data";
@@ -35,105 +31,64 @@ export type GenerationReviewScenePayload = {
   config: ReviewFormConfig;
 };
 
-function uniqueProductImageNames(names?: Array<string | undefined | null>): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const raw of names || []) {
-    const name = String(raw || "").trim();
-    if (!name || seen.has(name.toLowerCase())) continue;
-    seen.add(name.toLowerCase());
-    out.push(name);
-  }
-  return out;
-}
-
-function displayNameOfRef(item: ReferenceImageInput, fallbackIndex: number): string {
-  if (typeof item === "string") return `image_${fallbackIndex + 1}`;
-  const name = getImageDisplayName({
-    name: item.name || "",
-    imageBytes: item.imageBytes || "",
-  });
-  return name || `image_${fallbackIndex + 1}`;
-}
-
-/** Ảnh gửi Flow2 theo đúng thứ tự → input_file_0, input_file_1, ... */
-function collectAttachedImagesWithNames(config: ReviewFormConfig) {
-  const named: { name: string; input: ReferenceImageInput }[] = [];
-  for (const item of collectOrderedReviewReferenceImages(config)) {
-    if (filterReferenceImages([item]).length === 0) continue;
-    named.push({ name: displayNameOfRef(item, named.length), input: item });
-    if (named.length >= MAX_FLOW2_TEXT_IMAGES) break;
-  }
-  return named;
-}
-
-function buildAttachedImageIndexNote(attachedNames: string[]): string {
-  if (!attachedNames.length) return "";
-  const lines = attachedNames.map((name, i) => `- input_file_${i}.png = "${name}"`);
-  return [
-    "",
-    "ATTACHED_IMAGE_INDEX (same order as uploaded files; Gemini labels them input_file_N):",
-    ...lines,
-    "When referring to an image, ALWAYS write the name on the right, never input_file_N.",
-  ].join("\n");
-}
-
-function buildReviewSceneSystemInstruction(productNames: string[], attachedNames: string[]): string {
-  const attachedRule = attachedNames.length
-    ? `Attached files are labeled input_file_N internally. Map them as: ${attachedNames
-        .map((name, i) => `input_file_${i}.png="${name}"`)
-        .join("; ")}. Never output input_file_*.`
-    : "";
-  const nameRule = productNames.length
-    ? `Each scene.visualPrompt MUST contain exactly one product image name from ${JSON.stringify(
-        productNames
-      )} as a literal token.`
-    : "";
-  return [
-    "You are a specialist in product photography and videography.",
-    attachedRule,
-    nameRule,
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function parseFlow2ReviewJson(result: Flow2TextResult): Record<string, unknown> {
-  if (Array.isArray(result.json)) {
-    return { scenes: result.json };
-  }
-  if (result.json && typeof result.json === "object") {
-    return unwrapAiJsonPayload(result.json);
-  }
+function parseReviewJson(result: Flow2TextResult): Record<string, unknown> {
+  if (Array.isArray(result.json)) return { scenes: result.json };
+  if (result.json && typeof result.json === "object") return unwrapAiJsonPayload(result.json);
   return parseGeminiJsonResponse(result.text);
 }
 
-function assignedProductImageName(names: string[], sceneIndex: number): string {
-  if (!names.length) return "";
-  return names[sceneIndex % names.length];
+function normalizeImageTokenName(value: unknown): string {
+  return String(value || "").trim();
 }
 
-function promptContainsImageName(text: string, name: string): boolean {
-  if (!name) return false;
-  return text.toLowerCase().includes(name.toLowerCase());
-}
-
-/** input_file_N → tên file đúng index ảnh đã gửi. */
-function replaceInputFileAliasesByIndex(text: string, attachedNames: string[]): string {
-  if (!text || !attachedNames.length) return text;
-  let out = text;
-  for (let i = attachedNames.length - 1; i >= 0; i--) {
-    const name = attachedNames[i];
-    if (!name) continue;
-    out = out.replace(new RegExp(`input_file_${i}(?:\\.[A-Za-z0-9]+)?`, "gi"), name);
+function buildInputImageAliasMap(productNames: string[]): Record<number, string> {
+  const map: Record<number, string> = {
+    1: "ảnh tham chiếu nhân vật",
+  };
+  for (let i = 0; i < productNames.length; i++) {
+    const index = i + 2;
+    const name = normalizeImageTokenName(productNames[i]);
+    map[index] = name || `sản phẩm ${i + 1}`;
   }
-  return out.replace(/\s{2,}/g, " ").trim();
+  return map;
 }
 
-function ensureProductNameInText(text: string, productName: string): string {
-  if (!productName) return text;
-  if (promptContainsImageName(text, productName)) return text;
-  return text ? `${productName}, ${text}` : productName;
+/**
+ * Convert Input_Image_N (1-based, nhân vật = 1) -> tên thực
+ * Convert input_file_N (0-based, nhân vật = 0) -> tên thực
+ * Convert image N (1-based, nhân vật = 1) -> tên thực
+ */
+function replaceInputImageAliases(text: string, aliasMap: Record<number, string>): string {
+  if (!text) return text;
+
+  const mapIndex = (index: number, full: string) => {
+    const mapped = aliasMap[index];
+    return mapped ? mapped : full;
+  };
+
+  // input_file_N.ext (0-based): input_file_0 = nhân vật, input_file_1 = sản phẩm 1, ...
+  let out = text.replace(/input[_\s-]*file[_\s-]*(\d+)(?:\.[a-z0-9]+)?/gi, (full, n) => {
+    const index = Number(n);
+    if (!Number.isFinite(index)) return full;
+    return mapIndex(index + 1, full);
+  });
+
+  // Input_Image_N.ext (1-based): Input_Image_1 = nhân vật, Input_Image_2 = sản phẩm 1, ...
+  out = out.replace(/input[_\s-]*image[_\s-]*(\d+)(?:\.[a-z0-9]+)?/gi, (full, n) => {
+    const index = Number(n);
+    if (!Number.isFinite(index)) return full;
+    return mapIndex(index, full);
+  });
+
+  // image N / imageN (1-based): image 1 = nhân vật, image 2 = sản phẩm 1, ...
+  // Negative lookbehind tránh match lại phần "image N" trong "input image N" (đã xử lý ở trên)
+  out = out.replace(/(?<!(?:input\s))image\s*(\d+)\b/gi, (full, n) => {
+    const index = Number(n);
+    if (!Number.isFinite(index)) return full;
+    return mapIndex(index, full);
+  });
+
+  return out;
 }
 
 export async function handleGenerationReviewScene(
@@ -147,13 +102,7 @@ export async function handleGenerationReviewScene(
 
   await emitter.progress(8, "Đang chuẩn bị kịch bản review...");
 
-  body.config.artStyleImgNames = uniqueProductImageNames(
-    body.config.artStyleImg?.map((img) => getImageDisplayName(img))
-  );
-  const productImageNames = body.config.artStyleImgNames;
-  const productImageNamesList = productImageNames.length
-    ? productImageNames.map((name) => `"${name}"`).join(", ")
-    : "none";
+  body.config.artStyleImgNames = body.config.artStyleImg?.map((img) => getImageDisplayName(img));
 
   const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
     artStyleId: body.config.artStyleId,
@@ -163,34 +112,43 @@ export async function handleGenerationReviewScene(
     body.config.artStyle = resolvedArtStylePrompt;
   }
 
-  const prompt = `Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.
-Use the following contextual settings: {{objectToPersonify}}, {{language}}, {{prompt}}.
+  const artStyleImgNames = body.config.artStyleImgNames?.join(", ");
+  const inputImageAliasMap = buildInputImageAliasMap(body.config.artStyleImgNames || []);
 
-PRODUCT_IMAGE_NAMES (exact tokens, copy verbatim): ${productImageNamesList}
-Assignment: Scene 1 uses the first name, Scene 2 uses the second, then cycle until every scene has exactly one name.
-FORBIDDEN: input_file_0, input_file_1, input_file_N.png, or any input_file_* — those are internal upload labels, not product names.
-
-CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
-
-visualPrompt rules:
-- Start with the assigned PRODUCT_IMAGE_NAMES token (example: ${productImageNames[0] || "product-name"}).
-- English. Analyze the uploaded product and invent a new action (hold/rotate/open/close/move).
-- Realistic POV. Keep lighting, surface, and product appearance accurate.
-- Product must interact naturally with surrounding objects.
+  // Prompt gốc giữ nguyên hoàn toàn
+  const prompt = `You are a specialist in product photography and videography.
+Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.  
+Use the following contextual settings: {{objectToPersonify}},  {{language}}, {{prompt}}.
+Return valid JSON only with this structure:
+{
+  "scenes": [
+   {
+  "topicTitle": "a short title for each s cene in {{language}}",
+  "artStyle": "{{artStyle}}", 
+  "visualPrompt":"English Use exactly ONE reference image name from ${
+    artStyleImgNames || "none"
+  } as the main product reference image for this scene. Assign reference images sequentially across all {{batchSize}} scenes in list order: Scene 1 uses the first image name, Scene 2 uses the second, and so on. When all image names have been used, restart from the first image and continue cycling in order until every scene has been assigned exactly one reference image. Select only ONE reference image by name per scene. - Analyze the uploaded product image and generate new actions for the product shown in the image based on the exact sequentially assigned name (for example: holding and rotating left or right, moving, opening and closing, etc.). - from a realistic POV (Point of View) perspective. - Maintain realistic lighting and accurate surface textures that match the actual product. - Based on the product's characteristics, the product must interact naturally with relevant surrounding objects (for example: a mop should interact with the floor, etc.).",
+  "environment": "Accurately and thoroughly describe the environment shown in the image.",
+  "voiceGender": "male or female",
+  "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
+  "motionPrompt": "from a realistic POV (Point of View) perspective",   
+  "audio": "voice metada  ta in {{language}}",
+  "dialogue": " dialogue/narration in {{language}}"
+  "camera": "English one exact value from CAMERA_TYPE ",
+}
+  ]
+}
+CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 
 IMPORTANT — REFERENCE IMAGES:
 IMPORTANT: The first reference image is always the character; from the second reference image onward, the images are product images.
-• Image 1 (character/personification): You MUST preserve the character's exact appearance, shape, color, material, and identifying features—including the face with the correct proportions of eyes, nose, and mouth—as well as the character's size, 100% identical to the first reference image when generating images. Do NOT transform the character into a personified/anthropomorphized version, and do not arbitrarily add or remove anything.
-• Image 2 onward (products): You MUST place ALL products into ONE single unified image. Each product must preserve its exact appearance, shape, color, brand, and packaging as shown in the reference image. Arrange all products naturally within a single, cohesive composition. Every product must be clearly visible and easily recognizable in the final image.
+• Image 1 (character/personification): You MUST preserve the character's exact appearance, shape, color, material, and identifying features—including the face with the correct proportions of eyes, nose, and mouth—as well as the character's size, 100% identical to the first reference image when generating images. Do NOT transform the character into a personified/anthropomorphized version, and do not arbitrarily add or remove anything. For example, if the first image shows a young man, the second image must also be a young man (a different one is not allowed; it must not be a woman). Do not change the accessories or clothing the man is wearing, and do not change his hairstyle. For example, if the accessory in the first scene is a hat, the second image must also feature a hat, not a shirt. • Image 2 onward (products): You MUST place ALL products into ONE single unified image. Each product must preserve its exact appearance, shape, color, brand, and packaging as shown in the reference image. Arrange all products naturally within a single, cohesive composition. Every product must be clearly visible and easily recognizable in the final image. Some random product items must be shown being held in the character's hand.
 `;
 
-  await emitter.progress(20, "Đang gửi prompt lên Flow2 gen_text...");
+  await emitter.progress(20, "Đang gọi Flow2 gen_text tạo kịch bản review...");
 
-  const attachedImages = collectAttachedImagesWithNames(body.config);
-  const attachedNames = attachedImages.map((item) => item.name);
-  const imageBase64List = await resolveReferenceImagesForGemini(
-    attachedImages.map((item) => item.input)
-  );
+  const referenceInputs = collectOrderedReviewReferenceImages(body.config);
+  const imageBase64List = await resolveReferenceImagesForGemini(referenceInputs);
   const imageReferenceNote = buildImageReferenceNotes({
     productImages: body.config.artStyleImg,
     personifyImages: body.config.objectToPersonifyImage
@@ -198,17 +156,12 @@ IMPORTANT: The first reference image is always the character; from the second re
       : undefined,
   });
 
-  const interpolatedText =
-    interpolateTemplate(prompt, body.config) +
-    imageReferenceNote +
-    buildAttachedImageIndexNote(attachedNames);
+  const interpolatedText = interpolateTemplate(prompt, body.config) + imageReferenceNote;
 
   const { result } = await generateTextWithFlow2({
     prompt: interpolatedText,
-    systemInstruction: buildReviewSceneSystemInstruction(productImageNames, attachedNames),
-    model: DEFAULT_FLOW2_TEXT_MODEL,
-    thinkingLevel: "HIGH",
-    imageInputs: imageBase64List,
+    systemInstruction: "You are a specialist in product photography and videography.",
+    imageInputs: imageBase64List.length > 0 ? imageBase64List : undefined,
     jsonMode: true,
     jsonSchema: ReviewOpenAIJsonSchema,
     customerId: job.customerId,
@@ -222,8 +175,8 @@ IMPORTANT: The first reference image is always the character; from the second re
 
   await emitter.progress(85, "Đang chuẩn hoá kết quả...");
 
-  const rawParsed = parseFlow2ReviewJson(result) as any;
-  assertNonEmptyScenesArray(rawParsed.scenes, { label: "generation-review", parsed: rawParsed });
+  const rawParsed = parseReviewJson(result) as any;
+  assertNonEmptyScenesArray(rawParsed.scenes);
 
   const parsed = {
     artStyle: rawParsed.artStyle || "",
@@ -240,27 +193,23 @@ IMPORTANT: The first reference image is always the character; from the second re
             tag: "main",
           },
         ],
-    scenes: rawParsed.scenes.map((scene: any, index: number) => {
-      const productName = assignedProductImageName(productImageNames, index);
-      const visualPrompt = ensureProductNameInText(
-        replaceInputFileAliasesByIndex(scene.visualPrompt || "", attachedNames),
-        productName
-      );
-      return {
-        visualPrompt,
-        topicTitle: scene.topicTitle || "",
-        sceneNumber: scene.sceneNumber,
-        camera: scene.camera || "",
-        motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
-          scene.visualEffects || ""
-        }`,
-        imageGenPrompt: `[${scene.camera}] POV shot: ${visualPrompt}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
-        audio:
-          `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
-          "",
-        dialogue: scene.dialogue || "",
-      };
-    }),
+    scenes: rawParsed.scenes.map((scene: any) => ({
+      visualPrompt: replaceInputImageAliases(scene.visualPrompt || "", inputImageAliasMap),
+      topicTitle: scene.topicTitle || "",
+      sceneNumber: scene.sceneNumber,
+      camera: scene.camera || "",
+      motionPrompt: `[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
+        scene.visualEffects || ""
+      }`,
+      imageGenPrompt: `[${scene.camera}] POV shot: ${replaceInputImageAliases(
+        scene.visualPrompt || "",
+        inputImageAliasMap
+      )}. Setting: ${rawParsed.environment}.${rawParsed.artStyle}`,
+      audio:
+        `Voice: ${rawParsed.voiceGender}, ${rawParsed.voiceStyle}, ${normalizeSceneAudioField(scene.audio)}` ||
+        "",
+      dialogue: scene.dialogue || "",
+    })),
   };
 
   await incrementRequestCount(job.customerId);
