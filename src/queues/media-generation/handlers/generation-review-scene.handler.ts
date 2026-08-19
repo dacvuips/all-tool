@@ -91,11 +91,8 @@ function buildReviewSceneSystemInstruction(productNames: string[], attachedNames
     : "";
   return [
     "You are a specialist in product photography and videography.",
-    "Return ONLY a raw JSON object matching this JSON Schema exactly.",
-    "No markdown, no code fences, no explanation, no extra text.",
     attachedRule,
     nameRule,
-    JSON.stringify(ReviewOpenAIJsonSchema),
   ]
     .filter(Boolean)
     .join("\n");
@@ -166,13 +163,14 @@ export async function handleGenerationReviewScene(
     body.config.artStyle = resolvedArtStylePrompt;
   }
 
-  const prompt = `You are a specialist in product photography and videography.
-Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.
+  const prompt = `Your task is to generate exactly {{batchSize}} scenes for a short-form product review video based on the following configuration.
 Use the following contextual settings: {{objectToPersonify}}, {{language}}, {{prompt}}.
 
 PRODUCT_IMAGE_NAMES (exact tokens, copy verbatim): ${productImageNamesList}
 Assignment: Scene 1 uses the first name, Scene 2 uses the second, then cycle until every scene has exactly one name.
 FORBIDDEN: input_file_0, input_file_1, input_file_N.png, or any input_file_* — those are internal upload labels, not product names.
+
+CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
 
 visualPrompt rules:
 - Start with the assigned PRODUCT_IMAGE_NAMES token (example: ${productImageNames[0] || "product-name"}).
@@ -180,24 +178,10 @@ visualPrompt rules:
 - Realistic POV. Keep lighting, surface, and product appearance accurate.
 - Product must interact naturally with surrounding objects.
 
-Return valid JSON only with this structure:
-{
-  "scenes": [
-   {
-  "topicTitle": "a short title for each scene in {{language}}",
-  "artStyle": "{{artStyle}}",
-  "visualPrompt": "${productImageNames[0] || "product-name"}, POV shot: ...",
-  "environment": "Accurately and thoroughly describe the environment shown in the image.",
-  "voiceGender": "male or female",
-  "audioPrompt": "English voice casting: gender, accent, tone, emotion, pacing",
-  "motionPrompt": "from a realistic POV (Point of View) perspective",
-  "audio": "voice metadata in {{language}}",
-  "dialogue": "dialogue/narration in {{language}}",
-  "camera": "English one exact value from CAMERA_TYPE"
-}
-  ]
-}
-CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
+IMPORTANT — REFERENCE IMAGES:
+IMPORTANT: The first reference image is always the character; from the second reference image onward, the images are product images.
+• Image 1 (character/personification): You MUST preserve the character's exact appearance, shape, color, material, and identifying features—including the face with the correct proportions of eyes, nose, and mouth—as well as the character's size, 100% identical to the first reference image when generating images. Do NOT transform the character into a personified/anthropomorphized version, and do not arbitrarily add or remove anything.
+• Image 2 onward (products): You MUST place ALL products into ONE single unified image. Each product must preserve its exact appearance, shape, color, brand, and packaging as shown in the reference image. Arrange all products naturally within a single, cohesive composition. Every product must be clearly visible and easily recognizable in the final image.
 `;
 
   await emitter.progress(20, "Đang gửi prompt lên Flow2 gen_text...");
@@ -225,6 +209,8 @@ CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no 
     model: DEFAULT_FLOW2_TEXT_MODEL,
     thinkingLevel: "HIGH",
     imageInputs: imageBase64List,
+    jsonMode: true,
+    jsonSchema: ReviewOpenAIJsonSchema,
     customerId: job.customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);

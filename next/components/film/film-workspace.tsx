@@ -4202,7 +4202,7 @@ export default function FilmWorkspace({ projectId }: Props) {
       sceneId: string,
       lineId: string,
       patch: Parameters<typeof patchSceneDialogueLine>[2],
-      match?: { character?: string; line?: string }
+      match?: { character: string; line: string }
     ) => {
       const prev = sceneTail.get(sceneId) || Promise.resolve();
       const task = prev.then(async () => {

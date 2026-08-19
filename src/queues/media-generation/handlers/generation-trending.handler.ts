@@ -1,24 +1,19 @@
 /**
- * Handler GENERATION_TRENDING — AI tạo kịch bản trending (JSON).
+ * Handler GENERATION_TRENDING — Flow2 gen_text tạo kịch bản trending (JSON).
  */
 import { AffiliateVideoOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
-import { AffiliateVideoResponseSchema } from "../../../routers/app/constanst";
 import {
   assertNonEmptyScenesArray,
   buildProductImageScriptNote,
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
   incrementRequestCount,
   interpolateTrendingTemplate,
   normalizeSceneAudioField,
   parseGeminiJsonResponse,
-  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveProductImagesForAi,
   TrendingModeTypeEnum,
   TrendingVideoFormConfig,
+  unwrapAiJsonPayload,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { TrendingModel } from "../../../libs/dal/trending/trending.model";
 import {
@@ -27,11 +22,23 @@ import {
 } from "../../../libs/dal/mediaGenerationJob";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
+import {
+  generateTextWithFlow2,
+  type Flow2TextResult,
+} from "../../../routers/api-media/flow2/text-generation";
 
 export type GenerationTrendingPayload = {
   config: TrendingVideoFormConfig;
   productImages?: string[];
 };
+
+const TRENDING_SYSTEM_INSTRUCTION = "You are an AI video script director.";
+
+function parseTrendingJson(result: Flow2TextResult): Record<string, unknown> {
+  if (Array.isArray(result.json)) return { scenes: result.json };
+  if (result.json && typeof result.json === "object") return unwrapAiJsonPayload(result.json);
+  return parseGeminiJsonResponse(result.text);
+}
 
 export async function handleGenerationTrending(
   job: IMediaGenerationJob,
@@ -62,13 +69,12 @@ export async function handleGenerationTrending(
     ? `Your task is to generate exactly {{batchSize}} cinematic scenes`
     : `Your task is to generate an appropriate number of cinematic scenes (decide based on the script content, typically 4-8 scenes)`;
 
-  const prompt = `
-
+  const promptTemplate = `
 Create a consistent multi-scene AI video prompt using:
 {{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. ${batchSizeInstruction} for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
 Create 2 fixed English anchors:
 
-CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
+CHARACTER_ANCHOR: Describe the character's core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
 
 ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view. Save to environment
 Generate "visualEffects" as one polished English sentence.
@@ -76,7 +82,6 @@ It must make the scene feel visually rich, magical, and cinematic in a Pixar-lik
 Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
 Keep it concise, vivid, and scene-specific.
 
-- Return valid JSON only.
 CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
 Root JSON structure:
 {
@@ -101,42 +106,32 @@ Root JSON structure:
   ]
 }
 CRITICAL RULE: Always keep character and environment identical across all scenes.
-CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 `;
 
-  await emitter.progress(25, "Đang gọi AI tạo kịch bản trending...");
+  await emitter.progress(25, "Đang gửi prompt lên Flow2 gen_text...");
 
-  const interpolatedText =
-    interpolateTrendingTemplate(prompt, body.config) + productImageNote;
+  const interpolatedText = interpolateTrendingTemplate(promptTemplate, body.config) + productImageNote;
 
   const productImageBase64List = await resolveProductImagesForAi(productImageUrls);
-  const aiProvider = await resolveAiSceneProvider();
-  let responseText: string;
 
-  if (aiProvider === "gemini") {
-    responseText = await callGeminiJsonGenerate({
-      model: await getGeminiSceneModel("TRENDING"),
-      text: interpolatedText,
-      media: productImageBase64List,
-      label: "generation-trending",
-      responseSchema: AffiliateVideoResponseSchema,
-    });
-  } else {
-    responseText = await callChatGPTGateway({
-      text: interpolatedText,
-      images: productImageBase64List.map((img, index) => ({
-        ...img,
-        fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-      })),
-      label: "generation-trending",
-      model: await getChatGPTSceneModel("TRENDING"),
-      jsonSchema: AffiliateVideoOpenAIJsonSchema,
-    });
-  }
+  const { result } = await generateTextWithFlow2({
+    prompt: interpolatedText,
+    systemInstruction: TRENDING_SYSTEM_INSTRUCTION,
+    imageInputs: productImageBase64List,
+    jsonMode: true,
+    jsonSchema: AffiliateVideoOpenAIJsonSchema,
+    customerId: job.customerId,
+    onProgress: async (progress, message) => {
+      await emitter.progress(progress, message);
+    },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
+  });
 
   await emitter.progress(85, "Đang chuẩn hoá kết quả...");
 
-  const rawParsed = parseGeminiJsonResponse(responseText) as any;
+  const rawParsed = parseTrendingJson(result) as any;
   assertNonEmptyScenesArray(rawParsed.scenes);
 
   const parsed = {

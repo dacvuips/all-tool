@@ -40,12 +40,23 @@ export type Flow2TextResult = {
   profileId?: string;
 };
 
+export type Flow2JsonSchema = Record<string, unknown> & {
+  type?: string;
+  properties?: Record<string, unknown>;
+  items?: Record<string, unknown>;
+  required?: string[];
+};
+
 export type Flow2CreateTextRequestParams = {
   prompt: string;
   systemInstruction?: string;
   model?: string;
   thinkingLevel?: string;
   imageInputs?: Flow2ImageInput[];
+  /** Bật chế độ JSON output (json: true + response_mime_type: "application/json") */
+  jsonMode?: boolean;
+  /** Schema JSON để Flow2 enforce output structure */
+  jsonSchema?: Flow2JsonSchema;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
   onRequestCreated?: (requestId: string) => void | Promise<void>;
   customerId?: string;
@@ -201,6 +212,8 @@ export async function createFlow2TextRequest(
   const model = String(params.model || DEFAULT_FLOW2_TEXT_MODEL).trim() || DEFAULT_FLOW2_TEXT_MODEL;
   const thinkingLevel = normalizeFlow2ThinkingLevel(params.thinkingLevel);
 
+  const useJsonMode = params.jsonMode === true || params.jsonSchema != null;
+
   return createFlow2Request(
     {
       type: "gen_text",
@@ -210,6 +223,8 @@ export async function createFlow2TextRequest(
         model,
         thinking_level: thinkingLevel,
         ...(image_base64s.length > 0 ? { image_base64s } : {}),
+        ...(useJsonMode ? { json: true, response_mime_type: "application/json" } : {}),
+        ...(params.jsonSchema ? { schema: params.jsonSchema } : {}),
       },
     },
     flow2Opts(params.customerId)
@@ -259,29 +274,73 @@ export async function waitForFlow2TextResult(params: {
   return result;
 }
 
+// ---------- Per-customer concurrency limiter ----------
+
+/** Số request gen_text song song tối đa cho 1 customerId */
+const FLOW2_TEXT_MAX_CONCURRENT_PER_CUSTOMER = 10;
+
+/** active count per customerId (in-memory, reset on restart) */
+const _textConcurrentMap = new Map<string, number>();
+
+function _textConcurrentGet(customerId: string): number {
+  return _textConcurrentMap.get(customerId) ?? 0;
+}
+
+function _textConcurrentInc(customerId: string): void {
+  _textConcurrentMap.set(customerId, _textConcurrentGet(customerId) + 1);
+}
+
+function _textConcurrentDec(customerId: string): void {
+  const next = Math.max(0, _textConcurrentGet(customerId) - 1);
+  if (next === 0) _textConcurrentMap.delete(customerId);
+  else _textConcurrentMap.set(customerId, next);
+}
+
+function checkFlow2TextConcurrentLimit(customerId?: string): void {
+  if (!customerId) return;
+  const current = _textConcurrentGet(customerId);
+  if (current >= FLOW2_TEXT_MAX_CONCURRENT_PER_CUSTOMER) {
+    throw Object.assign(
+      new Error(
+        `Đã đạt giới hạn ${FLOW2_TEXT_MAX_CONCURRENT_PER_CUSTOMER} request gen_text song song cho tài khoản này. Vui lòng thử lại sau.`
+      ),
+      { statusCode: 429 }
+    );
+  }
+}
+
+// ------------------------------------------------------
+
 export async function generateTextWithFlow2(
   params: Flow2CreateTextRequestParams
 ): Promise<{ requestId: string; result: Flow2TextResult }> {
-  return runFlow2WithRetry({
-    logTag: "text",
-    onProgress: params.onProgress,
-    createProgressMessage: "Đang gửi request generate text lên Flow2...",
-    createdProgressMessage: () => "",
-    retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
-    runOnce: async () => {
-      const created = await createFlow2TextRequest(params);
-      await params.onRequestCreated?.(created.requestId);
-      await safeProgress(
-        params.onProgress,
-        55,
-        `Đã tạo request Flow2 (${created.requestId}), đang chờ kết quả...`
-      );
-      const result = await waitForFlow2TextResult({
-        requestId: created.requestId,
-        onProgress: params.onProgress,
-        customerId: params.customerId,
-      });
-      return { requestId: created.requestId, result };
-    },
-  });
+  const customerId = params.customerId;
+  checkFlow2TextConcurrentLimit(customerId);
+  if (customerId) _textConcurrentInc(customerId);
+  try {
+    return await runFlow2WithRetry({
+      logTag: "text",
+      onProgress: params.onProgress,
+      createProgressMessage: "Đang gửi request generate text lên Flow2...",
+      createdProgressMessage: () => "",
+      retryProgressMessage: (attempt) => `Flow2 gặp lỗi tạm thời, đang retry lần ${attempt}...`,
+      runOnce: async () => {
+        const created = await createFlow2TextRequest(params);
+        await params.onRequestCreated?.(created.requestId);
+        await safeProgress(
+          params.onProgress,
+          55,
+          `Đã tạo request Flow2 (${created.requestId}), đang chờ kết quả...`
+        );
+        const result = await waitForFlow2TextResult({
+          requestId: created.requestId,
+          onProgress: params.onProgress,
+          customerId: params.customerId,
+        });
+        return { requestId: created.requestId, result };
+      },
+    });
+  } finally {
+    if (customerId) _textConcurrentDec(customerId);
+  }
 }

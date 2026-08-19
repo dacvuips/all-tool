@@ -35,6 +35,12 @@ type GenerateTextBody = {
   thinking_level?: string;
   images?: Flow2ImageInput[];
   image_base64s?: Flow2ImageInput[];
+  /** Bật JSON output mode (json: true + response_mime_type: application/json) */
+  jsonMode?: boolean;
+  json?: boolean;
+  /** Schema JSON enforce output structure */
+  jsonSchema?: Record<string, unknown>;
+  schema?: Record<string, unknown>;
   /** true = trả requestId ngay, client tự poll GET */
   async?: boolean;
 };
@@ -68,12 +74,21 @@ function parseGenerateTextParams(body: GenerateTextBody) {
     MAX_SYSTEM_INSTRUCTION_CHARS
   );
 
+  const rawSchema = body.jsonSchema ?? body.schema;
+  const jsonSchema =
+    rawSchema && typeof rawSchema === "object" && !Array.isArray(rawSchema)
+      ? (rawSchema as Record<string, unknown>)
+      : undefined;
+  const jsonMode = body.jsonMode === true || body.json === true || jsonSchema != null;
+
   return {
     prompt,
     systemInstruction: systemInstruction || undefined,
     model: asTrimmed(body.model) || DEFAULT_FLOW2_TEXT_MODEL,
     thinkingLevel: asTrimmed(body.thinkingLevel || body.thinking_level) || DEFAULT_FLOW2_THINKING_LEVEL,
     imageInputs: collectImageInputs(body),
+    jsonMode: jsonMode || undefined,
+    jsonSchema: jsonSchema || undefined,
   };
 }
 
