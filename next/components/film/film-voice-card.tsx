@@ -14,6 +14,7 @@ import {
   type FilmVoiceListItem,
 } from "./film-dialogue";
 import type { FilmCharacterRecord, FilmDialogueLineRecord, FilmSceneRecord } from "./film-types";
+import { FilmVoiceTierSuffix } from "./film-voice-tier";
 
 const TTS_WAVE_COLOR = getVoiceTool("tts").color;
 
@@ -141,9 +142,12 @@ export default function FilmVoiceCard({
             {speaker}
           </span>
           {linkedVoice.voiceLabel || linkedVoice.voiceId ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-green-50 text-green-700 border border-green-100 max-w-[12rem]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-10 font-semibold bg-green-50 text-green-700 border border-green-100 max-w-[20rem]">
               <RiUserVoiceLine className="text-xs flex-shrink-0" />
-              <span className="truncate">{linkedVoice.voiceLabel || linkedVoice.voiceId}</span>
+              <span className="truncate min-w-0">
+                {linkedVoice.voiceLabel || linkedVoice.voiceId}
+              </span>
+              <FilmVoiceTierSuffix voiceId={linkedVoice.voiceId} />
             </span>
           ) : null}
         </div>

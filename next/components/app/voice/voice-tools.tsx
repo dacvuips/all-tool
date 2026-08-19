@@ -420,13 +420,19 @@ export function VoiceIdPicker({
   );
 }
 
-export function PaidTextToSpeechPanel() {
+export function PaidTextToSpeechPanel({ initialVoiceId }: { initialVoiceId?: string } = {}) {
   const { t } = useTranslation();
   const { running, run } = useVoiceContext();
-  const [voiceId, setVoiceId] = useState("voice_67365ff1907f816ddc906026");
+  const [voiceId, setVoiceId] = useState(
+    initialVoiceId?.trim() || "voice_67365ff1907f816ddc906026"
+  );
   const [text, setText] = useState("Xin chào, đây là bản thử nghiệm VietTheo Voice API.");
   const [speed, setSpeed] = useState(1);
   const [creativity, setCreativity] = useState(0.5);
+
+  useEffect(() => {
+    if (initialVoiceId?.trim()) setVoiceId(initialVoiceId.trim());
+  }, [initialVoiceId]);
 
   return (
     <VoiceFormShell
@@ -468,12 +474,47 @@ export function PaidTextToSpeechPanel() {
   );
 }
 
-function FreeTextToSpeechPanel() {
+function FreeVoiceSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { t } = useTranslation();
+  return (
+    <div>
+      <div className="mb-1 text-xs font-medium text-gray-600">{t("Voice")}</div>
+      <select
+        className="px-3 py-2 w-full text-sm rounded-lg border bg-white"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {FREE_GEN_AUDIO_VOICES.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name} — {item.description}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+export { FreeVoiceSelect };
+
+export function FreeTextToSpeechPanel({
+  initialVoiceId,
+  onPickFreeVoice,
+}: {
+  initialVoiceId?: string;
+  onPickFreeVoice?: (voiceId: string, label: string) => void;
+}) {
   const { t } = useTranslation();
   const { runFreeGenAudio } = useVoiceContext();
   const { color } = getVoiceTool("tts");
-  const [voice, setVoice] = useState(FREE_GEN_AUDIO_VOICES[0]?.id || "achernar");
+  const defaultVoice = FREE_GEN_AUDIO_VOICES[0]?.id || "achernar";
+  const [voice, setVoice] = useState(initialVoiceId?.trim().toLowerCase() || defaultVoice);
   const [text, setText] = useState("Chào các bạn, tôi là Thái");
+  const selectedVoice = FREE_GEN_AUDIO_VOICES.find((item) => item.id === voice);
+
+  useEffect(() => {
+    if (!initialVoiceId?.trim()) return;
+    setVoice(initialVoiceId.trim().toLowerCase());
+  }, [initialVoiceId]);
 
   return (
     <VoiceFormShell
@@ -491,23 +532,26 @@ function FreeTextToSpeechPanel() {
           { voiceId: voice, feature: t("Tạo giọng miễn phí") }
         )
       }
-    ><p className="text-xs text-gray-500  " style={{ color }}>
-    {t("Miễn phí — không trừ text credit")}
-  </p>
-      <div>
-        <div className="mb-1 text-xs font-medium text-gray-600">{t("Voice")}</div>
-        <select
-          className="px-3 py-2 w-full text-sm rounded-lg border bg-white"
-          value={voice}
-          onChange={(e) => setVoice(e.target.value)}
+    >
+      <p className="text-xs text-gray-500" style={{ color }}>
+        {t("Miễn phí — không trừ text credit")}
+      </p>
+      <FreeVoiceSelect value={voice} onChange={setVoice} />
+      {onPickFreeVoice ? (
+        <button
+          type="button"
+          onClick={() =>
+            onPickFreeVoice(
+              voice,
+              selectedVoice ? `${selectedVoice.name} — ${selectedVoice.description}` : voice
+            )
+          }
+          className="w-full h-9 text-xs font-semibold rounded-lg border cursor-pointer"
+          style={{ color, background: `${color}14`, borderColor: `${color}55` }}
         >
-          {FREE_GEN_AUDIO_VOICES.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name} — {item.description}
-            </option>
-          ))}
-        </select>
-      </div>
+          {t("Dùng giọng này")}
+        </button>
+      ) : null}
       <div>
         <div className="mb-1 text-xs font-medium text-gray-600">{t("Nội dung")}</div>
         <textarea
@@ -518,7 +562,6 @@ function FreeTextToSpeechPanel() {
           maxLength={50000}
         />
       </div>
-      
     </VoiceFormShell>
   );
 }
@@ -562,13 +605,25 @@ function TextToSpeechTierTabs({
   );
 }
 
-export function TextToSpeechPanel() {
-  const [tier, setTier] = useState<TtsTier>("free");
+export type TextToSpeechPanelProps = {
+  defaultTier?: TtsTier;
+  onPickFreeVoice?: (voiceId: string, label: string) => void;
+};
+
+export function TextToSpeechPanel({
+  defaultTier = "free",
+  onPickFreeVoice,
+}: TextToSpeechPanelProps = {}) {
+  const [tier, setTier] = useState<TtsTier>(defaultTier);
   return (
     <div className="flex overflow-hidden flex-col flex-1 min-h-0">
       <TextToSpeechTierTabs tier={tier} onChange={setTier} />
       <div className="flex overflow-hidden flex-col flex-1 min-h-0">
-        {tier === "paid" ? <PaidTextToSpeechPanel /> : <FreeTextToSpeechPanel />}
+        {tier === "paid" ? (
+          <PaidTextToSpeechPanel />
+        ) : (
+          <FreeTextToSpeechPanel onPickFreeVoice={onPickFreeVoice} />
+        )}
       </div>
     </div>
   );

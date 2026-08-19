@@ -16,6 +16,7 @@ import { useToast } from "../../lib/providers/toast-provider";
 import { Button } from "../shared/utilities/form";
 import { getFilmEntityImageSrc } from "./api/generate-film-media";
 import FilmCharacterVoiceDialog, {
+  filmCharacterToAttachedVoice,
   type FilmCharacterVoicePick,
 } from "./film-character-voice-dialog";
 import FilmCharacterVoiceIcon, {
@@ -586,6 +587,7 @@ export default function FilmVoicePanel({
       <FilmCharacterVoiceDialog
         isOpen={!!voiceEditCharacter}
         characterName={voiceEditCharacter?.name}
+        attachedVoice={filmCharacterToAttachedVoice(voiceEditCharacter)}
         onClose={closeVoiceDialog}
         onPick={async (voice: FilmCharacterVoicePick) => {
           if (!voiceEditCharacter) return;

@@ -5,9 +5,10 @@ import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
 import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
 import FilmCharacterVoiceDialog, {
-  FilmCharacterVoicePlayButton,
+  filmCharacterToAttachedVoice,
   type FilmCharacterVoicePick,
 } from "./film-character-voice-dialog";
+import { FilmCharacterVoicePlayButton } from "./film-character-voice-play-button";
 import {
   clearFilmCharacterVoice,
   filmCharacterHasVoice,
@@ -327,6 +328,12 @@ export default function FilmCharacterEditDialog({
       <FilmCharacterVoiceDialog
         isOpen={voiceModalOpen}
         characterName={editName.trim() || character?.name}
+        attachedVoice={filmCharacterToAttachedVoice({
+          voiceId: editVoiceId,
+          voiceLabel: editVoiceLabel,
+          voicePreviewBlob: editVoiceBlob,
+          voiceResultId: editVoiceResultId,
+        })}
         onClose={() => setVoiceModalOpen(false)}
         onPick={(voice: FilmCharacterVoicePick) => {
           setEditVoiceId(voice.voiceId);

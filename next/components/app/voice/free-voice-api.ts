@@ -1,5 +1,5 @@
 import type { MicroxJob } from "./voice-types";
-import { setVoiceAbortSignal } from "./voice-api";
+import { jobIdOf, setVoiceAbortSignal } from "./voice-api";
 
 let freeGenAudioAbortSignal: AbortSignal | null = null;
 
@@ -187,4 +187,47 @@ export async function pollFreeGenAudioJob(
     });
   }
   throw new Error("Hết thời gian chờ gen_audio");
+}
+
+export const FREE_VOICE_PREVIEW_TEXT = "Xin chào đây là Viet Theo voice";
+
+function freeGenAudioJobErrorMessage(job: unknown, fallback: string): string {
+  if (!job || typeof job !== "object") return fallback;
+  const row = job as Record<string, unknown>;
+  const nested =
+    row.data && typeof row.data === "object"
+      ? (row.data as Record<string, unknown>)
+      : null;
+  const msg = String(
+    row.error || row.message || nested?.error || nested?.message || ""
+  ).trim();
+  return msg || fallback;
+}
+
+/** Tạo audio ngắn để nghe thử giọng miễn phí. */
+export async function previewFreeGenAudioVoice(
+  voiceId: string,
+  signal?: AbortSignal
+): Promise<Blob> {
+  const voice = String(voiceId || "").trim().toLowerCase();
+  if (!voice) throw new Error("Chưa chọn giọng");
+
+  const job = await createFreeGenAudio(
+    { text: FREE_VOICE_PREVIEW_TEXT, voice },
+    signal
+  );
+  const id = jobIdOf(job);
+  if (!id) throw new Error("Không nhận được job ID");
+
+  const done = await pollFreeGenAudioJob(id, undefined, signal);
+  const status = String(done?.status || "").toLowerCase();
+  if (status === "failed") {
+    throw new Error(freeGenAudioJobErrorMessage(done, "Tạo giọng thất bại"));
+  }
+
+  const blob = await fetchFreeGenAudioOutputBlobWithRetry(id, 0, signal, done);
+  if (!blob || blob.size < 32) {
+    throw new Error("Không tải được file âm thanh");
+  }
+  return blob;
 }

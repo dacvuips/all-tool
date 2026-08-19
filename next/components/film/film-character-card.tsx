@@ -8,17 +8,16 @@ import { HiDocumentDuplicate } from "react-icons/hi2";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { SceneCardImageTab } from "../app/affiliate-video/shared/scene-card-image-tab";
+import { FILM_CHARACTER_PROP_ASPECT_RATIO } from "./film-aspect";
 import {
   readFilmLinkedPropDnd,
   type FilmCatalogKind,
 } from "./film-catalog-pick-dialog";
-import { FILM_CHARACTER_PROP_ASPECT_RATIO } from "./film-aspect";
 import type { FilmCharacterImageGenerateInput } from "./film-character-image-dialog";
 import FilmCharacterVoiceIcon, {
-  clearFilmCharacterVoice,
   filmCharacterHasVoice,
   FilmCharacterVoiceCreateButton,
-  FilmCharacterVoiceUnlinkButton,
+  FilmCharacterVoiceUnlinkButton
 } from "./film-character-voice-icon";
 import { filmEntityToGeneratedImage } from "./film-entity-to-generated-image";
 import FilmImageGalleryDialog from "./film-image-gallery-dialog";
@@ -26,9 +25,9 @@ import FilmLinkedPropsBlock from "./film-linked-props-block";
 import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
 import {
   FilmCharacterRecord,
+  filmCharacterRoleLabel,
   FilmEpisodeRecord,
   FilmPropRecord,
-  filmCharacterRoleLabel,
 } from "./film-types";
 
 /** Tối đa ảnh reference gửi khi gen ảnh NV */
@@ -184,7 +183,7 @@ export default function FilmCharacterCard({
             <p className="m-0 mt-0.5 text-10 text-gray-400 truncate">{roleLabel}</p>
           ) : null}
         </div>
-        <div className="flex absolute top-0 right-1 z-10 gap-1 items-center opacity-0 transition duration-200 ease-out transform translate-y-1 group-hover:opacity-100 group-hover:translate-y-0">
+        <div className="flex absolute top-11 right-1 z-10 gap-1 items-center opacity-0 transition duration-200 ease-out transform translate-y-1 group-hover:opacity-100 group-hover:translate-y-0">
           {onClone ? (
             <button
               type="button"

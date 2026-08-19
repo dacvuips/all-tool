@@ -44,3 +44,9 @@ export function freeGenAudioVoiceLabel(voiceId: string): string {
   if (!found) return id;
   return `${found.name} — ${found.description}`;
 }
+
+export function isFreeGenAudioVoiceId(voiceId: string): boolean {
+  const id = String(voiceId || "").trim().toLowerCase();
+  if (!id) return false;
+  return FREE_GEN_AUDIO_VOICES.some((item) => item.id === id);
+}

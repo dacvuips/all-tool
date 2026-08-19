@@ -16,6 +16,7 @@ import { Button } from "../shared/utilities/form";
 import FilmCharacterCard from "./film-character-card";
 import FilmCharacterEditDialog from "./film-character-edit-dialog";
 import type { FilmCharacterVoicePick } from "./film-character-voice-dialog";
+import { filmCharacterToAttachedVoice } from "./film-character-voice-dialog";
 import { clearFilmCharacterVoice } from "./film-character-voice-icon";
 import { FilmCatalogPickDialog, type FilmCatalogKind, type FilmCatalogPickItem } from "./film-catalog-pick-dialog";
 import type { FilmCharacterImageGenerateInput } from "./film-character-image-dialog";
@@ -496,6 +497,7 @@ export default function FilmCharacterImagesPanel({
       <FilmCharacterVoiceDialog
         isOpen={!!voiceEditCharacter}
         characterName={voiceEditCharacter?.name}
+        attachedVoice={filmCharacterToAttachedVoice(voiceEditCharacter)}
         onClose={() => setVoiceEditCharacter(null)}
         onPick={async (voice: FilmCharacterVoicePick) => {
           if (!voiceEditCharacter) return;
