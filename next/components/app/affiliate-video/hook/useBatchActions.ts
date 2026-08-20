@@ -44,6 +44,7 @@ import { useConcurrencyLimits } from "./useConcurrencyLimits";
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
 import { useAffiliateVideoApi } from "./useAffiliateVideoApi";
 import type { AffiliateVideoProviderSlice } from "./useSceneMedia";
+import { dialogueTextForTts } from "../shared/voice-export-audio-cache";
 import { bindSceneJobEnqueue } from "./sceneMediaJobHelpers";
 
 // ─── Concurrency limits ───
@@ -62,10 +63,13 @@ export function useBatchActions(
     saveGeneratedImage,
     saveGeneratedVideo,
     generateAudioTTS,
+    getGeneratedAudio,
+    saveGeneratedAudio,
   } = useAffiliateVideoApi();
   const singleContext = useAffiliateVideoContext();
   const {
     scriptData: contextScriptData,
+    setScriptData,
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
@@ -106,15 +110,31 @@ export function useBatchActions(
   const [dialogueCopied, setDialogueCopied] = useState(false);
   const [audioCopied, setAudioCopied] = useState(false);
 
-  /** Aggregate all dialogue from enabled scenes */
-  const dialogueExportText = useMemo(() => {
-    const eligibleScenes = scenes.filter((s) => !s.disabled);
-    if (eligibleScenes.length === 0) return "";
-    return eligibleScenes
-      .filter((s) => s.dialogue)
-      .map((s) => `"${s.dialogue}"`)
-      .join("\n");
+  /** Individual dialogue items per scene — gồm cả scene đang tắt / thoại trống để sửa và lưu */
+  const dialogueItems = useMemo(() => {
+    return scenes.map((s) => ({
+      sceneId: s.id,
+      label: `Scene ${s.sceneNumber ?? ""}`.trim(),
+      text: String(s.dialogue || ""),
+    }));
   }, [scenes]);
+
+  /** Aggregate all dialogue from scenes */
+  const dialogueExportText = useMemo(() => {
+    return scenes.map((s) => `"${s.dialogue || ""}"`).join(", ");
+  }, [scenes]);
+
+  const handleSaveDialogue = useCallback(
+    async (updates: { sceneId: string; text: string }[]) => {
+      if (!scriptData?.scenes || !setScriptData) return;
+      const byId = new Map(updates.map((p) => [p.sceneId, p.text]));
+      const nextScenes = scriptData.scenes.map((s) =>
+        byId.has(s.id) ? { ...s, dialogue: byId.get(s.id) ?? s.dialogue } : s
+      );
+      setScriptData({ ...scriptData, scenes: nextScenes });
+    },
+    [scriptData, setScriptData]
+  );
 
   /** Aggregate voice profile from scriptData (voiceGender · voiceTone · voiceStyle) */
   const audioExportText = useMemo(() => {
@@ -156,7 +176,7 @@ export function useBatchActions(
       const cacheKey = `voice-export-${Date.now()}`;
       const audioData = await generateAudioTTS({
         cacheKey,
-        text: dialogueExportText,
+        text: dialogueTextForTts(dialogueExportText),
         voiceName: ttsVoiceName,
         stylePrompt: audioExportText ? `Voice style: ${audioExportText}` : undefined,
       });
@@ -1506,9 +1526,11 @@ export function useBatchActions(
     setShowVoiceExportDialog,
     dialogueCopied,
     audioCopied,
+    dialogueItems,
     dialogueExportText,
     audioExportText,
     handleCopyDialogue,
+    handleSaveDialogue,
     handleCopyAudio,
 
     // TTS
@@ -1519,6 +1541,8 @@ export function useBatchActions(
     ttsAudioRef,
     handleGenerateTTS,
     handleDownloadTTSAudio,
+    getGeneratedAudio,
+    saveGeneratedAudio,
 
     // Batch image generation
     batchRunning,

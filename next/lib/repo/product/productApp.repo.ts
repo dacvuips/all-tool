@@ -21,6 +21,7 @@ export enum AiProviderKeyEnum {
   KLING_KEY = "KLING_KEY",
   SEE_DANCE_KEY = "SEE_DANCE_KEY",
   GOOGLE_LABS_API_KEY = "GOOGLE_LABS_API_KEY",
+  CHATGPT_GATEWAY_KEY = "CHATGPT_GATEWAY_KEY",
 }
 
 // ─── Repository ───────────────────────────────────────────────────────────────

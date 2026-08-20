@@ -15,6 +15,8 @@ const schema = gql`
     imageLimit: Int
     requestCount: Int
     requestLimit: Int
+    textCreditCount: Int
+    textCreditLimit: Int
     imageStreamCount: Int
     videoStreamCount: Int
     expiryPackageDate: DateTime

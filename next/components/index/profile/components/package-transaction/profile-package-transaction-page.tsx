@@ -53,6 +53,12 @@ function SnapshotCell({ snapshot }: { snapshot?: PackageTransactionSnapshot }) {
     items.push(`Ảnh: ${snapshot.imageCount}/${snapshot.imageLimit ?? "—"}`);
   if (snapshot.requestCount !== undefined && snapshot.requestCount !== null)
     items.push(`Text: ${snapshot.requestCount}/${snapshot.requestLimit ?? "—"}`);
+  if (snapshot.textCreditCount !== undefined && snapshot.textCreditCount !== null)
+    items.push(
+      `Text credit: ${snapshot.textCreditCount}/${
+        snapshot.textCreditLimit === -1 ? "∞" : snapshot.textCreditLimit ?? "—"
+      }`
+    );
   if (snapshot.imageStreamCount !== undefined && snapshot.imageStreamCount !== null)
     items.push(`Stream ảnh: ${snapshot.imageStreamCount}`);
   if (snapshot.videoStreamCount !== undefined && snapshot.videoStreamCount !== null)

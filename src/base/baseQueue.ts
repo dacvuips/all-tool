@@ -7,7 +7,7 @@ import { Logger } from "winston";
 
 import redis from "../helpers/redis";
 import logger from "../helpers/logger";
-import { SharedRedisClient } from "../helpers/sharedRedisClient";
+import { isRedisUnavailableError, SharedRedisClient } from "../helpers/sharedRedisClient";
 import { IS_DEBUG } from "../libs/shared";
 
 type QueueOptions = QueueSettings & {
@@ -69,32 +69,137 @@ export abstract class BaseQueue extends EventEmitter {
   }
 
   /**
+   * Flag: queue id đã gọi Queue#process. Bee-queue chỉ cho process 1 lần / instance.
+   */
+  private _processApplied: Record<string, boolean> = {};
+  /** Debounce recreate worker sau Redis abort (tránh loop). */
+  private _restartAfterRedisErrorAt: Record<string, number> = {};
+  /** Hẹn recreate sau khi job in-memory kết thúc. */
+  private _recreateScheduled: Record<string, ReturnType<typeof setTimeout> | null> = {};
+
+  private resolveQueueId(id?: string): string {
+    return id || (IS_DEBUG ? "dev" : "prod");
+  }
+
+  /** Số job handler đang chạy trong process hiện tại (bee-queue `running`). */
+  getInMemoryRunningCount(id?: string): number {
+    const queueId = this.resolveQueueId(id);
+    const q = this.getQueueIfExists(queueId);
+    if (!q) return 0;
+    const running = (q as any).running;
+    return typeof running === "number" && running > 0 ? running : 0;
+  }
+
+  private isQueueFinishAfterCloseError(err: any): boolean {
+    const msg = String(err?.message || "");
+    return /unable to update the status of (succeeded|failed) job/i.test(msg);
+  }
+
+  /** Giữ listener trên queue cũ để tránh Unhandled 'error' khi job hoàn tất sau close(). */
+  private attachBenignCloseErrorGuard(queue: Queue, id: string): void {
+    queue.on("error", (err: Error) => {
+      if (this.isQueueFinishAfterCloseError(err)) {
+        this.logger.warn(
+          `[${this.name}:${id}] Job finished after queue close (benign): ${err.message}`
+        );
+        return;
+      }
+      this.logger.warn(`[${this.name}:${id}] Detached queue error: ${err.message}`);
+    });
+  }
+
+  private detachQueueForRecreate(existing: Queue, id: string): void {
+    try {
+      this.attachBenignCloseErrorGuard(existing, id);
+      const maybePromise = (existing as any).close(5000);
+      if (maybePromise && typeof maybePromise.then === "function") {
+        maybePromise.catch((err: any) => {
+          this.logger.warn(
+            `[${this.name}:${id}] close queue before recreate: ${err?.message || err}`
+          );
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `[${this.name}:${id}] close queue before recreate: ${err?.message || err}`
+      );
+    }
+  }
+
+  private scheduleRecreateWhenIdle(id: string): void {
+    if (this._recreateScheduled[id]) return;
+
+    const tick = () => {
+      if (this.getInMemoryRunningCount(id) > 0) {
+        this._recreateScheduled[id] = setTimeout(tick, 3000);
+        return;
+      }
+      this._recreateScheduled[id] = null;
+      if (this.recreateWorker(id)) {
+        this.logger.warn(`[${this.name}:${id}] Consumer recreated after in-memory jobs finished`);
+      }
+    };
+
+    this._recreateScheduled[id] = setTimeout(tick, 3000);
+  }
+
+  /**
+   * Tạo lại worker bee-queue (instance mới + process 1 lần).
+   *
+   * **Không** dùng `Queue#destroy()` (xoá job trong Redis) + `process` lại trên cùng instance
+   * → bee-queue ném `Cannot call Queue#process twice`, consumer chết, job kẹt waiting/0%.
+   *
+   * @returns true nếu consumer mới đã được tạo ngay; false nếu hoãn vì còn job in-memory.
+   */
+  private recreateWorker(id: string): boolean {
+    const existing = this._queues[id];
+    if (existing) {
+      const running = this.getInMemoryRunningCount(id);
+      if (running > 0) {
+        this.logger.warn(
+          `[${this.name}:${id}] Defer consumer recreate — ${running} job(s) still running in memory`
+        );
+        this.scheduleRecreateWhenIdle(id);
+        return false;
+      }
+      this.detachQueueForRecreate(existing, id);
+      delete this._queues[id];
+      this._processApplied[id] = false;
+    }
+    this.queue(id);
+    return true;
+  }
+
+  /**
    * Khởi động lại bee-queue consumer khi job kẹt ở `waiting` (Redis ECONNRESET / worker im lặng).
    * Idempotent — gọi nhiều lần an toàn.
    */
   restartQueueConsumer(id?: string): void {
-    if (!id) {
-      id = IS_DEBUG ? "dev" : "prod";
-    }
-    const q = this.getQueueIfExists(id);
-    if (!q) {
-      this.queue(id);
-      this.logger.warn(`[${this.name}:${id}] Consumer started (queue was missing)`);
-      return;
-    }
+    id = this.resolveQueueId(id);
     try {
-      q.destroy();
-      this.applyProcessToQueue(id);
-      this.logger.warn(`[${this.name}:${id}] Consumer restarted`);
+      if (!this.getQueueIfExists(id)) {
+        this.queue(id);
+        this.logger.warn(`[${this.name}:${id}] Consumer started (queue was missing)`);
+        return;
+      }
+      if (this.recreateWorker(id)) {
+        this.logger.warn(`[${this.name}:${id}] Consumer restarted`);
+      }
     } catch (err) {
       this.logger.error(`[${this.name}:${id}] restartQueueConsumer lỗi`, err);
     }
   }
 
-  /** Trạng thái queue: running = worker đã start và queue phản hồi, active/waiting từ Redis. */
+  /** Trạng thái queue: running = worker đã start; redisUnhealthy = Redis tạm mất (không phải consumer chết). */
   async getQueueStatus(
     id?: string
-  ): Promise<{ running: boolean; active: number; waiting: number; newestJob?: string }> {
+  ): Promise<{
+    running: boolean;
+    active: number;
+    waiting: number;
+    newestJob?: string;
+    redisUnhealthy?: boolean;
+  }> {
     const q = this.getQueueIfExists(id);
     if (!q) {
       return { running: false, active: 0, waiting: 0 };
@@ -102,7 +207,10 @@ export abstract class BaseQueue extends EventEmitter {
     try {
       const health = await q.checkHealth();
       return { running: true, ...health };
-    } catch {
+    } catch (err: any) {
+      if (isRedisUnavailableError(err)) {
+        return { running: true, active: 0, waiting: 0, redisUnhealthy: true };
+      }
       return { running: false, active: 0, waiting: 0 };
     }
   }
@@ -162,12 +270,7 @@ export abstract class BaseQueue extends EventEmitter {
         isWorker: true,
         ...queueOptions,
       });
-      // // Add Queue to QueueManager
-      // QueueManager.instance.addQueue(`${id}:${this.name}`, this._queues[id], {
-      //   name: this.name,
-      //   prefix: id,
-      //   concurrency: this.concurrency,
-      // });
+      this.bindQueueErrorHandler(id);
 
       if (true) {
         if (uniqueWorker) {
@@ -214,17 +317,24 @@ export abstract class BaseQueue extends EventEmitter {
 
   private applyProcessToQueue(id: string) {
     try {
-      const { uniqueWorker, ...queueOptions } = this.options;
+      if (this._processApplied[id] && this._queues[id]) {
+        this.logger.warn(
+          `[${this.name}:${id}] process already applied — skip (use recreateWorker to rebind)`
+        );
+        return;
+      }
       this._queues[id].process(this.concurrency, (job) => {
         return this.process(job).catch((err) => {
           this.logger.error("Error when process job", err);
           throw err;
         });
       });
+      this._processApplied[id] = true;
       // Check Stalled Job
       this.checkStalledJob(id);
     } catch (err) {
       this.logger.error("Error when apply process to queue", err);
+      this._processApplied[id] = false;
     }
   }
 
@@ -243,12 +353,7 @@ export abstract class BaseQueue extends EventEmitter {
         isWorker: true,
         ...queueOptions,
       });
-      // QueueManager.instance.removeQueue(`${id}:${this.name}`);
-      // QueueManager.instance.addQueue(`${id}:${this.name}`, this._queues[id], {
-      //   name: this.name,
-      //   prefix: id,
-      //   concurrency: this.concurrency,
-      // });
+      this.bindQueueErrorHandler(id);
     } catch (err) {
       this.logger.error("Error when remove process to queue", err);
     }
@@ -259,6 +364,10 @@ export abstract class BaseQueue extends EventEmitter {
       const stallIntervalMs = this.options.stallIntervalMs ?? 60000;
       this._queues[id].checkStalledJobs(stallIntervalMs, (err, stalled) => {
         if (err) {
+          if (isRedisUnavailableError(err)) {
+            this.logger.warn(`Skip stalled-job check — Redis chưa sẵn sàng: ${err.message}`);
+            return;
+          }
           this.logger.error("Error when check stalled job", err);
         }
         if (stalled > 0) {
@@ -275,14 +384,17 @@ export abstract class BaseQueue extends EventEmitter {
                   this.logger.warn(
                     `[${this.name}:${id}] Phantom active count — recreate queue worker`
                   );
-                  this._queues[id].destroy();
-                  this.applyProcessToQueue(id);
+                  this.recreateWorker(id);
                 }
               }
               this.logger.info(`Processing [${active}/${waiting}]`);
             }
           })
           .catch((err) => {
+            if (isRedisUnavailableError(err)) {
+              this.logger.warn(`Skip queue health check — Redis chưa sẵn sàng: ${err.message}`);
+              return;
+            }
             this.logger.error("Error when check queue status", err);
           });
       });
@@ -290,7 +402,47 @@ export abstract class BaseQueue extends EventEmitter {
   }
   protected abstract process(job: Job<any>): Promise<any>;
 
-  private handleQueueError(err: Error) {
-    this.logger.error("Queue error::::" + err.message);
+  private bindQueueErrorHandler(id: string) {
+    const q = this._queues[id];
+    if (!q) return;
+    q.on("error", (err: Error) => this.handleQueueError(id, err));
+  }
+
+  private isRedisAbortError(err: any): boolean {
+    return isRedisUnavailableError(err);
+  }
+
+  private handleQueueError(id: string, err: Error) {
+    if (this.isQueueFinishAfterCloseError(err)) {
+      this.logger.warn(
+        `[${this.name}:${id}] Job finished after queue close (benign): ${err.message}`
+      );
+      return;
+    }
+    if (this.isRedisAbortError(err)) {
+      this.logger.warn(
+        `[${this.name}:${id}] Redis abort (BRPOPLPUSH) — ${err.message}`
+      );
+      const now = Date.now();
+      const last = this._restartAfterRedisErrorAt[id] || 0;
+      if (now - last < 4000) return;
+      this._restartAfterRedisErrorAt[id] = now;
+      setTimeout(() => {
+        SharedRedisClient.instance
+          .waitUntilReady(15000)
+          .then(() => {
+            this.restartQueueConsumer(id);
+          })
+          .catch((restartErr: any) => {
+            this.logger.warn(
+              `[${this.name}:${id}] skip consumer restart — Redis chưa sẵn sàng: ${
+                restartErr?.message || restartErr
+              }`
+            );
+          });
+      }, 1500);
+      return;
+    }
+    this.logger.error(`[${this.name}:${id}] Queue error: ${err.message}`, err);
   }
 }

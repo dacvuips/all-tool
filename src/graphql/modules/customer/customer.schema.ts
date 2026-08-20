@@ -153,6 +153,10 @@ const schema = gql`
     requestCount: Int
     "Giới hạn generation text"
     requestLimit: Int
+    "Điểm Voice đã dùng"
+    textCreditCount: Int
+    "Giới hạn Điểm Voice"
+    textCreditLimit: Int
     "Số luồng ảnh đồng thời"
     imageStreamCount: Int
     "Số luồng video đồng thời"
@@ -175,6 +179,10 @@ const schema = gql`
     requestCount: Int
     "Giới hạn generation text"
     requestLimit: Int
+    "Điểm Voice đã dùng"
+    textCreditCount: Int
+    "Giới hạn Điểm Voice"
+    textCreditLimit: Int
     "Số luồng ảnh đồng thời"
     imageStreamCount: Int
     "Số luồng video đồng thời"

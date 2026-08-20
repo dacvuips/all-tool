@@ -1,16 +1,16 @@
 /**
- * Handler SUGGEST_CONFIG — AI gợi ý objectToPersonify + tipContent.
+ * Handler SUGGEST_CONFIG — Flow2 gen_text gợi ý objectToPersonify + tipContent.
  */
 import { SuggestConfigOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
 import {
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
-  resolveAiSceneProvider,
+  unwrapAiJsonPayload,
 } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  generateTextWithFlow2,
+  type Flow2TextResult,
+} from "../../../routers/api-media/flow2/text-generation";
 import {
   IMediaGenerationJob,
   MediaGenerationJsonResult,
@@ -23,6 +23,15 @@ export type SuggestConfigPayload = {
   mood?: string;
   language?: string;
 };
+
+const SUGGEST_CONFIG_SYSTEM_INSTRUCTION = "You are a creative short-form video content specialist for TikTok/Reels.";
+
+function parseSuggestJson(result: Flow2TextResult): Record<string, unknown> {
+  if (result.json && !Array.isArray(result.json) && typeof result.json === "object") {
+    return unwrapAiJsonPayload(result.json);
+  }
+  return parseGeminiJsonResponse(result.text);
+}
 
 export async function handleSuggestConfig(
   job: IMediaGenerationJob,
@@ -57,29 +66,23 @@ CRITICAL: Return ONLY a raw JSON object with exactly these keys: objectToPersoni
 No markdown, no code fences, no explanation, no extra text.
 Write field values in ${outputLanguage}.`;
 
-  await emitter.progress(30, "Đang gọi AI...");
+  await emitter.progress(30, "Đang gọi Flow2 gen_text...");
 
-  const aiProvider = await resolveAiSceneProvider();
-  let responseText: string;
+  const { result } = await generateTextWithFlow2({
+    prompt,
+    systemInstruction: SUGGEST_CONFIG_SYSTEM_INSTRUCTION,
+    jsonMode: true,
+    jsonSchema: SuggestConfigOpenAIJsonSchema,
+    customerId: job.customerId,
+    onProgress: async (progress, message) => {
+      await emitter.progress(progress, message);
+    },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
+  });
 
-  if (aiProvider === "gemini") {
-    responseText = await callGeminiJsonGenerate({
-      model: await getGeminiSceneModel("SUGGEST_CONFIG"),
-      text: prompt,
-      label: "suggest-config",
-      responseSchema: SuggestConfigOpenAIJsonSchema,
-    });
-  } else {
-    responseText = await callChatGPTGateway({
-      text: prompt,
-      label: "suggest-config",
-      model: await getChatGPTSceneModel("SUGGEST_CONFIG"),
-      jsonSchema: SuggestConfigOpenAIJsonSchema,
-      jsonSchemaName: "suggest_config_response",
-    });
-  }
-
-  const parsed = parseGeminiJsonResponse(responseText) as {
+  const parsed = parseSuggestJson(result) as {
     objectToPersonify?: string;
     tipContent?: string;
   };

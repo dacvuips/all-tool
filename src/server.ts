@@ -7,21 +7,24 @@ import path from "path";
 import startExpressApp from "./express";
 import { MigrationLoader } from "./migrations";
 import { startQueues } from "./queues/start-queues";
+import { waitForMainConnection } from "./helpers/mongo";
 
-function executeSeedings() {
+async function executeSeedings() {
   const seedingFiles = walkSyncFiles(path.join(__dirname)).filter((f) =>
     /(.*).seeding.js$/.test(f)
   );
-  seedingFiles.map(async (f) => {
-    const { default: seeding } = require(f);
-    await seeding();
-  });
+  for (const f of seedingFiles) {
+    try {
+      const { default: seeding } = require(f);
+      await seeding();
+    } catch (err) {
+      logger.error(`seeding error ${f}`, err);
+    }
+  }
 }
 
 (async function () {
   moment.tz.setDefault(config.get("tz"));
-  await executeSeedings();
-  startQueues();
   const port = config.get<number>("port");
   const app = startExpressApp();
   const server = app.listen(port, "0.0.0.0", () => {
@@ -31,8 +34,14 @@ function executeSeedings() {
   });
   grapqhQLServer(app, server);
 
+  await waitForMainConnection();
+  await executeSeedings();
+  startQueues();
+
   const migrationLoader = new MigrationLoader();
   migrationLoader.start().catch((err) => {
     logger.error("migration error", err);
   });
-})();
+})().catch((err) => {
+  logger.error("server startup error", err);
+});

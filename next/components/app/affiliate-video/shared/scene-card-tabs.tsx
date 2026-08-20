@@ -61,6 +61,8 @@ const TABS: TabDef[] = [
 export interface SceneCardTabsProps {
   /** Ẩn tab Hình ảnh (prompt_to_video mode) */
   hideImageTab?: boolean;
+  /** Ẩn tab Video đơn */
+  hideVideoTab?: boolean;
   /** Ẩn tab Video nối (không có nextSceneId) */
   hideExtendTab?: boolean;
   /** Nội dung render cho mỗi tab */
@@ -83,6 +85,7 @@ export interface SceneCardTabsProps {
 
 export function SceneCardTabs({
   hideImageTab = false,
+  hideVideoTab = false,
   hideExtendTab = false,
   renderImageTab,
   renderVideoTab,
@@ -98,6 +101,7 @@ export function SceneCardTabs({
   // Lọc tabs dựa trên điều kiện hiển thị
   const visibleTabs = TABS.filter((tab) => {
     if (tab.key === "image" && hideImageTab) return false;
+    if (tab.key === "video" && hideVideoTab) return false;
     if (tab.key === "extend" && hideExtendTab) return false;
     return true;
   });
@@ -105,6 +109,7 @@ export function SceneCardTabs({
   // Default tab: image nếu có, nếu không thì video
   const defaultTab = visibleTabs[0]?.key || "video";
   const [activeTab, setActiveTab] = useState<SceneTabKey>(defaultTab);
+  const showTabBar = visibleTabs.length > 1;
 
   // Khi forcedTab thay đổi từ bên ngoài, tự động chuyển tab nội bộ
   useEffect(() => {
@@ -119,51 +124,53 @@ export function SceneCardTabs({
 
   return (
     <div className="flex flex-col">
-      {/* ── Tab bar ── */}
-      <div className="flex items-center px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none justify-center gap-0.5">
-        {visibleTabs.map((tab) => {
-          const status = tabStatus?.[tab.key];
-          const isLoading = !!status?.loading;
-          const isDone = !isLoading && !!status?.done;
-          const progress = status?.progress;
-          const isActive = currentTab === tab.key;
+      {/* ── Tab bar (ẩn khi chỉ còn 1 tab, vd. film Ảnh Cảnh quay) ── */}
+      {showTabBar ? (
+        <div className="flex items-center px-2 py-1.5 bg-gray-50 border-t border-gray-100 rounded-b-none justify-center gap-0.5">
+          {visibleTabs.map((tab) => {
+            const status = tabStatus?.[tab.key];
+            const isLoading = !!status?.loading;
+            const isDone = !isLoading && !!status?.done;
+            const progress = status?.progress;
+            const isActive = currentTab === tab.key;
 
-          return (
-            <button
-              key={tab.key}
-              id={guideTabIds?.[tab.key]}
-              onClick={() => setActiveTab(tab.key)}
-              className={`relative flex items-center gap-1 px-1 py-1 w-full justify-center rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
-                isActive ? tab.activeClass : tab.inactiveClass
-              }`}
-            >
-              {/* Icon / Spinner */}
-              {isLoading ? <RiLoader4Line className="text-sm animate-spin" /> : tab.icon}
+            return (
+              <button
+                key={tab.key}
+                id={guideTabIds?.[tab.key]}
+                onClick={() => setActiveTab(tab.key)}
+                className={`relative flex items-center gap-1 px-1 py-1 w-full justify-center rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer border-0 whitespace-nowrap ${
+                  isActive ? tab.activeClass : tab.inactiveClass
+                }`}
+              >
+                {/* Icon / Spinner */}
+                {isLoading ? <RiLoader4Line className="text-sm animate-spin" /> : tab.icon}
 
-              <span>{t(tab.labelKey)}</span>
+                <span>{t(tab.labelKey)}</span>
 
-              {/* Progress label khi loading */}
-              {isLoading && progress != null && (
-                <span className="text-[10px] font-bold opacity-90 leading-none">
-                  {Math.round(progress)}%
-                </span>
-              )}
+                {/* Progress label khi loading */}
+                {isLoading && progress != null && (
+                  <span className="text-[10px] font-bold opacity-90 leading-none">
+                    {Math.round(progress)}%
+                  </span>
+                )}
 
-              {/* Dấu tích xanh khi done – góc trên phải */}
-              {isDone && (
-                <span
-                  data-tooltip="Hoàn thành"
-                  data-placement="top"
-                  className="absolute -top-1 -right-0.5 flex items-center justify-center border-dashed border w-4 h-4 rounded-full bg-white text-success shadow-sm"
-                  style={{ fontSize: 9, lineHeight: 1 }}
-                >
-                  ✓
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+                {/* Dấu tích xanh khi done – góc trên phải */}
+                {isDone && (
+                  <span
+                    data-tooltip="Hoàn thành"
+                    data-placement="top"
+                    className="absolute -top-1 -right-0.5 flex items-center justify-center border-dashed border w-4 h-4 rounded-full bg-white text-success shadow-sm"
+                    style={{ fontSize: 9, lineHeight: 1 }}
+                  >
+                    ✓
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* ── Tab content ── */}
       <div className="p-2 sm:p-3">
@@ -173,7 +180,7 @@ export function SceneCardTabs({
             {renderImagePrompt && <div className="mt-2">{renderImagePrompt()}</div>}
           </>
         )}
-        {currentTab === "video" && (
+        {currentTab === "video" && !hideVideoTab && (
           <>
             {renderVideoTab()}
             {renderVideoPrompts && <div className="mt-2">{renderVideoPrompts()}</div>}

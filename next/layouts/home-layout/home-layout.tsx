@@ -1,5 +1,6 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import { WolfSlideOutWidget } from "../../components/app/affiliate-video/wolf-slide-out/wolf-slide-out";
 import { CheckoutProvider } from "../../components/index/checkout/provider/checkout-provider";
 import { HomeProvider } from "../../components/index/home/provider/home-provider";
 import { MediaGenerationSuccessTicker } from "../../components/shared/media-generation-success-ticker";
@@ -29,6 +30,9 @@ export function HomeLayout({ ...props }: LayoutProps) {
   const isHomePage = !["/profile", "/checkout", "/post"].some((path) =>
     router.pathname.startsWith(path)
   );
+  /** Film workspace tự cuộn cột phải — ẩn footer + khóa scroll trang */
+  const isFilmWorkspace = router.pathname === "/film/[id]";
+  const isFilmPage = router.pathname.startsWith("/film");
 
   // Lưu referral code từ query param ?ref=... vào localStorage
   useEffect(() => {
@@ -45,8 +49,11 @@ export function HomeLayout({ ...props }: LayoutProps) {
       <HomeLayoutProvider>
         <DefaultHead shopCode="" shopLogo="" />
         <GlobalProvider>
-          <div className="pt-14 w-full min-h-screen">
-            {/* {isHomePage && <Sidebar setGetToggleSidebar={setGetToggleSidebar} />} */}
+          <div
+            className={`pt-14 w-full ${
+              isFilmWorkspace ? "h-screen overflow-hidden" : "min-h-screen"
+            }`}
+          >
             <SelectCategoryGlobalDialog />
             <UpdatePhoneNumberDialog />
             <TermsOfServiceDialog />
@@ -56,12 +63,17 @@ export function HomeLayout({ ...props }: LayoutProps) {
               </ChatProvider>
             )} */}
             <GroupsWidget />
-            <div className={`flex flex-col flex-1 grow`}>
+            {isFilmPage && <WolfSlideOutWidget />}
+            <div
+              className={`flex flex-col flex-1 grow ${
+                isFilmWorkspace ? "h-full min-h-0 overflow-hidden" : ""
+              }`}
+            >
               <ErrorCatcher>
-                <HomeLayoutContent {...props} />
+                <HomeLayoutContent {...props} filmWorkspace={isFilmWorkspace} />
               </ErrorCatcher>
 
-              <Footer />
+              {!isFilmWorkspace && <Footer />}
             </div>
           </div>{" "}
         </GlobalProvider>
@@ -70,19 +82,33 @@ export function HomeLayout({ ...props }: LayoutProps) {
   );
 }
 
-export function HomeLayoutContent({ children, ...props }: LayoutProps) {
+export function HomeLayoutContent({
+  children,
+  filmWorkspace = false,
+  ...props
+}: LayoutProps & { filmWorkspace?: boolean }) {
   const router = useRouter();
   const isToolPage = router.pathname.startsWith("/app/");
 
   return (
     <>
-      <div className="flex relative flex-col bg-gray-100">
-        <div className="mx-auto w-full">
+      <div
+        className={`flex relative flex-col bg-gray-100 ${
+          filmWorkspace ? "h-full min-h-0 overflow-hidden" : ""
+        }`}
+      >
+        <div className={`mx-auto w-full ${filmWorkspace ? "h-full min-h-0 overflow-hidden" : ""}`}>
           <div
-            className={`flex flex-col w-full text-accent`}
-            style={{
-              minHeight: "calc(100vh - 350px)",
-            }}
+            className={`flex flex-col w-full text-accent ${
+              filmWorkspace ? "h-full min-h-0 overflow-hidden" : ""
+            }`}
+            style={
+              filmWorkspace
+                ? undefined
+                : {
+                    minHeight: "calc(100vh - 350px)",
+                  }
+            }
           >
             <HomeProvider>
               <CheckoutProvider>
@@ -93,12 +119,10 @@ export function HomeLayoutContent({ children, ...props }: LayoutProps) {
             {isToolPage && <MediaGenerationSuccessTicker />}
             {children}
           </div>
-          {/* <Footer /> */}
         </div>
       </div>
 
-      {/* {screenLg && <FloatingAffiliateButton />} */}
-      <BackToTop />
+      {!filmWorkspace && <BackToTop />}
     </>
   );
 }

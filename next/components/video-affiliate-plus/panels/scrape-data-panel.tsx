@@ -301,6 +301,18 @@ function resolveScrapeProductUrl(row: ScrapeProductRow, marketHost: string): str
   return `https://${mallHost}/product/${shopId}/${itemId}`;
 }
 
+/** SP đủ điều kiện xuất project / gen: có tên, link SP, ảnh SP. */
+function isQualifiedScrapeProduct(row: ScrapeProductRow, marketHost: string): boolean {
+  if (!String(row.productName || "").trim()) return false;
+  if (!resolveScrapeProductUrl(row, marketHost)) return false;
+  const raw = ensureCrawlProductRaw(
+    { ...(row.raw || {}), __priceVndNormalized: true } as Record<string, unknown>,
+    { marketHost }
+  );
+  const imageUrl = pickImageUrlFromRaw(raw) || String(raw.image_url || "").trim();
+  return Boolean(imageUrl);
+}
+
 function mallHostFromAffiliate(marketHost: string): string {
   const host = String(marketHost || "").toLowerCase();
   const m = host.match(/^affiliate\.(shopee\..+)$/i);
@@ -2468,13 +2480,36 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       ).trim();
 
     try {
+      const removedIds = new Set(
+        products.filter((p) => !isQualifiedScrapeProduct(p, openMarketHost)).map((p) => p.id)
+      );
+      const exportProducts = products.filter((p) => !removedIds.has(p.id));
+
+      if (removedIds.size > 0) {
+        setCrawledProducts((prev) => prev.filter((p) => !removedIds.has(p.id)));
+        pushSaveLog(
+          `Đã loại ${removedIds.size} SP thiếu tên / link / ảnh sản phẩm`,
+          "warning"
+        );
+      }
+
+      if (!exportProducts.length) {
+        pushSaveLog("Không còn SP đủ điều kiện để lưu", "error");
+        setSaveProgressStatus(t("Không còn SP đủ điều kiện") as string);
+        setSaveProgressDone(true);
+        toast.warn(
+          t("Không còn SP đủ điều kiện (cần tên, link và ảnh sản phẩm)")
+        );
+        return;
+      }
+
       pushSaveLog(
-        `Bắt đầu lưu «${name}» · ${products.length} SP khớp lọc (kho ${crawledProducts.length})`,
+        `Bắt đầu lưu «${name}» · ${exportProducts.length} SP khớp lọc (kho ${crawledProducts.length})`,
         "info"
       );
 
       // Giữ nguyên short_link / description / hashtags đã lưu trong kho
-      let productsWithShort: ScrapeProductRow[] = products.map((p) => ({
+      let productsWithShort: ScrapeProductRow[] = exportProducts.map((p) => ({
         ...p,
         raw: {
           ...(p.raw || {}),

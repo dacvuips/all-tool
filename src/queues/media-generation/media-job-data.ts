@@ -5,7 +5,8 @@
  * Job Mongo chỉ giữ `dataRedisKey` để worker đọc lại khi xử lý.
  */
 import logger from "../../helpers/logger";
-import redis from "../../helpers/redis";
+import redis, { ensureRedisReady } from "../../helpers/redis";
+import { isRedisUnavailableError } from "../../helpers/sharedRedisClient";
 
 /** TTL payload trên Redis — 1 giờ */
 export const MEDIA_JOB_DATA_TTL_SEC = 60 * 60;
@@ -102,13 +103,17 @@ export async function saveMediaJobPayload(
 ): Promise<string> {
   const key = buildMediaJobDataKey(jobId);
   try {
+    await ensureRedisReady();
     await redis.set(key, JSON.stringify(payload), "EX", MEDIA_JOB_DATA_TTL_SEC);
     return key;
   } catch (err: any) {
     logger.error(`[MediaJobData] save jobId=${jobId} lỗi: ${err?.message}`);
-    const wrapped: any = new Error("Không thể lưu dữ liệu job. Vui lòng thử lại sau.");
-    wrapped.statusCode = 503;
-    throw wrapped;
+    if (isRedisUnavailableError(err) || !err?.statusCode) {
+      const wrapped: any = new Error("Không thể lưu dữ liệu job. Vui lòng thử lại sau.");
+      wrapped.statusCode = 503;
+      throw wrapped;
+    }
+    throw err;
   }
 }
 

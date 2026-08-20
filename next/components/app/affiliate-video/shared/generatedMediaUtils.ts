@@ -1,6 +1,7 @@
 import { requestCleanWatermark } from "../remove-logo/hook/cleanWatermarkClient";
 import { base64ToBlob as watermarkBase64ToBlob, stripToPureBase64 } from "../remove-logo/constants";
 import { notifyGeneratedMediaReplaced } from "./generatedMediaReplaceBus";
+import { toUpsampleUserErrorMessage } from "./media-error-message";
 import { base64ToBlob, toDownloadProxyUrl, triggerBlobDownload, uriToBlob } from "./videoDownloadUtils";
 
 /** Metadata Flow2 lưu sau gen_image — dùng upscale 4K. */
@@ -1055,14 +1056,14 @@ async function consumeUpsampleImageSSE(
         downloadToken = evt.downloadToken;
       }
       if (evt.type === "error") {
-        throw new Error(evt.message || "Lỗi upscale ảnh");
+        throw new Error(toUpsampleUserErrorMessage(evt.message, undefined, "Lỗi upscale ảnh"));
       }
     }
   }
 
   const tail = parseUpsampleImageSSELine(buffer);
   if (tail?.type === "error") {
-    throw new Error(tail.message || "Lỗi upscale ảnh");
+    throw new Error(toUpsampleUserErrorMessage(tail.message, undefined, "Lỗi upscale ảnh"));
   }
   if (tail?.type === "done" && tail.downloadToken) {
     downloadToken = tail.downloadToken;
@@ -1096,7 +1097,11 @@ export async function fetchUpsampledImageBlob(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
-      (err as { message?: string })?.message || `Lỗi upscale ${resolution} (${res.status})`
+      toUpsampleUserErrorMessage(
+        (err as { message?: string })?.message,
+        res.status,
+        `Lỗi upscale ${resolution} (${res.status})`
+      )
     );
   }
 
@@ -1113,7 +1118,11 @@ export async function fetchUpsampledImageBlob(
   if (!dlRes.ok) {
     const err = await dlRes.json().catch(() => ({}));
     throw new Error(
-      (err as { message?: string })?.message || `Lỗi tải ảnh ${resolution} (${dlRes.status})`
+      toUpsampleUserErrorMessage(
+        (err as { message?: string })?.message,
+        dlRes.status,
+        `Lỗi tải ảnh ${resolution} (${dlRes.status})`
+      )
     );
   }
 
@@ -1237,14 +1246,18 @@ async function consumeUpsampleVideoSSE(
         downloadToken = evt.downloadToken;
       }
       if (evt.type === "error") {
-        throw new Error(evt.message || "Lỗi upscale video 1080p");
+        throw new Error(
+          toUpsampleUserErrorMessage(evt.message, undefined, "Lỗi upscale video 1080p")
+        );
       }
     }
   }
 
   const tail = parseUpsampleVideoSSELine(buffer);
   if (tail?.type === "error") {
-    throw new Error(tail.message || "Lỗi upscale video 1080p");
+    throw new Error(
+      toUpsampleUserErrorMessage(tail.message, undefined, "Lỗi upscale video 1080p")
+    );
   }
   if (tail?.type === "done" && tail.downloadToken) {
     downloadToken = tail.downloadToken;
@@ -1274,7 +1287,11 @@ export async function fetchUpsampled1080pVideoBlob(
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(
-      (err as { message?: string })?.message || `Lỗi upscale video 1080p (${res.status})`
+      toUpsampleUserErrorMessage(
+        (err as { message?: string })?.message,
+        res.status,
+        `Lỗi upscale video 1080p (${res.status})`
+      )
     );
   }
 
@@ -1291,7 +1308,11 @@ export async function fetchUpsampled1080pVideoBlob(
   if (!dlRes.ok) {
     const err = await dlRes.json().catch(() => ({}));
     throw new Error(
-      (err as { message?: string })?.message || `Lỗi tải video 1080p (${dlRes.status})`
+      toUpsampleUserErrorMessage(
+        (err as { message?: string })?.message,
+        dlRes.status,
+        `Lỗi tải video 1080p (${dlRes.status})`
+      )
     );
   }
 

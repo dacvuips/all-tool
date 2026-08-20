@@ -12,31 +12,55 @@ import {
   startStaleProcessingRecoverySweep,
 } from "./media-generation";
 import logger from "../helpers/logger";
+import { waitForMainConnection } from "../helpers/mongo";
+import { ensureRedisReady } from "../helpers/redis";
+import { SharedRedisClient } from "../helpers/sharedRedisClient";
 
 export function startQueues(): void {
+  void startQueuesAsync();
+}
+
+async function startQueuesAsync(): Promise<void> {
+  try {
+    await waitForMainConnection();
+  } catch (err: any) {
+    logger.error("Failed to wait for Mongo before starting queues", err);
+    return;
+  }
+
+  try {
+    await SharedRedisClient.instance.waitUntilReady(20000);
+    await ensureRedisReady(20000);
+  } catch (err: any) {
+    logger.warn(
+      `[startQueues] Redis chưa ready — vẫn start worker, recovery sẽ retry: ${err?.message || err}`
+    );
+  }
+
   try {
     aiGenerationQueue.defaultQueue();
     logger.info("AiGenerationRun queue worker started");
   } catch (err: any) {
     logger.error("Failed to start AiGenerationRun queue", err);
   }
+
   try {
     mediaGenerationQueue.defaultQueue();
     logger.info("MediaGenerationJob queue worker started");
     startMediaJobCleanupSweep();
     startStaleProcessingRecoverySweep();
-    // Re-enqueue các job stale (PROCESSING/QUEUED) sau khi server vừa restart.
-    // Delay 2s để worker process kịp register trước khi nhận lại job cũ.
-    setTimeout(async () => {
-      try {
-        // 1. Giải phóng bee-job active mồ côi (worker cũ chết khi nodemon restart)
-        await recoverStalledBeeJobsOnStartup();
-        // 2. Re-enqueue job Mongo QUEUED/PROCESSING chưa có worker pickup
-        await resumeStaleMediaJobs();
-      } catch (err) {
-        logger.error("[MediaGenerationJob] resume stale lỗi", err);
+    // Worker đã process(); Redis đã ready — dọn bee-job mồ côi rồi re-enqueue Mongo.
+    try {
+      await recoverStalledBeeJobsOnStartup();
+      await resumeStaleMediaJobs();
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      if (/ready check failed|connection lost|Redis ready timeout/i.test(msg)) {
+        logger.warn(`[MediaGenerationJob] Redis chưa sẵn sàng khi resume stale — sẽ sweep lại sau`);
+        return;
       }
-    }, 2000);
+      logger.error("[MediaGenerationJob] resume stale lỗi", err);
+    }
   } catch (err: any) {
     logger.error("Failed to start MediaGenerationJob queue", err);
   }

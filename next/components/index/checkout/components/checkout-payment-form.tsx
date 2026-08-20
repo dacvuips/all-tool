@@ -47,6 +47,8 @@ interface PlanConfig {
   // Tool-specific
   videoLimit?: number;
   imageLimit?: number;
+  requestLimit?: number;
+  textCreditLimit?: number;
   imageStreamCount?: number;
   videoStreamCount?: number;
   // Recaptcha / API Media
@@ -144,6 +146,8 @@ export function CheckoutPaymentForm() {
               plan,
               videoLimit: getValue("video-limit"),
               imageLimit: getValue("image-limit"),
+              requestLimit: getValue("request-limit"),
+              textCreditLimit: getValue("text-credit"),
               imageStreamCount: getValue("image-stream-count"),
               videoStreamCount: getValue("video-stream-count"),
               price: getValue("price"),
@@ -336,6 +340,19 @@ export function CheckoutPaymentForm() {
             <HiCheck className="flex-shrink-0 text-green-500" />
             <span>
               {t("Tạo tối đa")} {formatNumber(config.imageLimit)} {t("hình ảnh")} / {t("ngày")}
+            </span>
+          </li>
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
+            <span>
+              {t("Tối đa")} {formatNumber(config.requestLimit)} {t("lượt generation text")} /{" "}
+              {t("ngày")}
+            </span>
+          </li>
+          <li className="flex gap-2 items-center text-xs text-gray-700">
+            <HiCheck className="flex-shrink-0 text-green-500" />
+            <span>
+              {t("Tối đa")} {formatNumber(config.textCreditLimit)} {t("điểm Voice")}
             </span>
           </li>
           <li className="flex gap-2 items-center text-xs text-gray-700">

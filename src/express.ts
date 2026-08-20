@@ -37,7 +37,7 @@ export default function startExpressApp() {
     compression({
       filter: (req, res) => {
         if (
-          /generation-(element-)?(video|image)|copy-video-generate-image|upsample-(video|image)|storyboard-ai-suggest|clean-watermark/.test(
+          /generation-(element-)?(video|image)|copy-video-generate-image|upsample-(video|image)|storyboard-ai-suggest|clean-watermark|generate-text/.test(
             req.path
           )
         ) {
@@ -122,6 +122,7 @@ function useHelmet(app: express.Application) {
               "'self'",
               "blob:",
               "data:",
+              "https:",
               "https://flow-content.google",
               "https://flow2.viettheo.site",
             ],

@@ -39,7 +39,7 @@ export function AffiliateVideoSidebarLayout({
   });
 
   return (
-    <div className="flex overflow-hidden relative flex-1">
+    <div className="flex overflow-hidden relative flex-1 min-w-0">
       <button
         type="button"
         onClick={() => onOpenChange(true)}
@@ -91,7 +91,7 @@ export function AffiliateVideoSidebarLayout({
         )}
       </div>
 
-      {children}
+      <div className="flex overflow-hidden flex-col flex-1 min-w-0 h-full">{children}</div>
     </div>
   );
 }

@@ -6,6 +6,7 @@
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { toUpsampleUserErrorMessage } from "../../api-media/flow2/_shared";
 import { upsampleVideoWithFlow2 } from "../../api-media/flow2/upsample-video";
 import { fetchFlow2UpsampleMediaBytes } from "../../api-media/flow2/upsample-poll";
 import {
@@ -105,16 +106,13 @@ export default [
         res.end();
       } catch (err: any) {
         logger.error(`[upsample-video] Lỗi: ${err?.message}`);
+        const userMessage = toUpsampleUserErrorMessage(err, "Lỗi upscale video 1080p");
         if (sseStarted) {
-          sendGenerationSSEError(
-            res,
-            err?.message || "Lỗi upscale video 1080p",
-            err?.statusCode || 500
-          );
+          sendGenerationSSEError(res, userMessage, err?.statusCode || 500);
           return;
         }
         const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi upscale video 1080p" });
+        res.status(status).json({ message: userMessage });
       }
     },
   },

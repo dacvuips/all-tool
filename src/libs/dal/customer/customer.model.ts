@@ -59,6 +59,8 @@ const customerSchema = new Schema(
         imageLimit: { type: Number, default: 10 },
         requestCount: { type: Number, default: 0 },
         requestLimit: { type: Number, default: 2 },
+        textCreditCount: { type: Number, default: 0 },
+        textCreditLimit: { type: Number, default: 0 },
         imageStreamCount: { type: Number, default: 1 },
         videoStreamCount: { type: Number, default: 1 },
         expiryPackageDate: { type: Date },

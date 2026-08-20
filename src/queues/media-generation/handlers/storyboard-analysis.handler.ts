@@ -1,27 +1,21 @@
 /**
- * Handler STORYBOARD_ANALYSIS — AI phân tích ảnh storyboard → JSON scenes.
+ * Handler STORYBOARD_ANALYSIS — Flow2 gen_text phân tích ảnh storyboard → JSON scenes.
  * Quota: route đã reserve slot (hoặc batch skipRequestReservation); fail → release.
  */
-import { retryAICall } from "../../../routers/app/affiliate-scene/_ai-retry";
-import {
-  CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS,
-  StoryboardAnalysisOpenAIJsonSchema,
-} from "../../../routers/app/affiliate-scene/_chatgpt.constants";
-import { GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS } from "../../../routers/app/affiliate-scene/_gemini.constants";
-import { StoryboardAnalysisResponseSchema } from "../../../routers/app/affiliate-scene/storyboard-analysis.schema";
+import { StoryboardAnalysisOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
 import {
   assertNonEmptyScenesArray,
   buildProductImageScriptNote,
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
   normalizeSceneAudioField,
   parseGeminiJsonResponse,
-  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveProductImagesForAi,
+  unwrapAiJsonPayload,
 } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  generateTextWithFlow2,
+  type Flow2TextResult,
+} from "../../../routers/api-media/flow2/text-generation";
 import {
   IMediaGenerationJob,
   MediaGenerationJsonResult,
@@ -111,46 +105,12 @@ CRITICAL OUTPUT: Return ONLY a raw JSON object matching the schema. No markdown,
 `;
 }
 
-async function callStoryboardAnalysisAi(params: {
-  aiProvider: string;
-  text: string;
-  storyboardImageBase64: string;
-  mimeType: string;
-  productImages?: { imageBytes: string; mimeType: string }[];
-}): Promise<string> {
-  const { aiProvider, text, storyboardImageBase64, mimeType, productImages = [] } = params;
-  const media = [{ imageBytes: storyboardImageBase64, mimeType }, ...productImages];
+const STORYBOARD_SYSTEM_INSTRUCTION = "You are an expert Storyboard Analysis and AI Video Director.";
 
-  if (aiProvider === "gemini") {
-    return callGeminiJsonGenerate({
-      model: await getGeminiSceneModel("STORYBOARD"),
-      text,
-      media,
-      label: "storyboard-analysis",
-      responseSchema: StoryboardAnalysisResponseSchema,
-      temperature: 0.3,
-      maxOutputTokens: GEMINI_STORYBOARD_MAX_OUTPUT_TOKENS,
-    });
-  }
-
-  return callChatGPTGateway({
-    text,
-    images: media.map((img, index) => ({
-      ...img,
-      fileName:
-        index === 0
-          ? mimeType.includes("png")
-            ? "storyboard.png"
-            : "storyboard.jpg"
-          : `photo-${index}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-    })),
-    label: "storyboard-analysis",
-    model: await getChatGPTSceneModel("STORYBOARD"),
-    jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
-    jsonSchemaName: "storyboard_analysis_response",
-    temperature: 0.3,
-    maxTokens: CHATGPT_STORYBOARD_MAX_OUTPUT_TOKENS,
-  });
+function parseStoryboardJson(result: Flow2TextResult): Record<string, unknown> {
+  if (Array.isArray(result.json)) return { scenes: result.json };
+  if (result.json && typeof result.json === "object") return unwrapAiJsonPayload(result.json);
+  return parseGeminiJsonResponse(result.text);
 }
 
 export async function handleStoryboardAnalysis(
@@ -176,6 +136,8 @@ export async function handleStoryboardAnalysis(
     const productImageNote = buildProductImageScriptNote(body.productImages || []);
     const productImages = await resolveProductImagesForAi(body.productImages);
 
+    const mimeType = body.mimeType || "image/png";
+
     const text =
       buildStoryboardAnalysisPrompt({
         artStyle,
@@ -184,24 +146,30 @@ export async function handleStoryboardAnalysis(
         tipContent: body.tipContent,
       }) + productImageNote;
 
-    const mimeType = body.mimeType || "image/png";
-    const aiProvider = await resolveAiSceneProvider();
+    await emitter.progress(25, "Đang gửi storyboard lên Flow2 gen_text...");
 
-    await emitter.progress(25, "Đang gọi AI phân tích storyboard...");
+    const storyboardImage = { imageBytes: body.storyboardImageBase64, mimeType };
+    const imageInputs = [storyboardImage, ...productImages];
 
-    const parsed = (await retryAICall(async () => {
-      const responseText = await callStoryboardAnalysisAi({
-        aiProvider,
-        text,
-        storyboardImageBase64: body.storyboardImageBase64,
-        mimeType,
-        productImages,
-      });
-      return parseGeminiJsonResponse(responseText);
-    }, "storyboard-analysis")) as any;
-    assertNonEmptyScenesArray(parsed.scenes);
+    const { result } = await generateTextWithFlow2({
+      prompt: text,
+      systemInstruction: STORYBOARD_SYSTEM_INSTRUCTION,
+      imageInputs,
+      jsonMode: true,
+      jsonSchema: StoryboardAnalysisOpenAIJsonSchema,
+      customerId: job.customerId,
+      onProgress: async (progress, message) => {
+        await emitter.progress(progress, message);
+      },
+      onRequestCreated: async (flow2RequestId) => {
+        await emitter.setFlow2RequestId(flow2RequestId);
+      },
+    });
 
     await emitter.progress(90, "Đang chuẩn hoá phân cảnh...");
+
+    const parsed = parseStoryboardJson(result) as any;
+    assertNonEmptyScenesArray(parsed.scenes);
 
     const normalizedScenes = parsed.scenes.map((scene: any, index: number) => ({
       sceneNumber: scene.sceneNumber ?? index + 1,

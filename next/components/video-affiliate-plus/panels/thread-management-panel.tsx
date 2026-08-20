@@ -48,6 +48,13 @@ import {
   pickExportDirectory,
   type ExportDownloadKind,
 } from "../download-export-video";
+import {
+  createFrontendJobQueue,
+  isStreamLimitEnqueueError,
+  MAX_STREAM_ENQUEUE_ATTEMPTS,
+  waitBeforeStreamEnqueueRetry,
+  withFrontendJobSlot,
+} from "../enqueue-stream-backoff";
 import { ThreadMetaRecord } from "../idb";
 import { formatImportHistoryOption, ImportHistoryItem } from "../import-history";
 import {
@@ -209,32 +216,6 @@ function isMergeRetryableError(err: unknown): boolean {
   return true;
 }
 
-/** Giới hạn số job video chạy đồng thời (dùng chung khi Tách Prompt + Bắt đầu nhiều task). */
-function createConcurrencyPool(limit: number) {
-  const max = Math.max(1, Math.min(50, Math.round(limit || 1)));
-  let active = 0;
-  const waiters: Array<() => void> = [];
-  return {
-    async acquire(): Promise<void> {
-      if (active < max) {
-        active += 1;
-        return;
-      }
-      await new Promise<void>((resolve) => {
-        waiters.push(() => {
-          active += 1;
-          resolve();
-        });
-      });
-    },
-    release(): void {
-      active = Math.max(0, active - 1);
-      const next = waiters.shift();
-      if (next) next();
-    },
-  };
-}
-
 function isMergeRetryCandidate(item: AffiliatePlusItem): boolean {
   return getMergeableVideoUrls(item).length >= 2 && !hasMergedVideoRef(item.mergedVideoUrl);
 }
@@ -363,6 +344,7 @@ export function ThreadManagementPanel({
   const sessionIdRef = useRef(sessionId);
   sessionIdRef.current = sessionId;
   const runnerRef = useRef<ThreadRunner | null>(null);
+  const videoJobQueueRef = useRef<ReturnType<typeof createFrontendJobQueue> | null>(null);
   const parentSyncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [listMeta, setListMeta] = useState<ThreadMetaRecord | null>(null);
@@ -1552,12 +1534,6 @@ export function ThreadManagementPanel({
     const useCharacterImage = config.useCharacterImage !== false;
     // Ảnh nhân vật theo switch cấu hình — tắt thì chỉ dùng ảnh sản phẩm
 
-    const missingProduct = targets.filter((i) => !i.imageUrl?.trim());
-    if (missingProduct.length) {
-      toast.warn(t("{{count}} luồng thiếu ảnh sản phẩm", { count: missingProduct.length }));
-      return;
-    }
-
     const prompt = buildActivePromptFromConfig(config).trim() || config.activePrompt?.trim() || "";
     if (config.splitPrompt) {
       const prompt0 = resolveEffectiveSlotPrompt(config, 0);
@@ -1572,25 +1548,28 @@ export function ThreadManagementPanel({
 
     pauseAllRef.current = false;
     runnerRef.current?.stop();
-    const isSingleTaskRun = ids?.length === 1;
     const videoConcurrency = Math.max(1, Math.min(50, Math.round(VIDEO_CONCURRENCY || 1)));
-    const videoSlotPool = config.splitPrompt ? createConcurrencyPool(videoConcurrency) : null;
-    // Không tách prompt: concurrency = số luồng video customer (mỗi task = 1 job).
-    // Tách prompt + 1 task: task concurrency = 1, slot song song theo videoConcurrency.
-    // Tách prompt + Bắt đầu: mọi task chạy, slot dùng chung pool videoConcurrency.
-    const concurrency = config.splitPrompt
-      ? isSingleTaskRun
-        ? 1
-        : Math.max(1, targets.length)
-      : videoConcurrency;
+    const jobQueue = createFrontendJobQueue(videoConcurrency);
+    videoJobQueueRef.current = jobQueue;
+    // Sản phẩm vượt quá số luồng gói xếp hàng ở frontend — chỉ N task chạy, phần còn lại status = waiting.
+    const concurrency = videoConcurrency;
     onAddLog(
-      t("Bắt đầu {{count}} luồng (song song {{n}})", {
+      t("Xếp hàng frontend: {{count}} sản phẩm, chạy song song tối đa {{n}} luồng", {
         count: targets.length,
-        n: config.splitPrompt ? videoConcurrency : concurrency,
+        n: concurrency,
       }),
       "info"
     );
     toast.success(t("Đã bắt đầu {{count}} luồng", { count: targets.length }));
+    await Promise.all(
+      targets.map((item) =>
+        patchThread(sessionId, item.id, {
+          status: "waiting" as ThreadStatus,
+          error: "",
+          countdown: 0,
+        })
+      )
+    );
 
     let characterPreparedFixed: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
     if (useCharacterImage) {
@@ -1651,65 +1630,77 @@ export function ThreadManagementPanel({
               videoModel: string;
               slotIndex?: number;
             }) => {
-              let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
-              for (let attempt = 0; ; attempt++) {
-                if (ctx.isPaused() || pauseAllRef.current) {
-                  throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
-                }
-                try {
-                  result = await shopeeVideoJob.run({
-                    url: "/api/app/generation-shopee-video/",
-                    body: {
-                      prompt: opts.promptText,
-                      images: opts.images,
-                      ...(opts.characterPrepared[0]
-                        ? { characterImage: opts.characterPrepared[0] }
-                        : {}),
-                      productImage: opts.productPrepared,
-                      videosPerJob: 1,
-                      variantCount: 1,
-                      videoModel: opts.videoModel,
-                      config: {
-                        prompt: opts.promptText,
-                        aspectRatio: "9:16",
-                        videosPerJob: 1,
-                        variantCount: 1,
-                        videoModel: opts.videoModel,
-                        videoMode: "component",
-                      },
-                      _metadata: {
-                        threadId: fresh.id,
-                        shopName: fresh.shopName,
-                        productName: fresh.productName,
-                        ...(opts.slotIndex != null ? { slotIndex: opts.slotIndex } : {}),
-                      },
-                    },
-                    cancelOnUnmount: true,
-                    onJobEnqueued: (jobId) => {
-                      activeJobIdsRef.current[fresh.id] = jobId;
-                    },
-                    onProgress: (_pct, msg) => {
-                      if (msg)
-                        onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
-                    },
-                  });
-                  break;
-                } catch (enqueueErr: any) {
-                  const isStreamLimit =
-                    enqueueErr instanceof MediaGenerationJobError &&
-                    enqueueErr.code === "ENQUEUE_FAILED" &&
-                    (enqueueErr.httpStatus === 429 ||
-                      /giới hạn luồng/i.test(String(enqueueErr.message || "")));
-                  if (!isStreamLimit || attempt >= 90) throw enqueueErr;
-                  onAddLog(
-                    t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
-                    "warning",
-                    fresh.id
-                  );
-                  await new Promise((r) => setTimeout(r, 2000));
-                }
-              }
-              return result!;
+              return withFrontendJobSlot(
+                jobQueue,
+                async () => {
+                  let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
+                  for (let attempt = 0; ; attempt++) {
+                    if (ctx.isPaused() || pauseAllRef.current) {
+                      throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
+                    }
+                    try {
+                      result = await shopeeVideoJob.run({
+                        url: "/api/app/generation-shopee-video/",
+                        body: {
+                          prompt: opts.promptText,
+                          images: opts.images,
+                          ...(opts.characterPrepared[0]
+                            ? { characterImage: opts.characterPrepared[0] }
+                            : {}),
+                          productImage: opts.productPrepared,
+                          videosPerJob: 1,
+                          variantCount: 1,
+                          videoModel: opts.videoModel,
+                          config: {
+                            prompt: opts.promptText,
+                            aspectRatio: "9:16",
+                            videosPerJob: 1,
+                            variantCount: 1,
+                            videoModel: opts.videoModel,
+                            videoMode: "component",
+                          },
+                          _metadata: {
+                            threadId: fresh.id,
+                            shopName: fresh.shopName,
+                            productName: fresh.productName,
+                            ...(opts.slotIndex != null ? { slotIndex: opts.slotIndex } : {}),
+                          },
+                        },
+                        cancelOnUnmount: true,
+                        onJobEnqueued: (jobId) => {
+                          activeJobIdsRef.current[fresh.id] = jobId;
+                        },
+                        onProgress: (_pct, msg) => {
+                          if (msg)
+                            onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+                        },
+                      });
+                      break;
+                    } catch (enqueueErr: any) {
+                      if (
+                        !isStreamLimitEnqueueError(enqueueErr) ||
+                        attempt >= MAX_STREAM_ENQUEUE_ATTEMPTS
+                      ) {
+                        throw enqueueErr;
+                      }
+                      onAddLog(
+                        t("Chờ slot luồng ({{n}}/{{max}})...", {
+                          n: attempt + 1,
+                          max: MAX_STREAM_ENQUEUE_ATTEMPTS,
+                        }),
+                        "warning",
+                        fresh.id
+                      );
+                      await waitBeforeStreamEnqueueRetry(attempt, {
+                        retryAfterMs: enqueueErr.retryAfterMs,
+                        isCancelled: () => ctx.isPaused() || pauseAllRef.current,
+                      });
+                    }
+                  }
+                  return result!;
+                },
+                () => ctx.isPaused() || pauseAllRef.current
+              );
             };
 
             const extractUris = (result: Awaited<ReturnType<typeof shopeeVideoJob.run>>) => {
@@ -1771,177 +1762,167 @@ export function ThreadManagementPanel({
                   return;
                 }
 
-                await videoSlotPool!.acquire();
-                try {
+                slotStatuses[slotIndex] = "running";
+                slotErrors[slotIndex] = "";
+                await patchSlotState(() => ({
+                  videoSlotStatuses: [...slotStatuses],
+                  videoSlotErrors: [...slotErrors],
+                  status: "running" as ThreadStatus,
+                  countdown: 99999,
+                }));
+                scheduleParentSync();
+
+                const slot = resolveSlotConfig(config!, slotIndex);
+                const slotPrompt =
+                  resolveEffectiveSlotPrompt(config!, slotIndex) ||
+                  fresh.prompt?.trim() ||
+                  prompt;
+
+                let characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
+                if (slot.useCharacterImage !== false) {
+                  const character =
+                    config!.characters.find((c) => c.id === slot.characterId) ||
+                    config!.characters[0];
+                  if (character) {
+                    const urls = getCharacterImagesForRandomMode(
+                      character,
+                      slot.randomImagesEnabled === true
+                    );
+                    if (urls.length) {
+                      characterPrepared = await Promise.all(
+                        urls.map((url) => prepareShopeeImageInput(url))
+                      );
+                    }
+                  }
+                }
+                const images = buildShopeeVideoImages(characterPrepared, productPrepared);
+
+                for (let slotRetry = 0; ; slotRetry++) {
                   if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
                     slotRunCancelled = true;
                     return;
                   }
 
-                  slotStatuses[slotIndex] = "running";
-                  slotErrors[slotIndex] = "";
-                  await patchSlotState(() => ({
-                    videoSlotStatuses: [...slotStatuses],
-                    videoSlotErrors: [...slotErrors],
-                    status: "running" as ThreadStatus,
-                    countdown: 99999,
-                  }));
-                  scheduleParentSync();
+                  try {
+                    onAddLog(
+                      t("Generate Video - {{n}}/{{total}} (Tách Prompt)", {
+                        n: slotIndex + 1,
+                        total: slotCount,
+                      }),
+                      "info",
+                      fresh.id
+                    );
 
-                  const slot = resolveSlotConfig(config!, slotIndex);
-                  const slotPrompt =
-                    resolveEffectiveSlotPrompt(config!, slotIndex) ||
-                    fresh.prompt?.trim() ||
-                    prompt;
+                    const result = await runOneGenerate({
+                      promptText: slotPrompt,
+                      images,
+                      characterPrepared,
+                      productPrepared,
+                      videoModel: slot.videoModel || config!.videoModel,
+                      slotIndex,
+                    });
 
-                  let characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[] = [];
-                  if (slot.useCharacterImage !== false) {
-                    const character =
-                      config!.characters.find((c) => c.id === slot.characterId) ||
-                      config!.characters[0];
-                    if (character) {
-                      const urls = getCharacterImagesForRandomMode(
-                        character,
-                        slot.randomImagesEnabled === true
-                      );
-                      if (urls.length) {
-                        characterPrepared = await Promise.all(
-                          urls.map((url) => prepareShopeeImageInput(url))
-                        );
-                      }
-                    }
-                  }
-                  const images = buildShopeeVideoImages(characterPrepared, productPrepared);
-
-                  for (let slotRetry = 0; ; slotRetry++) {
                     if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
                       slotRunCancelled = true;
                       return;
                     }
 
-                    try {
-                      onAddLog(
-                        t("Generate Video - {{n}}/{{total}} (Tách Prompt)", {
-                          n: slotIndex + 1,
-                          total: slotCount,
-                        }),
-                        "info",
-                        fresh.id
-                      );
+                    const rawUris = extractUris(result);
+                    const uri = rawUris[0] || "";
+                    if (!uri) {
+                      throw new Error(t("Không nhận được video"));
+                    }
+                    videoUrls[slotIndex] = uri;
+                    videoFlow2RequestIds[slotIndex] = String(
+                      result.data.flow2RequestId || ""
+                    ).trim();
+                    slotStatuses[slotIndex] = "success";
+                    slotErrors[slotIndex] = "";
 
-                      const result = await runOneGenerate({
-                        promptText: slotPrompt,
-                        images,
-                        characterPrepared,
-                        productPrepared,
-                        videoModel: slot.videoModel || config!.videoModel,
-                        slotIndex,
-                      });
+                    const filledSoFar = videoUrls.filter(Boolean).length;
+                    await patchSlotState(() => ({
+                      status: "running" as ThreadStatus,
+                      videoUrls: [...videoUrls],
+                      videoDisabled: [...videoDisabled],
+                      videoFlow2RequestIds: [...videoFlow2RequestIds],
+                      videoSlotStatuses: [...slotStatuses],
+                      videoSlotErrors: [...slotErrors],
+                      uploaded: filledSoFar,
+                      pending: Math.max(slotCount - filledSoFar, 0),
+                      error: "",
+                      countdown: 99999,
+                    }));
+                    scheduleParentSync();
 
-                      if (slotRunCancelled || ctx.isPaused() || pauseAllRef.current) {
-                        slotRunCancelled = true;
-                        return;
-                      }
-
-                      const rawUris = extractUris(result);
-                      const uri = rawUris[0] || "";
-                      if (!uri) {
-                        throw new Error(t("Không nhận được video"));
-                      }
-                      videoUrls[slotIndex] = uri;
-                      videoFlow2RequestIds[slotIndex] = String(
-                        result.data.flow2RequestId || ""
-                      ).trim();
-                      slotStatuses[slotIndex] = "success";
-                      slotErrors[slotIndex] = "";
-
-                      const filledSoFar = videoUrls.filter(Boolean).length;
-                      await patchSlotState(() => ({
-                        status: "running" as ThreadStatus,
-                        videoUrls: [...videoUrls],
-                        videoDisabled: [...videoDisabled],
-                        videoFlow2RequestIds: [...videoFlow2RequestIds],
-                        videoSlotStatuses: [...slotStatuses],
-                        videoSlotErrors: [...slotErrors],
-                        uploaded: filledSoFar,
-                        pending: Math.max(slotCount - filledSoFar, 0),
-                        error: "",
-                        countdown: 99999,
-                      }));
-                      scheduleParentSync();
-
-                      onAddLog(t("Video - {{n}} xong", { n: slotIndex + 1 }), "success", fresh.id);
-                      return;
-                    } catch (slotErr: any) {
-                      if (ctx.isPaused() || pauseAllRef.current) {
-                        slotRunCancelled = true;
-                        return;
-                      }
-                      if (
-                        slotErr instanceof MediaGenerationJobError &&
-                        slotErr.code === "JOB_CANCELLED" &&
-                        !isLostJobError(slotErr)
-                      ) {
-                        slotRunCancelled = true;
-                        return;
-                      }
-
-                      const slotMsg = getTaskErrorMessage(slotErr, t("Generate video thất bại"));
-                      if (
-                        isGenerateRetryableError(slotErr) &&
-                        slotRetry < MAX_GENERATE_ERROR_RETRIES
-                      ) {
-                        const nextRetry = slotRetry + 1;
-                        onAddLog(
-                          t(
-                            "Video - {{n}} chưa xong, giữ task này chạy lại {{current}}/{{max}} — chưa báo lỗi, chưa sang task khác",
-                            {
-                              n: slotIndex + 1,
-                              current: nextRetry,
-                              max: MAX_GENERATE_ERROR_RETRIES,
-                            }
-                          ),
-                          "warning",
-                          fresh.id
-                        );
-                        continue;
-                      }
-
-                      slotStatuses[slotIndex] = "error";
-                      slotErrors[slotIndex] = slotMsg;
-                      videoUrls[slotIndex] = "";
-                      videoFlow2RequestIds[slotIndex] = "";
-
-                      const filledSoFar = videoUrls.filter(Boolean).length;
-                      await patchSlotState(() => ({
-                        status: "running" as ThreadStatus,
-                        videoUrls: [...videoUrls],
-                        videoDisabled: [...videoDisabled],
-                        videoFlow2RequestIds: [...videoFlow2RequestIds],
-                        videoSlotStatuses: [...slotStatuses],
-                        videoSlotErrors: [...slotErrors],
-                        uploaded: filledSoFar,
-                        pending: Math.max(slotCount - filledSoFar, 0),
-                        error: t("Video - {{n}} lỗi: {{msg}}", {
-                          n: slotIndex + 1,
-                          msg: slotMsg,
-                        }),
-                        countdown: 99999,
-                      }));
-                      scheduleParentSync();
-                      onAddLog(
-                        t("Video - {{n}} lỗi: {{msg}}", {
-                          n: slotIndex + 1,
-                          msg: slotMsg,
-                        }),
-                        "error",
-                        fresh.id
-                      );
+                    onAddLog(t("Video - {{n}} xong", { n: slotIndex + 1 }), "success", fresh.id);
+                    return;
+                  } catch (slotErr: any) {
+                    if (ctx.isPaused() || pauseAllRef.current) {
+                      slotRunCancelled = true;
                       return;
                     }
+                    if (
+                      slotErr instanceof MediaGenerationJobError &&
+                      slotErr.code === "JOB_CANCELLED" &&
+                      !isLostJobError(slotErr)
+                    ) {
+                      slotRunCancelled = true;
+                      return;
+                    }
+
+                    const slotMsg = getTaskErrorMessage(slotErr, t("Generate video thất bại"));
+                    if (
+                      isGenerateRetryableError(slotErr) &&
+                      slotRetry < MAX_GENERATE_ERROR_RETRIES
+                    ) {
+                      const nextRetry = slotRetry + 1;
+                      onAddLog(
+                        t(
+                          "Video - {{n}} chưa xong, giữ task này chạy lại {{current}}/{{max}} — chưa báo lỗi, chưa sang task khác",
+                          {
+                            n: slotIndex + 1,
+                            current: nextRetry,
+                            max: MAX_GENERATE_ERROR_RETRIES,
+                          }
+                        ),
+                        "warning",
+                        fresh.id
+                      );
+                      continue;
+                    }
+
+                    slotStatuses[slotIndex] = "error";
+                    slotErrors[slotIndex] = slotMsg;
+                    videoUrls[slotIndex] = "";
+                    videoFlow2RequestIds[slotIndex] = "";
+
+                    const filledSoFar = videoUrls.filter(Boolean).length;
+                    await patchSlotState(() => ({
+                      status: "running" as ThreadStatus,
+                      videoUrls: [...videoUrls],
+                      videoDisabled: [...videoDisabled],
+                      videoFlow2RequestIds: [...videoFlow2RequestIds],
+                      videoSlotStatuses: [...slotStatuses],
+                      videoSlotErrors: [...slotErrors],
+                      uploaded: filledSoFar,
+                      pending: Math.max(slotCount - filledSoFar, 0),
+                      error: t("Video - {{n}} lỗi: {{msg}}", {
+                        n: slotIndex + 1,
+                        msg: slotMsg,
+                      }),
+                      countdown: 99999,
+                    }));
+                    scheduleParentSync();
+                    onAddLog(
+                      t("Video - {{n}} lỗi: {{msg}}", {
+                        n: slotIndex + 1,
+                        msg: slotMsg,
+                      }),
+                      "error",
+                      fresh.id
+                    );
+                    return;
                   }
-                } finally {
-                  videoSlotPool!.release();
                 }
               };
 
@@ -1968,57 +1949,80 @@ export function ThreadManagementPanel({
               const jobPrompt = fresh.prompt?.trim() || prompt;
 
               let result: Awaited<ReturnType<typeof shopeeVideoJob.run>>;
-              for (let attempt = 0; ; attempt++) {
-                if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
-                try {
-                  result = await shopeeVideoJob.run({
-                    url: "/api/app/generation-shopee-video/",
-                    body: {
-                      prompt: jobPrompt,
-                      images,
-                      ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
-                      productImage: productPrepared,
-                      videosPerJob: config!.videosPerJob,
-                      variantCount: config!.videosPerJob,
-                      videoModel: config!.videoModel,
-                      config: {
-                        prompt: jobPrompt,
-                        aspectRatio: "9:16",
-                        videosPerJob: config!.videosPerJob,
-                        variantCount: config!.videosPerJob,
-                        videoModel: config!.videoModel,
-                        videoMode: "component",
-                      },
-                      _metadata: {
-                        threadId: fresh.id,
-                        shopName: fresh.shopName,
-                        productName: fresh.productName,
-                      },
-                    },
-                    cancelOnUnmount: true,
-                    onJobEnqueued: (jobId) => {
-                      activeJobIdsRef.current[fresh.id] = jobId;
-                    },
-                    onProgress: (_pct, msg) => {
-                      if (msg)
-                        onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
-                    },
-                  });
-                  break;
-                } catch (enqueueErr: any) {
-                  const isStreamLimit =
-                    enqueueErr instanceof MediaGenerationJobError &&
-                    enqueueErr.code === "ENQUEUE_FAILED" &&
-                    (enqueueErr.httpStatus === 429 ||
-                      /giới hạn luồng/i.test(String(enqueueErr.message || "")));
-                  if (!isStreamLimit || attempt >= 90) throw enqueueErr;
-                  onAddLog(
-                    t("Chờ slot luồng ({{n}}/90)...", { n: attempt + 1 }),
-                    "warning",
-                    fresh.id
-                  );
-                  await new Promise((r) => setTimeout(r, 2000));
+              try {
+                result = await withFrontendJobSlot(
+                  jobQueue,
+                  async () => {
+                    for (let attempt = 0; ; attempt++) {
+                      if (ctx.isPaused() || pauseAllRef.current) {
+                        throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
+                      }
+                      try {
+                        return await shopeeVideoJob.run({
+                          url: "/api/app/generation-shopee-video/",
+                          body: {
+                            prompt: jobPrompt,
+                            images,
+                            ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
+                            productImage: productPrepared,
+                            videosPerJob: config!.videosPerJob,
+                            variantCount: config!.videosPerJob,
+                            videoModel: config!.videoModel,
+                            config: {
+                              prompt: jobPrompt,
+                              aspectRatio: "9:16",
+                              videosPerJob: config!.videosPerJob,
+                              variantCount: config!.videosPerJob,
+                              videoModel: config!.videoModel,
+                              videoMode: "component",
+                            },
+                            _metadata: {
+                              threadId: fresh.id,
+                              shopName: fresh.shopName,
+                              productName: fresh.productName,
+                            },
+                          },
+                          cancelOnUnmount: true,
+                          onJobEnqueued: (jobId) => {
+                            activeJobIdsRef.current[fresh.id] = jobId;
+                          },
+                          onProgress: (_pct, msg) => {
+                            if (msg)
+                              onAddLog(`${fresh.productName || fresh.id}: ${msg}`, "info", fresh.id);
+                          },
+                        });
+                      } catch (enqueueErr: any) {
+                        if (
+                          !isStreamLimitEnqueueError(enqueueErr) ||
+                          attempt >= MAX_STREAM_ENQUEUE_ATTEMPTS
+                        ) {
+                          throw enqueueErr;
+                        }
+                        onAddLog(
+                          t("Chờ slot luồng ({{n}}/{{max}})...", {
+                            n: attempt + 1,
+                            max: MAX_STREAM_ENQUEUE_ATTEMPTS,
+                          }),
+                          "warning",
+                          fresh.id
+                        );
+                        await waitBeforeStreamEnqueueRetry(attempt, {
+                          retryAfterMs: enqueueErr.retryAfterMs,
+                          isCancelled: () => ctx.isPaused() || pauseAllRef.current,
+                        });
+                      }
+                    }
+                  },
+                  () => ctx.isPaused() || pauseAllRef.current
+                );
+              } catch (enqueueErr: any) {
+                if (
+                  enqueueErr instanceof MediaGenerationJobError &&
+                  enqueueErr.code === "JOB_CANCELLED"
+                ) {
+                  return "cancelled";
                 }
+                throw enqueueErr;
               }
 
               if (ctx.isPaused() || pauseAllRef.current) return "cancelled";
@@ -2577,39 +2581,49 @@ export function ThreadManagementPanel({
           throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
         }
         try {
-          result = await shopeeVideoJob.run({
-            url: "/api/app/generation-shopee-video/",
-            body: {
-              prompt,
-              images,
-              ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
-              productImage: productPrepared,
-              videosPerJob: 1,
-              variantCount: 1,
-              videoModel: slot.videoModel || config.videoModel,
-              config: {
-                prompt,
-                aspectRatio: "9:16",
-                videosPerJob: 1,
-                variantCount: 1,
-                videoModel: slot.videoModel || config.videoModel,
-                videoMode: "component",
-              },
-              _metadata: {
-                threadId: target.id,
-                shopName: target.shopName,
-                productName: target.productName,
-                slotIndex,
-              },
-            },
-            cancelOnUnmount: false,
-            onJobEnqueued: (jobId) => {
-              activeJobIdsRef.current[itemId] = jobId;
-            },
-            onProgress: (_pct, msg) => {
-              if (msg) onAddLog(msg, "info", itemId);
-            },
-          });
+          if (!videoJobQueueRef.current) {
+            videoJobQueueRef.current = createFrontendJobQueue(
+              Math.max(1, Math.min(50, Math.round(VIDEO_CONCURRENCY || 1)))
+            );
+          }
+          result = await withFrontendJobSlot(
+            videoJobQueueRef.current,
+            async () =>
+              shopeeVideoJob.run({
+                url: "/api/app/generation-shopee-video/",
+                body: {
+                  prompt,
+                  images,
+                  ...(characterPrepared[0] ? { characterImage: characterPrepared[0] } : {}),
+                  productImage: productPrepared,
+                  videosPerJob: 1,
+                  variantCount: 1,
+                  videoModel: slot.videoModel || config.videoModel,
+                  config: {
+                    prompt,
+                    aspectRatio: "9:16",
+                    videosPerJob: 1,
+                    variantCount: 1,
+                    videoModel: slot.videoModel || config.videoModel,
+                    videoMode: "component",
+                  },
+                  _metadata: {
+                    threadId: target.id,
+                    shopName: target.shopName,
+                    productName: target.productName,
+                    slotIndex,
+                  },
+                },
+                cancelOnUnmount: false,
+                onJobEnqueued: (jobId) => {
+                  activeJobIdsRef.current[itemId] = jobId;
+                },
+                onProgress: (_pct, msg) => {
+                  if (msg) onAddLog(msg, "info", itemId);
+                },
+              }),
+            () => pauseAllRef.current
+          );
           const fromUris = (
             (result.data.videoUris?.length ? result.data.videoUris : []) as string[]
           )
@@ -2627,6 +2641,24 @@ export function ThreadManagementPanel({
             !isLostJobError(regenErr)
           ) {
             throw regenErr;
+          }
+          if (
+            isStreamLimitEnqueueError(regenErr) &&
+            regenRetry < MAX_STREAM_ENQUEUE_ATTEMPTS
+          ) {
+            onAddLog(
+              t("Chờ slot luồng ({{n}}/{{max}})...", {
+                n: regenRetry + 1,
+                max: MAX_STREAM_ENQUEUE_ATTEMPTS,
+              }),
+              "warning",
+              itemId
+            );
+            await waitBeforeStreamEnqueueRetry(regenRetry, {
+              retryAfterMs: regenErr.retryAfterMs,
+              isCancelled: () => pauseAllRef.current,
+            });
+            continue;
           }
           if (
             isGenerateRetryableError(regenErr) &&

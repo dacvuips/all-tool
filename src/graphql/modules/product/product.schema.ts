@@ -197,6 +197,7 @@ const schema = gql`
     KLING_KEY
     SEE_DANCE_KEY
     GOOGLE_LABS_API_KEY
+    CHATGPT_GATEWAY_KEY
   } 
 
   type ProductPageData {

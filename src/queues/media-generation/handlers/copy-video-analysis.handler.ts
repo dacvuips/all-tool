@@ -1,22 +1,27 @@
 /**
- * Handler COPY_VIDEO_ANALYSIS — AI phân tích video gốc → JSON scenes.
+ * Handler COPY_VIDEO_ANALYSIS — Flow2 gen_text phân tích video gốc → JSON scenes.
  */
 import {
   buildVideoAnalysisPrompt,
-  CopyVideoAnalysisResponseSchema,
 } from "../../../routers/app/affiliate-scene/_copy-video-analysis";
+import { CopyVideoAnalysisOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
 import {
   assertNonEmptyScenesArray,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
-  callGeminiJsonGenerate,
   filterReferenceImages,
-  getGeminiSceneModel,
   incrementRequestCount,
   parseGeminiJsonResponse,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
+  resolveProductImagesForAi,
+  resolveReferenceImagesForGemini,
+  unwrapAiJsonPayload,
 } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  generateTextWithFlow2,
+  type Flow2TextResult,
+} from "../../../routers/api-media/flow2/text-generation";
 import {
   IMediaGenerationJob,
   MediaGenerationJsonResult,
@@ -37,6 +42,14 @@ export type CopyVideoAnalysisPayload = {
   objectToPersonify?: string;
   artStyleId?: string;
 };
+
+const COPY_VIDEO_SYSTEM_INSTRUCTION = "You are an expert Video Production and AI Animation Director.";
+
+function parseCopyVideoJson(result: Flow2TextResult): Record<string, unknown> {
+  if (Array.isArray(result.json)) return { scenes: result.json };
+  if (result.json && typeof result.json === "object") return unwrapAiJsonPayload(result.json);
+  return parseGeminiJsonResponse(result.text);
+}
 
 export async function handleCopyVideoAnalysis(
   job: IMediaGenerationJob,
@@ -78,7 +91,7 @@ export async function handleCopyVideoAnalysis(
     body.artStyle = resolvedArtStylePrompt;
   }
 
-  await emitter.progress(20, "Đang gọi AI phân tích video...");
+  await emitter.progress(20, "Đang gửi video lên Flow2 gen_text...");
 
   const productImageNote = buildProductImageScriptNote(body.productImages || []);
   const personifyImageNote = usePersonifyImage
@@ -95,18 +108,36 @@ export async function handleCopyVideoAnalysis(
     personifyImageNote +
     productImageNote;
 
-  const responseText = await callGeminiJsonGenerate({
-    model: await getGeminiSceneModel("COPY_VIDEO"),
-    text,
-    media: [{ imageBytes: body.videoBase64, mimeType }],
-    label: "copy-video-analysis",
-    responseSchema: CopyVideoAnalysisResponseSchema,
-    temperature: 0.4,
+  const personifyImages = usePersonifyImage
+    ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
+    : [];
+  const productImages = await resolveProductImagesForAi(body.productImages);
+
+  // Video goes first, followed by optional reference images
+  const imageInputs = [
+    { imageBytes: body.videoBase64, mimeType },
+    ...personifyImages,
+    ...productImages,
+  ];
+
+  const { result } = await generateTextWithFlow2({
+    prompt: text,
+    systemInstruction: COPY_VIDEO_SYSTEM_INSTRUCTION,
+    imageInputs,
+    jsonMode: true,
+    jsonSchema: CopyVideoAnalysisOpenAIJsonSchema,
+    customerId: job.customerId,
+    onProgress: async (progress, message) => {
+      await emitter.progress(progress, message);
+    },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
   });
 
   await emitter.progress(90, "Đang chuẩn hoá kết quả...");
 
-  const parsed = parseGeminiJsonResponse(responseText);
+  const parsed = parseCopyVideoJson(result) as any;
   assertNonEmptyScenesArray(parsed.scenes);
 
   await incrementRequestCount(job.customerId);

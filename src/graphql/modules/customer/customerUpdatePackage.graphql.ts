@@ -5,6 +5,7 @@ import logger from "../../../helpers/logger";
 import { MainConnection } from "../../../helpers/mongo";
 import { Scope } from "../../../libs/dal/authority";
 import { CustomerModel, SubscriptionPlanEnum } from "../../../libs/dal/customer";
+import { snapshotGooglePackage } from "../../../libs/dal/customer/google-package.snapshot";
 import { IntroduceModel } from "../../../libs/dal/introduce";
 import {
   InsertNotification,
@@ -38,6 +39,7 @@ const FREE_PACKAGE_DEFAULTS = {
   videoLimit: 5,
   imageLimit: 10,
   requestLimit: 5,
+  textCreditLimit: 0,
   imageStreamCount: 1,
   videoStreamCount: 1,
   price: 0,
@@ -69,24 +71,14 @@ export default {
         const pkg = customer.googlePackage || {};
 
         // Snapshot BEFORE
-        const beforeSnapshot: PackageTransactionSnapshot = {
-          subscription: pkg.subscription,
-          videoCount: pkg.videoCount,
-          videoLimit: pkg.videoLimit,
-          imageCount: pkg.imageCount,
-          imageLimit: pkg.imageLimit,
-          requestCount: pkg.requestCount,
-          requestLimit: pkg.requestLimit,
-          imageStreamCount: pkg.imageStreamCount,
-          videoStreamCount: pkg.videoStreamCount,
-          expiryPackageDate: pkg.expiryPackageDate,
-        };
+        const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
 
         // Lấy thông số gói từ Setting
         let packageConfig: {
           videoLimit: number;
           imageLimit: number;
           requestLimit: number;
+          textCreditLimit: number;
           imageStreamCount: number;
           videoStreamCount: number;
           price: number;
@@ -109,6 +101,7 @@ export default {
             videoLimit: getValue("video-limit"),
             imageLimit: getValue("image-limit"),
             requestLimit: getValue("request-limit"),
+            textCreditLimit: getValue("text-credit"),
             imageStreamCount: getValue("image-stream-count"),
             videoStreamCount: getValue("video-stream-count"),
             price: getValue("price"),
@@ -121,11 +114,13 @@ export default {
           "googlePackage.videoLimit": packageConfig.videoLimit,
           "googlePackage.imageLimit": packageConfig.imageLimit,
           "googlePackage.requestLimit": packageConfig.requestLimit,
+          "googlePackage.textCreditLimit": packageConfig.textCreditLimit,
           "googlePackage.imageStreamCount": packageConfig.imageStreamCount,
           "googlePackage.videoStreamCount": packageConfig.videoStreamCount,
           "googlePackage.videoCount": 0,
           "googlePackage.imageCount": 0,
           "googlePackage.requestCount": 0,
+          "googlePackage.textCreditCount": 0,
         };
 
         // Tự động tính expiryPackageDate theo loại gói
@@ -155,18 +150,7 @@ export default {
         const updatedPkg = updatedCustomer.googlePackage || {};
 
         // Snapshot AFTER
-        const afterSnapshot: PackageTransactionSnapshot = {
-          subscription: updatedPkg.subscription,
-          videoCount: updatedPkg.videoCount,
-          videoLimit: updatedPkg.videoLimit,
-          imageCount: updatedPkg.imageCount,
-          imageLimit: updatedPkg.imageLimit,
-          requestCount: updatedPkg.requestCount,
-          requestLimit: updatedPkg.requestLimit,
-          imageStreamCount: updatedPkg.imageStreamCount,
-          videoStreamCount: updatedPkg.videoStreamCount,
-          expiryPackageDate: updatedPkg.expiryPackageDate,
-        };
+        const afterSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(updatedPkg);
 
         // Ghi log PackageTransaction
         await PackageTransactionModel.create({

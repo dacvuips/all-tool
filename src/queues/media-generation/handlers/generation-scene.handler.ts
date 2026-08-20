@@ -1,29 +1,28 @@
 /**
- * Handler GENERATION_SCENE — AI tạo kịch bản multi-scene (JSON).
+ * Handler GENERATION_SCENE — Flow2 gen_text tạo kịch bản multi-scene (JSON).
  */
 import { StoryModeTypeEnum } from "../../../routers/app/constanst";
 import { AffiliateVideoOpenAIJsonSchema } from "../../../routers/app/affiliate-scene/_chatgpt.constants";
-import { AffiliateVideoResponseSchema } from "../../../routers/app/affiliate-scene/_gemini.constants";
 import {
   AffiliateVideoFormConfig,
   assertNonEmptyScenesArray,
   buildObjectPersonifyImageScriptNote,
   buildProductImageScriptNote,
-  callChatGPTGateway,
-  callGeminiJsonGenerate,
   filterReferenceImages,
-  getChatGPTSceneModel,
-  getGeminiSceneModel,
   incrementRequestCount,
   interpolateTemplate,
   normalizeSceneAudioField,
   parseGeminiJsonResponse,
-  resolveAiSceneProvider,
   resolveArtStylePrompt,
   resolveObjectToPersonifyPrompt,
   resolveProductImagesForAi,
   resolveReferenceImagesForGemini,
+  unwrapAiJsonPayload,
 } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  generateTextWithFlow2,
+  type Flow2TextResult,
+} from "../../../routers/api-media/flow2/text-generation";
 import {
   IMediaGenerationJob,
   MediaGenerationJsonResult,
@@ -39,13 +38,14 @@ export type GenerationScenePayload = {
   objectToPersonifyImages?: import("../../../routers/app/affiliate-scene/_shared").ReferenceImageInput[];
 };
 
-const DEFAULT_PROMPT = `
+const SCENE_SYSTEM_INSTRUCTION = "You are an AI video script director.";
 
+const DEFAULT_PROMPT = `
 Create a consistent multi-scene AI video prompt using:
 {{objectToPersonify}}, {{category}}, {{artStyle}}, {{language}}. {{batchSizeInstruction}} for a short-form video based on the following configuration. Treat {{tipContent}} as the core message of the video
 Create 2 fixed English anchors:
 
-CHARACTER_ANCHOR: Describe the character’s core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
+CHARACTER_ANCHOR: Describe the character's core identity and personified concept, head/face structure, facial features and default expression, overall size, body type, build, silhouette, proportions, full anatomy, posture, surface texture if relevant, outfit, shoes, accessories, signature details, colors, materials, textures, patterns, finish, and distinctive memorable traits. Art style influence from {{artStyle}}. Save to characterBaseDescription
 
 ENVIRONMENT_ANCHOR: Must be one short, vivid sentence describing: - the main location - 4–6 key visual objects/details - the overall atmosphere or outside view. Save to environment
 Generate "visualEffects" as one polished English sentence.
@@ -53,7 +53,6 @@ It must make the scene feel visually rich, magical, and cinematic in a Pixar-lik
 Include: one lighting effect - one atmospheric detail - one character-related accent - one motion or action accent
 Keep it concise, vivid, and scene-specific.
 
-- Return valid JSON only.
 CAMERA_TYPE = [Close-up, Medium shot, Wide shot, Full shot, Low angle, High angle, Over-the-shoulder, Tracking shot, Dolly in, Dolly out, Pan left, Pan right, Tilt up, Tilt down, Orbit shot, Static shot, Handheld].
 Root JSON structure:
 {
@@ -78,8 +77,13 @@ Root JSON structure:
   ]
 }
 CRITICAL RULE: Always keep character and environment identical across all scenes.
-CRITICAL OUTPUT: Return ONLY a raw JSON object. No markdown, no code fences, no explanation, no extra text.
 `;
+
+function parseSceneJson(result: Flow2TextResult): Record<string, unknown> {
+  if (Array.isArray(result.json)) return { scenes: result.json };
+  if (result.json && typeof result.json === "object") return unwrapAiJsonPayload(result.json);
+  return parseGeminiJsonResponse(result.text);
+}
 
 export async function handleGenerationScene(
   job: IMediaGenerationJob,
@@ -119,23 +123,19 @@ export async function handleGenerationScene(
     body.config.artStyle = resolvedArtStylePrompt;
   }
 
-  await emitter.progress(20, "Đang gọi AI tạo kịch bản...");
+  await emitter.progress(20, "Đang gửi prompt lên Flow2 gen_text...");
 
   const productImageNote = buildProductImageScriptNote(body.productImages || []);
   const personifyImageNote = usePersonifyImage
     ? buildObjectPersonifyImageScriptNote(body.objectToPersonifyImages || [])
     : "";
 
-  const storyModeTypes = body.config?.storyModeType;
   const hasBatchSize = body.config.batchSize != null && body.config.batchSize > 0;
   const batchSizeInstruction = hasBatchSize
     ? `Your task is to generate exactly {{batchSize}} cinematic scenes`
     : `Your task is to generate an appropriate number of cinematic scenes (decide based on the script content, typically 4-8 scenes)`;
 
-  const promptTemplate = DEFAULT_PROMPT.replace(
-    "{{batchSizeInstruction}}",
-    batchSizeInstruction
-  );
+  const promptTemplate = DEFAULT_PROMPT.replace("{{batchSizeInstruction}}", batchSizeInstruction);
 
   const interpolatedText =
     interpolateTemplate(body.text || promptTemplate, body.config) +
@@ -146,37 +146,29 @@ export async function handleGenerationScene(
     ? await resolveReferenceImagesForGemini(body.objectToPersonifyImages)
     : [];
   const productImageBase64List = await resolveProductImagesForAi(body.productImages);
-  const mediaImages = [...personifyImageBase64List, ...productImageBase64List];
+  const imageInputs = [...personifyImageBase64List, ...productImageBase64List];
 
-  const aiProvider = await resolveAiSceneProvider();
-  let responseText: string;
-
-  if (aiProvider === "gemini") {
-    responseText = await callGeminiJsonGenerate({
-      model: await getGeminiSceneModel("SCENE"),
-      text: interpolatedText,
-      media: mediaImages,
-      label: "generation-scene",
-      responseSchema: AffiliateVideoResponseSchema,
-    });
-  } else {
-    responseText = await callChatGPTGateway({
-      text: interpolatedText,
-      images: mediaImages.map((img, index) => ({
-        ...img,
-        fileName: `photo-${index + 1}.${(img.mimeType || "").includes("png") ? "png" : "jpg"}`,
-      })),
-      label: "generation-scene",
-      model: await getChatGPTSceneModel("SCENE"),
-      jsonSchema: AffiliateVideoOpenAIJsonSchema,
-    });
-  }
+  const { result } = await generateTextWithFlow2({
+    prompt: interpolatedText,
+    systemInstruction: SCENE_SYSTEM_INSTRUCTION,
+    imageInputs,
+    jsonMode: true,
+    jsonSchema: AffiliateVideoOpenAIJsonSchema,
+    customerId: job.customerId,
+    onProgress: async (progress, message) => {
+      await emitter.progress(progress, message);
+    },
+    onRequestCreated: async (flow2RequestId) => {
+      await emitter.setFlow2RequestId(flow2RequestId);
+    },
+  });
 
   await emitter.progress(85, "Đang chuẩn hoá kết quả...");
 
-  const rawParsed = parseGeminiJsonResponse(responseText) as any;
+  const rawParsed = parseSceneJson(result) as any;
   assertNonEmptyScenesArray(rawParsed.scenes);
 
+  const storyModeTypes = body.config?.storyModeType;
   const parsed = {
     topicTitle: rawParsed.topicTitle || "",
     artStyle: rawParsed.artStyle || "",
@@ -203,9 +195,7 @@ export async function handleGenerationScene(
         storyModeTypes === StoryModeTypeEnum.prompt_to_video
           ? `${rawParsed.characterBaseDescription}, `
           : ""
-      } [${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${
-        scene.visualEffects || ""
-      }`,
+      }[${scene.camera}]: ${scene.motionPrompt}, Visual atmosphere: ${scene.visualEffects || ""}`,
       imageGenPrompt:
         storyModeTypes === StoryModeTypeEnum.image_to_video
           ? `${rawParsed.characterBaseDescription},[${scene.camera}]: ${scene.motionPrompt}. Setting: ${rawParsed.environment}. Visual atmosphere: ${scene.visualEffects}.${rawParsed.artStyle}` ||
