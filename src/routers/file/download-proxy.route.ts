@@ -1,5 +1,6 @@
 import axios from "axios";
 import { Request, Response } from "express";
+import { Readable } from "stream";
 
 /** HTML entity &amp; / &#38; trong query khi copy từ outerHTML */
 function decodeHtmlAmpersands(value: string): string {
@@ -30,12 +31,77 @@ function pickUrlParam(query: Request["query"]): string {
   return decodeHtmlAmpersands(s.trim());
 }
 
+function destroyUpstreamStream(stream: unknown): void {
+  if (stream instanceof Readable) {
+    stream.destroy();
+    return;
+  }
+  const maybe = stream as { destroy?: (err?: Error) => void } | null;
+  if (maybe && typeof maybe.destroy === "function") {
+    maybe.destroy();
+  }
+}
+
+function pipeUpstreamToResponse(
+  req: Request,
+  res: Response,
+  upstream: NodeJS.ReadableStream
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (err?: Error) => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve();
+    };
+
+    const onClientClose = () => {
+      destroyUpstreamStream(upstream);
+      finish();
+    };
+
+    req.once("close", onClientClose);
+
+    upstream.on("error", (err) => {
+      req.off("close", onClientClose);
+      destroyUpstreamStream(upstream);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: "Failed to download file",
+          details: err.message,
+        });
+        finish();
+        return;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+      finish(err);
+    });
+
+    upstream.pipe(res);
+
+    res.on("error", (err) => {
+      req.off("close", onClientClose);
+      destroyUpstreamStream(upstream);
+      finish(err);
+    });
+
+    res.on("finish", () => {
+      req.off("close", onClientClose);
+      finish();
+    });
+  });
+}
+
 export default [
   {
     method: "get",
     path: "/api/file/download-proxy",
     midd: [],
     action: async (req: Request, res: Response) => {
+      let upstream: NodeJS.ReadableStream | null = null;
       try {
         const inlinePreview = resolveInlinePreview(req.query);
         let url = pickUrlParam(req.query);
@@ -72,16 +138,19 @@ export default [
           requestHeaders.Range = rangeHeader;
         }
 
-        // Fetch media from external URL (supports Range for video preview)
+        // Stream upstream — tránh buffer cả file vào RAM (video lớn gây CPU/RAM spike)
         const response = await axios.get(url, {
-          responseType: "arraybuffer",
+          responseType: "stream",
           timeout: 120000, // video có thể lớn / chậm
-          maxContentLength: 500 * 1024 * 1024,
+          maxContentLength: Infinity,
+          maxBodyLength: Infinity,
           headers: requestHeaders,
           validateStatus: () => true,
         });
+        upstream = response.data as NodeJS.ReadableStream;
 
         if (response.status === 404 || response.status === 410) {
+          destroyUpstreamStream(upstream);
           return res.status(response.status).json({
             error: "Video URL không tồn tại hoặc đã hết hạn",
             details: `Upstream HTTP ${response.status}`,
@@ -89,6 +158,7 @@ export default [
         }
 
         if (response.status < 200 || (response.status >= 300 && response.status !== 206)) {
+          destroyUpstreamStream(upstream);
           return res.status(502).json({
             error: "Upstream trả lỗi khi tải video",
             details: `Upstream HTTP ${response.status}`,
@@ -114,8 +184,16 @@ export default [
           res.setHeader("Content-Length", response.headers["content-length"]);
         }
 
-        res.status(response.status).send(Buffer.from(response.data));
+        res.status(response.status);
+        await pipeUpstreamToResponse(req, res, upstream);
+        upstream = null;
       } catch (error: any) {
+        if (upstream) {
+          destroyUpstreamStream(upstream);
+        }
+        if (res.headersSent || res.writableEnded) {
+          return;
+        }
         console.error("Download proxy error:", error.message);
         const upstreamStatus = error?.response?.status;
         if (upstreamStatus === 404 || upstreamStatus === 410) {
