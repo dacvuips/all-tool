@@ -4,7 +4,7 @@
  *   1. `POST` API enqueue → backend kiểm tra giới hạn luồng, lưu Redis, tạo job → trả `{ jobId }`.
  *   2. Mở GraphQL subscription `mediaGenerationJobChanged(jobId)` (push realtime).
  *   3. Query một lần `mediaGenerationJob(id)` — xử lý race job xong trước khi subscription kết nối.
- *   4. Fallback poll mỗi 8s nếu socket im lặng.
+ *   4. Fallback poll nếu socket im lặng (QUEUED nhanh hơn; PROCESSING chậm hơn để giảm tải server).
  *   5. Resolve khi `SUCCEEDED`; reject khi `FAILED` / `CANCELLED`.
  *
  * Edge cases đã xử lý:
@@ -61,10 +61,15 @@ export type MediaGenerationRunOptions<TBody = any> = {
   /** Gọi ngay sau khi enqueue thành công — dùng để gắn jobId lên item UI */
   onJobEnqueued?: (jobId: string) => void;
   /**
-   * Khoảng poll fallback (ms). Mặc định 8000ms.
+   * Khoảng poll fallback khi job QUEUED (ms). Mặc định 8000ms.
    * Đặt 0 để tắt fallback (chỉ dựa subscription).
    */
   pollIntervalMs?: number;
+  /**
+   * Khoảng poll fallback khi job PROCESSING (ms). Mặc định 4000ms.
+   * Subscription vẫn push realtime; poll chỉ là lớp dự phòng.
+   */
+  pollIntervalProcessingMs?: number;
   /**
    * Nếu component unmount khi job đang chạy, có gọi cancel không?
    * Mặc định `false` — worker chạy tiếp; job SUCCEEDED sẽ bị xóa khỏi Mongo sau khi publish socket.
@@ -92,9 +97,19 @@ export class MediaGenerationJobError extends Error {
   }
 }
 
+const DEFAULT_POLL_INTERVAL = 8000;
+const DEFAULT_POLL_INTERVAL_PROCESSING = 4000;
 /** Số lần poll liên tiếp không thấy job trên server → dừng theo dõi */
 const JOB_MISSING_POLL_THRESHOLD = 2;
-const DEFAULT_POLL_INTERVAL = 8000;
+
+function resolvePollIntervalMs(
+  status: MediaGenerationJob["status"] | undefined,
+  queuedMs: number,
+  processingMs: number
+): number {
+  if (status === "PROCESSING") return processingMs;
+  return queuedMs;
+}
 
 export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
   /** Theo dõi mọi "instance" run() đang sống để cleanup khi unmount */
@@ -134,6 +149,8 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
   const run = useCallback(
     async (opts: MediaGenerationRunOptions<TBody>): Promise<MediaGenerationRunResult<TResult>> => {
       const pollIntervalMs = opts.pollIntervalMs ?? DEFAULT_POLL_INTERVAL;
+      const pollIntervalProcessingMs =
+        opts.pollIntervalProcessingMs ?? DEFAULT_POLL_INTERVAL_PROCESSING;
       const handle: { jobId: string | null; cleanup: () => void; cancelOnUnmount?: boolean } = {
         jobId: null,
         cleanup: () => undefined,
@@ -221,19 +238,53 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
         let settled = false;
         let missingPollCount = 0;
         let subscription: { unsubscribe: () => void } | null = null;
-        let pollTimer: ReturnType<typeof setInterval> | null = null;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
         let polling = false;
+        let activePollIntervalMs = pollIntervalMs;
+
+        const clearPollTimer = () => {
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
+          }
+        };
+
+        const scheduleNextPoll = () => {
+          clearPollTimer();
+          if (settled || activePollIntervalMs <= 0) return;
+          pollTimer = setTimeout(() => {
+            pollTimer = null;
+            void pollOnce();
+          }, activePollIntervalMs);
+        };
+
+        const syncPollIntervalForStatus = (status: MediaGenerationJob["status"] | undefined) => {
+          const nextInterval = resolvePollIntervalMs(
+            status,
+            pollIntervalMs,
+            pollIntervalProcessingMs
+          );
+          if (nextInterval === activePollIntervalMs) return;
+          activePollIntervalMs = nextInterval;
+          if (!settled && !polling) {
+            scheduleNextPoll();
+          }
+        };
 
         const pollOnce = async () => {
           if (settled || polling) return;
           polling = true;
           try {
             const job = await MediaGenerationJobService.getJob<TResult>(jobId);
+            syncPollIntervalForStatus(job?.status);
             handleJobSnapshot(job);
           } catch {
             handleMissingJob();
           } finally {
             polling = false;
+            if (!settled) {
+              scheduleNextPoll();
+            }
           }
         };
 
@@ -257,10 +308,7 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
             }
             subscription = null;
           }
-          if (pollTimer) {
-            clearInterval(pollTimer);
-            pollTimer = null;
-          }
+          clearPollTimer();
           if (typeof window !== "undefined") {
             window.removeEventListener("focus", handleWindowFocus);
           }
@@ -341,8 +389,9 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
               reject(new MediaGenerationJobError("Đã huỷ", "JOB_CANCELLED", job.id));
               break;
             }
-            // QUEUED / PROCESSING — tiếp tục theo dõi
+            // QUEUED / PROCESSING — tiếp tục theo dõi (poll chậm hơn khi PROCESSING)
             default:
+              syncPollIntervalForStatus(job.status);
               break;
           }
         };
@@ -365,11 +414,9 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
           console.warn("[useMediaGenerationJob] query initial lỗi:", err?.message);
         });
 
-        // 2c. Poll fallback (nếu enable)
+        // 2c. Poll fallback (nếu enable) — QUEUED nhanh, PROCESSING chậm hơn
         if (pollIntervalMs > 0) {
-          pollTimer = setInterval(() => {
-            void pollOnce();
-          }, pollIntervalMs);
+          scheduleNextPoll();
         }
 
         if (typeof window !== "undefined") {

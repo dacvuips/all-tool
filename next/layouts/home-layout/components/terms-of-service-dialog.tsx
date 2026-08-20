@@ -65,7 +65,7 @@ export function TermsOfServiceDialog() {
       width={720}
       maxWidth="94vw"
       slideFromBottom="none"
-      title={"Điều khoản sử dụng dịch vụ"}
+      title={"Điều khoản và chính sách sử dụng dịch vụ"}
       wrapperClass="fixed w-full h-screen top-0 left-0 z-100 flex flex-col items-center overflow-hidden px-3 pt-20 pb-3 no-scrollbar"
       extraDialogClass="overflow-hidden flex flex-col w-full flex-1 min-h-0 my-0"
       extraDialogStyle={{ margin: 0, maxHeight: "calc(100dvh - 3.5rem - 12px)" }}

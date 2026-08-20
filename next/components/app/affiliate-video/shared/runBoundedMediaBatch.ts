@@ -5,7 +5,7 @@ import {
   createFrontendJobQueue,
   isStreamLimitEnqueueError,
   withFrontendJobSlot,
-} from "../../../lib/media/enqueue-stream-backoff";
+} from "../../../../lib/media/enqueue-stream-backoff";
 
 export type BoundedBatchProgress = {
   setTotal: (n: number) => void;

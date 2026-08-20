@@ -493,7 +493,7 @@ export default function FilmStudioPanel({
                 className="mt-1 w-full px-2.5 py-2 text-sm rounded-lg bg-slate-800 border border-slate-600 text-slate-200"
               >
                 <option value="">{t("—")}</option>
-                {[...new Set(voiceItems.map((v) => v.line.character).filter(Boolean))].map(
+                {Array.from(new Set(voiceItems.map((v) => v.line.character).filter(Boolean))).map(
                   (name) => (
                     <option key={name} value={name}>
                       {name}
