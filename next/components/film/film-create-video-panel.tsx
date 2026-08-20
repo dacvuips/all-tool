@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
@@ -21,6 +21,7 @@ import { FilmAspectRatio, FilmSceneRecord } from "./film-types";
 import { sceneVideoCreating, sceneVideoReady } from "./film-video-card";
 import {
   FILM_VIDEO_REF_MODE_OPTIONS,
+  padVideoRefSlots,
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
@@ -37,7 +38,10 @@ type Props = {
   /** Click tiêu đề card → mở đúng phân cảnh trong Chuỗi Cảnh quay */
   onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
   /** Chọn chế độ Bắt đầu / Thành phần / Start-End → seed slot */
-  onVideoRefModeChange?: (mode: FilmVideoRefMode) => void | Promise<void>;
+  onVideoRefModeChange?: (
+    mode: FilmVideoRefMode,
+    opts?: { rebuild?: boolean }
+  ) => void | Promise<void>;
   onVideoRefSlotsChange?: (
     scene: FilmSceneRecord,
     slots: Array<FilmVideoRefSlot | null>
@@ -113,24 +117,32 @@ export default function FilmCreateVideoPanel({
     if (!onVideoRefModeChange) return;
     setModeBusy(true);
     try {
-      await onVideoRefModeChange(mode);
+      await onVideoRefModeChange(mode, { rebuild: true });
     } finally {
       setModeBusy(false);
     }
   };
 
-  // Seed mặc định khi đã có cảnh và chưa có slot
+  /** Theo dõi ảnh khung + slot — seed lại khi frame có mà slot 1 còn trống. */
+  const refSeedSignal = useMemo(
+    () =>
+      scenes
+        .map((s) => {
+          const frameUrl = (s.frameImageUrl || "").trim();
+          const frameBlob = s.frameImageBlob instanceof Blob ? s.frameImageBlob.size : 0;
+          const slot = padVideoRefSlots(s.videoRefSlots, videoRefMode)[0];
+          const slotUrl = (slot?.imageUrl || "").trim();
+          const slotBlob = slot?.imageBlob instanceof Blob ? slot.imageBlob.size : 0;
+          return `${s.id}:${frameUrl}:${frameBlob}:${slotUrl}:${slotBlob}`;
+        })
+        .join("|"),
+    [scenes, videoRefMode]
+  );
+
   useEffect(() => {
     if (!onVideoRefModeChange || !scenes.length) return;
-    const needSeed = scenes.some(
-      (s) => !s.videoRefSlots || s.videoRefSlots.length === 0
-    );
-    if (needSeed) {
-      void onVideoRefModeChange(videoRefMode);
-    }
-    // chỉ seed khi số cảnh đổi (load / đổi tập)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenes.length]);
+    void onVideoRefModeChange(videoRefMode, { rebuild: false });
+  }, [refSeedSignal, onVideoRefModeChange, videoRefMode, scenes.length]);
 
   return (
     <div className="flex relative flex-col gap-3 h-full min-h-0">

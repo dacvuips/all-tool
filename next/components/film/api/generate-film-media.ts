@@ -5,6 +5,13 @@
  * Dùng chung useMediaGenerationJob pattern (REST enqueue → poll/sub job).
  */
 import { MediaGenerationJobService } from "../../../lib/repo/media-generation-job/media-generation-job.repo";
+import {
+  isStreamLimitHttpStatus,
+  MAX_STREAM_ENQUEUE_ATTEMPTS,
+  parseRetryAfterMs,
+  STREAM_ENQUEUE_MAX_WAIT_MS,
+  waitBeforeStreamEnqueueRetry,
+} from "../../../lib/media/enqueue-stream-backoff";
 import { getOrCreateBlobPreviewUrl } from "../../app/affiliate-video/shared/generatedMediaUtils";
 import {
   base64ToBlob,
@@ -77,9 +84,6 @@ export type FilmGenerateVideoResult = {
 
 const POLL_MS = 2500;
 const MAX_WAIT_MS = 15 * 60 * 1000;
-/** Retry enqueue khi 429 (hết slot luồng image/video) */
-const ENQUEUE_RETRY_MS = 10_000;
-const ENQUEUE_MAX_WAIT_MS = 20 * 60 * 1000;
 
 /** Job đang poll trên client (module-level) — đổi tab / đóng dialog không mất track. */
 const inflightWait = new Map<string, Promise<unknown>>();
@@ -101,7 +105,7 @@ function pickApiErrorMessage(body: any, status: number, fallback: string): strin
   return `${fallback} (${status})`;
 }
 
-/** POST enqueue; tự retry khi 429 (chờ luồng ảnh/video). */
+/** POST enqueue; tự retry khi 429 (chờ luồng ảnh/video, global backoff). */
 async function postFilmEnqueue(
   url: string,
   payload: Record<string, unknown>,
@@ -109,8 +113,13 @@ async function postFilmEnqueue(
 ): Promise<{ jobId: string }> {
   const started = Date.now();
   let lastMessage = failLabel;
+  let attempt = 0;
 
-  while (Date.now() - started < ENQUEUE_MAX_WAIT_MS) {
+  while (Date.now() - started < STREAM_ENQUEUE_MAX_WAIT_MS) {
+    if (attempt >= MAX_STREAM_ENQUEUE_ATTEMPTS) {
+      break;
+    }
+
     const res = await fetch(url, {
       method: "POST",
       credentials: "include",
@@ -128,9 +137,10 @@ async function postFilmEnqueue(
 
     lastMessage = pickApiErrorMessage(body, res.status, failLabel);
 
-    // Hết slot stream — đợi rồi enqueue lại (film bulk / click liên tiếp)
-    if (res.status === 429) {
-      await sleep(ENQUEUE_RETRY_MS);
+    if (isStreamLimitHttpStatus(res.status, lastMessage)) {
+      await waitBeforeStreamEnqueueRetry(attempt++, {
+        retryAfterMs: parseRetryAfterMs(res),
+      });
       continue;
     }
 

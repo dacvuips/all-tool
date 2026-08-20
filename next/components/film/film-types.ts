@@ -111,6 +111,7 @@ export type FilmWorkspaceStepId =
   | "voice"
   | "shot_images"
   | "create_video"
+  | "studio"
   | "settings";
 
 export type FilmWorkspaceStepSection = "script" | "production" | "settings";

@@ -7,6 +7,7 @@ import {
   HiChip,
   HiCog,
   HiCollection,
+  HiFilm,
   HiPlay,
   HiViewGrid,
 } from "react-icons/hi";
@@ -43,6 +44,8 @@ function stepIcon(item: FilmWorkspaceStep, active: boolean) {
       return <HiCamera className={className} />;
     case "create_video":
       return <HiPlay className={className} />;
+    case "studio":
+      return <HiFilm className={className} />;
     case "settings":
       return <HiCog className={className} />;
     default:

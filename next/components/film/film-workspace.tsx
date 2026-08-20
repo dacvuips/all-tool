@@ -51,6 +51,7 @@ import {
 } from "./film-catalog-pick-dialog";
 import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
+import FilmStudioPanel from "./film-studio-panel";
 import {
   applyCharacterVoiceLinksToScenes,
   buildFilmVoiceListItems,
@@ -116,6 +117,7 @@ import { buildFilmPropImagePrompt } from "./film-prop-image-prompt";
 import FilmPropsPanel from "./film-props-panel";
 import {
   buildFilmSceneImagePrompt,
+  appendFilmSingleFrameImageConstraint,
   hydrateScenesImagePrompts,
   withBuiltSceneImagePrompt,
 } from "./film-scene-image-prompt";
@@ -166,10 +168,13 @@ import {
 import { sceneVideoReady } from "./film-video-card";
 import {
   buildDefaultVideoRefSlots,
+  ensureVideoRefSlotsFromFrame,
   FILM_VIDEO_REF_SLOT_COUNT,
   filmVideoRefModeToFlow2,
   filmVideoRefModeToServiceImageType,
   padVideoRefSlots,
+  scenesNeedVideoRefSlotSeed,
+  videoRefSlotsEqual,
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
@@ -3657,7 +3662,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
     try {
       const { jobId } = await enqueueFilmImage({
-        prompt: activePrompt,
+        prompt: appendFilmSingleFrameImageConstraint(activePrompt),
         images,
         aspectRatio,
         numberOfImages: 1,
@@ -4057,16 +4062,23 @@ export default function FilmWorkspace({ projectId }: Props) {
   );
 
   const handleVideoRefModeChange = useCallback(
-    async (mode: FilmVideoRefMode) => {
+    async (mode: FilmVideoRefMode, opts?: { rebuild?: boolean }) => {
+      const rebuild = opts?.rebuild ?? false;
+      if (!rebuild && !scenesNeedVideoRefSlotSeed(scenes, mode)) return;
+
       setVideoRefMode(mode);
       const now = new Date().toISOString();
       const next = scenes.map((s) => ({
         ...s,
-        videoRefSlots: buildDefaultVideoRefSlots(s, mode),
+        videoRefSlots: rebuild
+          ? buildDefaultVideoRefSlots(s, mode)
+          : ensureVideoRefSlotsFromFrame(s, mode),
         updatedAt: now,
       }));
       setScenes(next);
       for (const s of next) {
+        const prev = scenes.find((x) => x.id === s.id);
+        if (prev && videoRefSlotsEqual(prev.videoRefSlots, s.videoRefSlots, mode)) continue;
         try {
           await putFilmScene(s);
         } catch (e) {
@@ -4444,6 +4456,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   if (voiceDone) doneSteps.push("voice");
   if (shotImagesDone) doneSteps.push("shot_images");
   if (createVideoDone) doneSteps.push("create_video");
+  if (createVideoDone) doneSteps.push("studio");
 
   const loadingSteps: FilmWorkspaceStepId[] = [];
   if (characters.some((c) => c.status === "creating")) {
@@ -4463,7 +4476,8 @@ export default function FilmWorkspace({ projectId }: Props) {
     activeStep === "scene_images" ||
     activeStep === "voice" ||
     activeStep === "shot_images" ||
-    activeStep === "create_video";
+    activeStep === "create_video" ||
+    activeStep === "studio";
 
   return (
     <div
@@ -4888,6 +4902,13 @@ export default function FilmWorkspace({ projectId }: Props) {
             />
           )}
 
+          {activeStep === "studio" && (
+            <FilmStudioPanel
+              scenes={scenes}
+              aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
+            />
+          )}
+
           {activeStep === "settings" && (
             <FilmSettingsPanel
               project={project}
@@ -4911,6 +4932,7 @@ export default function FilmWorkspace({ projectId }: Props) {
             activeStep !== "voice" &&
             activeStep !== "shot_images" &&
             activeStep !== "create_video" &&
+            activeStep !== "studio" &&
             activeStep !== "settings" && (
               <div className="flex flex-col justify-center items-center px-6 h-full text-center min-h-xs">
                 <p className="m-0 text-base font-semibold text-gray-700">

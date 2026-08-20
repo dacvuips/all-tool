@@ -28,6 +28,13 @@
  */
 import { useCallback, useEffect, useRef } from "react";
 import {
+  MAX_STREAM_ENQUEUE_ATTEMPTS,
+  STREAM_ENQUEUE_MAX_WAIT_MS,
+  isStreamLimitHttpStatus,
+  parseRetryAfterMs,
+  waitBeforeStreamEnqueueRetry,
+} from "../media/enqueue-stream-backoff";
+import {
   MediaGenerationJob,
   MediaGenerationJobService,
 } from "../repo/media-generation-job/media-generation-job.repo";
@@ -85,22 +92,16 @@ export class MediaGenerationJobError extends Error {
   }
 }
 
-const DEFAULT_POLL_INTERVAL = 8000;
+import {
+  MAX_STREAM_ENQUEUE_ATTEMPTS,
+  STREAM_ENQUEUE_MAX_WAIT_MS,
+  isStreamLimitHttpStatus,
+  parseRetryAfterMs,
+  waitBeforeStreamEnqueueRetry,
+} from "../media/enqueue-stream-backoff";
 /** Số lần poll liên tiếp không thấy job trên server → dừng theo dõi */
 const JOB_MISSING_POLL_THRESHOLD = 2;
-
-function parseRetryAfterHeader(res: Response): number | undefined {
-  const header = res.headers.get("Retry-After");
-  if (!header) return undefined;
-  const sec = Number(header);
-  if (Number.isFinite(sec) && sec > 0) return sec * 1000;
-  const dateMs = Date.parse(header);
-  if (Number.isFinite(dateMs)) {
-    const delta = dateMs - Date.now();
-    return delta > 0 ? delta : undefined;
-  }
-  return undefined;
-}
+const DEFAULT_POLL_INTERVAL = 8000;
 
 export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
   /** Theo dõi mọi "instance" run() đang sống để cleanup khi unmount */
@@ -147,37 +148,69 @@ export function useMediaGenerationJob<TResult = unknown, TBody = any>() {
       };
       activeHandlesRef.current.push(handle);
 
-      // ── 1. Enqueue qua REST ────────────────────────────────────────────────
+      // ── 1. Enqueue qua REST (retry 429 — chờ slot luồng, không spam server) ──
       let jobId: string;
+      const enqueueStarted = Date.now();
+      let enqueueAttempt = 0;
       try {
-        const res = await fetch(opts.url, {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-          body: JSON.stringify(opts.body),
-        });
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new MediaGenerationJobError(
-            (err as any)?.message || `Lỗi ${res.status}`,
-            "ENQUEUE_FAILED",
-            undefined,
-            res.status,
-            parseRetryAfterHeader(res)
-          );
+        while (true) {
+          if (Date.now() - enqueueStarted >= STREAM_ENQUEUE_MAX_WAIT_MS) {
+            throw new MediaGenerationJobError(
+              "Hết thời gian chờ slot tạo media. Thử lại khi job hiện tại hoàn thành.",
+              "ENQUEUE_FAILED",
+              undefined,
+              429
+            );
+          }
+          if (enqueueAttempt >= MAX_STREAM_ENQUEUE_ATTEMPTS) {
+            throw new MediaGenerationJobError(
+              "Đã thử quá nhiều lần khi chờ slot luồng. Vui lòng thử lại sau.",
+              "ENQUEUE_FAILED",
+              undefined,
+              429
+            );
+          }
+
+          const res = await fetch(opts.url, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+            body: JSON.stringify(opts.body),
+          });
+
+          if (isStreamLimitHttpStatus(res.status)) {
+            await res.json().catch(() => ({}));
+            await waitBeforeStreamEnqueueRetry(enqueueAttempt++, {
+              retryAfterMs: parseRetryAfterMs(res),
+            });
+            continue;
+          }
+
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new MediaGenerationJobError(
+              (err as any)?.message || `Lỗi ${res.status}`,
+              "ENQUEUE_FAILED",
+              undefined,
+              res.status,
+              parseRetryAfterMs(res)
+            );
+          }
+
+          const data = await res.json();
+          if (!data?.jobId) {
+            throw new MediaGenerationJobError(
+              "Backend không trả về jobId",
+              "ENQUEUE_FAILED",
+              undefined,
+              res.status
+            );
+          }
+          jobId = String(data.jobId);
+          handle.jobId = jobId;
+          opts.onJobEnqueued?.(jobId);
+          break;
         }
-        const data = await res.json();
-        if (!data?.jobId) {
-          throw new MediaGenerationJobError(
-            "Backend không trả về jobId",
-            "ENQUEUE_FAILED",
-            undefined,
-            res.status
-          );
-        }
-        jobId = String(data.jobId);
-        handle.jobId = jobId;
-        opts.onJobEnqueued?.(jobId);
       } catch (err: any) {
         const idx = activeHandlesRef.current.indexOf(handle);
         if (idx >= 0) activeHandlesRef.current.splice(idx, 1);

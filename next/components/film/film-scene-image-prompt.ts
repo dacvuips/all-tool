@@ -5,6 +5,26 @@
  */
 import type { FilmSceneRecord } from "./film-types";
 
+/** Ràng buộc chống ảnh bị chia nhiều panel / storyboard trong một ảnh. */
+export const FILM_SINGLE_FRAME_IMAGE_CONSTRAINT = `[Định dạng ảnh]
+- Chỉ MỘT khung hình duy nhất, liền mạch (single unified cinematic frame).
+- KHÔNG chia ô, KHÔNG storyboard panel, KHÔNG comic strip, KHÔNG lưới ảnh, KHÔNG xếp nhiều cảnh trong cùng một ảnh.
+- Single continuous still — no split panels, no multi-frame collage, no contact sheet, no diptych/triptych.`;
+
+/** Ghép ràng buộc 1 khung nếu prompt chưa có (tránh trùng khi hydrate lại). */
+export function appendFilmSingleFrameImageConstraint(prompt: string): string {
+  const text = String(prompt || "").trim();
+  if (!text) return FILM_SINGLE_FRAME_IMAGE_CONSTRAINT;
+  if (
+    /single unified frame|single continuous still|khung hình duy nhất|no split panel|không chia ô/i.test(
+      text
+    )
+  ) {
+    return text;
+  }
+  return `${text}\n\n${FILM_SINGLE_FRAME_IMAGE_CONSTRAINT}`;
+}
+
 export type FilmSceneImagePromptSource = Pick<
   FilmSceneRecord,
   | "visualDescription"
@@ -122,7 +142,7 @@ export function buildFilmSceneImagePrompt(
   if (atmosphereBlock) parts.push(atmosphereBlock);
   if (style) parts.push(style);
 
-  if (parts.length) return parts.join("\n\n");
+  if (parts.length) return appendFilmSingleFrameImageConstraint(parts.join("\n\n"));
 
   const summary = String(scene.summary || "").trim();
   if (summary) return summary;

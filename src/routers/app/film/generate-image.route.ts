@@ -12,6 +12,7 @@ import {
   type FilmMediaAssetKind,
 } from "../../../queues/media-generation/handlers/film-job.types";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkImageLimit } from "../affiliate-scene/_shared";
 
 export default [
@@ -95,8 +96,7 @@ export default [
         });
       } catch (err: any) {
         logger.error(`[film-generate-image] Lỗi enqueue: ${err?.message}`);
-        const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
+        sendEnqueueErrorResponse(res, err);
       }
     },
   },

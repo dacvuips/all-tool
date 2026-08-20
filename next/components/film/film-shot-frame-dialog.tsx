@@ -10,7 +10,7 @@ import {
   filmAttachEntityHasImage,
 } from "./film-attachment-validate";
 import FilmMediaZoom from "./film-media-zoom";
-import { buildFilmSceneImagePrompt, resolveFilmSceneImagePrompt } from "./film-scene-image-prompt";
+import { buildFilmSceneImagePrompt, resolveFilmSceneImagePrompt, appendFilmSingleFrameImageConstraint } from "./film-scene-image-prompt";
 import {
   FilmCharacterRecord,
   FilmSceneRecord,
@@ -31,8 +31,11 @@ export function buildFilmShotFrameDefaultPrompt(
   globalStyle?: string | null
 ): string {
   const stored = String(scene.imagePrompt || "").trim();
-  if (stored) return stored;
-  return resolveFilmSceneImagePrompt(scene, globalStyle) || buildFilmSceneImagePrompt(scene, globalStyle);
+  if (stored) return appendFilmSingleFrameImageConstraint(stored);
+  return appendFilmSingleFrameImageConstraint(
+    resolveFilmSceneImagePrompt(scene, globalStyle) ||
+      buildFilmSceneImagePrompt(scene, globalStyle)
+  );
 }
 
 /** Prompt thực sự gửi Image API — ưu tiên đề xuất AI khi đang chọn suggested. */
@@ -43,7 +46,7 @@ export function resolveFilmShotFrameActivePrompt(
   const suggested = String(scene.frameSuggestedPrompt || "").trim();
   const source = scene.framePromptSource;
   if (suggested && source !== "main") {
-    return suggested;
+    return appendFilmSingleFrameImageConstraint(suggested);
   }
   return buildFilmShotFrameDefaultPrompt(scene, globalStyle);
 }

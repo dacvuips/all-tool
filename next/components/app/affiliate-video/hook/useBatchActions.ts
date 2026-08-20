@@ -39,6 +39,7 @@ import {
   collectFailedRetryTasks,
   runBatchRetryWorkerPool,
 } from "../shared/batchRetryFailed";
+import { runBoundedMediaBatch } from "../shared/runBoundedMediaBatch";
 import { useConcurrencyLimits } from "./useConcurrencyLimits";
 
 import { useAffiliateVideoContext } from "../single/providers/affiliate-video-provider";
@@ -689,55 +690,35 @@ export function useBatchActions(
   const handleCreateAllImage = async () => {
     if (batchRunning) return;
 
-    // Filter out disabled scenes
     const eligibleScenes = scenes.filter((s) => !s.disabled);
     if (eligibleScenes.length === 0) return;
 
     setBatchRunning(true);
-    setBatchTotal(eligibleScenes.length);
-    setBatchCompleted(0);
-    setBatchErrors(0);
-    setBatchSkipped(0);
-    setBatchCurrentIndex(0);
-    setBatchCurrentSceneLabel("");
+    setBatchDone(false);
     stopRef.current = false;
 
-    let completed = 0;
-    let errors = 0;
-    let skipped = 0;
-    let nextIndex = 0;
-
-    const worker = async () => {
-      while (true) {
-        if (stopRef.current) return;
-
-        const idx = nextIndex++;
-        if (idx >= eligibleScenes.length) return;
-
-        const scene = eligibleScenes[idx];
-
-        // Skip scenes that already have a generated image
+    const result = await runBoundedMediaBatch({
+      items: eligibleScenes,
+      concurrency: IMAGE_CONCURRENCY,
+      stopRef,
+      progress: {
+        setTotal: setBatchTotal,
+        setCompleted: setBatchCompleted,
+        setErrors: setBatchErrors,
+        setSkipped: setBatchSkipped,
+        setCurrentLabel: (label) => setBatchCurrentSceneLabel(label),
+      },
+      getLabel: (scene) => `#${scene.sceneNumber}`,
+      shouldSkip: async (scene) => {
         const existing = await getGeneratedImage(scene.id);
-        if (existing) {
-          skipped++;
-          setBatchSkipped(skipped);
-          completed++;
-          setBatchCompleted(completed);
-          continue;
-        }
-
-        // Skip scenes without an image prompt
-        if (!scene.imageGenPrompt) {
-          skipped++;
-          setBatchSkipped(skipped);
-          completed++;
-          setBatchCompleted(completed);
-          continue;
-        }
-
+        if (existing) return true;
+        if (!scene.imageGenPrompt) return true;
+        return false;
+      },
+      execute: async (scene) => {
+        addBatchGeneratingSceneId(scene.id);
+        reportSceneError?.(scene.id, "image", null);
         try {
-          addBatchGeneratingSceneId(scene.id);
-          reportSceneError?.(scene.id, "image", null);
           const imageParams = await buildAffiliateImageGenerateParams({
             scene,
             scriptData,
@@ -758,48 +739,39 @@ export function useBatchActions(
               registerSceneJob
             )
           );
-          completed++;
-          setBatchCompleted(completed);
         } catch (err: any) {
           console.error(`[BatchCreateAllImage] Scene #${scene.sceneNumber} error:`, err);
           reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
-          errors++;
-          setBatchErrors(errors);
-          completed++;
-          setBatchCompleted(completed);
+          throw err;
         } finally {
           reportSceneProgress?.(scene.id, "image", null);
           removeBatchGeneratingSceneId(scene.id);
         }
-      }
-    };
-
-    // Start N workers – each independently pulls next scene from queue
-    await Promise.all(Array.from({ length: IMAGE_CONCURRENCY }, () => worker()));
+      },
+    });
 
     setBatchRunning(false);
     setBatchDone(true);
     setBatchCurrentIndex(-1);
     setBatchCurrentSceneLabel("");
 
-    // Toast thông báo kết quả
-    const generated = completed - skipped - errors;
-    if (stopRef.current) {
+    const generated = result.completed - result.skipped - result.errors;
+    if (result.stopped) {
       toast.info(
-        `${t("Đã dừng. Tạo được")} ${generated} ${t("ảnh")}, ${skipped} ${t(
+        `${t("Đã dừng. Tạo được")} ${generated} ${t("ảnh")}, ${result.skipped} ${t(
           "bỏ qua"
-        )}, ${errors} ${t("lỗi")}.`
+        )}, ${result.errors} ${t("lỗi")}.`
       );
-    } else if (errors > 0) {
+    } else if (result.errors > 0) {
       toast.warn(
-        `${t("Hoàn thành! Tạo được")} ${generated} ${t("ảnh")}, ${skipped} ${t(
+        `${t("Hoàn thành! Tạo được")} ${generated} ${t("ảnh")}, ${result.skipped} ${t(
           "bỏ qua"
-        )}, ${errors} ${t("lỗi")}.`
+        )}, ${result.errors} ${t("lỗi")}.`
       );
     } else {
       toast.success(
         `${t("Đã hoàn thành! Tạo được")} ${generated} ${t("ảnh")}${
-          skipped > 0 ? `, ${skipped} ${t("bỏ qua")}` : ""
+          result.skipped > 0 ? `, ${result.skipped} ${t("bỏ qua")}` : ""
         }.`
       );
     }
@@ -815,47 +787,31 @@ export function useBatchActions(
   const handleCreateAllVideo = async () => {
     if (videoBatchRunning || batchRunning) return;
 
-    // Filter: not disabled, has motionPrompt
     const eligibleScenes = scenes.filter((s) => !s.disabled && s.motionPrompt);
     if (eligibleScenes.length === 0) return;
 
     setVideoBatchRunning(true);
-    setVideoBatchTotal(eligibleScenes.length);
-    setVideoBatchCompleted(0);
-    setVideoBatchErrors(0);
-    setVideoBatchSkipped(0);
-    setVideoBatchCurrentIndex(0);
-    setVideoBatchCurrentSceneLabel("");
+    setVideoBatchDone(false);
     videoStopRef.current = false;
 
-    let completed = 0;
-    let errors = 0;
-    let skipped = 0;
-    let nextIndex = 0;
-
-    const worker = async () => {
-      while (true) {
-        if (videoStopRef.current) return;
-
-        const idx = nextIndex++;
-        if (idx >= eligibleScenes.length) return;
-
-        const scene = eligibleScenes[idx];
-
-        // Skip scenes that already have a generated video
-        const existingVideo = await getGeneratedVideo(scene.id);
-        if (existingVideo) {
-          skipped++;
-          setVideoBatchSkipped(skipped);
-          completed++;
-          setVideoBatchCompleted(completed);
-          continue;
-        }
-
+    const result = await runBoundedMediaBatch({
+      items: eligibleScenes,
+      concurrency: VIDEO_CONCURRENCY,
+      stopRef: videoStopRef,
+      progress: {
+        setTotal: setVideoBatchTotal,
+        setCompleted: setVideoBatchCompleted,
+        setErrors: setVideoBatchErrors,
+        setSkipped: setVideoBatchSkipped,
+        setCurrentLabel: (label) => setVideoBatchCurrentSceneLabel(label),
+      },
+      getLabel: (scene) => `#${scene.sceneNumber}`,
+      shouldSkip: async (scene) => !!(await getGeneratedVideo(scene.id)),
+      execute: async (scene) => {
         if (isPromptToVideo) {
+          addBatchGeneratingVideoSceneId(scene.id);
+          reportSceneError?.(scene.id, "video", null);
           try {
-            addBatchGeneratingVideoSceneId(scene.id);
-            reportSceneError?.(scene.id, "video", null);
             const videoParams = await buildAffiliateVideoGenerateParams({
               scene,
               scriptData,
@@ -874,29 +830,23 @@ export function useBatchActions(
                 registerSceneJob
               )
             );
-            completed++;
-            setVideoBatchCompleted(completed);
           } catch (err: any) {
             console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
             reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
+            throw err;
           } finally {
             reportSceneProgress?.(scene.id, "video", null);
             removeBatchGeneratingVideoSceneId(scene.id);
           }
-          continue;
+          return;
         }
 
-        // Storyboard: không bắt buộc tạo ảnh → dùng ảnh gốc làm tham chiếu
         if (!requireImageBeforeVideo) {
           const originImage = elementFormImageToGeneratedImage(scene.storyboardCropImage);
           if (originImage) {
+            addBatchGeneratingVideoSceneId(scene.id);
+            reportSceneError?.(scene.id, "video", null);
             try {
-              addBatchGeneratingVideoSceneId(scene.id);
-              reportSceneError?.(scene.id, "video", null);
               const videoParams = await buildAffiliateVideoGenerateParams({
                 scene,
                 scriptData,
@@ -916,45 +866,29 @@ export function useBatchActions(
                   registerSceneJob
                 )
               );
-              completed++;
-              setVideoBatchCompleted(completed);
             } catch (err: any) {
               console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
               reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
-              errors++;
-              setVideoBatchErrors(errors);
-              completed++;
-              setVideoBatchCompleted(completed);
+              throw err;
             } finally {
               reportSceneProgress?.(scene.id, "video", null);
               removeBatchGeneratingVideoSceneId(scene.id);
             }
-            continue;
+            return;
           }
-          // Cảnh storyboard thiếu crop → skip/error; scene không có crop vẫn đi luồng gen ảnh
           if (
             scene.storyboardSourceIndex != null ||
             scene.cropRegion ||
             scene.storyboardCropImage != null
           ) {
             reportSceneError?.(scene.id, "video", t("Không có ảnh gốc để tạo video"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
+            return "error";
           }
         }
 
         let existingImage = await getGeneratedImage(scene.id);
         if (!existingImage) {
-          if (!scene.imageGenPrompt) {
-            skipped++;
-            setVideoBatchSkipped(skipped);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
-          }
+          if (!scene.imageGenPrompt) return "skip";
           try {
             addBatchGeneratingSceneId(scene.id);
             reportSceneError?.(scene.id, "image", null);
@@ -984,27 +918,17 @@ export function useBatchActions(
               imgErr
             );
             reportSceneError?.(scene.id, "image", imgErr?.message || t("Lỗi tạo ảnh"));
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
+            return "error";
           } finally {
             reportSceneProgress?.(scene.id, "image", null);
             removeBatchGeneratingSceneId(scene.id);
           }
-          if (!existingImage) {
-            errors++;
-            setVideoBatchErrors(errors);
-            completed++;
-            setVideoBatchCompleted(completed);
-            continue;
-          }
+          if (!existingImage) return "error";
         }
 
+        addBatchGeneratingVideoSceneId(scene.id);
+        reportSceneError?.(scene.id, "video", null);
         try {
-          addBatchGeneratingVideoSceneId(scene.id);
-          reportSceneError?.(scene.id, "video", null);
           const videoParams = await buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
@@ -1024,47 +948,39 @@ export function useBatchActions(
               registerSceneJob
             )
           );
-          completed++;
-          setVideoBatchCompleted(completed);
         } catch (err: any) {
           console.error(`[BatchCreateAllVideo] Scene #${scene.sceneNumber} error:`, err);
           reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
-          errors++;
-          setVideoBatchErrors(errors);
-          completed++;
-          setVideoBatchCompleted(completed);
+          throw err;
         } finally {
           reportSceneProgress?.(scene.id, "video", null);
           removeBatchGeneratingVideoSceneId(scene.id);
         }
-      }
-    };
-
-    // Start N workers – each independently pulls next scene from queue
-    await Promise.all(Array.from({ length: VIDEO_CONCURRENCY }, () => worker()));
+      },
+    });
 
     setVideoBatchRunning(false);
     setVideoBatchDone(true);
     setVideoBatchCurrentIndex(-1);
     setVideoBatchCurrentSceneLabel("");
 
-    const generated = completed - skipped - errors;
-    if (videoStopRef.current) {
+    const generated = result.completed - result.skipped - result.errors;
+    if (result.stopped) {
       toast.info(
-        `${t("Đã dừng. Tạo được")} ${generated} video, ${skipped} ${t("bỏ qua")}, ${errors} ${t(
+        `${t("Đã dừng. Tạo được")} ${generated} video, ${result.skipped} ${t("bỏ qua")}, ${result.errors} ${t(
           "lỗi"
         )}.`
       );
-    } else if (errors > 0) {
+    } else if (result.errors > 0) {
       toast.warn(
-        `${t("Hoàn thành! Tạo được")} ${generated} video, ${skipped} ${t("bỏ qua")}, ${errors} ${t(
+        `${t("Hoàn thành! Tạo được")} ${generated} video, ${result.skipped} ${t("bỏ qua")}, ${result.errors} ${t(
           "lỗi"
         )}.`
       );
     } else {
       toast.success(
         `${t("Đã hoàn thành! Tạo được")} ${generated} video${
-          skipped > 0 ? `, ${skipped} ${t("bỏ qua")}` : ""
+          result.skipped > 0 ? `, ${result.skipped} ${t("bỏ qua")}` : ""
         }.`
       );
     }

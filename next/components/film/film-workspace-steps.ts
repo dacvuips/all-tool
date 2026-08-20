@@ -46,6 +46,11 @@ export const FILM_WORKSPACE_STEPS: FilmWorkspaceStep[] = [
     label: "Tạo video",
   },
   {
+    id: "studio",
+    section: "production",
+    label: "Studio",
+  },
+  {
     id: "settings",
     section: "settings",
     label: "Setting",

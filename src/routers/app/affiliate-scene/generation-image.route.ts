@@ -10,6 +10,7 @@ import logger from "../../../helpers/logger";
 import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
+import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkImageLimit, ReferenceImageInput } from "./_shared";
 
 export default [
@@ -54,8 +55,7 @@ export default [
         res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
         logger.error(`[generation-image] Lỗi enqueue: ${err?.message}`);
-        const status = err?.statusCode || 500;
-        res.status(status).json({ message: err?.message || "Lỗi server" });
+        sendEnqueueErrorResponse(res, err);
       }
     },
   },

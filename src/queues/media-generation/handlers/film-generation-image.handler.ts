@@ -30,6 +30,25 @@ const LOG_PREFIX = "film-generation-image";
 const NO_TEXT_NOTE =
   "\nIMPORTANT: Never generate any visible or readable text in the image. Do not include any letters, words, numbers, logos, captions, labels, subtitles, signs, watermarks, or interface text.";
 
+const SINGLE_FRAME_NOTE =
+  "\nIMPORTANT: Output exactly ONE unified cinematic frame. Do NOT split, divide, or stack multiple panels. No storyboard layout, comic strip, grid, contact sheet, or multiple shots in one image.";
+
+function finalizeFilmImagePrompt(
+  prompt: string,
+  payload: FilmGenerationImagePayload
+): string {
+  let full = prompt;
+  if (payload.filmAssetKind === "shot_frame") {
+    if (!/single unified frame|no split panel|one unified cinematic frame/i.test(full)) {
+      full = `${full}${SINGLE_FRAME_NOTE}`;
+    }
+  }
+  if (payload.noText === true) {
+    full = `${full}${NO_TEXT_NOTE}`;
+  }
+  return full;
+}
+
 export async function handleFilmGenerationImage(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
@@ -45,8 +64,7 @@ export async function handleFilmGenerationImage(
   }
 
   // Film: không tự chèn anti-text note (chỉ ghép khi client gửi noText: true)
-  const fullPrompt =
-    payload.noText === true ? `${prompt}${NO_TEXT_NOTE}` : prompt;
+  const fullPrompt = finalizeFilmImagePrompt(prompt, payload);
 
   const images = await runImagePipeline({
     customerId: job.customerId,
