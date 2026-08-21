@@ -497,3 +497,19 @@ export function resolveDialogueLineVoiceLink(
   const voiceLabel = (ch?.voiceLabel || line.voiceLabel || "").trim();
   return { voiceId, voiceLabel };
 }
+
+/**
+ * Giọng dùng khi gen video Flow2 (mode Thành phần).
+ * Ưu tiên dòng thoại đầu có voiceId; fallback scene.voiceId.
+ */
+export function resolveFilmSceneVideoVoice(
+  scene: Pick<FilmSceneRecord, "voiceId" | "dialogueLines">,
+  characters: FilmCharacterRecord[] = []
+): string | undefined {
+  for (const line of scene.dialogueLines || []) {
+    const { voiceId } = resolveDialogueLineVoiceLink(line, characters);
+    if (voiceId) return voiceId;
+  }
+  const sceneVoice = String(scene.voiceId || "").trim();
+  return sceneVoice || undefined;
+}

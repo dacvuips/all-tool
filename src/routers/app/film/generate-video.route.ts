@@ -12,6 +12,7 @@
  *   - Thành phần (start_add_end / component, 1–3 ảnh): reference components
  * - serviceImageType: image_only | start_end | start_add_end
  * - videoMode: frame | component (fallback khi thiếu serviceImageType)
+ * - voice: giọng Flow2 (chỉ áp dụng khi videoMode=component và có ≥1 ảnh)
  * - aspectRatio, filmProjectId, filmEpisodeId, filmSceneId
  */
 import { Request, Response } from "express";
@@ -43,6 +44,7 @@ export default [
           videoMode?: string;
           serviceImageType?: string;
           generateAudio?: boolean;
+          voice?: string;
           noText?: boolean;
           filmProjectId?: string;
           filmEpisodeId?: string;
@@ -73,6 +75,7 @@ export default [
           videoMode: body.videoMode,
           serviceImageType: body.serviceImageType,
           generateAudio: body.generateAudio,
+          voice: typeof body.voice === "string" ? body.voice.trim() || undefined : undefined,
           noText: body.noText === true,
           filmProjectId: body.filmProjectId,
           filmEpisodeId: body.filmEpisodeId,

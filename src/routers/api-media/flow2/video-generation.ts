@@ -18,6 +18,7 @@ import {
 } from "./_shared";
 import { Flow2ImageInput, normalizeImageToDataUrl } from "./image-generation";
 import {
+  FLOW2_VIDEO_MODE,
   Flow2VideoMode,
   resolveFlow2VideoMode,
 } from "./video-mode";
@@ -31,6 +32,26 @@ export {
 } from "./video-mode";
 
 export type Flow2VideoQuality = "lite_relaxed" | string;
+
+/**
+ * `voice` chỉ được gắn vào Flow2 `gen_image_video` khi:
+ * - `video_mode` === `component`
+ * - có ít nhất 1 ảnh trong `image_base64s`
+ * Thiếu 1 trong 2 điều kiện → bỏ qua dù client có gửi voice.
+ */
+export function resolveFlow2VideoVoiceParam(input: {
+  voice?: string | null;
+  videoMode?: Flow2VideoMode | string | null;
+  imageCount: number;
+}): string | undefined {
+  const voice = String(input.voice || "").trim();
+  if (!voice) return undefined;
+  if (input.imageCount < 1) return undefined;
+  if (String(input.videoMode || "").trim().toLowerCase() !== FLOW2_VIDEO_MODE.COMPONENT) {
+    return undefined;
+  }
+  return voice;
+}
 
 export type Flow2CreateVideoRequestParams = {
   prompt: string;
@@ -48,6 +69,11 @@ export type Flow2CreateVideoRequestParams = {
    * - `component` — Reference (1–3 ảnh)
    */
   videoMode?: Flow2VideoMode;
+  /**
+   * Giọng Flow2 (vd. `achernar`) — chỉ áp dụng khi `video_mode=component` và có ≥1 ảnh.
+   * Backend tự lọc; client gửi sai điều kiện cũng không được gắn vào request.
+   */
+  voice?: string;
   /** Số biến thể video / job (map từ config `videosPerJob`) */
   variantCount?: number;
   onProgress?: (progress: number, message?: string) => void | Promise<void>;
@@ -283,6 +309,11 @@ export async function createFlow2VideoRequest(
 
   const image_base64s = await Promise.all(imageInputs.map(normalizeImageToDataUrl));
   const variant_count = Math.max(1, Math.min(5, Math.round(params.variantCount || 1)));
+  const voice = resolveFlow2VideoVoiceParam({
+    voice: params.voice,
+    videoMode: video_mode,
+    imageCount: image_base64s.length,
+  });
 
   return createFlow2Request(
     {
@@ -294,6 +325,7 @@ export async function createFlow2VideoRequest(
         video_mode,
         video_quality,
         variant_count,
+        ...(voice ? { voice } : {}),
       },
     },
     flow2Opts

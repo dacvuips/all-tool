@@ -54,6 +54,10 @@ export type FilmGenerateVideoParams = {
   videoMode?: string;
   serviceImageType?: string;
   generateAudio?: boolean;
+  /**
+   * Giọng Flow2 (vd. achernar). Backend chỉ gắn khi videoMode=component và có ≥1 ảnh.
+   */
+  voice?: string;
   noText?: boolean;
   filmProjectId?: string;
   filmEpisodeId?: string;
@@ -268,6 +272,7 @@ export async function enqueueFilmVideo(
       videoMode: params.videoMode,
       serviceImageType: params.serviceImageType,
       generateAudio: params.generateAudio,
+      voice: params.voice,
       noText: params.noText === true,
       filmProjectId: params.filmProjectId,
       filmEpisodeId: params.filmEpisodeId,

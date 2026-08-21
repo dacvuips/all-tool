@@ -60,6 +60,7 @@ import {
   hydrateScenesDialogueLines,
   patchSceneDialogueLine,
   resolveDialogueLineVoiceLink,
+  resolveFilmSceneVideoVoice,
   stopSceneDialogueVoice,
   stripCharacterVoiceLinksFromScenes,
   withDialogueLineOnScene,
@@ -4036,6 +4037,14 @@ export default function FilmWorkspace({ projectId }: Props) {
     const aspectRatio = resolveFilmProjectAspectRatio(project.aspectRatio);
     const videoMode = filmVideoRefModeToFlow2(mode);
     const serviceImageType = filmVideoRefModeToServiceImageType(mode);
+    const silentLipSync = !!latest.videoSilentLipSync;
+    // voice chỉ gửi khi Thành phần + có ảnh + không nhép miệng im lặng; backend vẫn lọc lần nữa
+    const voice =
+      !silentLipSync &&
+      videoMode === "component" &&
+      images.length > 0
+        ? resolveFilmSceneVideoVoice(latest, characters)
+        : undefined;
 
     try {
       const { jobId } = await enqueueFilmVideo({
@@ -4044,7 +4053,8 @@ export default function FilmWorkspace({ projectId }: Props) {
         aspectRatio,
         videoMode,
         serviceImageType,
-        generateAudio: latest.videoSilentLipSync ? false : undefined,
+        generateAudio: silentLipSync ? false : undefined,
+        voice,
         filmProjectId: project.id,
         filmEpisodeId: latest.episodeId,
         filmSceneId: latest.id,

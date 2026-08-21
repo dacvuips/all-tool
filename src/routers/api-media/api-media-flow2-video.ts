@@ -17,6 +17,7 @@ import {
 } from "./flow2/image-generation";
 import {
   GeneratedVideo,
+  resolveFlow2VideoVoiceParam,
   waitForFlow2VideoResult,
 } from "./flow2/video-generation";
 import { Flow2VideoMode } from "./flow2/video-mode";
@@ -57,6 +58,8 @@ export type CreateApiMediaFlow2VideoParams = {
   imageInputs?: Flow2ImageInput[];
   videoInputs?: Array<string | { imageBytes: string; mimeType?: string }>;
   videoMode?: Flow2VideoMode;
+  /** Chỉ gắn khi video_mode=component và có ≥1 ảnh */
+  voice?: string;
   customerId?: string;
 };
 
@@ -96,6 +99,11 @@ export async function createApiMediaFlow2VideoRequest(
     videoInputs.length > 0
       ? await Promise.all(videoInputs.map(normalizeVideoToDataUrl))
       : undefined;
+  const voice = resolveFlow2VideoVoiceParam({
+    voice: params.voice,
+    videoMode: params.videoMode,
+    imageCount: image_base64s.length,
+  });
 
   return createFlow2Request(
     {
@@ -108,6 +116,7 @@ export async function createApiMediaFlow2VideoRequest(
         video_quality,
         ...durationFields,
         ...(video_base64s?.length ? { video_base64s } : {}),
+        ...(voice ? { voice } : {}),
       },
     },
     flow2Opts

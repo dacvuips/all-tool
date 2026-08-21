@@ -25,6 +25,11 @@ export type RunFlow2VideoPipelineArgs = {
   serviceImageType?: ServiceImageEnum;
   /** Fallback: video_mode client gửi trực tiếp khi không có serviceImageType */
   videoMode?: Flow2VideoMode | string;
+  /**
+   * Giọng Flow2 — chỉ gắn khi video_mode=component và có ≥1 ảnh
+   * (lọc cuối ở createFlow2VideoRequest).
+   */
+  voice?: string;
   emitter: MediaJobEmitter;
   logPrefix?: string;
 };
@@ -41,6 +46,7 @@ export async function runFlow2VideoPipeline(
     images = [],
     videoMode,
     serviceImageType,
+    voice,
     emitter,
     logPrefix = "generation-video",
   } = args;
@@ -56,7 +62,9 @@ export async function runFlow2VideoPipeline(
   logger.info(
     `[${logPrefix}] Bắt đầu gọi Flow2 tạo video (user ${customerId}, video_mode=${
       resolvedVideoMode ?? "text"
-    }, images=${imageCount}, variant_count=${variantCount || 1})`
+    }, images=${imageCount}, variant_count=${variantCount || 1}, voice=${
+      voice?.trim() ? "yes" : "no"
+    })`
   );
 
   const { requestId, video, videos } = await generateVideoWithFlow2({
@@ -66,6 +74,7 @@ export async function runFlow2VideoPipeline(
     variantCount,
     imageInputs: images,
     videoMode: resolvedVideoMode,
+    voice,
     customerId,
     onProgress: async (progress, message) => {
       await emitter.progress(progress, message);

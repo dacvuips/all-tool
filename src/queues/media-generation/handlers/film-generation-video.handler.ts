@@ -24,6 +24,8 @@ export type FilmGenerationVideoPayload = FilmJobContext & {
   videoMode?: Flow2VideoMode | string;
   serviceImageType?: ServiceImageEnum | string;
   generateAudio?: boolean;
+  /** Giọng Flow2 — chỉ gắn khi component + có ảnh (lọc ở Flow2 create) */
+  voice?: string;
   noText?: boolean;
   filmAssetKind?: FilmMediaAssetKind;
 };
@@ -78,6 +80,7 @@ export async function handleFilmGenerationVideo(
     images: payload.images,
     videoMode: payload.videoMode,
     serviceImageType: payload.serviceImageType as ServiceImageEnum | undefined,
+    voice: payload.generateAudio === false ? undefined : payload.voice,
     emitter,
     logPrefix: LOG_PREFIX,
   });
