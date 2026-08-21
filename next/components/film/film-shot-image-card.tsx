@@ -1,9 +1,9 @@
 /**
  * Card Ảnh / Video cảnh quay — tái dụng SceneCardTabs + SceneCardImageTab + SceneCardVideoTab (tool).
  */
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiExternalLink, HiSparkles } from "react-icons/hi";
+import { HiChevronDown, HiExternalLink, HiSparkles } from "react-icons/hi";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
@@ -18,7 +18,13 @@ import {
   SceneCardVideoTab,
   type GeneratedVideoData,
 } from "../app/affiliate-video/shared/scene-card-video-tab";
+import {
+  FREE_GEN_AUDIO_VOICES,
+  freeGenAudioVoiceLabel,
+} from "../app/voice/free-voice-voices";
 import { Button } from "../shared/utilities/form";
+import { Popover } from "../shared/utilities/popover/popover";
+import { getFilmEntityVideoSrc } from "./api/generate-film-media";
 import {
   FilmAttachOption,
   FilmSceneMissingAttachChips,
@@ -30,8 +36,6 @@ import {
   type FilmAttachIssueKind,
 } from "./film-attachment-validate";
 import FilmImageGalleryDialog from "./film-image-gallery-dialog";
-import FilmVideoGalleryDialog from "./film-video-gallery-dialog";
-import { getFilmEntityVideoSrc } from "./api/generate-film-media";
 import {
   buildFilmShotFrameDefaultPrompt
 } from "./film-shot-frame-dialog";
@@ -42,6 +46,7 @@ import {
   FilmSceneImageRecord,
   FilmSceneRecord,
 } from "./film-types";
+import FilmVideoGalleryDialog from "./film-video-gallery-dialog";
 import type { FilmVideoRefMode, FilmVideoRefSlot } from "./film-video-ref-mode";
 import FilmVideoRefSlots from "./film-video-ref-slots";
 
@@ -95,6 +100,11 @@ type Props = {
   ) => void;
   /** Bật/tắt: nhép miệng theo thoại, không nói tiếng */
   onToggleSilentLipSync?: (scene: FilmSceneRecord) => void;
+  /**
+   * Chọn giọng Flow2 (miễn phí) — chỉ hiện khi videoRefMode=component.
+   * Voice id (vd. achernar) được gửi kèm generate video.
+   */
+  onVideoVoiceChange?: (scene: FilmSceneRecord, voiceId: string) => void;
 };
 
 export function sceneFrameReady(scene: FilmSceneRecord): boolean {
@@ -177,11 +187,19 @@ export default function FilmShotImageCard({
   videoRefMode = null,
   onVideoRefSlotsChange,
   onToggleSilentLipSync,
+  onVideoVoiceChange,
 }: Props) {
   const { t } = useTranslation();
   const toast = useToast();
   const [galleryOpen, setGalleryOpen] = useState(false);
   const [videoGalleryOpen, setVideoGalleryOpen] = useState(false);
+  const videoVoiceBtnRef = useRef<HTMLButtonElement>(null);
+  const showComponentVoicePicker =
+    videoRefMode === "component" && !!onVideoVoiceChange;
+  const selectedVideoVoice = String(scene.videoVoice || "").trim().toLowerCase();
+  const selectedVideoVoiceLabel = selectedVideoVoice
+    ? freeGenAudioVoiceLabel(selectedVideoVoice).split(" — ")[0] || selectedVideoVoice
+    : "";
   const ar: "16:9" | "9:16" = aspectRatio === "16:9" ? "16:9" : "9:16";
   const indexLabel = `#${scene.index}`;
   const sceneTitle =
@@ -389,24 +407,104 @@ export default function FilmShotImageCard({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm flex flex-col h-full transition-all hover:border-primary">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 min-w-0">
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold bg-gray-800 text-white flex-shrink-0">
+      <div className="flex items-start gap-2 px-3 py-2 border-b border-gray-100 min-w-0">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold bg-gray-800 text-white flex-shrink-0 mt-0.5">
           {indexLabel}
         </span>
-        {onEditScene || onTitleClick ? (
-          <button
-            type="button"
-            className="min-w-0 flex-1 text-left text-xs font-semibold text-gray-800 truncate border-0 bg-transparent p-0 cursor-pointer hover:text-blue-600 hover:underline"
-            title={t("Sửa phân cảnh")}
-            onClick={() => (onEditScene || onTitleClick)?.(scene)}
-          >
-            {sceneTitle}
-          </button>
-        ) : (
-          <span className="text-xs font-semibold text-gray-800 truncate min-w-0 flex-1" title={sceneTitle}>
-            {sceneTitle}
-          </span>
-        )}
+        <div className="min-w-0 flex-1 flex flex-col gap-0.5">
+          {onEditScene || onTitleClick ? (
+            <button
+              type="button"
+              className="min-w-0 w-full text-left text-xs font-semibold text-gray-800 truncate border-0 bg-transparent p-0 cursor-pointer hover:text-blue-600 hover:underline"
+              title={t("Sửa phân cảnh")}
+              onClick={() => (onEditScene || onTitleClick)?.(scene)}
+            >
+              {sceneTitle}
+            </button>
+          ) : (
+            <span className="text-xs font-semibold text-gray-800 truncate" title={sceneTitle}>
+              {sceneTitle}
+            </span>
+          )}
+          <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+            {!hideImageTab && scene.shotSize ? (
+              <span className="inline-flex self-start text-10 font-medium text-gray-600 leading-none truncate max-w-full">
+                {scene.shotSize}
+              </span>
+            ) : null}
+            {showComponentVoicePicker ? (
+              <>
+                <button
+                  ref={videoVoiceBtnRef}
+                  type="button"
+                  disabled={generatingVideo}
+                  className={`inline-flex items-center gap-0.5  h-4 max-w-32 px-1.5 rounded text-10 font-medium border-0 cursor-pointer truncate ${
+                    selectedVideoVoice
+                      ? " text-primary hover:bg-primary-light"
+                      : " text-gray-500 hover:bg-gray-100"
+                  } ${generatingVideo ? "opacity-60 cursor-not-allowed" : ""}`}
+                  title={
+                    selectedVideoVoice
+                      ? freeGenAudioVoiceLabel(selectedVideoVoice)
+                      : t("Chọn giọng miễn phí cho video Thành phần")
+                  }
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <MdRecordVoiceOver className="text-xs flex-shrink-0 opacity-80" />
+                  <span className="truncate min-w-0">
+                    {selectedVideoVoiceLabel || t("Chọn giọng")}
+                  </span>
+                  <HiChevronDown className="text-xs flex-shrink-0 opacity-70" />
+                </button>
+                <Popover
+                  reference={videoVoiceBtnRef}
+                  trigger="click"
+                  placement="bottom-start"
+                  theme="light"
+                  arrow={false}
+                >
+                  <div className="w-56 py-1">
+                    <div className="px-3 py-2 border-b border-gray-100">
+                      <p className="m-0 text-10 font-semibold text-gray-500 uppercase tracking-wide">
+                        {t("Giọng miễn phí")}
+                      </p>
+                      <p className="m-0 text-10 text-gray-500">
+                        {t("Giọng sẽ được thêm trực tiếp vào video sau khi gen.") }
+                      </p>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto py-1">
+                      {FREE_GEN_AUDIO_VOICES.map((voice) => {
+                        const selected = selectedVideoVoice === voice.id;
+                        return (
+                          <button
+                            key={voice.id}
+                            type="button"
+                            className={`w-full text-left px-3 py-2 border-0 cursor-pointer transition-colors ${
+                              selected
+                                ? "bg-emerald-50"
+                                : "bg-transparent hover:bg-gray-50"
+                            }`}
+                            onClick={() => {
+                              onVideoVoiceChange?.(scene, voice.id);
+                              (videoVoiceBtnRef.current as any)?._tippy?.hide();
+                            }}
+                          >
+                            <span className="block text-xs font-semibold text-gray-800">
+                              {voice.name}
+                            </span>
+                            <span className="block text-10 text-gray-400 truncate">
+                              {voice.description}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </Popover>
+              </>
+            ) : null}
+          </div>
+        </div>
         {onOpenStoryboardScene ? (
           <button
             type="button"
@@ -447,11 +545,6 @@ export default function FilmShotImageCard({
               <MdRecordVoiceOver className="text-base" />
             )}
           </button>
-        ) : null}
-        {scene.shotSize ? (
-          <span className="flex-shrink-0 text-10 font-medium text-gray-400 truncate max-w-[36%]">
-            {scene.shotSize}
-          </span>
         ) : null}
       </div>
 

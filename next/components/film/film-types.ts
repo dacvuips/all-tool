@@ -440,6 +440,11 @@ export type FilmSceneRecord = {
    * Prompt giữ thoại + ghi chú silent; generateAudio = false.
    */
   videoSilentLipSync?: boolean;
+  /**
+   * Giọng Flow2 khi Tạo video mode Thành phần (vd. achernar).
+   * Chỉ dùng khi video_mode=component và có ảnh tham chiếu.
+   */
+  videoVoice?: string;
   /** Prompt âm thanh */
   audioPrompt?: string;
   /** User đã sửa tay Prompt âm thanh — không tự ghép đè */

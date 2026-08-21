@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
@@ -19,6 +19,12 @@ import {
   FILM_MEDIA_CARD_GRID_CLASS,
   FILM_MEDIA_CARD_GRID_PAD_CLASS,
 } from "./film-media-card-grid";
+import FilmSceneEditDialog from "./film-scene-edit-dialog";
+import { resolveFilmSceneImagePrompt } from "./film-scene-image-prompt";
+import {
+  resolveFilmSceneAudioPrompt,
+  resolveFilmSceneVideoPrompt,
+} from "./film-scene-video-prompt";
 import {
   type FilmShotFrameGenerateInput,
   resolveFilmShotFrameActivePrompt,
@@ -28,21 +34,33 @@ import FilmShotImageCard, {
   sceneFrameReady,
 } from "./film-shot-image-card";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
-import { FilmAspectRatio, FilmCharacterRecord, FilmPropRecord, FilmSceneImageRecord, FilmSceneRecord } from "./film-types";
+import {
+  FilmAspectRatio,
+  FilmCharacterRecord,
+  FilmPropRecord,
+  FilmSceneImageRecord,
+  FilmSceneRecord,
+  filmCharacterLinkedToEpisode,
+  filmLocationLinkedToEpisode,
+  filmPropLinkedToEpisode,
+} from "./film-types";
 
 type Props = {
   scenes: FilmSceneRecord[];
   characters: FilmCharacterRecord[];
   aspectRatio?: FilmAspectRatio;
   storyboardImagePromptStyle?: string | null;
+  storyboardVideoPromptStyle?: string | null;
+  storyboardAudioPromptStyle?: string | null;
   onCreateFrame: (input: FilmShotFrameGenerateInput) => Promise<void>;
   onStopFrame?: (scene: FilmSceneRecord) => void | Promise<void>;
   stopPendingIds?: Record<string, true>;
   onSetFrameImage?: (scene: FilmSceneRecord, image: GeneratedImageData) => Promise<void>;
   onBulkCreateFrames?: () => Promise<void>;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
-  /** Click tiêu đề card → mở đúng phân cảnh trong Chuỗi Cảnh quay */
+  /** Icon cạnh tiêu đề → mở đúng phân cảnh trong Chuỗi phân cảnh */
   onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
+  onSaveScene?: (scene: FilmSceneRecord) => void | Promise<void>;
   propsList?: FilmPropRecord[];
   sceneImages?: FilmSceneImageRecord[];
   onOpenAttachEntity?: (kind: FilmAttachIssueKind, option: FilmAttachOption) => void;
@@ -66,6 +84,8 @@ export default function FilmShotImagesPanel({
   characters,
   aspectRatio = "9:16",
   storyboardImagePromptStyle,
+  storyboardVideoPromptStyle,
+  storyboardAudioPromptStyle,
   onCreateFrame,
   onStopFrame,
   stopPendingIds,
@@ -73,6 +93,7 @@ export default function FilmShotImagesPanel({
   onBulkCreateFrames,
   onTabNavigate,
   onOpenStoryboardScene,
+  onSaveScene,
   propsList = [],
   sceneImages = [],
   onOpenAttachEntity,
@@ -84,9 +105,56 @@ export default function FilmShotImagesPanel({
   const [tab, setTab] = useState<FilmStoryboardTab>("shot_images");
   /** Chỉ true khi đang chạy "Tạo hàng loạt" — gen đơn không khóa nút bulk. */
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [editSceneId, setEditSceneId] = useState<string | null>(null);
 
   const readyCount = scenes.filter(sceneFrameReady).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
+  const editScene = editSceneId
+    ? scenes.find((s) => s.id === editSceneId) || null
+    : null;
+  const episodeId = editScene?.episodeId || scenes[0]?.episodeId;
+
+  const characterOptions: FilmAttachOption[] = useMemo(
+    () =>
+      characters
+        .filter((c) => filmCharacterLinkedToEpisode(c, episodeId))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          imageBlob: c.imageBlob,
+          imageUrl: c.imageUrl,
+          imageUrls: c.imageUrls,
+        })),
+    [characters, episodeId]
+  );
+
+  const propOptions: FilmAttachOption[] = useMemo(
+    () =>
+      propsList
+        .filter((p) => filmPropLinkedToEpisode(p, episodeId))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          imageBlob: p.imageBlob,
+          imageUrl: p.imageUrl,
+          imageUrls: p.imageUrls,
+        })),
+    [propsList, episodeId]
+  );
+
+  const sceneLocationOptions: FilmAttachOption[] = useMemo(
+    () =>
+      sceneImages
+        .filter((s) => filmLocationLinkedToEpisode(s, episodeId))
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          imageBlob: s.imageBlob,
+          imageUrl: s.imageUrl,
+          imageUrls: s.imageUrls,
+        })),
+    [sceneImages, episodeId]
+  );
 
   const handleTab = (id: FilmStoryboardTab) => {
     setTab(id);
@@ -231,7 +299,7 @@ export default function FilmShotImagesPanel({
                           }
                         : undefined
                     }
-                    onEditScene={onOpenStoryboardScene}
+                    onEditScene={(s) => setEditSceneId(s.id)}
                     onOpenStoryboardScene={onOpenStoryboardScene}
                     characters={characters}
                     propsList={propsList}
@@ -297,6 +365,35 @@ export default function FilmShotImagesPanel({
           </button>
         </div>
       </div>
+
+      <FilmSceneEditDialog
+        isOpen={!!editScene}
+        scene={editScene}
+        imagePromptDefault={
+          editScene
+            ? resolveFilmSceneImagePrompt(editScene, storyboardImagePromptStyle)
+            : ""
+        }
+        videoPromptDefault={
+          editScene
+            ? resolveFilmSceneVideoPrompt(editScene, storyboardVideoPromptStyle)
+            : ""
+        }
+        audioPromptDefault={
+          editScene
+            ? resolveFilmSceneAudioPrompt(editScene, storyboardAudioPromptStyle)
+            : ""
+        }
+        characterOptions={characterOptions}
+        propOptions={propOptions}
+        sceneLocationOptions={sceneLocationOptions}
+        onClose={() => setEditSceneId(null)}
+        onSave={async (next) => {
+          if (!onSaveScene) return;
+          await onSaveScene(next);
+        }}
+        onOpenAttachEntity={onOpenAttachEntity}
+      />
     </div>
   );
 }

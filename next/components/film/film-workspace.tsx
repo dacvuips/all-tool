@@ -176,6 +176,7 @@ import { sceneVideoReady } from "./film-video-card";
 import {
   buildDefaultVideoRefSlots,
   ensureVideoRefSlotsFromFrame,
+  FILM_VIDEO_REF_MODE_DEFAULT,
   FILM_VIDEO_REF_SLOT_COUNT,
   filmVideoRefModeToFlow2,
   filmVideoRefModeToServiceImageType,
@@ -267,7 +268,9 @@ export default function FilmWorkspace({ projectId }: Props) {
     };
   }, []);
   /** Mode ảnh tham chiếu Tạo video (Start / Start-End / Thành Phần) */
-  const [videoRefMode, setVideoRefMode] = useState<FilmVideoRefMode>("start");
+  const [videoRefMode, setVideoRefMode] = useState<FilmVideoRefMode>(
+    FILM_VIDEO_REF_MODE_DEFAULT
+  );
 
   const markStopPending = useCallback((id: string, pending: boolean) => {
     setStopPendingIds((prev) => {
@@ -4965,6 +4968,8 @@ export default function FilmWorkspace({ projectId }: Props) {
               characters={characters}
               aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
               storyboardImagePromptStyle={project.storyboardImagePrompt}
+              storyboardVideoPromptStyle={project.storyboardVideoPrompt}
+              storyboardAudioPromptStyle={project.storyboardAudioPrompt}
               onCreateFrame={handleCreateShotFrame}
               onStopFrame={handleStopShotFrame}
               stopPendingIds={stopPendingIds}
@@ -4972,6 +4977,7 @@ export default function FilmWorkspace({ projectId }: Props) {
               onBulkCreateFrames={handleBulkCreateShotFrames}
               onSuggestSafePrompt={handleSuggestSafeShotFramePrompt}
               onFramePromptSourceChange={handleFramePromptSourceChange}
+              onSaveScene={handleSaveScene}
               onTabNavigate={(tab) => {
                 if (tab === "storyboard") selectActiveStep("storyboard");
                 else if (tab === "voice") selectActiveStep("voice");

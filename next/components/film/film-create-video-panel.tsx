@@ -42,6 +42,7 @@ import {
 } from "./film-types";
 import { sceneVideoCreating, sceneVideoReady } from "./film-video-card";
 import {
+  FILM_VIDEO_REF_MODE_DEFAULT,
   FILM_VIDEO_REF_MODE_OPTIONS,
   padVideoRefSlots,
   type FilmVideoRefMode,
@@ -116,7 +117,7 @@ export default function FilmCreateVideoPanel({
   onOpenAttachEntity,
   onVideoRefModeChange,
   onVideoRefSlotsChange,
-  videoRefMode: videoRefModeProp = "start",
+  videoRefMode: videoRefModeProp = FILM_VIDEO_REF_MODE_DEFAULT,
 }: Props) {
   const { t } = useTranslation();
   const bulkBtnRef = useRef<HTMLButtonElement>(null);
@@ -294,32 +295,147 @@ export default function FilmCreateVideoPanel({
       </div>
 
       <div className="flex overflow-hidden flex-col flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm">
-        <div className="flex flex-col gap-3 px-4 py-4 border-b border-gray-50 sm:px-5 lg:flex-row lg:items-center">
-          <div className="flex items-start gap-2.5 min-w-0 flex-shrink-0">
-            <div className="flex flex-shrink-0 justify-center items-center w-9 h-9 bg-gray-100 rounded-xl">
-              <HiVideoCamera className="text-lg text-gray-500" />
+        <div className="flex flex-col   px-4 py-4 border-b border-gray-50 sm:px-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-2.5 min-w-0 flex-shrink-0">
+              <div className="flex flex-shrink-0 justify-center items-center w-9 h-9 bg-gray-100 rounded-xl">
+                <HiVideoCamera className="text-lg text-gray-500" />
+              </div>
+              <div>
+                <h2 className="m-0 text-base font-bold text-gray-900">{t("Bảng sản xuất")}</h2>
+                <p className="text-xs text-gray-400 m-0 mt-0.5 flex flex-wrap gap-x-1">
+                  <span>
+                    {scenes.length} {t("Cảnh quay")}
+                  </span>
+                  <span>·</span>
+                  <span>
+                    {readyCount}/{scenes.length || 0} {t("đã tạo")}
+                  </span>
+                  {allDone && scenes.length > 0 && (
+                    <>
+                      <span>·</span>
+                      <span className="text-green-600">{t("Hoàn thành")}</span>
+                    </>
+                  )}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="m-0 text-base font-bold text-gray-900">{t("Bảng sản xuất")}</h2>
-              <p className="text-xs text-gray-400 m-0 mt-0.5 flex flex-wrap gap-x-1">
-                <span>
-                  {scenes.length} {t("Cảnh quay")}
+
+            <div className="flex flex-wrap flex-shrink-0 gap-2 items-center sm:justify-end">
+              <>
+                <span className="inline-flex sm:hidden">
+                  <Button
+                    outline
+                    small
+                    icon={
+                      allSilentLipSync ? (
+                        <MdRecordVoiceOver />
+                      ) : (
+                        <MdVoiceOverOff />
+                      )
+                    }
+                    className={`!rounded-lg !px-2.5 ${
+                      allSilentLipSync
+                        ? "!border-red-200 !text-red-600 !bg-red-50 hover:!bg-red-100"
+                        : ""
+                    }`}
+                    onClick={handleToggleSilentLipSyncAll}
+                    disabled={!scenes.length || !onSaveScene}
+                    tooltip={
+                      allSilentLipSync
+                        ? t("Bật tiếng tất cả")
+                        : t(
+                            "Giữ thoại để nhép miệng; video gen không nói tiếng (dùng Tạo giọng + Studio)"
+                          )
+                    }
+                  />
                 </span>
-                <span>·</span>
-                <span>
-                  {readyCount}/{scenes.length || 0} {t("đã tạo")}
+                <span className="hidden sm:inline-flex">
+                  <Button
+                    outline
+                    small
+                    text={
+                      allSilentLipSync
+                        ? t("Bật tiếng tất cả")
+                        : t("Nhép miệng")
+                    }
+                    icon={
+                      allSilentLipSync ? (
+                        <MdRecordVoiceOver />
+                      ) : (
+                        <MdVoiceOverOff />
+                      )
+                    }
+                    className={`!rounded-lg ${
+                      allSilentLipSync
+                        ? "!border-red-200 !text-red-600 !bg-red-50 hover:!bg-red-100"
+                        : ""
+                    }`}
+                    onClick={handleToggleSilentLipSyncAll}
+                    disabled={!scenes.length || !onSaveScene}
+                    tooltip={t(
+                      "Giữ thoại để nhép miệng; video gen không nói tiếng (dùng Tạo giọng + Studio)"
+                    )}
+                  />
                 </span>
-                {allDone && scenes.length > 0 && (
-                  <>
-                    <span>·</span>
-                    <span className="text-green-600">{t("Hoàn thành")}</span>
-                  </>
-                )}
-              </p>
+              </>
+              <>
+                <span className="inline-flex sm:hidden">
+                  <Button
+                    outline
+                    small
+                    icon={<HiDownload />}
+                    className="!rounded-lg !px-2.5"
+                    onClick={() => onDownloadAll?.()}
+                    disabled={!readyCount}
+                    tooltip={t("Tải tất cả")}
+                  />
+                </span>
+                <span className="hidden sm:inline-flex">
+                  <Button
+                    outline
+                    small
+                    text={t("Tải tất cả")}
+                    icon={<HiDownload />}
+                    className="!rounded-lg"
+                    onClick={() => onDownloadAll?.()}
+                    disabled={!readyCount}
+                  />
+                </span>
+              </>
+              <Button
+                primary
+                small
+                text={
+                  <span className="inline-flex items-center gap-1">
+                    {t("Tạo hàng loạt")}
+                    <HiChevronDown className="text-sm opacity-90" />
+                  </span>
+                }
+                icon={<HiVideoCamera />}
+                className="!rounded-lg !bg-orange-500 hover:!bg-orange-600 !border-orange-500"
+                innerRef={bulkBtnRef}
+                isLoading={bulkBusy}
+                disabled={!scenes.length || bulkBusy || (!canBulkAll && !canBulkErrors)}
+              />
+              <Dropdown reference={bulkBtnRef} placement="bottom-end">
+                <Dropdown.Item
+                  text={t("Tạo lại tất cả")}
+                  icon={<HiRefresh />}
+                  disabled={!canBulkAll || bulkBusy}
+                  onClick={() => void handleBulk("all")}
+                />
+                <Dropdown.Item
+                  text={`${t("Tạo lại video lỗi")}${errorCount ? ` (${errorCount})` : ""}`}
+                  icon={<HiVideoCamera />}
+                  disabled={!canBulkErrors || bulkBusy}
+                  onClick={() => void handleBulk("errors")}
+                />
+              </Dropdown>
             </div>
           </div>
 
-          <div className="flex flex-1 justify-center items-center min-w-0">
+          <div className="flex justify-center items-center w-full min-w-0 -mb-3 mt-1">
             <div className="inline-flex items-center gap-1 whitespace-nowrap border border-gray-200 rounded-full p-0.5 w-max">
               {FILM_VIDEO_REF_MODE_OPTIONS.map((opt) => {
                 const active = videoRefMode === opt.id;
@@ -342,67 +458,6 @@ export default function FilmCreateVideoPanel({
                 );
               })}
             </div>
-          </div>
-
-          <div className="flex flex-wrap flex-shrink-0 gap-2 items-center lg:justify-end">
-            <Button
-              outline
-              small
-              text={
-                allSilentLipSync
-                  ? t("Bật tiếng tất cả")
-                  : t("Nhép miệng")
-              }
-              icon={allSilentLipSync ? <MdRecordVoiceOver /> : <MdVoiceOverOff />}
-              className={`!rounded-lg ${
-                allSilentLipSync
-                  ? "!border-red-200 !text-red-600 !bg-red-50 hover:!bg-red-100"
-                  : ""
-              }`}
-              onClick={handleToggleSilentLipSyncAll}
-              disabled={!scenes.length || !onSaveScene}
-              data-tooltip={t(
-                "Giữ thoại để nhép miệng; video gen không nói tiếng (dùng Tạo giọng + Studio)"
-              )}
-            />
-            <Button
-              outline
-              small
-              text={t("Tải tất cả")}
-              icon={<HiDownload />}
-              className="!rounded-lg"
-              onClick={() => onDownloadAll?.()}
-              disabled={!readyCount}
-            />
-            <Button
-              primary
-              small
-              text={
-                <span className="inline-flex items-center gap-1">
-                  {t("Tạo hàng loạt")}
-                  <HiChevronDown className="text-sm opacity-90" />
-                </span>
-              }
-              icon={<HiVideoCamera />}
-              className="!rounded-lg !bg-orange-500 hover:!bg-orange-600 !border-orange-500"
-              innerRef={bulkBtnRef}
-              isLoading={bulkBusy}
-              disabled={!scenes.length || bulkBusy || (!canBulkAll && !canBulkErrors)}
-            />
-            <Dropdown reference={bulkBtnRef} placement="bottom-end">
-              <Dropdown.Item
-                text={t("Tạo lại tất cả")}
-                icon={<HiRefresh />}
-                disabled={!canBulkAll || bulkBusy}
-                onClick={() => void handleBulk("all")}
-              />
-              <Dropdown.Item
-                text={`${t("Tạo lại video lỗi")}${errorCount ? ` (${errorCount})` : ""}`}
-                icon={<HiVideoCamera />}
-                disabled={!canBulkErrors || bulkBusy}
-                onClick={() => void handleBulk("errors")}
-              />
-            </Dropdown>
           </div>
         </div>
 
@@ -460,6 +515,17 @@ export default function FilmCreateVideoPanel({
                     onOpenStoryboardScene={onOpenStoryboardScene}
                     onToggleSilentLipSync={
                       onSaveScene ? handleToggleSilentLipSync : undefined
+                    }
+                    onVideoVoiceChange={
+                      onSaveScene
+                        ? (s, voiceId) => {
+                            void onSaveScene({
+                              ...s,
+                              videoVoice: voiceId,
+                              updatedAt: new Date().toISOString(),
+                            });
+                          }
+                        : undefined
                     }
                   />
                 ))}

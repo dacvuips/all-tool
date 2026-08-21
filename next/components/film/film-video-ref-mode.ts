@@ -50,11 +50,11 @@ export type FilmVideoRefModeOption = {
 
 export const FILM_VIDEO_REF_MODE_OPTIONS: FilmVideoRefModeOption[] = [
   {
-    id: "start",
-    label: "Start",
-    slotCount: 1,
+    id: "component",
+    label: "Thành Phần",
+    slotCount: 3,
     description:
-      "1 ảnh khung bắt đầu (start image) → video. Mặc định gắn ảnh khung phân cảnh vào slot 1.",
+      "3 ảnh tham chiếu (reference / thành phần). Mặc định gắn ảnh khung phân cảnh vào slot đầu.",
   },
   {
     id: "start_end",
@@ -64,13 +64,16 @@ export const FILM_VIDEO_REF_MODE_OPTIONS: FilmVideoRefModeOption[] = [
       "2 ảnh start + end frame. Mặc định gắn ảnh khung phân cảnh vào slot bắt đầu (slot 1).",
   },
   {
-    id: "component",
-    label: "Thành Phần",
-    slotCount: 3,
+    id: "start",
+    label: "Start",
+    slotCount: 1,
     description:
-      "3 ảnh tham chiếu (reference / thành phần). Mặc định gắn ảnh khung phân cảnh vào slot đầu.",
+      "1 ảnh khung bắt đầu (start image) → video. Mặc định gắn ảnh khung phân cảnh vào slot 1.",
   },
 ];
+
+/** Mode mặc định khi mở Tạo video */
+export const FILM_VIDEO_REF_MODE_DEFAULT: FilmVideoRefMode = "component";
 
 /** Ảnh khung phân cảnh → slot tham chiếu (nếu có). */
 export function sceneFrameToVideoRefSlot(
