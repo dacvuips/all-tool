@@ -12,6 +12,7 @@ import {
   HiThumbUp,
   HiVideoCamera,
 } from "react-icons/hi";
+import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import { Button } from "../shared/utilities/form";
 import { Dropdown } from "../shared/utilities/popover/dropdown";
 import type { FilmAttachOption } from "./film-attach-fields";
@@ -24,6 +25,7 @@ import { resolveFilmSceneImagePrompt } from "./film-scene-image-prompt";
 import {
   resolveFilmSceneAudioPrompt,
   resolveFilmSceneVideoPrompt,
+  withBuiltSceneVideoPrompt,
 } from "./film-scene-video-prompt";
 import FilmShotImageCard from "./film-shot-image-card";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
@@ -131,6 +133,36 @@ export default function FilmCreateVideoPanel({
 
   const readyCount = scenes.filter(sceneVideoReady).length;
   const errorCount = scenes.filter((s) => s.videoStatus === "error").length;
+  const allSilentLipSync =
+    scenes.length > 0 && scenes.every((s) => !!s.videoSilentLipSync);
+
+  const applySilentLipSync = (
+    scene: FilmSceneRecord,
+    enabled: boolean
+  ): FilmSceneRecord => {
+    const next: FilmSceneRecord = {
+      ...scene,
+      videoSilentLipSync: enabled,
+      updatedAt: new Date().toISOString(),
+    };
+    if (next.videoPromptCustom) return next;
+    return withBuiltSceneVideoPrompt(next, storyboardVideoPromptStyle);
+  };
+
+  const handleToggleSilentLipSync = (scene: FilmSceneRecord) => {
+    if (!onSaveScene) return;
+    void onSaveScene(applySilentLipSync(scene, !scene.videoSilentLipSync));
+  };
+
+  const handleToggleSilentLipSyncAll = () => {
+    if (!onSaveScene || !scenes.length) return;
+    const nextEnabled = !allSilentLipSync;
+    void (async () => {
+      for (const scene of scenes) {
+        await onSaveScene(applySilentLipSync(scene, nextEnabled));
+      }
+    })();
+  };
   const creatingCount = scenes.filter(sceneVideoCreating).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
   const canBulkAll = scenes.length > 0 && creatingCount < scenes.length;
@@ -316,6 +348,26 @@ export default function FilmCreateVideoPanel({
             <Button
               outline
               small
+              text={
+                allSilentLipSync
+                  ? t("Bật tiếng tất cả")
+                  : t("Nhép miệng, không tiếng")
+              }
+              icon={allSilentLipSync ? <MdRecordVoiceOver /> : <MdVoiceOverOff />}
+              className={`!rounded-lg ${
+                allSilentLipSync
+                  ? "!border-red-200 !text-red-600 !bg-red-50 hover:!bg-red-100"
+                  : ""
+              }`}
+              onClick={handleToggleSilentLipSyncAll}
+              disabled={!scenes.length || !onSaveScene}
+              data-tooltip={t(
+                "Giữ thoại để nhép miệng; video gen không nói tiếng (dùng Tạo giọng + Studio)"
+              )}
+            />
+            <Button
+              outline
+              small
               text={t("Tải tất cả (.zip)")}
               icon={<HiDownload />}
               className="!rounded-lg"
@@ -406,6 +458,9 @@ export default function FilmCreateVideoPanel({
                     videoActionPending={!!stopPendingIds?.[`video:${scene.id}`]}
                     onEditScene={(s) => setEditSceneId(s.id)}
                     onOpenStoryboardScene={onOpenStoryboardScene}
+                    onToggleSilentLipSync={
+                      onSaveScene ? handleToggleSilentLipSync : undefined
+                    }
                   />
                 ))}
             </div>

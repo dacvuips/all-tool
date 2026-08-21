@@ -4044,6 +4044,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         aspectRatio,
         videoMode,
         serviceImageType,
+        generateAudio: latest.videoSilentLipSync ? false : undefined,
         filmProjectId: project.id,
         filmEpisodeId: latest.episodeId,
         filmSceneId: latest.id,

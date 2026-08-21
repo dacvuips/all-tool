@@ -4,6 +4,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiExternalLink, HiSparkles } from "react-icons/hi";
+import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import {
@@ -92,6 +93,8 @@ type Props = {
     scene: FilmSceneRecord,
     slots: Array<FilmVideoRefSlot | null>
   ) => void;
+  /** Bật/tắt: nhép miệng theo thoại, không nói tiếng */
+  onToggleSilentLipSync?: (scene: FilmSceneRecord) => void;
 };
 
 export function sceneFrameReady(scene: FilmSceneRecord): boolean {
@@ -173,6 +176,7 @@ export default function FilmShotImageCard({
   onFramePromptSourceChange,
   videoRefMode = null,
   onVideoRefSlotsChange,
+  onToggleSilentLipSync,
 }: Props) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -415,6 +419,33 @@ export default function FilmShotImageCard({
             }}
           >
             <HiExternalLink className="text-base" />
+          </button>
+        ) : null}
+        {onToggleSilentLipSync ? (
+          <button
+            type="button"
+            className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md border-0 cursor-pointer ${
+              scene.videoSilentLipSync
+                ? "text-red-500 bg-red-50 hover:bg-red-100"
+                : "text-gray-400 bg-transparent hover:text-red-500 hover:bg-red-50"
+            }`}
+            title={
+              scene.videoSilentLipSync
+                ? t("Đang: nhép miệng, không tiếng — bấm để bật tiếng lại")
+                : t("Nhép miệng theo thoại, không nói tiếng")
+            }
+            aria-label={t("Nhép miệng, không tiếng")}
+            aria-pressed={!!scene.videoSilentLipSync}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSilentLipSync(scene);
+            }}
+          >
+            {scene.videoSilentLipSync ? (
+              <MdVoiceOverOff className="text-base" />
+            ) : (
+              <MdRecordVoiceOver className="text-base" />
+            )}
           </button>
         ) : null}
         {scene.shotSize ? (

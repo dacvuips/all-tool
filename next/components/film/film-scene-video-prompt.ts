@@ -3,8 +3,25 @@
  * Nguồn: Cỡ cảnh, Góc máy, Lia máy + [MOTION][AUDIO][SFX][MUSIC][VOICE][DIALOGUE]
  * (+ tuỳ chọn suffix cấu hình Setting).
  */
-import type { FilmSceneRecord } from "./film-types";
 import { formatFilmPromptBracketBlock } from "./film-scene-image-prompt";
+import type { FilmSceneRecord } from "./film-types";
+
+/** Giữ [DIALOGUE] để nhép miệng; tắt tiếng nói — đặt ĐẦU prompt (chỉ gắn 1 lần qua ensure). */
+export const FILM_SILENT_LIP_SYNC_NOTE = [
+  "PRIORITY RULE #1 — MUTE SPOKEN VOICE:",
+  "- Absolute: no audible speech, no talking, no dialogue audio track, no voiceover.",
+  "- Characters may look like they are speaking, but the soundtrack must NOT contain spoken words.",
+  "- Ambient wind/water only if needed; never generate human voice.",
+  "PRIORITY RULE #2 — LIP-SYNC (VISUAL ONLY):",
+  "- Speaking character(s) MUST clearly mouth every word in [DIALOGUE].",
+  "- Visible lip shapes, jaw open/close, facial acting while talking.",
+  "- Mouth must move with dialogue rhythm — frozen/closed mouth is forbidden.",
+  "- Treat [DIALOGUE] as lip-sync reference only (silent plate for later dubbing).",
+].join("\n");
+
+/** Nhận diện mọi bản ghi chú silent/lip-sync cũ + hiện tại để gỡ trước khi gắn lại 1 lần. */
+const FILM_SILENT_LIP_SYNC_NOTE_DETECT_RE =
+  /Lip-sync performance \(visual\):[\s\S]*?(?:added later in editing\.?|out of the soundtrack\.?)|Quiet performance notes:[\s\S]*?subtle and cinematic\.?|Quiet audio:[\s\S]*?out of the soundtrack\.?|PRIORITY RULE #1 — MUTE SPOKEN VOICE:[\s\S]*?(?:silent plate for later dubbing\.?|frozen\/closed mouth is forbidden\.?)|IMPORTANT LIP-SYNC \(VISUAL ONLY\)[\s\S]*?(?:MUTE AUDIO:[\s\S]*?voice will be added in post\.?|voice added in post\.?)|accurate lip-sync mouth movement matching the dialogue;?\s*silent video;?\s*no audible speech;?\s*no spoken voice audio|(?:^|\n)- Speaking character\(s\) MUST clearly mouth every word in \[DIALOGUE\]\.[\s\S]*?silent plate for later dubbing\.?/i;
 
 export type FilmSceneVideoPromptSource = Pick<
   FilmSceneRecord,
@@ -13,6 +30,7 @@ export type FilmSceneVideoPromptSource = Pick<
   | "cameraMovement"
   | "dialogue"
   | "videoPrompt"
+  | "videoSilentLipSync"
   | "motionPrompt"
   | "audioAmbience"
   | "sfx"
@@ -23,45 +41,75 @@ export type FilmSceneVideoPromptSource = Pick<
   | "atmosphere"
 >;
 
+/** Bỏ khối [VOICE]… (giữ [DIALOGUE]) — tránh model tạo tiếng nói. */
+export function stripFilmVoicePromptBlock(prompt: string): string {
+  return String(prompt || "")
+    .replace(/\[VOICE\][\s\S]*?(?=\[(?:MOTION|AUDIO|SFX|MUSIC|VOICE|DIALOGUE)\]|$)/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Silent lip-sync: bỏ thêm [AUDIO]/[SFX]/[MUSIC] — dễ kích tiếng nói / “sau câu nói”. */
+export function stripFilmAmbientSoundPromptBlocks(prompt: string): string {
+  return String(prompt || "")
+    .replace(
+      /\[(?:AUDIO|SFX|MUSIC)\][\s\S]*?(?=\[(?:MOTION|AUDIO|SFX|MUSIC|VOICE|DIALOGUE)\]|$)/gi,
+      ""
+    )
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** Đảm bảo prompt có ghi chú nhép miệng + không tiếng — đúng 1 lần, luôn Ở ĐẦU. */
+export function ensureFilmSilentLipSyncPrompt(prompt: string): string {
+  let cleaned = stripFilmAmbientSoundPromptBlocks(stripFilmVoicePromptBlock(prompt));
+  // Gỡ bản note hiện tại nếu đã có (tránh nhân đôi với build/resolve)
+  while (cleaned.includes(FILM_SILENT_LIP_SYNC_NOTE)) {
+    cleaned = cleaned.split(FILM_SILENT_LIP_SYNC_NOTE).join("\n\n");
+  }
+  cleaned = cleaned
+    .replace(FILM_SILENT_LIP_SYNC_NOTE_DETECT_RE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!cleaned) return FILM_SILENT_LIP_SYNC_NOTE;
+  return `${FILM_SILENT_LIP_SYNC_NOTE}\n\n${cleaned}`;
+}
+
 function tagged(tag: string, value?: string | null): string {
   return formatFilmPromptBracketBlock(tag, value);
 }
 
 /**
  * Gắn field scene → Prompt video.
- * Thứ tự: Cỡ cảnh → Góc máy → Lia máy → [MOTION] [AUDIO] [SFX] [MUSIC] [VOICE] [DIALOGUE]
+ * Thứ tự: (silent note đầu) → Cỡ cảnh → … → [MOTION] [DIALOGUE]
+ * videoSilentLipSync: bỏ [VOICE]/[AUDIO]/[SFX]/[MUSIC] (dễ kích tiếng nói),
+ * giữ [DIALOGUE], đặt RULE mute/lip-sync ở ĐẦU prompt.
  */
 export function buildFilmSceneVideoPrompt(
   scene: FilmSceneVideoPromptSource,
   globalStyle?: string | null
 ): string {
   const parts: string[] = [];
+  const silentLipSync = !!scene.videoSilentLipSync;
 
   const shotSizeBlock = formatFilmPromptBracketBlock("Cỡ cảnh", scene.shotSize);
   const cameraAngleBlock = formatFilmPromptBracketBlock("Góc máy", scene.cameraAngle);
-  const cameraMovementBlock = formatFilmPromptBracketBlock(
-    "Lia máy",
-    scene.cameraMovement
-  );
+  const cameraMovementBlock = formatFilmPromptBracketBlock("Lia máy", scene.cameraMovement);
   const dialogue = String(scene.dialogue || "").trim();
   const style = String(globalStyle || "").trim();
+
+  const hasRealDialogue =
+    !!dialogue && !/^không\s*thoại$/i.test(dialogue.replace(/^[-–—•*]+\s*/i, "").trim());
+
+  // Note silent/lip-sync chỉ gắn 1 lần ở resolve → ensureFilmSilentLipSyncPrompt
 
   if (shotSizeBlock) parts.push(shotSizeBlock);
   if (cameraAngleBlock) parts.push(cameraAngleBlock);
   if (cameraMovementBlock) parts.push(cameraMovementBlock);
 
-  const actionBlock = formatFilmPromptBracketBlock(
-    "Hành động nhân vật",
-    scene.action
-  );
-  const visualBlock = formatFilmPromptBracketBlock(
-    "Hình ảnh cảnh quay",
-    scene.visualDescription
-  );
-  const atmosphereBlock = formatFilmPromptBracketBlock(
-    "Không khí cảnh",
-    scene.atmosphere
-  );
+  const actionBlock = formatFilmPromptBracketBlock("Hành động nhân vật", scene.action);
+  const visualBlock = formatFilmPromptBracketBlock("Hình ảnh cảnh quay", scene.visualDescription);
+  const atmosphereBlock = formatFilmPromptBracketBlock("Không khí cảnh", scene.atmosphere);
   if (actionBlock) parts.push(actionBlock);
   if (visualBlock) parts.push(visualBlock);
   if (atmosphereBlock) parts.push(atmosphereBlock);
@@ -71,14 +119,29 @@ export function buildFilmSceneVideoPrompt(
   const sfx = tagged("SFX", scene.sfx);
   const music = tagged("MUSIC", scene.music);
   const voice = tagged("VOICE", scene.voiceDirection);
-  // Không có thoại → vẫn ghi [DIALOGUE] với "- Không thoại"
-  const dialogueTag = tagged("DIALOGUE", dialogue || "Không thoại");
+  // Silent lip-sync: nhét chỉ thị nhép miệng ngay trong [DIALOGUE]
+  const dialogueBody =
+    silentLipSync && hasRealDialogue
+      ? `${dialogue}\n- Visible lip-sync only: mouth this dialogue clearly (open/close lips & jaw); soundtrack has NO spoken voice.`
+      : dialogue || "Không thoại";
+  const dialogueTag = tagged("DIALOGUE", dialogueBody);
 
   if (motion) parts.push(motion);
-  if (audio) parts.push(audio);
-  if (sfx) parts.push(sfx);
-  if (music) parts.push(music);
-  if (voice) parts.push(voice);
+  // Silent: bỏ AUDIO/SFX/MUSIC/VOICE — dễ kích model tạo tiếng nói ("câu nói", thở, nhạc sau thoại)
+  if (!silentLipSync) {
+    if (audio) parts.push(audio);
+    if (sfx) parts.push(sfx);
+    if (music) parts.push(music);
+    if (voice) parts.push(voice);
+  }
+  if (silentLipSync && hasRealDialogue) {
+    parts.push(
+      tagged(
+        "MOTION",
+        "Speaking character mouths the dialogue with clear lip-sync and jaw movement; do not freeze the mouth; no audible speech."
+      )
+    );
+  }
   if (dialogueTag) parts.push(dialogueTag);
 
   if (style) parts.push(style);
@@ -90,10 +153,7 @@ export function buildFilmSceneVideoPrompt(
 
 /** Ghép [AUDIO]/[SFX]/[MUSIC]/[VOICE] → Prompt âm thanh. */
 export function buildFilmSceneAudioPrompt(
-  scene: Pick<
-    FilmSceneRecord,
-    "audioAmbience" | "sfx" | "music" | "voiceDirection"
-  >,
+  scene: Pick<FilmSceneRecord, "audioAmbience" | "sfx" | "music" | "voiceDirection">,
   globalStyle?: string | null
 ): string {
   const parts = [
@@ -195,12 +255,18 @@ export function resolveFilmSceneVideoPrompt(
   const builtHasTags = hasVideoDetailTags(built);
   const storedHasTags = hasVideoDetailTags(stored);
 
+  let result = "";
   // Extract đã gắn [MOTION]… vào videoPrompt — giữ nếu bản ghép chưa có tag
-  if (storedHasTags && !builtHasTags) return stored;
-  if (builtHasTags) return built;
-  if (built) return built;
-  if (stored) return stored;
-  return String(globalStyle || "").trim();
+  if (storedHasTags && !builtHasTags) result = stored;
+  else if (builtHasTags) result = built;
+  else if (built) result = built;
+  else if (stored) result = stored;
+  else result = String(globalStyle || "").trim();
+
+  if (scene.videoSilentLipSync) {
+    return ensureFilmSilentLipSyncPrompt(result);
+  }
+  return result;
 }
 
 /** Ghi videoPrompt đã ghép vào scene. */

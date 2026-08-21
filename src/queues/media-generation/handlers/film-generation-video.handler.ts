@@ -33,6 +33,16 @@ const LOG_PREFIX = "film-generation-video";
 const NO_TEXT_NOTE =
   "\nIMPORTANT: Do not render any readable on-screen text, captions, logos, or watermarks in the video frames.";
 
+/** generateAudio=false: lip-sync rõ + mute mềm, đặt Ở ĐẦU prompt. */
+const SILENT_LIP_SYNC_NOTE = [
+  "Lip-sync performance (visual):",
+  "- Speaking character(s) clearly mouth every word in [DIALOGUE].",
+  "- Clear lip shapes, jaw open/close, expressive face while talking.",
+  "- Mouth keeps moving with the dialogue rhythm; avoid a still or closed mouth.",
+  "Quiet audio:",
+  "- Soft ambience only; keep spoken dialogue out of the soundtrack.",
+].join("\n");
+
 export async function handleFilmGenerationVideo(
   job: IMediaGenerationJob,
   emitter: MediaJobEmitter
@@ -47,8 +57,19 @@ export async function handleFilmGenerationVideo(
   }
 
   // Film: không tự chèn anti-text note (chỉ ghép khi client gửi noText: true)
-  const fullPrompt =
+  let fullPrompt =
     payload.noText === true ? `${prompt}${NO_TEXT_NOTE}` : prompt;
+
+  if (payload.generateAudio === false) {
+    // Client đã gắn FILM_SILENT_LIP_SYNC_NOTE / lip-sync note → không prepend thêm
+    const hasClientSilentNote =
+      /silent plate for later dubbing|Lip-sync performance \(visual\)|Quiet performance notes:|MUST clearly mouth every word in \[DIALOGUE\]/i.test(
+        fullPrompt
+      );
+    if (!hasClientSilentNote) {
+      fullPrompt = `${SILENT_LIP_SYNC_NOTE}\n\n${fullPrompt}`;
+    }
+  }
 
   const result = await runFlow2VideoPipeline({
     customerId: job.customerId,

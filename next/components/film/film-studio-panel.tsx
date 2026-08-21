@@ -965,7 +965,7 @@ export default function FilmStudioPanel({
               startSec = drag.originStartSec - drag.originTrimIn;
               duration = end0 - startSec;
               trimIn = 0;
-            } else {
+        } else {
               startSec = nextStart;
               duration = end0 - nextStart;
               trimIn = nextTrim;
@@ -988,7 +988,7 @@ export default function FilmStudioPanel({
                 isVoiceTrack
                   ? {
                       timelineStartSec: startSec,
-                      timelineDurationSec: duration,
+                timelineDurationSec: duration,
                       voiceTrimInSec: Math.max(0, trimIn),
                     }
                   : {
@@ -1039,9 +1039,9 @@ export default function FilmStudioPanel({
             previewLeft != null && Number.isFinite(previewLeft)
               ? Math.max(0, previewLeft + dur * 0.5)
               : (() => {
-                  const el = timelineRef.current;
+        const el = timelineRef.current;
                   if (!el) return 0;
-                  const rect = el.getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
                   const x = e.clientX - rect.left + el.scrollLeft;
                   return Math.max(0, x / Math.max(pxPerSecRef.current, 0.001));
                 })();
@@ -2202,7 +2202,7 @@ export default function FilmStudioPanel({
       setSelectedVoiceId(null);
       setInspectorTab("subtitle");
     } else {
-      setSelectedVoiceId(clip.id);
+    setSelectedVoiceId(clip.id);
       setSelectedSubtitleId(null);
       setInspectorTab("audio");
     }
@@ -2424,7 +2424,7 @@ export default function FilmStudioPanel({
                   >
                     <span className="block break-words pointer-events-none">
                       {timedSubtitle.text}
-                    </span>
+                  </span>
                     <div
                       data-handle="sub-left"
                       className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize"
@@ -2527,8 +2527,8 @@ export default function FilmStudioPanel({
                       <div className="absolute inset-0 flex flex-col justify-center items-center gap-2 px-4 text-gray-400 text-center">
                         <span className="text-4xl opacity-40">▶</span>
                         <p className="m-0 text-sm">{t("Chưa có video — tạo video ở tab Tạo video")}</p>
-                      </div>
-                    )}
+              </div>
+            )}
 
                     {showSubtitleOverlay &&
                     timedSubtitle?.text &&
@@ -3392,7 +3392,7 @@ export default function FilmStudioPanel({
                     style={{ left: s * pxPerSec }}
                   >
                     {s}s
-                  </div>
+                </div>
               ))}
           </div>
 
@@ -3502,7 +3502,7 @@ export default function FilmStudioPanel({
                     className={`absolute inset-0 overflow-hidden rounded pointer-events-none ${
                       draggingClipId === clip.sceneId ? "opacity-70 ring-2 ring-sky-300" : ""
                     }`}
-                  >
+              >
                 {clip.thumbUrl ? (
                   <img
                     src={clip.thumbUrl}
@@ -3650,7 +3650,7 @@ export default function FilmStudioPanel({
                   <div className="absolute top-0 left-0 right-0 z-10 flex items-start pointer-events-none pl-3 pr-5 pt-0.5">
                     <span className="min-w-0 text-10 font-semibold text-primary-dark truncate leading-none">
                       {clip.label}
-                    </span>
+                  </span>
                   </div>
                   {hasAudio ? (
                     <button
@@ -3769,7 +3769,7 @@ export default function FilmStudioPanel({
               >
                   <div className="absolute inset-0 overflow-visible rounded px-1.5 py-0.5 flex items-center justify-center text-center pointer-events-none whitespace-normal break-words leading-snug">
                     {clip.text || t("Phụ đề")}
-                  </div>
+              </div>
                   <button
                     type="button"
                     title={clipOn ? t("Tắt phụ đề này") : t("Bật phụ đề này")}

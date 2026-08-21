@@ -435,6 +435,11 @@ export type FilmSceneRecord = {
   videoPrompt?: string;
   /** User đã sửa tay Prompt video — không tự ghép đè */
   videoPromptCustom?: boolean;
+  /**
+   * Tạo video: nhép miệng theo [DIALOGUE], không phát tiếng nói.
+   * Prompt giữ thoại + ghi chú silent; generateAudio = false.
+   */
+  videoSilentLipSync?: boolean;
   /** Prompt âm thanh */
   audioPrompt?: string;
   /** User đã sửa tay Prompt âm thanh — không tự ghép đè */
