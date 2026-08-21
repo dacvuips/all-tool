@@ -12,6 +12,7 @@ import {
   STORE_NAME,
 } from "../../constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import {
   SceneErrorKind,
   SceneErrors,
@@ -75,6 +76,7 @@ interface ElementContextType {
   selectedHistoryId: string | null;
   selectHistoryItem: (id: string) => void;
   clearSceneHistory: () => Promise<void>;
+  renameHistoryItem: (id: string, label: string) => Promise<void>;
 
   // ── Batch generating state ──
   batchGeneratingSceneIdsRef: React.MutableRefObject<Set<string>>;
@@ -341,6 +343,21 @@ export function ElementProvider(props) {
     setSelectedHistoryId(null);
   }, [scriptDB]);
 
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(sceneHistory, id, label);
+      if (!next) return;
+      setSceneHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.elementHistory, next);
+      } catch (err) {
+        console.warn("[element] Failed to rename history", err);
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
+
   /** Persist current copyVideoFormConfig to IndexedDB (call on submit only) */
   const persistElementInput = useCallback(() => {
     if (elementFormConfig) {
@@ -397,6 +414,7 @@ export function ElementProvider(props) {
         selectedHistoryId,
         selectHistoryItem,
         clearSceneHistory,
+        renameHistoryItem,
 
         // batch generating state
         batchGeneratingSceneIdsRef,

@@ -3,9 +3,16 @@
  * Dropdown chọn lịch sử kịch bản – UI thuần, không đọc IndexedDB.
  * Parent (provider) load history từ IndexedDB và truyền props xuống.
  */
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { RiDeleteBin6Line, RiDeleteBinLine, RiHistoryLine } from "react-icons/ri";
+import {
+  RiCheckLine,
+  RiCloseLine,
+  RiDeleteBin6Line,
+  RiDeleteBinLine,
+  RiEdit2Line,
+  RiHistoryLine,
+} from "react-icons/ri";
 
 /** Shape chung của mọi entry lưu trong IndexedDB (scene / copy-video / element / trending) */
 export interface BaseHistoryItem<TData = unknown> {
@@ -15,6 +22,22 @@ export interface BaseHistoryItem<TData = unknown> {
   data: TData;
 }
 
+/** Đổi `label` trong mảng lịch sử (không mutate). Trả null nếu không đổi. */
+export function applyHistoryRename<T extends BaseHistoryItem>(
+  items: T[],
+  id: string,
+  label: string
+): T[] | null {
+  const trimmed = String(label || "").trim();
+  if (!id || !trimmed) return null;
+  const idx = items.findIndex((h) => h.id === id);
+  if (idx < 0) return null;
+  if (String(items[idx].label || "").trim() === trimmed) return null;
+  const next = items.slice();
+  next[idx] = { ...next[idx], label: trimmed };
+  return next;
+}
+
 export interface SceneHistoryDropdownProps<TData = unknown> {
   items: BaseHistoryItem<TData>[];
   selectedId: string | null;
@@ -22,12 +45,16 @@ export interface SceneHistoryDropdownProps<TData = unknown> {
   onClear: () => void | Promise<void>;
   /** Xóa phiên đang chọn (tuỳ chọn — hiện nút riêng). */
   onDeleteSelected?: () => void | Promise<void>;
+  /** Đổi tên phiên đang chọn (tuỳ chọn — hiện nút bút chì). */
+  onRename?: (id: string, label: string) => void | Promise<void>;
   /** Tuỳ biến text trong &lt;option&gt; (mặc định: label + số scene) */
   formatOptionLabel?: (item: BaseHistoryItem<TData>) => string;
   /** Tooltip nút xóa phiên đang chọn */
   deleteSelectedTitle?: string;
   /** Nhãn xác nhận xóa phiên đang chọn */
   deleteSelectedConfirmLabel?: string;
+  /** Tooltip nút đổi tên */
+  renameTitle?: string;
   /** Tooltip nút xóa tất cả */
   clearTitle?: string;
   /** Nhãn nút xác nhận xóa tất cả */
@@ -87,9 +114,11 @@ export function SceneHistoryDropdown<TData = unknown>({
   onSelect,
   onClear,
   onDeleteSelected,
+  onRename,
   formatOptionLabel = defaultFormatOptionLabel,
   deleteSelectedTitle,
   deleteSelectedConfirmLabel,
+  renameTitle,
   clearTitle,
   clearConfirmLabel,
   className = "",
@@ -97,6 +126,25 @@ export function SceneHistoryDropdown<TData = unknown>({
   const { t } = useTranslation();
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftLabel, setDraftLabel] = useState("");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  const activeId = selectedId || items[0]?.id || "";
+  const activeItem = items.find((h) => h.id === activeId) || items[0] || null;
+
+  useEffect(() => {
+    if (!renaming) return;
+    renameInputRef.current?.focus();
+    renameInputRef.current?.select();
+  }, [renaming]);
+
+  useEffect(() => {
+    // Đổi phiên đang chọn → thoát chế độ rename
+    setRenaming(false);
+    setConfirmDeleteSelected(false);
+    setConfirmClearAll(false);
+  }, [activeId]);
 
   if (!items.length) return null;
 
@@ -105,11 +153,47 @@ export function SceneHistoryDropdown<TData = unknown>({
     setConfirmClearAll(false);
   };
 
+  const beginRename = () => {
+    if (!activeItem || !onRename) return;
+    setConfirmDeleteSelected(false);
+    setConfirmClearAll(false);
+    setDraftLabel(String(activeItem.label || "").trim());
+    setRenaming(true);
+  };
+
+  const cancelRename = () => {
+    setRenaming(false);
+    setDraftLabel("");
+  };
+
+  const commitRename = async () => {
+    if (!activeItem || !onRename) return;
+    const next = String(draftLabel || "").trim();
+    if (!next) {
+      cancelRename();
+      return;
+    }
+    await onRename(activeItem.id, next);
+    setRenaming(false);
+    setDraftLabel("");
+  };
+
   const renderActions = () => (
     <>
       <span className="text-[10px] text-gray-400 whitespace-nowrap mr-1">
         {items.length} {t("bản")}
       </span>
+      {onRename ? (
+        <button
+          type="button"
+          onClick={beginRename}
+          disabled={!activeId || renaming}
+          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent disabled:opacity-40 disabled:cursor-not-allowed"
+          title={renameTitle || t("Đổi tên phiên đang chọn")}
+        >
+          <RiEdit2Line className="text-sm" />
+        </button>
+      ) : null}
       {onDeleteSelected ? (
         confirmDeleteSelected ? (
           <HistoryConfirmButtons
@@ -126,6 +210,7 @@ export function SceneHistoryDropdown<TData = unknown>({
             type="button"
             onClick={() => {
               setConfirmClearAll(false);
+              setRenaming(false);
               setConfirmDeleteSelected(true);
             }}
             disabled={!selectedId}
@@ -151,6 +236,7 @@ export function SceneHistoryDropdown<TData = unknown>({
           id="batch-history-clear"
           onClick={() => {
             setConfirmDeleteSelected(false);
+            setRenaming(false);
             setConfirmClearAll(true);
           }}
           className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all cursor-pointer border-0 bg-transparent"
@@ -174,19 +260,58 @@ export function SceneHistoryDropdown<TData = unknown>({
         <div className="flex gap-1 items-center sm:hidden">{renderActions()}</div>
       </div>
 
-      <select
-        id="batch-history-select"
-        value={selectedId || items[0]?.id || ""}
-        onChange={(e) => onSelect(e.target.value)}
-        className="w-full sm:flex-1 text-xs bg-white border border-gray-200 rounded-lg px-2.5 py-2 sm:py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all cursor-pointer hover:border-gray-300 appearance-none shadow-sm sm:shadow-none"
-        style={SELECT_ARROW_STYLE}
-      >
-        {items.map((item) => (
-          <option key={item.id} value={item.id}>
-            {formatOptionLabel(item)}
-          </option>
-        ))}
-      </select>
+      {renaming ? (
+        <div className="flex flex-1 gap-1 items-center min-w-0">
+          <input
+            ref={renameInputRef}
+            type="text"
+            value={draftLabel}
+            onChange={(e) => setDraftLabel(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void commitRename();
+              } else if (e.key === "Escape") {
+                e.preventDefault();
+                cancelRename();
+              }
+            }}
+            placeholder={t("Tên phiên…")}
+            maxLength={80}
+            className="w-full sm:flex-1 text-xs bg-white border border-indigo-300 rounded-lg px-2.5 py-2 sm:py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 shadow-sm sm:shadow-none"
+          />
+          <button
+            type="button"
+            onClick={() => void commitRename()}
+            className="p-1.5 text-white bg-indigo-500 hover:bg-indigo-600 rounded-lg border-0 cursor-pointer"
+            title={t("Lưu tên")}
+          >
+            <RiCheckLine className="text-sm" />
+          </button>
+          <button
+            type="button"
+            onClick={cancelRename}
+            className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg border-0 cursor-pointer bg-transparent"
+            title={t("Hủy")}
+          >
+            <RiCloseLine className="text-sm" />
+          </button>
+        </div>
+      ) : (
+        <select
+          id="batch-history-select"
+          value={activeId}
+          onChange={(e) => onSelect(e.target.value)}
+          className="w-full sm:flex-1 text-xs bg-white border border-gray-200 rounded-lg px-2.5 py-2 sm:py-1.5 text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 transition-all cursor-pointer hover:border-gray-300 appearance-none shadow-sm sm:shadow-none"
+          style={SELECT_ARROW_STYLE}
+        >
+          {items.map((item) => (
+            <option key={item.id} value={item.id}>
+              {formatOptionLabel(item)}
+            </option>
+          ))}
+        </select>
+      )}
 
       <div className="hidden gap-1 items-center sm:flex">{renderActions()}</div>
     </div>

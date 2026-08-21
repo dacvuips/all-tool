@@ -26,6 +26,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
     sceneHistory,
     selectHistoryItem,
     clearSceneHistory,
+    renameHistoryItem,
   } = useCopyVideoContext();
   const db = useIndexedDB<any>(STORE_NAME.copyVideo, DB_NAME.copyVideo);
   const { insertScene } = useCopyVideoApi();
@@ -144,6 +145,7 @@ export function BatchListPanel({ scenes, characters }: BatchListPanelProps) {
                 selectedId: selectedHistoryId ?? null,
                 onSelect: (id) => selectHistoryItem?.(id),
                 onClear: () => clearSceneHistory?.(),
+                onRename: (id, label) => renameHistoryItem?.(id, label),
                 formatOptionLabel: (item) =>
                   `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
               }

@@ -16,6 +16,7 @@ import {
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import {
   replaceStoryboardImageScenes,
 } from "../utils/storyboardScriptUtils";
@@ -137,6 +138,8 @@ export const AffiliateVideoContext = createContext<
     selectHistoryItem: (id: string) => void;
     /** Clear all scene generation history */
     clearSceneHistory: () => Promise<void>;
+    /** Rename a history item by ID */
+    renameHistoryItem: (id: string, label: string) => Promise<void>;
     /** Refresh history from IndexedDB */
     refreshSceneHistory: () => Promise<void>;
 
@@ -328,6 +331,21 @@ export function AffiliateVideoProvider(props) {
     setSceneHistory([]);
     setSelectedHistoryId(null);
   }, [clearStoryboardHistoryApi]);
+
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(sceneHistory, id, label);
+      if (!next) return;
+      setSceneHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.storyboardHistory, next);
+      } catch (err) {
+        console.warn("[storyboard] Failed to rename history", err);
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
 
   const getSceneList = async () => {
     try {
@@ -580,6 +598,7 @@ export function AffiliateVideoProvider(props) {
         selectedHistoryId,
         selectHistoryItem,
         clearSceneHistory: clearSceneHistoryFn,
+        renameHistoryItem,
         refreshSceneHistory,
 
         // story mode

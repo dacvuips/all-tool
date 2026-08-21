@@ -26,6 +26,7 @@ import {
   useSceneProgressBroadcast,
 } from "../../hook/useSceneProgressBroadcast";
 import { useSceneJobBroadcast } from "../../hook/useSceneJobBroadcast";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import { syncSidebarPatchToCurrentScript } from "../../shared/syncSidebarPatchToCurrentScript";
 
 /** Key used to persist the last generated script in IndexedDB */
@@ -133,6 +134,8 @@ export const AffiliateVideoContext = createContext<
     selectHistoryItem: (id: string) => void;
     /** Clear all scene generation history */
     clearSceneHistory: () => Promise<void>;
+    /** Rename a history item by ID */
+    renameHistoryItem: (id: string, label: string) => Promise<void>;
     /** Refresh history from IndexedDB */
     refreshSceneHistory: () => Promise<void>;
 
@@ -313,6 +316,21 @@ export function AffiliateVideoProvider(props) {
     setSelectedHistoryId(null);
   }, [clearSceneHistoryApi]);
 
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(sceneHistory, id, label);
+      if (!next) return;
+      setSceneHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.sceneHistory, next);
+      } catch (err) {
+        console.warn("[affiliate-video] Failed to rename history", err);
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
+
   const getSceneList = async () => {
     try {
       const cached = await scriptDB.get(CACHE_KEY.lastScript);
@@ -451,6 +469,7 @@ export function AffiliateVideoProvider(props) {
         selectedHistoryId,
         selectHistoryItem,
         clearSceneHistory: clearSceneHistoryFn,
+        renameHistoryItem,
         refreshSceneHistory,
 
         // story mode

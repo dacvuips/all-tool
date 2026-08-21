@@ -18,6 +18,7 @@ import {
 import { GenerateSceneFromTextParams } from "../../copy-video/hook/useCopyVideoApi";
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import {
   SceneErrorKind,
   SceneErrors,
@@ -136,6 +137,8 @@ export const AffiliateVideoContext = createContext<
     selectHistoryItem: (id: string) => void;
     /** Clear all scene generation history */
     clearSceneHistory: () => Promise<void>;
+    /** Rename a history item by ID */
+    renameHistoryItem: (id: string, label: string) => Promise<void>;
     /** Refresh history from IndexedDB */
     refreshSceneHistory: () => Promise<void>;
 
@@ -332,6 +335,21 @@ export function AffiliateVideoProvider(props: {
     setSelectedTrendingHistoryId(null);
   }, [clearTrendingHistoryApi]);
 
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(trendingHistory, id, label);
+      if (!next) return;
+      setTrendingHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.trendingHistory, next);
+      } catch (err) {
+        console.warn("[affiliate-video] Failed to rename history", err);
+      }
+    },
+    [trendingHistory, scriptDB]
+  );
+
   const getTrendingSceneList = async () => {
     try {
       const cached = await scriptDB.get(CACHE_KEY.lastTrendingScript);
@@ -471,6 +489,7 @@ export function AffiliateVideoProvider(props: {
         selectedHistoryId: selectedTrendingHistoryId,
         selectHistoryItem: selectTrendingHistoryItem,
         clearSceneHistory: clearTrendingHistoryFn,
+        renameHistoryItem,
         refreshSceneHistory: refreshTrendingHistory,
 
         // story mode

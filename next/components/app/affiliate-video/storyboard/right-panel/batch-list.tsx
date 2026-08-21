@@ -35,6 +35,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     sceneHistory,
     selectHistoryItem,
     clearSceneHistory,
+    renameHistoryItem,
     affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
@@ -148,6 +149,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
               selectedId: selectedHistoryId ?? null,
               onSelect: (id) => selectHistoryItem?.(id),
               onClear: () => clearSceneHistory?.(),
+              onRename: (id, label) => renameHistoryItem?.(id, label),
             }
           : undefined
       }

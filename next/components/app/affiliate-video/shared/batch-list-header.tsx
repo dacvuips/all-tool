@@ -30,6 +30,7 @@ export interface BatchListHistoryConfig<TData = unknown> {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onClear: () => void | Promise<void>;
+  onRename?: (id: string, label: string) => void | Promise<void>;
   formatOptionLabel?: (item: BaseHistoryItem<TData>) => string;
 }
 
@@ -76,6 +77,7 @@ export function BatchListHeader({
             selectedId={history.selectedId}
             onSelect={history.onSelect}
             onClear={history.onClear}
+            onRename={history.onRename}
             formatOptionLabel={history.formatOptionLabel}
           />
         </div>

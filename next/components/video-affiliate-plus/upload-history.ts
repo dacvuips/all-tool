@@ -159,6 +159,23 @@ export async function updateUploadHistorySession(
   await idbSetUploadHistoryList(next);
 }
 
+/** Đổi tên phiên Đăng video Shopee (label hiển thị lịch sử). */
+export async function renameUploadHistorySession(
+  id: string,
+  label: string
+): Promise<UploadHistoryItem[]> {
+  const trimmed = String(label || "").trim();
+  if (!id || !trimmed) return getUploadHistory();
+  const existing = await idbGetUploadHistoryList<UploadHistoryItem>();
+  const idx = existing.findIndex((h) => h.id === id);
+  if (idx < 0) return existing.map(normalizeEntry);
+  const next = [...existing];
+  const entry = normalizeEntry(next[idx]);
+  next[idx] = { ...entry, label: trimmed };
+  await idbSetUploadHistoryList(next);
+  return next.map(normalizeEntry);
+}
+
 export async function clearUploadHistory(): Promise<void> {
   await idbClearUploadHistory();
 }

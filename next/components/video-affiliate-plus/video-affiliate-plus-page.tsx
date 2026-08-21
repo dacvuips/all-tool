@@ -19,6 +19,7 @@ import {
   ImportHistoryItem,
   migrateLegacyImportHistory,
   pushImportHistory,
+  renameImportHistorySession,
   setSelectedImportHistoryId,
   updateImportHistoryCount,
 } from "./import-history";
@@ -467,6 +468,15 @@ export default function VideoAffiliatePlusPage() {
     }
   }, []);
 
+  const handleRenameHistorySession = useCallback(async (id: string, label: string) => {
+    try {
+      const history = await renameImportHistorySession(id, label);
+      setImportHistory(history);
+    } catch (err) {
+      console.warn("[video-affiliate-plus] rename history session failed", err);
+    }
+  }, []);
+
   const handleAddLog = useCallback(
     (message: string, level: AffiliatePlusLog["level"] = "info", threadId?: string) => {
       setLogs((prev) => {
@@ -599,6 +609,7 @@ export default function VideoAffiliatePlusPage() {
               onImportComplete={handleImportComplete}
               onSelectHistory={handleSelectHistory}
               onDeleteHistorySession={handleDeleteHistorySession}
+              onRenameHistorySession={handleRenameHistorySession}
               onClearHistory={handleClearHistory}
               onAddLog={handleAddLog}
             />

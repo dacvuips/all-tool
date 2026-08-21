@@ -12,6 +12,7 @@ import {
 
 import { useTranslation } from "react-i18next";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import {
   SceneErrorKind,
   SceneErrors,
@@ -50,6 +51,7 @@ interface CopyVideoContextType {
   selectedHistoryId: string | null;
   selectHistoryItem: (id: string) => void;
   clearSceneHistory: () => Promise<void>;
+  renameHistoryItem: (id: string, label: string) => Promise<void>;
 
   // ── Batch generating state ──
   batchGeneratingSceneIdsRef: React.MutableRefObject<Set<string>>;
@@ -308,6 +310,21 @@ export function CopyVideoProvider(props) {
     setSelectedHistoryId(null);
   }, [scriptDB]);
 
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(sceneHistory, id, label);
+      if (!next) return;
+      setSceneHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.copyVideoHistory, next);
+      } catch (err) {
+        console.warn("[copy-video] Failed to rename history", err);
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
+
   /** Persist current copyVideoFormConfig to IndexedDB (call on submit only) */
   const persistCopyVideoInput = useCallback(() => {
     if (copyVideoFormConfig) {
@@ -359,6 +376,7 @@ export function CopyVideoProvider(props) {
         selectedHistoryId,
         selectHistoryItem,
         clearSceneHistory,
+        renameHistoryItem,
 
         // batch generating state
         batchGeneratingSceneIdsRef,

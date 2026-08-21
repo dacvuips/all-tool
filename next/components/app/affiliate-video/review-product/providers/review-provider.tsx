@@ -5,6 +5,7 @@ import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { CACHE_KEY, DB_NAME, ElementFormImage, STORE_NAME } from "../../constants";
 import { ServiceImageEnum } from "../../elements/constants";
 import { useIndexedDB } from "../../hook/useIndexedDB";
+import { applyHistoryRename } from "../../shared/scene-history-dropdown";
 import {
   SceneErrorKind,
   SceneErrors,
@@ -66,6 +67,7 @@ interface ReviewContextType {
   selectedHistoryId: string | null;
   selectHistoryItem: (id: string) => void;
   clearSceneHistory: () => Promise<void>;
+  renameHistoryItem: (id: string, label: string) => Promise<void>;
 
   // ── Batch generating state ──
   batchGeneratingSceneIdsRef: React.MutableRefObject<Set<string>>;
@@ -326,6 +328,21 @@ export function ReviewProvider(props) {
     setSelectedHistoryId(null);
   }, [scriptDB]);
 
+  /** Rename a history item and persist */
+  const renameHistoryItem = useCallback(
+    async (id: string, label: string) => {
+      const next = applyHistoryRename(sceneHistory, id, label);
+      if (!next) return;
+      setSceneHistory(next);
+      try {
+        await scriptDB.set(CACHE_KEY.reviewHistory, next);
+      } catch (err) {
+        console.warn("[review] Failed to rename history", err);
+      }
+    },
+    [sceneHistory, scriptDB]
+  );
+
   /** Persist current copyVideoFormConfig to IndexedDB (call on submit only) */
   const persistReviewInput = useCallback(() => {
     if (reviewFormConfig) {
@@ -377,6 +394,7 @@ export function ReviewProvider(props) {
         selectedHistoryId,
         selectHistoryItem,
         clearSceneHistory,
+        renameHistoryItem,
 
         // batch generating state
         batchGeneratingSceneIdsRef,

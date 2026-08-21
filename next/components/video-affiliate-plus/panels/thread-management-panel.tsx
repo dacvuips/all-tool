@@ -314,6 +314,7 @@ interface ThreadManagementPanelProps {
   onImportComplete: (fileName: string, items: AffiliatePlusItem[]) => void | Promise<void>;
   onSelectHistory: (id: string) => void | Promise<void>;
   onDeleteHistorySession: (id: string) => void | Promise<void>;
+  onRenameHistorySession?: (id: string, label: string) => void | Promise<void>;
   onClearHistory: () => void | Promise<void>;
   onAddLog: (message: string, level?: AffiliatePlusLog["level"], threadId?: string) => void;
 }
@@ -328,6 +329,7 @@ export function ThreadManagementPanel({
   onImportComplete,
   onSelectHistory,
   onDeleteHistorySession,
+  onRenameHistorySession,
   onClearHistory,
   onAddLog,
 }: ThreadManagementPanelProps) {
@@ -2994,10 +2996,16 @@ export function ThreadManagementPanel({
           selectedId={selectedHistoryId}
           onSelect={(id) => void onSelectHistory(id)}
           onDeleteSelected={() => void handleDeleteSelectedHistory({ skipConfirm: true })}
+          onRename={
+            onRenameHistorySession
+              ? (id, label) => void onRenameHistorySession(id, label)
+              : undefined
+          }
           onClear={() => void handleClearGenerateVideoIdb({ skipConfirm: true })}
           formatOptionLabel={formatImportHistoryOption}
           deleteSelectedTitle={t("Xóa phiên đang chọn + video IndexedDB") as string}
           deleteSelectedConfirmLabel={t("Xóa phiên") as string}
+          renameTitle={t("Đổi tên phiên đang chọn") as string}
           clearTitle={t("Xóa tất cả lịch sử + video IndexedDB (giải phóng bộ nhớ)") as string}
           clearConfirmLabel={t("Xóa hết") as string}
           className="px-2 py-2 mb-3 rounded-lg"

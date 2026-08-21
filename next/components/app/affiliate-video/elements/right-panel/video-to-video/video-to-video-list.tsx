@@ -32,6 +32,7 @@ export function VideoToVideoListPanel({
     sceneHistory,
     selectHistoryItem,
     clearSceneHistory,
+    renameHistoryItem,
   } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
@@ -136,6 +137,7 @@ export function VideoToVideoListPanel({
               selectedId: selectedHistoryId ?? null,
               onSelect: (id) => selectHistoryItem?.(id),
               onClear: () => clearSceneHistory?.(),
+              onRename: (id, label) => renameHistoryItem?.(id, label),
               formatOptionLabel: (item) =>
                 `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
             }

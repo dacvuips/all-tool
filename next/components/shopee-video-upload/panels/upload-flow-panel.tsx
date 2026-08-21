@@ -60,6 +60,7 @@ import {
   getUploadHistory,
   PersistedUploadThread,
   pushUploadHistory,
+  renameUploadHistorySession,
   setSelectedUploadHistoryId,
   updateUploadHistorySession,
   UploadHistoryItem,
@@ -885,6 +886,15 @@ export function ShopeeUploadFlowPanel({
     }
   };
 
+  const handleRenameUploadHistory = async (id: string, label: string) => {
+    try {
+      const history = await renameUploadHistorySession(id, label);
+      setUploadHistory(history);
+    } catch (err: any) {
+      toast.error(err?.message || t("Đổi tên phiên thất bại"));
+    }
+  };
+
   const playVideo = async (video: ShopeeUploadThread) => {
     try {
       const url = await resolveMergedPreviewUrl({
@@ -1089,7 +1099,9 @@ export function ShopeeUploadFlowPanel({
           selectedId={selectedUploadHistoryId}
           onSelect={(id) => void handleSelectUploadHistory(id)}
           onClear={() => void handleClearUploadHistory()}
+          onRename={(id, label) => void handleRenameUploadHistory(id, label)}
           formatOptionLabel={formatUploadHistoryOption}
+          renameTitle={t("Đổi tên phiên đang chọn") as string}
           className="px-2 py-2 mb-3 rounded-lg"
         />
 

@@ -183,6 +183,23 @@ export async function updateImportHistoryCount(id: string, itemCount: number): P
   await idbSetImportHistoryList(next);
 }
 
+/** Đổi tên phiên Generate Video (label hiển thị lịch sử). */
+export async function renameImportHistorySession(
+  id: string,
+  label: string
+): Promise<ImportHistoryItem[]> {
+  const trimmed = String(label || "").trim();
+  if (!id || !trimmed) return getImportHistory();
+  const existing = await idbGetImportHistoryList<ImportHistoryItem>();
+  const idx = existing.findIndex((h) => h.id === id);
+  if (idx < 0) return existing.map(normalizeHistoryEntry);
+  const next = [...existing];
+  const entry = normalizeHistoryEntry(next[idx]);
+  next[idx] = stripLegacyItems({ ...entry, label: trimmed });
+  await idbSetImportHistoryList(next);
+  return next.map(normalizeHistoryEntry);
+}
+
 export async function clearImportHistory(): Promise<void> {
   await idbClearImportHistory();
 }

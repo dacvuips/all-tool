@@ -34,6 +34,7 @@ export function BatchListPanel({
     sceneHistory,
     selectHistoryItem,
     clearSceneHistory,
+    renameHistoryItem,
   } = useReviewContext();
   const db = useIndexedDB<any>(STORE_NAME.generateReview, DB_NAME.generateReview);
   const { insertScene } = useReviewApi();
@@ -142,6 +143,7 @@ export function BatchListPanel({
               selectedId: selectedHistoryId ?? null,
               onSelect: (id) => selectHistoryItem?.(id),
               onClear: () => clearSceneHistory?.(),
+              onRename: (id, label) => renameHistoryItem?.(id, label),
               formatOptionLabel: (item) =>
                 `${item.label} (${(item.data as any)?.scenes?.length || 0} scenes)`,
             }
