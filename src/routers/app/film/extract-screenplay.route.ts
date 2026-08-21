@@ -166,7 +166,7 @@ function buildUserPrompt(params: {
     "    [VOICE]",
     "    - chỉ dẫn giọng",
     "    [DIALOGUE]",
-    "    - Tên: lời thoại (bỏ khối này nếu không có thoại)",
+    "    - Tên: lời thoại (không có thoại thì ghi: - Không thoại)",
     "  · Mỗi tag một khối: tag trên 1 dòng, giá trị xuống dòng, mỗi dòng bắt đầu bằng '- '.",
     "  · SAI: [AUDIO]Nước rút...  — ĐÚNG:",
     "    [AUDIO]",

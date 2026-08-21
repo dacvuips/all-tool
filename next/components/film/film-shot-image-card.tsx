@@ -3,7 +3,7 @@
  */
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiSparkles } from "react-icons/hi";
+import { HiExternalLink, HiSparkles } from "react-icons/hi";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import {
@@ -29,6 +29,8 @@ import {
   type FilmAttachIssueKind,
 } from "./film-attachment-validate";
 import FilmImageGalleryDialog from "./film-image-gallery-dialog";
+import FilmVideoGalleryDialog from "./film-video-gallery-dialog";
+import { getFilmEntityVideoSrc } from "./api/generate-film-media";
 import {
   buildFilmShotFrameDefaultPrompt
 } from "./film-shot-frame-dialog";
@@ -53,6 +55,8 @@ type Props = {
   generationActionPending?: boolean;
   /** Upload / chọn gallery → ghi frame */
   onSetFrameImage?: (scene: FilmSceneRecord, image: GeneratedImageData) => void;
+  /** Upload / chọn gallery → ghi video cảnh */
+  onSetSceneVideo?: (scene: FilmSceneRecord, video: GeneratedVideoData) => void;
   onCreateVideo?: (scene: FilmSceneRecord) => void;
   onStopVideo?: (scene: FilmSceneRecord) => void;
   videoActionPending?: boolean;
@@ -64,7 +68,11 @@ type Props = {
   hideVideoTab?: boolean;
   /** Giữ tab Video nối như tool; mặc định ẩn vì film chưa nối */
   hideExtendTab?: boolean;
-  /** Click tiêu đề → mở phân cảnh tương ứng (Chuỗi Cảnh quay) */
+  /** Click tiêu đề → mở modal sửa phân cảnh */
+  onEditScene?: (scene: FilmSceneRecord) => void;
+  /** Icon cạnh tiêu đề → mở phân cảnh trong Chuỗi phân cảnh */
+  onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
+  /** @deprecated Dùng onEditScene / onOpenStoryboardScene */
   onTitleClick?: (scene: FilmSceneRecord) => void;
   characters?: FilmCharacterRecord[];
   propsList?: FilmPropRecord[];
@@ -124,12 +132,15 @@ function sceneToGeneratedVideo(
   scene: FilmSceneRecord,
   aspectRatio: FilmAspectRatio
 ): GeneratedVideoData | null {
-  const url = (scene.videoUrl || "").trim();
-  if (!url) return null;
+  const src = getFilmEntityVideoSrc(scene);
+  if (!src && !(scene.videoBlob && scene.videoBlob.size > 0)) return null;
+  const url = src || (scene.videoUrl || "").trim();
+  if (!url && !(scene.videoBlob && scene.videoBlob.size > 0)) return null;
   return {
-    videoUri: url,
-    mimeType: "video/mp4",
-    previewUrl: url,
+    videoUri: url || null,
+    mimeType: scene.videoBlob?.type || "video/mp4",
+    previewUrl: url || undefined,
+    mediaBlob: scene.videoBlob,
     aspectRatio,
   };
 }
@@ -142,6 +153,7 @@ export default function FilmShotImageCard({
   onStopFrame,
   generationActionPending = false,
   onSetFrameImage,
+  onSetSceneVideo,
   onCreateVideo,
   onStopVideo,
   videoActionPending = false,
@@ -149,6 +161,8 @@ export default function FilmShotImageCard({
   hideImageTab = false,
   hideVideoTab = false,
   hideExtendTab = true,
+  onEditScene,
+  onOpenStoryboardScene,
   onTitleClick,
   characters = [],
   propsList = [],
@@ -163,6 +177,7 @@ export default function FilmShotImageCard({
   const { t } = useTranslation();
   const toast = useToast();
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [videoGalleryOpen, setVideoGalleryOpen] = useState(false);
   const ar: "16:9" | "9:16" = aspectRatio === "16:9" ? "16:9" : "9:16";
   const indexLabel = `#${scene.index}`;
   const sceneTitle =
@@ -191,7 +206,7 @@ export default function FilmShotImageCard({
   );
   const generatedVideo = useMemo(
     () => sceneToGeneratedVideo(scene, aspectRatio),
-    [scene.videoUrl, aspectRatio]
+    [scene.videoUrl, scene.videoBlob, aspectRatio]
   );
   const hasImage = !!generatedImage || sceneFrameReady(scene);
 
@@ -243,6 +258,14 @@ export default function FilmShotImageCard({
       return;
     }
     toast.info(t("Tải lên ảnh khung hình chưa được hỗ trợ ở đây."));
+  };
+
+  const handleSetVideo = (videoData: GeneratedVideoData) => {
+    if (onSetSceneVideo) {
+      onSetSceneVideo(scene, videoData);
+      return;
+    }
+    toast.info(t("Tải lên video chưa được hỗ trợ ở đây."));
   };
 
   const renderImagePolicyAssist = () => {
@@ -366,22 +389,36 @@ export default function FilmShotImageCard({
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-10 font-bold bg-gray-800 text-white flex-shrink-0">
           {indexLabel}
         </span>
-        {onTitleClick ? (
+        {onEditScene || onTitleClick ? (
           <button
             type="button"
             className="min-w-0 flex-1 text-left text-xs font-semibold text-gray-800 truncate border-0 bg-transparent p-0 cursor-pointer hover:text-blue-600 hover:underline"
-            title={t("Mở phân cảnh trong Chuỗi Cảnh quay")}
-            onClick={() => onTitleClick(scene)}
+            title={t("Sửa phân cảnh")}
+            onClick={() => (onEditScene || onTitleClick)?.(scene)}
           >
             {sceneTitle}
           </button>
         ) : (
-          <span className="text-xs font-semibold text-gray-800 truncate" title={sceneTitle}>
+          <span className="text-xs font-semibold text-gray-800 truncate min-w-0 flex-1" title={sceneTitle}>
             {sceneTitle}
           </span>
         )}
+        {onOpenStoryboardScene ? (
+          <button
+            type="button"
+            className="flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md border-0 bg-transparent text-gray-400 hover:text-blue-600 hover:bg-blue-50 cursor-pointer"
+            title={t("Mở trong Chuỗi phân cảnh")}
+            aria-label={t("Mở trong Chuỗi phân cảnh")}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenStoryboardScene(scene);
+            }}
+          >
+            <HiExternalLink className="text-base" />
+          </button>
+        ) : null}
         {scene.shotSize ? (
-          <span className="ml-auto flex-shrink-0 text-10 font-medium text-gray-400 truncate max-w-[40%]">
+          <span className="flex-shrink-0 text-10 font-medium text-gray-400 truncate max-w-[36%]">
             {scene.shotSize}
           </span>
         ) : null}
@@ -477,6 +514,10 @@ export default function FilmShotImageCard({
               onStopVideo ? () => onStopVideo(scene) : undefined
             }
             generationActionPending={videoActionPending}
+            onSetVideo={onSetSceneVideo ? handleSetVideo : undefined}
+            onOpenGallery={
+              onSetSceneVideo ? () => setVideoGalleryOpen(true) : undefined
+            }
           />
         )}
         renderExtendTab={() => null}
@@ -492,6 +533,16 @@ export default function FilmShotImageCard({
         onSelect={(image) => {
           setGalleryOpen(false);
           handleSetImage(image);
+        }}
+      />
+
+      <FilmVideoGalleryDialog
+        isOpen={videoGalleryOpen}
+        onClose={() => setVideoGalleryOpen(false)}
+        title={t("Gallery video cảnh quay")}
+        onSelect={(video) => {
+          setVideoGalleryOpen(false);
+          handleSetVideo(video);
         }}
       />
     </div>

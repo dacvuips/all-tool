@@ -1,5 +1,5 @@
 import { useRouter } from "next/router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiArrowLeft, HiLightningBolt, HiRefresh } from "react-icons/hi";
 import { RiKey2Line } from "react-icons/ri";
@@ -19,8 +19,9 @@ import {
   cancelFilmMediaJob,
   enqueueFilmImage,
   enqueueFilmVideo,
-  extractFilmVideoUrlFromJobResult,
+  isFilmMediaJobWatching,
   materializeFilmImageFromJobResult,
+  materializeFilmVideoFromJobResult,
   waitFilmMediaJob,
 } from "./api/generate-film-media";
 import { rewriteFilmShotFramePrompt } from "./api/rewrite-shot-frame-prompt";
@@ -52,6 +53,7 @@ import {
 import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
 import FilmStudioPanel from "./film-studio-panel";
+import { isFilmCreateVideoScene, resetFilmStudioTimelineFromScratch } from "./film-studio-timeline";
 import {
   applyCharacterVoiceLinksToScenes,
   buildFilmVoiceListItems,
@@ -81,6 +83,7 @@ import {
   collectFilmMediaImageRefs,
   collectFilmVideoRefSlotImageRefs,
   generatedImageDataToFilmStored,
+  generatedVideoDataToFilmStored,
 } from "./film-entity-to-generated-image";
 import {
   addFilmScene,
@@ -97,12 +100,15 @@ import {
   getFilmScenesByProject,
   getFilmSystemInstruction,
   initFilmDB,
+  loadOrSeedFilmStudioTimeline,
   putFilmCharacter,
   putFilmEpisode,
   putFilmProject,
   putFilmProp,
   putFilmScene,
   putFilmSceneImage,
+  putFilmStudioTimeline,
+  purgeStudioArtifactsFromEpisodeScenes,
   replaceFilmCharactersForProject,
   replaceFilmPropsForProject,
   replaceFilmSceneImagesForProject,
@@ -238,6 +244,9 @@ export default function FilmWorkspace({ projectId }: Props) {
   const [characterCount, setCharacterCount] = useState(0);
   const [sceneCount, setSceneCount] = useState(0);
   const [scenes, setScenes] = useState<FilmSceneRecord[]>([]);
+  /** Timeline Studio — IndexedDB riêng theo tập, không đụng `scenes` gốc */
+  const [studioScenes, setStudioScenes] = useState<FilmSceneRecord[]>([]);
+  const [studioLoading, setStudioLoading] = useState(false);
   const [characters, setCharacters] = useState<FilmCharacterRecord[]>([]);
   const [propsList, setPropsList] = useState<FilmPropRecord[]>([]);
   const [sceneImages, setSceneImages] = useState<FilmSceneImageRecord[]>([]);
@@ -328,8 +337,14 @@ export default function FilmWorkspace({ projectId }: Props) {
   const activeEpisode = episodes[activeEpisodeIndex] || null;
 
   const loadEpisodeScenes = useCallback(async (episodeId: string) => {
-    const rows = await getFilmScenesByEpisode(episodeId);
     const p = await getFilmProject(projectId).catch(() => null);
+    // Gỡ clip/line Studio khỏi store scenes gốc (nếu còn sót từ bản cũ)
+    let rows = await purgeStudioArtifactsFromEpisodeScenes(projectId, episodeId).catch(async () => {
+      const raw = await getFilmScenesByEpisode(episodeId);
+      return raw.filter((s) => !s.studioDerived);
+    });
+    rows = rows.filter(isFilmCreateVideoScene);
+
     const imageStyle = p?.storyboardImagePrompt;
     const videoStyle = p?.storyboardVideoPrompt;
     const audioStyle = p?.storyboardAudioPrompt;
@@ -820,6 +835,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     }));
     const saved = await replaceFilmScenesForEpisode(project.id, activeEpisode.id, seeded);
     setScenes(saved);
+    setSceneCount((c) => Math.max(0, c - scenes.length + saved.length));
     await syncMissingEntitiesFromScenes(saved);
     setEpisodes((prev) =>
       prev.map((e) =>
@@ -3079,29 +3095,49 @@ export default function FilmWorkspace({ projectId }: Props) {
   };
 
   /** Resume poll job đang creating trong IDB (reload / quay lại project). */
+  const creatingMediaJobsKey = useMemo(() => {
+    const ids: string[] = [];
+    for (const c of characters) {
+      if (c.status === "creating" && c.mediaJobId) ids.push(`c:${c.mediaJobId}`);
+    }
+    for (const p of propsList) {
+      if (p.status === "creating" && p.mediaJobId) ids.push(`p:${p.mediaJobId}`);
+    }
+    for (const loc of sceneImages) {
+      if (loc.status === "creating" && loc.mediaJobId) ids.push(`l:${loc.mediaJobId}`);
+    }
+    for (const s of scenes) {
+      if (s.frameStatus === "creating" && s.frameMediaJobId) ids.push(`f:${s.frameMediaJobId}`);
+      if (s.videoStatus === "creating" && s.videoMediaJobId) ids.push(`v:${s.videoMediaJobId}`);
+    }
+    return ids.sort().join("|");
+  }, [characters, propsList, sceneImages, scenes]);
+
   useEffect(() => {
     if (loading || !project) return;
     for (const c of characters) {
-      if (c.status === "creating" && c.mediaJobId) {
+      if (c.status === "creating" && c.mediaJobId && !isFilmMediaJobWatching(c.mediaJobId)) {
         finishCharacterImageJob(c.id, c.imagePrompt || "", c.mediaJobId, c);
       }
     }
     for (const p of propsList) {
-      if (p.status === "creating" && p.mediaJobId) {
+      if (p.status === "creating" && p.mediaJobId && !isFilmMediaJobWatching(p.mediaJobId)) {
         finishPropImageJob(p.id, p.imagePrompt || "", p.mediaJobId, p);
       }
     }
     for (const loc of sceneImages) {
-      if (loc.status === "creating" && loc.mediaJobId) {
+      if (loc.status === "creating" && loc.mediaJobId && !isFilmMediaJobWatching(loc.mediaJobId)) {
         finishSceneImageJob(loc.id, loc.imagePrompt || "", loc.mediaJobId, loc);
       }
     }
     for (const s of scenes) {
       if (s.frameStatus === "creating" && s.frameMediaJobId) {
-        void waitFilmMediaJob<Record<string, unknown>>(s.frameMediaJobId, (progress) => {
+        const jobId = s.frameMediaJobId;
+        if (isFilmMediaJobWatching(jobId)) continue;
+        void waitFilmMediaJob<Record<string, unknown>>(jobId, (progress) => {
           setScenes((prev) =>
             prev.map((x) =>
-              x.id === s.id && x.frameMediaJobId === s.frameMediaJobId
+              x.id === s.id && x.frameMediaJobId === jobId
                 ? { ...x, frameMediaProgress: progress, frameStatus: "creating" }
                 : x
             )
@@ -3109,35 +3145,48 @@ export default function FilmWorkspace({ projectId }: Props) {
         })
           .then(async (resultData) => {
             const stored = await materializeFilmImageFromJobResult(resultData);
-            const done: FilmSceneRecord = {
-              ...s,
-              frameImageUrl: stored.imageUrl || s.frameImageUrl || "",
-              frameImageBlob: stored.imageBlob,
-              frameStatus: "ready",
-              mediaStatus: "ready",
-              frameMediaJobId: undefined,
-              frameMediaProgress: undefined,
-              frameError: undefined,
-              updatedAt: new Date().toISOString(),
-            };
-            await putFilmScene(done);
-            setScenes((prev) => prev.map((x) => (x.id === done.id ? done : x)));
+            setScenes((prev) => {
+              const current = prev.find((x) => x.id === s.id);
+              if (!current || current.frameMediaJobId !== jobId) return prev;
+              const done: FilmSceneRecord = {
+                ...current,
+                frameImageUrl: stored.imageUrl || current.frameImageUrl || "",
+                frameImageBlob: stored.imageBlob,
+                frameStatus: "ready",
+                mediaStatus: "ready",
+                frameMediaJobId: undefined,
+                frameMediaProgress: undefined,
+                frameError: undefined,
+                updatedAt: new Date().toISOString(),
+              };
+              void putFilmScene(done);
+              return prev.map((x) => (x.id === done.id ? done : x));
+            });
           })
           .catch(async (err: any) => {
-            const failed: FilmSceneRecord = {
-              ...s,
-              frameStatus: "error",
-              frameMediaJobId: undefined,
-              frameMediaProgress: undefined,
-              frameError: String(err?.message || t("Tạo ảnh cảnh quay thất bại")),
-              updatedAt: new Date().toISOString(),
-            };
-            await putFilmScene(failed);
-            setScenes((prev) => prev.map((x) => (x.id === failed.id ? failed : x)));
+            setScenes((prev) => {
+              const current = prev.find((x) => x.id === s.id);
+              if (!current || current.frameMediaJobId !== jobId) return prev;
+              const hasFrame =
+                !!(current.frameImageBlob instanceof Blob && current.frameImageBlob.size > 0) ||
+                !!(current.frameImageUrl || "").trim();
+              const failed: FilmSceneRecord = {
+                ...current,
+                frameStatus: hasFrame ? "ready" : "error",
+                mediaStatus: hasFrame ? "ready" : current.mediaStatus,
+                frameMediaJobId: undefined,
+                frameMediaProgress: undefined,
+                frameError: String(err?.message || t("Tạo ảnh cảnh quay thất bại")),
+                updatedAt: new Date().toISOString(),
+              };
+              void putFilmScene(failed);
+              return prev.map((x) => (x.id === failed.id ? failed : x));
+            });
           });
       }
       if (s.videoStatus === "creating" && s.videoMediaJobId) {
         const jobId = s.videoMediaJobId;
+        if (isFilmMediaJobWatching(jobId)) continue;
         void waitFilmMediaJob<Record<string, unknown>>(jobId, (progress) => {
           setScenes((prev) =>
             prev.map((x) =>
@@ -3148,37 +3197,58 @@ export default function FilmWorkspace({ projectId }: Props) {
           );
         })
           .then(async (resultData) => {
-            const videoUrl = extractFilmVideoUrlFromJobResult(resultData);
-            if (!videoUrl) throw new Error("Job film không trả về video");
-            const done: FilmSceneRecord = {
-              ...s,
-              videoUrl,
-              videoStatus: "ready",
-              videoMediaJobId: undefined,
-              videoMediaProgress: undefined,
-              videoError: undefined,
-              updatedAt: new Date().toISOString(),
-            };
-            await putFilmScene(done);
-            setScenes((prev) => prev.map((x) => (x.id === done.id ? done : x)));
+            const stored = await materializeFilmVideoFromJobResult(resultData);
+            if (!stored.videoUrl && !stored.videoBlob) {
+              throw new Error("Job film không trả về video");
+            }
+            setScenes((prev) => {
+              const current = prev.find((x) => x.id === s.id);
+              if (!current || current.videoMediaJobId !== jobId) return prev;
+              const done: FilmSceneRecord = {
+                ...current,
+                videoUrl: stored.videoUrl || current.videoUrl || "",
+                videoBlob: stored.videoBlob || current.videoBlob,
+                videoStatus: "ready",
+                videoMediaJobId: undefined,
+                videoMediaProgress: undefined,
+                videoError: undefined,
+                updatedAt: new Date().toISOString(),
+              };
+              void putFilmScene(done);
+              return prev.map((x) => (x.id === done.id ? done : x));
+            });
           })
           .catch(async (err: any) => {
-            const hasVideo = !!(s.videoUrl || "").trim();
-            const failed: FilmSceneRecord = {
-              ...s,
-              videoStatus: hasVideo ? "ready" : "error",
-              videoMediaJobId: undefined,
-              videoMediaProgress: undefined,
-              videoError: String(err?.message || t("Tạo video thất bại")),
-              updatedAt: new Date().toISOString(),
-            };
-            await putFilmScene(failed);
-            setScenes((prev) => prev.map((x) => (x.id === failed.id ? failed : x)));
+            setScenes((prev) => {
+              const current = prev.find((x) => x.id === s.id);
+              if (!current || current.videoMediaJobId !== jobId) return prev;
+              const hasVideo =
+                !!(current.videoUrl || "").trim() ||
+                !!(current.videoBlob && current.videoBlob.size > 0);
+              const failed: FilmSceneRecord = {
+                ...current,
+                videoStatus: hasVideo ? "ready" : "error",
+                videoMediaJobId: undefined,
+                videoMediaProgress: undefined,
+                videoError: String(err?.message || t("Tạo video thất bại")),
+                updatedAt: new Date().toISOString(),
+              };
+              void putFilmScene(failed);
+              return prev.map((x) => (x.id === failed.id ? failed : x));
+            });
           });
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume theo load + project
-  }, [loading, project?.id, finishCharacterImageJob, finishPropImageJob, finishSceneImageJob]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- resume theo load + job ids đang creating
+  }, [
+    loading,
+    project?.id,
+    creatingMediaJobsKey,
+    finishCharacterImageJob,
+    finishPropImageJob,
+    finishSceneImageJob,
+    t,
+  ]);
 
   const handleAddSceneImage = async (name?: string) => {
     if (!project) return;
@@ -3816,6 +3886,32 @@ export default function FilmWorkspace({ projectId }: Props) {
     await putFilmScene(next);
   };
 
+  const handleSetSceneVideo = async (
+    scene: FilmSceneRecord,
+    video: {
+      videoUri?: string | null;
+      videoBytes?: string | null;
+      mediaBlob?: Blob;
+      previewUrl?: string;
+      mimeType?: string;
+    }
+  ) => {
+    const stored = generatedVideoDataToFilmStored(video);
+    if (!stored.videoUrl && !stored.videoBlob) return;
+    const next: FilmSceneRecord = {
+      ...scene,
+      videoUrl: stored.videoUrl || (stored.videoBlob ? "" : scene.videoUrl || ""),
+      videoBlob: stored.videoBlob,
+      videoStatus: "ready",
+      videoError: undefined,
+      videoMediaJobId: undefined,
+      videoMediaProgress: undefined,
+      updatedAt: new Date().toISOString(),
+    };
+    setScenes((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+    await putFilmScene(next);
+  };
+
   const handleSuggestSafeShotFramePrompt = async (scene: FilmSceneRecord) => {
     const latest = scenes.find((s) => s.id === scene.id) || scene;
     if (latest.frameSuggestStatus === "loading") return;
@@ -3979,14 +4075,17 @@ export default function FilmWorkspace({ projectId }: Props) {
         );
       })
         .then(async (resultData) => {
-          const videoUrl = extractFilmVideoUrlFromJobResult(resultData);
-          if (!videoUrl) throw new Error("Job film không trả về video");
+          const stored = await materializeFilmVideoFromJobResult(resultData);
+          if (!stored.videoUrl && !stored.videoBlob) {
+            throw new Error("Job film không trả về video");
+          }
           setScenes((prev) => {
             const current = prev.find((x) => x.id === latest.id);
             if (!current || current.videoMediaJobId !== jobId) return prev;
             const done: FilmSceneRecord = {
               ...current,
-              videoUrl,
+              videoUrl: stored.videoUrl || current.videoUrl || "",
+              videoBlob: stored.videoBlob || current.videoBlob,
               videoStatus: "ready",
               videoMediaJobId: undefined,
               videoMediaProgress: undefined,
@@ -4001,7 +4100,9 @@ export default function FilmWorkspace({ projectId }: Props) {
           setScenes((prev) => {
             const current = prev.find((x) => x.id === latest.id);
             if (!current || current.videoMediaJobId !== jobId) return prev;
-            const hasVideo = !!(current.videoUrl || "").trim();
+            const hasVideo =
+              !!(current.videoUrl || "").trim() ||
+              !!(current.videoBlob && current.videoBlob.size > 0);
             const failed: FilmSceneRecord = {
               ...current,
               videoStatus: hasVideo ? "ready" : "error",
@@ -4036,7 +4137,9 @@ export default function FilmWorkspace({ projectId }: Props) {
       const jobId = latest.videoMediaJobId;
       markStopPending(`video:${latest.id}`, true);
       try {
-        const hasVideo = !!(latest.videoUrl || "").trim();
+        const hasVideo =
+          !!(latest.videoUrl || "").trim() ||
+          !!(latest.videoBlob && latest.videoBlob.size > 0);
         const stopped: FilmSceneRecord = {
           ...latest,
           videoStatus: hasVideo ? "ready" : "error",
@@ -4103,10 +4206,12 @@ export default function FilmWorkspace({ projectId }: Props) {
     [scenes]
   );
 
-  const handleBulkCreateVideos = async () => {
-    const targets = scenes.filter(
-      (s) => !sceneVideoReady(s) && s.videoStatus !== "creating"
-    );
+  const handleBulkCreateVideos = async (mode: "all" | "errors" = "all") => {
+    const targets = scenes.filter((s) => {
+      if (s.videoStatus === "creating") return false;
+      if (mode === "errors") return s.videoStatus === "error";
+      return true;
+    });
     if (!targets.length) return;
 
     for (const s of targets) {
@@ -4391,6 +4496,50 @@ export default function FilmWorkspace({ projectId }: Props) {
     for (const s of toSave) await putFilmScene(s);
   }, []);
 
+  /** Scene gốc Chuỗi phân cảnh — bỏ clip Studio (cắt/chèn video) */
+  const storyboardScenes = scenes.filter(isFilmCreateVideoScene);
+
+  /** Studio: load/seed timeline riêng theo tập — không ghi vào scenes gốc */
+  useEffect(() => {
+    if (activeStep !== "studio") return;
+    if (!project?.id || !activeEpisode?.id) {
+      setStudioScenes([]);
+      return;
+    }
+    const projectIdNow = project.id;
+    const episodeIdNow = activeEpisode.id;
+    let cancelled = false;
+    setStudioLoading(true);
+    void (async () => {
+      try {
+        const source = await purgeStudioArtifactsFromEpisodeScenes(
+          projectIdNow,
+          episodeIdNow
+        ).catch(async () => {
+          const raw = await getFilmScenesByEpisode(episodeIdNow);
+          return raw.filter(isFilmCreateVideoScene);
+        });
+        if (!cancelled) {
+          setScenes(source.filter(isFilmCreateVideoScene));
+        }
+        const tl = await loadOrSeedFilmStudioTimeline(
+          projectIdNow,
+          episodeIdNow,
+          source
+        );
+        if (!cancelled) setStudioScenes(tl.scenes || []);
+      } catch (err) {
+        console.error("[FilmWorkspace] load studio timeline failed:", err);
+        if (!cancelled) setStudioScenes([]);
+      } finally {
+        if (!cancelled) setStudioLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeStep, project?.id, activeEpisode?.id]);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center w-full min-h-screen text-sm text-gray-400">
@@ -4409,7 +4558,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   }
 
   const episodeLabel = activeEpisode?.title || `${t("Tập")} ${activeEpisodeIndex + 1}`;
-  const hasStoryboard = scenes.length > 0;
+  const hasStoryboard = storyboardScenes.length > 0;
   const hasCharacters = characters.length > 0;
   const charactersDone =
     hasCharacters &&
@@ -4441,10 +4590,14 @@ export default function FilmWorkspace({ projectId }: Props) {
         (p.imageUrls && p.imageUrls.length > 0)
     );
   const shotImagesDone =
-    hasStoryboard && scenes.length > 0 && scenes.every(sceneFrameReady);
+    hasStoryboard &&
+    storyboardScenes.length > 0 &&
+    storyboardScenes.every(sceneFrameReady);
   const createVideoDone =
-    hasStoryboard && scenes.length > 0 && scenes.every(sceneVideoReady);
-  const voiceItems = hasStoryboard ? buildFilmVoiceListItems(scenes) : [];
+    hasStoryboard &&
+    storyboardScenes.length > 0 &&
+    storyboardScenes.every(sceneVideoReady);
+  const voiceItems = hasStoryboard ? buildFilmVoiceListItems(storyboardScenes) : [];
   const voiceDone =
     voiceItems.length > 0 && voiceItems.every((item) => dialogueLineReady(item.line));
   const doneSteps: FilmWorkspaceStepId[] = [];
@@ -4603,9 +4756,11 @@ export default function FilmWorkspace({ projectId }: Props) {
 
         <main
           className={`flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain ${
-            openLayout
-              ? "p-4 sm:px-6 lg:p-0"
-              : "m-4 sm:mx-6 lg:m-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 flex flex-col"
+            activeStep === "studio"
+              ? "p-0 overflow-y-auto overscroll-contain flex flex-col flex-1 min-h-0"
+              : openLayout
+                ? "p-4 sm:px-6 lg:p-0"
+                : "m-4 sm:mx-6 lg:m-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 flex flex-col"
           }`}
         >
           {activeStep === "original_content" && (
@@ -4795,7 +4950,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
           {activeStep === "shot_images" && (
             <FilmShotImagesPanel
-              scenes={scenes}
+              scenes={storyboardScenes}
               characters={characters}
               aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
               storyboardImagePromptStyle={project.storyboardImagePrompt}
@@ -4856,7 +5011,7 @@ export default function FilmWorkspace({ projectId }: Props) {
           {activeStep === "voice" && (
             <FilmVoicePanel
               projectId={project.id}
-              scenes={scenes}
+              scenes={storyboardScenes}
               characters={characters}
               episodes={episodes}
               promptTemplate={project.characterImagePromptTemplate}
@@ -4877,15 +5032,23 @@ export default function FilmWorkspace({ projectId }: Props) {
 
           {activeStep === "create_video" && (
             <FilmCreateVideoPanel
-              scenes={scenes}
+              scenes={storyboardScenes}
               aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
+              characters={characters}
+              propsList={propsList}
+              sceneImages={sceneImages}
+              storyboardImagePromptStyle={project.storyboardImagePrompt}
+              storyboardVideoPromptStyle={project.storyboardVideoPrompt}
+              storyboardAudioPromptStyle={project.storyboardAudioPrompt}
               onCreateVideo={handleCreateVideo}
               onStopVideo={handleStopVideoGeneration}
+              onSetSceneVideo={handleSetSceneVideo}
               stopPendingIds={stopPendingIds}
               onBulkCreateVideos={handleBulkCreateVideos}
               videoRefMode={videoRefMode}
               onVideoRefModeChange={handleVideoRefModeChange}
               onVideoRefSlotsChange={handleVideoRefSlotsChange}
+              onSaveScene={handleSaveScene}
               onDownloadAll={() => {
                 // Placeholder — export zip khi có video thật
                 console.info("[Film] Download all videos (not implemented)");
@@ -4899,14 +5062,81 @@ export default function FilmWorkspace({ projectId }: Props) {
                 setStoryboardFocusSceneId(scene.id);
                 selectActiveStep("storyboard");
               }}
+              onOpenAttachEntity={(kind, option) => {
+                const id = String(option?.id || "").trim();
+                const step =
+                  kind === "character"
+                    ? "character_images"
+                    : kind === "prop"
+                      ? "props"
+                      : "scene_images";
+                setProductionFocusEntityId(null);
+                selectActiveStep(step);
+                if (id) {
+                  requestAnimationFrame(() => {
+                    setProductionFocusEntityId(id);
+                  });
+                }
+              }}
             />
           )}
 
           {activeStep === "studio" && (
-            <FilmStudioPanel
-              scenes={scenes}
-              aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
-            />
+            <div className="relative flex flex-col w-full min-h-full">
+              {studioLoading ? (
+                <div className="flex flex-1 items-center justify-center text-sm text-gray-400 py-16">
+                  {t("Đang tải Studio...")}
+                </div>
+              ) : (
+              <FilmStudioPanel
+                scenes={studioScenes}
+                aspectRatio={resolveFilmProjectAspectRatio(project.aspectRatio)}
+                subtitleConfig={project.studioSubtitleConfig}
+                onSubtitleConfigChange={(config) => {
+                  if (!project) return;
+                  const updated: FilmProjectRecord = {
+                    ...project,
+                    studioSubtitleConfig: config,
+                    updatedAt: new Date().toISOString(),
+                  };
+                  setProject(updated);
+                  void putFilmProject(updated).catch(() => undefined);
+                }}
+                onReloadScenes={async () => {
+                  if (!project?.id || !activeEpisode?.id) {
+                    return storyboardScenes;
+                  }
+                  // Chỉ đọc scenes gốc (Tạo video) — không sửa store scenes
+                  const fresh = await getFilmScenesByEpisode(activeEpisode.id);
+                  return fresh.filter(isFilmCreateVideoScene);
+                }}
+                onReplaceScenes={async (next) => {
+                  if (!project?.id || !activeEpisode?.id) {
+                    setStudioScenes(next);
+                    return next;
+                  }
+                  const saved = await putFilmStudioTimeline({
+                    episodeId: activeEpisode.id,
+                    projectId: project.id,
+                    scenes: next,
+                    updatedAt: new Date().toISOString(),
+                  });
+                  setStudioScenes(saved.scenes);
+                  return saved.scenes;
+                }}
+                onScenesChange={(next) => {
+                  setStudioScenes(next);
+                  if (!project?.id || !activeEpisode?.id) return;
+                  void putFilmStudioTimeline({
+                    episodeId: activeEpisode.id,
+                    projectId: project.id,
+                    scenes: next,
+                    updatedAt: new Date().toISOString(),
+                  }).catch(() => undefined);
+                }}
+              />
+              )}
+            </div>
           )}
 
           {activeStep === "settings" && (

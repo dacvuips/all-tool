@@ -171,6 +171,21 @@ export function destroyFFmpegInstance() {
   _loadPromise = null;
 }
 
+function isWasmMemoryError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err ?? "");
+  return /memory access out of bounds|out of bounds memory|Cannot enlarge memory|out of memory|OOM|Aborted\(native code\)|ArrayBuffer is detached|could not be cloned/i.test(
+    msg
+  );
+}
+
+/**
+ * ffmpeg.wasm `writeFile` transfer ArrayBuffer sang Worker → buffer gốc bị detach.
+ * Luôn `.slice()` trước khi ghi (đặc biệt với cache font / ghi 2 lần).
+ */
+function u8ForFfmpegWrite(data: Uint8Array): Uint8Array {
+  return data.slice();
+}
+
 // ─── Core merge ─────────────────────────────────────────────────────────────
 
 /**
@@ -246,8 +261,7 @@ export async function mergeVideosInBrowser(
           "0",
           "-i",
           "concat.txt",
-          "-c:v",
-          "libx264",
+          ...H264_COMPAT_VIDEO_ARGS,
           "-preset",
           "veryfast",
           "-crf",
@@ -603,9 +617,20 @@ function atempoChain(speed: number): string {
   return parts.join(",");
 }
 
-const VIDEO_ENCODE_ARGS = [
+/** H.264 mở được trên Windows Movies & TV / hầu hết player. */
+const H264_COMPAT_VIDEO_ARGS = [
   "-c:v",
   "libx264",
+  "-pix_fmt",
+  "yuv420p",
+  "-profile:v",
+  "main",
+  "-level",
+  "4.0",
+] as const;
+
+const VIDEO_ENCODE_ARGS = [
+  ...H264_COMPAT_VIDEO_ARGS,
   "-preset",
   "veryfast",
   "-crf",
@@ -661,6 +686,40 @@ export async function processMediaInBrowser(
 
   if (!result) throw new Error("Xử lý media thất bại");
   return result;
+}
+
+/** Scale video về 1080p (landscape: cao 1080; portrait 9:16: rộng 1080). */
+export async function scaleVideoInBrowser(
+  input: Blob,
+  options: FfmpegMergeOptions & { portrait?: boolean } = {}
+): Promise<Blob> {
+  destroyFFmpegInstance();
+  const vf = options.portrait
+    ? "scale=1080:-2:flags=lanczos,setsar=1"
+    : "scale=-2:1080:flags=lanczos,setsar=1";
+  const result = await processMediaInBrowser(input, {
+    ...options,
+    message: options.portrait ? "Đang xuất 1080×1920..." : "Đang xuất 1920×1080...",
+    args: [
+      "-vf",
+      `${vf},format=yuv420p`,
+      ...H264_COMPAT_VIDEO_ARGS,
+      "-preset",
+      "ultrafast",
+      "-crf",
+      "28",
+      "-threads",
+      "1",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+    ],
+    outExt: "mp4",
+    outMime: "video/mp4",
+  });
+  destroyFFmpegInstance();
+  return result.blob;
 }
 
 export async function changeSpeedInBrowser(
@@ -876,6 +935,631 @@ export async function mergeAudioInBrowser(
     }
   });
   if (!result) throw new Error("Ghép audio thất bại");
+  return result;
+}
+
+/**
+ * Trộn nhiều audio theo mốc startSec tuyệt đối → 1 file MP3 dài totalSec.
+ * Dùng adelay + amix (độc lập track video).
+ */
+export async function mixTimedAudioClipsInBrowser(
+  clips: Array<{ blob: Blob; startSec: number; name?: string }>,
+  totalSec: number,
+  options: FfmpegMergeOptions = {}
+): Promise<Blob> {
+  const list = (clips || []).filter((c) => c?.blob && c.blob.size > 0);
+  if (!list.length) throw new Error("Chưa có audio để xuất");
+  const duration = Math.max(0.5, Number(totalSec) || 0.5);
+  let resultBlob: Blob | null = null;
+
+  await enqueue(async () => {
+    const ff = await getFFmpeg(options.onProgress);
+    const stamp = Date.now();
+    const names: string[] = [];
+    try {
+      options.onProgress?.({ ratio: 0.08, message: "Đang ghi audio..." });
+      for (let i = 0; i < list.length; i += 1) {
+        const ext = fileExtOf(list[i].name, "mp3");
+        const name = `mix_in_${stamp}_${i}.${ext}`;
+        await ff.writeFile(name, new Uint8Array(await list[i].blob.arrayBuffer()));
+        names.push(name);
+      }
+
+      const outName = `mix_out_${stamp}.mp3`;
+      options.onProgress?.({ ratio: 0.45, message: "Đang mix audio theo timeline..." });
+
+      const filterParts: string[] = [];
+      for (let i = 0; i < list.length; i += 1) {
+        const ms = Math.max(0, Math.round((list[i].startSec || 0) * 1000));
+        filterParts.push(
+          `[${i}:a]adelay=${ms}|${ms},aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${i}]`
+        );
+      }
+      const mixIn = list.map((_, i) => `[a${i}]`).join("");
+      filterParts.push(
+        `${mixIn}amix=inputs=${list.length}:duration=longest:dropout_transition=0:normalize=0,apad=whole_dur=${duration.toFixed(
+          3
+        )}[aout]`
+      );
+      const args: string[] = [];
+      for (const n of names) args.push("-i", n);
+      args.push(
+        "-filter_complex",
+        filterParts.join(";"),
+        "-map",
+        "[aout]",
+        "-t",
+        duration.toFixed(3),
+        "-c:a",
+        "libmp3lame",
+        "-q:a",
+        "2",
+        "-y",
+        outName
+      );
+      let code = await ff.exec(args);
+      if (code !== 0) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        const wav = `mix_out_${stamp}.wav`;
+        const argsWav = [...args];
+        argsWav[argsWav.length - 1] = wav;
+        const cIdx = argsWav.indexOf("-c:a");
+        if (cIdx >= 0) {
+          argsWav[cIdx + 1] = "pcm_s16le";
+          if (argsWav[cIdx + 2] === "-q:a") {
+            argsWav.splice(cIdx + 2, 2);
+          }
+        }
+        code = await ff.exec(argsWav);
+        if (code !== 0) throw new Error(`Mix audio thất bại (exit ${code})`);
+        resultBlob = toMediaBlob((await ff.readFile(wav)) as Uint8Array | string, "audio/wav");
+        await ff.deleteFile(wav).catch(() => undefined);
+      } else {
+        resultBlob = toMediaBlob(
+          (await ff.readFile(outName)) as Uint8Array | string,
+          "audio/mpeg"
+        );
+      }
+      await ff.deleteFile(outName).catch(() => undefined);
+    } finally {
+      for (const name of names) await ff.deleteFile(name).catch(() => undefined);
+    }
+    options.onProgress?.({ ratio: 1, message: "Hoàn tất audio" });
+  });
+
+  if (!resultBlob) throw new Error("Mix audio thất bại");
+  return resultBlob;
+}
+
+/** Ghép video + audio thành 1 MP4 — giữ tiếng gốc video và mix thêm audio timeline. */
+export async function muxVideoAndAudioInBrowser(
+  video: Blob,
+  audio: Blob,
+  options: FfmpegMergeOptions = {}
+): Promise<Blob> {
+  if (!video?.size) throw new Error("Thiếu video");
+  if (!audio?.size) throw new Error("Thiếu audio");
+  let resultBlob: Blob | null = null;
+
+  await enqueue(async () => {
+    const ff = await getFFmpeg(options.onProgress);
+    const stamp = Date.now();
+    const vName = `mux_v_${stamp}.mp4`;
+    const aExt = /\bwav\b/i.test(audio.type || "") ? "wav" : "mp3";
+    const aName = `mux_a_${stamp}.${aExt}`;
+    const outName = `mux_out_${stamp}.mp4`;
+    options.onProgress?.({ ratio: 0.1, message: "Đang mux video + audio..." });
+    await ff.writeFile(vName, new Uint8Array(await video.arrayBuffer()));
+    await ff.writeFile(aName, new Uint8Array(await audio.arrayBuffer()));
+
+    const mixFilter =
+      "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[va];" +
+      "[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[oa];" +
+      "[va][oa]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[aout]";
+
+    const runMux = async (opts: {
+      reencodeVideo: boolean;
+      mixVideoAudio: boolean;
+    }) => {
+      const args = ["-i", vName, "-i", aName];
+      if (opts.mixVideoAudio) {
+        args.push("-filter_complex", mixFilter, "-map", "0:v:0", "-map", "[aout]");
+      } else {
+        args.push("-map", "0:v:0", "-map", "1:a:0");
+      }
+      if (opts.reencodeVideo) {
+        args.push(
+          ...H264_COMPAT_VIDEO_ARGS,
+          "-preset",
+          "veryfast",
+          "-crf",
+          "23"
+        );
+      } else {
+        args.push("-c:v", "copy");
+      }
+      args.push(
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        "-y",
+        outName
+      );
+      return ff.exec(args);
+    };
+
+    try {
+      // 1) Giữ tiếng video + mix audio timeline (copy video)
+      let code = await runMux({ reencodeVideo: false, mixVideoAudio: true });
+      // 2) Cùng mix nhưng re-encode video
+      if (code !== 0) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        code = await runMux({ reencodeVideo: true, mixVideoAudio: true });
+      }
+      // 3) Video không có audio track → chỉ dùng audio timeline
+      if (code !== 0) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        code = await runMux({ reencodeVideo: false, mixVideoAudio: false });
+      }
+      if (code !== 0) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        code = await runMux({ reencodeVideo: true, mixVideoAudio: false });
+      }
+      if (code !== 0) throw new Error(`Mux thất bại (exit ${code})`);
+      resultBlob = toVideoBlob((await ff.readFile(outName)) as Uint8Array | string);
+    } finally {
+      await ff.deleteFile(vName).catch(() => undefined);
+      await ff.deleteFile(aName).catch(() => undefined);
+      await ff.deleteFile(outName).catch(() => undefined);
+    }
+    options.onProgress?.({ ratio: 1, message: "Hoàn tất mux" });
+  });
+
+  if (!resultBlob) throw new Error("Mux video/audio thất bại");
+  return resultBlob;
+}
+
+export type FfmpegSubtitleCue = {
+  startSec: number;
+  endSec: number;
+  text: string;
+};
+
+function wrapSubtitleLines(text: string, maxChars = 36): string {
+  const raw = String(text || "").trim().replace(/\s+/g, " ");
+  if (!raw) return "";
+  const words = raw.split(" ");
+  const lines: string[] = [];
+  let cur = "";
+  for (const w of words) {
+    const next = cur ? `${cur} ${w}` : w;
+    if (next.length > maxChars && cur) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = next;
+    }
+  }
+  if (cur) lines.push(cur);
+  return lines.slice(0, 3).join("\n");
+}
+
+function buildSrtContent(cues: FfmpegSubtitleCue[]): string {
+  const pad = (n: number) => String(Math.max(0, n)).padStart(2, "0");
+  const fmt = (sec: number) => {
+    const s = Math.max(0, sec);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const whole = Math.floor(s % 60);
+    const ms = Math.min(999, Math.round((s - Math.floor(s)) * 1000));
+    return `${pad(h)}:${pad(m)}:${pad(whole)},${String(ms).padStart(3, "0")}`;
+  };
+  return cues
+    .filter((c) => c.endSec > c.startSec && String(c.text || "").trim())
+    .map((c, i) => {
+      const body = wrapSubtitleLines(c.text);
+      return `${i + 1}\n${fmt(c.startSec)} --> ${fmt(c.endSec)}\n${body}\n`;
+    })
+    .join("\n");
+}
+
+function normalizeBurnHex(input: string | undefined, fallback: string): string {
+  const s = String(input || "").trim();
+  if (/^#[0-9a-fA-F]{6}$/.test(s)) return s.toLowerCase();
+  if (/^#[0-9a-fA-F]{3}$/.test(s)) {
+    const h = s.slice(1);
+    return `#${h[0]}${h[0]}${h[1]}${h[1]}${h[2]}${h[2]}`.toLowerCase();
+  }
+  return fallback;
+}
+
+/**
+ * Burn phụ đề vào video (chữ nằm sẵn trong khung hình).
+ * Ưu tiên: Canvas (font browser, tiếng Việt đúng) → PNG overlay 1 pass ffmpeg.
+ * Tránh ASS/libass (hay ra khối trắng khi thiếu glyph / BorderStyle box).
+ */
+export type BurnSubtitlesResult = {
+  blob: Blob;
+  mode: "hard" | "soft" | "none";
+};
+
+type BurnSubStyle = {
+  fontSizePx?: number;
+  xPercent?: number;
+  yPercent?: number;
+  widthPercent?: number;
+  textColor?: string;
+  bgColor?: string;
+  bgTransparent?: boolean;
+  borderColor?: string;
+  borderTransparent?: boolean;
+};
+
+function probeVideoBlobMeta(
+  blob: Blob
+): Promise<{ width: number; height: number; duration: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(blob);
+    const el = document.createElement("video");
+    el.preload = "metadata";
+    el.muted = true;
+    el.playsInline = true;
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      el.removeAttribute("src");
+      el.load();
+    };
+    el.onloadedmetadata = () => {
+      const width = Math.max(2, el.videoWidth || 720);
+      const height = Math.max(2, el.videoHeight || 1280);
+      const duration = Number.isFinite(el.duration) ? el.duration : 0;
+      cleanup();
+      resolve({ width, height, duration });
+    };
+    el.onerror = () => {
+      cleanup();
+      reject(new Error("Không đọc được metadata video"));
+    };
+    el.src = url;
+  });
+}
+
+function hexToCssRgba(hex: string, alpha: number): string {
+  const h = normalizeBurnHex(hex, "#000000").slice(1);
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  const a = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/** Vẽ 1 cue ra PNG full-frame trong suốt (Canvas = font hệ thống, không tofu trắng). */
+async function renderSubtitleCuePng(
+  cueText: string,
+  width: number,
+  height: number,
+  style: BurnSubStyle
+): Promise<Uint8Array> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas 2D không khả dụng");
+
+  ctx.clearRect(0, 0, width, height);
+
+  const xPercent = Math.max(0, Math.min(100, style.xPercent ?? 50));
+  const yPercent = Math.max(0, Math.min(100, style.yPercent ?? 88));
+  const widthPercent = Math.max(20, Math.min(100, style.widthPercent ?? 90));
+  // Preview Studio ~320–480px cao; scale font theo chiều cao video thật.
+  const basePx = Math.max(12, Math.round(style.fontSizePx ?? 16));
+  const fontSize = Math.max(18, Math.min(72, Math.round(basePx * (height / 360))));
+  const textColor = normalizeBurnHex(style.textColor, "#ffffff");
+  const bgColor = normalizeBurnHex(style.bgColor, "#000000");
+  const borderColor = normalizeBurnHex(style.borderColor, "#000000");
+  const bgTransparent = !!style.bgTransparent;
+  const borderTransparent = !!style.borderTransparent;
+
+  const maxBoxW = (widthPercent / 100) * width;
+  const cx = (xPercent / 100) * width;
+  const cy = (yPercent / 100) * height;
+  const lineHeight = fontSize * 1.25;
+  const padX = Math.round(fontSize * 0.55);
+  const padY = Math.round(fontSize * 0.4);
+
+  const approxChars = Math.max(8, Math.floor(maxBoxW / (fontSize * 0.55)));
+  const body = wrapSubtitleLines(cueText, approxChars);
+  const lines = body.split("\n").filter(Boolean);
+  if (!lines.length) {
+    return new Uint8Array();
+  }
+
+  ctx.font = `600 ${fontSize}px "Segoe UI", "Roboto", "Noto Sans", "Helvetica Neue", Arial, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  let textW = 0;
+  for (const line of lines) {
+    textW = Math.max(textW, ctx.measureText(line).width);
+  }
+  const boxW = Math.min(maxBoxW, textW + padX * 2);
+  const boxH = lines.length * lineHeight + padY * 2;
+  const boxX = cx - boxW / 2;
+  const boxY = cy - boxH / 2;
+  const radius = Math.min(12, fontSize * 0.35);
+
+  if (!bgTransparent) {
+    ctx.fillStyle = hexToCssRgba(bgColor, 0.8);
+    roundRectPath(ctx, boxX, boxY, boxW, boxH, radius);
+    ctx.fill();
+  }
+  if (!borderTransparent) {
+    ctx.strokeStyle = hexToCssRgba(borderColor, 0.9);
+    ctx.lineWidth = Math.max(1, Math.round(fontSize / 18));
+    roundRectPath(ctx, boxX, boxY, boxW, boxH, radius);
+    ctx.stroke();
+  }
+
+  const strokeW = Math.max(2, Math.round(fontSize / 12));
+  for (let i = 0; i < lines.length; i++) {
+    const ly = boxY + padY + lineHeight * (i + 0.5);
+    ctx.lineJoin = "round";
+    ctx.miterLimit = 2;
+    ctx.lineWidth = strokeW;
+    ctx.strokeStyle = borderTransparent ? "rgba(0,0,0,0.85)" : hexToCssRgba(borderColor, 0.95);
+    ctx.strokeText(lines[i], cx, ly, maxBoxW - padX);
+    ctx.fillStyle = textColor;
+    ctx.fillText(lines[i], cx, ly, maxBoxW - padX);
+  }
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error("toBlob PNG thất bại"))),
+      "image/png"
+    );
+  });
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
+function roundRectPath(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number
+) {
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+export async function burnSubtitlesOntoVideoInBrowser(
+  video: Blob,
+  cues: FfmpegSubtitleCue[],
+  options: FfmpegMergeOptions & {
+    style?: BurnSubStyle;
+    /** false = không chấp nhận soft-sub (chỉ hard-burn hoặc video gốc) */
+    allowSoftSub?: boolean;
+  } = {}
+): Promise<BurnSubtitlesResult> {
+  if (!video?.size) throw new Error("Thiếu video");
+  const list = (cues || [])
+    .map((c) => ({
+      startSec: Math.max(0, Number(c.startSec) || 0),
+      endSec: Math.max(0, Number(c.endSec) || 0),
+      text: String(c.text || "").trim(),
+    }))
+    .filter((c) => c.text && c.endSec > c.startSec + 0.05);
+  if (!list.length) return { blob: video, mode: "none" };
+
+  const style = options.style || {};
+  const allowSoftSub = options.allowSoftSub !== false;
+  let result: BurnSubtitlesResult = { blob: video, mode: "none" };
+
+  options.onProgress?.({ ratio: 0.08, message: "Đang vẽ phụ đề (Canvas)..." });
+  let meta: { width: number; height: number; duration: number };
+  try {
+    meta = await probeVideoBlobMeta(video);
+  } catch {
+    meta = { width: 720, height: 1280, duration: 0 };
+  }
+
+  const pngs: Uint8Array[] = [];
+  for (let i = 0; i < list.length; i++) {
+    options.onProgress?.({
+      ratio: 0.08 + (i / Math.max(1, list.length)) * 0.2,
+      message: `Đang vẽ phụ đề ${i + 1}/${list.length}...`,
+    });
+    pngs.push(await renderSubtitleCuePng(list[i].text, meta.width, meta.height, style));
+  }
+
+  const runOverlay = async (): Promise<BurnSubtitlesResult> => {
+    destroyFFmpegInstance();
+    const ff = await getFFmpeg(options.onProgress);
+    const stamp = Date.now();
+    const vName = `sub_v_${stamp}.mp4`;
+    const outName = `sub_out_${stamp}.mp4`;
+    const pngNames: string[] = [];
+    const srtName = `sub_${stamp}.srt`;
+
+    await ff.writeFile(vName, new Uint8Array(await video.arrayBuffer()));
+    await ff.writeFile(srtName, buildSrtContent(list));
+
+    try {
+      for (let i = 0; i < pngs.length; i++) {
+        if (!pngs[i]?.byteLength) continue;
+        const name = `cue_${stamp}_${i}.png`;
+        pngNames.push(name);
+        await ff.writeFile(name, u8ForFfmpegWrite(pngs[i]));
+      }
+
+      if (!pngNames.length) return { blob: video, mode: "none" };
+
+      // Overlay cụm ≤10 ảnh / pass — ít pass hơn = nhanh hơn (vẫn tránh OOM).
+      const chunkSize = 10;
+      let currentIn = vName;
+      const temps: string[] = [];
+      let code = 0;
+
+      const activeIdx = list
+        .map((c, i) => ({ c, i }))
+        .filter(({ i }) => pngs[i]?.byteLength > 0);
+
+      for (let offset = 0; offset < activeIdx.length; offset += chunkSize) {
+        const chunk = activeIdx.slice(offset, offset + chunkSize);
+        const midOut =
+          offset + chunkSize >= activeIdx.length
+            ? outName
+            : `sub_mid_${stamp}_${offset}.mp4`;
+
+        const args: string[] = ["-i", currentIn];
+        for (const { i } of chunk) {
+          args.push("-i", `cue_${stamp}_${i}.png`);
+        }
+
+        let filter = "";
+        let lastLabel = "[0:v]";
+        for (let j = 0; j < chunk.length; j++) {
+          const { c } = chunk[j];
+          const outLabel = j === chunk.length - 1 ? "[vout]" : `[v${offset}_${j}]`;
+          const enable = `between(t\\,${c.startSec.toFixed(3)}\\,${c.endSec.toFixed(3)})`;
+          // format=yuv420 — tránh RGBA/444 (Windows báo unsupported encoding)
+          filter += `${lastLabel}[${j + 1}:v]overlay=0:0:format=yuv420:enable='${enable}'${outLabel};`;
+          lastLabel = outLabel;
+        }
+        // Ép yuv420p + kích thước chẵn (Windows / H.264)
+        filter += `${lastLabel}format=yuv420p,scale=trunc(iw/2)*2:trunc(ih/2)*2[vfinal]`;
+
+        options.onProgress?.({
+          ratio: 0.3 + (offset / Math.max(1, activeIdx.length)) * 0.55,
+          message: `Đang burn phụ đề ${Math.min(offset + chunkSize, activeIdx.length)}/${activeIdx.length}...`,
+        });
+
+        const videoEncode = [
+          ...H264_COMPAT_VIDEO_ARGS,
+          "-preset",
+          "ultrafast",
+          "-crf",
+          "28",
+          "-threads",
+          "1",
+          "-movflags",
+          "+faststart",
+        ];
+        code = await ff.exec([
+          ...args,
+          "-filter_complex",
+          filter,
+          "-map",
+          "[vfinal]",
+          "-map",
+          "0:a",
+          ...videoEncode,
+          "-c:a",
+          "copy",
+          "-shortest",
+          "-y",
+          midOut,
+        ]);
+        if (code !== 0) {
+          await ff.deleteFile(midOut).catch(() => undefined);
+          code = await ff.exec([
+            ...args,
+            "-filter_complex",
+            filter,
+            "-map",
+            "[vfinal]",
+            "-an",
+            ...videoEncode,
+            "-shortest",
+            "-y",
+            midOut,
+          ]);
+        }
+        if (code !== 0) break;
+        if (currentIn !== vName) temps.push(currentIn);
+        currentIn = midOut;
+      }
+
+      for (const t of temps) await ff.deleteFile(t).catch(() => undefined);
+
+      if (code === 0) {
+        return {
+          blob: toVideoBlob((await ff.readFile(outName)) as Uint8Array | string),
+          mode: "hard",
+        };
+      }
+
+      // Soft-sub nhanh (không hiện chữ trừ khi bật CC) — chỉ khi cho phép.
+      if (allowSoftSub) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        options.onProgress?.({ ratio: 0.9, message: "Đang gắn soft-sub..." });
+        code = await ff.exec([
+          "-i",
+          vName,
+          "-i",
+          srtName,
+          "-c",
+          "copy",
+          "-c:s",
+          "mov_text",
+          "-metadata:s:s:0",
+          "language=vie",
+          "-movflags",
+          "+faststart",
+          "-y",
+          outName,
+        ]);
+        if (code === 0) {
+          return {
+            blob: toVideoBlob((await ff.readFile(outName)) as Uint8Array | string),
+            mode: "soft",
+          };
+        }
+      }
+
+      return { blob: video, mode: "none" };
+    } finally {
+      await ff.deleteFile(vName).catch(() => undefined);
+      await ff.deleteFile(srtName).catch(() => undefined);
+      await ff.deleteFile(outName).catch(() => undefined);
+      for (const n of pngNames) await ff.deleteFile(n).catch(() => undefined);
+      destroyFFmpegInstance();
+    }
+  };
+
+  await enqueue(async () => {
+    try {
+      result = await runOverlay();
+    } catch (err) {
+      if (!isWasmMemoryError(err)) throw err;
+      console.warn("[burnSubtitles] OOM overlay, thử lại:", err);
+      destroyFFmpegInstance();
+      try {
+        result = await runOverlay();
+      } catch (err2) {
+        if (isWasmMemoryError(err2)) {
+          console.warn("[burnSubtitles] OOM lần 2 — bỏ burn", err2);
+          destroyFFmpegInstance();
+          result = { blob: video, mode: "none" };
+        } else {
+          throw err2;
+        }
+      }
+    }
+    options.onProgress?.({ ratio: 1, message: "Hoàn tất phụ đề" });
+  });
+
   return result;
 }
 

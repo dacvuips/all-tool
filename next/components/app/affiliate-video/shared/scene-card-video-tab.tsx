@@ -5,11 +5,20 @@
  * Tái sử dụng cho: single, trending, copy-video modules
  * className only – Tailwind CSS, no inline styles
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload, AiOutlineVideoCamera } from "react-icons/ai";
 import { BiPlayCircle } from "react-icons/bi";
-import { RiFullscreenExitLine, RiFullscreenLine, RiLoader4Line, RiPauseFill, RiPlayFill, RiVideoFill } from "react-icons/ri";
+import {
+  RiFullscreenExitLine,
+  RiFullscreenLine,
+  RiGalleryLine,
+  RiLoader4Line,
+  RiPauseFill,
+  RiPlayFill,
+  RiUploadCloud2Line,
+  RiVideoFill,
+} from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
 import {
@@ -92,6 +101,10 @@ export interface SceneCardVideoTabProps {
    * Tool mặc định: false (empty h-20 như cũ).
    */
   uniformFrame?: boolean;
+  /** Upload / chọn gallery → gán video (film) */
+  onSetVideo?: (videoData: GeneratedVideoData) => void;
+  /** Mở Gallery video */
+  onOpenGallery?: () => void;
 }
 
 export function SceneCardVideoTab({
@@ -110,15 +123,60 @@ export function SceneCardVideoTab({
   onStopGeneration,
   generationActionPending = false,
   uniformFrame = false,
+  onSetVideo,
+  onOpenGallery,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const prevVideoSrcRef = useRef<string | null>(null);
   const [isVideoFrameReady, setIsVideoFrameReady] = useState(false);
   const [playingWithSound, setPlayingWithSound] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+
+  const canAssignVideo = !!onSetVideo;
+
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !onSetVideo) return;
+    if (!file.type.startsWith("video/") && !/\.(mp4|webm|mov|mkv|m4v)$/i.test(file.name)) {
+      return;
+    }
+    onSetVideo({
+      videoUri: null,
+      mimeType: file.type || "video/mp4",
+      mediaBlob: file,
+    });
+  };
+
+  const renderUploadGalleryButtons = () => {
+    if (!canAssignVideo) return null;
+    return (
+      <>
+        <Button
+          onClick={() => fileInputRef.current?.click()}
+          icon={<RiUploadCloud2Line />}
+          placement="bottom"
+          className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
+          iconClassName="text-xl font-bold"
+          tooltip={t("Upload video")}
+        />
+        {onOpenGallery ? (
+          <Button
+            onClick={onOpenGallery}
+            icon={<RiGalleryLine />}
+            placement="bottom"
+            className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
+            iconClassName="text-xl font-bold"
+            tooltip={t("Chọn từ Gallery")}
+          />
+        ) : null}
+      </>
+    );
+  };
 
   const handleClickGenerate = () => {
     if (!isPromptToVideo && !hasImage) {
@@ -559,6 +617,7 @@ export function SceneCardVideoTab({
                   tooltip={t("Tạo lại")}
                 />
               )}
+              {renderUploadGalleryButtons()}
             </div>
           </div>
         ) : generatingVideo ? (
@@ -583,15 +642,28 @@ export function SceneCardVideoTab({
             />
           )
         ) : uniformFrame ? (
-          renderUniformPlaceholder(
-            <>
-              <AiOutlineVideoCamera className="text-xl mb-0.5 text-gray-300 group-hover:text-purple-400" />
-              <span className="text-xs font-medium text-gray-400 group-hover:text-purple-500">
-                {t("Tạo video đơn")}
-              </span>
-            </>,
-            { clickable: true }
-          )
+          <div className="flex flex-col gap-1.5 items-center w-full">
+            {renderUniformPlaceholder(
+              <>
+                <AiOutlineVideoCamera className="text-xl mb-0.5 text-gray-300 group-hover:text-purple-400" />
+                <span className="text-xs font-medium text-gray-400 group-hover:text-purple-500">
+                  {t("Tạo video đơn")}
+                </span>
+              </>,
+              { clickable: true }
+            )}
+            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+              <Button
+                onClick={handleClickGenerate}
+                icon={<AiOutlineVideoCamera />}
+                placement="bottom"
+                className="w-8 h-8 rounded-lg bg-purple-50 text-purple-500"
+                iconClassName="text-xl font-bold"
+                tooltip={t("Tạo video")}
+              />
+              {renderUploadGalleryButtons()}
+            </div>
+          </div>
         ) : (
           <button
             id={generateButtonId}
@@ -607,6 +679,16 @@ export function SceneCardVideoTab({
           </button>
         )}
       </div>
+
+      {canAssignVideo ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="video/*,.mp4,.webm,.mov,.mkv,.m4v"
+          className="hidden"
+          onChange={handleFileUpload}
+        />
+      ) : null}
 
       <SceneMediaError message={errorMessage} />
     </div>

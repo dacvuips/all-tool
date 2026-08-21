@@ -16,6 +16,7 @@ import {
 import { SceneMediaError } from "../app/affiliate-video/shared/scene-media-error";
 import { SceneMediaGenerationProgress } from "../app/affiliate-video/shared/scene-media-generation-progress";
 import { Button } from "../shared/utilities/form";
+import { getFilmEntityVideoSrc } from "./api/generate-film-media";
 import { FilmAspectRatio, FilmSceneRecord } from "./film-types";
 import { sceneFrameReady } from "./film-shot-image-card";
 
@@ -28,7 +29,11 @@ type Props = {
 };
 
 export function sceneVideoReady(scene: FilmSceneRecord): boolean {
-  return scene.videoStatus === "ready" || !!scene.videoUrl;
+  return (
+    scene.videoStatus === "ready" ||
+    !!(scene.videoUrl || "").trim() ||
+    !!(scene.videoBlob && scene.videoBlob.size > 0)
+  );
 }
 
 export function sceneVideoCreating(scene: FilmSceneRecord): boolean {
@@ -64,7 +69,7 @@ export default function FilmVideoCard({
   const hasFrame = sceneFrameReady(scene);
   const ready = sceneVideoReady(scene);
   const creating = sceneVideoCreating(scene);
-  const videoSrc = scene.videoUrl || null;
+  const videoSrc = getFilmEntityVideoSrc(scene) || null;
   const progress =
     typeof (scene as any).mediaJobProgress === "number"
       ? Math.max(0, Math.min(100, Math.round((scene as any).mediaJobProgress)))

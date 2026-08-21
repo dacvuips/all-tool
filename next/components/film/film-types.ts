@@ -3,7 +3,7 @@
  * với affiliate-video / video-affiliate-manager / wolf / ...
  *
  * Database : film-short-projects
- * Version  : 1
+ * Version  : 6
  *
  * Object stores
  * ─────────────────────────────────────────────────────────────
@@ -12,12 +12,14 @@
  * characters – nhân vật thuộc project
  * props      – vật phẩm thuộc project
  * sceneImages – ảnh bối cảnh / địa điểm
- * scenes     – phân cảnh thuộc tập / project
+ * scenes     – phân cảnh gốc thuộc tập (storyboard / ảnh / video / giọng)
+ * studioTimelines – timeline Studio riêng theo tập (edit độc lập, không ghi đè scenes)
  * meta       – key/value cấu hình local (tuỳ chọn)
  *
  * Quan hệ
  * ─────────────────────────────────────────────────────────────
  * projects 1 ──* episodes 1 ──* scenes
+ * episodes 1 ── 1 studioTimelines (key = episodeId)
  * projects 1 ──* characters
  * projects 1 ──* props
  * projects 1 ──* sceneImages
@@ -27,8 +29,8 @@
 // ── DB constants ─────────────────────────────────────────────────────────────
 
 export const FILM_DB_NAME = "film-short-projects";
-/** Bump khi thêm store/index — v4 đảm bảo schema đầy đủ (sceneImages, props, …) */
-export const FILM_DB_VERSION = 4;
+/** Bump khi thêm store/index — v6: ép upgrade + migrate Studio isolation */
+export const FILM_DB_VERSION = 6;
 
 export const FILM_STORE = {
   projects: "projects",
@@ -37,6 +39,8 @@ export const FILM_STORE = {
   props: "props",
   sceneImages: "sceneImages",
   scenes: "scenes",
+  /** Timeline Studio per episode — không đụng store scenes gốc */
+  studioTimelines: "studioTimelines",
   meta: "meta",
 } as const;
 
@@ -82,9 +86,82 @@ export type FilmProjectRecord = {
   /** Denormalized count cho card list */
   sceneCount: number;
   coverImageId?: string;
+  /**
+   * Studio: cấu hình phụ đề (vị trí, cỡ chữ, màu, hiện/ẩn).
+   * Persist theo project — giữ khi reload / mở lại tab Studio.
+   */
+  studioSubtitleConfig?: FilmStudioSubtitleConfig;
   createdAt: string;
   updatedAt: string;
 };
+
+/** Cấu hình phụ đề Studio (preview + burn export) */
+export type FilmStudioSubtitleStyle = {
+  xPercent: number;
+  yPercent: number;
+  widthPercent: number;
+  fontSizePx: number;
+  textColor: string;
+  bgColor: string;
+  bgTransparent: boolean;
+  borderColor: string;
+  borderTransparent: boolean;
+};
+
+export type FilmStudioSubtitleConfig = {
+  showOverlay: boolean;
+  style: FilmStudioSubtitleStyle;
+};
+
+export const DEFAULT_FILM_STUDIO_SUBTITLE_STYLE: FilmStudioSubtitleStyle = {
+  xPercent: 50,
+  yPercent: 88,
+  widthPercent: 90,
+  fontSizePx: 11,
+  textColor: "#ffffff",
+  bgColor: "#000000",
+  bgTransparent: true,
+  borderColor: "#ffffff",
+  borderTransparent: true,
+};
+
+export function normalizeFilmStudioSubtitleConfig(
+  input?: FilmStudioSubtitleConfig | null
+): FilmStudioSubtitleConfig {
+  const style = input?.style || DEFAULT_FILM_STUDIO_SUBTITLE_STYLE;
+  return {
+    showOverlay: input?.showOverlay !== false,
+    style: {
+      xPercent: clampNum(style.xPercent, 0, 100, DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.xPercent),
+      yPercent: clampNum(style.yPercent, 0, 100, DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.yPercent),
+      widthPercent: clampNum(
+        style.widthPercent,
+        20,
+        100,
+        DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.widthPercent
+      ),
+      fontSizePx: clampNum(
+        style.fontSizePx,
+        11,
+        40,
+        DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.fontSizePx
+      ),
+      textColor: String(style.textColor || DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.textColor),
+      bgColor: String(style.bgColor || DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.bgColor),
+      bgTransparent:
+        style.bgTransparent ?? DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.bgTransparent,
+      borderColor: String(style.borderColor || DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.borderColor),
+      borderTransparent:
+        style.borderTransparent ?? DEFAULT_FILM_STUDIO_SUBTITLE_STYLE.borderTransparent,
+    },
+  };
+}
+
+function clampNum(n: unknown, min: number, max: number, fallback: number): number {
+  const v = typeof n === "number" ? n : Number(n);
+  if (!Number.isFinite(v)) return fallback;
+  return Math.max(min, Math.min(max, v));
+}
 
 /** Tập phim — store: episodes (keyPath: id, index: projectId, projectId_index) */
 export type FilmEpisodeRecord = {
@@ -266,6 +343,39 @@ export type FilmDialogueLineRecord = {
   voiceSource?: "catalog" | "custom_id" | "minimax";
   voiceId?: string;
   voiceLabel?: string;
+  /**
+   * Studio: mốc bắt đầu tuyệt đối trên timeline Audio/Phụ đề (giây), độc lập video.
+   * Có giá trị → dùng trực tiếp. Không set → xem timelineOffsetSec (legacy) hoặc auto-pack.
+   */
+  timelineStartSec?: number;
+  /**
+   * @deprecated Legacy: offset so với đầu phân cảnh video. Chỉ dùng khi chưa có timelineStartSec.
+   */
+  timelineOffsetSec?: number;
+  /** Studio: độ dài clip trên track Audio/Phụ đề (giây), độc lập duration video */
+  timelineDurationSec?: number;
+  /**
+   * Studio: mốc bắt đầu riêng cho track Phụ đề (giây).
+   * Có giá trị → phụ đề lệch độc lập audio. Không set → dùng timelineStartSec.
+   */
+  subtitleStartSec?: number;
+  /**
+   * Studio: độ dài riêng track Phụ đề (giây).
+   * Có giá trị → cắt/kéo mép phụ đề không đụng audio.
+   */
+  subtitleDurationSec?: number;
+  /** Studio: trim vào trong file audio nguồn (giây) — cắt bỏ phần đầu audio */
+  voiceTrimInSec?: number;
+  /**
+   * Studio: dòng chèn từ Studio (audio/phụ đề độc lập) — chỉ hiện trên timeline,
+   * không ghi vào field Thoại / không hiện tab Tạo giọng / Chuỗi phân cảnh.
+   */
+  studioOnly?: boolean;
+  /**
+   * Studio: bật/tắt riêng block phụ đề (preview + burn).
+   * Mặc định true khi không set. false = ẩn / không burn clip này.
+   */
+  subtitleEnabled?: boolean;
 };
 
 /** Phân cảnh / cảnh quay — store: scenes (keyPath: id, indexes: projectId, episodeId) */
@@ -287,8 +397,15 @@ export type FilmSceneRecord = {
   cameraMovement?: string;
   /** Địa điểm */
   location?: string;
-  /** Thời lượng giây */
+  /** Thời lượng giây (độ dài clip trên Studio timeline) */
   durationSec?: number;
+  /**
+   * Studio: trim vào trong file video nguồn (giây).
+   * Playhead local = timelineSec - sceneStart + videoTrimInSec.
+   */
+  videoTrimInSec?: number;
+  /** Studio: điểm cắt cuối trong file nguồn (giây). Không set = hết clip timeline / hết file. */
+  videoTrimOutSec?: number;
   /** Tên nhân vật gắn */
   characterNames?: string[];
   /** Tên vật phẩm gắn */
@@ -361,6 +478,13 @@ export type FilmSceneRecord = {
   /** Video tạo từ khung hình */
   videoStatus?: "pending" | "creating" | "ready" | "error";
   videoUrl?: string;
+  /** Binary local video (IndexedDB) — ưu tiên preview/export, tránh CORS URL Flow */
+  videoBlob?: Blob;
+  /**
+   * Clip phát sinh trong timeline Studio (cắt / chèn file).
+   * Chỉ tồn tại trong store `studioTimelines` — không ghi vào `scenes` gốc.
+   */
+  studioDerived?: boolean;
   /** Job poll resume (FILM_GENERATION_VIDEO) */
   videoMediaJobId?: string;
   videoMediaProgress?: number;
@@ -394,6 +518,17 @@ export type FilmSceneRecord = {
 /** Meta key/value — store: meta (không keyPath, key do caller) */
 export type FilmMetaRecord = {
   value: unknown;
+  updatedAt: string;
+};
+
+/**
+ * Timeline Studio theo tập — store: studioTimelines (keyPath: episodeId).
+ * Chỉ đọc media từ scenes gốc; mọi cắt/chèn/xóa chỉ lưu ở đây.
+ */
+export type FilmStudioTimelineRecord = {
+  episodeId: string;
+  projectId: string;
+  scenes: FilmSceneRecord[];
   updatedAt: string;
 };
 

@@ -139,28 +139,40 @@ export function mergeFilmDialogueLines(
 
 /** Đồng bộ dialogueLines từ field dialogue (source of truth). */
 export function syncSceneDialogueLines(scene: FilmSceneRecord): FilmDialogueLineRecord[] {
+  const studioOnlyLines = (scene.dialogueLines || []).filter((l) => l.studioOnly);
   const parsed = parseFilmDialogueText(scene.dialogue || "");
   if (!parsed.length) {
     const fallback = scene.dialogue?.trim() || "";
-    if (!fallback) return [];
+    if (!fallback) return studioOnlyLines;
     const character =
       scene.speakerName?.trim() || scene.characterNames?.[0]?.trim() || "";
-    return mergeFilmDialogueLines(
-      [{ character, line: fallback }],
-      scene.dialogueLines || []
-    );
+    return [
+      ...mergeFilmDialogueLines(
+        [{ character, line: fallback }],
+        (scene.dialogueLines || []).filter((l) => !l.studioOnly)
+      ),
+      ...studioOnlyLines,
+    ];
   }
-  return mergeFilmDialogueLines(parsed, scene.dialogueLines || []);
+  return [
+    ...mergeFilmDialogueLines(
+      parsed,
+      (scene.dialogueLines || []).filter((l) => !l.studioOnly)
+    ),
+    ...studioOnlyLines,
+  ];
 }
 
 /** Scene sau khi sync dialogueLines (ghi IDB) */
 export function withSyncedDialogueLines(scene: FilmSceneRecord): FilmSceneRecord {
   const dialogueLines = syncSceneDialogueLines(scene);
+  const storyboardLines = dialogueLines.filter((l) => !l.studioOnly);
   return {
     ...scene,
     dialogueLines,
+    dialogue: formatFilmDialogueText(storyboardLines),
     speakerName:
-      dialogueLines[0]?.character ||
+      storyboardLines[0]?.character ||
       scene.speakerName ||
       scene.characterNames?.[0] ||
       "",
@@ -313,7 +325,7 @@ export function buildFilmVoiceListItems(
   });
   const items: FilmVoiceListItem[] = [];
   for (const scene of sorted) {
-    const lines = syncSceneDialogueLines(scene);
+    const lines = syncSceneDialogueLines(scene).filter((l) => !l.studioOnly);
     const syncedScene: FilmSceneRecord = { ...scene, dialogueLines: lines };
     lines.forEach((line, i) => {
       items.push({

@@ -71,7 +71,8 @@ export function buildFilmSceneVideoPrompt(
   const sfx = tagged("SFX", scene.sfx);
   const music = tagged("MUSIC", scene.music);
   const voice = tagged("VOICE", scene.voiceDirection);
-  const dialogueTag = tagged("DIALOGUE", dialogue);
+  // Không có thoại → vẫn ghi [DIALOGUE] với "- Không thoại"
+  const dialogueTag = tagged("DIALOGUE", dialogue || "Không thoại");
 
   if (motion) parts.push(motion);
   if (audio) parts.push(audio);

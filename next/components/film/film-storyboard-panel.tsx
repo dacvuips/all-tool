@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiPlus, HiRefresh } from "react-icons/hi";
+import { useAlert } from "../../lib/providers/alert-provider";
 import { Button } from "../shared/utilities/form";
 import type { FilmAttachOption } from "./film-attach-fields";
 import { withSyncedDialogueLines } from "./film-dialogue";
@@ -31,6 +32,7 @@ import {
   filmPropLinkedToEpisode,
   filmScenesTotalDuration,
 } from "./film-types";
+import { isFilmCreateVideoScene } from "./film-studio-timeline";
 import FilmStoryboardSceneDetail from "./film-storyboard-scene-detail";
 import FilmStoryboardSceneList from "./film-storyboard-scene-list";
 import { getFilmSceneLocationNames } from "./film-attachment-validate";
@@ -69,7 +71,7 @@ type Props = {
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
-  { id: "storyboard", label: "Tạo Chuỗi Cảnh quay" },
+  { id: "storyboard", label: "Tạo Chuỗi phân cảnh" },
   { id: "voice", label: "Tạo Giọng" },
   { id: "shot_images", label: "Ảnh Cảnh quay" },
   { id: "create_video", label: "Tạo video" },
@@ -97,6 +99,7 @@ export default function FilmStoryboardPanel({
   onOpenAttachEntity,
 }: Props) {
   const { t } = useTranslation();
+  const alert = useAlert();
   const [tab, setTab] = useState<FilmStoryboardTab>("storyboard");
   const [selectedId, setSelectedId] = useState<string | null>(
     () => focusSceneId || null
@@ -104,24 +107,31 @@ export default function FilmStoryboardPanel({
   /** User đã chọn scene khác — bỏ ưu tiên focusSceneId */
   const [userPickedSelection, setUserPickedSelection] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  /** Chỉ hiện phân cảnh gốc — ẩn clip cắt/chèn từ Studio */
+  const storyboardScenes = useMemo(
+    () => scenes.filter(isFilmCreateVideoScene),
+    [scenes]
+  );
 
   useEffect(() => {
-    if (!scenes.length) {
+    if (!storyboardScenes.length) {
       setSelectedId(null);
       return;
     }
     if (
       !userPickedSelection &&
       focusSceneId &&
-      scenes.some((s) => s.id === focusSceneId)
+      storyboardScenes.some((s) => s.id === focusSceneId)
     ) {
       setSelectedId(focusSceneId);
       return;
     }
-    if (!selectedId || !scenes.find((s) => s.id === selectedId)) {
-      setSelectedId(scenes[0].id);
+    if (!selectedId || !storyboardScenes.find((s) => s.id === selectedId)) {
+      setSelectedId(storyboardScenes[0].id);
     }
-  }, [scenes, selectedId, focusSceneId, userPickedSelection]);
+  }, [storyboardScenes, selectedId, focusSceneId, userPickedSelection]);
 
   const handleSelectScene = (id: string) => {
     setUserPickedSelection(true);
@@ -178,8 +188,8 @@ export default function FilmStoryboardPanel({
   ]);
 
   const selected = useMemo(
-    () => scenes.find((s) => s.id === selectedId) || null,
-    [scenes, selectedId]
+    () => storyboardScenes.find((s) => s.id === selectedId) || null,
+    [storyboardScenes, selectedId]
   );
 
   /** Luôn hiện bản ghép từ field (không để textarea trống nếu đã có nguồn). */
@@ -226,7 +236,10 @@ export default function FilmStoryboardPanel({
     ? resolveFilmSceneAudioPrompt(selected, storyboardAudioPromptStyle)
     : "";
 
-  const totalDuration = useMemo(() => filmScenesTotalDuration(scenes), [scenes]);
+  const totalDuration = useMemo(
+    () => filmScenesTotalDuration(storyboardScenes),
+    [storyboardScenes]
+  );
 
   const characterOptions: FilmAttachOption[] = useMemo(() => {
     const episodeId = episode?.id;
@@ -389,6 +402,43 @@ export default function FilmStoryboardPanel({
     }
   };
 
+  const handleDeleteScene = async (scene: FilmSceneRecord) => {
+    if (busy || deletingId) return;
+    const title =
+      scene.title?.trim() ||
+      scene.summary?.trim() ||
+      `${t("Cảnh quay")} #${scene.index}`;
+    const ok = alert.danger
+      ? await alert.danger(
+          t("Xóa phân cảnh"),
+          t(
+            "Xóa “{{name}}” khỏi chuỗi phân cảnh? Thao tác không hoàn tác.",
+            { name: title }
+          ),
+          t("Xóa")
+        )
+      : window.confirm(
+          t("Xóa “{{name}}” khỏi chuỗi phân cảnh?", { name: title })
+        );
+    if (!ok) return;
+
+    setDeletingId(scene.id);
+    setBusy(true);
+    try {
+      // Giữ nguyên clip Studio (studioDerived) — chỉ bỏ phân cảnh gốc
+      const remaining = scenes.filter((s) => s.id !== scene.id);
+      await onReplaceScenes(remaining);
+      const nextStoryboard = remaining.filter(isFilmCreateVideoScene);
+      if (selectedId === scene.id) {
+        setSelectedId(nextStoryboard[0]?.id || null);
+        setUserPickedSelection(true);
+      }
+    } finally {
+      setDeletingId(null);
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-full min-h-0 gap-3">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
@@ -415,7 +465,7 @@ export default function FilmStoryboardPanel({
 
         <div className="flex items-center gap-2 flex-wrap flex-shrink-0">
           <span className="text-xs text-gray-500 whitespace-nowrap">
-            {scenes.length} {t("Cảnh quay")} - {totalDuration}s
+            {storyboardScenes.length} {t("Cảnh quay")} - {totalDuration}s
           </span>
           <Button
             outline
@@ -452,10 +502,12 @@ export default function FilmStoryboardPanel({
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-3">
           <div className="w-full lg:w-80 flex-shrink-0 min-h-sm lg:min-h-0 lg:max-h-screen">
             <FilmStoryboardSceneList
-              scenes={scenes}
+              scenes={storyboardScenes}
               selectedId={selectedId}
               totalDurationSec={totalDuration}
               onSelect={handleSelectScene}
+              onDelete={handleDeleteScene}
+              deletingId={deletingId}
             />
           </div>
           <div className="flex-1 min-w-0 min-h-md lg:min-h-0 lg:max-h-screen">

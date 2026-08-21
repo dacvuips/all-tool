@@ -60,7 +60,7 @@ type Props = {
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
-  { id: "storyboard", label: "Tạo Chuỗi Cảnh quay" },
+  { id: "storyboard", label: "Tạo Chuỗi phân cảnh" },
   { id: "voice", label: "Tạo Giọng" },
   { id: "shot_images", label: "Ảnh Cảnh quay" },
   { id: "create_video", label: "Tạo video" },
@@ -500,12 +500,12 @@ export default function FilmVoicePanel({
               <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
                 <p className="text-sm text-gray-500 m-0 max-w-md">
                   {t(
-                    "Chưa có thoại. Thêm field Thoại trong Chuỗi Cảnh quay (mỗi dòng: Tên nhân vật: lời thoại) hoặc trích xuất từ nội dung gốc."
+                    "Chưa có thoại. Thêm field Thoại trong Chuỗi phân cảnh (mỗi dòng: Tên nhân vật: lời thoại) hoặc trích xuất từ nội dung gốc."
                   )}
                 </p>
                 <Button
                   outline
-                  text={t("Mở Chuỗi Cảnh quay")}
+                  text={t("Mở Chuỗi phân cảnh")}
                   className="!rounded-lg"
                   onClick={() => onTabNavigate?.("storyboard")}
                 />

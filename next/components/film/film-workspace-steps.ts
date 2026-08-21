@@ -13,7 +13,7 @@ export const FILM_WORKSPACE_STEPS: FilmWorkspaceStep[] = [
   {
     id: "storyboard",
     section: "script",
-    label: "Chuỗi Cảnh quay",
+    label: "Chuỗi phân cảnh",
   },
   {
     id: "character_images",

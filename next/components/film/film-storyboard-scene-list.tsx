@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { HiTrash } from "react-icons/hi";
 import { FilmSceneRecord } from "./film-types";
 
 type Props = {
@@ -6,6 +7,8 @@ type Props = {
   selectedId: string | null;
   totalDurationSec: number;
   onSelect: (id: string) => void;
+  onDelete?: (scene: FilmSceneRecord) => void;
+  deletingId?: string | null;
 };
 
 export default function FilmStoryboardSceneList({
@@ -13,6 +16,8 @@ export default function FilmStoryboardSceneList({
   selectedId,
   totalDurationSec,
   onSelect,
+  onDelete,
+  deletingId = null,
 }: Props) {
   const { t } = useTranslation();
 
@@ -20,7 +25,7 @@ export default function FilmStoryboardSceneList({
     <div className="flex flex-col h-full min-h-0 bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-4 py-3.5 border-b border-gray-50">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-bold text-gray-900 m-0">{t("Chuỗi Cảnh quay")}</h3>
+          <h3 className="text-sm font-bold text-gray-900 m-0">{t("Chuỗi phân cảnh")}</h3>
           <span className="text-xs font-semibold text-gray-500">{totalDurationSec}s</span>
         </div>
         <p className="text-xs text-gray-400 m-0 mt-1">
@@ -51,12 +56,20 @@ export default function FilmStoryboardSceneList({
                 : scene.mediaStatus === "error"
                   ? "bg-red-400"
                   : "bg-yellow-400";
+            const deleting = deletingId === scene.id;
 
             return (
-              <button
+              <div
                 key={scene.id}
-                type="button"
+                role="button"
+                tabIndex={0}
                 onClick={() => onSelect(scene.id)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect(scene.id);
+                  }
+                }}
                 className={`w-full text-left rounded-xl border p-3 transition-all cursor-pointer ${
                   selected
                     ? "border-blue-400 bg-blue-50 shadow-sm"
@@ -69,9 +82,27 @@ export default function FilmStoryboardSceneList({
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-xs font-semibold text-gray-900 truncate" title={sceneTitle}>
+                      <span
+                        className="text-xs font-semibold text-gray-900 truncate flex-1"
+                        title={sceneTitle}
+                      >
                         {sceneTitle}
                       </span>
+                      {onDelete ? (
+                        <button
+                          type="button"
+                          title={t("Xóa phân cảnh")}
+                          aria-label={t("Xóa phân cảnh")}
+                          disabled={deleting}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(scene);
+                          }}
+                          className="flex-shrink-0 flex justify-center items-center w-7 h-7 text-gray-400 bg-white rounded-lg border border-gray-100 shadow-sm cursor-pointer hover:text-red-600 hover:border-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <HiTrash className="text-sm" />
+                        </button>
+                      ) : null}
                     </div>
                     <div className="flex items-center gap-2 flex-wrap mt-0.5">
                       {scene.shotSize && (
@@ -98,7 +129,7 @@ export default function FilmStoryboardSceneList({
                     </div>
                   </div>
                 </div>
-              </button>
+              </div>
             );
           })
         )}

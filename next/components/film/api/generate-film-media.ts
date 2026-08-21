@@ -17,7 +17,9 @@ import {
   base64ToBlob,
   dataUrlToBlob,
   toDownloadProxyUrl,
+  uriToBlob,
 } from "../../app/affiliate-video/shared/videoDownloadUtils";
+import type { FilmSceneRecord } from "../film-types";
 
 export type FilmMediaAssetKind =
   | "character"
@@ -84,6 +86,8 @@ export type FilmGenerateVideoResult = {
 
 const POLL_MS = 2500;
 const MAX_WAIT_MS = 15 * 60 * 1000;
+/** Job đã xóa khỏi Mongo (SUCCEEDED/cleanup) — không poll vô hạn, UI sẽ thoát trạng thái 0%. */
+const JOB_MISSING_POLL_THRESHOLD = 3;
 
 /** Job đang poll trên client (module-level) — đổi tab / đóng dialog không mất track. */
 const inflightWait = new Map<string, Promise<unknown>>();
@@ -164,13 +168,21 @@ export function waitFilmMediaJob<T>(
   const p = (async () => {
     const started = Date.now();
     let lastProgress = -1;
+    let missingPollCount = 0;
 
     while (Date.now() - started < MAX_WAIT_MS) {
       const job = await MediaGenerationJobService.getJob<T>(jobId);
       if (!job) {
+        missingPollCount += 1;
+        if (missingPollCount >= JOB_MISSING_POLL_THRESHOLD) {
+          throw new Error(
+            "Job không còn trên server (đã xong hoặc hết hạn). Vui lòng tạo lại."
+          );
+        }
         await sleep(POLL_MS);
         continue;
       }
+      missingPollCount = 0;
 
       if (typeof job.progress === "number" && job.progress >= lastProgress) {
         lastProgress = job.progress;
@@ -595,4 +607,142 @@ export function extractFilmVideoUrlFromJobResult(resultData: unknown): string {
     }
   }
   return "";
+}
+
+export type FilmStoredVideo = {
+  /** URL persist (proxy/http hoặc data/blob) */
+  videoUrl: string;
+  /** Binary local — ưu tiên preview / Studio / export */
+  videoBlob?: Blob;
+};
+
+/**
+ * Materialize video job → tải blob về client (giống ảnh).
+ * Giữ videoUrl proxy làm backup nếu fetch blob thất bại.
+ */
+export async function materializeFilmVideoFromJobResult(
+  resultData: unknown
+): Promise<FilmStoredVideo> {
+  if (!resultData || typeof resultData !== "object") {
+    throw new Error("Job film không trả về video");
+  }
+  const r = resultData as Record<string, unknown>;
+
+  // 1) videoBytes base64 (nếu job trả)
+  const bytesRaw = String(r.videoBytes || "").trim();
+  if (bytesRaw) {
+    const mime = String(r.mimeType || "video/mp4").trim() || "video/mp4";
+    const payload = stripBase64Payload(bytesRaw);
+    if (payload) {
+      try {
+        const blob = base64ToBlob(payload, mime);
+        if (blob.size > 0) {
+          return {
+            videoUrl: `data:${mime};base64,${payload}`,
+            videoBlob: blob,
+          };
+        }
+      } catch (err) {
+        console.warn("[film] video base64→Blob fail", err);
+      }
+    }
+  }
+
+  // 2) Remote / proxy URL → fetch blob
+  const videoUrl = extractFilmVideoUrlFromJobResult(resultData);
+  if (!videoUrl) throw new Error("Job film không trả về video");
+
+  if (videoUrl.startsWith("data:")) {
+    try {
+      const blob = dataUrlToBlob(videoUrl);
+      if (blob.size > 0) return { videoUrl, videoBlob: blob };
+    } catch (err) {
+      console.warn("[film] video dataURL→Blob fail", err);
+    }
+    return { videoUrl };
+  }
+
+  if (videoUrl.startsWith("blob:")) {
+    try {
+      const res = await fetch(videoUrl);
+      if (res.ok) {
+        const blob = await res.blob();
+        if (blob.size > 0) return { videoUrl, videoBlob: blob };
+      }
+    } catch (err) {
+      console.warn("[film] video blob URL fetch fail", err);
+    }
+    return { videoUrl };
+  }
+
+  try {
+    const res = await fetch(videoUrl, { credentials: "include" });
+    if (res.ok) {
+      const blob = await res.blob();
+      if (blob.size > 0) {
+        return { videoUrl, videoBlob: blob };
+      }
+    }
+  } catch (err) {
+    console.warn("[film] fetch proxy video fail, dùng URL proxy", err);
+  }
+  return { videoUrl };
+}
+
+/** Src hiển thị video scene (blob → object URL, else normalize URL). */
+export function getFilmEntityVideoSrc(entity: {
+  videoBlob?: Blob | null;
+  videoUrl?: string | null;
+}): string {
+  if (entity.videoBlob instanceof Blob && entity.videoBlob.size > 0) {
+    return getOrCreateBlobPreviewUrl(entity.videoBlob);
+  }
+  return normalizeFilmVideoUrl(entity.videoUrl);
+}
+
+/**
+ * Tải lại blob video từ URL (proxy) cho từng scene — dùng nút Làm lại Studio.
+ * Giữ blob cũ nếu fetch thất bại.
+ */
+export async function rematerializeFilmSceneVideos(
+  scenes: FilmSceneRecord[],
+  options?: {
+    onProgress?: (done: number, total: number) => void;
+  }
+): Promise<FilmSceneRecord[]> {
+  const list = scenes || [];
+  const out: FilmSceneRecord[] = [];
+  for (let i = 0; i < list.length; i += 1) {
+    const scene = list[i];
+    const url = normalizeFilmVideoUrl(scene.videoUrl);
+    if (!url) {
+      out.push(scene);
+      options?.onProgress?.(i + 1, list.length);
+      continue;
+    }
+    // blob: session-local — không fetch lại remote
+    if (url.startsWith("blob:")) {
+      out.push(scene);
+      options?.onProgress?.(i + 1, list.length);
+      continue;
+    }
+    try {
+      const blob = await uriToBlob(url);
+      if (blob && blob.size > 0) {
+        out.push({
+          ...scene,
+          videoUrl: url,
+          videoBlob: blob,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        out.push(scene);
+      }
+    } catch (err) {
+      console.warn("[film] rematerialize video fail", scene.id, err);
+      out.push(scene);
+    }
+    options?.onProgress?.(i + 1, list.length);
+  }
+  return out;
 }

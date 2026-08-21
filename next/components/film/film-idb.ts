@@ -5,7 +5,7 @@
  * Không dùng chung useIndexedDB / DB_NAME của affiliate-video hay video-affiliate-manager.
  *
  * DB name : film-short-projects  (FILM_DB_NAME)
- * Version : 4
+ * Version : 6
  *
  * Stores
  * ─────────────────────────────────────────────────────────
@@ -15,6 +15,7 @@
  * props        keyPath:id   indexes: byProjectId
  * sceneImages  keyPath:id   indexes: byProjectId
  * scenes       keyPath:id   indexes: byProjectId, byEpisodeId, byEpisodeIdIndex
+ * studioTimelines keyPath:episodeId  indexes: byProjectId
  * meta         no keyPath   (key/value settings)
  */
 
@@ -31,10 +32,16 @@ import {
   FilmPropRecord,
   FilmSceneImageRecord,
   FilmSceneRecord,
+  FilmStudioTimelineRecord,
   buildFilmEpisodesForProject,
   buildFilmProjectRecord,
   buildFilmScenesForEpisode,
 } from "./film-types";
+import { formatFilmDialogueText } from "./film-dialogue";
+import {
+  isFilmCreateVideoScene,
+  resetFilmStudioTimelineFromScratch,
+} from "./film-studio-timeline";
 import { buildFilmSceneImagePrompt } from "./film-scene-image-prompt";
 import {
   buildFilmSceneAudioPrompt,
@@ -103,6 +110,10 @@ function ensureFilmSchema(db: IDBDatabase): void {
     { name: "byEpisodeIdIndex", keyPath: ["episodeId", "index"], unique: true },
   ]);
 
+  createStoreWithIndexes(db, FILM_STORE.studioTimelines, "episodeId", [
+    { name: "byProjectId", keyPath: "projectId" },
+  ]);
+
   if (!db.objectStoreNames.contains(FILM_STORE.meta)) {
     db.createObjectStore(FILM_STORE.meta);
   }
@@ -138,8 +149,14 @@ function openFilmDBOnce(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(FILM_DB_NAME, FILM_DB_VERSION);
 
-    req.onupgradeneeded = () => {
-      ensureFilmSchema(req.result);
+    req.onupgradeneeded = (event) => {
+      const db = req.result;
+      ensureFilmSchema(db);
+      console.info(
+        `[film-idb] upgraded ${event.oldVersion} → ${FILM_DB_VERSION}`,
+        "stores:",
+        Array.from(db.objectStoreNames)
+      );
     };
 
     req.onsuccess = () => {
@@ -160,7 +177,11 @@ function openFilmDBOnce(): Promise<IDBDatabase> {
         } catch {
           // ignore
         }
-        reject(new Error("[film-idb] schema incomplete"));
+        reject(
+          new Error(
+            "[film-idb] schema incomplete — đóng mọi tab Film rồi reload trang (upgrade IndexedDB)"
+          )
+        );
         return;
       }
 
@@ -754,6 +775,107 @@ export async function putFilmScene(scene: FilmSceneRecord): Promise<void> {
   await withStoreRequest(FILM_STORE.scenes, "readwrite", (s) => s.put(scene));
 }
 
+// ── Studio timelines (per episode, isolated from scenes) ─────────────────────
+
+export async function getFilmStudioTimeline(
+  episodeId: string
+): Promise<FilmStudioTimelineRecord | null> {
+  const row = await withStoreRequest<FilmStudioTimelineRecord | undefined>(
+    FILM_STORE.studioTimelines,
+    "readonly",
+    (s) => s.get(episodeId)
+  );
+  return row || null;
+}
+
+export async function putFilmStudioTimeline(
+  record: FilmStudioTimelineRecord
+): Promise<FilmStudioTimelineRecord> {
+  const next: FilmStudioTimelineRecord = {
+    ...record,
+    updatedAt: new Date().toISOString(),
+  };
+  await withStoreRequest(FILM_STORE.studioTimelines, "readwrite", (s) => s.put(next));
+  return next;
+}
+
+export async function deleteFilmStudioTimeline(episodeId: string): Promise<void> {
+  await withStoreRequest(FILM_STORE.studioTimelines, "readwrite", (s) => s.delete(episodeId));
+}
+
+/** Clone nông scenes để Studio edit — không chia sẻ mảng dialogueLines với bản gốc. */
+export function cloneFilmScenesForStudio(scenes: FilmSceneRecord[]): FilmSceneRecord[] {
+  return scenes.map((s) => ({
+    ...s,
+    dialogueLines: (s.dialogueLines || []).map((l) => ({ ...l })),
+    videoRefSlots: s.videoRefSlots
+      ? s.videoRefSlots.map((slot) => (slot ? { ...slot } : null))
+      : undefined,
+  }));
+}
+
+/**
+ * Gỡ artifact Studio khỏi store `scenes` gốc (studioDerived + studioOnly lines).
+ * Trả về danh sách scenes gốc đã sạch.
+ */
+export async function purgeStudioArtifactsFromEpisodeScenes(
+  projectId: string,
+  episodeId: string
+): Promise<FilmSceneRecord[]> {
+  const existing = await getFilmScenesByEpisode(episodeId);
+  const needsPurge = existing.some(
+    (s) =>
+      !!s.studioDerived || (s.dialogueLines || []).some((l) => !!l.studioOnly)
+  );
+  const base = existing.filter((s) => !s.studioDerived);
+  if (!needsPurge) {
+    return base.filter(isFilmCreateVideoScene);
+  }
+
+  const cleaned = base.map((s) => {
+    const lines = (s.dialogueLines || [])
+      .filter((l) => !l.studioOnly)
+      .map((l) => {
+        const next = { ...l };
+        delete next.studioOnly;
+        return next;
+      });
+    const { studioDerived: _drop, ...rest } = s;
+    return {
+      ...rest,
+      dialogueLines: lines,
+      dialogue: formatFilmDialogueText(lines) || s.dialogue,
+    };
+  });
+
+  const saved = await replaceFilmScenesForEpisode(projectId, episodeId, cleaned);
+  return saved.filter(isFilmCreateVideoScene);
+}
+
+/**
+ * Load / seed timeline Studio cho tập.
+ * Chỉ đọc scenes gốc để seed lần đầu — không ghi ngược vào scenes.
+ */
+export async function loadOrSeedFilmStudioTimeline(
+  projectId: string,
+  episodeId: string,
+  sourceScenes: FilmSceneRecord[]
+): Promise<FilmStudioTimelineRecord> {
+  const existing = await getFilmStudioTimeline(episodeId);
+  if (existing?.scenes?.length) {
+    return existing;
+  }
+  const seed = resetFilmStudioTimelineFromScratch(
+    cloneFilmScenesForStudio(sourceScenes.filter(isFilmCreateVideoScene))
+  );
+  return putFilmStudioTimeline({
+    episodeId,
+    projectId,
+    scenes: seed,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 /** Xoá toàn bộ scene của episode rồi ghi danh sách mới; cập nhật denormalized counts */
 export async function replaceFilmScenesForEpisode(
   projectId: string,
@@ -890,6 +1012,8 @@ export async function setFilmOutputLanguage(value: string): Promise<FilmLanguage
 // ── Migrate legacy localStorage → IndexedDB (1 lần) ──────────────────────────
 
 const MIGRATION_META_KEY = "migrated_from_localStorage_v1";
+/** Migrate: tách clip Studio khỏi scenes → studioTimelines */
+const STUDIO_ISOLATION_META_KEY = "migrated_studio_isolation_v6";
 
 function readLegacyLocalProjects(): FilmProjectRecord[] {
   try {
@@ -923,10 +1047,62 @@ function readLegacyLocalProjects(): FilmProjectRecord[] {
 }
 
 /**
- * Mở DB + migrate localStorage cũ (nếu có). Gọi 1 lần khi load trang Film.
+ * Mọi episode: chuyển studioDerived sang studioTimelines (nếu chưa có), rồi purge scenes gốc.
+ */
+export async function migrateFilmStudioIsolation(): Promise<void> {
+  const done = await getFilmMeta<boolean>(STUDIO_ISOLATION_META_KEY);
+  if (done) return;
+
+  const episodes = await withStoreRequest<FilmEpisodeRecord[]>(
+    FILM_STORE.episodes,
+    "readonly",
+    (s) => s.getAll()
+  );
+
+  for (const ep of episodes || []) {
+    if (!ep?.id || !ep.projectId) continue;
+    try {
+      const all = await getFilmScenesByEpisode(ep.id);
+      const derived = all.filter((s) => !!s.studioDerived);
+      const source = all.filter((s) => !s.studioDerived);
+      const existingTl = await getFilmStudioTimeline(ep.id);
+
+      if (!existingTl?.scenes?.length) {
+        const seedScenes =
+          derived.length > 0
+            ? cloneFilmScenesForStudio(
+                [...source, ...derived].sort((a, b) => a.index - b.index)
+              )
+            : resetFilmStudioTimelineFromScratch(cloneFilmScenesForStudio(source));
+        await putFilmStudioTimeline({
+          episodeId: ep.id,
+          projectId: ep.projectId,
+          scenes: seedScenes,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      await purgeStudioArtifactsFromEpisodeScenes(ep.projectId, ep.id);
+    } catch (err) {
+      console.warn("[film-idb] studio isolation migrate episode failed:", ep.id, err);
+    }
+  }
+
+  await setFilmMeta(STUDIO_ISOLATION_META_KEY, true);
+  console.info("[film-idb] migrated studio isolation v6");
+}
+
+/**
+ * Mở DB + migrate schema/data. Gọi 1 lần khi load trang Film.
  */
 export async function initFilmDB(): Promise<void> {
   await openFilmDB();
+
+  try {
+    await migrateFilmStudioIsolation();
+  } catch (err) {
+    console.warn("[film-idb] studio isolation migrate failed:", err);
+  }
 
   const migrated = await getFilmMeta<boolean>(MIGRATION_META_KEY);
   if (migrated) return;

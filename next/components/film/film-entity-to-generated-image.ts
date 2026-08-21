@@ -3,8 +3,10 @@
  * + Convert entity → FilmMediaImageRef cho enqueue generate.
  */
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
+import { prepareGenerationImageFile } from "../app/affiliate-video/shared/compressGenerationImage";
 import {
   getGeneratedImagePreviewSrc,
+  getGeneratedVideoPreviewSrc,
 } from "../app/affiliate-video/shared/generatedMediaUtils";
 import { toDownloadProxyUrl } from "../app/affiliate-video/shared/videoDownloadUtils";
 import {
@@ -53,6 +55,40 @@ export function generatedImageDataToFilmStored(image: GeneratedImageData): {
   return { imageUrl: imageBlob ? "" : imageUrl, imageBlob: imageBlob || undefined };
 }
 
+export function generatedVideoDataToFilmStored(video: {
+  videoUri?: string | null;
+  videoBytes?: string | null;
+  mediaBlob?: Blob;
+  previewUrl?: string;
+  mimeType?: string;
+}): {
+  videoUrl: string;
+  videoBlob?: Blob;
+} {
+  let videoBlob = video.mediaBlob;
+  if (!videoBlob && (video.videoBytes || "").trim()) {
+    try {
+      const pure = String(video.videoBytes).replace(/^data:[^;]+;base64,/, "").trim();
+      const binary = atob(pure);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      videoBlob = new Blob([bytes], { type: video.mimeType || "video/mp4" });
+    } catch {
+      // ignore
+    }
+  }
+  if (videoBlob) {
+    return { videoUrl: "", videoBlob };
+  }
+  const videoUrl = String(
+    getGeneratedVideoPreviewSrc(video as any) ||
+      video.previewUrl ||
+      video.videoUri ||
+      ""
+  ).trim();
+  return { videoUrl, videoBlob: undefined };
+}
+
 async function blobToBase64Payload(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -66,8 +102,36 @@ async function blobToBase64Payload(blob: Blob): Promise<string> {
   });
 }
 
+function dataUrlToBlob(dataUrl: string, mimeType?: string): Blob | null {
+  try {
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    const binary = atob(match[2]);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType || match[1] || "image/jpeg" });
+  } catch {
+    return null;
+  }
+}
+
+/** Resize ≤1920 + JPEG 72% (GIF giữ nguyên). */
+async function blobToCompressedMediaRef(blob: Blob, fileName = "film-ref.jpg"): Promise<FilmMediaImageRef> {
+  const type = blob.type || "image/jpeg";
+  const file =
+    blob instanceof File
+      ? blob
+      : new File([blob], fileName, { type });
+  const prepared = await prepareGenerationImageFile(file);
+  return {
+    imageBytes: await blobToBase64Payload(prepared),
+    mimeType: prepared.type || type || "image/jpeg",
+  };
+}
+
 /**
  * Entity ảnh (blob / url) → ref gửi API generate (reference props + character).
+ * Nén trước khi encode base64 — cùng chuẩn affiliate (1920px / JPEG 72).
  */
 export async function filmEntityToMediaImageRef(entity: {
   imageBlob?: Blob | null;
@@ -75,11 +139,7 @@ export async function filmEntityToMediaImageRef(entity: {
   imageUrls?: string[];
 }): Promise<FilmMediaImageRef | null> {
   if (entity.imageBlob instanceof Blob && entity.imageBlob.size > 0) {
-    const imageBytes = await blobToBase64Payload(entity.imageBlob);
-    return {
-      imageBytes,
-      mimeType: entity.imageBlob.type || "image/jpeg",
-    };
+    return blobToCompressedMediaRef(entity.imageBlob);
   }
 
   const src = getFilmEntityImageSrc(entity);
@@ -87,6 +147,8 @@ export async function filmEntityToMediaImageRef(entity: {
 
   const dataMatch = src.match(/^data:([^;]+);base64,(.+)$/);
   if (dataMatch) {
+    const blob = dataUrlToBlob(src, dataMatch[1]);
+    if (blob && blob.size > 0) return blobToCompressedMediaRef(blob);
     return { imageBytes: dataMatch[2], mimeType: dataMatch[1] || "image/jpeg" };
   }
 
@@ -95,12 +157,7 @@ export async function filmEntityToMediaImageRef(entity: {
     const res = await fetch(fetchUrl, { credentials: "include" });
     if (res.ok) {
       const blob = await res.blob();
-      if (blob.size > 0) {
-        return {
-          imageBytes: await blobToBase64Payload(blob),
-          mimeType: blob.type || "image/jpeg",
-        };
-      }
+      if (blob.size > 0) return blobToCompressedMediaRef(blob);
     }
   } catch {
     // fall through

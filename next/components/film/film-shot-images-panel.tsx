@@ -55,7 +55,7 @@ type Props = {
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
-  { id: "storyboard", label: "Tạo Chuỗi Cảnh quay" },
+  { id: "storyboard", label: "Tạo Chuỗi phân cảnh" },
   { id: "voice", label: "Tạo Giọng" },
   { id: "shot_images", label: "Ảnh Cảnh quay" },
   { id: "create_video", label: "Tạo video" },
@@ -82,11 +82,11 @@ export default function FilmShotImagesPanel({
 }: Props) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<FilmStoryboardTab>("shot_images");
-  const [busy, setBusy] = useState(false);
+  /** Chỉ true khi đang chạy "Tạo hàng loạt" — gen đơn không khóa nút bulk. */
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const readyCount = scenes.filter(sceneFrameReady).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
-  const anyCreating = scenes.some(sceneFrameCreating);
 
   const handleTab = (id: FilmStoryboardTab) => {
     setTab(id);
@@ -95,7 +95,7 @@ export default function FilmShotImagesPanel({
 
   /** Tạo ngay — ưu tiên prompt đề xuất AI nếu đang chọn */
   const handleCreate = async (scene: FilmSceneRecord) => {
-    if (busy || sceneFrameCreating(scene)) return;
+    if (sceneFrameCreating(scene)) return;
     const latest = scenes.find((s) => s.id === scene.id) || scene;
     if (sceneFrameCreating(latest)) return;
 
@@ -104,21 +104,16 @@ export default function FilmShotImagesPanel({
       prompt: resolveFilmShotFrameActivePrompt(latest, storyboardImagePromptStyle),
     };
 
-    setBusy(true);
-    try {
-      await onCreateFrame(input);
-    } finally {
-      setBusy(false);
-    }
+    await onCreateFrame(input);
   };
 
   const handleBulk = async () => {
-    if (busy || !onBulkCreateFrames) return;
-    setBusy(true);
+    if (bulkBusy || !onBulkCreateFrames) return;
+    setBulkBusy(true);
     try {
       await onBulkCreateFrames();
     } finally {
-      setBusy(false);
+      setBulkBusy(false);
     }
   };
 
@@ -177,7 +172,7 @@ export default function FilmShotImagesPanel({
                 icon={<HiTemplate />}
                 className="!rounded-lg"
                 onClick={handleBulk}
-                isLoading={busy || anyCreating}
+                isLoading={bulkBusy}
                 disabled={!scenes.length || allDone}
               />
             )}
@@ -197,11 +192,11 @@ export default function FilmShotImagesPanel({
           {scenes.length === 0 ? (
             <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
               <p className="text-sm text-gray-500 m-0">
-                {t("Chưa có cảnh quay. Tạo Chuỗi Cảnh quay trước rồi quay lại bước này.")}
+                {t("Chưa có cảnh quay. Tạo Chuỗi phân cảnh trước rồi quay lại bước này.")}
               </p>
               <Button
                 outline
-                text={t("Mở Chuỗi Cảnh quay")}
+                text={t("Mở Chuỗi phân cảnh")}
                 className="!rounded-lg"
                 onClick={() => onTabNavigate?.("storyboard")}
               />
@@ -236,7 +231,8 @@ export default function FilmShotImagesPanel({
                           }
                         : undefined
                     }
-                    onTitleClick={onOpenStoryboardScene}
+                    onEditScene={onOpenStoryboardScene}
+                    onOpenStoryboardScene={onOpenStoryboardScene}
                     characters={characters}
                     propsList={propsList}
                     sceneImages={sceneImages}

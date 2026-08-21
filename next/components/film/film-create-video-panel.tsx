@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
+  HiChevronDown,
   HiDotsVertical,
   HiDownload,
+  HiRefresh,
   HiShare,
   HiSparkles,
   HiThumbDown,
@@ -11,13 +13,30 @@ import {
   HiVideoCamera,
 } from "react-icons/hi";
 import { Button } from "../shared/utilities/form";
+import { Dropdown } from "../shared/utilities/popover/dropdown";
+import type { FilmAttachOption } from "./film-attach-fields";
 import {
   FILM_MEDIA_CARD_GRID_CLASS,
   FILM_MEDIA_CARD_GRID_PAD_CLASS,
 } from "./film-media-card-grid";
+import FilmSceneEditDialog from "./film-scene-edit-dialog";
+import { resolveFilmSceneImagePrompt } from "./film-scene-image-prompt";
+import {
+  resolveFilmSceneAudioPrompt,
+  resolveFilmSceneVideoPrompt,
+} from "./film-scene-video-prompt";
 import FilmShotImageCard from "./film-shot-image-card";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
-import { FilmAspectRatio, FilmSceneRecord } from "./film-types";
+import {
+  FilmAspectRatio,
+  FilmCharacterRecord,
+  FilmPropRecord,
+  FilmSceneImageRecord,
+  FilmSceneRecord,
+  filmCharacterLinkedToEpisode,
+  filmLocationLinkedToEpisode,
+  filmPropLinkedToEpisode,
+} from "./film-types";
 import { sceneVideoCreating, sceneVideoReady } from "./film-video-card";
 import {
   FILM_VIDEO_REF_MODE_OPTIONS,
@@ -25,19 +44,37 @@ import {
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
+import type { GeneratedVideoData } from "../app/affiliate-video/shared/scene-card-video-tab";
+
+export type FilmBulkCreateVideoMode = "all" | "errors";
 
 type Props = {
   scenes: FilmSceneRecord[];
   aspectRatio?: FilmAspectRatio;
+  characters?: FilmCharacterRecord[];
+  propsList?: FilmPropRecord[];
+  sceneImages?: FilmSceneImageRecord[];
+  storyboardImagePromptStyle?: string | null;
+  storyboardVideoPromptStyle?: string | null;
+  storyboardAudioPromptStyle?: string | null;
   onCreateVideo: (scene: FilmSceneRecord) => Promise<void>;
   onStopVideo?: (scene: FilmSceneRecord) => void | Promise<void>;
+  /** Upload / gallery → gán video scene */
+  onSetSceneVideo?: (
+    scene: FilmSceneRecord,
+    video: GeneratedVideoData
+  ) => void | Promise<void>;
   stopPendingIds?: Record<string, true>;
-  onBulkCreateVideos: () => Promise<void>;
+  onBulkCreateVideos: (mode: FilmBulkCreateVideoMode) => Promise<void>;
   onDownloadAll?: () => void;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
-  /** Click tiêu đề card → mở đúng phân cảnh trong Chuỗi Cảnh quay */
+  /** Icon cạnh tiêu đề → mở đúng phân cảnh trong Chuỗi phân cảnh */
   onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
-  /** Chọn chế độ Bắt đầu / Thành phần / Start-End → seed slot */
+  onSaveScene?: (scene: FilmSceneRecord) => void | Promise<void>;
+  onOpenAttachEntity?: (
+    kind: "character" | "prop" | "location",
+    option: FilmAttachOption
+  ) => void;
   onVideoRefModeChange?: (
     mode: FilmVideoRefMode,
     opts?: { rebuild?: boolean }
@@ -46,12 +83,11 @@ type Props = {
     scene: FilmSceneRecord,
     slots: Array<FilmVideoRefSlot | null>
   ) => void | Promise<void>;
-  /** Mode đang chọn (parent điều khiển sau seed) */
   videoRefMode?: FilmVideoRefMode;
 };
 
 const TABS: { id: FilmStoryboardTab; label: string }[] = [
-  { id: "storyboard", label: "Tạo Chuỗi Cảnh quay" },
+  { id: "storyboard", label: "Tạo Chuỗi phân cảnh" },
   { id: "voice", label: "Tạo Giọng" },
   { id: "shot_images", label: "Ảnh Cảnh quay" },
   { id: "create_video", label: "Tạo video" },
@@ -60,20 +96,31 @@ const TABS: { id: FilmStoryboardTab; label: string }[] = [
 export default function FilmCreateVideoPanel({
   scenes,
   aspectRatio = "9:16",
+  characters = [],
+  propsList = [],
+  sceneImages = [],
+  storyboardImagePromptStyle,
+  storyboardVideoPromptStyle,
+  storyboardAudioPromptStyle,
   onCreateVideo,
   onStopVideo,
+  onSetSceneVideo,
   stopPendingIds,
   onBulkCreateVideos,
   onDownloadAll,
   onTabNavigate,
   onOpenStoryboardScene,
+  onSaveScene,
+  onOpenAttachEntity,
   onVideoRefModeChange,
   onVideoRefSlotsChange,
   videoRefMode: videoRefModeProp = "start",
 }: Props) {
   const { t } = useTranslation();
+  const bulkBtnRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<FilmStoryboardTab>("create_video");
-  const [busy, setBusy] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [editSceneId, setEditSceneId] = useState<string | null>(null);
   const [videoRefMode, setVideoRefMode] =
     useState<FilmVideoRefMode>(videoRefModeProp);
   const [modeBusy, setModeBusy] = useState(false);
@@ -83,8 +130,57 @@ export default function FilmCreateVideoPanel({
   }, [videoRefModeProp]);
 
   const readyCount = scenes.filter(sceneVideoReady).length;
+  const errorCount = scenes.filter((s) => s.videoStatus === "error").length;
+  const creatingCount = scenes.filter(sceneVideoCreating).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
-  const anyCreating = scenes.some(sceneVideoCreating);
+  const canBulkAll = scenes.length > 0 && creatingCount < scenes.length;
+  const canBulkErrors = errorCount > 0;
+  const editScene = editSceneId
+    ? scenes.find((s) => s.id === editSceneId) || null
+    : null;
+  const episodeId = editScene?.episodeId || scenes[0]?.episodeId;
+
+  const characterOptions: FilmAttachOption[] = useMemo(
+    () =>
+      characters
+        .filter((c) => filmCharacterLinkedToEpisode(c, episodeId))
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          imageBlob: c.imageBlob,
+          imageUrl: c.imageUrl,
+          imageUrls: c.imageUrls,
+        })),
+    [characters, episodeId]
+  );
+
+  const propOptions: FilmAttachOption[] = useMemo(
+    () =>
+      propsList
+        .filter((p) => filmPropLinkedToEpisode(p, episodeId))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          imageBlob: p.imageBlob,
+          imageUrl: p.imageUrl,
+          imageUrls: p.imageUrls,
+        })),
+    [propsList, episodeId]
+  );
+
+  const sceneLocationOptions: FilmAttachOption[] = useMemo(
+    () =>
+      sceneImages
+        .filter((s) => filmLocationLinkedToEpisode(s, episodeId))
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          imageBlob: s.imageBlob,
+          imageUrl: s.imageUrl,
+          imageUrls: s.imageUrls,
+        })),
+    [sceneImages, episodeId]
+  );
 
   const handleTab = (id: FilmStoryboardTab) => {
     setTab(id);
@@ -92,22 +188,19 @@ export default function FilmCreateVideoPanel({
   };
 
   const handleCreate = async (scene: FilmSceneRecord) => {
-    if (busy || sceneVideoCreating(scene)) return;
-    setBusy(true);
-    try {
-      await onCreateVideo(scene);
-    } finally {
-      setBusy(false);
-    }
+    if (sceneVideoCreating(scene)) return;
+    await onCreateVideo(scene);
   };
 
-  const handleBulk = async () => {
-    if (busy || !scenes.length) return;
-    setBusy(true);
+  const handleBulk = async (mode: FilmBulkCreateVideoMode) => {
+    if (bulkBusy || !scenes.length) return;
+    if (mode === "errors" && !canBulkErrors) return;
+    if (mode === "all" && !canBulkAll) return;
+    setBulkBusy(true);
     try {
-      await onBulkCreateVideos();
+      await onBulkCreateVideos(mode);
     } finally {
-      setBusy(false);
+      setBulkBusy(false);
     }
   };
 
@@ -123,7 +216,6 @@ export default function FilmCreateVideoPanel({
     }
   };
 
-  /** Theo dõi ảnh khung + slot — seed lại khi frame có mà slot 1 còn trống. */
   const refSeedSignal = useMemo(
     () =>
       scenes
@@ -233,13 +325,32 @@ export default function FilmCreateVideoPanel({
             <Button
               primary
               small
-              text={t("Tạo hàng loạt")}
+              text={
+                <span className="inline-flex items-center gap-1">
+                  {t("Tạo hàng loạt")}
+                  <HiChevronDown className="text-sm opacity-90" />
+                </span>
+              }
               icon={<HiVideoCamera />}
               className="!rounded-lg !bg-orange-500 hover:!bg-orange-600 !border-orange-500"
-              onClick={handleBulk}
-              isLoading={busy || anyCreating}
-              disabled={!scenes.length || allDone}
+              innerRef={bulkBtnRef}
+              isLoading={bulkBusy}
+              disabled={!scenes.length || bulkBusy || (!canBulkAll && !canBulkErrors)}
             />
+            <Dropdown reference={bulkBtnRef} placement="bottom-end">
+              <Dropdown.Item
+                text={t("Tạo lại tất cả")}
+                icon={<HiRefresh />}
+                disabled={!canBulkAll || bulkBusy}
+                onClick={() => void handleBulk("all")}
+              />
+              <Dropdown.Item
+                text={`${t("Tạo lại video lỗi")}${errorCount ? ` (${errorCount})` : ""}`}
+                icon={<HiVideoCamera />}
+                disabled={!canBulkErrors || bulkBusy}
+                onClick={() => void handleBulk("errors")}
+              />
+            </Dropdown>
           </div>
         </div>
 
@@ -247,11 +358,12 @@ export default function FilmCreateVideoPanel({
           {scenes.length === 0 ? (
             <div className="flex flex-col gap-2 justify-center items-center h-full text-center min-h-2xs">
               <p className="m-0 text-sm text-gray-500">
-                {t("Chưa có cảnh quay. Tạo Chuỗi Cảnh quay trước rồi quay lại bước này.")}
+                {t("Chưa có cảnh quay. Tạo Chuỗi phân cảnh trước rồi quay lại bước này.")}
               </p>
               <Button
                 outline
-                text={t("Mở Chuỗi Cảnh quay")}
+                small
+                text={t("Mở Chuỗi phân cảnh")}
                 className="!rounded-lg"
                 onClick={() => onTabNavigate?.("storyboard")}
               />
@@ -284,8 +396,16 @@ export default function FilmCreateVideoPanel({
                           }
                         : undefined
                     }
+                    onSetSceneVideo={
+                      onSetSceneVideo
+                        ? (s, video) => {
+                            void onSetSceneVideo(s, video);
+                          }
+                        : undefined
+                    }
                     videoActionPending={!!stopPendingIds?.[`video:${scene.id}`]}
-                    onTitleClick={onOpenStoryboardScene}
+                    onEditScene={(s) => setEditSceneId(s.id)}
+                    onOpenStoryboardScene={onOpenStoryboardScene}
                   />
                 ))}
             </div>
@@ -331,6 +451,35 @@ export default function FilmCreateVideoPanel({
           </button>
         </div>
       </div>
+
+      <FilmSceneEditDialog
+        isOpen={!!editScene}
+        scene={editScene}
+        imagePromptDefault={
+          editScene
+            ? resolveFilmSceneImagePrompt(editScene, storyboardImagePromptStyle)
+            : ""
+        }
+        videoPromptDefault={
+          editScene
+            ? resolveFilmSceneVideoPrompt(editScene, storyboardVideoPromptStyle)
+            : ""
+        }
+        audioPromptDefault={
+          editScene
+            ? resolveFilmSceneAudioPrompt(editScene, storyboardAudioPromptStyle)
+            : ""
+        }
+        characterOptions={characterOptions}
+        propOptions={propOptions}
+        sceneLocationOptions={sceneLocationOptions}
+        onClose={() => setEditSceneId(null)}
+        onSave={async (next) => {
+          if (!onSaveScene) return;
+          await onSaveScene(next);
+        }}
+        onOpenAttachEntity={onOpenAttachEntity}
+      />
     </div>
   );
 }

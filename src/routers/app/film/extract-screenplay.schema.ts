@@ -114,7 +114,7 @@ const sceneItemOpenAI = {
     videoPrompt: {
       type: "string" as const,
       description:
-        "Prompt video ĐẦY ĐỦ cho UI. Mỗi tag một khối, KHÔNG viết liền: [AUDIO]\\n- nội dung. Gồm [MOTION], [AUDIO], [SFX], [MUSIC], [VOICE], [DIALOGUE] (DIALOGUE bỏ nếu không có thoại). Không markdown.",
+        "Prompt video ĐẦY ĐỦ cho UI. Mỗi tag một khối, KHÔNG viết liền: [AUDIO]\\n- nội dung. Gồm [MOTION], [AUDIO], [SFX], [MUSIC], [VOICE], [DIALOGUE] (không thoại: [DIALOGUE]\\n- Không thoại). Không markdown.",
     },
     dialogues: {
       type: "array" as const,
@@ -372,7 +372,7 @@ export const FilmExtractScreenplayGeminiSchema = {
           videoPrompt: {
             type: Type.STRING,
             description:
-              "Prompt video đầy đủ: mỗi tag một khối [AUDIO]\\n- nội dung (MOTION, AUDIO, SFX, MUSIC, VOICE, DIALOGUE). Không viết liền sau tag.",
+              "Prompt video đầy đủ: mỗi tag một khối [AUDIO]\\n- nội dung (MOTION, AUDIO, SFX, MUSIC, VOICE, DIALOGUE; không thoại: [DIALOGUE]\\n- Không thoại). Không viết liền sau tag.",
           },
           dialogues: {
             type: Type.ARRAY,
