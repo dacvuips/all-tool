@@ -45,15 +45,13 @@ import {
   FILM_SCENE_ATTACH_IMAGE_LIMIT,
   isFilmAttachErrorMessage,
 } from "./film-attachment-validate";
-import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
 import {
   type FilmCatalogKind,
   type FilmCatalogPickItem,
 } from "./film-catalog-pick-dialog";
+import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
 import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
-import FilmStudioPanel from "./film-studio-panel";
-import { isFilmCreateVideoScene, resetFilmStudioTimelineFromScratch } from "./film-studio-timeline";
 import {
   applyCharacterVoiceLinksToScenes,
   buildFilmVoiceListItems,
@@ -101,6 +99,7 @@ import {
   getFilmSystemInstruction,
   initFilmDB,
   loadOrSeedFilmStudioTimeline,
+  purgeStudioArtifactsFromEpisodeScenes,
   putFilmCharacter,
   putFilmEpisode,
   putFilmProject,
@@ -108,7 +107,6 @@ import {
   putFilmScene,
   putFilmSceneImage,
   putFilmStudioTimeline,
-  purgeStudioArtifactsFromEpisodeScenes,
   replaceFilmCharactersForProject,
   replaceFilmPropsForProject,
   replaceFilmSceneImagesForProject,
@@ -122,8 +120,8 @@ import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
 import { buildFilmPropImagePrompt } from "./film-prop-image-prompt";
 import FilmPropsPanel from "./film-props-panel";
 import {
-  buildFilmSceneImagePrompt,
   appendFilmSingleFrameImageConstraint,
+  buildFilmSceneImagePrompt,
   hydrateScenesImagePrompts,
   withBuiltSceneImagePrompt,
 } from "./film-scene-image-prompt";
@@ -148,6 +146,8 @@ import {
 } from "./film-shot-image-card";
 import FilmShotImagesPanel from "./film-shot-images-panel";
 import FilmStoryboardPanel, { createEmptyFilmScene } from "./film-storyboard-panel";
+import FilmStudioPanel from "./film-studio-panel";
+import { isFilmCreateVideoScene } from "./film-studio-timeline";
 import {
   buildFilmCharactersFromNames,
   buildFilmPropsFromNames,
@@ -190,12 +190,12 @@ import {
   type FilmVoiceGenerateInput,
 } from "./film-voice-generate";
 import FilmVoicePanel from "./film-voice-panel";
+import FilmWorkspaceSidebar from "./film-workspace-sidebar";
 import {
   FILM_STEP_QUERY_KEY,
   filmStepFromLocation,
   parseFilmWorkspaceStepId,
 } from "./film-workspace-steps";
-import FilmWorkspaceSidebar from "./film-workspace-sidebar";
 
 type Props = {
   projectId: string;

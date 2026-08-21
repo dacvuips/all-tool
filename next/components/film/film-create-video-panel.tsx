@@ -13,6 +13,7 @@ import {
   HiVideoCamera,
 } from "react-icons/hi";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
+import type { GeneratedVideoData } from "../app/affiliate-video/shared/scene-card-video-tab";
 import { Button } from "../shared/utilities/form";
 import { Dropdown } from "../shared/utilities/popover/dropdown";
 import type { FilmAttachOption } from "./film-attach-fields";
@@ -46,7 +47,6 @@ import {
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
-import type { GeneratedVideoData } from "../app/affiliate-video/shared/scene-card-video-tab";
 
 export type FilmBulkCreateVideoMode = "all" | "errors";
 
@@ -320,7 +320,7 @@ export default function FilmCreateVideoPanel({
           </div>
 
           <div className="flex flex-1 justify-center items-center min-w-0">
-            <div className="inline-flex items-center gap-1 flex-wrap border border-gray-200 rounded-full p-0.5 w-max">
+            <div className="inline-flex items-center gap-1 whitespace-nowrap border border-gray-200 rounded-full p-0.5 w-max">
               {FILM_VIDEO_REF_MODE_OPTIONS.map((opt) => {
                 const active = videoRefMode === opt.id;
                 return (
@@ -351,7 +351,7 @@ export default function FilmCreateVideoPanel({
               text={
                 allSilentLipSync
                   ? t("Bật tiếng tất cả")
-                  : t("Nhép miệng, không tiếng")
+                  : t("Nhép miệng")
               }
               icon={allSilentLipSync ? <MdRecordVoiceOver /> : <MdVoiceOverOff />}
               className={`!rounded-lg ${
@@ -368,7 +368,7 @@ export default function FilmCreateVideoPanel({
             <Button
               outline
               small
-              text={t("Tải tất cả (.zip)")}
+              text={t("Tải tất cả")}
               icon={<HiDownload />}
               className="!rounded-lg"
               onClick={() => onDownloadAll?.()}
