@@ -334,6 +334,8 @@ export interface ReviewScene {
   reviewImageSlots?: (ReviewFormImage | undefined)[];
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   reviewVideoSlots?: (ReviewFormVideo | undefined)[];
+  /** Giọng Flow2 khi gen video mode Thành phần (vd. achernar) */
+  videoVoice?: string;
   /** Custom prompt override cho ảnh sản phẩm khi tạo ảnh */
   product_image_prompt?: string;
 }

@@ -5,6 +5,7 @@ import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiChevronDown, HiExternalLink, HiSparkles } from "react-icons/hi";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
+import { RiCloseLine } from "react-icons/ri";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import {
@@ -18,10 +19,8 @@ import {
   SceneCardVideoTab,
   type GeneratedVideoData,
 } from "../app/affiliate-video/shared/scene-card-video-tab";
-import {
-  FREE_GEN_AUDIO_VOICES,
-  freeGenAudioVoiceLabel,
-} from "../app/voice/free-voice-voices";
+import { FREE_VOICE_NONE, FreeVoiceList } from "../app/voice/free-voice-list";
+import { freeGenAudioVoiceLabel } from "../app/voice/free-voice-voices";
 import { Button } from "../shared/utilities/form";
 import { Popover } from "../shared/utilities/popover/popover";
 import { getFilmEntityVideoSrc } from "./api/generate-film-media";
@@ -434,28 +433,46 @@ export default function FilmShotImageCard({
             ) : null}
             {showComponentVoicePicker ? (
               <>
-                <button
-                  ref={videoVoiceBtnRef}
-                  type="button"
-                  disabled={generatingVideo}
-                  className={`inline-flex items-center gap-0.5  h-4 max-w-32 px-1.5 rounded text-10 font-medium border-0 cursor-pointer truncate ${
-                    selectedVideoVoice
-                      ? " text-primary hover:bg-primary-light"
-                      : " text-gray-500 hover:bg-gray-100"
-                  } ${generatingVideo ? "opacity-60 cursor-not-allowed" : ""}`}
-                  title={
-                    selectedVideoVoice
-                      ? freeGenAudioVoiceLabel(selectedVideoVoice)
-                      : t("Chọn giọng miễn phí cho video Thành phần")
-                  }
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <MdRecordVoiceOver className="text-xs flex-shrink-0 opacity-80" />
-                  <span className="truncate min-w-0">
-                    {selectedVideoVoiceLabel || t("Chọn giọng")}
-                  </span>
-                  <HiChevronDown className="text-xs flex-shrink-0 opacity-70" />
-                </button>
+                <span className="inline-flex items-center max-w-40">
+                  <button
+                    ref={videoVoiceBtnRef}
+                    type="button"
+                    disabled={generatingVideo}
+                    className={`inline-flex items-center gap-0.5 h-4 min-w-0 px-1.5 rounded text-10 font-medium border-0 cursor-pointer truncate ${
+                      selectedVideoVoice
+                        ? " text-primary hover:bg-primary-light"
+                        : " text-gray-400 hover:bg-gray-100"
+                    } ${generatingVideo ? "opacity-60 cursor-not-allowed" : ""}`}
+                    title={
+                      selectedVideoVoice
+                        ? freeGenAudioVoiceLabel(selectedVideoVoice)
+                        : t("Chọn giọng")
+                    }
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <MdRecordVoiceOver className="text-xs flex-shrink-0 opacity-80" />
+                    <span className="truncate min-w-0">
+                      {selectedVideoVoiceLabel || t("Chọn giọng")}
+                    </span>
+                    {selectedVideoVoice ? null : (
+                      <HiChevronDown className="text-xs flex-shrink-0 opacity-70" />
+                    )}
+                  </button>
+                  {selectedVideoVoice && !generatingVideo ? (
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full border-0 bg-transparent text-gray-400 hover:text-gray-700 hover:bg-gray-100 cursor-pointer flex-shrink-0"
+                      title={t("Xóa giọng")}
+                      aria-label={t("Xóa giọng")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onVideoVoiceChange?.(scene, FREE_VOICE_NONE);
+                      }}
+                    >
+                      <RiCloseLine className="text-xs" />
+                    </button>
+                  ) : null}
+                </span>
                 <Popover
                   reference={videoVoiceBtnRef}
                   trigger="click"
@@ -472,33 +489,14 @@ export default function FilmShotImageCard({
                         {t("Giọng sẽ được thêm trực tiếp vào video sau khi gen.") }
                       </p>
                     </div>
-                    <div className="max-h-56 overflow-y-auto py-1">
-                      {FREE_GEN_AUDIO_VOICES.map((voice) => {
-                        const selected = selectedVideoVoice === voice.id;
-                        return (
-                          <button
-                            key={voice.id}
-                            type="button"
-                            className={`w-full text-left px-3 py-2 border-0 cursor-pointer transition-colors ${
-                              selected
-                                ? "bg-emerald-50"
-                                : "bg-transparent hover:bg-gray-50"
-                            }`}
-                            onClick={() => {
-                              onVideoVoiceChange?.(scene, voice.id);
-                              (videoVoiceBtnRef.current as any)?._tippy?.hide();
-                            }}
-                          >
-                            <span className="block text-xs font-semibold text-gray-800">
-                              {voice.name}
-                            </span>
-                            <span className="block text-10 text-gray-400 truncate">
-                              {voice.description}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
+                    <FreeVoiceList
+                      value={selectedVideoVoice}
+                      disabled={generatingVideo}
+                      onChange={(voiceId) => {
+                        onVideoVoiceChange?.(scene, voiceId);
+                        (videoVoiceBtnRef.current as any)?._tippy?.hide();
+                      }}
+                    />
                   </div>
                 </Popover>
               </>

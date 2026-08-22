@@ -23,6 +23,7 @@ export type GenerationShopeeVideoPayload = {
   videosPerJob?: number;
   videoQuality?: string;
   video_mode?: string;
+  voice?: string;
   config?: {
     prompt?: string;
     aspectRatio?: "16:9" | "9:16";
@@ -30,6 +31,7 @@ export type GenerationShopeeVideoPayload = {
     videosPerJob?: number;
     videoQuality?: string;
     videoMode?: string;
+    voice?: string;
   };
 };
 
@@ -76,6 +78,7 @@ export async function handleGenerationShopeeVideo(
     variantCount,
     images,
     videoMode: FLOW2_VIDEO_MODE.COMPONENT,
+    voice: payload.config?.voice ?? payload.voice,
     emitter,
     logPrefix: "generation-shopee-video",
   });

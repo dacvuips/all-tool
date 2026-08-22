@@ -27,6 +27,7 @@ export default [
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
           noText?: boolean;
           voiceDisable?: boolean;
+          voice?: string;
           /** frame = startImage/endImage; component = Reference (1–3 ảnh) */
           video_mode?: string;
           config?: {
@@ -35,6 +36,7 @@ export default [
             generateAudio?: boolean;
             noText?: boolean;
             voiceDisable?: boolean;
+            voice?: string;
             videoMode?: string;
             serviceImageType?: string;
           };

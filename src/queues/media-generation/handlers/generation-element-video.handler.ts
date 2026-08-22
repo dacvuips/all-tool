@@ -25,6 +25,8 @@ export type GenerationElementVideoPayload = {
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
   noText?: boolean;
   voiceDisable?: boolean;
+  /** Giọng Flow2 — chỉ gắn khi component + có ảnh (pipeline lọc lại) */
+  voice?: string;
   video_mode?: Flow2VideoMode | string;
   config?: {
     prompt?: string;
@@ -32,6 +34,7 @@ export type GenerationElementVideoPayload = {
     generateAudio?: boolean;
     noText?: boolean;
     voiceDisable?: boolean;
+    voice?: string;
     artStyleId?: string;
     artStyle?: string;
     serviceImageType?: ServiceImageEnum;
@@ -67,6 +70,7 @@ export async function handleGenerationElementVideo(
     images: payload.images,
     videoMode: payload.config?.videoMode,
     serviceImageType: payload.config?.serviceImageType,
+    voice: payload.config?.voice ?? payload.voice,
     emitter,
     logPrefix: "generation-element-video",
   });

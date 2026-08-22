@@ -39,6 +39,7 @@ import {
 } from "../../../shared/generatedMediaUtils";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
+import { SceneComponentVideoVoiceSelect } from "../../../shared/scene-component-video-voice-select";
 import { GeneratedImageData } from "../../hook/useReviewApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
@@ -59,7 +60,8 @@ export type EditField =
   | "dialogue"
   | "audio"
   | "visualPrompt"
-  | "product_image_prompt";
+  | "product_image_prompt"
+  | "videoVoice";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -127,6 +129,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
+  const [activeMediaTab, setActiveMediaTab] = useState<SceneTabKey>(
+    hideImageColumn ? "video" : "image"
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
   // ── Thumbnail from IndexedDB (saved during video analysis) ──
   const { thumbnailUrl: thumbnailOriginImage, loading: thumbnailLoading } = useSceneThumbnail(
@@ -472,12 +477,20 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           readOnly={isDisabled}
           onSlotsChange={handleReviewImageSlotsChange}
         />
+        {activeMediaTab === "video" ? (
+          <SceneComponentVideoVoiceSelect
+            value={scene.videoVoice}
+            disabled={isDisabled}
+            onChange={(voiceId) => onUpdateScene(scene.id, "videoVoice", voiceId)}
+          />
+        ) : null}
       </div>
       {/* ── Media tabs ── */}
       <SceneCardTabs
         hideImageTab={!!hideImageColumn}
         hideExtendTab={!nextSceneId}
         forcedTab={forcedTab}
+        onActiveTabChange={setActiveMediaTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
           video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },

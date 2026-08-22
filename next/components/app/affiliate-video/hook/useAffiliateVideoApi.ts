@@ -171,6 +171,8 @@ export interface GenerateVideoParams {
   noText?: boolean;
   /** Tắt thoại / audio trong video */
   voiceDisable?: boolean;
+  /** Giọng Flow2 — chỉ gắn khi mode component + có ảnh */
+  voice?: string;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
   /** Tự động tải video sau khi gen xong */
@@ -1519,6 +1521,7 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         generateAudio,
         noText,
         voiceDisable,
+        voice,
         videoMode,
         onProgress,
         onStatusMessage,
@@ -1543,11 +1546,13 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             images,
             noText,
             voiceDisable,
+            voice,
             config: {
               aspectRatio,
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,
+              voice,
               videoMode: videoMode ?? Flow2VideoModeEnum.FRAME,
             },
             _metadata: { sceneId },

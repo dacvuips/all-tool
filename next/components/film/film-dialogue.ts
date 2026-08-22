@@ -500,18 +500,12 @@ export function resolveDialogueLineVoiceLink(
 
 /**
  * Giọng dùng khi gen video Flow2 (mode Thành phần).
- * Ưu tiên `videoVoice` (chọn trên card Tạo video); rồi dòng thoại; rồi scene.voiceId.
+ * Chỉ dùng `videoVoice` đã chọn trên card; không chọn → không gửi voice.
  */
 export function resolveFilmSceneVideoVoice(
   scene: Pick<FilmSceneRecord, "voiceId" | "videoVoice" | "dialogueLines">,
-  characters: FilmCharacterRecord[] = []
+  _characters: FilmCharacterRecord[] = []
 ): string | undefined {
   const picked = String(scene.videoVoice || "").trim();
-  if (picked) return picked;
-  for (const line of scene.dialogueLines || []) {
-    const { voiceId } = resolveDialogueLineVoiceLink(line, characters);
-    if (voiceId) return voiceId;
-  }
-  const sceneVoice = String(scene.voiceId || "").trim();
-  return sceneVoice || undefined;
+  return picked || undefined;
 }

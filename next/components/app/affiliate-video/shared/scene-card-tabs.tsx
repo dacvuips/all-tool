@@ -77,6 +77,8 @@ export interface SceneCardTabsProps {
   tabStatus?: Partial<Record<SceneTabKey, TabStatus>>;
   /** Ép chọn tab từ bên ngoài (dùng cho "chuyển tab đồng loạt") */
   forcedTab?: SceneTabKey | null;
+  /** Báo tab đang active (để UI ngoài tab bar, vd. select giọng) */
+  onActiveTabChange?: (tab: SceneTabKey) => void;
   /** ID cho các nút tab (intro tour) */
   guideTabIds?: Partial<Record<SceneTabKey, string>>;
 }
@@ -94,6 +96,7 @@ export function SceneCardTabs({
   renderVideoPrompts,
   tabStatus,
   forcedTab,
+  onActiveTabChange,
   guideTabIds,
 }: SceneCardTabsProps) {
   const { t } = useTranslation();
@@ -121,6 +124,10 @@ export function SceneCardTabs({
 
   // Nếu active tab bị ẩn, chuyển về tab đầu tiên
   const currentTab = visibleTabs.find((t) => t.key === activeTab) ? activeTab : defaultTab;
+
+  useEffect(() => {
+    onActiveTabChange?.(currentTab);
+  }, [currentTab, onActiveTabChange]);
 
   return (
     <div className="flex flex-col">

@@ -11,6 +11,7 @@ import { useAffiliateBatchListIntro } from "../../../shared/use-affiliate-batch-
 import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { useElementApi } from "../../hook/useElementApi";
 import { useElementContext } from "../../providers/element-provider";
+import { ServiceImageEnum } from "../../constants";
 import { BatchActionBar } from "../batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
 
@@ -33,9 +34,13 @@ export function ImagesToVideoListPanel({
     selectHistoryItem,
     clearSceneHistory,
     renameHistoryItem,
+    elementFormConfig,
   } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
+  const showBatchVideoVoice =
+    elementFormConfig?.serviceImageType === ServiceImageEnum.startAddEnd ||
+    scriptData?.serviceImageType === ServiceImageEnum.startAddEnd;
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
     sidebarIntroKey: IntroGuideKey.ELEMENT_SIDEBAR,
@@ -149,6 +154,7 @@ export function ImagesToVideoListPanel({
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
       lazyMountSceneRows
+      showBatchVideoVoice={showBatchVideoVoice}
       onOpenIntro={openIntro}
     />
     </>

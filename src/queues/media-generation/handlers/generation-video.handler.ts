@@ -19,6 +19,7 @@ export type GenerationVideoPayload = {
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
   noText?: boolean;
   voiceDisable?: boolean;
+  voice?: string;
   /** Alias top-level — ưu tiên thấp hơn config.videoMode */
   video_mode?: Flow2VideoMode | string;
   config?: {
@@ -27,6 +28,7 @@ export type GenerationVideoPayload = {
     generateAudio?: boolean;
     noText?: boolean;
     voiceDisable?: boolean;
+    voice?: string;
     /** frame = startImage/endImage; component = Reference */
     videoMode?: Flow2VideoMode | string;
     serviceImageType?: ServiceImageEnum;
@@ -50,6 +52,7 @@ export async function handleGenerationVideo(
     images: payload.images,
     videoMode: payload.config?.videoMode ?? payload.video_mode,
     serviceImageType: payload.config?.serviceImageType,
+    voice: payload.config?.voice ?? payload.voice,
     emitter,
     logPrefix: "generation-video",
   });

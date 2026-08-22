@@ -89,6 +89,9 @@ export interface SharedBatchListPanelProps {
 
   /** Chỉ mount scene row khi gần viewport — giảm RAM với danh sách dài */
   lazyMountSceneRows?: boolean;
+
+  /** Hiện select giọng áp dụng cho tất cả phân cảnh (mode Thành phần) */
+  showBatchVideoVoice?: boolean;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -108,6 +111,7 @@ export function SharedBatchListPanel({
   onOpenIntro,
   getDragHandleId,
   lazyMountSceneRows = false,
+  showBatchVideoVoice = false,
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
@@ -194,6 +198,21 @@ export function SharedBatchListPanel({
       await onPersistScenes(updated);
     } catch (err) {
       console.error("[handleToggleAllVoiceDisable] Failed to persist:", err);
+    }
+  };
+
+  /** Đặt videoVoice cho TẤT CẢ phân cảnh (mode Thành phần) */
+  const handleSetAllVideoVoice = async (voiceId: string) => {
+    const next = String(voiceId || "").trim().toLowerCase();
+    const updated = sceneList.map((s) => ({
+      ...s,
+      videoVoice: next || undefined,
+    }));
+    setSceneList(updated);
+    try {
+      await onSyncScenes(updated);
+    } catch (err) {
+      console.error("[handleSetAllVideoVoice] Failed to persist:", err);
     }
   };
 
@@ -591,6 +610,8 @@ export function SharedBatchListPanel({
         onToggleAllNoDownload={handleToggleAllNoDownload}
         onSetAllAutoDownloadImageResolution={handleSetAllAutoDownloadImageResolution}
         onSetAllAutoDownloadVideoResolution={handleSetAllAutoDownloadVideoResolution}
+        showBatchVideoVoice={showBatchVideoVoice}
+        onSetAllVideoVoice={handleSetAllVideoVoice}
         onOpenIntro={onOpenIntro}
       />
 

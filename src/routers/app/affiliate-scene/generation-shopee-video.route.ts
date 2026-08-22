@@ -45,6 +45,7 @@ export default [
           variantCount?: number;
           videoModel?: string;
           videoQuality?: string;
+          voice?: string;
           config?: {
             prompt?: string;
             aspectRatio?: "16:9" | "9:16";
@@ -53,6 +54,7 @@ export default [
             videoModel?: string;
             videoQuality?: string;
             videoMode?: string;
+            voice?: string;
           };
           _metadata?: Record<string, unknown>;
         };

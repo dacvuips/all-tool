@@ -27,12 +27,14 @@ export default [
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
           noText?: boolean;
           voiceDisable?: boolean;
+          voice?: string;
           config?: {
             prompt?: string;
             aspectRatio?: "16:9" | "9:16";
             generateAudio?: boolean;
             noText?: boolean;
             voiceDisable?: boolean;
+            voice?: string;
             artStyleId?: string;
             artStyle?: string;
             serviceImageType?: ServiceImageEnum;

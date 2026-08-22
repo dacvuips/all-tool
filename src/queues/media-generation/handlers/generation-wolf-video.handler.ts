@@ -18,6 +18,7 @@ export type GenerationWolfVideoPayload = {
   images?: Array<string | MediaImageBytes>;
   noText?: boolean;
   voiceDisable?: boolean;
+  voice?: string;
   video_mode?: Flow2VideoMode | string;
   config?: {
     prompt?: string;
@@ -25,6 +26,7 @@ export type GenerationWolfVideoPayload = {
     generateAudio?: boolean;
     noText?: boolean;
     voiceDisable?: boolean;
+    voice?: string;
     artStyleId?: string;
     artStyle?: string;
     serviceImageType?: ServiceImageEnum;
@@ -46,6 +48,7 @@ export async function handleGenerationWolfVideo(
     aspectRatio: payload.config?.aspectRatio,
     images: payload.images,
     videoMode: payload.config?.videoMode ?? payload.video_mode,
+    voice: payload.config?.voice ?? payload.voice,
     emitter,
     logPrefix: "generation-wolf-video",
   });

@@ -11,6 +11,8 @@ import type {
 } from "../hook/useReviewApi";
 import { generatedImageToApiBase64Input } from "../../shared/generatedMediaUtils";
 import { buildAutoDownloadOptions } from "../../shared/autoDownloadUtils";
+import { resolveComponentVideoVoiceParam } from "../../shared/scene-component-video-voice-select";
+import { ServiceImageEnum } from "../constants";
 
 export type ElementScriptLike =
   | Pick<ElementAnalysisData, "aspectRatio" | "artStyle" | "artStyleId" | "serviceImageType">
@@ -128,17 +130,29 @@ export async function buildReviewVideoGenerateParams(options: {
     images = undefined;
   }
 
+  const imageCount = images?.length ?? 0;
+  const voice = resolveComponentVideoVoiceParam({
+    voice: scene.videoVoice,
+    serviceImageType: ServiceImageEnum.startAddEnd,
+    imageCount,
+    voiceDisable: scene.voiceDisable,
+  });
+  const resolvedServiceImageType = voice
+    ? ServiceImageEnum.startAddEnd
+    : scriptData?.serviceImageType;
+
   return {
     sceneId: isStitch ? scene.id + "::stitch" : scene.id,
     prompt: buildReviewVideoPrompt(scene, isStitch),
     images,
     aspectRatio: scriptData?.aspectRatio,
-    serviceImageType: scriptData?.serviceImageType,
+    serviceImageType: resolvedServiceImageType,
     artStyleId: scriptData?.artStyleId,
     artStyle: scriptData?.artStyle,
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    voice,
     ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

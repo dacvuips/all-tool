@@ -150,6 +150,7 @@ export function BatchListPanel({
       ActionBarComponent={(props) => <BatchActionBar {...props} componentTab />}
       SceneRowComponent={SceneRowGroup}
       lazyMountSceneRows
+      showBatchVideoVoice
       onOpenIntro={openIntro}
     />
     </>

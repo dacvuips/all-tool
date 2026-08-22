@@ -227,6 +227,8 @@ export interface SceneScript {
   storyboardSourceIndex?: number;
   /** Placeholder khi đang chờ phân tích ảnh storyboard (giữ đúng vị trí trong danh sách) */
   storyboardPending?: boolean;
+  /** Giọng Flow2 khi gen video mode Thành phần (vd. achernar) */
+  videoVoice?: string;
 }
 
 /** Trạng thái phân tích từng ảnh storyboard */
@@ -392,6 +394,8 @@ export interface CopyVideoScene {
   elementImageSlotsActionMode?: ActionImageEnum;
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   elementVideoSlots?: (ElementFormVideo | undefined)[];
+  /** Giọng Flow2 khi gen video mode Thành phần (vd. achernar) */
+  videoVoice?: string;
   product_image_prompt?: string;
   sceneNumber?: number;
 }
@@ -463,6 +467,8 @@ export interface ElementScene {
   elementImageSlotsActionMode?: ActionImageEnum;
   /** 1 ô video tham chiếu theo scene – auto-match tên video trong prompt */
   elementVideoSlots?: (ElementFormVideo | undefined)[];
+  /** Giọng Flow2 khi gen video mode Thành phần (vd. achernar) */
+  videoVoice?: string;
   product_image_prompt?: string;
   sceneNumber?: number;
 }

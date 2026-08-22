@@ -1630,6 +1630,7 @@ export function ThreadManagementPanel({
               characterPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>[];
               productPrepared: Awaited<ReturnType<typeof prepareShopeeImageInput>>;
               videoModel: string;
+              voice?: string;
               slotIndex?: number;
             }) => {
               return withFrontendJobSlot(
@@ -1641,6 +1642,7 @@ export function ThreadManagementPanel({
                       throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
                     }
                     try {
+                      const voice = String(opts.voice || "").trim().toLowerCase() || undefined;
                       result = await shopeeVideoJob.run({
                         url: "/api/app/generation-shopee-video/",
                         body: {
@@ -1653,6 +1655,7 @@ export function ThreadManagementPanel({
                           videosPerJob: 1,
                           variantCount: 1,
                           videoModel: opts.videoModel,
+                          voice,
                           config: {
                             prompt: opts.promptText,
                             aspectRatio: "9:16",
@@ -1660,6 +1663,7 @@ export function ThreadManagementPanel({
                             variantCount: 1,
                             videoModel: opts.videoModel,
                             videoMode: "component",
+                            voice,
                           },
                           _metadata: {
                             threadId: fresh.id,
@@ -1821,6 +1825,7 @@ export function ThreadManagementPanel({
                       characterPrepared,
                       productPrepared,
                       videoModel: slot.videoModel || config!.videoModel,
+                      voice: slot.voice || config!.voice,
                       slotIndex,
                     });
 
@@ -1960,6 +1965,8 @@ export function ThreadManagementPanel({
                         throw new MediaGenerationJobError(t("Đã dừng"), "JOB_CANCELLED");
                       }
                       try {
+                        const voice =
+                          String(config!.voice || "").trim().toLowerCase() || undefined;
                         return await shopeeVideoJob.run({
                           url: "/api/app/generation-shopee-video/",
                           body: {
@@ -1970,6 +1977,7 @@ export function ThreadManagementPanel({
                             videosPerJob: config!.videosPerJob,
                             variantCount: config!.videosPerJob,
                             videoModel: config!.videoModel,
+                            voice,
                             config: {
                               prompt: jobPrompt,
                               aspectRatio: "9:16",
@@ -1977,6 +1985,7 @@ export function ThreadManagementPanel({
                               variantCount: config!.videosPerJob,
                               videoModel: config!.videoModel,
                               videoMode: "component",
+                              voice,
                             },
                             _metadata: {
                               threadId: fresh.id,
@@ -2590,8 +2599,12 @@ export function ThreadManagementPanel({
           }
           result = await withFrontendJobSlot(
             videoJobQueueRef.current,
-            async () =>
-              shopeeVideoJob.run({
+            async () => {
+              const voice =
+                String(slot.voice || config.voice || "")
+                  .trim()
+                  .toLowerCase() || undefined;
+              return shopeeVideoJob.run({
                 url: "/api/app/generation-shopee-video/",
                 body: {
                   prompt,
@@ -2601,6 +2614,7 @@ export function ThreadManagementPanel({
                   videosPerJob: 1,
                   variantCount: 1,
                   videoModel: slot.videoModel || config.videoModel,
+                  voice,
                   config: {
                     prompt,
                     aspectRatio: "9:16",
@@ -2608,6 +2622,7 @@ export function ThreadManagementPanel({
                     variantCount: 1,
                     videoModel: slot.videoModel || config.videoModel,
                     videoMode: "component",
+                    voice,
                   },
                   _metadata: {
                     threadId: target.id,
@@ -2623,7 +2638,8 @@ export function ThreadManagementPanel({
                 onProgress: (_pct, msg) => {
                   if (msg) onAddLog(msg, "info", itemId);
                 },
-              }),
+              });
+            },
             () => pauseAllRef.current
           );
           const fromUris = (

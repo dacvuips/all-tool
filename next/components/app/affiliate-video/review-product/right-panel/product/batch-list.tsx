@@ -155,6 +155,7 @@ export function BatchListPanel({
       ActionBarComponent={BatchActionBar}
       SceneRowComponent={SceneRowGroup}
       onOpenIntro={openIntro}
+      showBatchVideoVoice
     />
     </>
   );

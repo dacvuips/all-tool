@@ -23,6 +23,7 @@ export type GenerationReviewVideoPayload = {
   images?: Array<string | MediaImageBytes>;
   noText?: boolean;
   voiceDisable?: boolean;
+  voice?: string;
   video_mode?: Flow2VideoMode | string;
   config?: {
     prompt?: string;
@@ -30,6 +31,7 @@ export type GenerationReviewVideoPayload = {
     generateAudio?: boolean;
     noText?: boolean;
     voiceDisable?: boolean;
+    voice?: string;
     artStyleId?: string;
     artStyle?: string;
     serviceImageType?: ServiceImageEnum;
@@ -64,6 +66,7 @@ export async function handleGenerationReviewVideo(
     images: payload.images,
     videoMode: payload.config?.videoMode,
     serviceImageType: payload.config?.serviceImageType,
+    voice: payload.config?.voice ?? payload.voice,
     emitter,
     logPrefix: "generation-review-video",
   });

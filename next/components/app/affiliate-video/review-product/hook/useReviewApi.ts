@@ -150,6 +150,8 @@ export interface GenerateVideoParams {
   noText?: boolean;
   /** Tắt thoại / audio trong video */
   voiceDisable?: boolean;
+  /** Giọng Flow2 — chỉ gắn khi mode component + có ảnh */
+  voice?: string;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
   autoDownload?: boolean;
@@ -636,6 +638,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
         generateAudio,
         noText,
         voiceDisable,
+        voice,
         onProgress,
         onStatusMessage,
         onError,
@@ -661,11 +664,13 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
             images,
             noText,
             voiceDisable,
+            voice,
             config: {
               aspectRatio,
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,
+              voice,
               artStyleId,
               artStyle,
               serviceImageType,
