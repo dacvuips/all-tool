@@ -37,43 +37,46 @@ export default function FilmProjectCard({ project, onClick, onEdit }: Props) {
       <button
         type="button"
         onClick={onClick}
-        className="w-full text-left p-5 cursor-pointer bg-transparent border-0 rounded-2xl"
+        className="w-full text-left p-4 sm:p-5 cursor-pointer bg-transparent border-0 rounded-2xl"
       >
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 uppercase tracking-wide pr-8">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 uppercase tracking-wide pr-10">
+          <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0" />
           <span>
             {project.episodeCount} {t("TẬP")}
           </span>
         </div>
 
-        <h3 className="mt-2 text-lg font-bold text-gray-900 leading-snug line-clamp-2 m-0 pr-6">
+        <h3 className="mt-1.5 sm:mt-2 text-base sm:text-lg font-bold text-gray-900 leading-snug line-clamp-2 m-0 pr-8">
           {project.name}
         </h3>
 
-        <div className="mt-3 flex items-center gap-3 flex-wrap">
+        <div className="mt-3 space-y-2 sm:space-y-0 sm:flex sm:items-center sm:gap-3 sm:flex-wrap">
           {project.artStyleLabel && (
-            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600">
+            <span className="inline-flex items-center max-w-full px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-600 truncate">
               {project.artStyleLabel}
             </span>
           )}
-          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-            <HiUserGroup className="text-sm" />
-            {project.characterCount}
-          </span>
-          <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-            <HiDocumentText className="text-sm" />
-            {project.sceneCount}
-          </span>
+          <div className="inline-flex items-center gap-3 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1">
+              <HiUserGroup className="text-sm flex-shrink-0" />
+              {project.characterCount}
+            </span>
+            <span className="w-px h-3 bg-gray-200" aria-hidden />
+            <span className="inline-flex items-center gap-1">
+              <HiDocumentText className="text-sm flex-shrink-0" />
+              {project.sceneCount}
+            </span>
+          </div>
         </div>
 
-        <div className="mt-5 flex items-center gap-3">
-          <div className="flex-1 h-1.5 rounded-full bg-blue-100 overflow-hidden">
+        <div className="mt-4 sm:mt-5 space-y-1.5 xs:space-y-0 xs:flex xs:items-center xs:gap-3">
+          <div className="flex-1 h-1.5 rounded-full bg-blue-100 overflow-hidden min-w-0">
             <div
               className="h-full rounded-full bg-blue-500 transition-all"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0">
+          <span className="text-xs text-gray-400 xs:whitespace-nowrap xs:flex-shrink-0 block text-right xs:text-left">
             {filmTimeAgo(project.updatedAt, t)}
           </span>
         </div>
