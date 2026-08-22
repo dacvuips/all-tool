@@ -16,6 +16,7 @@ import { useToast } from "../../lib/providers/toast-provider";
 import { Button } from "../shared/utilities/form";
 import { getFilmEntityImageSrc } from "./api/generate-film-media";
 import FilmCharacterVoiceDialog, {
+  dialogueLineToAttachedVoice,
   filmCharacterToAttachedVoice,
   type FilmCharacterVoicePick,
 } from "./film-character-voice-dialog";
@@ -23,14 +24,19 @@ import FilmCharacterVoiceIcon, {
   clearFilmCharacterVoice,
   filmCharacterHasVoice,
   FilmCharacterVoiceCreateButton,
+  FilmCharacterVoiceResetButton,
   FilmCharacterVoiceUnlinkButton,
 } from "./film-character-voice-icon";
 import {
   buildFilmVoiceCharacterRoster,
   buildFilmVoiceListItems,
+  characterHasCustomDialogueVoices,
   dialogueLineCreating,
   dialogueLineReady,
   hydrateScenesDialogueLines,
+  patchSceneDialogueLine,
+  resetCharacterDialogueLineVoices,
+  resolveCharacterVoiceLink,
   resolveDialogueLineVoiceLink,
   type FilmVoiceListItem,
 } from "./film-dialogue";
@@ -51,11 +57,13 @@ type Props = {
   onSaveCharacter?: (c: FilmCharacterRecord) => Promise<void>;
   onCharactersChange?: (next: FilmCharacterRecord[]) => void;
   onCreateVoice: (input: FilmVoiceGenerateInput) => Promise<void>;
+  onSetDefaultVoiceTake?: (item: FilmVoiceListItem, takeId: string) => Promise<void> | void;
   onStopVoice?: (item: FilmVoiceListItem) => Promise<void> | void;
   onBulkCreateVoices?: (items: FilmVoiceListItem[]) => Promise<void>;
   onStopBulkVoices?: () => Promise<void> | void;
   /** Scene đang tạo hàng loạt (mọi tập) — cập nhật list theo bộ lọc nhân vật/tập */
   overlayScenes?: FilmSceneRecord[] | null;
+  onSaveScene?: (scene: FilmSceneRecord) => Promise<void>;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
 };
 
@@ -75,10 +83,12 @@ export default function FilmVoicePanel({
   onSaveCharacter,
   onCharactersChange,
   onCreateVoice,
+  onSetDefaultVoiceTake,
   onStopVoice,
   onBulkCreateVoices,
   onStopBulkVoices,
   overlayScenes,
+  onSaveScene,
   onTabNavigate,
 }: Props) {
   const { t } = useTranslation();
@@ -88,6 +98,7 @@ export default function FilmVoicePanel({
   const [busy, setBusy] = useState(false);
   const [zipping, setZipping] = useState(false);
   const [voiceEditCharacter, setVoiceEditCharacter] = useState<FilmCharacterRecord | null>(null);
+  const [voiceEditLine, setVoiceEditLine] = useState<FilmVoiceListItem | null>(null);
   const [voiceConfigOpen, setVoiceConfigOpen] = useState(false);
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [episodeFilter, setEpisodeFilter] = useState<string | null>(null);
@@ -201,6 +212,21 @@ export default function FilmVoicePanel({
 
   const closeVoiceDialog = () => {
     setVoiceEditCharacter(null);
+    setVoiceEditLine(null);
+  };
+
+  const resetSpeakerLineVoices = async (speakerName: string) => {
+    if (!onSaveScene) return;
+    const { scenes: next, changed } = resetCharacterDialogueLineVoices(
+      allScenes,
+      speakerName
+    );
+    if (!changed.length) return;
+    setAllScenes(next);
+    for (const scene of changed) {
+      await onSaveScene(scene);
+    }
+    toast.success(t("Đã reset giọng các câu thoại về giọng nhân vật"));
   };
 
   const handleTab = (id: FilmStoryboardTab) => {
@@ -399,7 +425,7 @@ export default function FilmVoicePanel({
                             : "bg-white border-gray-100 hover:bg-blue-50 hover:border-blue-200"
                         }`}
                       >
-                        <div className="flex-shrink-0 w-9 h-9 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
                           {src ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -422,7 +448,7 @@ export default function FilmVoicePanel({
                             >
                               {sp.name}
                             </span>
-                            <div className="flex items-center gap-0.5">
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
                             {sp.character ? (
                               <FilmCharacterVoiceCreateButton
                                 onClick={(e) => {
@@ -437,6 +463,14 @@ export default function FilmVoicePanel({
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   void removeCharacterVoice(sp.character!);
+                                }}
+                              />
+                            ) : null}
+                            {characterHasCustomDialogueVoices(sp.name, allScenes) ? (
+                              <FilmCharacterVoiceResetButton
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void resetSpeakerLineVoices(sp.name);
                                 }}
                               />
                             ) : null}
@@ -524,7 +558,9 @@ export default function FilmVoicePanel({
                   characters={characters}
                   episodeLabel={episodeLabelById.get(item.scene.episodeId)}
                   onCreateVoice={createVoiceForItem}
+                  onSetDefaultVoiceTake={onSetDefaultVoiceTake}
                   onStopVoice={onStopVoice}
+                  onPickLineVoice={(lineItem) => setVoiceEditLine(lineItem)}
                 />
               ))
             )}
@@ -585,24 +621,54 @@ export default function FilmVoicePanel({
       />
 
       <FilmCharacterVoiceDialog
-        isOpen={!!voiceEditCharacter}
-        characterName={voiceEditCharacter?.name}
-        attachedVoice={filmCharacterToAttachedVoice(voiceEditCharacter)}
+        isOpen={!!voiceEditCharacter || !!voiceEditLine}
+        characterName={
+          voiceEditCharacter?.name || voiceEditLine?.line.character?.trim() || undefined
+        }
+        attachedVoice={
+          voiceEditCharacter
+            ? filmCharacterToAttachedVoice(voiceEditCharacter)
+            : voiceEditLine
+              ? dialogueLineToAttachedVoice(voiceEditLine.line)
+              : null
+        }
         onClose={closeVoiceDialog}
         onPick={async (voice: FilmCharacterVoicePick) => {
-          if (!voiceEditCharacter) return;
-          const draft: FilmCharacterRecord = {
-            ...voiceEditCharacter,
-            voiceId: voice.voiceId,
-            voiceLabel: voice.voiceLabel,
-            voicePreviewBlob: voice.voicePreviewBlob,
-            voiceResultId: voice.voiceResultId || undefined,
-            updatedAt: new Date().toISOString(),
-          };
-          onCharactersChange?.(
-            characters.map((x) => (x.id === draft.id ? draft : x))
+          if (voiceEditCharacter) {
+            const draft: FilmCharacterRecord = {
+              ...voiceEditCharacter,
+              voiceId: voice.voiceId,
+              voiceLabel: voice.voiceLabel,
+              voicePreviewBlob: voice.voicePreviewBlob,
+              voiceResultId: voice.voiceResultId || undefined,
+              updatedAt: new Date().toISOString(),
+            };
+            onCharactersChange?.(
+              characters.map((x) => (x.id === draft.id ? draft : x))
+            );
+            await onSaveCharacter?.(draft);
+            closeVoiceDialog();
+            return;
+          }
+          if (!voiceEditLine || !onSaveScene) return;
+          const scene =
+            allScenes.find((s) => s.id === voiceEditLine.scene.id) ||
+            voiceEditLine.scene;
+          const characterVoice = resolveCharacterVoiceLink(
+            voiceEditLine.line.character || "",
+            characters
           );
-          await onSaveCharacter?.(draft);
+          const sameAsCharacter =
+            voice.voiceId.trim() === characterVoice.voiceId &&
+            (voice.voiceLabel.trim() || voice.voiceId.trim()) ===
+              (characterVoice.voiceLabel || characterVoice.voiceId);
+          const next = patchSceneDialogueLine(scene, voiceEditLine.line.id, {
+            voiceCustom: !sameAsCharacter,
+            voiceId: sameAsCharacter ? undefined : voice.voiceId,
+            voiceLabel: sameAsCharacter ? undefined : voice.voiceLabel,
+          });
+          setAllScenes((prev) => prev.map((s) => (s.id === next.id ? next : s)));
+          await onSaveScene(next);
           closeVoiceDialog();
         }}
       />

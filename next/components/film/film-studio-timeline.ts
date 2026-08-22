@@ -2,7 +2,7 @@
  * Helpers Studio timeline — clips, trim, split, reorder.
  */
 import { createFilmId, type FilmDialogueLineRecord, type FilmSceneRecord } from "./film-types";
-import { formatFilmDialogueText, syncSceneDialogueLines } from "./film-dialogue";
+import { formatFilmDialogueText, resolveDialogueLineDefaultAudio, syncSceneDialogueLines, withDialogueLineDefaultAudioSynced } from "./film-dialogue";
 
 export const FILM_STUDIO_DEFAULT_SCENE_SEC = 5;
 export const FILM_STUDIO_MIN_CLIP_SEC = 1;
@@ -224,10 +224,11 @@ export function resetFilmStudioTimelineFromScratch(
     const lines = syncSceneDialogueLines(scene)
       .filter((line) => !line.studioOnly)
       .map((line) => {
-        const hasAudio = !!(line.voiceUrl || line.voiceBlob);
-        const hasText = !!String(line.line || "").trim();
+        const synced = withDialogueLineDefaultAudioSynced(line);
+        const hasAudio = !!(synced.voiceUrl || synced.voiceBlob);
+        const hasText = !!String(synced.line || "").trim();
         const next: FilmDialogueLineRecord = {
-          ...line,
+          ...synced,
           voiceTrimInSec: 0,
         };
         delete next.timelineOffsetSec;
@@ -242,7 +243,7 @@ export function resetFilmStudioTimelineFromScratch(
         }
 
         const dur = resolveIndependentLineDuration(
-          { line: line.line, timelineDurationSec: undefined },
+          { line: synced.line, timelineDurationSec: undefined },
           sceneDuration
         );
         const startSec = packCursor;
@@ -360,6 +361,7 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
 
     if (lines.length) {
       lines.forEach((line) => {
+        const audio = resolveDialogueLineDefaultAudio(line);
         const dur = resolveIndependentLineDuration(line, sceneDuration);
         const hasAbs = line.timelineStartSec != null && Number.isFinite(line.timelineStartSec);
         const hasLegacyOffset =
@@ -375,7 +377,7 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
           startSec = packCursor;
         }
 
-        const hasAudio = !!(line.voiceUrl || line.voiceBlob);
+        const hasAudio = !!(audio.voiceUrl || audio.voiceBlob);
         // A1 chỉ hiện clip có file audio — thêm/xóa tùy ý trong Studio
         if (hasAudio) {
           voiceClips.push({
@@ -389,13 +391,13 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
             character: line.character,
             text: line.line,
             label: resolveVoiceClipLabel({
-              voiceLabel: line.voiceLabel || scene.voiceLabel,
+              voiceLabel: audio.voiceLabel || line.voiceLabel || scene.voiceLabel,
               character: line.character,
               text: line.line,
               hasAudio,
             }),
-            voiceUrl: line.voiceUrl,
-            voiceBlob: line.voiceBlob,
+            voiceUrl: audio.voiceUrl,
+            voiceBlob: audio.voiceBlob,
           });
         }
         const hasSubtitleText = !!String(line.line || "").trim();

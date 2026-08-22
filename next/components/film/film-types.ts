@@ -330,6 +330,18 @@ export type FilmSceneImageRecord = {
   updatedAt: string;
 };
 
+/** Một bản audio TTS đã tạo cho câu thoại — tab Tạo giọng */
+export type FilmDialogueVoiceTakeRecord = {
+  id: string;
+  voiceBlob?: Blob;
+  voiceUrl?: string;
+  voiceId?: string;
+  voiceLabel?: string;
+  createdAt?: string;
+  /** Chỉ một take được đánh dấu mặc định */
+  isDefault?: boolean;
+};
+
 /** Một lời thoại (tách từ field dialogue) — dùng tab Tạo giọng */
 export type FilmDialogueLineRecord = {
   id: string;
@@ -343,6 +355,10 @@ export type FilmDialogueLineRecord = {
   voiceSource?: "catalog" | "custom_id" | "minimax";
   voiceId?: string;
   voiceLabel?: string;
+  /** Giọng riêng cho câu thoại này (khác giọng mặc định nhân vật) */
+  voiceCustom?: boolean;
+  /** Các bản audio đã tạo — `voiceBlob`/`voiceUrl` trên line sync từ take mặc định */
+  voiceTakes?: FilmDialogueVoiceTakeRecord[];
   /**
    * Studio: mốc bắt đầu tuyệt đối trên timeline Audio/Phụ đề (giây), độc lập video.
    * Có giá trị → dùng trực tiếp. Không set → xem timelineOffsetSec (legacy) hoặc auto-pack.

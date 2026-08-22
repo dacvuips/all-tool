@@ -520,7 +520,7 @@ export default function FilmShotImageCard({
         {onToggleSilentLipSync ? (
           <button
             type="button"
-            className={`flex-shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md border-0 cursor-pointer ${
+            className={`flex-shrink-0 inline-flex items-center justify-center w-5 h-5 rounded-md border-0 cursor-pointer ${
               scene.videoSilentLipSync
                 ? "text-red-500 bg-red-50 hover:bg-red-100"
                 : "text-gray-400 bg-transparent hover:text-red-500 hover:bg-red-50"
@@ -538,9 +538,9 @@ export default function FilmShotImageCard({
             }}
           >
             {scene.videoSilentLipSync ? (
-              <MdVoiceOverOff className="text-base" />
+              <MdVoiceOverOff className="text-sm" />
             ) : (
-              <MdRecordVoiceOver className="text-base" />
+              <MdRecordVoiceOver className="text-sm" />
             )}
           </button>
         ) : null}

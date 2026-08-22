@@ -58,8 +58,11 @@ import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
 import {
   applyCharacterVoiceLinksToScenes,
+  buildAppendDialogueVoiceTakePatch,
   buildFilmVoiceListItems,
+  buildSetDefaultDialogueVoiceTakePatch,
   dialogueLineCreating,
+  dialogueLineHasAudio,
   dialogueLineReady,
   hydrateScenesDialogueLines,
   patchSceneDialogueLine,
@@ -4271,9 +4274,11 @@ export default function FilmWorkspace({ projectId }: Props) {
     voiceAbortRef.current.set(key, ac);
 
     const current = scenes.find((s) => s.id === scene.id) || scene;
+    const existingLine = current.dialogueLines?.find((l) => l.id === dialogueLineId);
     const creating = patchSceneDialogueLine(current, dialogueLineId, {
       voiceId: voiceId.trim(),
       voiceLabel: voiceLabel?.trim() || voiceId.trim(),
+      voiceCustom: existingLine?.voiceCustom,
       voiceStatus: "creating",
       voiceError: undefined,
     });
@@ -4283,12 +4288,16 @@ export default function FilmWorkspace({ projectId }: Props) {
     try {
       const blob = await generateFilmDialogueVoiceBlob(trimmedText, voiceId, ac.signal);
       if (ac.signal.aborted) throw new DOMException("Đã dừng", "AbortError");
-      const done = patchSceneDialogueLine(creating, dialogueLineId, {
-        voiceStatus: "ready",
+      const lineAfterCreating =
+        creating.dialogueLines?.find((l) => l.id === dialogueLineId) || existingLine;
+      if (!lineAfterCreating) return;
+      const takePatch = buildAppendDialogueVoiceTakePatch(lineAfterCreating, {
         voiceBlob: blob,
         voiceUrl: "",
-        voiceError: undefined,
+        voiceId: voiceId.trim(),
+        voiceLabel: voiceLabel?.trim() || voiceId.trim(),
       });
+      const done = patchSceneDialogueLine(creating, dialogueLineId, takePatch);
       setScenes((prev) => prev.map((x) => (x.id === done.id ? done : x)));
       await putFilmScene(done);
       await refreshTextCredits();
@@ -4308,6 +4317,17 @@ export default function FilmWorkspace({ projectId }: Props) {
     } finally {
       if (voiceAbortRef.current.get(key) === ac) voiceAbortRef.current.delete(key);
     }
+  };
+
+  const handleSetDefaultVoiceTake = async (item: FilmVoiceListItem, takeId: string) => {
+    const current = scenes.find((s) => s.id === item.scene.id) || item.scene;
+    const line = current.dialogueLines?.find((l) => l.id === item.line.id);
+    if (!line) return;
+    const patch = buildSetDefaultDialogueVoiceTakePatch(line, takeId);
+    if (!patch) return;
+    const next = patchSceneDialogueLine(current, item.line.id, patch);
+    setScenes((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+    await putFilmScene(next);
   };
 
   const handleBulkCreateVoices = async (items: FilmVoiceListItem[]) => {
@@ -4390,38 +4410,46 @@ export default function FilmWorkspace({ projectId }: Props) {
 
         const blob = await generateFilmDialogueVoiceBlob(text, linked.voiceId, ac.signal);
         if (ac.signal.aborted || bulkAc.signal.aborted) {
+          const sceneNow = sceneById.get(item.scene.id);
+          const lineNow = sceneNow?.dialogueLines?.find((l) => l.id === item.line.id) || item.line;
           await patchLine(
             item.scene.id,
             item.line.id,
             {
-              voiceStatus: item.line.voiceBlob || item.line.voiceUrl ? "ready" : "pending",
+              voiceStatus: dialogueLineHasAudio(lineNow) ? "ready" : "pending",
               voiceError: undefined,
             },
             item.line
           );
           return;
         }
+        const sceneNow = sceneById.get(item.scene.id);
+        const lineNow = sceneNow?.dialogueLines?.find((l) => l.id === item.line.id) || item.line;
         await patchLine(
           item.scene.id,
           item.line.id,
           {
-            voiceStatus: "ready",
-            voiceBlob: blob,
-            voiceUrl: "",
-            voiceError: undefined,
             voiceId: linked.voiceId,
             voiceLabel: linked.voiceLabel || linked.voiceId,
+            ...buildAppendDialogueVoiceTakePatch(lineNow, {
+              voiceBlob: blob,
+              voiceUrl: "",
+              voiceId: linked.voiceId,
+              voiceLabel: linked.voiceLabel || linked.voiceId,
+            }),
           },
           item.line
         );
         await refreshTextCredits();
       } catch (err: any) {
         if (isVoiceAbortError(err) || ac.signal.aborted || bulkAc.signal.aborted) {
+          const sceneNow = sceneById.get(item.scene.id);
+          const lineNow = sceneNow?.dialogueLines?.find((l) => l.id === item.line.id) || item.line;
           await patchLine(
             item.scene.id,
             item.line.id,
             {
-              voiceStatus: item.line.voiceBlob || item.line.voiceUrl ? "ready" : "pending",
+              voiceStatus: dialogueLineHasAudio(lineNow) ? "ready" : "pending",
               voiceError: undefined,
             },
             item.line
@@ -4469,7 +4497,7 @@ export default function FilmWorkspace({ projectId }: Props) {
             item.scene.id,
             item.line.id,
             {
-              voiceStatus: line.voiceBlob || line.voiceUrl ? "ready" : "pending",
+              voiceStatus: dialogueLineHasAudio(line) ? "ready" : "pending",
               voiceError: undefined,
             },
             item.line
@@ -5034,7 +5062,9 @@ export default function FilmWorkspace({ projectId }: Props) {
               promptTemplate={project.characterImagePromptTemplate}
               onCharactersChange={setCharacters}
               onSaveCharacter={handleSaveCharacter}
+              onSaveScene={handleSaveScene}
               onCreateVoice={handleCreateVoice}
+              onSetDefaultVoiceTake={handleSetDefaultVoiceTake}
               onStopVoice={handleStopVoice}
               onBulkCreateVoices={handleBulkCreateVoices}
               onStopBulkVoices={handleStopBulkVoices}

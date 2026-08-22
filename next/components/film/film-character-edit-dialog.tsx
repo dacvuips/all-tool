@@ -221,7 +221,7 @@ export default function FilmCharacterEditDialog({
                   <span className="flex-1 min-w-0 text-sm font-semibold text-gray-800 truncate">
                     {editVoiceLabel || editVoiceId}
                   </span>
-                  <FilmCharacterVoicePlayButton blob={editVoiceBlob} voiceId={editVoiceId} />
+                  <FilmCharacterVoicePlayButton blob={editVoiceBlob} voiceId={editVoiceId} size="sm" />
                   <button
                     type="button"
                     onClick={() => setVoiceModalOpen(true)}
@@ -236,7 +236,6 @@ export default function FilmCharacterEditDialog({
                   }) ? (
                     <FilmCharacterVoiceUnlinkButton
                       onClick={() => void removeVoice()}
-                      className="!w-7 !h-7"
                     />
                   ) : null}
                 </div>

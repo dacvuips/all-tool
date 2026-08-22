@@ -1,6 +1,6 @@
 import { saveAs } from "file-saver";
 import JSZip from "jszip";
-import { dialogueLineReady, type FilmVoiceListItem } from "./film-dialogue";
+import { dialogueLineReady, getDefaultDialogueVoiceTake, type FilmVoiceListItem } from "./film-dialogue";
 
 function pad(n: number, size = 2): string {
   return String(n).padStart(size, "0");
@@ -23,6 +23,8 @@ function extOf(blob: Blob, url?: string): string {
 }
 
 async function blobOfItem(item: FilmVoiceListItem): Promise<Blob | null> {
+  const def = getDefaultDialogueVoiceTake(item.line);
+  if (def?.voiceBlob && def.voiceBlob.size > 0) return def.voiceBlob;
   if (item.line.voiceBlob && item.line.voiceBlob.size > 0) return item.line.voiceBlob;
   const url = item.line.voiceUrl?.trim();
   if (!url) return null;

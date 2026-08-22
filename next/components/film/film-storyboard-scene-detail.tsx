@@ -42,6 +42,10 @@ type Props = {
   ) => void;
 };
 
+const fieldLabelClass = "block text-xs font-semibold text-primary-dark mb-1.5";
+const sectionTitleClass =
+  "text-xs font-bold tracking-wider text-accent uppercase mb-2";
+
 function PromptField({
   label,
   value,
@@ -66,13 +70,13 @@ function PromptField({
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
-        <label className="block text-xs font-medium text-gray-500 m-0">{label}</label>
+        <label className={`${fieldLabelClass} m-0`}>{label}</label>
         <button
           type="button"
           onClick={onReset}
           disabled={!canReset}
           title={t("Reset về prompt mặc định")}
-          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-10 font-semibold border-0 bg-transparent cursor-pointer text-gray-400 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
+          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-10 font-semibold border-0 bg-transparent cursor-pointer text-gray-400 hover:text-primary hover:bg-primary-light disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400 disabled:hover:bg-transparent"
         >
           <HiRefresh className="text-xs" />
           {t("Reset")}
@@ -99,14 +103,14 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-500 mb-1.5">{label}</label>
+      <label className={fieldLabelClass}>{label}</label>
       {children}
     </div>
   );
 }
 
 const inputClass =
-  "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 bg-white";
+  "w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-800 outline-none focus:border-primary focus:ring-2 focus:ring-primary-light bg-white";
 const selectClass = `${inputClass} cursor-pointer appearance-auto`;
 const textareaClass = `${inputClass} resize-y min-h-18 leading-relaxed`;
 
@@ -185,7 +189,7 @@ export default function FilmStoryboardSceneDetail({
       <div className="px-4 sm:px-5 py-3.5 border-b border-gray-50 flex-shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <h3 className="text-base font-bold text-gray-900 m-0 min-w-0 flex items-center gap-2">
-            <span className="flex-shrink-0">#{scene.index}</span>
+            <span className="flex-shrink-0 text-primary-dark">#{scene.index}</span>
             {editingTitle ? (
               <input
                 autoFocus
@@ -204,7 +208,7 @@ export default function FilmStoryboardSceneDetail({
                   }
                 }}
                 placeholder={t("Tiêu đề")}
-                className="m-0 min-w-0 flex-1 px-1.5 py-0.5 text-sm font-semibold text-gray-800 bg-white rounded border border-blue-300 outline-none focus:border-blue-500"
+                className="m-0 min-w-0 flex-1 px-1.5 py-0.5 text-sm font-semibold text-gray-800 bg-white rounded border border-primary/40 outline-none focus:border-primary"
               />
             ) : (
               <button
@@ -216,13 +220,13 @@ export default function FilmStoryboardSceneDetail({
                 <span
                   className={`font-semibold truncate min-w-0 ${
                     sceneTitle
-                      ? "text-gray-700 group-hover:text-blue-700"
+                      ? "text-accent group-hover:text-primary-dark"
                       : "text-gray-400 italic"
                   }`}
                 >
                   {sceneTitle || t("Tiêu đề")}
                 </span>
-                <HiPencil className="flex-shrink-0 text-sm text-gray-400 group-hover:text-blue-600" />
+                <HiPencil className="flex-shrink-0 text-sm text-gray-400 group-hover:text-primary" />
               </button>
             )}
           </h3>
@@ -235,21 +239,21 @@ export default function FilmStoryboardSceneDetail({
       <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4 space-y-6">
         {/* Overview */}
         <section>
-          <div className="text-10 font-bold tracking-wider text-gray-400 uppercase mb-2">
-            {t("Tổng quan cảnh quay")}
-          </div>
+          <div className={sectionTitleClass}>{t("Tổng quan cảnh quay")}</div>
           <div className="flex flex-col xl:flex-row gap-3">
             <div className="flex-1 min-w-0">
-              <textarea
-                value={scene.summary || ""}
-                onChange={(e) => onChange({ summary: e.target.value })}
-                rows={3}
-                className={textareaClass}
-                placeholder={t("Tóm tắt cảnh quay...")}
-              />
+              <Field label={t("Tóm tắt")}>
+                <textarea
+                  value={scene.summary || ""}
+                  onChange={(e) => onChange({ summary: e.target.value })}
+                  rows={3}
+                  className={textareaClass}
+                  placeholder={t("Tóm tắt cảnh quay...")}
+                />
+              </Field>
               <div className="flex flex-wrap gap-1.5 mt-2">
                 {scene.cameraAngle && (
-                  <span className="px-2.5 py-1 rounded-full text-10 font-medium bg-blue-50 text-blue-600">
+                  <span className="px-2.5 py-1 rounded-full text-10 font-medium bg-primary-light text-primary-dark">
                     {scene.cameraAngle}
                   </span>
                 )}
@@ -269,9 +273,7 @@ export default function FilmStoryboardSceneDetail({
 
         {/* Structure */}
         <section>
-          <div className="text-10 font-bold tracking-wider text-gray-400 uppercase mb-3">
-            {t("Cấu trúc Cảnh quay")}
-          </div>
+          <div className={`${sectionTitleClass} mb-3`}>{t("Cấu trúc Cảnh quay")}</div>
           <div className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label={t("Cỡ cảnh")}>
@@ -375,7 +377,7 @@ export default function FilmStoryboardSceneDetail({
         {/* Prompts */}
         <section className="rounded-2xl border border-gray-100 p-4 bg-gray-50">
           <div className="flex items-center justify-between mb-3">
-            <div className="text-sm font-bold text-gray-800">{t("Prompt")}</div>
+            <div className="text-sm font-bold text-accent">{t("Prompt")}</div>
             <span className="text-10 text-gray-400">
               {t("Cho ảnh, video, nhạc, âm thanh · cấu hình chung ở Setting")}
             </span>

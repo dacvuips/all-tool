@@ -277,6 +277,7 @@ function FilmVoiceConfigBody({
               <FilmCharacterVoicePlayButton
                 blob={selectedVoice?.voicePreviewBlob}
                 voiceId={selectedVoice?.voiceId}
+                size="sm"
               />
               {selectedCharacter && filmCharacterHasVoice(selectedCharacter) ? (
                 <FilmCharacterVoiceUnlinkButton

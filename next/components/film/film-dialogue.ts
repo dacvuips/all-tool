@@ -6,6 +6,7 @@ import {
   createFilmId,
   type FilmCharacterRecord,
   type FilmDialogueLineRecord,
+  type FilmDialogueVoiceTakeRecord,
   type FilmSceneRecord,
 } from "./film-types";
 
@@ -213,8 +214,144 @@ export function hydrateScenesDialogueLines(
   return { scenes: next, changed };
 }
 
+/** Chuẩn hoá danh sách take — migrate từ voiceBlob đơn lẻ nếu chưa có voiceTakes */
+export function normalizeDialogueLineVoiceTakes(
+  line: FilmDialogueLineRecord
+): FilmDialogueVoiceTakeRecord[] {
+  const stored = (line.voiceTakes || []).filter(Boolean);
+  if (stored.length) {
+    const withAudio = stored.filter((t) => t.voiceBlob || t.voiceUrl);
+    if (!withAudio.length) return stored;
+    const defaults = withAudio.filter((t) => t.isDefault);
+    if (defaults.length === 1) return stored;
+    const defId = defaults[0]?.id || withAudio[withAudio.length - 1]!.id;
+    return stored.map((t) => ({ ...t, isDefault: t.id === defId }));
+  }
+  if (line.voiceBlob || line.voiceUrl) {
+    return [
+      {
+        id: `${line.id}-legacy`,
+        voiceBlob: line.voiceBlob,
+        voiceUrl: line.voiceUrl,
+        voiceId: line.voiceId,
+        voiceLabel: line.voiceLabel,
+        isDefault: true,
+      },
+    ];
+  }
+  return [];
+}
+
+export function dialogueLineHasAudio(line: FilmDialogueLineRecord): boolean {
+  return (
+    normalizeDialogueLineVoiceTakes(line).some((t) => !!(t.voiceBlob || t.voiceUrl)) ||
+    !!(line.voiceBlob || line.voiceUrl)
+  );
+}
+
+export function getDefaultDialogueVoiceTake(
+  line: FilmDialogueLineRecord
+): FilmDialogueVoiceTakeRecord | null {
+  const takes = normalizeDialogueLineVoiceTakes(line).filter((t) => t.voiceBlob || t.voiceUrl);
+  return takes.find((t) => t.isDefault) || takes.at(-1) || null;
+}
+
+/** Audio dùng cho Studio/export — luôn lấy từ take mặc định nếu có voiceTakes */
+export function resolveDialogueLineDefaultAudio(
+  line: FilmDialogueLineRecord
+): Pick<FilmDialogueLineRecord, "voiceBlob" | "voiceUrl" | "voiceId" | "voiceLabel"> {
+  const def = getDefaultDialogueVoiceTake(line);
+  if (def) {
+    return {
+      voiceBlob: def.voiceBlob,
+      voiceUrl: def.voiceUrl || "",
+      voiceId: def.voiceId ?? line.voiceId,
+      voiceLabel: def.voiceLabel ?? line.voiceLabel,
+    };
+  }
+  return {
+    voiceBlob: line.voiceBlob,
+    voiceUrl: line.voiceUrl,
+    voiceId: line.voiceId,
+    voiceLabel: line.voiceLabel,
+  };
+}
+
+/** Gắn lại voiceBlob/voiceUrl trên line theo take mặc định (giữ voiceTakes) */
+export function withDialogueLineDefaultAudioSynced(
+  line: FilmDialogueLineRecord
+): FilmDialogueLineRecord {
+  const takes = normalizeDialogueLineVoiceTakes(line);
+  if (!takes.length) return line;
+  const patch = syncDialogueLineFromDefaultTake(line, takes);
+  return { ...line, ...patch };
+}
+
+function syncDialogueLineFromDefaultTake(
+  line: FilmDialogueLineRecord,
+  takes: FilmDialogueVoiceTakeRecord[]
+): Partial<FilmDialogueLineRecord> {
+  const withAudio = takes.filter((t) => t.voiceBlob || t.voiceUrl);
+  const def = withAudio.find((t) => t.isDefault) || withAudio.at(-1);
+  if (!def) {
+    return {
+      voiceTakes: takes.length ? takes : undefined,
+      voiceBlob: undefined,
+      voiceUrl: "",
+      voiceStatus: line.voiceStatus === "creating" ? "creating" : "pending",
+    };
+  }
+  return {
+    voiceTakes: takes,
+    voiceBlob: def.voiceBlob,
+    voiceUrl: def.voiceUrl || "",
+    voiceId: def.voiceId ?? line.voiceId,
+    voiceLabel: def.voiceLabel ?? line.voiceLabel,
+    voiceStatus: "ready",
+    voiceError: undefined,
+  };
+}
+
+/** Thêm bản audio mới — bản đầu tiên tự động là mặc định */
+export function buildAppendDialogueVoiceTakePatch(
+  line: FilmDialogueLineRecord,
+  input: {
+    voiceBlob: Blob;
+    voiceUrl?: string;
+    voiceId?: string;
+    voiceLabel?: string;
+  }
+): Partial<FilmDialogueLineRecord> {
+  const takes = normalizeDialogueLineVoiceTakes(line);
+  const hasExisting = takes.some((t) => t.voiceBlob || t.voiceUrl);
+  const id = createFilmId("vt");
+  const newTake: FilmDialogueVoiceTakeRecord = {
+    id,
+    voiceBlob: input.voiceBlob,
+    voiceUrl: input.voiceUrl || "",
+    voiceId: input.voiceId,
+    voiceLabel: input.voiceLabel,
+    createdAt: new Date().toISOString(),
+    isDefault: !hasExisting,
+  };
+  return syncDialogueLineFromDefaultTake(line, [...takes, newTake]);
+}
+
+/** Đặt take làm mặc định — bỏ mặc định các take khác */
+export function buildSetDefaultDialogueVoiceTakePatch(
+  line: FilmDialogueLineRecord,
+  takeId: string
+): Partial<FilmDialogueLineRecord> | null {
+  const takes = normalizeDialogueLineVoiceTakes(line);
+  if (!takes.some((t) => t.id === takeId)) return null;
+  const nextTakes = takes.map((t) => ({ ...t, isDefault: t.id === takeId }));
+  return syncDialogueLineFromDefaultTake(line, nextTakes);
+}
+
 export function dialogueLineReady(line: FilmDialogueLineRecord): boolean {
-  return line.voiceStatus === "ready" || !!line.voiceUrl || !!line.voiceBlob;
+  if (line.voiceStatus === "creating") return false;
+  if (dialogueLineHasAudio(line)) return true;
+  return line.voiceStatus === "ready";
 }
 
 export function dialogueLineCreating(line: FilmDialogueLineRecord): boolean {
@@ -227,7 +364,7 @@ export function stopSceneDialogueVoice(
   lineId: string
 ): FilmSceneRecord {
   const line = scene.dialogueLines?.find((l) => l.id === lineId);
-  const hasAudio = !!(line?.voiceBlob || line?.voiceUrl);
+  const hasAudio = line ? dialogueLineHasAudio(line) : false;
   return patchSceneDialogueLine(scene, lineId, {
     voiceStatus: hasAudio ? "ready" : "pending",
     voiceError: undefined,
@@ -415,32 +552,77 @@ export function patchSceneDialogueLine(
   };
 }
 
-/** Chỉ gắn voiceId / voiceLabel từ nhân vật — không copy blob / audio data. */
-export function applyCharacterVoiceLinksToScenes(
+/** Giọng mặc định gắn trên nhân vật (không xét override từng câu). */
+export function resolveCharacterVoiceLink(
+  characterName: string,
+  characters: FilmCharacterRecord[] = []
+): { voiceId: string; voiceLabel: string } {
+  const name = characterName?.trim().toLowerCase() || "";
+  const ch = name
+    ? characters.find((c) => c.name.trim().toLowerCase() === name)
+    : undefined;
+  return {
+    voiceId: (ch?.voiceId || "").trim(),
+    voiceLabel: (ch?.voiceLabel || "").trim(),
+  };
+}
+
+/**
+ * Giọng dùng TTS cho 1 câu thoại.
+ * Câu có `voiceCustom` → dùng giọng riêng; không thì kế thừa giọng nhân vật.
+ */
+export function resolveDialogueLineVoiceLink(
+  line: Pick<
+    FilmDialogueLineRecord,
+    "character" | "voiceId" | "voiceLabel" | "voiceCustom"
+  >,
+  characters: FilmCharacterRecord[] = []
+): { voiceId: string; voiceLabel: string } {
+  if (line.voiceCustom) {
+    const voiceId = (line.voiceId || "").trim();
+    const voiceLabel = (line.voiceLabel || voiceId || "").trim();
+    return { voiceId, voiceLabel };
+  }
+  return resolveCharacterVoiceLink(line.character || "", characters);
+}
+
+export function characterHasCustomDialogueVoices(
+  characterName: string,
+  scenes: FilmSceneRecord[]
+): boolean {
+  const name = characterName.trim().toLowerCase();
+  if (!name) return false;
+  for (const scene of scenes) {
+    for (const line of scene.dialogueLines || []) {
+      if (line.character?.trim().toLowerCase() !== name) continue;
+      if (line.voiceCustom) return true;
+    }
+  }
+  return false;
+}
+
+/** Bỏ giọng riêng từng câu → kế thừa lại giọng nhân vật. */
+export function resetCharacterDialogueLineVoices(
   scenes: FilmSceneRecord[],
-  characters: FilmCharacterRecord[]
+  characterName: string
 ): { scenes: FilmSceneRecord[]; changed: FilmSceneRecord[] } {
-  const byName = new Map(
-    characters
-      .map((c) => [c.name.trim().toLowerCase(), c] as const)
-      .filter(([k]) => !!k)
-  );
+  const name = characterName.trim().toLowerCase();
+  if (!name) return { scenes, changed: [] };
   const changed: FilmSceneRecord[] = [];
   const next = scenes.map((scene) => {
-    const lines = scene.dialogueLines;
-    if (!lines?.length) return scene;
+    if (!scene.dialogueLines?.length) return scene;
     let dirty = false;
-    const dialogueLines = lines.map((line) => {
-      const ch = byName.get(line.character?.trim().toLowerCase() || "");
-      const voiceId = ch?.voiceId?.trim() || "";
-      const voiceLabel = ch?.voiceLabel?.trim() || "";
-      if (!voiceId && !voiceLabel) return line;
-      if (line.voiceId === voiceId && (line.voiceLabel || "") === voiceLabel) return line;
+    const dialogueLines = scene.dialogueLines.map((line) => {
+      if (line.character?.trim().toLowerCase() !== name) return line;
+      if (!line.voiceCustom && !line.voiceId?.trim() && !line.voiceLabel?.trim()) {
+        return line;
+      }
       dirty = true;
       return {
         ...line,
-        voiceId: voiceId || line.voiceId,
-        voiceLabel: voiceLabel || line.voiceLabel,
+        voiceCustom: false,
+        voiceId: undefined,
+        voiceLabel: undefined,
       };
     });
     if (!dirty) return scene;
@@ -453,6 +635,14 @@ export function applyCharacterVoiceLinksToScenes(
     return patched;
   });
   return { scenes: next, changed };
+}
+
+/** @deprecated Giọng kế thừa qua resolveDialogueLineVoiceLink — không ghi đè câu voiceCustom. */
+export function applyCharacterVoiceLinksToScenes(
+  scenes: FilmSceneRecord[],
+  _characters: FilmCharacterRecord[]
+): { scenes: FilmSceneRecord[]; changed: FilmSceneRecord[] } {
+  return { scenes, changed: [] };
 }
 
 /** Gỡ voiceId/voiceLabel trên dòng thoại của nhân vật (không xóa file audio đã tạo). */
@@ -468,9 +658,16 @@ export function stripCharacterVoiceLinksFromScenes(
     let dirty = false;
     const dialogueLines = scene.dialogueLines.map((line) => {
       if (line.character?.trim().toLowerCase() !== name) return line;
-      if (!line.voiceId?.trim() && !line.voiceLabel?.trim()) return line;
+      if (!line.voiceCustom && !line.voiceId?.trim() && !line.voiceLabel?.trim()) {
+        return line;
+      }
       dirty = true;
-      return { ...line, voiceId: undefined, voiceLabel: undefined };
+      return {
+        ...line,
+        voiceCustom: false,
+        voiceId: undefined,
+        voiceLabel: undefined,
+      };
     });
     if (!dirty) return scene;
     const patched: FilmSceneRecord = {
@@ -482,20 +679,6 @@ export function stripCharacterVoiceLinksFromScenes(
     return patched;
   });
   return { scenes: next, changed };
-}
-
-/** Giọng gắn nhân vật (link) — ưu tiên hơn voice trên dòng thoại. */
-export function resolveDialogueLineVoiceLink(
-  line: Pick<FilmDialogueLineRecord, "character" | "voiceId" | "voiceLabel">,
-  characters: FilmCharacterRecord[] = []
-): { voiceId: string; voiceLabel: string } {
-  const name = line.character?.trim().toLowerCase() || "";
-  const ch = name
-    ? characters.find((c) => c.name.trim().toLowerCase() === name)
-    : undefined;
-  const voiceId = (ch?.voiceId || line.voiceId || "").trim();
-  const voiceLabel = (ch?.voiceLabel || line.voiceLabel || "").trim();
-  return { voiceId, voiceLabel };
 }
 
 /**

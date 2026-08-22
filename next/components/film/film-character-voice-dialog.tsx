@@ -62,6 +62,19 @@ export function filmCharacterToAttachedVoice(
   };
 }
 
+export function dialogueLineToAttachedVoice(
+  line?: Pick<
+    import("./film-types").FilmDialogueLineRecord,
+    "voiceCustom" | "voiceId" | "voiceLabel"
+  > | null
+): FilmCharacterVoicePick | null {
+  if (!line?.voiceCustom) return null;
+  const voiceId = line.voiceId?.trim() || "";
+  const voiceLabel = line.voiceLabel?.trim() || voiceId;
+  if (!voiceId && !voiceLabel) return null;
+  return { voiceId, voiceLabel };
+}
+
 export function resolveFilmVoiceModalState(attached?: FilmCharacterVoicePick | null): {
   tier: FilmVoiceTier;
   tool: VoiceToolId;
@@ -141,7 +154,7 @@ function FilmAttachedVoiceBanner({ voice }: { voice: FilmCharacterVoicePick }) {
   const label = voice.voiceLabel?.trim() || voice.voiceId?.trim() || t("Giọng đã gắn");
   return (
     <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-green-200 bg-green-50">
-      <RiUserVoiceLine className="text-lg text-green-600 flex-shrink-0" />
+      <RiUserVoiceLine className="text-base text-green-600 flex-shrink-0" />
       <div className="flex-1 min-w-0">
         <p className="text-10 font-semibold text-green-700 m-0 uppercase tracking-wide">
           {t("Giọng đang gắn")}

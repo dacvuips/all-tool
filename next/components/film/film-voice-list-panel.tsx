@@ -90,7 +90,7 @@ function FreeVoicePickList({
                       {t("Đang gắn")}
                     </span>
                   ) : null}
-                  <FilmCharacterVoicePlayButton voiceId={voice.id} />
+                  <FilmCharacterVoicePlayButton voiceId={voice.id} size="sm" />
                 </div>
               </div>
             </button>

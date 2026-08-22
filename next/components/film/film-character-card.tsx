@@ -159,7 +159,7 @@ export default function FilmCharacterCard({
     >
       <div className="flex relative gap-2 items-center px-3 py-2 min-w-0 border-b border-gray-100">
         <div className="flex-1 min-w-0">
-          <div className="flex gap-1.5 items-center min-w-0">
+          <div className="flex gap-1 items-center min-w-0">
             <h4 className="m-0 text-sm font-bold text-gray-900 truncate">{character.name}</h4>
             {onCreateVoice ? (
               <FilmCharacterVoiceCreateButton
