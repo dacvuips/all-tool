@@ -35,6 +35,10 @@ function createApolloClient() {
   });
 }
 
+export function resetApolloClient() {
+  apolloClient = null;
+}
+
 export function initializeApollo(initialState = null) {
   const _apolloClient = apolloClient ?? createApolloClient();
 

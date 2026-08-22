@@ -1,7 +1,6 @@
-import { ApolloClient, NormalizedCacheObject } from "@apollo/client";
 import { ApolloQueryResult, FetchResult, MutationOptions, QueryOptions } from "@apollo/client/core";
 import gql from "graphql-tag";
-import { initializeApollo } from "../graphql/apollo-client";
+import { initializeApollo, resetApolloClient } from "../graphql/apollo-client";
 
 export class GraphRepository {
   static instance = null;
@@ -13,12 +12,8 @@ export class GraphRepository {
     return GraphRepository.instance;
   }
 
-  private _apollo: ApolloClient<NormalizedCacheObject>;
   get apollo() {
-    if (!this._apollo) {
-      this._apollo = initializeApollo();
-    }
-    return this._apollo;
+    return initializeApollo();
   }
 
   gql: Function = gql;
@@ -161,7 +156,14 @@ export class GraphRepository {
   }
 
   async clearStore() {
-    await this.apollo.clearStore();
+    const client = this.apollo;
+    client.stop();
+    try {
+      await client.clearStore();
+    } catch {
+      // Queries may still be winding down after stop(); safe to ignore on logout/reset.
+    }
+    resetApolloClient();
   }
 
   handleError(result: ApolloQueryResult<any> | FetchResult) {
