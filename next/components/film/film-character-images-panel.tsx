@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
@@ -23,6 +23,8 @@ import type { FilmCharacterImageGenerateInput } from "./film-character-image-dia
 import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
 import { useFilmEntityCardFocus } from "./film-entity-card-focus";
 import { FILM_MEDIA_CARD_GRID_CLASS, FILM_MEDIA_CARD_GRID_PAD_CLASS } from "./film-media-card-grid";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { matchesFilmNameSearch } from "./film-production-search";
 import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
 import {
   FilmAspectRatio,
@@ -136,6 +138,7 @@ export default function FilmCharacterImagesPanel({
   const [editTarget, setEditTarget] = useState<FilmCharacterRecord | null>(null);
   const [voiceEditCharacter, setVoiceEditCharacter] = useState<FilmCharacterRecord | null>(null);
   const [catalogOwner, setCatalogOwner] = useState<FilmCharacterRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useFilmEntityCardFocus(focusEntityId, onFocusEntityConsumed);
 
@@ -148,6 +151,10 @@ export default function FilmCharacterImagesPanel({
     (c) => c.status !== "created" && c.status !== "creating" && !(c.imageUrls?.length || c.imageUrl)
   ).length;
   const allDone = characters.length > 0 && pendingCount === 0;
+  const visibleCharacters = useMemo(
+    () => characters.filter((c) => matchesFilmNameSearch([c.name], searchQuery)),
+    [characters, searchQuery]
+  );
 
   const handleTab = (id: FilmProductionTab) => {
     setTab(id);
@@ -315,6 +322,12 @@ export default function FilmCharacterImagesPanel({
                 </p>
               </div>
             </div>
+            <FilmProductionSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t("Tìm nhân vật...")}
+              className="w-full sm:flex-1 sm:max-w-xs order-last sm:order-none"
+            />
             <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <Button
                 outline
@@ -360,9 +373,13 @@ export default function FilmCharacterImagesPanel({
                   />
                 </div>
               </div>
+            ) : visibleCharacters.length === 0 ? (
+              <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
+                <p className="text-sm text-gray-400 m-0">{t("Không có nhân vật khớp tìm kiếm.")}</p>
+              </div>
             ) : (
               <div className={FILM_MEDIA_CARD_GRID_CLASS}>
-                {characters.map((c) => (
+                {visibleCharacters.map((c) => (
                   <FilmCharacterCard
                     key={c.id}
                     character={c}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
@@ -28,6 +28,8 @@ import { useFilmEntityCardFocus } from "./film-entity-card-focus";
 import type { FilmLocationImageGenerateInput } from "./film-location-image-dialog";
 import { buildFilmLocationImagePrompt } from "./film-location-image-prompt";
 import { FILM_MEDIA_CARD_GRID_CLASS, FILM_MEDIA_CARD_GRID_PAD_CLASS } from "./film-media-card-grid";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { matchesFilmNameSearch } from "./film-production-search";
 import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
 import FilmSceneImageCard from "./film-scene-image-card";
 import { FilmCatalogPickDialog, type FilmCatalogKind, type FilmCatalogPickItem } from "./film-catalog-pick-dialog";
@@ -148,6 +150,7 @@ export default function FilmSceneImagesPanel({
   const [editTarget, setEditTarget] = useState<FilmSceneImageRecord | null>(null);
   const [catalogOwner, setCatalogOwner] = useState<FilmSceneImageRecord | null>(null);
   const [editName, setEditName] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [editContext, setEditContext] = useState("");
   const [editTimeOfDay, setEditTimeOfDay] = useState("");
   const [editDesc, setEditDesc] = useState("");
@@ -187,6 +190,10 @@ export default function FilmSceneImagesPanel({
     (p) => p.status !== "created" && p.status !== "creating" && !(p.imageUrls?.length || p.imageUrl)
   ).length;
   const allDone = items.length > 0 && pendingCount === 0;
+  const visibleItems = useMemo(
+    () => items.filter((item) => matchesFilmNameSearch([item.name], searchQuery)),
+    [items, searchQuery]
+  );
 
   const handleTab = (id: FilmProductionTab) => {
     setTab(id);
@@ -343,6 +350,12 @@ export default function FilmSceneImagesPanel({
               </p>
             </div>
           </div>
+          <FilmProductionSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t("Tìm bối cảnh...")}
+            className="w-full sm:flex-1 sm:max-w-xs order-last sm:order-none"
+          />
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             <Button
               outline
@@ -389,9 +402,13 @@ export default function FilmSceneImagesPanel({
                 />
               </div>
             </div>
+          ) : visibleItems.length === 0 ? (
+            <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
+              <p className="text-sm text-gray-400 m-0">{t("Không có bối cảnh khớp tìm kiếm.")}</p>
+            </div>
           ) : (
             <div className={FILM_MEDIA_CARD_GRID_CLASS}>
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <FilmSceneImageCard
                   key={item.id}
                   item={item}

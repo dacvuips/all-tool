@@ -1,18 +1,18 @@
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiArrowLeft, HiRefresh } from "react-icons/hi";
+import { HiArrowLeft, HiPencil, HiPlus, HiRefresh, HiTrash } from "react-icons/hi";
 import { RiKey2Line } from "react-icons/ri";
-import {
-  TrainingGuidePopover,
-  TrainingTopicSlug,
-} from "../shared/common/training-guide-popover";
 import { useAlert } from "../../lib/providers/alert-provider";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { isVoiceAbortError } from "../app/voice/voice-api";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../shared/common/training-guide-popover";
 import { Button } from "../shared/utilities/form";
 import {
   applyFilmExtractResult,
@@ -92,8 +92,11 @@ import {
   generatedVideoDataToFilmStored,
 } from "./film-entity-to-generated-image";
 import {
+  addFilmEpisode,
   addFilmScene,
   deleteFilmCharacter,
+  deleteFilmEpisode,
+  deleteFilmProject,
   deleteFilmProp,
   deleteFilmSceneImage,
   getFilmCharactersByProject,
@@ -298,6 +301,9 @@ export default function FilmWorkspace({ projectId }: Props) {
   );
   const [editingProjectName, setEditingProjectName] = useState(false);
   const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
+  const [episodeTitleDraft, setEpisodeTitleDraft] = useState("");
+  const [hoveredEpisodeId, setHoveredEpisodeId] = useState<string | null>(null);
 
   const refreshAiKeysStatus = useCallback(async () => {
     try {
@@ -609,6 +615,60 @@ export default function FilmWorkspace({ projectId }: Props) {
     setProject(updated);
   };
 
+  const startEditEpisodeTitle = (ep: FilmEpisodeRecord) => {
+    setEpisodeTitleDraft(ep.title?.trim() || `${t("Tập")} ${ep.index}`);
+    setEditingEpisodeId(ep.id);
+  };
+
+  const commitEpisodeTitle = async () => {
+    const episodeId = editingEpisodeId;
+    if (!episodeId) return;
+    const episode = episodes.find((e) => e.id === episodeId);
+    setEditingEpisodeId(null);
+    if (!episode) return;
+    const nextTitle = episodeTitleDraft.trim();
+    if (!nextTitle) {
+      toast.warn(t("Tên tập không được để trống."));
+      return;
+    }
+    if (nextTitle === (episode.title || "").trim()) return;
+    const updated: FilmEpisodeRecord = {
+      ...episode,
+      title: nextTitle,
+      updatedAt: new Date().toISOString(),
+    };
+    await putFilmEpisode(updated);
+    setEpisodes((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
+  };
+
+  const handleDeleteProject = async () => {
+    if (!project) return;
+    const ok = alert?.danger
+      ? await alert.danger(
+          t("Xóa dự án"),
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ tập, phân cảnh, nhân vật, vật phẩm và bối cảnh. Thao tác không hoàn tác. Tiếp tục?",
+            { name: project.name }
+          ),
+          t("Xóa")
+        )
+      : window.confirm(
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ dữ liệu dự án. Tiếp tục?",
+            { name: project.name }
+          )
+        );
+    if (!ok) return;
+    try {
+      await deleteFilmProject(project.id);
+      toast.success(t("Đã xóa dự án “{{name}}”", { name: project.name }));
+      void router.push("/film");
+    } catch (err) {
+      console.error("[FilmWorkspace] delete project failed:", err);
+      toast.error(t("Không thể xóa dự án"));
+    }
+  };
+
   /** Giữ đúng tập từ `?ep=` khi reload / back-forward (shallow). */
   useEffect(() => {
     if (!router.isReady || episodes.length === 0) return;
@@ -677,6 +737,69 @@ export default function FilmWorkspace({ projectId }: Props) {
     },
     [router]
   );
+
+  const handleAddEpisode = async () => {
+    if (!project) return;
+    try {
+      const result = await addFilmEpisode(project.id);
+      setProject(result.project);
+      setEpisodes(result.episodes);
+      setCharacters(result.characters);
+      setPropsList(result.props);
+      setSceneImages(result.sceneImages);
+      setSceneCount(result.project.sceneCount || 0);
+      selectActiveEpisode(result.episodes.length - 1);
+      toast.success(t("Đã thêm {{title}}", { title: result.addedEpisode.title }));
+    } catch (err) {
+      console.error("[FilmWorkspace] add episode failed:", err);
+      toast.error(t("Không thể thêm tập"));
+    }
+  };
+
+  const handleDeleteEpisode = async (episode: FilmEpisodeRecord, deletedIdx: number) => {
+    if (!project || episodes.length <= 1) return;
+    const label = episode.title || `${t("Tập")} ${episode.index}`;
+    const ok = alert?.danger
+      ? await alert.danger(
+          t("Xóa tập"),
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ phân cảnh và dữ liệu Studio của tập này. Thao tác không hoàn tác. Tiếp tục?",
+            { name: label }
+          ),
+          t("Xóa")
+        )
+      : window.confirm(
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ phân cảnh và dữ liệu Studio của tập này. Tiếp tục?",
+            { name: label }
+          )
+        );
+    if (!ok) return;
+
+    const activeIdBefore = activeEpisode?.id;
+    try {
+      const result = await deleteFilmEpisode(project.id, episode.id);
+      setProject(result.project);
+      setEpisodes(result.episodes);
+      setCharacters(result.characters);
+      setPropsList(result.props);
+      setSceneImages(result.sceneImages);
+      setSceneCount(result.project.sceneCount || 0);
+      if (activeIdBefore === episode.id) {
+        setScenes([]);
+        selectActiveEpisode(Math.min(deletedIdx, result.episodes.length - 1));
+      } else if (activeIdBefore) {
+        const nextIdx = result.episodes.findIndex((e) => e.id === activeIdBefore);
+        if (nextIdx >= 0 && nextIdx !== activeEpisodeIndex) {
+          selectActiveEpisode(nextIdx);
+        }
+      }
+      toast.success(t("Đã xóa {{name}}", { name: label }));
+    } catch (err) {
+      console.error("[FilmWorkspace] delete episode failed:", err);
+      toast.error(t("Không thể xóa tập"));
+    }
+  };
 
   useEffect(() => {
     if (!activeEpisode) return;
@@ -4753,28 +4876,123 @@ export default function FilmWorkspace({ projectId }: Props) {
               className="!rounded-lg"
               onClick={load}
             />
+            <Button
+              outline
+              small
+              text={t("Xóa dự án")}
+              icon={<HiTrash />}
+              className="!rounded-lg !border-red-200 !text-red-600 hover:!bg-red-50"
+              onClick={() => void handleDeleteProject()}
+            />
             <TrainingGuidePopover
               variant="toolbar"
               topicSlug={TrainingTopicSlug.MAKE_FILM}
             />
           </div>
         </div>
-        {episodes.length > 1 && (
-          <div className="flex flex-wrap gap-2 px-4 pb-3 sm:px-6 lg:px-8">
-            {episodes.map((ep, idx) => (
-              <button
-                key={ep.id}
-                type="button"
-                onClick={() => selectActiveEpisode(idx)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium border cursor-pointer ${
-                  idx === activeEpisodeIndex
-                    ? "bg-blue-50 border-blue-200 text-blue-700"
-                    : "bg-white border-gray-200 text-gray-600 hover:border-gray-300"
-                }`}
-              >
-                {ep.title || `${t("Tập")} ${ep.index}`}
-              </button>
-            ))}
+        {episodes.length > 0 && (
+          <div className="flex flex-wrap gap-2 items-center px-4 pb-3 sm:px-6 lg:px-8">
+            {episodes.map((ep, idx) => {
+              const active = idx === activeEpisodeIndex;
+              const renaming = editingEpisodeId === ep.id;
+              const hovered = hoveredEpisodeId === ep.id;
+              const actionCount = 1 + (episodes.length > 1 ? 1 : 0);
+              const actionsOpen = hovered && !renaming;
+              return (
+                <span
+                  key={ep.id}
+                  onMouseEnter={() => setHoveredEpisodeId(ep.id)}
+                  onMouseLeave={() =>
+                    setHoveredEpisodeId((cur) => (cur === ep.id ? null : cur))
+                  }
+                  className={`inline-flex items-center rounded-lg border text-xs font-medium ${
+                    active || renaming
+                      ? "bg-blue-50 border-blue-200 text-blue-700"
+                      : "bg-white border-gray-200 text-gray-600"
+                  }`}
+                >
+                  {renaming ? (
+                    <input
+                      autoFocus
+                      value={episodeTitleDraft}
+                      onChange={(e) => setEpisodeTitleDraft(e.target.value)}
+                      onBlur={() => void commitEpisodeTitle()}
+                      onClick={(e) => e.stopPropagation()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          (e.target as HTMLInputElement).blur();
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault();
+                          setEditingEpisodeId(null);
+                        }
+                      }}
+                      className="min-w-0 max-w-[12rem] px-2 py-1.5 text-xs font-medium text-blue-700 bg-transparent border-0 outline-none"
+                      style={{ width: `${Math.max(6, episodeTitleDraft.length + 1)}ch` }}
+                      title={t("Đổi tên tập") as string}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => selectActiveEpisode(idx)}
+                      className={`px-3 py-1.5 border-0 cursor-pointer bg-transparent ${
+                        active ? "text-blue-700" : "text-gray-600 hover:text-gray-800"
+                      }`}
+                    >
+                      {ep.title || `${t("Tập")} ${ep.index}`}
+                    </button>
+                  )}
+                  {!renaming ? (
+                    <span
+                      className={`inline-flex items-center self-stretch overflow-hidden border-0 border-l ${
+                        active ? "border-blue-200" : "border-gray-200"
+                      }`}
+                      style={{
+                        width: actionsOpen ? actionCount * 28 : 0,
+                        opacity: actionsOpen ? 1 : 0,
+                        borderLeftWidth: actionsOpen ? 1 : 0,
+                        transition: "width 0.15s ease, opacity 0.15s ease",
+                        pointerEvents: actionsOpen ? "auto" : "none",
+                      }}
+                    >
+                      <button
+                        type="button"
+                        title={t("Đổi tên tập")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startEditEpisodeTitle(ep);
+                        }}
+                        className="inline-flex flex-shrink-0 items-center justify-center w-7 h-full border-0 cursor-pointer bg-transparent hover:bg-blue-100"
+                      >
+                        <HiPencil className="text-sm text-blue-500" />
+                      </button>
+                      {episodes.length > 1 ? (
+                        <button
+                          type="button"
+                          title={t("Xóa tập")}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void handleDeleteEpisode(ep, idx);
+                          }}
+                          className="inline-flex flex-shrink-0 items-center justify-center w-7 h-full border-0 border-l border-inherit cursor-pointer bg-transparent hover:bg-red-50"
+                        >
+                          <HiTrash className="text-sm text-red-500" />
+                        </button>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </span>
+              );
+            })}
+            <Button
+              outline
+              small
+              text={t("Thêm tập")}
+              icon={<HiPlus />}
+              className="!rounded-lg"
+              onClick={() => void handleAddEpisode()}
+            />
           </div>
         )}
       </div>

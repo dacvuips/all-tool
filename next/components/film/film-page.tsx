@@ -2,15 +2,25 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiPlus } from "react-icons/hi";
+import { useAlert } from "../../lib/providers/alert-provider";
+import { useToast } from "../../lib/providers/toast-provider";
 import { Button } from "../shared/utilities/form";
 import FilmCreateDialog from "./film-create-dialog";
-import { createFilmProject, initFilmDB, listFilmProjects, updateFilmProject } from "./film-idb";
+import {
+  createFilmProject,
+  deleteFilmProject,
+  initFilmDB,
+  listFilmProjects,
+  updateFilmProject,
+} from "./film-idb";
 import FilmProjectCard from "./film-project-card";
 import { FilmProjectCreateInput, FilmProjectRecord } from "./film-types";
 
 const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
   const { t } = useTranslation();
   const router = useRouter();
+  const alert = useAlert();
+  const toast = useToast();
   const [projects, setProjects] = useState<FilmProjectRecord[]>([]);
   const [ready, setReady] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -53,6 +63,33 @@ const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
   const closeDialog = () => {
     setDialogOpen(false);
     setEditingProject(null);
+  };
+
+  const handleDelete = async (project: FilmProjectRecord) => {
+    const ok = alert?.danger
+      ? await alert.danger(
+          t("Xóa dự án"),
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ tập, phân cảnh, nhân vật, vật phẩm và bối cảnh. Thao tác không hoàn tác. Tiếp tục?",
+            { name: project.name }
+          ),
+          t("Xóa")
+        )
+      : window.confirm(
+          t(
+            "Xóa “{{name}}” sẽ xóa toàn bộ dữ liệu dự án. Tiếp tục?",
+            { name: project.name }
+          )
+        );
+    if (!ok) return;
+    try {
+      await deleteFilmProject(project.id);
+      setProjects((prev) => prev.filter((p) => p.id !== project.id));
+      toast.success(t("Đã xóa dự án “{{name}}”", { name: project.name }));
+    } catch (err) {
+      console.error("[FilmPage] delete project failed:", err);
+      toast.error(t("Không thể xóa dự án"));
+    }
   };
 
   const handleSubmit = async (data: FilmProjectCreateInput) => {
@@ -127,6 +164,7 @@ const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
               key={project.id}
               project={project}
               onEdit={openEdit}
+              onDelete={handleDelete}
               onClick={() => openProject(project)}
             />
           ))}

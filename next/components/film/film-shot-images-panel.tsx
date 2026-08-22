@@ -33,6 +33,8 @@ import FilmShotImageCard, {
   sceneFrameCreating,
   sceneFrameReady,
 } from "./film-shot-image-card";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { getFilmSceneDisplayNames, matchesFilmNameSearch } from "./film-production-search";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
 import {
   FilmAspectRatio,
@@ -106,8 +108,16 @@ export default function FilmShotImagesPanel({
   /** Chỉ true khi đang chạy "Tạo hàng loạt" — gen đơn không khóa nút bulk. */
   const [bulkBusy, setBulkBusy] = useState(false);
   const [editSceneId, setEditSceneId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const readyCount = scenes.filter(sceneFrameReady).length;
+  const visibleScenes = useMemo(() => {
+    const sorted = scenes.slice().sort((a, b) => a.index - b.index);
+    if (!searchQuery.trim()) return sorted;
+    return sorted.filter((scene) =>
+      matchesFilmNameSearch(getFilmSceneDisplayNames(scene), searchQuery)
+    );
+  }, [scenes, searchQuery]);
   const allDone = scenes.length > 0 && readyCount === scenes.length;
   const editScene = editSceneId
     ? scenes.find((s) => s.id === editSceneId) || null
@@ -231,6 +241,12 @@ export default function FilmShotImagesPanel({
               </p>
             </div>
           </div>
+          <FilmProductionSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t("Tìm cảnh quay...")}
+            className="w-full sm:flex-1 sm:max-w-xs order-last sm:order-none"
+          />
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {onBulkCreateFrames && (
               <Button
@@ -269,15 +285,16 @@ export default function FilmShotImagesPanel({
                 onClick={() => onTabNavigate?.("storyboard")}
               />
             </div>
+          ) : visibleScenes.length === 0 ? (
+            <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
+              <p className="text-sm text-gray-400 m-0">{t("Không có cảnh quay khớp tìm kiếm.")}</p>
+            </div>
           ) : (
             <div className={FILM_MEDIA_CARD_GRID_CLASS}>
-              {scenes
-                .slice()
-                .sort((a, b) => a.index - b.index)
-                .map((scene) => (
-                  <FilmShotImageCard
-                    key={scene.id}
-                    scene={scene}
+              {visibleScenes.map((scene) => (
+                <FilmShotImageCard
+                  key={scene.id}
+                  scene={scene}
                     aspectRatio={aspectRatio}
                     storyboardImagePromptStyle={storyboardImagePromptStyle}
                     hideVideoTab

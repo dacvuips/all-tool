@@ -27,8 +27,10 @@ import {
 } from "./_film-ai-credentials";
 import { FILM_DEFAULT_SYSTEM_INSTRUCTION } from "./_film-screenplay-system-instruction";
 import {
-  FilmExtractScreenplayGeminiSchema,
-  FilmExtractScreenplayOpenAIJsonSchema,
+  buildExtractScreenplaySchemas,
+  FILM_CHARACTER_ROLES,
+  FILM_PROP_CATEGORIES,
+  FILM_TIME_OF_DAY_VALUES,
   type FilmExtractCharacterAction,
   type FilmExtractCharacterItem,
   type FilmExtractDialogue,
@@ -129,78 +131,13 @@ function buildUserPrompt(params: {
   return [
     "## TASK",
     inherit
-      ? "Chia nội dung gốc bên dưới thành các PHÂN CẢNH chi tiết cho storyboard, có kế thừa mạch truyện từ tập trước."
-      : "Chia nội dung gốc bên dưới thành các PHÂN CẢNH chi tiết cho storyboard.",
-    `BẮT BUỘC tạo đúng ${sceneCount} phân cảnh (scenes.length === ${sceneCount}). Không được ít hơn hoặc nhiều hơn.`,
-    `Mọi field text (title, content, dialogue, description, ...) viết bằng ${language}.`,
-    "",
-    "## MỖI PHÂN CẢNH (scenes[i]) BẮT BUỘC có:",
-    "- index: số thứ tự 1..N",
-    "- title: tiêu đề ngắn",
-    "- content: tóm tắt / overview ngắn toàn cảnh (1–3 câu)",
-    "- characterActions: mảng { character, action } — HÀNH ĐỘNG từng nhân vật trong cảnh:",
-    "  · action: làm gì, tương tác với ai/cái gì như thế nào (KHÔNG gộp lời thoại vào đây)",
-    "  · mỗi nhân vật trong characterNames nên có 1 phần tử tương ứng",
-    "- visualDescription: Hình ảnh cảnh quay — mô tả khung hình, composition, ánh sáng, không gian nhìn thấy",
-    "- atmosphere: Không khí cảnh — cảm xúc / năng lượng / tone (căng thẳng, ấm áp, u ám, ...)",
-    "- shotSize: cỡ cảnh (Toàn cảnh / Trung cảnh / Cận cảnh / Siêu cận / ...)",
-    "- cameraAngle: góc máy",
-    "- cameraMovement: lia máy",
-    "- motion: [MOTION] mô tả CHI TIẾT chuyển động camera + nhân vật/vật thể (hướng, tốc độ, nhịp). KHÔNG để rỗng.",
-    "- audio: [AUDIO] nền âm thanh tổng / ambience (phòng, ngoài trời, crowd, máy móc...). KHÔNG để rỗng.",
-    "- sfx: [SFX] hiệu ứng cụ thể (bước chân, cửa, va chạm, mưa...). Dùng 'none' nếu không có.",
-    "- music: [MUSIC] nhạc nền (thể loại, mood, crescendo/fade). Dùng 'none' nếu im lặng.",
-    "- voice: [VOICE] chỉ dẫn giọng — KHÔNG chép nguyên thoại. Dùng 'none' CHỈ khi cảnh không có lời.",
-    "  · Có lời thì BẮT BUỘC đủ 5 yếu tố: giới tính (nam/nữ), pitch (trầm/bổng), tốc độ (nhanh/chậm), tuổi giọng, cảm xúc.",
-    "  · Có thể thêm ai nói. VD: 'Minh, nam, giọng trầm, nói chậm, tuổi trung niên, căng thẳng'.",
-    "  · Nhiều người nói: liệt kê từng người, mỗi người đủ 5 yếu tố.",
-    "- videoPrompt: Prompt video ĐẦY ĐỦ gắn vào UI từng phân cảnh. Format BẮT BUỘC (không markdown, KHÔNG viết nội dung liền sau tag):",
-    "    [MOTION]",
-    "    - mô tả chuyển động",
-    "    [AUDIO]",
-    "    - mô tả nền âm",
-    "    [SFX]",
-    "    - hiệu ứng",
-    "    [MUSIC]",
-    "    - nhạc nền",
-    "    [VOICE]",
-    "    - chỉ dẫn giọng",
-    "    [DIALOGUE]",
-    "    - Tên: lời thoại (không có thoại thì ghi: - Không thoại)",
-    "  · Mỗi tag một khối: tag trên 1 dòng, giá trị xuống dòng, mỗi dòng bắt đầu bằng '- '.",
-    "  · SAI: [AUDIO]Nước rút...  — ĐÚNG:",
-    "    [AUDIO]",
-    "    - Nước rút...",
-    "  · videoPrompt phải dùng đúng nội dung các field motion/audio/sfx/music/voice/dialogues ở trên.",
-    "- dialogues: mảng { character, line } — [DIALOGUE] lời thoại từng nhân vật; để [] nếu không có thoại",
-    "- location: địa điểm cảnh",
-    "- characterNames: tên nhân vật xuất hiện trong cảnh",
-    "- propNames: props xuất hiện trong cảnh",
-    "",
-    "## TỔNG HỢP (unique, không trùng lặp):",
-    "- characters: { name, description, clothingAccessories, role }",
-    "  · description: ngoại hình + tính cách (KHÔNG gồm trang phục)",
-    "  · clothingAccessories: Clothing & Accessories — quần áo, giày dép, trang sức, phụ kiện chi tiết",
-    "- locations: { name, description, context, timeOfDay }",
-    "  · timeOfDay: Time of Day / ánh sáng — e.g. Golden Hour, Harsh Noon, Rainy Night, Blue Hour, Overcast Morning, Moonlit Night",
-    "- props: { name, description, category }",
-    "",
-    "## RULES",
-    `- Đúng ${sceneCount} phần tử trong scenes, index liên tục từ 1 đến ${sceneCount}.`,
-    "- Chia nội dung cân đều theo tiến trình câu chuyện; không cắt vụn vô nghĩa.",
-    "- Role nhân vật: main | antagonist | supporting | extra.",
-    "- Category props: weapon | container | prop | clothing | other.",
-    "- clothingAccessories BẮT BUỘC cụ thể, sống động cho image prompt (không để rỗng).",
-    "- timeOfDay BẮT BUỘC dùng cụm ánh sáng điện ảnh tiếng Anh (Golden Hour / Harsh Noon / Rainy Night / ...).",
-    "- Mỗi phân cảnh BẮT BUỘC có mô tả chi tiết motion/audio/sfx/music/voice (tag [MOTION] [AUDIO] [SFX] [MUSIC] [VOICE] [DIALOGUE] khi ghép prompt video).",
-    "- motion/audio/sfx/music/voice viết cụ thể, điện ảnh; không generic ('có tiếng động').",
-    "- [VOICE] khi có thoại: BẮT BUỘC gồm giới tính + pitch (trầm/bổng) + tốc độ + tuổi giọng + cảm xúc. Không được chỉ 'giọng nam' hoặc 'nói nhanh'.",
-    "- Return ONLY raw JSON matching the response schema. No markdown, no code fences, no explanation.",
-    "",
-    `## OUTPUT LANGUAGE: ${language}`,
-    `## SCENE COUNT (MANDATORY): ${sceneCount}`,
+      ? "Chia ORIGINAL CONTENT bên dưới thành đúng số phân cảnh storyboard JSON, tiếp nối mạch truyện từ tập trước."
+      : "Chia ORIGINAL CONTENT bên dưới thành đúng số phân cảnh storyboard JSON.",
+    `BẮT BUỘC đúng ${sceneCount} phân cảnh (scenes.length === ${sceneCount}).`,
+    "Tuân thủ JSON Schema đã cung cấp — mọi quy tắc field, enum và format nằm trong schema descriptions.",
+    `Mọi field narrative viết bằng ${language}.`,
     inherit
-      ? "- Tiếp nối tập trước: giữ continuity nhân vật/bối cảnh, không viết lại các cảnh đã có ở tập trước."
+      ? "- Giữ continuity nhân vật/bối cảnh; KHÔNG lặp lại các cảnh đã có ở tập trước."
       : "",
     "",
     formatPreviousScenesBlock(previousScenes),
@@ -268,6 +205,40 @@ function normalizeCharacterActions(raw: unknown): FilmExtractCharacterAction[] {
   return out;
 }
 
+function isNoneish(v: string): boolean {
+  const s = v.trim().toLowerCase();
+  return !s || s === "none" || s === "không" || s === "khong";
+}
+
+function normalizeEnumValue<T extends string>(raw: string, allowed: readonly T[], fallback: T): T {
+  const key = raw.trim().toLowerCase();
+  const hit = allowed.find((v) => v.toLowerCase() === key);
+  return hit || fallback;
+}
+
+function repairExtractScene(scene: FilmExtractSceneItem): FilmExtractSceneItem {
+  const next = { ...scene };
+  if (!next.sfx.trim()) next.sfx = "none";
+  if (!next.music.trim()) next.music = "none";
+  if (!next.motion.trim()) {
+    next.motion = next.content
+      ? `Camera và nhân vật di chuyển tự nhiên trong cảnh — ${next.content.slice(0, 160)}`
+      : "Camera pan chậm qua không gian cảnh, nhân vật có chuyển động nhẹ theo nhịp cảnh";
+  }
+  if (!next.audio.trim()) {
+    next.audio = next.atmosphere
+      ? `Ambience và lớp âm nền phù hợp không khí ${next.atmosphere}`
+      : "Ambience không gian cảnh, tiếng môi trường vừa phải";
+  }
+  if (next.dialogues.length > 0 && isNoneish(next.voice)) {
+    next.voice =
+      "Giọng trung tính, pitch trung bình, tốc độ vừa, tuổi trưởng thành, cảm xúc theo tone cảnh";
+  } else if (!next.dialogues.length && isNoneish(next.voice)) {
+    next.voice = "none";
+  }
+  return next;
+}
+
 function normalizeResult(parsed: Record<string, unknown>, sceneCount: number): FilmExtractScreenplayResult {
   const rawScenes = Array.isArray(parsed.scenes) ? parsed.scenes : [];
   if (rawScenes.length === 0) {
@@ -329,7 +300,7 @@ function normalizeResult(parsed: Record<string, unknown>, sceneCount: number): F
       characterNames,
       propNames: asStringArray(s.propNames),
     };
-  });
+  }).map(repairExtractScene);
 
   // Re-index 1..N liên tục
   scenes.forEach((sc, i) => {
@@ -345,8 +316,8 @@ function normalizeResult(parsed: Record<string, unknown>, sceneCount: number): F
       description: asString(c.description),
       clothingAccessories: asString(
         c.clothingAccessories ?? c.clothing_and_accessories ?? c.clothing
-      ),
-      role: asString(c.role) || "supporting",
+      ) || asString(c.description).slice(0, 120),
+      role: normalizeEnumValue(asString(c.role) || "supporting", FILM_CHARACTER_ROLES, "supporting"),
     };
   }).filter((c) => c.name);
 
@@ -354,12 +325,17 @@ function normalizeResult(parsed: Record<string, unknown>, sceneCount: number): F
     Array.isArray(parsed.locations) ? parsed.locations : []
   ).map((raw) => {
     const l = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-    const timeOfDay = asString(l.timeOfDay ?? l.time_of_day);
+    const timeOfDayRaw = asString(l.timeOfDay ?? l.time_of_day);
+    const timeOfDay = normalizeEnumValue(
+      timeOfDayRaw || "Daylight",
+      FILM_TIME_OF_DAY_VALUES,
+      "Daylight"
+    );
     return {
       name: asString(l.name),
       description: asString(l.description),
       context: asString(l.context) || timeOfDay || "Ngày",
-      timeOfDay: timeOfDay || asString(l.context) || "Daylight",
+      timeOfDay,
     };
   }).filter((l) => l.name);
 
@@ -370,7 +346,7 @@ function normalizeResult(parsed: Record<string, unknown>, sceneCount: number): F
     return {
       name: asString(p.name),
       description: asString(p.description),
-      category: asString(p.category) || "prop",
+      category: normalizeEnumValue(asString(p.category) || "prop", FILM_PROP_CATEGORIES, "prop"),
     };
   }).filter((p) => p.name);
 
@@ -425,6 +401,7 @@ async function callOpenAiJson(params: {
   apiKey: string;
   systemInstruction: string;
   userPrompt: string;
+  openAiSchema: Record<string, unknown>;
 }): Promise<{ text: string; model: string }> {
   const model = OPENAI_MODEL;
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -444,7 +421,7 @@ async function callOpenAiJson(params: {
         json_schema: {
           name: "film_extract_screenplay",
           strict: true,
-          schema: FilmExtractScreenplayOpenAIJsonSchema,
+          schema: params.openAiSchema,
         },
       },
     }),
@@ -479,6 +456,7 @@ async function callOpenAiJsonObjectFallback(params: {
   apiKey: string;
   systemInstruction: string;
   userPrompt: string;
+  openAiSchema: Record<string, unknown>;
 }): Promise<{ text: string; model: string }> {
   const model = OPENAI_MODEL;
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -496,7 +474,7 @@ async function callOpenAiJsonObjectFallback(params: {
             params.systemInstruction,
             "",
             "Output MUST match this JSON Schema exactly:",
-            JSON.stringify(FilmExtractScreenplayOpenAIJsonSchema),
+            JSON.stringify(params.openAiSchema),
           ].join("\n"),
         },
         { role: "user", content: params.userPrompt },
@@ -531,6 +509,7 @@ async function callGeminiJson(params: {
   apiKey: string;
   systemInstruction: string;
   userPrompt: string;
+  geminiSchema: Record<string, unknown>;
 }): Promise<{ text: string; model: string }> {
   const model = GEMINI_MODEL;
   const ai = new GoogleGenAI({ apiKey: params.apiKey });
@@ -541,7 +520,7 @@ async function callGeminiJson(params: {
       systemInstruction: params.systemInstruction,
       temperature: 0.35,
       responseMimeType: "application/json",
-      responseSchema: FilmExtractScreenplayGeminiSchema,
+      responseSchema: params.geminiSchema,
     },
   });
   const text = String((response as any)?.text || "").trim();
@@ -595,6 +574,7 @@ export default [
         await checkRequestLimit(context.id);
 
         const previousScenes = normalizePreviousScenes(body?.previousScenes);
+        const schemas = buildExtractScreenplaySchemas({ sceneCount, language });
         const userPrompt = buildUserPrompt({
           content,
           language,
@@ -620,7 +600,7 @@ export default [
             temperature: 0.35,
             baseUrl: cred.endpoint,
             apiKey: cred.apiKey,
-            jsonSchema: FilmExtractScreenplayOpenAIJsonSchema as unknown as Record<string, unknown>,
+            jsonSchema: schemas.openai as unknown as Record<string, unknown>,
             jsonSchemaName: "film_extract_screenplay",
           });
         } else if (cred.provider === "gemini") {
@@ -628,6 +608,7 @@ export default [
             apiKey: cred.apiKey,
             systemInstruction,
             userPrompt,
+            geminiSchema: schemas.gemini as unknown as Record<string, unknown>,
           });
           rawText = out.text;
           model = out.model;
@@ -636,6 +617,7 @@ export default [
             apiKey: cred.apiKey,
             systemInstruction,
             userPrompt,
+            openAiSchema: schemas.openai as unknown as Record<string, unknown>,
           });
           rawText = out.text;
           model = out.model;

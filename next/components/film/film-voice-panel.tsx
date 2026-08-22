@@ -47,6 +47,8 @@ import FilmVoiceCard from "./film-voice-card";
 import FilmVoiceConfigDialog from "./film-voice-config-dialog";
 import { downloadFilmVoicesZip } from "./film-voice-download";
 import type { FilmVoiceGenerateInput } from "./film-voice-generate";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { matchesFilmNameSearch } from "./film-production-search";
 
 type Props = {
   projectId?: string;
@@ -102,6 +104,7 @@ export default function FilmVoicePanel({
   const [voiceConfigOpen, setVoiceConfigOpen] = useState(false);
   const [speakerFilter, setSpeakerFilter] = useState<string | null>(null);
   const [episodeFilter, setEpisodeFilter] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [allScenes, setAllScenes] = useState<FilmSceneRecord[]>(scenes);
   const [sceneRefresh, setSceneRefresh] = useState(0);
 
@@ -171,8 +174,13 @@ export default function FilmVoicePanel({
         (x) => x.line.character?.trim().toLowerCase() === speakerFilter
       );
     }
+    if (searchQuery.trim()) {
+      next = next.filter((x) =>
+        matchesFilmNameSearch([x.line.character], searchQuery)
+      );
+    }
     return next;
-  }, [list, episodeFilter, speakerFilter]);
+  }, [list, episodeFilter, speakerFilter, searchQuery]);
   const readyCount = visibleList.filter((x) => dialogueLineReady(x.line)).length;
   const anyCreating = visibleList.some((x) => dialogueLineCreating(x.line));
   const bulkEligibleCount = useMemo(
@@ -362,6 +370,12 @@ export default function FilmVoicePanel({
               </p>
             </div>
           </div>
+          <FilmProductionSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t("Tìm nhân vật...")}
+            className="w-full sm:flex-1 sm:max-w-xs order-last sm:order-none"
+          />
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {onBulkCreateVoices && (
               anyCreating && onStopBulkVoices ? (
@@ -546,7 +560,7 @@ export default function FilmVoicePanel({
               </div>
             ) : visibleList.length === 0 ? (
               <p className="text-sm text-gray-400 m-0 py-8 text-center">
-                {episodeFilter || speakerFilter
+                {episodeFilter || speakerFilter || searchQuery.trim()
                   ? t("Không có câu thoại khớp bộ lọc.")
                   : t("Không có câu thoại của nhân vật này.")}
               </p>

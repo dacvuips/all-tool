@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { HiDocumentText, HiPencil, HiUserGroup } from "react-icons/hi";
+import { HiDocumentText, HiPencil, HiTrash, HiUserGroup } from "react-icons/hi";
 import { FilmProjectRecord } from "./film-types";
 import { filmTimeAgo } from "./film-utils";
 
@@ -7,31 +7,52 @@ type Props = {
   project: FilmProjectRecord;
   onClick?: () => void;
   onEdit?: (project: FilmProjectRecord) => void;
+  onDelete?: (project: FilmProjectRecord) => void;
 };
 
-export default function FilmProjectCard({ project, onClick, onEdit }: Props) {
+export default function FilmProjectCard({ project, onClick, onEdit, onDelete }: Props) {
   const { t } = useTranslation();
   const progress = Math.min(100, Math.max(0, project.progress ?? 0));
 
   return (
     <div className="relative group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md hover:border-blue-100 transition-all">
-      {onEdit && (
-        <button
-          type="button"
-          title={t("Sửa dự án")}
-          aria-label={t("Sửa dự án")}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(project);
-          }}
-          className="absolute top-3 right-3 z-10 w-8 h-8 rounded-lg flex items-center justify-center
-            text-gray-400 bg-white bg-opacity-90 border border-gray-100 shadow-sm
-            opacity-100 sm:opacity-0 sm:group-hover:opacity-100
-            hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50
-            transition-all cursor-pointer"
-        >
-          <HiPencil className="text-base" />
-        </button>
+      {(onEdit || onDelete) && (
+        <div className="absolute top-3 right-3 z-10 flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              type="button"
+              title={t("Sửa dự án")}
+              aria-label={t("Sửa dự án")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(project);
+              }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center
+                text-gray-400 bg-white bg-opacity-90 border border-gray-100 shadow-sm
+                hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50
+                transition-all cursor-pointer"
+            >
+              <HiPencil className="text-base" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              title={t("Xóa dự án")}
+              aria-label={t("Xóa dự án")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(project);
+              }}
+              className="w-8 h-8 rounded-lg flex items-center justify-center
+                text-gray-400 bg-white bg-opacity-90 border border-gray-100 shadow-sm
+                hover:text-red-600 hover:border-red-200 hover:bg-red-50
+                transition-all cursor-pointer"
+            >
+              <HiTrash className="text-base" />
+            </button>
+          )}
+        </div>
       )}
 
       <button

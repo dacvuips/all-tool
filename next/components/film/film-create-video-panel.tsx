@@ -29,6 +29,8 @@ import {
   withBuiltSceneVideoPrompt,
 } from "./film-scene-video-prompt";
 import FilmShotImageCard from "./film-shot-image-card";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { getFilmSceneDisplayNames, matchesFilmNameSearch } from "./film-production-search";
 import type { FilmStoryboardTab } from "./film-storyboard-panel";
 import {
   FilmAspectRatio,
@@ -127,12 +129,20 @@ export default function FilmCreateVideoPanel({
   const [videoRefMode, setVideoRefMode] =
     useState<FilmVideoRefMode>(videoRefModeProp);
   const [modeBusy, setModeBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     setVideoRefMode(videoRefModeProp);
   }, [videoRefModeProp]);
 
   const readyCount = scenes.filter(sceneVideoReady).length;
+  const visibleScenes = useMemo(() => {
+    const sorted = scenes.slice().sort((a, b) => a.index - b.index);
+    if (!searchQuery.trim()) return sorted;
+    return sorted.filter((scene) =>
+      matchesFilmNameSearch(getFilmSceneDisplayNames(scene), searchQuery)
+    );
+  }, [scenes, searchQuery]);
   const errorCount = scenes.filter((s) => s.videoStatus === "error").length;
   const allSilentLipSync =
     scenes.length > 0 && scenes.every((s) => !!s.videoSilentLipSync);
@@ -321,6 +331,13 @@ export default function FilmCreateVideoPanel({
               </div>
             </div>
 
+            <FilmProductionSearchInput
+              value={searchQuery}
+              onChange={setSearchQuery}
+              placeholder={t("Tìm cảnh quay...")}
+              className="w-full sm:flex-1 sm:max-w-xs"
+            />
+
             <div className="flex flex-wrap flex-shrink-0 gap-2 items-center sm:justify-end">
               <>
                 <span className="inline-flex sm:hidden">
@@ -475,15 +492,16 @@ export default function FilmCreateVideoPanel({
                 onClick={() => onTabNavigate?.("storyboard")}
               />
             </div>
+          ) : visibleScenes.length === 0 ? (
+            <div className="flex flex-col gap-2 justify-center items-center h-full text-center min-h-2xs">
+              <p className="m-0 text-sm text-gray-400">{t("Không có cảnh quay khớp tìm kiếm.")}</p>
+            </div>
           ) : (
             <div className={FILM_MEDIA_CARD_GRID_CLASS}>
-              {scenes
-                .slice()
-                .sort((a, b) => a.index - b.index)
-                .map((scene) => (
-                  <FilmShotImageCard
-                    key={scene.id}
-                    scene={scene}
+              {visibleScenes.map((scene) => (
+                <FilmShotImageCard
+                  key={scene.id}
+                  scene={scene}
                     aspectRatio={aspectRatio}
                     forcedTab="video"
                     hideImageTab

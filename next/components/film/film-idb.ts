@@ -36,6 +36,7 @@ import {
   buildFilmEpisodesForProject,
   buildFilmProjectRecord,
   buildFilmScenesForEpisode,
+  createFilmId,
 } from "./film-types";
 import { formatFilmDialogueText } from "./film-dialogue";
 import {
@@ -224,6 +225,32 @@ export function openFilmDB(): Promise<IDBDatabase> {
 function reqPromise<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/** Xóa mọi bản ghi có `projectId` khớp — dùng index byProjectId trong cùng transaction. */
+function deleteStoreRowsByProjectId(
+  store: IDBObjectStore,
+  projectId: string
+): Promise<number> {
+  return new Promise((resolve, reject) => {
+    if (!store.indexNames.contains("byProjectId")) {
+      resolve(0);
+      return;
+    }
+    let deleted = 0;
+    const req = store.index("byProjectId").openCursor(IDBKeyRange.only(projectId));
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (!cursor) {
+        resolve(deleted);
+        return;
+      }
+      cursor.delete();
+      deleted += 1;
+      cursor.continue();
+    };
     req.onerror = () => reject(req.error);
   });
 }
@@ -468,14 +495,13 @@ export async function updateFilmProjectStoryboardPrompts(
   return { project, updatedScenes };
 }
 
+/**
+ * Xóa dự án và toàn bộ dữ liệu liên quan:
+ * episodes, scenes, characters, props, sceneImages, studioTimelines
+ * (blob ảnh/video/voice nằm trong các record → bị dọn theo).
+ */
 export async function deleteFilmProject(id: string): Promise<void> {
-  const [episodes, characters, scenes, props, sceneImages] = await Promise.all([
-    getFilmEpisodesByProject(id).catch(() => [] as FilmEpisodeRecord[]),
-    getFilmCharactersByProject(id).catch(() => [] as FilmCharacterRecord[]),
-    getFilmScenesByProject(id).catch(() => [] as FilmSceneRecord[]),
-    getFilmPropsByProject(id).catch(() => [] as FilmPropRecord[]),
-    getFilmSceneImagesByProject(id).catch(() => [] as FilmSceneImageRecord[]),
-  ]);
+  const episodes = await getFilmEpisodesByProject(id).catch(() => [] as FilmEpisodeRecord[]);
 
   const db = await openFilmDB();
   const storeNames = [
@@ -485,6 +511,7 @@ export async function deleteFilmProject(id: string): Promise<void> {
     FILM_STORE.props,
     FILM_STORE.sceneImages,
     FILM_STORE.scenes,
+    FILM_STORE.studioTimelines,
   ].filter((name) => db.objectStoreNames.contains(name));
 
   const tx = db.transaction(storeNames, "readwrite");
@@ -492,25 +519,26 @@ export async function deleteFilmProject(id: string): Promise<void> {
   if (db.objectStoreNames.contains(FILM_STORE.projects)) {
     tx.objectStore(FILM_STORE.projects).delete(id);
   }
-  if (db.objectStoreNames.contains(FILM_STORE.episodes)) {
-    const epStore = tx.objectStore(FILM_STORE.episodes);
-    for (const ep of episodes) epStore.delete(ep.id);
+
+  // Cursor theo byProjectId — dọn hết kể cả bản ghi orphan (ảnh/video/voice blob theo record)
+  for (const storeName of [
+    FILM_STORE.episodes,
+    FILM_STORE.characters,
+    FILM_STORE.props,
+    FILM_STORE.sceneImages,
+    FILM_STORE.scenes,
+    FILM_STORE.studioTimelines,
+  ] as const) {
+    if (!db.objectStoreNames.contains(storeName)) continue;
+    await deleteStoreRowsByProjectId(tx.objectStore(storeName), id);
   }
-  if (db.objectStoreNames.contains(FILM_STORE.characters)) {
-    const chStore = tx.objectStore(FILM_STORE.characters);
-    for (const ch of characters) chStore.delete(ch.id);
-  }
-  if (db.objectStoreNames.contains(FILM_STORE.props)) {
-    const prStore = tx.objectStore(FILM_STORE.props);
-    for (const pr of props) prStore.delete(pr.id);
-  }
-  if (db.objectStoreNames.contains(FILM_STORE.sceneImages)) {
-    const locStore = tx.objectStore(FILM_STORE.sceneImages);
-    for (const loc of sceneImages) locStore.delete(loc.id);
-  }
-  if (db.objectStoreNames.contains(FILM_STORE.scenes)) {
-    const scStore = tx.objectStore(FILM_STORE.scenes);
-    for (const sc of scenes) scStore.delete(sc.id);
+
+  // Studio timeline keyPath = episodeId — xóa thêm theo id tập phòng khi thiếu/sai projectId
+  if (db.objectStoreNames.contains(FILM_STORE.studioTimelines)) {
+    const tlStore = tx.objectStore(FILM_STORE.studioTimelines);
+    for (const ep of episodes) {
+      tlStore.delete(ep.id);
+    }
   }
 
   await txComplete(tx);
@@ -558,6 +586,273 @@ export async function getFilmEpisodesByProject(projectId: string): Promise<FilmE
 
 export async function putFilmEpisode(episode: FilmEpisodeRecord): Promise<void> {
   await withStoreRequest(FILM_STORE.episodes, "readwrite", (s) => s.put(episode));
+}
+
+function defaultEpisodeTitle(index: number): string {
+  return `Tập ${index}`;
+}
+
+function isDefaultEpisodeTitle(title: string, index: number): boolean {
+  const trimmed = title.trim();
+  return trimmed === defaultEpisodeTitle(index) || trimmed === `Episode ${index}`;
+}
+
+function tagEpisodeIdsOnAdd(
+  entityEpisodeIds: string[] | undefined,
+  oldEpisodeIds: string[],
+  newEpisodeId: string
+): string[] | undefined {
+  if (!entityEpisodeIds?.length) {
+    return [...oldEpisodeIds, newEpisodeId];
+  }
+  const hadAll = oldEpisodeIds.every((id) => entityEpisodeIds.includes(id));
+  if (!hadAll) return entityEpisodeIds;
+  return [...entityEpisodeIds, newEpisodeId];
+}
+
+function tagEpisodeIdsOnDelete(
+  entityEpisodeIds: string[] | undefined,
+  episodeId: string
+): string[] | undefined {
+  if (!entityEpisodeIds?.length) return entityEpisodeIds;
+  const next = entityEpisodeIds.filter((id) => id !== episodeId);
+  return next.length ? next : undefined;
+}
+
+export type FilmEpisodeMutationResult = {
+  episodes: FilmEpisodeRecord[];
+  project: FilmProjectRecord;
+  characters: FilmCharacterRecord[];
+  props: FilmPropRecord[];
+  sceneImages: FilmSceneImageRecord[];
+};
+
+/** Thêm tập mới — scaffold scenes mặc định, cập nhật project + entity episodeIds */
+export async function addFilmEpisode(projectId: string): Promise<
+  FilmEpisodeMutationResult & {
+    addedEpisode: FilmEpisodeRecord;
+    addedScenes: FilmSceneRecord[];
+  }
+> {
+  const project = await getFilmProject(projectId);
+  if (!project) {
+    throw new Error(`[film-idb] Project not found: ${projectId}`);
+  }
+
+  const existing = await getFilmEpisodesByProject(projectId);
+  const oldEpisodeIds = existing.map((ep) => ep.id);
+  const nextIndex = existing.length + 1;
+  const now = new Date().toISOString();
+  const scenesPerEp =
+    project.scenesPerEpisode ??
+    Math.max(1, Math.ceil((project.sceneCount || 0) / Math.max(1, project.episodeCount)) || 3);
+
+  const addedEpisode: FilmEpisodeRecord = {
+    id: createFilmId("ep"),
+    projectId,
+    index: nextIndex,
+    title: defaultEpisodeTitle(nextIndex),
+    status: "draft",
+    sceneCount: scenesPerEp,
+    originalContent: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+  const addedScenes = buildFilmScenesForEpisode(projectId, addedEpisode);
+  const updatedProject: FilmProjectRecord = {
+    ...project,
+    episodeCount: nextIndex,
+    sceneCount: (project.sceneCount || 0) + addedScenes.length,
+    updatedAt: now,
+  };
+
+  const [characters, props, sceneImages] = await Promise.all([
+    getFilmCharactersByProject(projectId).catch(() => [] as FilmCharacterRecord[]),
+    getFilmPropsByProject(projectId).catch(() => [] as FilmPropRecord[]),
+    getFilmSceneImagesByProject(projectId).catch(() => [] as FilmSceneImageRecord[]),
+  ]);
+
+  const nextCharacters = characters.map((c) => {
+    const episodeIds = tagEpisodeIdsOnAdd(c.episodeIds, oldEpisodeIds, addedEpisode.id);
+    if (episodeIds === c.episodeIds) return c;
+    return { ...c, episodeIds, updatedAt: now };
+  });
+  const nextProps = props.map((p) => {
+    const episodeIds = tagEpisodeIdsOnAdd(p.episodeIds, oldEpisodeIds, addedEpisode.id);
+    if (episodeIds === p.episodeIds) return p;
+    return { ...p, episodeIds, updatedAt: now };
+  });
+  const nextSceneImages = sceneImages.map((loc) => {
+    const episodeIds = tagEpisodeIdsOnAdd(loc.episodeIds, oldEpisodeIds, addedEpisode.id);
+    if (episodeIds === loc.episodeIds) return loc;
+    return { ...loc, episodeIds, updatedAt: now };
+  });
+
+  const db = await openFilmDB();
+  const storeNames = [
+    FILM_STORE.projects,
+    FILM_STORE.episodes,
+    FILM_STORE.scenes,
+    FILM_STORE.characters,
+    FILM_STORE.props,
+    FILM_STORE.sceneImages,
+  ].filter((name) => db.objectStoreNames.contains(name));
+  const tx = db.transaction(storeNames, "readwrite");
+
+  tx.objectStore(FILM_STORE.projects).put(updatedProject);
+  tx.objectStore(FILM_STORE.episodes).put(addedEpisode);
+  const sceneStore = tx.objectStore(FILM_STORE.scenes);
+  for (const sc of addedScenes) sceneStore.put(sc);
+
+  if (db.objectStoreNames.contains(FILM_STORE.characters)) {
+    const chStore = tx.objectStore(FILM_STORE.characters);
+    for (const ch of nextCharacters) {
+      if (ch.updatedAt === now) chStore.put(ch);
+    }
+  }
+  if (db.objectStoreNames.contains(FILM_STORE.props)) {
+    const propStore = tx.objectStore(FILM_STORE.props);
+    for (const p of nextProps) {
+      if (p.updatedAt === now) propStore.put(p);
+    }
+  }
+  if (db.objectStoreNames.contains(FILM_STORE.sceneImages)) {
+    const locStore = tx.objectStore(FILM_STORE.sceneImages);
+    for (const loc of nextSceneImages) {
+      if (loc.updatedAt === now) locStore.put(loc);
+    }
+  }
+
+  await txComplete(tx);
+
+  return {
+    episodes: [...existing, addedEpisode],
+    project: updatedProject,
+    characters: nextCharacters,
+    props: nextProps,
+    sceneImages: nextSceneImages,
+    addedEpisode,
+    addedScenes,
+  };
+}
+
+/** Xóa tập — không cho xóa tập cuối cùng; reindex các tập còn lại */
+export async function deleteFilmEpisode(
+  projectId: string,
+  episodeId: string
+): Promise<FilmEpisodeMutationResult> {
+  const project = await getFilmProject(projectId);
+  if (!project) {
+    throw new Error(`[film-idb] Project not found: ${projectId}`);
+  }
+
+  const existing = await getFilmEpisodesByProject(projectId);
+  if (existing.length <= 1) {
+    throw new Error("[film-idb] Cannot delete the last episode");
+  }
+  const target = existing.find((ep) => ep.id === episodeId);
+  if (!target) {
+    throw new Error(`[film-idb] Episode not found: ${episodeId}`);
+  }
+
+  const scenes = await getFilmScenesByEpisode(episodeId);
+  const now = new Date().toISOString();
+  const remaining = existing
+    .filter((ep) => ep.id !== episodeId)
+    .sort((a, b) => a.index - b.index)
+    .map((ep, i) => {
+      const nextIndex = i + 1;
+      const title = isDefaultEpisodeTitle(ep.title, ep.index)
+        ? defaultEpisodeTitle(nextIndex)
+        : ep.title;
+      return {
+        ...ep,
+        index: nextIndex,
+        title,
+        updatedAt: now,
+      };
+    });
+
+  const updatedProject: FilmProjectRecord = {
+    ...project,
+    episodeCount: remaining.length,
+    sceneCount: Math.max(0, (project.sceneCount || 0) - scenes.length),
+    updatedAt: now,
+  };
+
+  const [characters, props, sceneImages] = await Promise.all([
+    getFilmCharactersByProject(projectId).catch(() => [] as FilmCharacterRecord[]),
+    getFilmPropsByProject(projectId).catch(() => [] as FilmPropRecord[]),
+    getFilmSceneImagesByProject(projectId).catch(() => [] as FilmSceneImageRecord[]),
+  ]);
+
+  const nextCharacters = characters.map((c) => {
+    const episodeIds = tagEpisodeIdsOnDelete(c.episodeIds, episodeId);
+    if (episodeIds === c.episodeIds) return c;
+    return { ...c, episodeIds, updatedAt: now };
+  });
+  const nextProps = props.map((p) => {
+    const episodeIds = tagEpisodeIdsOnDelete(p.episodeIds, episodeId);
+    if (episodeIds === p.episodeIds) return p;
+    return { ...p, episodeIds, updatedAt: now };
+  });
+  const nextSceneImages = sceneImages.map((loc) => {
+    const episodeIds = tagEpisodeIdsOnDelete(loc.episodeIds, episodeId);
+    if (episodeIds === loc.episodeIds) return loc;
+    return { ...loc, episodeIds, updatedAt: now };
+  });
+
+  const db = await openFilmDB();
+  const storeNames = [
+    FILM_STORE.projects,
+    FILM_STORE.episodes,
+    FILM_STORE.scenes,
+    FILM_STORE.characters,
+    FILM_STORE.props,
+    FILM_STORE.sceneImages,
+    FILM_STORE.studioTimelines,
+  ].filter((name) => db.objectStoreNames.contains(name));
+  const tx = db.transaction(storeNames, "readwrite");
+
+  tx.objectStore(FILM_STORE.projects).put(updatedProject);
+  const epStore = tx.objectStore(FILM_STORE.episodes);
+  epStore.delete(episodeId);
+  for (const ep of remaining) epStore.put(ep);
+
+  const sceneStore = tx.objectStore(FILM_STORE.scenes);
+  for (const sc of scenes) sceneStore.delete(sc.id);
+
+  if (db.objectStoreNames.contains(FILM_STORE.characters)) {
+    const chStore = tx.objectStore(FILM_STORE.characters);
+    for (const ch of nextCharacters) {
+      if (ch.updatedAt === now) chStore.put(ch);
+    }
+  }
+  if (db.objectStoreNames.contains(FILM_STORE.props)) {
+    const propStore = tx.objectStore(FILM_STORE.props);
+    for (const p of nextProps) {
+      if (p.updatedAt === now) propStore.put(p);
+    }
+  }
+  if (db.objectStoreNames.contains(FILM_STORE.sceneImages)) {
+    const locStore = tx.objectStore(FILM_STORE.sceneImages);
+    for (const loc of nextSceneImages) {
+      if (loc.updatedAt === now) locStore.put(loc);
+    }
+  }
+  if (db.objectStoreNames.contains(FILM_STORE.studioTimelines)) {
+    tx.objectStore(FILM_STORE.studioTimelines).delete(episodeId);
+  }
+
+  await txComplete(tx);
+
+  return {
+    episodes: remaining,
+    project: updatedProject,
+    characters: nextCharacters,
+    props: nextProps,
+    sceneImages: nextSceneImages,
+  };
 }
 
 export async function getFilmEpisode(id: string): Promise<FilmEpisodeRecord | undefined> {

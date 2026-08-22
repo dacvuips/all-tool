@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
@@ -26,6 +26,8 @@ import FilmEditDialogShell, {
 } from "./film-edit-dialog-shell";
 import { useFilmEntityCardFocus } from "./film-entity-card-focus";
 import { FILM_MEDIA_CARD_GRID_CLASS, FILM_MEDIA_CARD_GRID_PAD_CLASS } from "./film-media-card-grid";
+import { FilmProductionSearchInput } from "./film-production-search-input";
+import { matchesFilmNameSearch } from "./film-production-search";
 import FilmPropCard from "./film-prop-card";
 import { FilmCatalogPickDialog, type FilmCatalogKind, type FilmCatalogPickItem } from "./film-catalog-pick-dialog";
 import type { FilmPropImageGenerateInput } from "./film-prop-image-dialog";
@@ -144,6 +146,7 @@ export default function FilmPropsPanel({
   const [suggestingId, setSuggestingId] = useState<string | null>(null);
   const [editTarget, setEditTarget] = useState<FilmPropRecord | null>(null);
   const [catalogOwner, setCatalogOwner] = useState<FilmPropRecord | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editName, setEditName] = useState("");
   const [editCategory, setEditCategory] = useState<string>("prop");
   const [editDesc, setEditDesc] = useState("");
@@ -183,6 +186,10 @@ export default function FilmPropsPanel({
     (p) => p.status !== "created" && p.status !== "creating" && !(p.imageUrls?.length || p.imageUrl)
   ).length;
   const allDone = props.length > 0 && pendingCount === 0;
+  const visibleProps = useMemo(
+    () => props.filter((p) => matchesFilmNameSearch([p.name], searchQuery)),
+    [props, searchQuery]
+  );
 
   const handleTab = (id: FilmProductionTab) => {
     setTab(id);
@@ -342,6 +349,12 @@ export default function FilmPropsPanel({
               </p>
             </div>
           </div>
+          <FilmProductionSearchInput
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder={t("Tìm vật phẩm...")}
+            className="w-full sm:flex-1 sm:max-w-xs order-last sm:order-none"
+          />
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             <Button
               outline
@@ -388,9 +401,13 @@ export default function FilmPropsPanel({
                 />
               </div>
             </div>
+          ) : visibleProps.length === 0 ? (
+            <div className="h-full min-h-2xs flex flex-col items-center justify-center text-center gap-2">
+              <p className="text-sm text-gray-400 m-0">{t("Không có vật phẩm khớp tìm kiếm.")}</p>
+            </div>
           ) : (
             <div className={FILM_MEDIA_CARD_GRID_CLASS}>
-              {props.map((p) => (
+              {visibleProps.map((p) => (
                 <FilmPropCard
                   key={p.id}
                   prop={p}
