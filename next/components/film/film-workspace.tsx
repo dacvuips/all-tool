@@ -1,8 +1,12 @@
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { HiArrowLeft, HiLightningBolt, HiRefresh } from "react-icons/hi";
+import { HiArrowLeft, HiRefresh } from "react-icons/hi";
 import { RiKey2Line } from "react-icons/ri";
+import {
+  TrainingGuidePopover,
+  TrainingTopicSlug,
+} from "../shared/common/training-guide-popover";
 import { useAlert } from "../../lib/providers/alert-provider";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
@@ -4721,13 +4725,9 @@ export default function FilmWorkspace({ projectId }: Props) {
               className="!rounded-lg"
               onClick={load}
             />
-            <Button
-              primary
-              small
-              text={t("Bắt đầu sản xuất")}
-              icon={<HiLightningBolt />}
-              className="!rounded-lg !bg-blue-600 hover:!bg-blue-700"
-              onClick={() => selectActiveStep("character_images")}
+            <TrainingGuidePopover
+              variant="toolbar"
+              topicSlug={TrainingTopicSlug.MAKE_FILM}
             />
           </div>
         </div>

@@ -5,16 +5,23 @@ import logger from "./logger";
 const mongoUri = config.get<string>("mongo.main");
 
 const mongoOptions: mongoose.ConnectOptions = {
-  socketTimeoutMS: 360000,
-  connectTimeoutMS: 20000,
+  socketTimeoutMS: 45000,
+  connectTimeoutMS: 30000,
   serverSelectionTimeoutMS: 30000,
   heartbeatFrequencyMS: 10000,
+  maxPoolSize: 10,
+  minPoolSize: 1,
+  retryWrites: true,
+  retryReads: true,
   autoCreate: true,
   autoIndex: true,
   readPreference: "primaryPreferred",
+  /** Không queue operation 10s rồi timeout — fail ngay nếu chưa connect (server đã chờ Mongo trước khi listen). */
+  bufferCommands: false,
 };
 
-const connect = mongoose.createConnection(mongoUri, mongoOptions);
+/** Lazy connect — tránh mở socket ngay khi import module (trùng với connectWithRetry). */
+const connect = mongoose.createConnection();
 
 function isTransientMongoError(err: unknown): boolean {
   const msg = String((err as { message?: string })?.message || err || "");
@@ -26,10 +33,12 @@ function isTransientMongoError(err: unknown): boolean {
 
 connect.on("error", (err) => {
   if (isTransientMongoError(err)) {
-    logger.warn(`Mongo connection error (will retry): ${err.message}`);
+    logger.warn(
+      `Mongo connection error (will retry) [${mongoHostLabel()}]: ${err.message}`
+    );
     return;
   }
-  logger.error("Mongo Database Connection Error " + err.message);
+  logger.error(`Mongo Database Connection Error [${mongoHostLabel()}]: ${err.message}`);
 });
 
 connect.on("disconnected", () => {
@@ -45,6 +54,16 @@ connect.on("connected", () => {
 });
 
 export const MainConnection = connect;
+
+function mongoHostLabel(): string {
+  const uri = mongoUri;
+  if (/mongodb\+srv:\/\//i.test(uri)) {
+    const m = uri.match(/mongodb\+srv:\/\/[^/@]*@([^/?]+)/i);
+    return m?.[1] ? `Atlas:${m[1]}` : "Atlas cluster";
+  }
+  const m = uri.match(/mongodb(?:\+srv)?:\/\/[^/@]*@?([^/?]+)/i);
+  return m?.[1] || "MongoDB";
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -66,7 +85,7 @@ async function connectWithRetry(): Promise<void> {
       attempt++;
       const delayMs = Math.min(1000 * 2 ** Math.min(attempt, 4), 15000);
       logger.warn(
-        `Mongo chưa sẵn sàng (lần ${attempt}) — thử lại sau ${delayMs}ms: ${err?.message || err}`
+        `Mongo chưa sẵn sàng (lần ${attempt}) [${mongoHostLabel()}] — thử lại sau ${delayMs}ms: ${err?.message || err}`
       );
       await sleep(delayMs);
     }

@@ -44,6 +44,7 @@ export default [
           gatewayEndpoint?: string;
           gatewayApiKey?: string;
           gatewayModel?: string;
+          clearGateway?: boolean;
         };
         const status = await saveFilmAiCredentials(context, body);
         res.json({ success: true, data: status });

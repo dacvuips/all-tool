@@ -197,9 +197,23 @@ export type FilmAiCredentialSaveInput = {
   gatewayEndpoint?: string;
   gatewayApiKey?: string;
   gatewayModel?: string;
+  /** Xóa Gateway đã lưu trên server (khi user để trống endpoint + API key). */
+  clearGateway?: boolean;
 };
 
-/** Chỉ ghi field có giá trị mới (không nhận **** / rỗng). */
+async function clearCustomerGatewayCredentials(
+  context: Context
+): Promise<void> {
+  const customerId = filmCustomerId(context);
+  if (!customerId) return;
+  await CredentialModel.deleteMany({
+    key: AiProviderKeyEnum.CHATGPT_GATEWAY_KEY,
+    customerId,
+    isCustomerCredential: true,
+  });
+}
+
+/** Chỉ ghi field có giá trị mới (không nhận **** / rỗng). clearGateway = xóa Gateway. */
 export async function saveFilmAiCredentials(
   context: Context,
   input: FilmAiCredentialSaveInput
@@ -209,6 +223,10 @@ export async function saveFilmAiCredentials(
   const gatewayEndpoint = asString(input.gatewayEndpoint);
   const gatewayApiKey = asString(input.gatewayApiKey);
   const gatewayModel = asString(input.gatewayModel);
+
+  if (input.clearGateway) {
+    await clearCustomerGatewayCredentials(context);
+  }
 
   if (openaiKey && openaiKey !== "****") {
     await upsertCustomerCredential({
@@ -226,7 +244,7 @@ export async function saveFilmAiCredentials(
   }
 
   const gwAny = Boolean(gatewayEndpoint || gatewayApiKey || gatewayModel);
-  if (gwAny) {
+  if (gwAny && !input.clearGateway) {
     const current = parseGatewayPayload(
       await loadPlainCredential(
         filmCustomerId(context),
@@ -242,7 +260,7 @@ export async function saveFilmAiCredentials(
       gatewayModel || current?.model || FILM_DEFAULT_GATEWAY_MODEL;
     if (!nextEndpoint || !nextKey) {
       const err: any = new Error(
-        "Gateway cần đủ Endpoint và API Key (hoặc để trống cả ba)."
+        "Gateway cần đủ Endpoint, API Key và Model (hoặc để trống cả ba)."
       );
       err.statusCode = 400;
       throw err;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CgSpinner } from "react-icons/cg";
+import { HiChevronDown } from "react-icons/hi";
 import { RiBookOpenLine } from "react-icons/ri";
 
 import { useDevice } from "../../../lib/hooks/useDevice";
@@ -15,6 +16,8 @@ interface TrainingGuidePopoverProps {
   className?: string;
   /** Slug chủ đề (Topic.slug) — chỉ lấy bài viết thuộc chủ đề này */
   topicSlug?: TrainingTopicSlug;
+  /** "icon" = nút tròn nhỏ; "toolbar" = nút outline có chữ Hướng dẫn (dropdown) */
+  variant?: "icon" | "toolbar";
 }
 
 export enum TrainingTopicSlug {
@@ -29,9 +32,14 @@ export enum TrainingTopicSlug {
   MAKE_FILM = "make-film",
 }
 
-export function TrainingGuidePopover({ className = "", topicSlug }: TrainingGuidePopoverProps) {
+export function TrainingGuidePopover({
+  className = "",
+  topicSlug,
+  variant = "icon",
+}: TrainingGuidePopoverProps) {
   const { t } = useTranslation();
   const { isMobile } = useDevice();
+  const isToolbar = variant === "toolbar";
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [loading, setLoading] = useState(false);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -85,17 +93,34 @@ export function TrainingGuidePopover({ className = "", topicSlug }: TrainingGuid
 
   return (
     <>
-      <Button
-        innerRef={triggerRef}
-        aria-label={t("Xem hướng dẫn")}
-        className={`flex justify-center items-center w-6 h-6 rounded-full px-0 py-0 border-0 bg-blue-100 text-blue-600 cursor-pointer transition-colors hover:bg-blue-200 ${className}`}
-        icon={<RiBookOpenLine className="text-sm text-blue-600" />}
-      />
+      {isToolbar ? (
+        <Button
+          innerRef={triggerRef}
+          outline
+          small
+          aria-label={t("Hướng dẫn")}
+          text={
+            <span className="inline-flex items-center gap-1">
+              {t("Hướng dẫn")}
+              <HiChevronDown className="text-sm opacity-90" />
+            </span>
+          }
+          icon={<RiBookOpenLine className="text-lg" />}
+          className={`!rounded-lg ${className}`}
+        />
+      ) : (
+        <Button
+          innerRef={triggerRef}
+          aria-label={t("Xem hướng dẫn")}
+          className={`flex justify-center items-center w-6 h-6 rounded-full px-0 py-0 border-0 bg-blue-100 text-blue-600 cursor-pointer transition-colors hover:bg-blue-200 ${className}`}
+          icon={<RiBookOpenLine className="text-sm text-blue-600" />}
+        />
+      )}
 
       <Popover
         reference={triggerRef}
-        trigger={isMobile ? "click" : "hover"}
-        placement="bottom-start"
+        trigger={isToolbar || isMobile ? "click" : "hover"}
+        placement={isToolbar ? "bottom-end" : "bottom-start"}
         arrow={false}
         maxWidth={360}
         delay={0}

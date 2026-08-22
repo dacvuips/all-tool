@@ -30,6 +30,8 @@ export type FilmAiKeysSaveInput = {
   gatewayEndpoint?: string;
   gatewayApiKey?: string;
   gatewayModel?: string;
+  /** Xóa Gateway đã lưu trên server. */
+  clearGateway?: boolean;
 };
 
 export const EMPTY_FILM_AI_KEYS_STATUS: FilmAiKeysStatus = {
@@ -74,17 +76,24 @@ export async function fetchFilmAiKeysStatus(): Promise<FilmAiKeysStatus> {
 export async function saveFilmAiKeysToServer(
   input: FilmAiKeysSaveInput
 ): Promise<FilmAiKeysStatus> {
+  const payload: Record<string, string | boolean> = {};
+  const oai = asString(input.openaiKey);
+  const gem = asString(input.geminiKey);
+  const ep = asString(input.gatewayEndpoint);
+  const gwKey = asString(input.gatewayApiKey);
+  const gwModel = asString(input.gatewayModel);
+  if (oai) payload.openaiKey = oai;
+  if (gem) payload.geminiKey = gem;
+  if (ep) payload.gatewayEndpoint = ep;
+  if (gwKey) payload.gatewayApiKey = gwKey;
+  if (gwModel) payload.gatewayModel = gwModel;
+  if (input.clearGateway === true) payload.clearGateway = true;
+
   const res = await fetch("/api/app/film/ai-credentials/", {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      openaiKey: asString(input.openaiKey) || undefined,
-      geminiKey: asString(input.geminiKey) || undefined,
-      gatewayEndpoint: asString(input.gatewayEndpoint) || undefined,
-      gatewayApiKey: asString(input.gatewayApiKey) || undefined,
-      gatewayModel: asString(input.gatewayModel) || undefined,
-    }),
+    body: JSON.stringify(payload),
   });
   const body = await res.json().catch(() => ({} as any));
   if (!res.ok) {
@@ -100,6 +109,28 @@ function readLegacyLs(key: string): string {
   } catch {
     return "";
   }
+}
+
+function clearLegacyGatewayLs(): void {
+  clearLegacyLs(LEGACY_GATEWAY_ENDPOINT_LS);
+  clearLegacyLs(LEGACY_GATEWAY_API_KEY_LS);
+  clearLegacyLs(LEGACY_GATEWAY_MODEL_LS);
+}
+
+/** Xóa bản sao Gateway trong localStorage (tránh migrate / scrape hiện key cũ). */
+export function clearFilmLegacyGatewayFromLocalStorage(): void {
+  clearLegacyGatewayLs();
+}
+
+/** Sau khi lưu/xóa Gateway trên server — dọn localStorage legacy. */
+export function syncFilmLegacyGatewayAfterServerSave(gatewayTouched: boolean): void {
+  if (!gatewayTouched) return;
+  clearLegacyGatewayLs();
+}
+
+/** Scrape panel: user xóa trống Gateway trên trình duyệt. */
+export function markFilmGatewayClearedLocally(): void {
+  clearLegacyGatewayLs();
 }
 
 function clearLegacyLs(key: string): void {
@@ -133,13 +164,10 @@ export async function migrateFilmAiKeysFromLocalStorage(): Promise<FilmAiKeysSta
   const payload: FilmAiKeysSaveInput = {};
   if (openaiKey && !status.hasOpenaiKey) payload.openaiKey = openaiKey;
   if (geminiKey && !status.hasGeminiKey) payload.geminiKey = geminiKey;
-  if (gatewayApiKey && !status.hasGateway) {
-    payload.gatewayEndpoint = gatewayEndpoint;
-    payload.gatewayApiKey = gatewayApiKey;
-    payload.gatewayModel = gatewayModel || FILM_DEFAULT_GATEWAY_MODEL;
-  }
+  // Gateway không auto-migrate từ localStorage — tránh khôi phục nhầm sau khi user đã xóa.
+  // Thêm Gateway qua dialog API Keys (Film → server / Scrape → trình duyệt).
 
-  if (payload.openaiKey || payload.geminiKey || payload.gatewayApiKey) {
+  if (payload.openaiKey || payload.geminiKey) {
     status = await saveFilmAiKeysToServer(payload);
   }
 

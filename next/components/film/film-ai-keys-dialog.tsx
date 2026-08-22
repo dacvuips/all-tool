@@ -8,6 +8,7 @@ import {
   FILM_DEFAULT_GATEWAY_MODEL,
   fetchFilmAiKeysStatus,
   saveFilmAiKeysToServer,
+  syncFilmLegacyGatewayAfterServerSave,
   type FilmAiKeysStatus,
 } from "./film-ai-keys";
 
@@ -22,7 +23,7 @@ type Props = {
 
 function SavedBadge({ label }: { label: string }) {
   return (
-    <span className="inline-flex items-center px-2 h-5 text-10 font-semibold text-teal-800 bg-teal-100 rounded-full">
+    <span className="inline-flex items-center px-2 h-5 text-10 font-semibold text-green-800 bg-green-100 rounded-full">
       {label}
     </span>
   );
@@ -51,8 +52,8 @@ export default function FilmAiKeysDialog({ isOpen, onClose, onSaved }: Props) {
     setOpenaiKey("");
     setGeminiKey("");
     setGatewayApiKey("");
-    setGatewayEndpoint(s.gatewayEndpoint);
-    setGatewayModel(s.gatewayModel);
+    setGatewayEndpoint(s.hasGateway ? s.gatewayEndpoint : "");
+    setGatewayModel(s.hasGateway ? s.gatewayModel : "");
     setOpenaiKeyVisible(false);
     setGeminiKeyVisible(false);
     setGatewayKeyVisible(false);
@@ -87,14 +88,22 @@ export default function FilmAiKeysDialog({ isOpen, onClose, onSaved }: Props) {
     const gwModel = gatewayModel.trim();
     const oai = openaiKey.trim();
     const gem = geminiKey.trim();
+    const hadGatewayMeta =
+      status.hasGateway || Boolean(status.gatewayEndpoint) || Boolean(status.gatewayModel);
+    const wantsClearGateway = !ep && !gwKey && !gwModel && hadGatewayMeta;
     const gwChanged =
+      wantsClearGateway ||
       Boolean(gwKey) ||
       ep !== (status.gatewayEndpoint || "") ||
-      Boolean(gwModel) && gwModel !== (status.gatewayModel || "");
-    const gwReady = Boolean((ep || status.gatewayEndpoint) && (gwKey || status.hasGateway));
-    if (gwChanged && !gwReady) {
+      gwModel !== (status.gatewayModel || "");
+    const gwReady =
+      wantsClearGateway ||
+      (status.hasGateway
+        ? Boolean((ep || status.gatewayEndpoint) && (gwKey || status.hasGateway))
+        : Boolean(ep && gwKey && gwModel));
+    if (gwChanged && !wantsClearGateway && !gwReady) {
       toast.warn(
-        t("Gateway cần đủ Endpoint và API Key (hoặc để trống nếu đã lưu trên server).")
+        t("Gateway cần đủ Endpoint, API Key và Model (hoặc để trống cả ba để xóa Gateway).")
       );
       return;
     }
@@ -107,13 +116,17 @@ export default function FilmAiKeysDialog({ isOpen, onClose, onSaved }: Props) {
       const next = await saveFilmAiKeysToServer({
         openaiKey: oai || undefined,
         geminiKey: gem || undefined,
-        gatewayEndpoint: gwChanged ? ep || undefined : undefined,
-        gatewayApiKey: gwChanged ? gwKey || undefined : undefined,
-        gatewayModel: gwChanged ? gwModel || undefined : undefined,
+        clearGateway: wantsClearGateway,
+        gatewayEndpoint: wantsClearGateway ? undefined : gwChanged ? ep || undefined : undefined,
+        gatewayApiKey: wantsClearGateway ? undefined : gwChanged ? gwKey || undefined : undefined,
+        gatewayModel: wantsClearGateway ? undefined : gwChanged ? gwModel || undefined : undefined,
       });
+      syncFilmLegacyGatewayAfterServerSave(gwChanged);
       setStatus(next);
       resetDrafts(next);
-      toast.success(t("Đã lưu API Keys trên server."));
+      toast.success(
+        wantsClearGateway ? t("Đã xóa Gateway.") : t("Đã lưu API Keys trên server.")
+      );
       onSaved?.(next);
       onClose();
     } catch (err: any) {

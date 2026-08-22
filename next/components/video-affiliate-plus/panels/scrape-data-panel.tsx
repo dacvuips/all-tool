@@ -16,6 +16,9 @@ import {
 import { RiChromeLine, RiCloudLine, RiDatabase2Line, RiKey2Line, RiLoader4Line, RiMagicLine, RiRefreshLine } from "react-icons/ri";
 import { useAlert } from "../../../lib/providers/alert-provider";
 import { useToast } from "../../../lib/providers/toast-provider";
+import {
+  markFilmGatewayClearedLocally,
+} from "../../film/film-ai-keys";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { Switch } from "../../shared/utilities/form";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
@@ -971,6 +974,9 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
     writeScrapeAiKey(SCRAPE_GATEWAY_MODEL_LS, gwModel);
     writeScrapeAiKey(SCRAPE_OPENAI_KEY_LS, oai);
     writeScrapeAiKey(SCRAPE_GEMINI_KEY_LS, gem);
+    if (!gwAny) {
+      markFilmGatewayClearedLocally();
+    }
     setGatewayEndpoint(ep);
     setGatewayApiKey(gwKey);
     setGatewayModel(gwModel);

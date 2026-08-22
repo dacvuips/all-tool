@@ -103,6 +103,8 @@ type Props = {
 const TRACK_LABEL_W = FILM_STUDIO_TRACK_LABEL_W;
 /** Bước scrub playhead khi kéo timeline */
 const SCRUB_STEP_SEC = 0.2;
+/** Mốc thời gian trên ruler timeline (0, 2, 4, 6, 8 …) */
+const TIMELINE_RULER_STEP_SEC = 2;
 const TIMELINE_ZOOM_MIN = 8;
 const TIMELINE_ZOOM_MAX = 240;
 
@@ -3383,15 +3385,15 @@ export default function FilmStudioPanel({
             title={t("Kéo để tua playhead (giây)")}
           >
               {Array.from(
-                { length: Math.floor(Math.ceil(totalSec) / 5) + 1 },
-                (_, i) => i * 5
+                { length: Math.floor(Math.ceil(totalSec) / TIMELINE_RULER_STEP_SEC) + 1 },
+                (_, i) => i * TIMELINE_RULER_STEP_SEC
               ).map((s) => (
                   <div
                     key={s}
-                    className="absolute bottom-0.5 text-10 leading-none text-slate-300 font-mono pointer-events-none tabular-nums"
+                    className="absolute bottom-0.5 -translate-x-1/2 text-10 leading-none text-slate-300 font-mono pointer-events-none tabular-nums"
                     style={{ left: s * pxPerSec }}
                   >
-                    {s}s
+                    {s}
                 </div>
               ))}
           </div>

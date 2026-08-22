@@ -26,6 +26,10 @@ async function executeSeedings() {
 (async function () {
   moment.tz.setDefault(config.get("tz"));
   const port = config.get<number>("port");
+
+  // Chờ Mongo trước khi nhận HTTP — tránh GraphQL "buffering timed out after 10000ms"
+  await waitForMainConnection();
+
   const app = startExpressApp();
   const server = app.listen(port, "0.0.0.0", () => {
     logger.info(
@@ -34,7 +38,6 @@ async function executeSeedings() {
   });
   grapqhQLServer(app, server);
 
-  await waitForMainConnection();
   await executeSeedings();
   startQueues();
 
