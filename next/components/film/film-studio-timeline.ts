@@ -116,6 +116,21 @@ export function rebuildFilmSceneTimeline(
   }));
 }
 
+/** Đổi thứ tự phân cảnh gốc (tab Chuỗi phân cảnh), giữ clip Studio tại vị trí cũ. */
+export function reorderFilmStoryboardScenes(
+  allScenes: FilmSceneRecord[],
+  reorderedStoryboard: FilmSceneRecord[]
+): FilmSceneRecord[] {
+  const storyboardIds = new Set(reorderedStoryboard.map((s) => s.id));
+  const queue = [...reorderedStoryboard];
+  const merged = allScenes.map((s) => {
+    if (!storyboardIds.has(s.id)) return s;
+    const next = queue.shift();
+    return next ?? s;
+  });
+  return rebuildFilmSceneTimeline(merged);
+}
+
 /**
  * Scene thuộc tab Tạo video (gốc), không phải clip cắt/chèn Studio.
  */

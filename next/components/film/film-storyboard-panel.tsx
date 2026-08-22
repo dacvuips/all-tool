@@ -32,7 +32,10 @@ import {
   filmPropLinkedToEpisode,
   filmScenesTotalDuration,
 } from "./film-types";
-import { isFilmCreateVideoScene } from "./film-studio-timeline";
+import {
+  isFilmCreateVideoScene,
+  reorderFilmStoryboardScenes,
+} from "./film-studio-timeline";
 import FilmStoryboardSceneDetail from "./film-storyboard-scene-detail";
 import FilmStoryboardSceneList from "./film-storyboard-scene-list";
 import { getFilmSceneLocationNames } from "./film-attachment-validate";
@@ -402,6 +405,17 @@ export default function FilmStoryboardPanel({
     }
   };
 
+  const handleReorderScenes = async (reorderedStoryboard: FilmSceneRecord[]) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const merged = reorderFilmStoryboardScenes(scenes, reorderedStoryboard);
+      await onReplaceScenes(merged);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleDeleteScene = async (scene: FilmSceneRecord) => {
     if (busy || deletingId) return;
     const title =
@@ -507,6 +521,8 @@ export default function FilmStoryboardPanel({
               totalDurationSec={totalDuration}
               onSelect={handleSelectScene}
               onDelete={handleDeleteScene}
+              onReorder={handleReorderScenes}
+              reorderDisabled={busy}
               deletingId={deletingId}
             />
           </div>
