@@ -37,6 +37,7 @@ import { Button, Field, Form, Input, Switch } from "../../shared/utilities/form"
 import { Popover } from "../../shared/utilities/popover/popover";
 import {
   buildMergedVideoFileBase,
+  buildScrapeProjectImportTemplateCsv,
   exportAffiliatePlusCSV,
   parseAffiliatePlusCSV,
   parseAffiliatePlusExcel,
@@ -82,6 +83,7 @@ import {
   ScrapeCsvSession,
   sessionDisplayName,
 } from "../scrape-csv-history";
+import { downloadCsvText } from "../scrape/api";
 import {
   PanelListCard,
   panelListClasses,
@@ -1045,7 +1047,7 @@ export function ThreadManagementPanel({
     if (!parsed.length) {
       toast.warn(
         t(
-          "Không đọc được dữ liệu sản phẩm. Cần các cột: Tên shop, Tên sản phẩm, Ảnh, Link sản phẩm / Link affiliate"
+          "Không đọc được dữ liệu. Tải «Mẫu import» hoặc dùng CSV Crawl Project (item_id, name, shop_name, product_link, image_url, …)"
         )
       );
       return null;
@@ -1055,6 +1057,11 @@ export function ThreadManagementPanel({
       ...item,
       prompt: item.prompt || genConfigLoaded.activePrompt || "",
     }));
+  };
+
+  const downloadGenerateImportTemplate = () => {
+    downloadCsvText(buildScrapeProjectImportTemplateCsv(), "mau-import-generate-video.csv");
+    toast.success(t("Đã tải mẫu import Generate Video"));
   };
 
   /** Import thay thế — clear danh sách hiện tại, tạo phiên mới. */
@@ -3081,6 +3088,15 @@ export function ThreadManagementPanel({
                       fileInputRef.current?.click();
                     },
                   },
+                  {
+                    label: t("Tải mẫu import"),
+                    hint: t("CSV mẫu Crawl Project / Generate Video"),
+                    icon: <HiDownload className="text-base text-emerald-600" />,
+                    action: () => {
+                      setImportMenuOpen(false);
+                      downloadGenerateImportTemplate();
+                    },
+                  },
                 ].map((item) => (
                   <button
                     key={item.label}
@@ -4198,6 +4214,15 @@ export function ThreadManagementPanel({
               <button
                 type="button"
                 disabled={!!importingSessionId}
+                onClick={downloadGenerateImportTemplate}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              >
+                <HiDownload />
+                {t("Tải mẫu import")}
+              </button>
+              <button
+                type="button"
+                disabled={!!importingSessionId}
                 onClick={() => {
                   setScrapeImportOpen(false);
                   fileInputRef.current?.click();
@@ -4230,17 +4255,27 @@ export function ThreadManagementPanel({
               <p className="m-0 text-sm text-gray-500">
                 {t("Chưa có CSV trong IndexedDB. Cào dữ liệu trước hoặc nhập thủ công.")}
               </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setScrapeImportOpen(false);
-                  fileInputRef.current?.click();
-                }}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
-              >
-                <RiFileExcel2Line />
-                {t("Nhập thủ công")}
-              </button>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={downloadGenerateImportTemplate}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-4 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+                >
+                  <HiDownload />
+                  {t("Tải mẫu import")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setScrapeImportOpen(false);
+                    fileInputRef.current?.click();
+                  }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700"
+                >
+                  <RiFileExcel2Line />
+                  {t("Nhập thủ công")}
+                </button>
+              </div>
             </div>
           ) : (
             <div

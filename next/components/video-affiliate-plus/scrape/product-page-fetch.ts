@@ -257,6 +257,7 @@ export const CRAWL_PRODUCT_CORE_KEYS = [
   "shopid",
   "name",
   "shop_name",
+  "description",
   "hashtags",
   "seller_commission_rate",
   "default_commission_rate",
@@ -317,6 +318,7 @@ export function ensureCrawlProductRaw(
   if (!out.shopid && shopId) out.shopid = shopId;
   fill("name", "product_name");
   fill("shop_name");
+  fill("description");
   fill("seller_commission_rate");
   fill("default_commission_rate");
   fill("long_link", "affiliate_link");
@@ -327,6 +329,7 @@ export function ensureCrawlProductRaw(
   fill("sold", "historical_sold", "sold_count");
 
   if (out.hashtags == null) out.hashtags = "";
+  if (out.description == null) out.description = "";
   if (out.affiliate_link_short == null) out.affiliate_link_short = "";
 
   if (!out.product_link && shopId && itemId) {

@@ -30,6 +30,7 @@ import {
   ScrapeCsvSession,
   sessionDisplayName,
 } from "../scrape-csv-history";
+import { rowsToScrapeProjectCsv } from "../csv-parser";
 import {
   downloadCsvText,
   exportShopeeAffiliateCsv,
@@ -313,6 +314,63 @@ function isQualifiedScrapeProduct(row: ScrapeProductRow, marketHost: string): bo
   return Boolean(imageUrl);
 }
 
+/** item_id — dùng dedupe Lưu Project. */
+function resolveScrapeItemId(row: ScrapeProductRow): string {
+  const raw = (row.raw || {}) as Record<string, unknown>;
+  const card =
+    raw.batch_item_for_item_card_full &&
+    typeof raw.batch_item_for_item_card_full === "object" &&
+    !Array.isArray(raw.batch_item_for_item_card_full)
+      ? (raw.batch_item_for_item_card_full as Record<string, unknown>)
+      : null;
+  const fromRaw = String(raw.item_id || card?.item_id || "").trim();
+  if (fromRaw) return fromRaw;
+  return parseShopItemFromRowId(row.id).itemId;
+}
+
+function scrapeProductRichnessScore(row: ScrapeProductRow): number {
+  const raw = (row.raw || {}) as Record<string, unknown>;
+  let score = 0;
+  if (String(raw.affiliate_link_short || "").trim()) score += 100;
+  if (String(raw.description || "").trim()) score += 10;
+  if (String(raw.hashtags || "").trim()) score += 10;
+  score += row.commissionReceived / 1e6;
+  return score;
+}
+
+function pickRicherScrapeProduct(a: ScrapeProductRow, b: ScrapeProductRow): ScrapeProductRow {
+  return scrapeProductRichnessScore(b) > scrapeProductRichnessScore(a) ? b : a;
+}
+
+/** Loại SP trùng item_id — giữ bản đầy short link / SEO / HH hơn. */
+function dedupeScrapeProductsByItemId(rows: ScrapeProductRow[]): {
+  unique: ScrapeProductRow[];
+  droppedIds: string[];
+} {
+  const byKey = new Map<string, ScrapeProductRow>();
+  const droppedIds: string[] = [];
+
+  for (const row of rows) {
+    const itemId = resolveScrapeItemId(row);
+    const key = itemId || `__row__:${row.id}`;
+
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, row);
+      continue;
+    }
+
+    const keep = pickRicherScrapeProduct(existing, row);
+    const drop = keep.id === existing.id ? row : existing;
+    byKey.set(key, keep);
+    if (drop.id !== keep.id) {
+      droppedIds.push(drop.id);
+    }
+  }
+
+  return { unique: Array.from(byKey.values()), droppedIds };
+}
+
 function mallHostFromAffiliate(marketHost: string): string {
   const host = String(marketHost || "").toLowerCase();
   const m = host.match(/^affiliate\.(shopee\..+)$/i);
@@ -552,66 +610,21 @@ function parseScrapedCsvToRaws(csv: string): Record<string, unknown>[] {
   return rows;
 }
 
-/** CSV đầy đủ mọi field cào được — UI chỉ hiện cột gọn. */
+/** CSV project — chỉ các cột chuẩn import Generate Video. */
 function productsToFullScrapedCsv(rows: ScrapeProductRow[]): string {
   const raws = rows.map((r, idx) => {
     const base = ensureCrawlProductRaw(
       { ...(r.raw || {}), __priceVndNormalized: true } as Record<string, unknown>,
       {}
     );
-    if (base.stt == null) base.stt = idx + 1;
-    if (!base.id && r.id) base.id = r.id;
-    if (base.affiliate_link_short == null) base.affiliate_link_short = "";
-    if (base.long_link == null) base.long_link = "";
+    base.stt = idx + 1;
     if (base.description == null) base.description = "";
     if (base.hashtags == null) base.hashtags = "";
-    return base;
+    if (base.affiliate_link_short == null) base.affiliate_link_short = "";
+    if (base.long_link == null) base.long_link = "";
+    return base as Record<string, unknown>;
   });
-
-  const preferred = [
-    "stt",
-    "item_id",
-    "shopid",
-    "name",
-    "shop_name",
-    "hashtags",
-    "seller_commission_rate",
-    "default_commission_rate",
-    "long_link",
-    "affiliate_link_short",
-    "product_link",
-    "image_url",
-    "price",
-    "price_min",
-    "price_max",
-    "sold",
-    "itemid",
-    "description",
-    "max_commission_rate",
-    "image",
-    "historical_sold",
-    "ctime",
-    "is_official_shop",
-    "id",
-  ];
-
-  const seen = new Set<string>();
-  for (const row of raws) {
-    for (const key of Object.keys(row)) {
-      if (key.startsWith("__")) continue;
-      seen.add(key);
-    }
-  }
-  const keys = [
-    ...preferred.filter((k) => seen.has(k)),
-    ...Array.from(seen).filter((k) => !preferred.includes(k)),
-  ];
-
-  const lines = [keys.map((k) => escapeCsvValue(k)).join(",")];
-  for (const row of raws) {
-    lines.push(keys.map((k) => escapeCsvValue(row[k])).join(","));
-  }
-  return "\uFEFF" + lines.join("\n");
+  return rowsToScrapeProjectCsv(raws);
 }
 
 const GIO_VIDEO_CSV_HEADERS = [
@@ -2483,7 +2496,7 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
       const removedIds = new Set(
         products.filter((p) => !isQualifiedScrapeProduct(p, openMarketHost)).map((p) => p.id)
       );
-      const exportProducts = products.filter((p) => !removedIds.has(p.id));
+      let exportProducts = products.filter((p) => !removedIds.has(p.id));
 
       if (removedIds.size > 0) {
         setCrawledProducts((prev) => prev.filter((p) => !removedIds.has(p.id)));
@@ -2500,6 +2513,31 @@ export function ScrapeDataPanel(_props: ScrapeDataPanelProps) {
         toast.warn(
           t("Không còn SP đủ điều kiện (cần tên, link và ảnh sản phẩm)")
         );
+        return;
+      }
+
+      // ── Dedupe item_id trước short link / AI (tránh xử lý SP trùng) ──
+      setSaveProgressPercent(3);
+      setSaveProgressStatus(t("Loại trùng item_id…") as string);
+      const { unique: dedupedExportProducts, droppedIds: duplicateItemIds } =
+        dedupeScrapeProductsByItemId(exportProducts);
+      if (duplicateItemIds.length > 0) {
+        const dupSet = new Set(duplicateItemIds);
+        setCrawledProducts((prev) => prev.filter((p) => !dupSet.has(p.id)));
+        pushSaveLog(
+          `Đã loại ${duplicateItemIds.length} SP trùng item_id · còn ${dedupedExportProducts.length} SP`,
+          "warning"
+        );
+      } else {
+        pushSaveLog("Không có SP trùng item_id", "info");
+      }
+      exportProducts = dedupedExportProducts;
+
+      if (!exportProducts.length) {
+        pushSaveLog("Không còn SP sau khi loại trùng item_id", "error");
+        setSaveProgressStatus(t("Không còn SP sau loại trùng") as string);
+        setSaveProgressDone(true);
+        toast.warn(t("Không còn SP sau khi loại trùng item_id"));
         return;
       }
 

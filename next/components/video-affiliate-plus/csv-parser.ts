@@ -1,5 +1,68 @@
 import { AffiliatePlusItem, createEmptyItem } from "./types";
 
+/** Cột CSV Crawl Project / mẫu import Generate Video. */
+export const SCRAPE_PROJECT_CSV_HEADERS = [
+  "stt",
+  "item_id",
+  "shopid",
+  "name",
+  "shop_name",
+  "description",
+  "hashtags",
+  "seller_commission_rate",
+  "default_commission_rate",
+  "long_link",
+  "affiliate_link_short",
+  "product_link",
+  "image_url",
+  "price",
+] as const;
+
+export type ScrapeProjectCsvHeader = (typeof SCRAPE_PROJECT_CSV_HEADERS)[number];
+
+function escapeScrapeProjectCsvValue(value: unknown): string {
+  if (value == null) return "";
+  const text = typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+/** Mẫu CSV import Generate Video — cùng cột với Crawl Project đã lưu. */
+export function buildScrapeProjectImportTemplateCsv(): string {
+  const sample: Record<ScrapeProjectCsvHeader, string> = {
+    stt: "1",
+    item_id: "12345678901",
+    shopid: "123456",
+    name: "Ten san pham mau",
+    shop_name: "Ten shop mau",
+    description: "Mo ta san pham mau. XEM NGAY.",
+    hashtags: "#TagMau1,#TagMau2",
+    seller_commission_rate: "5",
+    default_commission_rate: "3",
+    long_link: "https://affiliate.shopee.vn/offer/product_share?...",
+    affiliate_link_short: "https://s.shopee.vn/xxxxx",
+    product_link: "https://shopee.vn/product/123456/12345678901",
+    image_url: "https://down-vn.img.susercontent.com/file/xxx",
+    price: "199000",
+  };
+  const headerLine = SCRAPE_PROJECT_CSV_HEADERS.join(",");
+  const sampleLine = SCRAPE_PROJECT_CSV_HEADERS.map((k) =>
+    escapeScrapeProjectCsvValue(sample[k])
+  ).join(",");
+  return `\uFEFF${headerLine}\n${sampleLine}\n`;
+}
+
+/** Ghi CSV project chỉ gồm các cột chuẩn (theo thứ tự cố định). */
+export function rowsToScrapeProjectCsv(rows: Record<string, unknown>[]): string {
+  const headerLine = SCRAPE_PROJECT_CSV_HEADERS.map((k) => escapeScrapeProjectCsvValue(k)).join(
+    ","
+  );
+  const dataLines = rows.map((row) =>
+    SCRAPE_PROJECT_CSV_HEADERS.map((k) => escapeScrapeProjectCsvValue(row[k])).join(",")
+  );
+  return `\uFEFF${headerLine}\n${dataLines.join("\n")}`;
+}
+
 /**
  * Map theo TÊN CỘT (không theo vị trí).
  * Key = field nội bộ, value = các tên cột có thể gặp trong file Shopee / CSV.
@@ -60,23 +123,22 @@ const HEADER_ALIASES: Record<string, string[]> = {
     "affiliate_link_short",
     "affiliate link short",
     "affiliate link shot",
-    "long_link",
   ],
+  longLink: ["long_link", "affiliate link long", "link affiliate long"],
   commission: [
     "hoa hồng shop",
     "hoa hong shop",
-    "hoa hồng mặc định",
-    "hoa hong mac dinh",
-    "hoa hồng tối đa",
-    "hoa hong toi da",
     "hoa hồng",
     "hoa hong",
     "hoa_hong",
     "commission",
     "seller_commission_rate",
-    "default_commission_rate",
     "max_commission_rate",
   ],
+  defaultCommission: ["default_commission_rate", "hoa hồng mặc định", "hoa hong mac dinh"],
+  description: ["description", "mo ta", "mô tả", "noi dung", "nội dung", "mo ta sp"],
+  hashtags: ["hashtags", "hashtag", "tag", "tags"],
+  price: ["price", "gia", "giá", "gia ban", "giá bán"],
   imageUrl: [
     "ảnh",
     "anh",
@@ -208,11 +270,19 @@ function toRowArray(row: unknown): string[] {
   return [];
 }
 
+function composeImportPrompt(raw: Record<string, string>): string {
+  const desc = String(raw.description || "").trim();
+  const tags = String(raw.hashtags || "").trim();
+  if (desc && tags) return `${desc}\n${tags}`;
+  return desc || tags || String(raw.prompt || "").trim();
+}
+
 function buildItemFromRaw(raw: Record<string, string>, index: number): AffiliatePlusItem {
   const videoUrls = parseVideoUrls(raw.videoUrls || "");
   const total = videoUrls.length;
-  // Ưu tiên Link sản phẩm (canonical); affiliate chỉ fallback
-  const productLink = raw.productLink || raw.affiliateLink || "";
+  // Ưu tiên product_link; fallback affiliate short / long
+  const productLink =
+    raw.productLink || raw.affiliateLink || raw.longLink || "";
   const fromLink = extractShopeeShopItemIds(productLink);
   const productId =
     String(raw.productId || "").trim() || fromLink.itemId || "";
@@ -228,9 +298,9 @@ function buildItemFromRaw(raw: Record<string, string>, index: number): Affiliate
     productId,
     productName: raw.productName || "",
     productLink,
-    commission: raw.commission || "",
+    commission: raw.commission || raw.defaultCommission || "",
     imageUrl: raw.imageUrl || "",
-    prompt: raw.prompt || "",
+    prompt: composeImportPrompt(raw),
     videoUrls,
     hostPort: raw.hostPort || "",
     country: raw.country || "VN",
@@ -338,7 +408,6 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
 
           if (field === "commission") {
             const headerName = normalizeHeader(firstRow[colIndex] || "");
-            // Ưu tiên seller_commission_rate / "Hoa hồng shop"
             if (
               headerName.includes("shop") ||
               headerName === "seller_commission_rate" ||
@@ -349,9 +418,13 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
             return;
           }
 
+          if (field === "defaultCommission") {
+            if (!raw.defaultCommission) raw.defaultCommission = value;
+            return;
+          }
+
           if (field === "affiliateLink") {
             const headerName = normalizeHeader(firstRow[colIndex] || "");
-            // Ưu tiên link short/shot hơn long_link
             if (
               headerName.includes("shot") ||
               headerName.includes("short") ||
@@ -360,6 +433,11 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
             ) {
               raw.affiliateLink = value;
             }
+            return;
+          }
+
+          if (field === "longLink") {
+            if (!raw.longLink) raw.longLink = value;
             return;
           }
 
@@ -378,6 +456,20 @@ export function parseAffiliatePlusRows(rows: unknown[]): AffiliatePlusItem[] {
 
           if (!raw[field]) raw[field] = value;
         });
+      } else if (values.length >= SCRAPE_PROJECT_CSV_HEADERS.length) {
+        // Fallback: thứ tự mẫu Crawl Project / Generate Video
+        raw.productId = values[1] || "";
+        raw.shopId = values[2] || "";
+        raw.productName = values[3] || "";
+        raw.shopName = values[4] || "";
+        raw.description = values[5] || "";
+        raw.hashtags = values[6] || "";
+        raw.commission = values[7] || "";
+        raw.defaultCommission = values[8] || "";
+        raw.longLink = values[9] || "";
+        raw.affiliateLink = values[10] || "";
+        raw.productLink = values[11] || "";
+        raw.imageUrl = values[12] || "";
       } else {
         // Fallback khi không nhận ra header: giả định thứ tự đơn giản
         raw.shopName = values[0] || "";
