@@ -372,6 +372,35 @@ export async function updateFilmProject(
   return updated;
 }
 
+/** Cập nhật artStyleId / artStyleLabel dự án ngay khi đổi phong cách. */
+export async function updateFilmProjectArtStyle(
+  id: string,
+  artStyleId: string,
+  artStyleLabel: string
+): Promise<FilmProjectRecord> {
+  const existing = await getFilmProject(id);
+  if (!existing) {
+    throw new Error(`[film-idb] Project not found: ${id}`);
+  }
+
+  const nextId = String(artStyleId || "").trim();
+  const nextLabel = nextId ? String(artStyleLabel || "").trim() : "";
+
+  if (existing.artStyleId === nextId && (existing.artStyleLabel || "") === nextLabel) {
+    return existing;
+  }
+
+  const updated: FilmProjectRecord = {
+    ...existing,
+    artStyleId: nextId,
+    artStyleLabel: nextLabel,
+    updatedAt: new Date().toISOString(),
+  };
+
+  await putFilmProject(updated);
+  return updated;
+}
+
 export type FilmProjectImagePromptTemplatesInput = {
   characterImagePromptTemplate: string;
   propImagePromptTemplate: string;

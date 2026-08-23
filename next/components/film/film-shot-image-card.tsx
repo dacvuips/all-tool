@@ -154,6 +154,7 @@ function sceneToGeneratedVideo(
     previewUrl: url || undefined,
     mediaBlob: scene.videoBlob,
     aspectRatio,
+    flow2RequestId: scene.videoFlow2RequestId,
   };
 }
 

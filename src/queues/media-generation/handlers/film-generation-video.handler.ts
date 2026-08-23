@@ -9,12 +9,19 @@ import {
   MediaGenerationVideoResult,
 } from "../../../libs/dal/mediaGenerationJob";
 import { Flow2VideoMode } from "../../../routers/api-media/flow2/video-generation";
-import { incrementVideoCount } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  incrementVideoCount,
+  resolveArtStylePrompt,
+} from "../../../routers/app/affiliate-scene/_shared";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { MediaJobEmitter } from "../job-emitter";
 import { loadMediaJobPayload } from "../media-job-data";
 import { runFlow2VideoPipeline } from "./_flow2-video-pipeline";
-import type { FilmJobContext, FilmMediaAssetKind } from "./film-job.types";
+import {
+  prependFilmArtStyleToPrompt,
+  type FilmJobContext,
+  type FilmMediaAssetKind,
+} from "./film-job.types";
 
 /** Payload Redis cho film generate video */
 export type FilmGenerationVideoPayload = FilmJobContext & {
@@ -27,6 +34,8 @@ export type FilmGenerationVideoPayload = FilmJobContext & {
   /** Giọng Flow2 — chỉ gắn khi component + có ảnh (lọc ở Flow2 create) */
   voice?: string;
   noText?: boolean;
+  /** ID collection artstyles — resolve prompt gắn vào prompt tạo video */
+  artStyleId?: string;
   filmAssetKind?: FilmMediaAssetKind;
 };
 
@@ -35,7 +44,7 @@ const LOG_PREFIX = "film-generation-video";
 const NO_TEXT_NOTE =
   "\nIMPORTANT: Do not render any readable on-screen text, captions, logos, or watermarks in the video frames.";
 
-/** generateAudio=false: lip-sync rõ + mute mềm, đặt Ở ĐẦU prompt. */
+/** generateAudio=false: lip-sync rõ + mute mềm — đặt trước scene prompt, sau art style. */
 const SILENT_LIP_SYNC_NOTE = [
   "Lip-sync performance (visual):",
   "- Speaking character(s) clearly mouth every word in [DIALOGUE].",
@@ -58,20 +67,29 @@ export async function handleFilmGenerationVideo(
     throw Object.assign(new Error("Thiếu prompt film generate video"), { statusCode: 400 });
   }
 
-  // Film: không tự chèn anti-text note (chỉ ghép khi client gửi noText: true)
-  let fullPrompt =
-    payload.noText === true ? `${prompt}${NO_TEXT_NOTE}` : prompt;
+  // Có artStyleId → lấy prompt từ collection artstyles; không chọn / không tìm thấy → để trống
+  const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
+    artStyleId: payload.artStyleId,
+  });
+
+  // 1) Ráp body (silent / noText) trước
+  let bodyPrompt = prompt;
+  if (payload.noText === true) {
+    bodyPrompt = `${bodyPrompt}${NO_TEXT_NOTE}`;
+  }
 
   if (payload.generateAudio === false) {
-    // Client đã gắn FILM_SILENT_LIP_SYNC_NOTE / lip-sync note → không prepend thêm
     const hasClientSilentNote =
       /silent plate for later dubbing|Lip-sync performance \(visual\)|Quiet performance notes:|MUST clearly mouth every word in \[DIALOGUE\]/i.test(
-        fullPrompt
+        bodyPrompt
       );
     if (!hasClientSilentNote) {
-      fullPrompt = `${SILENT_LIP_SYNC_NOTE}\n\n${fullPrompt}`;
+      bodyPrompt = `${SILENT_LIP_SYNC_NOTE}\n\n${bodyPrompt}`;
     }
   }
+
+  // 2) Art style luôn prepend CUỐI CÙNG → đứng đầu prompt
+  const fullPrompt = prependFilmArtStyleToPrompt(bodyPrompt, resolvedArtStylePrompt);
 
   const result = await runFlow2VideoPipeline({
     customerId: job.customerId,

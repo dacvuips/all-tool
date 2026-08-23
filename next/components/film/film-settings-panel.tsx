@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiOutlineAnnotation,
@@ -22,6 +22,7 @@ import {
   setFilmOutputLanguage,
   setFilmSystemInstruction,
   updateFilmProject,
+  updateFilmProjectArtStyle,
   updateFilmProjectImagePromptTemplates,
   updateFilmProjectStoryboardPrompts,
 } from "./film-idb";
@@ -127,9 +128,15 @@ export default function FilmSettingsPanel({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingLanguage, setSavingLanguage] = useState(false);
+  /** Bỏ qua sync form khi chỉ cập nhật artStyleId (tránh mất dirty field khác). */
+  const skipProjectFormSyncRef = useRef(false);
 
   // Sync form khi project đổi (id hoặc reload)
   useEffect(() => {
+    if (skipProjectFormSyncRef.current) {
+      skipProjectFormSyncRef.current = false;
+      return;
+    }
     const next = filmProjectSettingsFormFromProject(project);
     setProjectForm(next);
     setSavedProjectForm(next);
@@ -214,6 +221,45 @@ export default function FilmSettingsPanel({
       setSavingProject(false);
     }
   };
+
+  /** Đổi phong cách → cập nhật artStyleId dự án ngay (không chờ nút Lưu). */
+  const handleProjectFormChange = useCallback(
+    (patch: Partial<FilmProjectSettingsFormState>) => {
+      if (projectNameError) setProjectNameError("");
+
+      setProjectForm((prev) => {
+        const next = { ...prev, ...patch };
+        return next;
+      });
+
+      if (patch.artStyleId === undefined) return;
+
+      const artStyleId = String(patch.artStyleId || "").trim();
+      const style = artStyleOptions.find((o) => o.value === artStyleId);
+      const artStyleLabel = !artStyleId ? "" : style?.label || "";
+
+      void (async () => {
+        try {
+          const updated = await updateFilmProjectArtStyle(
+            project.id,
+            artStyleId,
+            artStyleLabel
+          );
+          skipProjectFormSyncRef.current = true;
+          onProjectUpdated(updated);
+          // Chỉ sync artStyle trong saved form → dirty các field khác vẫn giữ
+          setSavedProjectForm((saved) => ({
+            ...saved,
+            artStyleId: updated.artStyleId || "",
+          }));
+        } catch (err: any) {
+          console.error("[Film] update artStyleId failed", err);
+          toast.error(err?.message || t("Không cập nhật được phong cách."));
+        }
+      })();
+    },
+    [artStyleOptions, onProjectUpdated, project.id, projectNameError, t, toast]
+  );
 
   const handleSavePrompts = async () => {
     if (!promptDraft.character.trim() || !promptDraft.prop.trim() || !promptDraft.location.trim()) {
@@ -422,10 +468,7 @@ export default function FilmSettingsPanel({
 
         <FilmProjectSettingsFields
           form={projectForm}
-          onChange={(patch) => {
-            setProjectForm((prev) => ({ ...prev, ...patch }));
-            if (projectNameError) setProjectNameError("");
-          }}
+          onChange={handleProjectFormChange}
           nameError={projectNameError}
           disabled={savingProject}
         />

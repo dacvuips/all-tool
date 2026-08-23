@@ -32,6 +32,8 @@ export default [
           numberOfImages?: number;
           imageModel?: string;
           noText?: boolean;
+          /** ID collection artstyles — handler resolve prompt gắn vào prompt tạo ảnh */
+          artStyleId?: string;
           filmProjectId?: string;
           filmEpisodeId?: string;
           filmSceneId?: string;
@@ -59,6 +61,8 @@ export default [
           filmAssetKind: body.filmAssetKind || "character",
         });
 
+        const artStyleId = String(body.artStyleId || "").trim() || undefined;
+
         const requestPayload = {
           filmSource: "film" as const,
           prompt,
@@ -68,6 +72,7 @@ export default [
           numberOfImages: body.numberOfImages || 1,
           imageModel: body.imageModel,
           noText: body.noText === true,
+          artStyleId,
           filmProjectId: body.filmProjectId,
           filmEpisodeId: body.filmEpisodeId,
           filmSceneId: body.filmSceneId,

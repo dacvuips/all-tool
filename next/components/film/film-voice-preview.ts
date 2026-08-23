@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { previewFreeGenAudioVoice } from "../app/voice/free-voice-api";
+import {
+  getFreeVoicePreviewBlob,
+  hasFreeVoicePreview,
+  putFreeVoicePreviewBlob,
+} from "../app/voice/free-voice-preview-idb";
 import { isFreeGenAudioVoiceId } from "../app/voice/free-voice-voices";
 import { voicePreviewUrl } from "../app/voice/voice-api";
 
 export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [hasCached, setHasCached] = useState(Boolean(blob));
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const objectUrlRef = useRef("");
   const previewBlobRef = useRef<Blob | null>(null);
@@ -27,6 +33,27 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
     setLoading(false);
     revokeObjectUrl();
     previewBlobRef.current = null;
+    setHasCached(Boolean(blob));
+
+    const id = voiceId?.trim() || "";
+    if (blob || !isFreeGenAudioVoiceId(id)) return;
+
+    let cancelled = false;
+    void (async () => {
+      const cached = await getFreeVoicePreviewBlob(id);
+      if (cancelled) return;
+      if (cached) {
+        previewBlobRef.current = cached;
+        setHasCached(true);
+      } else {
+        const exists = await hasFreeVoicePreview(id);
+        if (!cancelled) setHasCached(exists);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [blob, voiceId, revokeObjectUrl]);
 
   useEffect(
@@ -45,6 +72,7 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
       if (!objectUrlRef.current) {
         objectUrlRef.current = URL.createObjectURL(blob);
       }
+      setHasCached(true);
       return objectUrlRef.current;
     }
 
@@ -56,6 +84,16 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
         if (!objectUrlRef.current) {
           objectUrlRef.current = URL.createObjectURL(previewBlobRef.current);
         }
+        setHasCached(true);
+        return objectUrlRef.current;
+      }
+
+      const cached = await getFreeVoicePreviewBlob(id);
+      if (cached) {
+        previewBlobRef.current = cached;
+        revokeObjectUrl();
+        objectUrlRef.current = URL.createObjectURL(cached);
+        setHasCached(true);
         return objectUrlRef.current;
       }
 
@@ -67,6 +105,8 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
         const previewBlob = await previewFreeGenAudioVoice(id, ac.signal);
         if (ac.signal.aborted) return "";
         previewBlobRef.current = previewBlob;
+        await putFreeVoicePreviewBlob(id, previewBlob);
+        setHasCached(true);
         revokeObjectUrl();
         objectUrlRef.current = URL.createObjectURL(previewBlob);
         return objectUrlRef.current;
@@ -111,5 +151,5 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
     }
   }, [loading, playing, resolvePlaySrc]);
 
-  return { playing, loading, toggle, canPreview };
+  return { playing, loading, toggle, canPreview, hasCached };
 }

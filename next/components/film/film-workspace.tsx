@@ -8,6 +8,7 @@ import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import { useToast } from "../../lib/providers/toast-provider";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
+import { useConcurrencyLimits } from "../app/affiliate-video/hook/useConcurrencyLimits";
 import { isVoiceAbortError } from "../app/voice/voice-api";
 import {
   TrainingGuidePopover,
@@ -56,6 +57,10 @@ import {
 import { buildFilmCharacterImagePrompt } from "./film-character-image-prompt";
 import FilmCharacterImagesPanel from "./film-character-images-panel";
 import FilmCreateVideoPanel from "./film-create-video-panel";
+import {
+  downloadFilmVideosSequentially,
+  type FilmDownloadVideoMode,
+} from "./film-video-download";
 import {
   applyCharacterVoiceLinksToScenes,
   buildAppendDialogueVoiceTakePatch,
@@ -213,6 +218,32 @@ type Props = {
   projectId: string;
 };
 
+/**
+ * Chạy bulk với tối đa `concurrency` worker song song (khớp imageStreamCount / videoStreamCount).
+ * Mỗi task chỉ cần enqueue xong (poll chạy nền) — worker lấy item kế ngay.
+ */
+async function runFilmBulkPool<T>(
+  items: T[],
+  concurrency: number,
+  runOne: (item: T) => Promise<void>
+): Promise<void> {
+  if (!items.length) return;
+  const pool = Math.max(1, Math.min(Math.round(concurrency) || 1, items.length));
+  let cursor = 0;
+  const worker = async () => {
+    while (true) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      try {
+        await runOne(items[index]);
+      } catch {
+        // tiếp tục item khác
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: pool }, () => worker()));
+}
+
 /** Query `ep` = số tập 1-based; trả index 0-based (mặc định 0). */
 function filmEpisodeIndexFromQuery(
   ep: string | string[] | null | undefined,
@@ -238,6 +269,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   const toast = useToast();
   const alert = useAlert();
   const { customer, loadCustomer } = useAuth();
+  const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
 
   const [loading, setLoading] = useState(true);
@@ -1406,6 +1438,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         images: images?.length ? images : undefined,
         aspectRatio: FILM_CHARACTER_PROP_ASPECT_RATIO,
         numberOfImages: 1,
+        artStyleId: project.artStyleId,
         filmProjectId: project.id,
         filmCharacterId: character.id,
         filmAssetKind: "character",
@@ -1560,16 +1593,12 @@ export default function FilmWorkspace({ projectId }: Props) {
         c.status !== "created" &&
         !(c.imageUrl || (c.imageUrls && c.imageUrls.length) || c.imageBlob)
     );
-    for (const c of targets) {
+    await runFilmBulkPool(targets, IMAGE_CONCURRENCY, async (c) => {
       const prompt =
         c.imagePrompt?.trim() ||
         buildFilmCharacterImagePrompt(c, project.characterImagePromptTemplate);
-      try {
-        await handleCreateCharacterImage({ character: c, prompt });
-      } catch {
-        // tiếp tục item khác
-      }
-    }
+      await handleCreateCharacterImage({ character: c, prompt });
+    });
   };
 
   const handleAddCharacter = async (name?: string) => {
@@ -1896,6 +1925,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         images: input.images?.length ? input.images : undefined,
         aspectRatio: FILM_CHARACTER_PROP_ASPECT_RATIO,
         numberOfImages: 1,
+        artStyleId: project.artStyleId,
         filmProjectId: project.id,
         filmPropId: prop.id,
         filmAssetKind: "prop",
@@ -2024,16 +2054,12 @@ export default function FilmWorkspace({ projectId }: Props) {
     );
     if (!targets.length) return;
 
-    for (const prop of targets) {
+    await runFilmBulkPool(targets, IMAGE_CONCURRENCY, async (prop) => {
       const prompt =
         prop.imagePrompt?.trim() ||
         buildFilmPropImagePrompt(prop, project.propImagePromptTemplate);
-      try {
-        await handleCreatePropImage({ prop, prompt });
-      } catch {
-        // tiếp tục item khác
-      }
-    }
+      await handleCreatePropImage({ prop, prompt });
+    });
   };
 
   const handleAddProp = async (name?: string) => {
@@ -3082,6 +3108,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         images: input.images?.length ? input.images : undefined,
         aspectRatio: resolveFilmProjectAspectRatio(project.aspectRatio),
         numberOfImages: 1,
+        artStyleId: project.artStyleId,
         filmProjectId: project.id,
         filmSceneImageId: item.id,
         filmAssetKind: "scene_location",
@@ -3212,7 +3239,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     );
     if (!targets.length) return;
 
-    for (const item of targets) {
+    await runFilmBulkPool(targets, IMAGE_CONCURRENCY, async (item) => {
       const prompt =
         item.imagePrompt?.trim() ||
         buildFilmLocationImagePrompt(
@@ -3220,12 +3247,8 @@ export default function FilmWorkspace({ projectId }: Props) {
           resolveFilmProjectAspectRatio(project.aspectRatio),
           project.locationImagePromptTemplate
         );
-      try {
-        await handleCreateSceneImage({ item, prompt });
-      } catch {
-        // tiếp tục item khác
-      }
-    }
+      await handleCreateSceneImage({ item, prompt });
+    });
   };
 
   /** Resume poll job đang creating trong IDB (reload / quay lại project). */
@@ -3342,6 +3365,8 @@ export default function FilmWorkspace({ projectId }: Props) {
                 ...current,
                 videoUrl: stored.videoUrl || current.videoUrl || "",
                 videoBlob: stored.videoBlob || current.videoBlob,
+                videoFlow2RequestId:
+                  stored.flow2RequestId || current.videoFlow2RequestId,
                 videoStatus: "ready",
                 videoMediaJobId: undefined,
                 videoMediaProgress: undefined,
@@ -3870,6 +3895,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         images,
         aspectRatio,
         numberOfImages: 1,
+        artStyleId: project.artStyleId,
         filmProjectId: project.id,
         filmEpisodeId: scene.episodeId,
         filmSceneId: scene.id,
@@ -4028,14 +4054,17 @@ export default function FilmWorkspace({ projectId }: Props) {
       mediaBlob?: Blob;
       previewUrl?: string;
       mimeType?: string;
+      flow2RequestId?: string;
     }
   ) => {
     const stored = generatedVideoDataToFilmStored(video);
     if (!stored.videoUrl && !stored.videoBlob) return;
+    const flow2 = String(video.flow2RequestId || "").trim();
     const next: FilmSceneRecord = {
       ...scene,
       videoUrl: stored.videoUrl || (stored.videoBlob ? "" : scene.videoUrl || ""),
       videoBlob: stored.videoBlob,
+      videoFlow2RequestId: flow2 || scene.videoFlow2RequestId,
       videoStatus: "ready",
       videoError: undefined,
       videoMediaJobId: undefined,
@@ -4127,17 +4156,13 @@ export default function FilmWorkspace({ projectId }: Props) {
     );
     if (!targets.length) return;
 
-    for (const s of targets) {
+    await runFilmBulkPool(targets, IMAGE_CONCURRENCY, async (s) => {
       const prompt = resolveFilmShotFrameActivePrompt(
         s,
         project?.storyboardImagePrompt
       );
-      try {
-        await handleCreateShotFrame({ scene: s, prompt });
-      } catch {
-        // tiếp tục scene khác
-      }
-    }
+      await handleCreateShotFrame({ scene: s, prompt });
+    });
   };
 
   const handleCreateVideo = async (scene: FilmSceneRecord) => {
@@ -4188,6 +4213,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         serviceImageType,
         generateAudio: silentLipSync ? false : undefined,
         voice,
+        artStyleId: project.artStyleId,
         filmProjectId: project.id,
         filmEpisodeId: latest.episodeId,
         filmSceneId: latest.id,
@@ -4230,6 +4256,8 @@ export default function FilmWorkspace({ projectId }: Props) {
               ...current,
               videoUrl: stored.videoUrl || current.videoUrl || "",
               videoBlob: stored.videoBlob || current.videoBlob,
+              videoFlow2RequestId:
+                stored.flow2RequestId || current.videoFlow2RequestId,
               videoStatus: "ready",
               videoMediaJobId: undefined,
               videoMediaProgress: undefined,
@@ -4358,12 +4386,61 @@ export default function FilmWorkspace({ projectId }: Props) {
     });
     if (!targets.length) return;
 
-    for (const s of targets) {
-      try {
-        await handleCreateVideo(s);
-      } catch {
-        // tiếp tục scene khác
+    await runFilmBulkPool(targets, VIDEO_CONCURRENCY, async (s) => {
+      await handleCreateVideo(s);
+    });
+  };
+
+  const handleDownloadAllVideos = async (mode: FilmDownloadVideoMode) => {
+    const aspectRatio = resolveFilmProjectAspectRatio(project?.aspectRatio);
+    const targets = scenes.filter(isFilmCreateVideoScene);
+    const ready = targets.filter(
+      (s) =>
+        !!(s.videoUrl || "").trim() || !!(s.videoBlob && s.videoBlob.size > 0)
+    );
+    if (!ready.length) {
+      toast.warn(t("Chưa có video nào để tải"));
+      return;
+    }
+
+    const modeLabel =
+      mode === "1080p"
+        ? "1080p"
+        : mode === "720p"
+          ? "720p"
+          : mode === "1080p-no-logo"
+            ? "1080p xóa logo AI"
+            : "720p xóa logo AI";
+
+    toast.info(t("Đang tải {{mode}} — từng file...", { mode: modeLabel }));
+
+    try {
+      const result = await downloadFilmVideosSequentially(targets, mode, {
+        aspectRatio,
+      });
+      if (result.downloaded === 0) {
+        toast.warn(t("Không tải được video nào"));
+        return;
       }
+      if (result.failed > 0) {
+        toast.warn(
+          t("Đã tải {{ok}}/{{total}} video ({{fail}} lỗi)", {
+            ok: result.downloaded,
+            total: result.total,
+            fail: result.failed,
+          })
+        );
+        return;
+      }
+      toast.success(
+        t("Đã tải {{count}} video ({{mode}})", {
+          count: result.downloaded,
+          mode: modeLabel,
+        })
+      );
+    } catch (err: any) {
+      console.error("[handleDownloadAllVideos]", err);
+      toast.error(err?.message || t("Lỗi khi tải video hàng loạt"));
     }
   };
 
@@ -5314,10 +5391,7 @@ export default function FilmWorkspace({ projectId }: Props) {
               onVideoRefModeChange={handleVideoRefModeChange}
               onVideoRefSlotsChange={handleVideoRefSlotsChange}
               onSaveScene={handleSaveScene}
-              onDownloadAll={() => {
-                // Placeholder — export zip khi có video thật
-                console.info("[Film] Download all videos (not implemented)");
-              }}
+              onDownloadAll={handleDownloadAllVideos}
               onTabNavigate={(tab) => {
                 if (tab === "storyboard") selectActiveStep("storyboard");
                 else if (tab === "voice") selectActiveStep("voice");

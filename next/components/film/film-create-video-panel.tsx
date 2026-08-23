@@ -50,6 +50,7 @@ import {
   type FilmVideoRefMode,
   type FilmVideoRefSlot,
 } from "./film-video-ref-mode";
+import type { FilmDownloadVideoMode } from "./film-video-download";
 
 export type FilmBulkCreateVideoMode = "all" | "errors";
 
@@ -71,7 +72,7 @@ type Props = {
   ) => void | Promise<void>;
   stopPendingIds?: Record<string, true>;
   onBulkCreateVideos: (mode: FilmBulkCreateVideoMode) => Promise<void>;
-  onDownloadAll?: () => void;
+  onDownloadAll?: (mode: FilmDownloadVideoMode) => void | Promise<void>;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
   /** Icon cạnh tiêu đề → mở đúng phân cảnh trong Chuỗi phân cảnh */
   onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
@@ -123,8 +124,10 @@ export default function FilmCreateVideoPanel({
 }: Props) {
   const { t } = useTranslation();
   const bulkBtnRef = useRef<HTMLButtonElement>(null);
+  const downloadBtnRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<FilmStoryboardTab>("create_video");
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const [editSceneId, setEditSceneId] = useState<string | null>(null);
   const [videoRefMode, setVideoRefMode] =
     useState<FilmVideoRefMode>(videoRefModeProp);
@@ -244,6 +247,16 @@ export default function FilmCreateVideoPanel({
       await onBulkCreateVideos(mode);
     } finally {
       setBulkBusy(false);
+    }
+  };
+
+  const handleDownload = async (mode: FilmDownloadVideoMode) => {
+    if (downloadBusy || !readyCount || !onDownloadAll) return;
+    setDownloadBusy(true);
+    try {
+      await onDownloadAll(mode);
+    } finally {
+      setDownloadBusy(false);
     }
   };
 
@@ -397,28 +410,48 @@ export default function FilmCreateVideoPanel({
                 </span>
               </>
               <>
-                <span className="inline-flex sm:hidden">
-                  <Button
-                    outline
-                    small
+                <Button
+                  outline
+                  small
+                  text={
+                    <span className="inline-flex items-center gap-1">
+                      <span className="hidden sm:inline">{t("Tải tất cả")}</span>
+                      <HiChevronDown className="text-sm opacity-90" />
+                    </span>
+                  }
+                  icon={<HiDownload />}
+                  className="!rounded-lg"
+                  innerRef={downloadBtnRef}
+                  isLoading={downloadBusy}
+                  disabled={!readyCount || downloadBusy}
+                  tooltip={t("Tải tất cả")}
+                />
+                <Dropdown reference={downloadBtnRef} placement="bottom-end">
+                  <Dropdown.Item
+                    text={t("Tải 1080p")}
                     icon={<HiDownload />}
-                    className="!rounded-lg !px-2.5"
-                    onClick={() => onDownloadAll?.()}
-                    disabled={!readyCount}
-                    tooltip={t("Tải tất cả")}
+                    disabled={!readyCount || downloadBusy}
+                    onClick={() => void handleDownload("1080p")}
                   />
-                </span>
-                <span className="hidden sm:inline-flex">
-                  <Button
-                    outline
-                    small
-                    text={t("Tải tất cả")}
+                  <Dropdown.Item
+                    text={t("Tải 720p")}
                     icon={<HiDownload />}
-                    className="!rounded-lg"
-                    onClick={() => onDownloadAll?.()}
-                    disabled={!readyCount}
+                    disabled={!readyCount || downloadBusy}
+                    onClick={() => void handleDownload("720p")}
                   />
-                </span>
+                  <Dropdown.Item
+                    text={t("1080p xóa logo AI")}
+                    icon={<HiDownload />}
+                    disabled={!readyCount || downloadBusy}
+                    onClick={() => void handleDownload("1080p-no-logo")}
+                  />
+                  <Dropdown.Item
+                    text={t("720p xóa logo AI")}
+                    icon={<HiDownload />}
+                    disabled={!readyCount || downloadBusy}
+                    onClick={() => void handleDownload("720p-no-logo")}
+                  />
+                </Dropdown>
               </>
               <Button
                 primary

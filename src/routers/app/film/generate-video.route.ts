@@ -46,6 +46,8 @@ export default [
           generateAudio?: boolean;
           voice?: string;
           noText?: boolean;
+          /** ID collection artstyles — handler resolve prompt gắn vào prompt tạo video */
+          artStyleId?: string;
           filmProjectId?: string;
           filmEpisodeId?: string;
           filmSceneId?: string;
@@ -67,6 +69,8 @@ export default [
           filmAssetKind: body.filmAssetKind || "shot_video",
         });
 
+        const artStyleId = String(body.artStyleId || "").trim() || undefined;
+
         const requestPayload = {
           filmSource: "film" as const,
           prompt,
@@ -77,6 +81,7 @@ export default [
           generateAudio: body.generateAudio,
           voice: typeof body.voice === "string" ? body.voice.trim() || undefined : undefined,
           noText: body.noText === true,
+          artStyleId,
           filmProjectId: body.filmProjectId,
           filmEpisodeId: body.filmEpisodeId,
           filmSceneId: body.filmSceneId,

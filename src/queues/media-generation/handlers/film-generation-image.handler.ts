@@ -6,12 +6,17 @@
  */
 import {
   incrementImageCount,
+  resolveArtStylePrompt,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
-import type { FilmJobContext, FilmMediaAssetKind } from "./film-job.types";
+import {
+  prependFilmArtStyleToPrompt,
+  type FilmJobContext,
+  type FilmMediaAssetKind,
+} from "./film-job.types";
 
 /** Payload Redis cho film generate image */
 export type FilmGenerationImagePayload = FilmJobContext & {
@@ -22,6 +27,8 @@ export type FilmGenerationImagePayload = FilmJobContext & {
   numberOfImages?: number;
   imageModel?: string;
   noText?: boolean;
+  /** ID collection artstyles — resolve prompt gắn vào prompt tạo ảnh */
+  artStyleId?: string;
   filmAssetKind?: FilmMediaAssetKind;
 };
 
@@ -35,9 +42,11 @@ const SINGLE_FRAME_NOTE =
 
 function finalizeFilmImagePrompt(
   prompt: string,
-  payload: FilmGenerationImagePayload
+  payload: FilmGenerationImagePayload,
+  artStylePrompt?: string
 ): string {
-  let full = prompt;
+  // Art style luôn ở đầu prompt
+  let full = prependFilmArtStyleToPrompt(prompt, artStylePrompt);
   if (payload.filmAssetKind === "shot_frame") {
     if (!/single unified frame|no split panel|one unified cinematic frame/i.test(full)) {
       full = `${full}${SINGLE_FRAME_NOTE}`;
@@ -63,8 +72,12 @@ export async function handleFilmGenerationImage(
     throw Object.assign(new Error("Thiếu prompt film generate image"), { statusCode: 400 });
   }
 
-  // Film: không tự chèn anti-text note (chỉ ghép khi client gửi noText: true)
-  const fullPrompt = finalizeFilmImagePrompt(prompt, payload);
+  // Có artStyleId → lấy prompt từ collection artstyles; không chọn / không tìm thấy → để trống
+  const { prompt: resolvedArtStylePrompt } = await resolveArtStylePrompt({
+    artStyleId: payload.artStyleId,
+  });
+
+  const fullPrompt = finalizeFilmImagePrompt(prompt, payload, resolvedArtStylePrompt);
 
   const images = await runImagePipeline({
     customerId: job.customerId,

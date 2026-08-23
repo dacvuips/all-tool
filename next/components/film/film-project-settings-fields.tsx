@@ -1,9 +1,9 @@
 /**
  * Form fields tạo/sửa metadata dự án (reuse create dialog + Setting workspace).
  */
-import { useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useOptionsTranslation } from "../../lib/hooks/useOptionsTranslate";
+import { ArtStyleCategoryService } from "../../lib/repo/list/artStyleCategory.repo";
 import { Select } from "../shared/utilities/form";
 import {
   FILM_ART_STYLE_FREE,
@@ -58,8 +58,8 @@ export function filmProjectSettingsFormToInput(
   if (!trimmed) {
     return { error: "Vui lòng nhập tên dự án" };
   }
-  const style =
-    artStyleOptions.find((o) => o.value === form.artStyleId) || artStyleOptions[0];
+  const artStyleId = (form.artStyleId || FILM_ART_STYLE_FREE).trim();
+  const style = artStyleOptions.find((o) => o.value === artStyleId);
   const scenes =
     form.scenesPerEpisode.trim() === ""
       ? undefined
@@ -68,26 +68,53 @@ export function filmProjectSettingsFormToInput(
     name: trimmed,
     episodeCount: Math.max(1, form.episodeCount || 1),
     scenesPerEpisode: scenes,
-    artStyleId: style?.value ?? FILM_ART_STYLE_FREE,
-    artStyleLabel:
-      style?.value === FILM_ART_STYLE_FREE || !style ? "" : style.label,
+    artStyleId,
+    artStyleLabel: !artStyleId ? "" : style?.label || "",
     aspectRatio: form.aspectRatio,
     narration: form.narration,
   };
 }
 
+/** Options phong cách ảnh từ collection GraphQL `artstyles` (không hardcode). */
 export function useFilmArtStyleOptions() {
   const { t } = useTranslation();
-  const { ART_STYLE_TRANSLATED_OPTIONS } = useOptionsTranslation();
-  return useMemo(
-    () => [
-      { value: FILM_ART_STYLE_FREE, label: t("Tự do (Không dán đè Style)") },
-      ...ART_STYLE_TRANSLATED_OPTIONS.filter(
-        (opt) => opt.value !== FILM_ART_STYLE_FREE && opt.value !== ""
-      ),
-    ],
-    [ART_STYLE_TRANSLATED_OPTIONS, t]
-  );
+  const freeOption = {
+    value: FILM_ART_STYLE_FREE,
+    label: t("Tự do (Không dán đè Style)"),
+  };
+  const [options, setOptions] = useState<{ value: string; label: string }[]>([freeOption]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        // getArtStylesByCategoryId không truyền category → lấy toàn bộ artstyles active
+        const result = await ArtStyleCategoryService.getArtStylesByCategoryId(
+          undefined,
+          1,
+          1000
+        );
+        if (cancelled) return;
+        const fromApi = (result.data || [])
+          .filter((item) => !!item?.id)
+          .map((item) => ({
+            value: String(item.id),
+            label: String(item.name || item.id).trim() || String(item.id),
+          }));
+        setOptions([freeOption, ...fromApi]);
+      } catch (err) {
+        console.error("[Film] load artstyles failed", err);
+        if (!cancelled) setOptions([freeOption]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // freeOption.label phụ thuộc t()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
+
+  return options;
 }
 
 function OptionCard({

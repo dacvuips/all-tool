@@ -183,7 +183,7 @@ export default function FilmCharacterCard({
             <p className="m-0 mt-0.5 text-10 text-gray-400 truncate">{roleLabel}</p>
           ) : null}
         </div>
-        <div className="flex absolute top-11 right-1 z-10 gap-1 items-center opacity-0 transition duration-200 ease-out transform translate-y-1 group-hover:opacity-100 group-hover:translate-y-0">
+        <div className="flex absolute top-7 right-1 z-10 gap-1 items-center opacity-0 transition duration-200 ease-out transform translate-y-1 group-hover:opacity-100 group-hover:translate-y-0">
           {onClone ? (
             <button
               type="button"

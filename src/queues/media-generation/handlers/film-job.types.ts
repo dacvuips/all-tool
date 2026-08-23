@@ -38,3 +38,26 @@ export function buildFilmJobMetadata(
     filmAssetKind: ctx.filmAssetKind || null,
   };
 }
+
+/**
+ * Khối art style đặt Ở ĐẦU prompt Film (ảnh / video).
+ * Không có prompt (không chọn / ID không tìm thấy) → trả chuỗi gốc.
+ */
+export function prependFilmArtStyleToPrompt(
+  basePrompt: string,
+  artStylePrompt?: string | null
+): string {
+  const prompt = String(basePrompt || "").trim();
+  const style = String(artStylePrompt || "").trim();
+  if (!style) return prompt;
+
+  const artStyleBlock = [
+    "Art style (mandatory — apply first):",
+    "Strictly follow this art style for the entire output. Keep the look consistent; do not mix other styles.",
+    "",
+    "Art style:",
+    style,
+  ].join("\n");
+
+  return prompt ? `${artStyleBlock}\n\n${prompt}` : artStyleBlock;
+}

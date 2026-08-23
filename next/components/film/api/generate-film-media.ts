@@ -37,6 +37,8 @@ export type FilmGenerateImageParams = {
   numberOfImages?: number;
   imageModel?: string;
   noText?: boolean;
+  /** ID collection artstyles — backend resolve prompt gắn vào prompt tạo ảnh */
+  artStyleId?: string;
   filmProjectId?: string;
   filmEpisodeId?: string;
   filmSceneId?: string;
@@ -59,6 +61,8 @@ export type FilmGenerateVideoParams = {
    */
   voice?: string;
   noText?: boolean;
+  /** ID collection artstyles — backend resolve prompt gắn vào prompt tạo video */
+  artStyleId?: string;
   filmProjectId?: string;
   filmEpisodeId?: string;
   filmSceneId?: string;
@@ -231,6 +235,8 @@ export async function enqueueFilmImage(
   const prompt = String(params.prompt || "").trim();
   if (!prompt) throw new Error("Thiếu prompt");
 
+  const artStyleId = String(params.artStyleId || "").trim() || undefined;
+
   return postFilmEnqueue(
     "/api/app/film/generate-image/",
     {
@@ -240,6 +246,7 @@ export async function enqueueFilmImage(
       numberOfImages: params.numberOfImages || 1,
       imageModel: params.imageModel,
       noText: params.noText === true,
+      artStyleId,
       filmProjectId: params.filmProjectId,
       filmEpisodeId: params.filmEpisodeId,
       filmSceneId: params.filmSceneId,
@@ -263,6 +270,8 @@ export async function enqueueFilmVideo(
   const prompt = String(params.prompt || "").trim();
   if (!prompt) throw new Error("Thiếu prompt");
 
+  const artStyleId = String(params.artStyleId || "").trim() || undefined;
+
   return postFilmEnqueue(
     "/api/app/film/generate-video/",
     {
@@ -274,6 +283,7 @@ export async function enqueueFilmVideo(
       generateAudio: params.generateAudio,
       voice: params.voice,
       noText: params.noText === true,
+      artStyleId,
       filmProjectId: params.filmProjectId,
       filmEpisodeId: params.filmEpisodeId,
       filmSceneId: params.filmSceneId,
@@ -619,7 +629,15 @@ export type FilmStoredVideo = {
   videoUrl: string;
   /** Binary local — ưu tiên preview / Studio / export */
   videoBlob?: Blob;
+  /** Flow2 request_id — upscale tải 1080p */
+  flow2RequestId?: string;
 };
+
+export function extractFilmVideoFlow2RequestId(resultData: unknown): string | undefined {
+  if (!resultData || typeof resultData !== "object") return undefined;
+  const id = String((resultData as Record<string, unknown>).flow2RequestId || "").trim();
+  return id || undefined;
+}
 
 /**
  * Materialize video job → tải blob về client (giống ảnh).
@@ -632,6 +650,7 @@ export async function materializeFilmVideoFromJobResult(
     throw new Error("Job film không trả về video");
   }
   const r = resultData as Record<string, unknown>;
+  const flow2RequestId = extractFilmVideoFlow2RequestId(resultData);
 
   // 1) videoBytes base64 (nếu job trả)
   const bytesRaw = String(r.videoBytes || "").trim();
@@ -645,6 +664,7 @@ export async function materializeFilmVideoFromJobResult(
           return {
             videoUrl: `data:${mime};base64,${payload}`,
             videoBlob: blob,
+            flow2RequestId,
           };
         }
       } catch (err) {
@@ -660,11 +680,11 @@ export async function materializeFilmVideoFromJobResult(
   if (videoUrl.startsWith("data:")) {
     try {
       const blob = dataUrlToBlob(videoUrl);
-      if (blob.size > 0) return { videoUrl, videoBlob: blob };
+      if (blob.size > 0) return { videoUrl, videoBlob: blob, flow2RequestId };
     } catch (err) {
       console.warn("[film] video dataURL→Blob fail", err);
     }
-    return { videoUrl };
+    return { videoUrl, flow2RequestId };
   }
 
   if (videoUrl.startsWith("blob:")) {
@@ -672,12 +692,12 @@ export async function materializeFilmVideoFromJobResult(
       const res = await fetch(videoUrl);
       if (res.ok) {
         const blob = await res.blob();
-        if (blob.size > 0) return { videoUrl, videoBlob: blob };
+        if (blob.size > 0) return { videoUrl, videoBlob: blob, flow2RequestId };
       }
     } catch (err) {
       console.warn("[film] video blob URL fetch fail", err);
     }
-    return { videoUrl };
+    return { videoUrl, flow2RequestId };
   }
 
   try {
@@ -685,13 +705,13 @@ export async function materializeFilmVideoFromJobResult(
     if (res.ok) {
       const blob = await res.blob();
       if (blob.size > 0) {
-        return { videoUrl, videoBlob: blob };
+        return { videoUrl, videoBlob: blob, flow2RequestId };
       }
     }
   } catch (err) {
     console.warn("[film] fetch proxy video fail, dùng URL proxy", err);
   }
-  return { videoUrl };
+  return { videoUrl, flow2RequestId };
 }
 
 /** Src hiển thị video scene (blob → object URL, else normalize URL). */

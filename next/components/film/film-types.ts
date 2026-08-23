@@ -506,6 +506,8 @@ export type FilmSceneRecord = {
   videoUrl?: string;
   /** Binary local video (IndexedDB) — ưu tiên preview/export, tránh CORS URL Flow */
   videoBlob?: Blob;
+  /** Flow2 request_id — upscale tải 1080p */
+  videoFlow2RequestId?: string;
   /**
    * Clip phát sinh trong timeline Studio (cắt / chèn file).
    * Chỉ tồn tại trong store `studioTimelines` — không ghi vào `scenes` gốc.
