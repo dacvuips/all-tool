@@ -185,9 +185,7 @@ export const AffiliateConfig = ({
                 id="scene-prompt-list"
                 className="border-gray-200 min-h-[200px]"
                 maxRows={10}
-                placeholder={`${t("Mỗi dòng bắt đầu bằng số là một cảnh, ví dụ")}:\n${t("1")}. ${t(
-                  "Mô tả cảnh đầu"
-                )}...\n${t("2")}. ${t("Mô tả cảnh hai")}...\n${t("3")}. ${t("Mô tả cảnh ba")}...`}
+                placeholder={`${t("Mỗi dòng xuống hàng (Enter) là một phân cảnh")}:\n${t("Mô tả cảnh đầu")}...\n${t("Mô tả cảnh hai")}...\n${t("Mô tả cảnh ba")}...`}
                 value={elementFormConfig?.prompt}
                 onChange={(v) => patchConfig && patchConfig({ prompt: v })}
               />

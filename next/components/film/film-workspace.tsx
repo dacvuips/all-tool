@@ -186,6 +186,7 @@ import {
   nextFilmCharacterCloneName,
   nextFilmLocationCloneName,
   nextFilmPropCloneName,
+  resolveStudioVideoAudioVolume,
 } from "./film-types";
 import { sceneVideoReady } from "./film-video-card";
 import {
@@ -899,6 +900,7 @@ export default function FilmWorkspace({ projectId }: Props) {
       content,
       language,
       sceneCount: targetSceneCount,
+      narration: project.narration,
       systemInstruction,
       previousScenes,
     });
@@ -4150,10 +4152,14 @@ export default function FilmWorkspace({ projectId }: Props) {
     await putFilmScene(next);
   };
 
-  const handleBulkCreateShotFrames = async () => {
-    const targets = scenes.filter(
-      (s) => !sceneFrameReady(s) && s.frameStatus !== "creating"
-    );
+  const handleBulkCreateShotFrames = async (
+    mode: "all" | "errors" = "all"
+  ) => {
+    const targets = scenes.filter((s) => {
+      if (s.frameStatus === "creating") return false;
+      if (mode === "errors") return s.frameStatus === "error";
+      return true;
+    });
     if (!targets.length) return;
 
     await runFilmBulkPool(targets, IMAGE_CONCURRENCY, async (s) => {
@@ -5094,7 +5100,7 @@ export default function FilmWorkspace({ projectId }: Props) {
         <main
           className={`flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain ${
             activeStep === "studio"
-              ? "p-0 overflow-y-auto overscroll-contain flex flex-col flex-1 min-h-0"
+              ? "p-0 overflow-hidden flex flex-col flex-1 min-h-0"
               : openLayout
                 ? "p-4 sm:px-6 lg:p-0"
                 : "m-4 sm:mx-6 lg:m-0 bg-white rounded-2xl border border-gray-100 shadow-sm p-4 sm:p-5 flex flex-col"
@@ -5421,7 +5427,7 @@ export default function FilmWorkspace({ projectId }: Props) {
           )}
 
           {activeStep === "studio" && (
-            <div className="relative flex flex-col w-full min-h-full">
+            <div className="relative flex flex-col flex-1 min-h-0 w-full h-full">
               {studioLoading ? (
                 <div className="flex flex-1 items-center justify-center text-sm text-gray-400 py-16">
                   {t("Đang tải Studio...")}
@@ -5436,6 +5442,18 @@ export default function FilmWorkspace({ projectId }: Props) {
                   const updated: FilmProjectRecord = {
                     ...project,
                     studioSubtitleConfig: config,
+                    updatedAt: new Date().toISOString(),
+                  };
+                  setProject(updated);
+                  void putFilmProject(updated).catch(() => undefined);
+                }}
+                videoAudioVolume={resolveStudioVideoAudioVolume(project)}
+                onVideoAudioVolumeChange={(volume) => {
+                  if (!project) return;
+                  const updated: FilmProjectRecord = {
+                    ...project,
+                    studioVideoAudioVolume: volume,
+                    studioMuteVideoAudio: volume <= 0,
                     updatedAt: new Date().toISOString(),
                   };
                   setProject(updated);

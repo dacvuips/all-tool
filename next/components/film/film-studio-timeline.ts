@@ -1,7 +1,7 @@
 /**
  * Helpers Studio timeline — clips, trim, split, reorder.
  */
-import { createFilmId, type FilmDialogueLineRecord, type FilmSceneRecord } from "./film-types";
+import { createFilmId, normalizeFilmAudioVolume, type FilmDialogueLineRecord, type FilmSceneRecord } from "./film-types";
 import { formatFilmDialogueText, resolveDialogueLineDefaultAudio, syncSceneDialogueLines, withDialogueLineDefaultAudioSynced } from "./film-dialogue";
 
 export const FILM_STUDIO_DEFAULT_SCENE_SEC = 5;
@@ -39,6 +39,8 @@ export type FilmStudioVoiceClip = {
   label: string;
   voiceUrl?: string;
   voiceBlob?: Blob;
+  /** Âm lượng clip (0–100, mặc định 100) */
+  volume: number;
 };
 
 function resolveVoiceClipLabel(input: {
@@ -77,19 +79,14 @@ function estimateLineDuration(text: string): number {
 
 function resolveIndependentLineDuration(
   line: { line: string; timelineDurationSec?: number },
-  sceneDurationSec: number
+  _sceneDurationSec?: number
 ): number {
-  const autoDur = estimateLineDuration(line.line);
   const stored = line.timelineDurationSec;
-  if (stored == null || !Number.isFinite(stored)) return autoDur;
-  // Legacy: duration ≈ cả cảnh / dài bất thường → estimate
-  if (
-    stored >= sceneDurationSec - 0.08 ||
-    stored > Math.max(autoDur * 2.5, autoDur + 2.5)
-  ) {
-    return autoDur;
+  // Đã chỉnh tay trên timeline → tôn trọng (kéo mép phải không bị reset)
+  if (stored != null && Number.isFinite(stored) && stored > 0) {
+    return Math.max(FILM_STUDIO_MIN_CLIP_SEC, stored);
   }
-  return Math.max(FILM_STUDIO_MIN_CLIP_SEC, stored);
+  return estimateLineDuration(line.line);
 }
 
 export function findFilmStudioClipAtTime<T extends { startSec: number; durationSec: number }>(
@@ -398,6 +395,7 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
             }),
             voiceUrl: audio.voiceUrl,
             voiceBlob: audio.voiceBlob,
+            volume: normalizeFilmAudioVolume(line.voiceVolume),
           });
         }
         const hasSubtitleText = !!String(line.line || "").trim();
@@ -453,6 +451,7 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
         }),
         voiceUrl: scene.voiceUrl,
         voiceBlob: undefined,
+        volume: normalizeFilmAudioVolume(scene.voiceVolume),
       });
       mediaCursor = Math.max(
         mediaCursor,
@@ -964,15 +963,20 @@ export function patchFilmDialogueLineTiming(
     timelineStartSec?: number;
     timelineDurationSec?: number;
     voiceTrimInSec?: number;
+    voiceVolume?: number;
     subtitleStartSec?: number;
     subtitleDurationSec?: number;
   }
 ): FilmSceneRecord {
+  const normalizedPatch = { ...patch };
+  if (normalizedPatch.voiceVolume != null) {
+    normalizedPatch.voiceVolume = normalizeFilmAudioVolume(normalizedPatch.voiceVolume);
+  }
   const lines = syncSceneDialogueLines(scene).map((l) =>
     l.id === lineId
       ? {
           ...l,
-          ...patch,
+          ...normalizedPatch,
           timelineOffsetSec: undefined,
         }
       : l
@@ -982,6 +986,16 @@ export function patchFilmDialogueLineTiming(
     dialogueLines: lines,
     updatedAt: new Date().toISOString(),
   };
+}
+
+export function patchFilmDialogueLineVolume(
+  scene: FilmSceneRecord,
+  lineId: string,
+  voiceVolume: number
+): FilmSceneRecord {
+  return patchFilmDialogueLineTiming(scene, lineId, {
+    voiceVolume: normalizeFilmAudioVolume(voiceVolume),
+  });
 }
 
 /** Cắt bỏ phần trước playhead (giữ phần sau) — video. localSec trong clip. */

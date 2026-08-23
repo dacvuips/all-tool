@@ -2,7 +2,7 @@
  * POST /api/app/film/extract-screenplay/
  * Trích xuất phân cảnh dạng JSON object (scenes + characters + locations + props).
  * API key đọc từ bảng Credential. Prompt (system + user) ghép trên backend.
- * Body: content, language, sceneCount, systemInstruction?, previousScenes? (kế thừa tập trước).
+ * Body: content, language, sceneCount, narration?, systemInstruction?, previousScenes? (kế thừa tập trước).
  *
  * Structured output:
  * - OpenAI: response_format json_schema (strict)
@@ -120,13 +120,56 @@ function formatPreviousScenesBlock(scenes: PreviousSceneContext[]): string {
   ].join("\n");
 }
 
+type FilmNarrationMode = "dialogue" | "third_person" | "pov";
+
+function normalizeNarration(raw?: string): FilmNarrationMode {
+  const v = String(raw || "").trim().toLowerCase();
+  if (v === "third_person" || v === "third-person" || v === "ngoi_3") return "third_person";
+  if (v === "pov" || v === "first_person" || v === "first-person" || v === "ngoi_1") return "pov";
+  return "dialogue";
+}
+
+/** Quy tắc ngôi kể — gắn vào user prompt khi trích xuất. */
+function formatNarrationModeBlock(narration: FilmNarrationMode, language: string): string {
+  if (narration === "third_person") {
+    return [
+      "## NARRATION MODE: THIRD PERSON (Ngôi 3)",
+      `- dialogues BẮT BUỘC là lời dẫn chuyện ngôi 3 (narrator voiceover), viết bằng ${language}.`,
+      "- character của mỗi dialogue: dùng 'Người kể' / 'Narrator' (hoặc tương đương theo ngôn ngữ output).",
+      "- KHÔNG viết đối thoại qua lại giữa nhân vật trong dialogues; thoại nhân vật (nếu cần cho mạch) chỉ mô tả ngắn trong content/characterActions.",
+      "- Giọng kể: ngôi 3 (anh ấy/cô ấy/họ hoặc tên nhân vật), khách quan hoặc limited third-person.",
+      "- voice phải mô tả giọng người kể chuyện (không phải giọng thoại nhân vật).",
+    ].join("\n");
+  }
+  if (narration === "pov") {
+    return [
+      "## NARRATION MODE: POV (Góc nhìn nhân vật / Ngôi 1)",
+      `- dialogues BẮT BUỘC là lời kể / độc thoại nội tâm góc nhìn nhân vật (POV, ngôi 1), viết bằng ${language}.`,
+      "- character: tên nhân vật đang giữ góc nhìn (thường là nhân vật chính / focal character của cảnh).",
+      "- line viết ngôi 1 (tôi / I / 我… tùy language) — cảm nhận, suy nghĩ, hoặc những gì nhân vật chứng kiến.",
+      "- Ưu tiên shotSize/cameraAngle mang tính POV khi phù hợp (vd. POV (Góc nhìn nhân vật), Over-the-Shoulder, Cận cảnh).",
+      "- visualDescription / motion có thể mô tả khung hình như nhân vật POV đang nhìn thấy.",
+      "- voice mô tả giọng đúng nhân vật POV (giới tính, pitch, tốc độ, tuổi, cảm xúc).",
+      "- Có thể có rất ít thoại người khác; ưu tiên dòng kể POV trong dialogues.",
+    ].join("\n");
+  }
+  return [
+    "## NARRATION MODE: DIALOGUE (Đối thoại)",
+    `- dialogues BẮT BUỘC là thoại nói của nhân vật (spoken dialogue), viết bằng ${language}.`,
+    "- Mỗi phần tử: tên nhân vật đang nói + câu thoại của họ.",
+    "- KHÔNG viết lời dẫn chuyện ngôi 3 hay lời kể ngôi 1/POV vào dialogues.",
+    "- voice mô tả giọng từng người nói (hoặc từng người nếu nhiều thoại).",
+  ].join("\n");
+}
+
 function buildUserPrompt(params: {
   content: string;
   language: string;
   sceneCount: number;
+  narration: FilmNarrationMode;
   previousScenes?: PreviousSceneContext[];
 }): string {
-  const { content, language, sceneCount, previousScenes = [] } = params;
+  const { content, language, sceneCount, narration, previousScenes = [] } = params;
   const inherit = previousScenes.length > 0;
   return [
     "## TASK",
@@ -139,6 +182,8 @@ function buildUserPrompt(params: {
     inherit
       ? "- Giữ continuity nhân vật/bối cảnh; KHÔNG lặp lại các cảnh đã có ở tập trước."
       : "",
+    "",
+    formatNarrationModeBlock(narration, language),
     "",
     formatPreviousScenesBlock(previousScenes),
     "## ORIGINAL CONTENT",
@@ -547,6 +592,7 @@ export default [
           systemInstruction?: string;
           language?: string;
           sceneCount?: number;
+          narration?: string;
           provider?: string;
           previousScenes?: unknown;
         };
@@ -562,6 +608,7 @@ export default [
 
         const language = normalizeLanguage(body?.language);
         const sceneCount = normalizeSceneCount(body?.sceneCount);
+        const narration = normalizeNarration(body?.narration);
         const systemInstruction = withLanguageInSystemInstruction(
           systemInstructionRaw,
           language
@@ -574,11 +621,12 @@ export default [
         await checkRequestLimit(context.id);
 
         const previousScenes = normalizePreviousScenes(body?.previousScenes);
-        const schemas = buildExtractScreenplaySchemas({ sceneCount, language });
+        const schemas = buildExtractScreenplaySchemas({ sceneCount, language, narration });
         const userPrompt = buildUserPrompt({
           content,
           language,
           sceneCount,
+          narration,
           previousScenes,
         });
         let rawText = "";

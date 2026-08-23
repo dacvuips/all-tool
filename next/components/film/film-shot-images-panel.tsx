@@ -1,8 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   HiAnnotation,
+  HiChevronDown,
   HiDotsVertical,
+  HiPhotograph,
+  HiRefresh,
   HiShare,
   HiSparkles,
   HiTemplate,
@@ -13,6 +16,7 @@ import {
 } from "react-icons/hi";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { Button } from "../shared/utilities/form";
+import { Dropdown } from "../shared/utilities/popover/dropdown";
 import type { FilmAttachOption } from "./film-attach-fields";
 import type { FilmAttachIssueKind } from "./film-attachment-validate";
 import {
@@ -47,6 +51,8 @@ import {
   filmPropLinkedToEpisode,
 } from "./film-types";
 
+export type FilmBulkCreateShotFrameMode = "all" | "errors";
+
 type Props = {
   scenes: FilmSceneRecord[];
   characters: FilmCharacterRecord[];
@@ -58,7 +64,7 @@ type Props = {
   onStopFrame?: (scene: FilmSceneRecord) => void | Promise<void>;
   stopPendingIds?: Record<string, true>;
   onSetFrameImage?: (scene: FilmSceneRecord, image: GeneratedImageData) => Promise<void>;
-  onBulkCreateFrames?: () => Promise<void>;
+  onBulkCreateFrames?: (mode: FilmBulkCreateShotFrameMode) => Promise<void>;
   onTabNavigate?: (tab: FilmStoryboardTab) => void;
   /** Icon cạnh tiêu đề → mở đúng phân cảnh trong Chuỗi phân cảnh */
   onOpenStoryboardScene?: (scene: FilmSceneRecord) => void;
@@ -104,6 +110,7 @@ export default function FilmShotImagesPanel({
   onFramePromptSourceChange,
 }: Props) {
   const { t } = useTranslation();
+  const bulkBtnRef = useRef<HTMLButtonElement>(null);
   const [tab, setTab] = useState<FilmStoryboardTab>("shot_images");
   /** Chỉ true khi đang chạy "Tạo hàng loạt" — gen đơn không khóa nút bulk. */
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -118,7 +125,11 @@ export default function FilmShotImagesPanel({
       matchesFilmNameSearch(getFilmSceneDisplayNames(scene), searchQuery)
     );
   }, [scenes, searchQuery]);
+  const errorCount = scenes.filter((s) => s.frameStatus === "error").length;
+  const creatingCount = scenes.filter(sceneFrameCreating).length;
   const allDone = scenes.length > 0 && readyCount === scenes.length;
+  const canBulkAll = scenes.length > 0 && creatingCount < scenes.length;
+  const canBulkErrors = errorCount > 0;
   const editScene = editSceneId
     ? scenes.find((s) => s.id === editSceneId) || null
     : null;
@@ -185,11 +196,13 @@ export default function FilmShotImagesPanel({
     await onCreateFrame(input);
   };
 
-  const handleBulk = async () => {
-    if (bulkBusy || !onBulkCreateFrames) return;
+  const handleBulk = async (mode: FilmBulkCreateShotFrameMode) => {
+    if (bulkBusy || !onBulkCreateFrames || !scenes.length) return;
+    if (mode === "errors" && !canBulkErrors) return;
+    if (mode === "all" && !canBulkAll) return;
     setBulkBusy(true);
     try {
-      await onBulkCreateFrames();
+      await onBulkCreateFrames(mode);
     } finally {
       setBulkBusy(false);
     }
@@ -249,16 +262,37 @@ export default function FilmShotImagesPanel({
           />
           <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
             {onBulkCreateFrames && (
-              <Button
-                outline
-                small
-                text={t("Tạo hàng loạt")}
-                icon={<HiTemplate />}
-                className="!rounded-lg"
-                onClick={handleBulk}
-                isLoading={bulkBusy}
-                disabled={!scenes.length || allDone}
-              />
+              <>
+                <Button
+                  outline
+                  small
+                  text={
+                    <span className="inline-flex items-center gap-1">
+                      {t("Tạo hàng loạt")}
+                      <HiChevronDown className="text-sm opacity-90" />
+                    </span>
+                  }
+                  icon={<HiTemplate />}
+                  className="!rounded-lg"
+                  innerRef={bulkBtnRef}
+                  isLoading={bulkBusy}
+                  disabled={!scenes.length || bulkBusy || (!canBulkAll && !canBulkErrors)}
+                />
+                <Dropdown reference={bulkBtnRef} placement="bottom-end">
+                  <Dropdown.Item
+                    text={t("Tạo lại tất cả")}
+                    icon={<HiRefresh />}
+                    disabled={!canBulkAll || bulkBusy}
+                    onClick={() => void handleBulk("all")}
+                  />
+                  <Dropdown.Item
+                    text={`${t("Tạo lại ảnh lỗi")}${errorCount ? ` (${errorCount})` : ""}`}
+                    icon={<HiPhotograph />}
+                    disabled={!canBulkErrors || bulkBusy}
+                    onClick={() => void handleBulk("errors")}
+                  />
+                </Dropdown>
+              </>
             )}
             <Button
               outline

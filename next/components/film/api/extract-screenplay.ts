@@ -657,6 +657,8 @@ export async function extractFilmScreenplay(params: {
   language?: string;
   /** Bắt buộc gen đúng số phân cảnh này */
   sceneCount: number;
+  /** Ngôi kể dự án — dialogue | third_person | pov */
+  narration?: "dialogue" | "third_person" | "pov";
   /** Chỉ gửi khi user sửa Setting; backend tự dùng default. */
   systemInstruction?: string;
   /** Kế thừa: Tiêu đề + Tổng quan tập trước */
@@ -666,6 +668,9 @@ export async function extractFilmScreenplay(params: {
   const language = String(params.language || "Vietnamese").trim() || "Vietnamese";
   const sceneCount = Math.max(1, Math.min(60, Math.floor(Number(params.sceneCount) || 6)));
   const systemInstruction = String(params.systemInstruction || "").trim();
+  const narrationRaw = String(params.narration || "").trim().toLowerCase();
+  const narration =
+    narrationRaw === "third_person" || narrationRaw === "pov" ? narrationRaw : "dialogue";
   if (!content) throw new Error("Thiếu nội dung gốc");
 
   const previousScenes = (params.previousScenes || [])
@@ -684,6 +689,7 @@ export async function extractFilmScreenplay(params: {
       content,
       language,
       sceneCount,
+      narration,
       ...(systemInstruction ? { systemInstruction } : {}),
       ...(previousScenes.length ? { previousScenes } : {}),
     }),

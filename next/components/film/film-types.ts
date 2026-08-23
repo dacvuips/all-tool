@@ -49,8 +49,16 @@ export type FilmStoreName = (typeof FILM_STORE)[keyof typeof FILM_STORE];
 // ── Domain types ─────────────────────────────────────────────────────────────
 
 export type FilmAspectRatio = "16:9" | "9:16";
-export type FilmNarration = "dialogue" | "third_person";
+/** Ngôi kể dự án — ảnh hưởng prompt trích xuất dialogues / lời dẫn. */
+export type FilmNarration = "dialogue" | "third_person" | "pov";
 export type FilmEntityStatus = "draft" | "in_progress" | "done";
+
+export function normalizeFilmNarration(raw?: string | null): FilmNarration {
+  const v = String(raw || "").trim().toLowerCase();
+  if (v === "third_person" || v === "third-person" || v === "ngoi_3") return "third_person";
+  if (v === "pov" || v === "first_person" || v === "first-person" || v === "ngoi_1") return "pov";
+  return "dialogue";
+}
 
 /** Dự án phim ngắn — store: projects (keyPath: id) */
 export type FilmProjectRecord = {
@@ -91,6 +99,13 @@ export type FilmProjectRecord = {
    * Persist theo project — giữ khi reload / mở lại tab Studio.
    */
   studioSubtitleConfig?: FilmStudioSubtitleConfig;
+  /**
+   * Studio: âm lượng tiếng gốc track Video (0–100, preview + xuất MP4).
+   * Track Audio (thoại) vẫn phát / mux bình thường.
+   */
+  studioVideoAudioVolume?: number;
+  /** @deprecated Dùng studioVideoAudioVolume = 0 */
+  studioMuteVideoAudio?: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -124,6 +139,26 @@ export const DEFAULT_FILM_STUDIO_SUBTITLE_STYLE: FilmStudioSubtitleStyle = {
   borderColor: "#ffffff",
   borderTransparent: true,
 };
+
+/** Âm lượng clip/timeline — 0–100, mặc định 100 */
+export function normalizeFilmAudioVolume(input?: number | null): number {
+  if (input == null || !Number.isFinite(input)) return 100;
+  return Math.max(0, Math.min(100, Math.round(input)));
+}
+
+/** Âm lượng tiếng gốc video Studio — migrate từ studioMuteVideoAudio */
+export function resolveStudioVideoAudioVolume(
+  project?: Pick<FilmProjectRecord, "studioVideoAudioVolume" | "studioMuteVideoAudio"> | null
+): number {
+  if (
+    project?.studioVideoAudioVolume != null &&
+    Number.isFinite(project.studioVideoAudioVolume)
+  ) {
+    return normalizeFilmAudioVolume(project.studioVideoAudioVolume);
+  }
+  if (project?.studioMuteVideoAudio) return 0;
+  return 100;
+}
 
 export function normalizeFilmStudioSubtitleConfig(
   input?: FilmStudioSubtitleConfig | null
@@ -382,6 +417,8 @@ export type FilmDialogueLineRecord = {
   subtitleDurationSec?: number;
   /** Studio: trim vào trong file audio nguồn (giây) — cắt bỏ phần đầu audio */
   voiceTrimInSec?: number;
+  /** Studio: âm lượng clip audio trên timeline (0–100, mặc định 100) */
+  voiceVolume?: number;
   /**
    * Studio: dòng chèn từ Studio (audio/phụ đề độc lập) — chỉ hiện trên timeline,
    * không ghi vào field Thoại / không hiện tab Tạo giọng / Chuỗi phân cảnh.
@@ -536,6 +573,8 @@ export type FilmSceneRecord = {
   voiceSource?: "catalog" | "custom_id" | "minimax";
   voiceId?: string;
   voiceLabel?: string;
+  /** Studio: âm lượng audio cấp scene (0–100) khi không gắn dialogue line */
+  voiceVolume?: number;
   /** Tên nhân vật nói thoại (hiển thị badge) */
   speakerName?: string;
   status: FilmEntityStatus;
@@ -601,7 +640,7 @@ export function buildFilmProjectRecord(input: FilmProjectCreateInput): FilmProje
     artStyleId: input.artStyleId || FILM_ART_STYLE_FREE,
     artStyleLabel: input.artStyleLabel || "",
     aspectRatio: input.aspectRatio,
-    narration: input.narration,
+    narration: normalizeFilmNarration(input.narration),
     progress: 5,
     characterCount: 0,
     sceneCount,

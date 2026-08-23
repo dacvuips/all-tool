@@ -11,7 +11,9 @@ import {
   HiLockClosed,
   HiLockOpen,
   HiRefresh,
-  HiStop
+  HiStop,
+  HiVolumeOff,
+  HiVolumeUp,
 } from "react-icons/hi";
 import {
   RiDeleteBinLine,
@@ -60,6 +62,7 @@ import {
   insertFilmSceneAfter,
   moveFilmSceneByDropSec,
   patchFilmDialogueLineTiming,
+  patchFilmDialogueLineVolume,
   readAudioUrlDurationSec,
   readVideoUrlDurationSec,
   refreshFilmStudioSceneDurations,
@@ -81,6 +84,7 @@ import type {
   FilmStudioSubtitleStyle,
 } from "./film-types";
 import {
+  normalizeFilmAudioVolume,
   normalizeFilmStudioSubtitleConfig,
 } from "./film-types";
 
@@ -92,6 +96,14 @@ type Props = {
   subtitleConfig?: FilmStudioSubtitleConfig | null;
   /** Lưu cấu hình phụ đề (debounce ở panel) */
   onSubtitleConfigChange?: (config: FilmStudioSubtitleConfig) => void;
+  /** Âm lượng tiếng gốc track Video 0–100 (đã lưu theo project) */
+  videoAudioVolume?: number;
+  /** Lưu âm lượng tiếng gốc video */
+  onVideoAudioVolumeChange?: (volume: number) => void;
+  /** @deprecated Dùng videoAudioVolume */
+  muteVideoAudio?: boolean;
+  /** @deprecated Dùng onVideoAudioVolumeChange */
+  onMuteVideoAudioChange?: (muted: boolean) => void;
   /** Lưu thay đổi timeline Studio (chỉ store studioTimelines) */
   onScenesChange?: (scenes: FilmSceneRecord[]) => void;
   /** Load scenes gốc từ Tạo video (read-only) — Làm lại Studio */
@@ -181,32 +193,84 @@ function formatReviewClock(sec: number): string {
   return `${m}:${String(whole).padStart(2, "0")}.${tenths}`;
 }
 
-/** Pattern thanh dọc gợn sóng liên tục — index theo trục timeline để các clip liền kề khớp nhau. */
-const AUDIO_WAVE_PATTERN = Array.from({ length: 64 }, (_, i) => {
-  const t = (i / 64) * Math.PI * 2 * 2.5;
-  const a = Math.sin(t);
-  const b = Math.sin(t * 1.35 + 0.9);
-  const n = (a * 0.72 + b * 0.28 + 1) / 2; // 0..1
-  return Math.max(3, Math.round(3 + n * 15)); // 3..18px
-});
-const AUDIO_WAVE_BAR_W = 1;
-const AUDIO_WAVE_GAP = 2;
-const AUDIO_WAVE_STEP = AUDIO_WAVE_BAR_W + AUDIO_WAVE_GAP;
+/** Thanh dọc cao thấp ngẫu nhiên (ổn định theo clipId + index). */
+const AUDIO_BAR_W = 1;
+const AUDIO_BAR_GAP = 2;
+const AUDIO_BAR_STEP = AUDIO_BAR_W + AUDIO_BAR_GAP;
 
-/** Waveform sát đáy; thanh mảnh, chiều cao gợn sóng. */
+function clipBarSeed(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i += 1) {
+    h ^= id.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function randomAudioBarHeight(clipSeed: number, barIndex: number): number {
+  let h = (clipSeed ^ Math.imul(barIndex + 1, 2654435761)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822507) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0;
+  const n = (h >>> 0) / 4294967296;
+  return Math.max(3, Math.round(3 + n * 15));
+}
+
+function FilmVolumeSlider({
+  value,
+  onChange,
+  disabled,
+  className = "",
+}: {
+  value: number;
+  onChange: (volume: number) => void;
+  disabled?: boolean;
+  className?: string;
+}) {
+  const vol = normalizeFilmAudioVolume(value);
+  return (
+    <div className={`flex items-center gap-2 min-w-0 ${className}`}>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={vol}
+        disabled={disabled}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="flex-1 min-w-0 h-1.5 accent-orange-500 cursor-pointer disabled:opacity-40"
+      />
+      <span className="flex-shrink-0 w-9 text-right text-xs font-mono tabular-nums text-gray-600">
+        {vol}%
+      </span>
+    </div>
+  );
+}
+
+/** Thanh audio sát đáy — cao thấp ngẫu nhiên, không gợn sóng. */
 function AudioSourceVisual({
+  clipId,
   startPx,
   widthPx,
   hasAudio,
 }: {
+  clipId: string;
   startPx: number;
   widthPx: number;
   hasAudio: boolean;
 }) {
-  const step = AUDIO_WAVE_STEP;
+  const clipSeed = useMemo(() => clipBarSeed(clipId || "audio"), [clipId]);
+  const step = AUDIO_BAR_STEP;
   const firstIdx = Math.floor(Math.max(0, startPx) / step);
   const offsetX = -(Math.max(0, startPx) % step);
   const count = Math.max(1, Math.ceil((widthPx - offsetX) / step) + 1);
+  const bars = useMemo(
+    () =>
+      Array.from({ length: count }, (_, i) => ({
+        key: firstIdx + i,
+        h: randomAudioBarHeight(clipSeed, firstIdx + i),
+      })),
+    [clipSeed, count, firstIdx]
+  );
   return (
     <div
       className={`absolute inset-0 overflow-hidden pointer-events-none ${
@@ -215,22 +279,19 @@ function AudioSourceVisual({
     >
       <div
         className="absolute left-0 right-0 bottom-0 top-0 flex items-end overflow-hidden pb-px"
-        style={{ left: offsetX, gap: AUDIO_WAVE_GAP }}
+        style={{ left: offsetX, gap: AUDIO_BAR_GAP }}
       >
-        {Array.from({ length: count }, (_, i) => {
-          const h = AUDIO_WAVE_PATTERN[(firstIdx + i) % AUDIO_WAVE_PATTERN.length];
-          return (
-            <span
-              key={firstIdx + i}
-              className="flex-shrink-0 rounded-sm bg-primary"
-              style={{
-                width: AUDIO_WAVE_BAR_W,
-                height: h,
-                opacity: hasAudio ? 0.75 : 0.35,
-              }}
-            />
-          );
-        })}
+        {bars.map((bar) => (
+          <span
+            key={bar.key}
+            className="flex-shrink-0 rounded-sm bg-primary"
+            style={{
+              width: AUDIO_BAR_W,
+              height: bar.h,
+              opacity: hasAudio ? 0.75 : 0.35,
+            }}
+          />
+        ))}
       </div>
     </div>
   );
@@ -257,9 +318,9 @@ function TimelineEdgeHandle({
       data-handle={side}
       className="absolute top-0 bottom-0 z-30 cursor-ew-resize"
       style={{
-        // Chủ yếu nằm ngoài mép clip — tránh che nút xóa bên trong
-        [side]: -28,
-        width: 40,
+        // Hit hẹp sát mép — để thân clip còn chỗ kéo đổi vị trí
+        [side]: -4,
+        width: 14,
       }}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -278,8 +339,8 @@ function TimelineEdgeHandle({
           visible ? "opacity-100" : "opacity-0 group-hover:opacity-95"
         }`}
         style={{
-          [side === "left" ? "left" : "right"]: 28,
-          width: 6,
+          [side === "left" ? "left" : "right"]: 4,
+          width: 4,
           backgroundColor: barColor,
           boxShadow: "0 0 0 1px rgba(255,255,255,0.35)",
         }}
@@ -318,6 +379,10 @@ export default function FilmStudioPanel({
   aspectRatio: aspectRatioProp,
   subtitleConfig,
   onSubtitleConfigChange,
+  videoAudioVolume: videoAudioVolumeProp,
+  onVideoAudioVolumeChange,
+  muteVideoAudio: muteVideoAudioProp,
+  onMuteVideoAudioChange,
   onScenesChange,
   onReloadScenes,
   onReplaceScenes,
@@ -355,6 +420,15 @@ export default function FilmStudioPanel({
   const [videoLocked, setVideoLocked] = useState(false);
   const [audioLocked, setAudioLocked] = useState(false);
   const [subtitleLocked, setSubtitleLocked] = useState(false);
+  const resolvedVideoAudioVolumeProp =
+    videoAudioVolumeProp != null
+      ? normalizeFilmAudioVolume(videoAudioVolumeProp)
+      : muteVideoAudioProp
+        ? 0
+        : 100;
+  const [videoAudioVolume, setVideoAudioVolume] = useState(resolvedVideoAudioVolumeProp);
+  const videoAudioVolumeRef = useRef(videoAudioVolume);
+  videoAudioVolumeRef.current = videoAudioVolume;
   const [previewFullscreen, setPreviewFullscreen] = useState(false);
   const [timelineDrop, setTimelineDrop] = useState<{
     track: "video" | "audio";
@@ -389,14 +463,40 @@ export default function FilmStudioPanel({
   /** Preview vị trí khi kéo video (clip đi theo chuột). */
   const [videoDragLeftSec, setVideoDragLeftSec] = useState<number | null>(null);
   const videoDragLeftSecRef = useRef<number | null>(null);
+  /** Mốc thời gian dưới con trỏ khi kéo video — dùng cho slot thả. */
+  const [videoDragPointerSec, setVideoDragPointerSec] = useState<number | null>(null);
+  const videoDragPointerSecRef = useRef<number | null>(null);
+  /** Preview vị trí khi kéo audio (clip đi theo chuột — tự do trên timeline). */
+  const [audioDragLeftSec, setAudioDragLeftSec] = useState<number | null>(null);
+  const audioDragLeftSecRef = useRef<number | null>(null);
   const localScenesRef = useRef(localScenes);
   localScenesRef.current = localScenes;
   const lastDragMovedRef = useRef(false);
 
   useEffect(() => {
-    if (dragRef.current?.kind === "video-move") return;
+    // Đang kéo clip — không ghi đè local bằng props (tránh snap về chỗ cũ)
+    if (dragRef.current) return;
     setLocalScenes(scenes);
   }, [scenes]);
+
+  useEffect(() => {
+    setVideoAudioVolume(resolvedVideoAudioVolumeProp);
+  }, [resolvedVideoAudioVolumeProp]);
+
+  useEffect(() => {
+    const vol = videoAudioVolumeRef.current / 100;
+    const muted = videoAudioVolumeRef.current <= 0;
+    const v = videoRef.current;
+    if (v) {
+      v.volume = vol;
+      v.muted = muted;
+    }
+    const d = dialogVideoRef.current;
+    if (d) {
+      d.volume = vol;
+      d.muted = muted;
+    }
+  }, [videoAudioVolume]);
 
   /** Hydrate cấu hình phụ đề từ project khi mở / reload */
   const lastHydratedSubtitleCfgRef = useRef("");
@@ -446,6 +546,29 @@ export default function FilmStudioPanel({
       }, 400);
     },
     [onScenesChange]
+  );
+
+  const handleVideoAudioVolumeChange = useCallback(
+    (volume: number) => {
+      const next = normalizeFilmAudioVolume(volume);
+      setVideoAudioVolume(next);
+      onVideoAudioVolumeChange?.(next);
+      onMuteVideoAudioChange?.(next <= 0);
+    },
+    [onVideoAudioVolumeChange, onMuteVideoAudioChange]
+  );
+
+  const handleVoiceVolumeChange = useCallback(
+    (clip: FilmStudioVoiceClip, volume: number) => {
+      const vol = normalizeFilmAudioVolume(volume);
+      const next = localScenesRef.current.map((s) => {
+        if (s.id !== clip.sceneId) return s;
+        if (clip.lineId) return patchFilmDialogueLineVolume(s, clip.lineId, vol);
+        return { ...s, voiceVolume: vol, updatedAt: new Date().toISOString() };
+      });
+      commitScenes(next);
+    },
+    [commitScenes]
   );
 
   const timeline = useMemo(() => buildFilmStudioTimeline(localScenes), [localScenes]);
@@ -532,7 +655,18 @@ export default function FilmStudioPanel({
     TIMELINE_ZOOM_MIN,
     Math.min(TIMELINE_ZOOM_MAX, zoomPxPerSec)
   );
-  const timelineWidth = Math.max(totalSec * pxPerSec, timelineViewportW);
+  const audioDragExtentSec =
+    audioDragLeftSec != null
+      ? audioDragLeftSec +
+        (voiceClips.find(
+          (c) => draggingClipId === `${c.sceneId}:${c.lineId}:voice`
+        )?.durationSec ?? 0)
+      : 0;
+  const timelineWidth = Math.max(
+    totalSec * pxPerSec,
+    timelineViewportW,
+    audioDragExtentSec * pxPerSec
+  );
   const pxPerSecRef = useRef(pxPerSec);
   pxPerSecRef.current = pxPerSec;
 
@@ -595,6 +729,9 @@ export default function FilmStudioPanel({
 
       const localTime = Math.max(0, timelineSec - clip.startSec + clip.trimInSec);
       v.playbackRate = playbackRate;
+      const vol = videoAudioVolumeRef.current / 100;
+      v.volume = vol;
+      v.muted = videoAudioVolumeRef.current <= 0;
       if (Number.isFinite(localTime) && Math.abs(v.currentTime - localTime) > 0.12) {
         try {
           v.currentTime = localTime;
@@ -653,6 +790,15 @@ export default function FilmStudioPanel({
     },
     [totalSec]
   );
+
+  /** Thời gian tuyệt đối dưới con trỏ — không kẹp totalSec (kéo video ra mép phải). */
+  const rawSecFromTimelineClientX = useCallback((clientX: number) => {
+    const el = timelineRef.current;
+    if (!el) return 0;
+    const rect = el.getBoundingClientRect();
+    const x = clientX - rect.left + el.scrollLeft;
+    return Math.max(0, x / Math.max(pxPerSecRef.current, 0.001));
+  }, []);
 
   useEffect(() => {
     const clip = activeVideoClip;
@@ -721,6 +867,7 @@ export default function FilmStudioPanel({
         }
         if (audio.src !== src) audio.src = src;
         audio.playbackRate = playbackRate;
+        audio.volume = normalizeFilmAudioVolume(clip.volume) / 100;
           if (clip.id !== solo.clipId) {
             if (!audio.paused) audio.pause();
             return;
@@ -756,6 +903,7 @@ export default function FilmStudioPanel({
           }
           if (audio.src !== src) audio.src = src;
           audio.playbackRate = playbackRate;
+          audio.volume = normalizeFilmAudioVolume(clip.volume) / 100;
           const end = clip.startSec + clip.durationSec;
           if (tSec >= clip.startSec && tSec < end) {
             const local = tSec - clip.startSec + (clip.trimInSec || 0);
@@ -907,7 +1055,7 @@ export default function FilmStudioPanel({
       if (!drag) return;
       const dxPx = e.clientX - drag.startX;
       const dx = dxPx / pxPerSecRef.current;
-      if (!drag.moved && Math.abs(dxPx) > 4) {
+      if (!drag.moved && Math.abs(dxPx) > 2) {
         drag.moved = true;
         if (
           drag.kind === "line-move" ||
@@ -940,18 +1088,31 @@ export default function FilmStudioPanel({
         const nextLeft = Math.max(0, originStart + dx);
         videoDragLeftSecRef.current = nextLeft;
         setVideoDragLeftSec(nextLeft);
+        const pointerSec = rawSecFromTimelineClientX(e.clientX);
+        videoDragPointerSecRef.current = pointerSec;
+        setVideoDragPointerSec(pointerSec);
         return;
       }
 
       if (drag.kind === "line-left" || drag.kind === "line-right" || drag.kind === "line-move") {
         if (drag.kind === "line-move" && !drag.moved) return;
+        const isVoiceTrack = drag.track === "voice";
+
+        /** Audio body: kéo preview tự do theo chuột — commit khi thả. */
+        if (drag.kind === "line-move" && isVoiceTrack) {
+          const nextLeft = Math.max(0, drag.originStartSec + dx);
+          audioDragLeftSecRef.current = nextLeft;
+          setAudioDragLeftSec(nextLeft);
+          return;
+        }
+
         let startSec = drag.originStartSec;
         let duration = drag.originDuration;
         let trimIn = drag.originTrimIn;
         const end0 = drag.originStartSec + drag.originDuration;
-        const isVoiceTrack = drag.track === "voice";
 
         if (drag.kind === "line-move") {
+          // Phụ đề: cập nhật live
           startSec = Math.max(0, drag.originStartSec + dx);
           duration = drag.originDuration;
           trimIn = drag.originTrimIn;
@@ -961,20 +1122,13 @@ export default function FilmStudioPanel({
             Math.min(end0 - FILM_STUDIO_MIN_CLIP_SEC, drag.originStartSec + dx)
           );
           const d = nextStart - drag.originStartSec;
+          startSec = nextStart;
+          duration = end0 - nextStart;
           if (isVoiceTrack) {
-            const nextTrim = drag.originTrimIn + d;
-            if (nextTrim < -0.001) {
-              startSec = drag.originStartSec - drag.originTrimIn;
-              duration = end0 - startSec;
-              trimIn = 0;
-        } else {
-              startSec = nextStart;
-              duration = end0 - nextStart;
-              trimIn = nextTrim;
-            }
+            // Kéo phải = cắt đầu (tăng trim). Kéo trái = kéo dài về trước;
+            // hết trim nguồn (trimIn=0) vẫn cho dài timeline tự do.
+            trimIn = Math.max(0, drag.originTrimIn + d);
           } else {
-            startSec = nextStart;
-            duration = end0 - nextStart;
             trimIn = drag.originTrimIn;
           }
         } else {
@@ -990,7 +1144,7 @@ export default function FilmStudioPanel({
                 isVoiceTrack
                   ? {
                       timelineStartSec: startSec,
-                timelineDurationSec: duration,
+                      timelineDurationSec: duration,
                       voiceTrimInSec: Math.max(0, trimIn),
                     }
                   : {
@@ -1025,28 +1179,18 @@ export default function FilmStudioPanel({
       lastDragMovedRef.current = !!drag.moved;
 
       if (drag.kind === "video-move") {
-        const previewLeft = videoDragLeftSecRef.current;
         const scenesBefore = localScenesRef.current;
         videoDragLeftSecRef.current = null;
         setVideoDragLeftSec(null);
+        const pointerSec = videoDragPointerSecRef.current;
+        videoDragPointerSecRef.current = null;
+        setVideoDragPointerSec(null);
         if (drag.moved) {
-          const dur = Math.max(
-            FILM_STUDIO_MIN_CLIP_SEC,
-            drag.originDurationSec ??
-              drag.origin.durationSec ??
-              FILM_STUDIO_DEFAULT_SCENE_SEC
-          );
-          /** Tâm clip theo vị trí mắt thấy khi thả (không clamp totalSec). */
+          /** Thả theo vị trí con trỏ — khớp slot xanh đang hiện. */
           const dropSec =
-            previewLeft != null && Number.isFinite(previewLeft)
-              ? Math.max(0, previewLeft + dur * 0.5)
-              : (() => {
-        const el = timelineRef.current;
-                  if (!el) return 0;
-        const rect = el.getBoundingClientRect();
-                  const x = e.clientX - rect.left + el.scrollLeft;
-                  return Math.max(0, x / Math.max(pxPerSecRef.current, 0.001));
-                })();
+            pointerSec != null && Number.isFinite(pointerSec)
+              ? Math.max(0, pointerSec)
+              : rawSecFromTimelineClientX(e.clientX);
           const next = moveFilmSceneByDropSec(scenesBefore, drag.sceneId, dropSec);
           commitScenes(next);
           const rebuilt = buildFilmStudioTimeline(next);
@@ -1064,17 +1208,59 @@ export default function FilmStudioPanel({
             .sort((a, b) => a.index - b.index)
             .map((s) => s.id)
             .join("\0");
-          setToast(
-            beforeIds !== afterIds
-              ? t("Đã đổi vị trí video")
-              : t("Thả vào vị trí khác trên timeline để đổi thứ tự")
-          );
+          if (beforeIds !== afterIds) {
+            setToast(t("Đã đổi vị trí video"));
+          }
         } else {
           seekTo(secFromTimelineClientX(e.clientX), {
             play: playingRef.current,
             snap: true,
           });
         }
+        return;
+      }
+
+      /** Audio: thả → ghi timelineStartSec tuyệt đối (kéo tự do). */
+      if (drag.kind === "line-move" && drag.track === "voice") {
+        const previewLeft = audioDragLeftSecRef.current;
+        audioDragLeftSecRef.current = null;
+        setAudioDragLeftSec(null);
+        if (!drag.moved) {
+          seekTo(secFromTimelineClientX(e.clientX), {
+            play: playingRef.current,
+            snap: true,
+          });
+          return;
+        }
+        const startSec =
+          previewLeft != null && Number.isFinite(previewLeft)
+            ? Math.max(0, previewLeft)
+            : Math.max(0, drag.originStartSec);
+        const scenesBefore = localScenesRef.current;
+        const next = scenesBefore.map((s) => {
+          if (s.id !== drag.sceneId) return s;
+          const line = (s.dialogueLines || []).find((l) => l.id === drag.lineId);
+          const freezeSubtitle =
+            !line ||
+            line.subtitleStartSec == null ||
+            !Number.isFinite(line.subtitleStartSec);
+          return patchFilmDialogueLineTiming(s, drag.lineId, {
+            timelineStartSec: startSec,
+            timelineDurationSec: drag.originDuration,
+            voiceTrimInSec: Math.max(0, drag.originTrimIn),
+            ...(freezeSubtitle
+              ? {
+                  subtitleStartSec: drag.originStartSec,
+                  subtitleDurationSec:
+                    line?.subtitleDurationSec != null &&
+                    Number.isFinite(line.subtitleDurationSec)
+                      ? Math.max(FILM_STUDIO_MIN_CLIP_SEC, line.subtitleDurationSec)
+                      : drag.originDuration,
+                }
+              : {}),
+          });
+        });
+        commitScenes(next);
         return;
       }
 
@@ -1097,7 +1283,7 @@ export default function FilmStudioPanel({
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
-  }, [commitScenes, seekTo, secFromTimelineClientX, t]);
+  }, [commitScenes, seekTo, secFromTimelineClientX, rawSecFromTimelineClientX, t]);
 
   const beginTimelineScrub = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
@@ -2089,6 +2275,7 @@ export default function FilmStudioPanel({
       const result = await exportFilmStudioTimeline(localScenesRef.current, {
         formats: selected,
         burnSubtitles: shouldBurnSubtitles,
+        videoAudioVolume: videoAudioVolumeRef.current / 100,
         subtitleStyle,
         resolution,
         portrait: aspectRatio === "9:16",
@@ -2168,8 +2355,15 @@ export default function FilmStudioPanel({
     setSelectedVideoId(clip.id);
     setSelectedVoiceId(null);
     setInspectorTab("video");
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     videoDragLeftSecRef.current = clip.startSec;
     setVideoDragLeftSec(clip.startSec);
+    videoDragPointerSecRef.current = clip.startSec + clip.durationSec * 0.5;
+    setVideoDragPointerSec(clip.startSec + clip.durationSec * 0.5);
     setDraggingClipId(clip.sceneId);
     dragRef.current = {
       kind: "video-move",
@@ -2232,7 +2426,39 @@ export default function FilmStudioPanel({
     e: React.PointerEvent
   ) => {
     if (audioLocked) return;
-    beginLineDrag(kind, clip, e, { select: "voice" });
+
+    let dragClip = clip;
+    // Scene-level voice (không có lineId) → tạo dòng studioOnly để kéo tự do được
+    if (!dragClip.lineId) {
+      const promoted = insertFilmIndependentLine(localScenesRef.current, {
+        hostSceneId: dragClip.sceneId,
+        startSec: dragClip.startSec,
+        durationSec: dragClip.durationSec,
+        character: dragClip.character,
+        text: dragClip.text || dragClip.label || "Audio",
+        voiceUrl: dragClip.voiceUrl,
+        voiceBlob: dragClip.voiceBlob,
+        voiceLabel: dragClip.label,
+        voiceTrimInSec: dragClip.trimInSec,
+      });
+      if (!promoted.lineId) return;
+      setLocalScenes(promoted.scenes);
+      localScenesRef.current = promoted.scenes;
+      dragClip = {
+        ...dragClip,
+        id: `${promoted.sceneId}:${promoted.lineId}`,
+        lineId: promoted.lineId,
+        kind: "line",
+      };
+      setSelectedVoiceId(dragClip.id);
+    }
+
+    if (kind === "line-move") {
+      audioDragLeftSecRef.current = dragClip.startSec;
+      setAudioDragLeftSec(dragClip.startSec);
+      setDraggingClipId(`${dragClip.sceneId}:${dragClip.lineId}:voice`);
+    }
+    beginLineDrag(kind, dragClip, e, { select: "voice" });
   };
 
   const beginSubtitleDrag = (
@@ -2266,9 +2492,14 @@ export default function FilmStudioPanel({
     if (!draggingClipId || videoDragLeftSec == null) return null;
     const self = videoClips.find((c) => c.sceneId === draggingClipId);
     if (!self) return null;
-    const dropSec = Math.max(0, videoDragLeftSec + self.durationSec * 0.5);
+    const dropSec = Math.max(
+      0,
+      videoDragPointerSec != null
+        ? videoDragPointerSec
+        : videoDragLeftSec + Math.min(0.35, self.durationSec * 0.25)
+    );
     return buildVideoDragLayout(videoClips, draggingClipId, dropSec);
-  }, [draggingClipId, videoDragLeftSec, videoClips]);
+  }, [draggingClipId, videoDragLeftSec, videoDragPointerSec, videoClips]);
 
   const videoDragOthersLeft = useMemo(() => {
     const map = new Map<string, number>();
@@ -2301,7 +2532,7 @@ export default function FilmStudioPanel({
   const TIMELINE_DOCK_H = 300;
 
   return (
-    <div className="relative flex flex-col w-full min-h-full bg-gray-100">
+    <div className="relative flex flex-col flex-1 min-h-0 w-full h-full bg-gray-100 gap-2  ">
       {toast || exportProgress ? (
         <div
           className="absolute z-50 left-1/4 top-3 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-xs text-white shadow-lg flex items-center gap-2"
@@ -2322,15 +2553,11 @@ export default function FilmStudioPanel({
         </div>
       ) : null}
 
-      {/* Preview + inspector — cuộn theo trang; mobile xếp dọc không bị cắt */}
-      <div
-        className="grid flex-shrink-0 w-full grid-cols-1 md:grid-cols-4 gap-2 md:gap-3"
-        style={{ minHeight: 450 }}
-      >
-        {/* Preview trái */}
+      {/* Preview + inspector — chiếm phần còn lại phía trên timeline */}
+      <div className="grid flex-1 min-h-0 w-full grid-cols-1 md:grid-cols-4 gap-2 md:gap-3">
+        {/* Preview trái */}  
         <section
-          className="md:col-span-3 flex flex-col min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-          style={{ height: 450, maxHeight: 450 }}
+          className="md:col-span-3 flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
         >
           <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-gray-100">
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Preview")}</h3>
@@ -2359,8 +2586,8 @@ export default function FilmStudioPanel({
                     previewSrc ? "opacity-100" : "opacity-0"
                   }`}
                   playsInline
-                  muted={false}
-                  onEnded={() => {
+                  muted={videoAudioVolume <= 0}
+                  onEnded={() => {  
                         if (soloRef.current?.kind === "video") {
                           clearSoloPlayback();
                           setPlaying(false);
@@ -2503,7 +2730,7 @@ export default function FilmStudioPanel({
                             previewSrc ? "opacity-100" : "opacity-0"
                           }`}
                           playsInline
-                          muted={false}
+                          muted={videoAudioVolume <= 0}
                           onEnded={() => {
                             if (soloRef.current?.kind === "video") {
                               clearSoloPlayback();
@@ -2721,8 +2948,7 @@ export default function FilmStudioPanel({
 
         {/* Cột tab — nội dung scroll bên trong thẻ */}
         <aside
-          className="md:col-span-1 flex flex-col min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
-          style={{ height: 450, maxHeight: 450 }}
+          className="md:col-span-1 flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
         >
           <div className="flex-shrink-0 px-2 sm:px-2.5 py-1.5 border-b border-gray-100">
             <div className="flex gap-0.5 sm:gap-1 p-0.5 rounded-lg bg-gray-100 border border-gray-200">
@@ -2788,6 +3014,17 @@ export default function FilmStudioPanel({
                     ? t("Dừng nghe clip")
                     : t("Nghe clip video này")}
                 </button>
+                <label className="block">
+                  <span className="text-10 font-semibold text-gray-500 uppercase tracking-wide">
+                    {t("Âm lượng tiếng gốc")}
+                  </span>
+                  <div className="mt-1.5">
+                    <FilmVolumeSlider
+                      value={videoAudioVolume}
+                      onChange={handleVideoAudioVolumeChange}
+                    />
+                  </div>
+                </label>
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block">
                     <span className="text-10 font-semibold text-gray-500 uppercase tracking-wide">
@@ -2908,10 +3145,35 @@ export default function FilmStudioPanel({
                   className="h-12 rounded-lg overflow-hidden border border-primary border-opacity-30 relative"
                   style={{ background: AUDIO_STRIPE_BG }}
                 >
-                  <span className="absolute inset-0 flex items-center px-3 text-xs font-semibold text-primary-dark truncate">
+                  {selectedVoiceClip ? (
+                    <AudioSourceVisual
+                      clipId={selectedVoiceClip.id}
+                      startPx={0}
+                      widthPx={240}
+                      hasAudio={
+                        !!(selectedVoiceClip.voiceUrl || selectedVoiceClip.voiceBlob)
+                      }
+                    />
+                  ) : null}
+                  <span className="absolute inset-0 flex items-center px-3 text-xs font-semibold text-primary-dark truncate pointer-events-none">
                     {selectedVoiceClip?.label || t("Audio source")}
                   </span>
                 </div>
+                {selectedVoiceClip &&
+                (selectedVoiceClip.voiceUrl || selectedVoiceClip.voiceBlob) ? (
+                  <label className="block">
+                    <span className="text-10 font-semibold text-gray-500 uppercase tracking-wide">
+                      {t("Âm lượng clip")}
+                    </span>
+                    <div className="mt-1.5">
+                      <FilmVolumeSlider
+                        value={selectedVoiceClip.volume}
+                        onChange={(vol) => handleVoiceVolumeChange(selectedVoiceClip, vol)}
+                        disabled={audioLocked}
+                      />
+                    </div>
+                  </label>
+                ) : null}
                 <button
                   type="button"
                   onClick={() =>
@@ -3307,18 +3569,12 @@ export default function FilmStudioPanel({
         </aside>
       </div>
 
-      {/* Timeline — cao cố định, sticky đáy khi scroll trang Studio */}
+      {/* Timeline — neo đáy panel Studio */}
       <section
-        className="sticky bottom-0 z-20 mt-auto flex flex-col flex-shrink-0 w-full overflow-hidden border border-gray-200 bg-white shadow rounded-lg"
+        className="z-20 flex flex-col flex-shrink-0 w-full overflow-hidden border border-gray-200 bg-white shadow rounded-lg"
         style={{ height: TIMELINE_DOCK_H, minHeight: TIMELINE_DOCK_H, maxHeight: TIMELINE_DOCK_H }}
       >
-        <div className="flex flex-wrap gap-2 items-center justify-between px-3 sm:px-4 py-0.5 sm:py-1 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="min-w-0">
-            
-            <p className="m-0 mt-0.5 text-xs font-semibold text-gray-500 hidden sm:block">
-              {t("Kéo thả video/audio vào track tương ứng — Audio & Phụ đề độc lập video")}
-            </p>
-          </div>
+        <div className="flex flex-wrap gap-2 items-center justify-end px-3 sm:px-4 py-0.5 sm:py-1 border-b border-gray-100 bg-gray-50 flex-shrink-0">
           <div className="flex flex-wrap gap-1">
             <ToolBtn
               title={t("Làm lại — lấy đúng video từ tab Tạo video")}
@@ -3336,6 +3592,30 @@ export default function FilmStudioPanel({
             <ToolBtn title={t("Split")} onClick={handleSplit} accent>
               <RiScissorsCutLine className="text-sm" />
             </ToolBtn>
+            <div className="flex items-center gap-1.5 px-0.5">
+              <ToolBtn
+                title={
+                  videoAudioVolume <= 0
+                    ? t("Bật tiếng gốc video")
+                    : t("Tắt tiếng gốc video")
+                }
+                onClick={() =>
+                  handleVideoAudioVolumeChange(videoAudioVolume <= 0 ? 100 : 0)
+                }
+                accent={videoAudioVolume <= 0}
+              >
+                {videoAudioVolume <= 0 ? (
+                  <HiVolumeOff className="text-sm" />
+                ) : (
+                  <HiVolumeUp className="text-sm" />
+                )}
+              </ToolBtn>
+              <FilmVolumeSlider
+                value={videoAudioVolume}
+                onChange={handleVideoAudioVolumeChange}
+                className="w-24"
+              />
+            </div>
             <ToolBtn title={t("Delete")} onClick={handleDelete}>
               <RiDeleteBinLine className="text-sm" />
             </ToolBtn>
@@ -3398,15 +3678,18 @@ export default function FilmStudioPanel({
               ))}
           </div>
 
-          {/* Playhead — vùng kéo riêng, không chặn scroll ngang */}
+          {/* Playhead — chỉ bắt kéo ở đầu (ruler); thân line không chặn kéo clip */}
           <div
-            className="absolute top-0 bottom-0 z-30 cursor-ew-resize"
+            className="absolute top-0 bottom-0 z-30 pointer-events-none"
             style={{ left: playheadLeft - 6, width: 12 }}
-            onPointerDown={beginTimelineScrub}
-            title={t("Kéo playhead")}
           >
-            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-red-500 pointer-events-none" />
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-sm bg-red-500 rotate-45 pointer-events-none" />
+            <div
+              className="absolute left-0 top-0 h-5 w-full cursor-ew-resize pointer-events-auto"
+              onPointerDown={beginTimelineScrub}
+              title={t("Kéo playhead")}
+            />
+            <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-red-500" />
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3 h-3 rounded-sm bg-red-500 rotate-45" />
           </div>
 
           <div
@@ -3464,16 +3747,18 @@ export default function FilmStudioPanel({
               return (
               <div
                 key={clip.id}
-                  className={`absolute top-1.5 bottom-1.5 rounded overflow-visible group transition-all duration-150 ${
+                  className={`absolute top-1.5 bottom-1.5 rounded overflow-visible group ${
                     selected || isDragging
                       ? "ring-2 ring-sky-400 z-30"
                       : "ring-1 ring-sky-600 ring-opacity-60 hover:ring-sky-400 z-10"
                   } ${clip.ready ? "bg-sky-950" : "bg-slate-800 opacity-70"} ${
                     videoLocked ? "cursor-ew-resize" : "cursor-grab active:cursor-grabbing"
-                } ${isDragging ? "opacity-85 shadow-lg z-40" : ""}`}
+                } ${isDragging ? "opacity-90 shadow-lg z-40" : ""}`}
                 style={{
                     left: leftSec * pxPerSec,
                     width: Math.max(clip.durationSec * pxPerSec, 28),
+                    // Không transition khi đang kéo — tránh giật / khó nhắm
+                    transition: draggingClipId ? "none" : undefined,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -3598,24 +3883,31 @@ export default function FilmStudioPanel({
             {voiceClips.map((clip) => {
               const hasAudio = !!(clip.voiceUrl || clip.voiceBlob);
               const selected = selectedVoiceId === clip.id;
-              const clipLeft = clip.startSec * pxPerSec;
+              const isDragging =
+                draggingClipId === `${clip.sceneId}:${clip.lineId}:voice`;
+              const leftSec =
+                isDragging && audioDragLeftSec != null
+                  ? Math.max(0, audioDragLeftSec)
+                  : clip.startSec;
+              const clipLeft = leftSec * pxPerSec;
               const clipWidth = Math.max(clip.durationSec * pxPerSec, 24);
               return (
               <div
                 key={clip.id}
                   className={`absolute top-1 bottom-1 rounded overflow-visible group ${
-                    selected
+                    selected || isDragging
                       ? "ring-2 ring-primary z-20"
                       : "ring-1 ring-primary ring-opacity-30 hover:ring-opacity-55 z-10"
-                  } ${audioLocked ? "cursor-ew-resize" : "cursor-grab active:cursor-grabbing"}`}
+                  } ${audioLocked ? "cursor-ew-resize" : "cursor-grab active:cursor-grabbing"} ${
+                    isDragging ? "opacity-85 shadow-md z-30" : ""
+                  }`}
                 style={{
                     left: clipLeft,
                     width: clipWidth,
-                    backgroundColor: selected
+                    backgroundColor: selected || isDragging
                       ? "rgba(254,241,231,0.98)"
                       : "rgba(255,252,248,0.95)",
-                    opacity: draggingClipId === `${clip.sceneId}:${clip.lineId}:voice` ? 0.75 : 1,
-                    zIndex: draggingClipId === `${clip.sceneId}:${clip.lineId}:voice` ? 30 : undefined,
+                    zIndex: isDragging ? 30 : undefined,
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -3640,10 +3932,11 @@ export default function FilmStudioPanel({
                     }
                     beginVoiceDrag("line-move", clip, e);
                   }}
-                  title={`${clip.label}${clip.character ? ` · ${clip.character}` : ""} · ${t("Kéo để đổi vị trí")}`}
+                  title={`${clip.label}${clip.character ? ` · ${clip.character}` : ""} · ${t("Kéo tự do trên timeline")}`}
                 >
                   <div className="absolute inset-0 overflow-hidden rounded pointer-events-none">
                     <AudioSourceVisual
+                      clipId={clip.id}
                       startPx={clipLeft}
                       widthPx={clipWidth}
                       hasAudio={hasAudio}

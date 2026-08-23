@@ -2,41 +2,34 @@ import { ElementAnalysisData, ElementScene, uid } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
 
-/** Một dòng prompt đã tách theo số thứ tự (1., 2., …) */
+/** Một dòng prompt = một phân cảnh. */
 export interface NumberedPromptItem {
   number: number;
   text: string;
 }
 
+/** Bỏ tiền tố "1. " / "2. " ở đầu dòng nếu có (tùy chọn, không bắt buộc). */
+function normalizeSceneLine(line: string): string {
+  return line.replace(/^\d+\.\s*/, "").trim();
+}
+
 /**
- * Tách textarea prompt thành các mục theo đầu dòng "N. ".
- * Nội dung một cảnh có thể xuống dòng; cảnh mới bắt đầu khi gặp dòng "N+1.".
+ * Tách prompt: mỗi dòng xuống hàng (Enter) = 1 phân cảnh.
+ * Dòng trống bỏ qua. "1. mô tả" trên một dòng vẫn là 1 cảnh (bỏ số nếu có).
  */
 export function parseNumberedPrompt(prompt: string): NumberedPromptItem[] {
   const trimmed = prompt.trim();
   if (!trimmed) return [];
 
-  const regex = /(?:^|\n)\s*(\d+)\.\s*/g;
-  const matches = Array.from(trimmed.matchAll(regex));
+  const lines = trimmed
+    .split(/\r?\n/)
+    .map((line) => normalizeSceneLine(line.trim()))
+    .filter(Boolean);
 
-  if (matches.length === 0) {
-    return [{ number: 1, text: trimmed }];
-  }
-
-  const items: NumberedPromptItem[] = [];
-  for (let i = 0; i < matches.length; i++) {
-    const match = matches[i];
-    const start = match.index! + match[0].length;
-    const end = i + 1 < matches.length ? matches[i + 1].index! : trimmed.length;
-    const text = trimmed.slice(start, end).trim();
-    if (text) {
-      items.push({ number: parseInt(match[1], 10), text });
-    }
-  }
-  return items;
+  return lines.map((text, index) => ({ number: index + 1, text }));
 }
 
-/** Chuyển danh sách prompt đánh số thành dữ liệu phân tích copy-video (scenes). */
+/** Chuyển danh sách prompt thành dữ liệu phân tích (scenes). */
 export function buildAnalysisDataFromNumberedPrompt(
   prompt: string,
   aspectRatio?: string,
@@ -47,11 +40,11 @@ export function buildAnalysisDataFromNumberedPrompt(
   const items = parseNumberedPrompt(prompt);
   if (items.length === 0) return null;
 
-  const scenes: ElementScene[] = items.map((item) => ({
+  const scenes: ElementScene[] = items.map((item, index) => ({
     id: uid(),
     timestamp: "",
     scene_type: "OBJECT" as const,
-    sceneNumber: item.number,
+    sceneNumber: index + 1,
     visual_prompt: item.text,
     motion_description: "",
     audio_description: "",

@@ -37,6 +37,7 @@ import {
   buildFilmProjectRecord,
   buildFilmScenesForEpisode,
   createFilmId,
+  normalizeFilmNarration,
 } from "./film-types";
 import { formatFilmDialogueText } from "./film-dialogue";
 import {
@@ -363,7 +364,7 @@ export async function updateFilmProject(
     artStyleId: input.artStyleId || "",
     artStyleLabel: input.artStyleLabel || "",
     aspectRatio: input.aspectRatio,
-    narration: input.narration,
+    narration: normalizeFilmNarration(input.narration),
     sceneCount,
     updatedAt: new Date().toISOString(),
   };
@@ -1357,7 +1358,7 @@ function readLegacyLocalProjects(): FilmProjectRecord[] {
           artStyleId: legacy.artStyleId ?? "",
           artStyleLabel: legacy.artStyleLabel ?? "",
           aspectRatio: legacy.aspectRatio === "9:16" ? "9:16" : "16:9",
-          narration: legacy.narration === "third_person" ? "third_person" : "dialogue",
+          narration: normalizeFilmNarration(legacy.narration),
           progress: typeof legacy.progress === "number" ? legacy.progress : 5,
           characterCount: legacy.characterCount ?? 0,
           sceneCount: legacy.sceneCount ?? 0,

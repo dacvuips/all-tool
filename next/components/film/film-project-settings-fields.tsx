@@ -11,6 +11,7 @@ import {
   FilmNarration,
   FilmProjectCreateInput,
   FilmProjectRecord,
+  normalizeFilmNarration,
 } from "./film-types";
 
 export type FilmProjectSettingsFormState = {
@@ -45,7 +46,7 @@ export function filmProjectSettingsFormFromProject(
         : "",
     artStyleId: project.artStyleId || FILM_ART_STYLE_FREE,
     aspectRatio: project.aspectRatio === "9:16" ? "9:16" : "16:9",
-    narration: project.narration === "third_person" ? "third_person" : "dialogue",
+    narration: normalizeFilmNarration(project.narration),
   };
 }
 
@@ -270,7 +271,7 @@ export default function FilmProjectSettingsFields({
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">{t("Ngôi kể")}</label>
-        <div className="flex gap-3 flex-col sm:flex-row">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <OptionCard
             selected={form.narration === "dialogue"}
             title={t("Đối thoại")}
@@ -282,6 +283,12 @@ export default function FilmProjectSettingsFields({
             title={t("Ngôi 3")}
             subtitle={t("Tự động tạo lời dẫn chuyện")}
             onClick={() => !disabled && onChange({ narration: "third_person" })}
+          />
+          <OptionCard
+            selected={form.narration === "pov"}
+            title={t("POV")}
+            subtitle={t("Lời kể góc nhìn nhân vật (ngôi 1)")}
+            onClick={() => !disabled && onChange({ narration: "pov" })}
           />
         </div>
       </div>

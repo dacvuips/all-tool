@@ -14,6 +14,8 @@ import {
     mixTimedAudioClipsInBrowser,
     muxVideoAndAudioInBrowser,
     scaleVideoInBrowser,
+    setVideoAudioVolumeInBrowser,
+    stripVideoAudioInBrowser,
     trimAudioInBrowser,
     trimVideoInBrowser,
     type FfmpegMergeProgress,
@@ -26,6 +28,7 @@ import {
     type FilmStudioVoiceClip,
 } from "./film-studio-timeline";
 import type { FilmSceneRecord } from "./film-types";
+import { normalizeFilmAudioVolume } from "./film-types";
 
 export type FilmStudioExportProgress = {
   ratio: number;
@@ -174,7 +177,7 @@ async function buildMixedAudioBlob(
   const withAudio = voiceClips.filter((c) => !!(c.voiceUrl || c.voiceBlob));
   if (!withAudio.length) return null;
 
-  const timed: Array<{ blob: Blob; startSec: number; name?: string }> = [];
+  const timed: Array<{ blob: Blob; startSec: number; name?: string; volume?: number }> = [];
   for (let i = 0; i < withAudio.length; i += 1) {
     throwIfExportAborted(signal);
     const clip = withAudio[i];
@@ -202,6 +205,7 @@ async function buildMixedAudioBlob(
       blob: trimmed.blob,
       startSec: Math.max(0, clip.startSec || 0),
       name: `clip_${i}.${trimmed.mimeType.includes("wav") ? "wav" : "mp3"}`,
+      volume: normalizeFilmAudioVolume(clip.volume) / 100,
     });
   }
 
@@ -251,6 +255,10 @@ export async function exportFilmStudioTimeline(
     onProgress?: (p: FilmStudioExportProgress) => void;
     /** false = không burn phụ đề vào MP4 */
     burnSubtitles?: boolean;
+    /** Âm lượng tiếng gốc track Video khi xuất MP4 (0–1, mặc định 1) */
+    videoAudioVolume?: number;
+    /** @deprecated Dùng videoAudioVolume = 0 */
+    muteVideoAudio?: boolean;
     /** source = giữ độ phân giải gốc; 1080p = scale lên/xuống 1080 */
     resolution?: FilmStudioExportResolution;
     /** true khi aspect 9:16 — scale theo chiều rộng 1080 */
@@ -275,6 +283,12 @@ export async function exportFilmStudioTimeline(
   const wantMp3 = formats.includes("mp3");
   const onProgress = options.onProgress;
   const burnSubtitles = options.burnSubtitles !== false;
+  const videoAudioVolume =
+    options.videoAudioVolume != null && Number.isFinite(options.videoAudioVolume)
+      ? Math.max(0, Math.min(1, options.videoAudioVolume))
+      : options.muteVideoAudio
+        ? 0
+        : 1;
   const want1080 = options.resolution === "1080p";
   const signal = options.signal;
 
@@ -331,9 +345,32 @@ export async function exportFilmStudioTimeline(
     let mp4Blob = videoPart.blob;
     if (audioPart) {
       throwIfExportAborted(signal);
-      onProgress?.({ ratio: 0.88, message: "Đang ghép video + audio (giữ tiếng gốc)..." });
+      onProgress?.({
+        ratio: 0.88,
+        message:
+          videoAudioVolume <= 0
+            ? "Đang ghép video + audio (đã tắt tiếng video)..."
+            : videoAudioVolume < 1
+              ? "Đang ghép video + audio (giảm tiếng video)..."
+              : "Đang ghép video + audio (giữ tiếng gốc)...",
+      });
       mp4Blob = await muxVideoAndAudioInBrowser(mp4Blob, audioPart, {
+        videoAudioVolume,
         onProgress: mapProgress(onProgress, 0.88, 0.92, "Mux", signal),
+      });
+      throwIfExportAborted(signal);
+    } else if (videoAudioVolume <= 0) {
+      throwIfExportAborted(signal);
+      onProgress?.({ ratio: 0.88, message: "Đang tắt tiếng gốc video..." });
+      mp4Blob = await stripVideoAudioInBrowser(mp4Blob, {
+        onProgress: mapProgress(onProgress, 0.88, 0.92, "Mute", signal),
+      });
+      throwIfExportAborted(signal);
+    } else if (videoAudioVolume < 1 - 1e-6) {
+      throwIfExportAborted(signal);
+      onProgress?.({ ratio: 0.88, message: "Đang chỉnh âm lượng tiếng gốc video..." });
+      mp4Blob = await setVideoAudioVolumeInBrowser(mp4Blob, videoAudioVolume, {
+        onProgress: mapProgress(onProgress, 0.88, 0.92, "Volume", signal),
       });
       throwIfExportAborted(signal);
     }

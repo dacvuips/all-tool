@@ -261,9 +261,7 @@ export function getElementSidebarIntroSteps(t: (key: string) => string): Affilia
     {
       element: "#scene-prompt-section",
       title: t("Prompt phân cảnh"),
-      intro: t(
-        "Mỗi dòng bắt đầu bằng số là một cảnh. VD: 1. Mô tả cảnh đầu... 2. Mô tả cảnh hai..."
-      ),
+      intro: t("Mỗi dòng xuống hàng (Enter) trong ô prompt là một phân cảnh riêng."),
       position: "right",
     },
     {

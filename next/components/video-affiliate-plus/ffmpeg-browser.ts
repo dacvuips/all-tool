@@ -943,7 +943,7 @@ export async function mergeAudioInBrowser(
  * Dùng adelay + amix (độc lập track video).
  */
 export async function mixTimedAudioClipsInBrowser(
-  clips: Array<{ blob: Blob; startSec: number; name?: string }>,
+  clips: Array<{ blob: Blob; startSec: number; name?: string; volume?: number }>,
   totalSec: number,
   options: FfmpegMergeOptions = {}
 ): Promise<Blob> {
@@ -971,8 +971,10 @@ export async function mixTimedAudioClipsInBrowser(
       const filterParts: string[] = [];
       for (let i = 0; i < list.length; i += 1) {
         const ms = Math.max(0, Math.round((list[i].startSec || 0) * 1000));
+        const vol = Math.max(0, Math.min(1, Number(list[i].volume ?? 1) || 0));
+        const volFilter = vol < 1 - 1e-6 ? `volume=${vol.toFixed(4)},` : "";
         filterParts.push(
-          `[${i}:a]adelay=${ms}|${ms},aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${i}]`
+          `[${i}:a]${volFilter}adelay=${ms}|${ms},aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[a${i}]`
         );
       }
       const mixIn = list.map((_, i) => `[a${i}]`).join("");
@@ -1031,15 +1033,27 @@ export async function mixTimedAudioClipsInBrowser(
   return resultBlob;
 }
 
-/** Ghép video + audio thành 1 MP4 — giữ tiếng gốc video và mix thêm audio timeline. */
+/** Ghép video + audio thành 1 MP4 — mặc định giữ tiếng gốc video và mix thêm audio timeline. */
 export async function muxVideoAndAudioInBrowser(
   video: Blob,
   audio: Blob,
-  options: FfmpegMergeOptions = {}
+  options: FfmpegMergeOptions & {
+    /** 0–1 — 0 = bỏ tiếng gốc video */
+    videoAudioVolume?: number;
+    /** @deprecated Dùng videoAudioVolume = 0 */
+    muteVideoAudio?: boolean;
+  } = {}
 ): Promise<Blob> {
   if (!video?.size) throw new Error("Thiếu video");
   if (!audio?.size) throw new Error("Thiếu audio");
   let resultBlob: Blob | null = null;
+  const videoAudioVolume =
+    options.videoAudioVolume != null && Number.isFinite(options.videoAudioVolume)
+      ? Math.max(0, Math.min(1, options.videoAudioVolume))
+      : options.muteVideoAudio
+        ? 0
+        : 1;
+  const muteVideoAudio = videoAudioVolume <= 0;
 
   await enqueue(async () => {
     const ff = await getFFmpeg(options.onProgress);
@@ -1048,12 +1062,23 @@ export async function muxVideoAndAudioInBrowser(
     const aExt = /\bwav\b/i.test(audio.type || "") ? "wav" : "mp3";
     const aName = `mux_a_${stamp}.${aExt}`;
     const outName = `mux_out_${stamp}.mp4`;
-    options.onProgress?.({ ratio: 0.1, message: "Đang mux video + audio..." });
+    options.onProgress?.({
+      ratio: 0.1,
+      message: muteVideoAudio
+        ? "Đang mux video + audio (đã tắt tiếng video)..."
+        : videoAudioVolume < 1
+          ? "Đang mux video + audio (giảm tiếng video)..."
+          : "Đang mux video + audio...",
+    });
     await ff.writeFile(vName, new Uint8Array(await video.arrayBuffer()));
     await ff.writeFile(aName, new Uint8Array(await audio.arrayBuffer()));
 
+    const videoVolFilter =
+      videoAudioVolume > 0 && videoAudioVolume < 1 - 1e-6
+        ? `volume=${videoAudioVolume.toFixed(4)},`
+        : "";
     const mixFilter =
-      "[0:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[va];" +
+      `[0:a]${videoVolFilter}aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[va];` +
       "[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo[oa];" +
       "[va][oa]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0[aout]";
 
@@ -1093,23 +1118,33 @@ export async function muxVideoAndAudioInBrowser(
     };
 
     try {
-      // 1) Giữ tiếng video + mix audio timeline (copy video)
-      let code = await runMux({ reencodeVideo: false, mixVideoAudio: true });
-      // 2) Cùng mix nhưng re-encode video
-      if (code !== 0) {
-        await ff.deleteFile(outName).catch(() => undefined);
-        code = await runMux({ reencodeVideo: true, mixVideoAudio: true });
+      if (muteVideoAudio) {
+        // Chỉ audio timeline — không giữ tiếng gốc video
+        let code = await runMux({ reencodeVideo: false, mixVideoAudio: false });
+        if (code !== 0) {
+          await ff.deleteFile(outName).catch(() => undefined);
+          code = await runMux({ reencodeVideo: true, mixVideoAudio: false });
+        }
+        if (code !== 0) throw new Error(`Mux thất bại (exit ${code})`);
+      } else {
+        // 1) Giữ tiếng video + mix audio timeline (copy video)
+        let code = await runMux({ reencodeVideo: false, mixVideoAudio: true });
+        // 2) Cùng mix nhưng re-encode video
+        if (code !== 0) {
+          await ff.deleteFile(outName).catch(() => undefined);
+          code = await runMux({ reencodeVideo: true, mixVideoAudio: true });
+        }
+        // 3) Video không có audio track → chỉ dùng audio timeline
+        if (code !== 0) {
+          await ff.deleteFile(outName).catch(() => undefined);
+          code = await runMux({ reencodeVideo: false, mixVideoAudio: false });
+        }
+        if (code !== 0) {
+          await ff.deleteFile(outName).catch(() => undefined);
+          code = await runMux({ reencodeVideo: true, mixVideoAudio: false });
+        }
+        if (code !== 0) throw new Error(`Mux thất bại (exit ${code})`);
       }
-      // 3) Video không có audio track → chỉ dùng audio timeline
-      if (code !== 0) {
-        await ff.deleteFile(outName).catch(() => undefined);
-        code = await runMux({ reencodeVideo: false, mixVideoAudio: false });
-      }
-      if (code !== 0) {
-        await ff.deleteFile(outName).catch(() => undefined);
-        code = await runMux({ reencodeVideo: true, mixVideoAudio: false });
-      }
-      if (code !== 0) throw new Error(`Mux thất bại (exit ${code})`);
       resultBlob = toVideoBlob((await ff.readFile(outName)) as Uint8Array | string);
     } finally {
       await ff.deleteFile(vName).catch(() => undefined);
@@ -1120,6 +1155,79 @@ export async function muxVideoAndAudioInBrowser(
   });
 
   if (!resultBlob) throw new Error("Mux video/audio thất bại");
+  return resultBlob;
+}
+
+/**
+ * Chỉnh âm lượng tiếng gốc trong file video (0–1, khớp HTML5 video.volume).
+ * 0 = gỡ audio track; 1 = giữ nguyên.
+ */
+export async function setVideoAudioVolumeInBrowser(
+  video: Blob,
+  volumeLinear: number,
+  options: FfmpegMergeOptions = {}
+): Promise<Blob> {
+  if (!video?.size) throw new Error("Thiếu video");
+  const vol = Math.max(0, Math.min(1, Number(volumeLinear) || 0));
+  if (vol >= 1 - 1e-6) return video;
+  if (vol <= 0) return stripVideoAudioInBrowser(video, options);
+
+  try {
+    const result = await processMediaInBrowser(video, {
+      ...options,
+      message: "Đang chỉnh âm lượng tiếng gốc video...",
+      args: ["-filter:a", `volume=${vol.toFixed(4)}`, ...VIDEO_ENCODE_ARGS],
+    });
+    return result.blob;
+  } catch {
+    // Video không có audio track — giữ nguyên
+    return video;
+  }
+}
+
+/** Gỡ toàn bộ audio track khỏi video (xuất im lặng khi tắt tiếng video, không có audio timeline). */
+export async function stripVideoAudioInBrowser(
+  video: Blob,
+  options: FfmpegMergeOptions = {}
+): Promise<Blob> {
+  if (!video?.size) throw new Error("Thiếu video");
+  let resultBlob: Blob | null = null;
+
+  await enqueue(async () => {
+    const ff = await getFFmpeg(options.onProgress);
+    const stamp = Date.now();
+    const vName = `strip_v_${stamp}.mp4`;
+    const outName = `strip_out_${stamp}.mp4`;
+    options.onProgress?.({ ratio: 0.2, message: "Đang tắt tiếng video..." });
+    await ff.writeFile(vName, new Uint8Array(await video.arrayBuffer()));
+
+    const runStrip = async (reencodeVideo: boolean) => {
+      const args = ["-i", vName, "-map", "0:v:0", "-an"];
+      if (reencodeVideo) {
+        args.push(...H264_COMPAT_VIDEO_ARGS, "-preset", "veryfast", "-crf", "23");
+      } else {
+        args.push("-c:v", "copy");
+      }
+      args.push("-movflags", "+faststart", "-y", outName);
+      return ff.exec(args);
+    };
+
+    try {
+      let code = await runStrip(false);
+      if (code !== 0) {
+        await ff.deleteFile(outName).catch(() => undefined);
+        code = await runStrip(true);
+      }
+      if (code !== 0) throw new Error(`Tắt tiếng video thất bại (exit ${code})`);
+      resultBlob = toVideoBlob((await ff.readFile(outName)) as Uint8Array | string);
+    } finally {
+      await ff.deleteFile(vName).catch(() => undefined);
+      await ff.deleteFile(outName).catch(() => undefined);
+    }
+    options.onProgress?.({ ratio: 1, message: "Đã tắt tiếng video" });
+  });
+
+  if (!resultBlob) throw new Error("Tắt tiếng video thất bại");
   return resultBlob;
 }
 

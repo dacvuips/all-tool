@@ -62,7 +62,7 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
     tabParam && Object.values(ElementScriptTabEnum).includes(tabParam as ElementScriptTabEnum)
       ? (tabParam as ElementScriptTabEnum)
       : scriptTab ?? ElementScriptTabEnum.batch;
-  // ── Submit: tách prompt đánh số (1., 2., …) → từng cảnh ──
+  // ── Submit: mỗi dòng xuống hàng → một phân cảnh ──
   const handleSubmit = useCallback(
     async (_formData: any) => {
       const promptText = (elementFormConfig?.prompt ?? "").trim();
@@ -88,8 +88,8 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         );
         if (!parsed?.scenes?.length) {
           toast.error(
-            `${t("Không tách được cảnh nào từ prompt")}. ${t("Dùng định dạng")}: ${t(
-              "1" + "." + " " + t("mô tả cảnh")
+            `${t("Không tách được cảnh nào từ prompt")}. ${t(
+              "Mỗi dòng xuống hàng (Enter) là một phân cảnh"
             )}`
           );
           return;

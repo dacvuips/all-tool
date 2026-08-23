@@ -4,7 +4,7 @@
  * - OpenAI: response_format json_schema (strict)
  * - Gateway: jsonSchema nhúng vào prompt
  *
- * Single source of truth: buildExtractScreenplaySchemas({ sceneCount, language })
+ * Single source of truth: buildExtractScreenplaySchemas({ sceneCount, language, narration? })
  */
 
 import { Type } from "@google/genai";
@@ -27,13 +27,43 @@ export const FILM_TIME_OF_DAY_VALUES = [
 export type BuildExtractScreenplaySchemaParams = {
   sceneCount: number;
   language: string;
+  /** Ngôi kể — ảnh hưởng mô tả field dialogues */
+  narration?: "dialogue" | "third_person" | "pov";
 };
 
 function langNote(language: string): string {
   return `Viết bằng ${language}.`;
 }
 
-function buildDialogueItemOpenAI(language: string) {
+function dialoguesFieldDescription(
+  language: string,
+  narration?: "dialogue" | "third_person" | "pov"
+): string {
+  if (narration === "third_person") {
+    return `[DIALOGUE] Lời dẫn chuyện ngôi 3 (narrator VO). character='Người kể'/'Narrator'. KHÔNG phải thoại đối thoại nhân vật. [] chỉ khi cảnh hoàn toàn im lặng. ${langNote(language)}`;
+  }
+  if (narration === "pov") {
+    return `[DIALOGUE] Lời kể / độc thoại nội tâm góc nhìn nhân vật (POV, ngôi 1). character=tên nhân vật POV; line viết ngôi 1. [] chỉ khi cảnh không có lời kể. ${langNote(language)}`;
+  }
+  return `[DIALOGUE] Lời thoại từng nhân vật (spoken dialogue); [] nếu không có thoại. ${langNote(language)}`;
+}
+
+function buildDialogueItemOpenAI(
+  language: string,
+  narration?: "dialogue" | "third_person" | "pov"
+) {
+  const characterDesc =
+    narration === "third_person"
+      ? `Tên người kể ('Người kể' / 'Narrator'). ${langNote(language)}`
+      : narration === "pov"
+        ? `Tên nhân vật đang giữ góc nhìn POV. ${langNote(language)}`
+        : `Tên nhân vật nói thoại. ${langNote(language)}`;
+  const lineDesc =
+    narration === "third_person"
+      ? `Nội dung lời dẫn chuyện ngôi 3. ${langNote(language)}`
+      : narration === "pov"
+        ? `Lời kể / độc thoại ngôi 1 từ góc nhìn nhân vật. ${langNote(language)}`
+        : `Nội dung thoại. ${langNote(language)}`;
   return {
     type: "object" as const,
     additionalProperties: false,
@@ -41,12 +71,12 @@ function buildDialogueItemOpenAI(language: string) {
       character: {
         type: "string" as const,
         minLength: 1,
-        description: `Tên nhân vật nói thoại. ${langNote(language)}`,
+        description: characterDesc,
       },
       line: {
         type: "string" as const,
         minLength: 1,
-        description: `Nội dung thoại. ${langNote(language)}`,
+        description: lineDesc,
       },
     },
     required: ["character", "line"] as const,
@@ -75,7 +105,7 @@ function buildCharacterActionItemOpenAI(language: string) {
 }
 
 function buildSceneItemOpenAI(params: BuildExtractScreenplaySchemaParams) {
-  const { sceneCount, language } = params;
+  const { sceneCount, language, narration } = params;
   return {
     type: "object" as const,
     additionalProperties: false,
@@ -166,8 +196,8 @@ function buildSceneItemOpenAI(params: BuildExtractScreenplaySchemaParams) {
       },
       dialogues: {
         type: "array" as const,
-        description: `[DIALOGUE] Lời thoại từng nhân vật; [] nếu không có thoại. ${langNote(language)}`,
-        items: buildDialogueItemOpenAI(language),
+        description: dialoguesFieldDescription(language, narration),
+        items: buildDialogueItemOpenAI(language, narration),
       },
       location: {
         type: "string" as const,
