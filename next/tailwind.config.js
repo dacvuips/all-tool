@@ -12,7 +12,7 @@ module.exports = {
   darkMode: false, // or 'media' or 'class'
   purge: 
     {
-      content: ['./next/**/*.tsx', './**/*.tsx'],
+      content: ['./next/**/*.tsx', './next/**/*.ts', './**/*.tsx'],
       options: {
         safelist: {
           standard: [/^grid-cols-/, /^col-span\-/, /^text\-/, /^bg\-/, "scroll-block"],

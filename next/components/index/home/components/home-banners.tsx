@@ -34,11 +34,11 @@ export function HomeBanners({ ...props }) {
 
   if (!topBanners) return <></>;
   return (
-    <section>
-      <div className={`grid grid-cols-1 gap-2  grid-row-1  w-full mx-auto  ${!xs ? "-mx-1" : ""}`}>
-        <div className="col-span-1 row-span-1 lg:col-span-1">
+    <div className="w-full">
+      <div className={`grid grid-cols-1 gap-2 grid-row-1 w-full mx-auto ${!xs ? "-mx-1" : ""}`}>
+        <div className="col-span-1 row-span-1 overflow-hidden rounded-lg lg:col-span-1">
           <Swiper
-            className={`relative w-full`}
+            className="relative w-full"
             slidesPerView={1}
             spaceBetween={28}
             // grabCursor
@@ -111,8 +111,8 @@ export function HomeBanners({ ...props }) {
             backgroundSize: "cover",
           }}
         ></div> */}
-      </div>{" "}
-    </section>
+      </div>
+    </div>
   );
 }
 

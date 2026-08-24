@@ -1,6 +1,6 @@
 import copy from "copy-to-clipboard";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiCheck, HiKey, HiLockClosed } from "react-icons/hi";
 import { RiFileCopy2Line, RiStackLine } from "react-icons/ri";
@@ -15,12 +15,13 @@ import {
   getApiBaseUrl,
 } from "../../../../api-media/api-media-guide-snippets";
 import {
-  API_MEDIA_CONSOLE_MODELS,
   API_MEDIA_ROUTES,
   ApiMediaRouteId,
   CONSOLE_STATS,
   ConsoleCodeLang,
   ROUTE_CONFIG,
+  ROUTE_HIGHLIGHT,
+  ROUTE_LOOP_MS,
 } from "./home-api-media-console-config";
 
 const PLACEHOLDER_API_KEY = "YOUR_API_KEY";
@@ -123,10 +124,12 @@ function highlightLine(line: string): React.ReactNode {
   return parts.length ? parts : <span style={{ color: CODE_SYNTAX.default }}>{line}</span>;
 }
 
-function SyntaxCode({ code }: { code: string }) {
+function SyntaxCode({ code, compact = false }: { code: string; compact?: boolean }) {
   return (
     <pre
-      className="overflow-auto flex-1 p-4 m-0 font-mono whitespace-pre bg-gray-50 text-11 sm:text-xs"
+      className={`overflow-auto flex-1 p-4 m-0 font-mono whitespace-pre bg-gray-50 ${
+        compact ? "max-h-full text-10 sm:max-h-full sm:text-11 lg:max-h-none" : "text-11 sm:text-xs"
+      }`}
       style={{ lineHeight: 1.65 }}
     >
       {code.split("\n").map((line, i) => (
@@ -222,26 +225,62 @@ function getRouteCode(routeId: ApiMediaRouteId, lang: ConsoleCodeLang): string {
   return buildCreateJobSnippet(PLACEHOLDER_API_KEY, config, lang);
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+function StatCard({
+  icon,
+  label,
+  value,
+  compact = false,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  compact?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-3 px-4 py-3.5 rounded-xl border border-primary bg-primary-light bg-opacity-20">
-      <div className="flex flex-shrink-0 justify-center items-center w-9 h-9 rounded-lg text-primary bg-primary-light">
+    <div
+      className={`flex items-center rounded-xl border border-primary bg-primary-light bg-opacity-20 ${
+        compact ? "gap-2 px-2 py-2" : "gap-3 px-4 py-3.5"
+      }`}
+    >
+      <div
+        className={`flex flex-shrink-0 justify-center items-center rounded-lg text-primary bg-primary-light ${
+          compact ? "w-7 h-7" : "w-9 h-9"
+        }`}
+      >
         {icon}
       </div>
       <div className="min-w-0">
-        <p className="font-semibold truncate text-primary text-11">{label}</p>
-        <p className="text-gray-500 truncate text-11">{value}</p>
+        <p className={`font-semibold truncate text-primary ${compact ? "text-10" : "text-11"}`}>
+          {label}
+        </p>
+        <p className={`text-gray-500 truncate ${compact ? "text-10" : "text-11"}`}>{value}</p>
       </div>
     </div>
   );
 }
 
-export function HomeApiMediaConsole() {
+export function HomeApiMediaConsole({ embedded = false }: { embedded?: boolean }) {
   const { t } = useTranslation();
   const toast = useToast();
   const [activeRoute, setActiveRoute] = useState<ApiMediaRouteId>("create_image");
   const [lang, setLang] = useState<ConsoleCodeLang>("node");
   const [copied, setCopied] = useState(false);
+  const loopIndexRef = useRef(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      loopIndexRef.current = (loopIndexRef.current + 1) % API_MEDIA_ROUTES.length;
+      setActiveRoute(API_MEDIA_ROUTES[loopIndexRef.current].id);
+    }, ROUTE_LOOP_MS);
+
+    return () => window.clearInterval(id);
+  }, []);
+
+  const handleRouteClick = useCallback((routeId: ApiMediaRouteId) => {
+    const idx = API_MEDIA_ROUTES.findIndex((route) => route.id === routeId);
+    loopIndexRef.current = idx >= 0 ? idx : 0;
+    setActiveRoute(routeId);
+  }, []);
 
   const code = useMemo(() => getRouteCode(activeRoute, lang), [activeRoute, lang]);
 
@@ -260,16 +299,25 @@ export function HomeApiMediaConsole() {
   };
 
   return (
-    <section className="px-4 py-12 bg-white sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
-        <div className="overflow-hidden bg-white rounded-2xl border border-dashed border-primary">
-          <div className="grid grid-cols-2 gap-3 p-4 border-b border-gray-100 lg:grid-cols-4">
+    <div className={embedded ? "w-full min-w-0" : "px-4 py-12 bg-white sm:px-6 lg:px-8"}>
+      <div className={embedded ? "w-full min-w-0" : "mx-auto max-w-6xl"}>
+        <div
+          className={`overflow-hidden bg-white border border-dashed border-primary ${
+            embedded ? "rounded-lg" : "rounded-2xl"
+          }`}
+        >
+          <div
+            className={`grid grid-cols-2 gap-2 p-3 border-b border-gray-100 sm:gap-3 sm:p-4 ${
+              embedded ? "lg:grid-cols-4" : "lg:grid-cols-4"
+            }`}
+          >
             {CONSOLE_STATS.map((stat) => (
               <StatCard
                 key={stat.id}
                 icon={statIcons[stat.id]}
                 label={stat.label}
                 value={stat.value}
+                compact={embedded}
               />
             ))}
           </div>
@@ -291,8 +339,20 @@ export function HomeApiMediaConsole() {
             </div>
           </div>
 
-          <div className="flex flex-col w-full min-h-[440px] lg:flex-row">
-            <div className="flex flex-col flex-shrink-0 w-full border-b border-gray-100 lg:w-1/4 lg:border-b-0 lg:border-r">
+          <div
+            className={`flex w-full flex-col ${
+              embedded
+                ? "min-h-0 lg:min-h-[280px] lg:flex-row xl:min-h-[320px]"
+                : "min-h-[440px] lg:flex-row"
+            }`}
+          >
+            <div
+              className={`flex w-full flex-col flex-shrink-0 border-b border-gray-100 ${
+                embedded
+                  ? "lg:w-1/3 lg:border-b-0 lg:border-r xl:w-1/4"
+                  : "lg:w-1/4 lg:border-b-0 lg:border-r"
+              }`}
+            >
               <div className="flex justify-between items-center px-4 py-3">
                 <span className="text-xs font-medium text-slate-400">Routes</span>
                 <span className="text-xs text-slate-600">{API_MEDIA_ROUTES.length}</span>
@@ -301,27 +361,19 @@ export function HomeApiMediaConsole() {
               <div className="flex-1 px-2 pb-2 space-y-0.5">
                 {API_MEDIA_ROUTES.map((route) => {
                   const active = activeRoute === route.id;
+                  const highlight = ROUTE_HIGHLIGHT[route.id];
                   return (
                     <button
                       key={route.id}
                       type="button"
-                      onClick={() => setActiveRoute(route.id)}
-                      className={`w-full text-left px-3 py-2 rounded-lg font-mono text-11 leading-snug transition-colors sm:text-xs ${
+                      onClick={() => handleRouteClick(route.id)}
+                      className={`w-full text-left px-3 py-2 rounded-lg font-mono text-11 leading-snug sm:text-xs ${
                         active
-                          ? "font-bold bg-gray-100 bg-opacity-50 ring-1 text-primary ring-primary"
-                          : "text-slate-400 hover:bg-gray-100 hover:text-slate-300"
+                          ? `font-bold ring-1 ${highlight.ring} ${highlight.bg} ${highlight.text}`
+                          : "text-slate-400 hover:bg-gray-100"
                       }`}
                     >
-                      <span
-                        className={
-                          route.method === "GET"
-                            ? "text-success-dark font-bold"
-                            : "text-primary font-bold"
-                        }
-                      >
-                        {route.method}
-                      </span>{" "}
-                      {route.path}
+                      <span className="font-bold">{route.method}</span> {route.path}
                     </button>
                   );
                 })}
@@ -342,7 +394,7 @@ export function HomeApiMediaConsole() {
               </div>
             </div>
 
-            <div className="flex flex-col flex-1 min-w-0 border-b border-gray-200 lg:border-b-0 lg:border-r">
+            <div className="flex min-w-0 flex-1 flex-col">
               <div className="flex justify-between items-center px-3 py-2 border-b border-gray-200">
                 <div className="flex gap-0.5">
                   {(["node", "curl", "python"] as ConsoleCodeLang[]).map((tab) => (
@@ -373,41 +425,11 @@ export function HomeApiMediaConsole() {
                   )}
                 </button>
               </div>
-              <SyntaxCode code={code} />
-            </div>
-
-            <div className="flex flex-col flex-shrink-0 w-full lg:w-1/4">
-              <div className="flex justify-between items-center px-4 py-3">
-                <span className="text-xs font-medium text-slate-400">Models</span>
-                <span className="text-xs text-emerald-400">Ready</span>
-              </div>
-
-              <div className="flex-1 px-2 pb-3 space-y-0.5 overflow-auto divide-y divide-gray-200">
-                {API_MEDIA_CONSOLE_MODELS.map((model) => (
-                  <div
-                    key={`${model.kind}-${model.id}`}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate text-primary text-12">{model.label}</p>
-                      <p className="text-gray-500 truncate text-12">{model.meta}</p>
-                    </div>
-                    <span
-                      className={`flex-shrink-0 px-2 py-0.5 text-10 font-semibold rounded-full border ${
-                        model.ready
-                          ? "text-success-dark border-success-dark bg-success-light"
-                          : "text-slate-600 border-gray-200 bg-gray-100"
-                      }`}
-                    >
-                      {model.ready ? "Ready" : "Soon"}
-                    </span>
-                  </div>
-                ))}
-              </div>
+              <SyntaxCode code={code} compact={embedded} />
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

@@ -1,8 +1,6 @@
 import {
   ApiMediaGuideConfig,
   DEFAULT_API_MEDIA_GUIDE_CONFIG,
-  IMAGE_MODEL_OPTIONS,
-  VIDEO_MODEL_OPTIONS,
 } from "../../../../api-media/api-media-guide-config";
 
 export type ApiMediaRouteId =
@@ -54,40 +52,6 @@ export const API_MEDIA_ROUTES: ApiMediaRoute[] = [
   },
 ];
 
-export type ConsoleModel = {
-  id: string;
-  label: string;
-  kind: "image" | "video";
-  meta: string;
-  ready: boolean;
-};
-
-export const API_MEDIA_CONSOLE_MODELS: ConsoleModel[] = [
-  ...IMAGE_MODEL_OPTIONS.map((m) => ({
-    id: m.id,
-    label: m.label,
-    kind: "image" as const,
-    meta: m.id === "NANO_BANANA_PRO" ? "Pro image" : "Image gen",
-    ready: true,
-  })),
-  ...VIDEO_MODEL_OPTIONS.filter((m) => !m.disabled).map((m) => ({
-    id: m.id,
-    label: m.label,
-    kind: "video" as const,
-    meta: "Video gen",
-    ready: true,
-  })),
-  ...VIDEO_MODEL_OPTIONS.filter((m) => m.disabled)
-    .slice(0, 2)
-    .map((m) => ({
-      id: m.id,
-      label: m.label,
-      kind: "video" as const,
-      meta: "Coming soon",
-      ready: false,
-    })),
-];
-
 export const ROUTE_CONFIG: Record<ApiMediaRouteId, ApiMediaGuideConfig> = {
   create_image: DEFAULT_API_MEDIA_GUIDE_CONFIG,
   create_video: { ...DEFAULT_API_MEDIA_GUIDE_CONFIG, creationType: "video" },
@@ -118,3 +82,34 @@ export const CONSOLE_STATS = [
     value: "One API key",
   },
 ] as const;
+
+export const ROUTE_HIGHLIGHT: Record<ApiMediaRouteId, { ring: string; bg: string; text: string }> =
+  {
+    create_image: {
+      ring: "ring-orange-400",
+      bg: "bg-orange-50",
+      text: "text-orange-600",
+    },
+    create_video: {
+      ring: "ring-red-500",
+      bg: "bg-red-50",
+      text: "text-red-600",
+    },
+    poll_job: {
+      ring: "ring-green-400",
+      bg: "bg-green-50",
+      text: "text-green-600",
+    },
+    upsample_image: {
+      ring: "ring-purple-400",
+      bg: "bg-purple-50",
+      text: "text-purple-600",
+    },
+    upsample_video: {
+      ring: "ring-rose-400",
+      bg: "bg-rose-50",
+      text: "text-rose-600",
+    },
+  };
+
+export const ROUTE_LOOP_MS = 900;

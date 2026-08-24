@@ -634,6 +634,12 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       href: "/app/affiliate-video",
       icon: <RiGalleryFill />,
       gradient: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
+      navActive: "border-purple text-purple bg-purple/5",
+      navIdle:
+        "border-gray-400 text-gray-700 bg-white hover:border-purple/50 hover:text-purple",
+      dropdownActiveText: "text-purple",
+      dropdownActiveBg: "bg-purple/5",
+      dot: "bg-purple",
     },
     {
       label: "[Film] Làm phim",
@@ -642,6 +648,11 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       href: "/film",
       icon: <RiFilmFill />,
       gradient: "linear-gradient(135deg, #EC4899, #BE185D)",
+      navActive: "border-rose text-rose bg-rose/5",
+      navIdle: "border-gray-400 text-gray-700 bg-white hover:border-rose/50 hover:text-rose",
+      dropdownActiveText: "text-rose",
+      dropdownActiveBg: "bg-rose/5",
+      dot: "bg-rose",
     },
     {
       label: "[API] - Image Banana & Video Veo",
@@ -650,10 +661,16 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       href: "/api-generate-media",
       icon: <RiCodeLine />,
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
+      navActive: "border-orange text-orange bg-orange/5",
+      navIdle: "border-gray-400 text-gray-700 bg-white hover:border-orange/50 hover:text-orange",
+      dropdownActiveText: "text-orange",
+      dropdownActiveBg: "bg-orange/5",
+      dot: "bg-orange",
     },
   ];
 
   const isActive = (href: string) => router.pathname.startsWith(href);
+  const activeService = SERVICES.find((service) => isActive(service.href));
 
   if (!compact) {
     return (
@@ -665,9 +682,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
               key={service.href}
               onClick={() => router.push(service.href)}
               className={`flex items-center gap-1.5 h-8 px-3 text-sm font-semibold rounded-lg border transition-all duration-200 whitespace-nowrap ${
-                active
-                  ? "border-primary text-primary bg-primary/5"
-                  : "border-gray-400 text-gray-700 hover:border-primary/50 hover:text-primary bg-white"
+                active ? service.navActive : service.navIdle
               }`}
             >
               <span className="text-base">{service.icon}</span>
@@ -686,8 +701,8 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center gap-1.5 h-8 mr-2 px-2 text-sm font-semibold rounded-lg border transition-all duration-200 ${
           isOpen
-            ? "border-primary text-primary bg-primary/5"
-            : "border-gray-400 text-gray-700 hover:border-primary/50 hover:text-primary bg-white"
+            ? activeService?.navActive ?? "border-primary text-primary bg-primary/5"
+            : activeService?.navActive ?? "border-gray-400 text-gray-700 bg-white hover:border-primary/50 hover:text-primary"
         }`}
       >
         <RiAppsLine className="text-lg" />
@@ -726,7 +741,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
                     setIsOpen(false);
                   }}
                   className={`flex items-center gap-3 w-full p-2.5 rounded-lg text-left transition-all duration-150 group ${
-                    isActive(service.href) ? "bg-primary/5" : "hover:bg-gray-50"
+                    isActive(service.href) ? service.dropdownActiveBg : "hover:bg-gray-50"
                   }`}
                 >
                   <div
@@ -738,7 +753,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
                   <div className="flex-1 min-w-0">
                     <div
                       className={`text-sm font-semibold leading-tight ${
-                        isActive(service.href) ? "text-primary" : "text-gray-800"
+                        isActive(service.href) ? service.dropdownActiveText : "text-gray-800"
                       }`}
                     >
                       {service.label}
@@ -746,7 +761,7 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
                     <div className="text-xs text-gray-400 mt-0.5 leading-tight">{service.desc}</div>
                   </div>
                   {isActive(service.href) && (
-                    <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary" />
+                    <div className={`flex-shrink-0 w-2 h-2 rounded-full ${service.dot}`} />
                   )}
                 </button>
               ))}
