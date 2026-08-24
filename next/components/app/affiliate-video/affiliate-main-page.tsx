@@ -13,6 +13,7 @@ import {
   RiListOrdered,
   RiMagicLine,
   RiMicLine,
+  RiVideoLine,
 } from "react-icons/ri";
 
 import { IoAppsSharp } from "react-icons/io5";
@@ -106,6 +107,16 @@ export default function AffiliateMainPage() {
       label: t("Voice"),
       value: "voice",
       component: <VoicePage />,
+    },
+    {
+      icon: <RiVideoLine />,
+      label: t("Audio/Image to Video"),
+      value: "audio-image-to-video",
+      component: (
+        <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
+          {t("Chức năng đang phát triển...")}
+        </div>
+      ),
     },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
