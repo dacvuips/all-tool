@@ -12,6 +12,7 @@ import {
   HiVideoCamera,
 } from "react-icons/hi";
 import { useAuth } from "../../lib/providers/auth-provider";
+import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
 import { useToast } from "../../lib/providers/toast-provider";
 import { Button } from "../shared/utilities/form";
 import { getFilmEntityImageSrc } from "./api/generate-film-media";
@@ -46,7 +47,10 @@ import { FilmCharacterRecord, FilmEpisodeRecord, FilmSceneRecord } from "./film-
 import FilmVoiceCard from "./film-voice-card";
 import FilmVoiceConfigDialog from "./film-voice-config-dialog";
 import { downloadFilmVoicesZip } from "./film-voice-download";
-import type { FilmVoiceGenerateInput } from "./film-voice-generate";
+import {
+  filmDialogueVoiceBlockReason,
+  type FilmVoiceGenerateInput,
+} from "./film-voice-generate";
 import { FilmProductionSearchInput } from "./film-production-search-input";
 import { matchesFilmNameSearch } from "./film-production-search";
 
@@ -96,6 +100,8 @@ export default function FilmVoicePanel({
   const { t } = useTranslation();
   const { customer } = useAuth();
   const toast = useToast();
+  const blockSetting = useSettingPublic("pa-b-page");
+  const marketplaceStopped = Boolean(blockSetting?.key);
   const [tab, setTab] = useState<FilmStoryboardTab>("voice");
   const [busy, setBusy] = useState(false);
   const [zipping, setZipping] = useState(false);
@@ -256,6 +262,15 @@ export default function FilmVoicePanel({
     if (!linked.voiceId?.trim()) return;
     const text = item.line.line?.trim();
     if (!text) return;
+    const blocked = filmDialogueVoiceBlockReason(
+      customer,
+      marketplaceStopped,
+      linked.voiceId
+    );
+    if (blocked) {
+      toast.warn(t(blocked));
+      return;
+    }
     const scene = allScenes.find((s) => s.id === item.scene.id) || item.scene;
     setBusy(true);
     try {
@@ -281,6 +296,18 @@ export default function FilmVoicePanel({
       return !!linked.voiceId?.trim();
     });
     if (!targets.length) return;
+    for (const item of targets) {
+      const linked = resolveDialogueLineVoiceLink(item.line, characters);
+      const blocked = filmDialogueVoiceBlockReason(
+        customer,
+        marketplaceStopped,
+        linked.voiceId || ""
+      );
+      if (blocked) {
+        toast.warn(t(blocked));
+        return;
+      }
+    }
     setBusy(true);
     try {
       await onBulkCreateVoices(targets);

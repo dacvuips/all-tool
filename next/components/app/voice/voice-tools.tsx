@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiCloseLine, RiMoneyDollarCircleLine, RiUserVoiceLine } from "react-icons/ri";
+import { useAuth } from "../../../lib/providers/auth-provider";
 import { GenerateAiIcon } from "../../../public/assets/svg/generate-ai";
 import { Dialog } from "../../shared/utilities/dialog/dialog";
 import { createFreeGenAudio } from "./free-voice-api";
 import { FREE_GEN_AUDIO_VOICES } from "./free-voice-voices";
+import { freeVoiceCreateBlockReason } from "./voice-access";
 import {
   createAudioCleanup,
   createSpeechToText,
@@ -504,12 +506,14 @@ export function FreeTextToSpeechPanel({
   onPickFreeVoice?: (voiceId: string, label: string) => void;
 }) {
   const { t } = useTranslation();
+  const { customer } = useAuth();
   const { runFreeGenAudio } = useVoiceContext();
   const { color } = getVoiceTool("tts");
   const defaultVoice = FREE_GEN_AUDIO_VOICES[0]?.id || "achernar";
   const [voice, setVoice] = useState(initialVoiceId?.trim().toLowerCase() || defaultVoice);
   const [text, setText] = useState("Chào các bạn, tôi là Thái");
   const selectedVoice = FREE_GEN_AUDIO_VOICES.find((item) => item.id === voice);
+  const freeBlockedReason = freeVoiceCreateBlockReason(customer);
 
   useEffect(() => {
     if (!initialVoiceId?.trim()) return;
@@ -521,7 +525,7 @@ export function FreeTextToSpeechPanel({
       submitText={t("Tạo giọng nói")}
       showCreditIcon={false}
       disabled={!text.trim() || !voice}
-      blockedReason=""
+      blockedReason={freeBlockedReason}
       onSubmit={() =>
         runFreeGenAudio(
           () =>

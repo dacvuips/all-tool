@@ -125,30 +125,98 @@ function slot0Filled(slot: FilmVideoRefSlot | null | undefined): boolean {
   return !!(slot.imageUrl || "").trim();
 }
 
-/** Cảnh có ảnh khung nhưng slot 1 ảnh tham chiếu còn trống → cần seed. */
+function slotFingerprint(slot: FilmVideoRefSlot | null | undefined): string {
+  if (!slot) return "";
+  const url = (slot.imageUrl || "").trim();
+  const blobSize = slot.imageBlob instanceof Blob ? slot.imageBlob.size : 0;
+  return `${url}|${blobSize}`;
+}
+
+/** Slot gắn tự động từ ảnh khung phân cảnh (không phải upload tay). */
+export function isAutoSeededVideoRefSlot(
+  slot: FilmVideoRefSlot | null | undefined,
+  scene?: FilmSceneRecord
+): boolean {
+  if (!slot || !slot0Filled(slot)) return false;
+  const name = String(slot.name || "").trim();
+  if (/^scene-\d+-frame$/i.test(name)) return true;
+  if (scene != null) {
+    const expected = `scene-${scene.index}-frame`;
+    if (name === expected) return true;
+  }
+  // Dữ liệu cũ: không có name → coi là auto nếu trùng ảnh khung hiện tại hoặc trống name
+  if (!name) return true;
+  return false;
+}
+
+function slotMatchesFrame(
+  slot: FilmVideoRefSlot | null | undefined,
+  scene: FilmSceneRecord
+): boolean {
+  const frame = sceneFrameToVideoRefSlot(scene);
+  if (!slot || !frame) return false;
+  return slotFingerprint(slot) === slotFingerprint(frame);
+}
+
+/** Cảnh có ảnh khung mới / slot trống / slot auto đã cũ → cần seed lại slot 1. */
 export function scenesNeedVideoRefSlotSeed(
   scenes: FilmSceneRecord[],
   mode: FilmVideoRefMode
 ): boolean {
   return scenes.some((scene) => {
+    const frame = sceneFrameToVideoRefSlot(scene);
+    if (!frame) return false;
     const slots = padVideoRefSlots(scene.videoRefSlots, mode);
-    if (slot0Filled(slots[0])) return false;
-    return !!sceneFrameToVideoRefSlot(scene);
+    const slot0 = slots[0];
+    if (!slot0Filled(slot0)) return true;
+    if (isAutoSeededVideoRefSlot(slot0, scene) && !slotMatchesFrame(slot0, scene)) {
+      return true;
+    }
+    return false;
   });
 }
 
-/** Gắn ảnh khung vào slot 1 nếu trống — giữ slot khác user đã chọn. */
+/**
+ * Gắn / làm mới ảnh khung vào slot 1 khi trống hoặc slot vẫn là auto-seed cũ.
+ * Không đụng slot user upload tay (name khác scene-*-frame).
+ */
 export function ensureVideoRefSlotsFromFrame(
   scene: FilmSceneRecord,
   mode: FilmVideoRefMode
 ): Array<FilmVideoRefSlot | null> {
   const slots = padVideoRefSlots(scene.videoRefSlots, mode);
-  if (slot0Filled(slots[0])) return slots;
   const frame = sceneFrameToVideoRefSlot(scene);
   if (!frame) return slots;
+
+  const slot0 = slots[0];
+  const shouldFill = !slot0Filled(slot0);
+  const shouldRefresh =
+    !shouldFill &&
+    isAutoSeededVideoRefSlot(slot0, scene) &&
+    !slotMatchesFrame(slot0, scene);
+
+  if (!shouldFill && !shouldRefresh) return slots;
   const next = [...slots];
   next[0] = frame;
   return next;
+}
+
+/** Áp frame mới vào scene + sync videoRefSlots (nếu slot 1 đang auto). */
+export function applyFrameToSceneVideoRefSlots(
+  scene: FilmSceneRecord,
+  mode: FilmVideoRefMode,
+  frame: { imageUrl?: string; imageBlob?: Blob }
+): FilmSceneRecord {
+  const withFrame: FilmSceneRecord = {
+    ...scene,
+    frameImageUrl: frame.imageUrl ?? scene.frameImageUrl,
+    frameImageBlob: frame.imageBlob !== undefined ? frame.imageBlob : scene.frameImageBlob,
+  };
+  const videoRefSlots = ensureVideoRefSlotsFromFrame(withFrame, mode);
+  if (videoRefSlotsEqual(scene.videoRefSlots, videoRefSlots, mode)) {
+    return withFrame;
+  }
+  return { ...withFrame, videoRefSlots };
 }
 
 export function videoRefSlotsEqual(
@@ -162,11 +230,6 @@ export function videoRefSlotsEqual(
     const other = right[i];
     if (!slot && !other) return true;
     if (!slot || !other) return false;
-    const urlA = (slot.imageUrl || "").trim();
-    const urlB = (other.imageUrl || "").trim();
-    if (urlA !== urlB) return false;
-    const blobA = slot.imageBlob instanceof Blob ? slot.imageBlob.size : 0;
-    const blobB = other.imageBlob instanceof Blob ? other.imageBlob.size : 0;
-    return blobA === blobB;
+    return slotFingerprint(slot) === slotFingerprint(other);
   });
 }

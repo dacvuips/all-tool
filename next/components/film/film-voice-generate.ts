@@ -1,9 +1,14 @@
+import type { Customer } from "../../lib/repo/customer/customer.repo";
 import {
   createFreeGenAudio,
   fetchFreeGenAudioOutputBlobWithRetry,
   pollFreeGenAudioJob,
 } from "../app/voice/free-voice-api";
 import { isFreeGenAudioVoiceId } from "../app/voice/free-voice-voices";
+import {
+  freeVoiceCreateBlockReason,
+  voiceCreateBlockReason,
+} from "../app/voice/voice-access";
 import {
   createTextToSpeech,
   fetchVoiceJobOutputBlob,
@@ -12,6 +17,18 @@ import {
 } from "../app/voice/voice-api";
 
 import type { FilmSceneRecord } from "./film-types";
+
+/** Chặn FE trước khi gọi API tạo giọng (free chỉ cần login; paid cần gói + credit). */
+export function filmDialogueVoiceBlockReason(
+  customer: Customer | null | undefined,
+  marketplaceStopped: boolean,
+  voiceId: string
+): string {
+  if (isFreeGenAudioVoiceId(voiceId)) {
+    return freeVoiceCreateBlockReason(customer);
+  }
+  return voiceCreateBlockReason(customer, marketplaceStopped);
+}
 
 export const FILM_VOICE_BULK_CONCURRENCY = 3;
 

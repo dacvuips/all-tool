@@ -7,6 +7,7 @@ import { useAlert } from "../../lib/providers/alert-provider";
 import { useAuth } from "../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../lib/providers/global-provider";
 import { useToast } from "../../lib/providers/toast-provider";
+import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { useConcurrencyLimits } from "../app/affiliate-video/hook/useConcurrencyLimits";
 import { isVoiceAbortError } from "../app/voice/voice-api";
@@ -190,6 +191,7 @@ import {
 } from "./film-types";
 import { sceneVideoReady } from "./film-video-card";
 import {
+  applyFrameToSceneVideoRefSlots,
   buildDefaultVideoRefSlots,
   ensureVideoRefSlotsFromFrame,
   FILM_VIDEO_REF_MODE_DEFAULT,
@@ -204,6 +206,7 @@ import {
 } from "./film-video-ref-mode";
 import {
   FILM_VOICE_BULK_CONCURRENCY,
+  filmDialogueVoiceBlockReason,
   generateFilmDialogueVoiceBlob,
   type FilmVoiceGenerateInput,
 } from "./film-voice-generate";
@@ -272,6 +275,8 @@ export default function FilmWorkspace({ projectId }: Props) {
   const { customer, loadCustomer } = useAuth();
   const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
+  const blockSetting = useSettingPublic("pa-b-page");
+  const marketplaceStopped = Boolean(blockSetting?.key);
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<FilmProjectRecord | null>(null);
@@ -3307,10 +3312,16 @@ export default function FilmWorkspace({ projectId }: Props) {
             setScenes((prev) => {
               const current = prev.find((x) => x.id === s.id);
               if (!current || current.frameMediaJobId !== jobId) return prev;
+              const synced = applyFrameToSceneVideoRefSlots(
+                current,
+                videoRefMode,
+                {
+                  imageUrl: stored.imageUrl || current.frameImageUrl || "",
+                  imageBlob: stored.imageBlob,
+                }
+              );
               const done: FilmSceneRecord = {
-                ...current,
-                frameImageUrl: stored.imageUrl || current.frameImageUrl || "",
-                frameImageBlob: stored.imageBlob,
+                ...synced,
                 frameStatus: "ready",
                 mediaStatus: "ready",
                 frameMediaJobId: undefined,
@@ -3938,11 +3949,17 @@ export default function FilmWorkspace({ projectId }: Props) {
           setScenes((prev) => {
             const current = prev.find((x) => x.id === scene.id);
             if (!current || current.frameMediaJobId !== jobId) return prev;
+            const synced = applyFrameToSceneVideoRefSlots(
+              current,
+              videoRefMode,
+              {
+                imageUrl: stored.imageUrl || "",
+                imageBlob: stored.imageBlob,
+              }
+            );
             const done: FilmSceneRecord = {
-              ...current,
+              ...synced,
               imagePrompt: mainImagePrompt ?? current.imagePrompt,
-              frameImageUrl: stored.imageUrl || "",
-              frameImageBlob: stored.imageBlob,
               frameStatus: "ready",
               mediaStatus: "ready",
               frameMediaJobId: undefined,
@@ -4033,10 +4050,12 @@ export default function FilmWorkspace({ projectId }: Props) {
   ) => {
     const stored = generatedImageDataToFilmStored(image);
     if (!stored.imageUrl && !stored.imageBlob) return;
+    const synced = applyFrameToSceneVideoRefSlots(scene, videoRefMode, {
+      imageUrl: stored.imageUrl || scene.frameImageUrl || "",
+      imageBlob: stored.imageBlob,
+    });
     const next: FilmSceneRecord = {
-      ...scene,
-      frameImageUrl: stored.imageUrl || scene.frameImageUrl || "",
-      frameImageBlob: stored.imageBlob,
+      ...synced,
       frameStatus: "ready",
       mediaStatus: "ready",
       frameError: undefined,
@@ -4474,6 +4493,16 @@ export default function FilmWorkspace({ projectId }: Props) {
     const trimmedText = String(text || "").trim();
     if (!trimmedText) return;
 
+    const blocked = filmDialogueVoiceBlockReason(
+      customer,
+      marketplaceStopped,
+      voiceId
+    );
+    if (blocked) {
+      toast.warn(t(blocked));
+      return;
+    }
+
     const key = filmVoiceAbortKey(scene.id, dialogueLineId);
     voiceAbortRef.current.get(key)?.abort();
     const ac = new AbortController();
@@ -4544,6 +4573,19 @@ export default function FilmWorkspace({ projectId }: Props) {
       return !!linked.voiceId?.trim();
     });
     if (!pending.length) return;
+
+    for (const item of pending) {
+      const linked = resolveDialogueLineVoiceLink(item.line, characters);
+      const blocked = filmDialogueVoiceBlockReason(
+        customer,
+        marketplaceStopped,
+        linked.voiceId || ""
+      );
+      if (blocked) {
+        toast.warn(t(blocked));
+        return;
+      }
+    }
 
     voiceBulkAbortRef.current?.abort();
     const bulkAc = new AbortController();

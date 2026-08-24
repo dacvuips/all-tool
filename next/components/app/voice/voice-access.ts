@@ -57,3 +57,11 @@ export function canCreateVoice(
 ): boolean {
   return !voiceCreateBlockReason(customer, marketplaceStopped);
 }
+
+/** Giọng miễn phí (free-gen-audio): chỉ cần đăng nhập — khớp backend authVoiceCustomer. */
+export function freeVoiceCreateBlockReason(
+  customer: Customer | null | undefined
+): string {
+  if (!customerIdOf(customer)) return "Vui lòng đăng nhập để tạo giọng";
+  return "";
+}

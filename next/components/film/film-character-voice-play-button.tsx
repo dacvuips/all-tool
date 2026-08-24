@@ -25,21 +25,29 @@ export function FilmCharacterVoicePlayButton({
   size?: keyof typeof PLAY_BTN_SIZE;
 }) {
   const { t } = useTranslation();
-  const { playing, loading, toggle, canPreview, hasCached } = useFilmVoicePreview(blob, voiceId);
+  const { playing, loading, toggle, canPreview, hasCached, error, freeBlockedReason } =
+    useFilmVoicePreview(blob, voiceId);
   const iconClass = PLAY_ICON_SIZE[size];
   const btnClass = PLAY_BTN_SIZE[size];
+  const blocked = !blob && Boolean(freeBlockedReason) && !hasCached;
 
   const title = loading
     ? t("Đang tải...")
     : playing
       ? t("Tạm dừng")
-      : hasCached
-        ? t("Phát audio đã lưu")
-        : t("Tạo audio nghe thử");
+      : error
+        ? t(error)
+        : blocked
+          ? t(freeBlockedReason)
+          : hasCached
+            ? t("Phát audio đã lưu")
+            : t("Tạo audio nghe thử");
 
   const colorClass = hasCached
     ? "bg-primary-light text-primary hover:bg-primary hover:text-white"
-    : "bg-blue-50 text-blue-600 hover:bg-blue-100";
+    : blocked
+      ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+      : "bg-blue-50 text-blue-600 hover:bg-blue-100";
 
   return (
     <button
@@ -48,7 +56,7 @@ export function FilmCharacterVoicePlayButton({
         e.stopPropagation();
         void toggle();
       }}
-      disabled={!canPreview || loading}
+      disabled={!canPreview || loading || blocked}
       title={title}
       aria-label={title}
       className={`inline-flex items-center justify-center border-0 cursor-pointer disabled:opacity-40 disabled:cursor-default flex-shrink-0 ${colorClass} ${btnClass} ${className}`}
