@@ -10,7 +10,6 @@ import {
   RiBookOpenLine,
   RiFileCopy2Line,
   RiGridLine,
-  RiImage2Fill,
   RiListOrdered,
   RiMagicLine,
   RiMicLine,
@@ -107,12 +106,6 @@ export default function AffiliateMainPage() {
       label: t("Voice"),
       value: "voice",
       component: <VoicePage />,
-    },
-    {
-      icon: <RiImage2Fill />,
-      label: t("Làm Phim"),
-      value: "make-film",
-      component: <>{"Sắp xong rồi"}</>,
     },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },

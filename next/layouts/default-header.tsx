@@ -11,6 +11,7 @@ import {
   RiBookOpenLine,
   RiCodeLine,
   RiExchangeLine,
+  RiFilmFill,
   RiGalleryFill,
   RiHandCoinFill,
   RiImageLine,
@@ -628,56 +629,68 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
   const SERVICES = [
     {
       label: "[Tools] Generate Banana & Veo",
+      navLabel: t("Generate App"),
       desc: t("Tạo ảnh & video AI hàng loạt"),
       href: "/app/affiliate-video",
       icon: <RiGalleryFill />,
       gradient: "linear-gradient(135deg, #8B5CF6, #6D28D9)",
     },
-    // {
-    //   label: "reCAPTCHA Token (Flow)",
-    //   desc: t("Quản lý reCAPTCHA Token"),
-    //   href: "/recaptcha",
-    //   icon: <RiShieldCheckLine />,
-    //   gradient: "linear-gradient(135deg, #10B981, #059669)",
-    // },
+    {
+      label: "[Film] Làm phim",
+      navLabel: t("Làm Phim"),
+      desc: t("Sản xuất phim ngắn AI từ kịch bản"),
+      href: "/film",
+      icon: <RiFilmFill />,
+      gradient: "linear-gradient(135deg, #EC4899, #BE185D)",
+    },
     {
       label: "[API] - Image Banana & Video Veo",
+      navLabel: t("API"),
       desc: t("Cổng API dành cho Deverlopers"),
       href: "/api-generate-media",
       icon: <RiCodeLine />,
       gradient: "linear-gradient(135deg, #F59E0B, #D97706)",
     },
-    // {
-    //   label: "Video Affiliate Plus",
-    //   desc: t("Quản lý và tạo danh sách affiliate"),
-    //   href: "/video-affiliate-plus",
-    //   icon: <RiVideoAddLine />,
-    //   gradient: "linear-gradient(135deg, #0EA5E9, #6366F1)",
-    // },
   ];
 
   const isActive = (href: string) => router.pathname.startsWith(href);
-  const activeService = SERVICES.find((s) => isActive(s.href));
+
+  if (!compact) {
+    return (
+      <nav className="flex items-center gap-1 mr-2">
+        {SERVICES.map((service) => {
+          const active = isActive(service.href);
+          return (
+            <button
+              key={service.href}
+              onClick={() => router.push(service.href)}
+              className={`flex items-center gap-1.5 h-8 px-3 text-sm font-semibold rounded-lg border transition-all duration-200 whitespace-nowrap ${
+                active
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-gray-400 text-gray-700 hover:border-primary/50 hover:text-primary bg-white"
+              }`}
+            >
+              <span className="text-base">{service.icon}</span>
+              {service.navLabel}
+            </button>
+          );
+        })}
+      </nav>
+    );
+  }
 
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Trigger */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className={`flex items-center gap-1.5 h-8 mr-2 text-sm font-semibold rounded-lg border transition-all duration-200 ${
-          compact ? "px-2" : "px-3"
-        } ${
+        className={`flex items-center gap-1.5 h-8 mr-2 px-2 text-sm font-semibold rounded-lg border transition-all duration-200 ${
           isOpen
             ? "border-primary text-primary bg-primary/5"
             : "border-gray-400 text-gray-700 hover:border-primary/50 hover:text-primary bg-white"
         }`}
       >
-        <RiAppsLine className={compact ? "text-lg" : "text-base"} />
-        {!compact && (
-          <span className="whitespace-nowrap">
-            {activeService ? activeService.label.substring(0, 18) + "..." : "Dịch vụ"}
-          </span>
-        )}
+        <RiAppsLine className="text-lg" />
         <HiOutlineChevronDown
           className={`text-xs transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
         />
@@ -686,20 +699,16 @@ function ServicesNavDropdown({ compact = false }: { compact?: boolean }) {
       {/* Dropdown */}
       {isOpen && (
         <>
-          {compact && (
-            <div
-              className="fixed inset-0 bg-black/20"
-              style={{ zIndex: 210 }}
-              onClick={() => setIsOpen(false)}
-            />
-          )}
           <div
-            className={`bg-white rounded-xl border border-gray-100 overflow-hidden ${
-              compact ? "fixed right-4 left-4 mx-auto max-w-sm" : "absolute left-0 mt-2 w-80"
-            }`}
+            className="fixed inset-0 bg-black/20"
+            style={{ zIndex: 210 }}
+            onClick={() => setIsOpen(false)}
+          />
+          <div
+            className="overflow-hidden fixed right-4 left-4 mx-auto max-w-sm bg-white rounded-xl border border-gray-100"
             style={{
               zIndex: 211,
-              ...(compact ? { top: "4rem" } : {}),
+              top: "4rem",
               boxShadow: "0 20px 60px -15px rgba(0,0,0,0.15), 0 4px 25px -5px rgba(0,0,0,0.08)",
             }}
           >

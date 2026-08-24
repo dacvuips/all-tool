@@ -3,6 +3,9 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../../lib/providers/auth-provider";
+import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
+import { useToast } from "../../lib/providers/toast-provider";
 import {
   HiChevronDoubleLeft,
   HiChevronDown,
@@ -87,6 +90,7 @@ import {
   normalizeFilmAudioVolume,
   normalizeFilmStudioSubtitleConfig,
 } from "./film-types";
+import { filmFeatureBlockReason } from "./film-access";
 
 type Props = {
   /** Timeline Studio (bản edit riêng — không phải scenes gốc của tập) */
@@ -388,6 +392,10 @@ export default function FilmStudioPanel({
   onReplaceScenes,
 }: Props) {
   const { t } = useTranslation();
+  const { customer } = useAuth();
+  const blockSetting = useSettingPublic("pa-b-page");
+  const marketplaceStopped = Boolean(blockSetting?.key);
+  const toastProvider = useToast();
   const aspectRatio = aspectRatioProp ?? "16:9";
   const videoRef = useRef<HTMLVideoElement>(null);
   const dialogVideoRef = useRef<HTMLVideoElement>(null);
@@ -2253,6 +2261,11 @@ export default function FilmStudioPanel({
     resolution: FilmStudioExportResolution = "source"
   ) => {
     if (exporting) return;
+    const blocked = filmFeatureBlockReason(customer, marketplaceStopped);
+    if (blocked) {
+      toastProvider.warn(t(blocked));
+      return;
+    }
     const hasVideo = videoClips.some((c) => c.ready && resolveFilmStudioVideoSrc(c.videoUrl));
     const hasAudio = voiceClips.some((c) => !!(c.voiceUrl || c.voiceBlob));
     const selected = formats.filter((f) => (f === "mp4" ? hasVideo : hasAudio));

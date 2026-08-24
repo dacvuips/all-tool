@@ -47,10 +47,8 @@ import { FilmCharacterRecord, FilmEpisodeRecord, FilmSceneRecord } from "./film-
 import FilmVoiceCard from "./film-voice-card";
 import FilmVoiceConfigDialog from "./film-voice-config-dialog";
 import { downloadFilmVoicesZip } from "./film-voice-download";
-import {
-  filmDialogueVoiceBlockReason,
-  type FilmVoiceGenerateInput,
-} from "./film-voice-generate";
+import { filmDialogueVoiceBlockReason } from "./film-access";
+import type { FilmVoiceGenerateInput } from "./film-voice-generate";
 import { FilmProductionSearchInput } from "./film-production-search-input";
 import { matchesFilmNameSearch } from "./film-production-search";
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../lib/providers/auth-provider";
+import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
 import { previewFreeGenAudioVoice } from "../app/voice/free-voice-api";
 import {
   getFreeVoicePreviewBlob,
@@ -7,11 +8,13 @@ import {
   putFreeVoicePreviewBlob,
 } from "../app/voice/free-voice-preview-idb";
 import { isFreeGenAudioVoiceId } from "../app/voice/free-voice-voices";
-import { freeVoiceCreateBlockReason } from "../app/voice/voice-access";
+import { filmFeatureBlockReason } from "./film-access";
 import { voicePreviewUrl } from "../app/voice/voice-api";
 
 export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
   const { customer } = useAuth();
+  const blockSetting = useSettingPublic("pa-b-page");
+  const marketplaceStopped = Boolean(blockSetting?.key);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hasCached, setHasCached] = useState(Boolean(blob));
@@ -20,7 +23,7 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
   const objectUrlRef = useRef("");
   const previewBlobRef = useRef<Blob | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const freeBlockedReason = freeVoiceCreateBlockReason(customer);
+  const filmBlockedReason = filmFeatureBlockReason(customer, marketplaceStopped);
 
   const revokeObjectUrl = useCallback(() => {
     if (objectUrlRef.current) {
@@ -103,8 +106,8 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
         return objectUrlRef.current;
       }
 
-      if (freeBlockedReason) {
-        throw new Error(freeBlockedReason);
+      if (filmBlockedReason) {
+        throw new Error(filmBlockedReason);
       }
 
       abortRef.current?.abort();
@@ -112,7 +115,7 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
       abortRef.current = ac;
       setLoading(true);
       try {
-        const previewBlob = await previewFreeGenAudioVoice(id, ac.signal);
+        const previewBlob = await previewFreeGenAudioVoice(id, ac.signal, { film: true });
         if (ac.signal.aborted) return "";
         previewBlobRef.current = previewBlob;
         await putFreeVoicePreviewBlob(id, previewBlob);
@@ -129,7 +132,7 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
     }
 
     return voicePreviewUrl(id);
-  }, [blob, voiceId, revokeObjectUrl, freeBlockedReason]);
+  }, [blob, voiceId, revokeObjectUrl, filmBlockedReason]);
 
   const toggle = useCallback(async () => {
     if (loading) return;
@@ -167,5 +170,5 @@ export function useFilmVoicePreview(blob?: Blob, voiceId?: string) {
     }
   }, [loading, playing, resolvePlaySrc]);
 
-  return { playing, loading, toggle, canPreview, hasCached, error, freeBlockedReason };
+  return { playing, loading, toggle, canPreview, hasCached, error, filmBlockedReason };
 }

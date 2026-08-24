@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { HiPlay, HiSpeakerWave } from "react-icons/hi2";
 import { RiLoader4Line, RiPauseFill } from "react-icons/ri";
+import { useToast } from "../../lib/providers/toast-provider";
 import { useFilmVoicePreview } from "./film-voice-preview";
 
 const PLAY_BTN_SIZE = {
@@ -25,11 +26,12 @@ export function FilmCharacterVoicePlayButton({
   size?: keyof typeof PLAY_BTN_SIZE;
 }) {
   const { t } = useTranslation();
-  const { playing, loading, toggle, canPreview, hasCached, error, freeBlockedReason } =
+  const toast = useToast();
+  const { playing, loading, toggle, canPreview, hasCached, error, filmBlockedReason } =
     useFilmVoicePreview(blob, voiceId);
   const iconClass = PLAY_ICON_SIZE[size];
   const btnClass = PLAY_BTN_SIZE[size];
-  const blocked = !blob && Boolean(freeBlockedReason) && !hasCached;
+  const needsUpgrade = !blob && Boolean(filmBlockedReason) && !hasCached;
 
   const title = loading
     ? t("Đang tải...")
@@ -37,15 +39,15 @@ export function FilmCharacterVoicePlayButton({
       ? t("Tạm dừng")
       : error
         ? t(error)
-        : blocked
-          ? t(freeBlockedReason)
+        : needsUpgrade
+          ? t(filmBlockedReason)
           : hasCached
             ? t("Phát audio đã lưu")
             : t("Tạo audio nghe thử");
 
   const colorClass = hasCached
     ? "bg-primary-light text-primary hover:bg-primary hover:text-white"
-    : blocked
+    : needsUpgrade
       ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
       : "bg-blue-50 text-blue-600 hover:bg-blue-100";
 
@@ -54,9 +56,13 @@ export function FilmCharacterVoicePlayButton({
       type="button"
       onClick={(e) => {
         e.stopPropagation();
+        if (needsUpgrade) {
+          toast.warn(t(filmBlockedReason));
+          return;
+        }
         void toggle();
       }}
-      disabled={!canPreview || loading || blocked}
+      disabled={!canPreview || loading}
       title={title}
       aria-label={title}
       className={`inline-flex items-center justify-center border-0 cursor-pointer disabled:opacity-40 disabled:cursor-default flex-shrink-0 ${colorClass} ${btnClass} ${className}`}

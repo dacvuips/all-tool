@@ -11,6 +11,7 @@ import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
 import type { GeneratedImageData } from "../app/affiliate-video/copy-video/hook/useCopyVideoApi";
 import { useConcurrencyLimits } from "../app/affiliate-video/hook/useConcurrencyLimits";
 import { isVoiceAbortError } from "../app/voice/voice-api";
+import { customerIdOf } from "../app/voice/voice-access";
 import {
   TrainingGuidePopover,
   TrainingTopicSlug,
@@ -40,6 +41,10 @@ import {
   type FilmAiKeysStatus,
 } from "./film-ai-keys";
 import FilmAiKeysDialog from "./film-ai-keys-dialog";
+import {
+  filmDialogueVoiceBlockReason,
+  filmFeatureBlockReason,
+} from "./film-access";
 import {
   FILM_CHARACTER_PROP_ASPECT_RATIO,
   resolveFilmProjectAspectRatio,
@@ -206,7 +211,6 @@ import {
 } from "./film-video-ref-mode";
 import {
   FILM_VOICE_BULK_CONCURRENCY,
-  filmDialogueVoiceBlockReason,
   generateFilmDialogueVoiceBlob,
   type FilmVoiceGenerateInput,
 } from "./film-voice-generate";
@@ -277,6 +281,29 @@ export default function FilmWorkspace({ projectId }: Props) {
   const { setOpenCustomerLoginDialog } = useGlobalContext();
   const blockSetting = useSettingPublic("pa-b-page");
   const marketplaceStopped = Boolean(blockSetting?.key);
+
+  const guardFilmFeature = useCallback((): boolean => {
+    const reason = filmFeatureBlockReason(customer, marketplaceStopped);
+    if (!reason) return true;
+    toast.warn(t(reason));
+    if (!customerIdOf(customer)) {
+      setOpenCustomerLoginDialog(true);
+    }
+    return false;
+  }, [customer, marketplaceStopped, toast, t, setOpenCustomerLoginDialog]);
+
+  const guardFilmVoice = useCallback(
+    (voiceId: string): boolean => {
+      const reason = filmDialogueVoiceBlockReason(customer, marketplaceStopped, voiceId);
+      if (!reason) return true;
+      toast.warn(t(reason));
+      if (!customerIdOf(customer)) {
+        setOpenCustomerLoginDialog(true);
+      }
+      return false;
+    },
+    [customer, marketplaceStopped, toast, t, setOpenCustomerLoginDialog]
+  );
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<FilmProjectRecord | null>(null);
@@ -857,10 +884,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     options?: { inheritPrevious?: boolean }
   ) => {
     if (!activeEpisode || !project) return;
-    if (!customer) {
-      setOpenCustomerLoginDialog(true);
-      throw new Error(t("Vui lòng đăng nhập để dùng AI trích xuất"));
-    }
+    if (!guardFilmFeature()) return;
 
     const status = await refreshAiKeysStatus();
     if (!status.hasAnyAi) {
@@ -1046,6 +1070,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleExtractCharacters = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const fromScenes = collectCharacterNamesFromScenes(scenes);
     const fromText = extractCharacterNamesFromText(activeEpisode?.originalContent || "");
     let names = Array.from(new Set([...fromScenes, ...fromText]));
@@ -1425,6 +1450,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   }) => {
     const { character, images } = input;
     if (!project) return;
+    if (!guardFilmFeature()) return;
     if (character.status === "creating" && character.mediaJobId) return;
 
     const propExtra = (input.propNamesInPrompt || [])
@@ -1486,6 +1512,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     propIds?: string[];
   }) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const character =
       characters.find((c) => c.id === input.character.id) || input.character;
 
@@ -1594,6 +1621,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleBulkCreateCharacters = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const targets = characters.filter(
       (c) =>
         c.status !== "creating" &&
@@ -1761,6 +1789,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleExtractProps = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     let names = collectPropNamesFromScenes(scenes);
     if (names.length === 0 && propsList.length > 0) return;
     if (names.length === 0) {
@@ -1913,6 +1942,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleCreatePropImage = async (input: FilmPropImageGenerateInput) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const { prop } = input;
     if (prop.status === "creating" && prop.mediaJobId) return;
 
@@ -1969,6 +1999,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     input: FilmPropImageGenerateInput
   ) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const prop = propsList.find((p) => p.id === input.prop.id) || input.prop;
     let fromIds: FilmPropRecord[] = [];
     if (input.propIds?.length) {
@@ -2053,6 +2084,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleBulkCreateProps = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const targets = propsList.filter(
       (p) =>
         p.status !== "creating" &&
@@ -2189,10 +2221,7 @@ export default function FilmWorkspace({ projectId }: Props) {
    */
   const handleSuggestCharacterProps = async (character: FilmCharacterRecord) => {
     if (!project) return;
-    if (!customer) {
-      toast.warn(t("Vui lòng đăng nhập để dùng AI."));
-      return;
-    }
+    if (!guardFilmFeature()) return;
     const aiStatus = await refreshAiKeysStatus();
     if (!aiStatus.hasAnyAi) {
       openAiKeysDialog();
@@ -2639,10 +2668,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   /** Gợi ý 10 vật phẩm kèm cho 1 VP → propsList + prop.propNames */
   const handleSuggestPropCompanions = async (prop: FilmPropRecord) => {
     if (!project) return;
-    if (!customer) {
-      toast.warn(t("Vui lòng đăng nhập để dùng AI."));
-      return;
-    }
+    if (!guardFilmFeature()) return;
     if (!(await refreshAiKeysStatus()).hasAnyAi) {
       openAiKeysDialog();
       toast.warn(t("Thêm API Key trước khi gợi ý vật phẩm."));
@@ -2925,6 +2951,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleExtractSceneImages = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     let locations = collectLocationsFromScenes(scenes);
     if (locations.length === 0 && sceneImages.length > 0) return;
     if (locations.length === 0) {
@@ -3092,6 +3119,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleCreateSceneImage = async (input: FilmLocationImageGenerateInput) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const { item } = input;
     if (item.status === "creating" && item.mediaJobId) return;
 
@@ -3152,6 +3180,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     input: FilmLocationImageGenerateInput
   ) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const item =
       sceneImages.find((s) => s.id === input.item.id) || input.item;
     let fromIds: FilmPropRecord[] = [];
@@ -3238,6 +3267,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleBulkCreateSceneImages = async () => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const targets = sceneImages.filter(
       (p) =>
         p.status !== "creating" &&
@@ -3579,10 +3609,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleSuggestLocationProps = async (item: FilmSceneImageRecord) => {
     if (!project) return;
-    if (!customer) {
-      toast.warn(t("Vui lòng đăng nhập để dùng AI."));
-      return;
-    }
+    if (!guardFilmFeature()) return;
     if (!(await refreshAiKeysStatus()).hasAnyAi) {
       openAiKeysDialog();
       toast.warn(t("Thêm API Key trước khi gợi ý vật phẩm."));
@@ -3812,6 +3839,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleCreateShotFrame = async (input: FilmShotFrameGenerateInput) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const scene =
       scenes.find((s) => s.id === input.scene.id) || input.scene;
     if (scene.frameStatus === "creating" && scene.frameMediaJobId) return;
@@ -4097,6 +4125,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   };
 
   const handleSuggestSafeShotFramePrompt = async (scene: FilmSceneRecord) => {
+    if (!guardFilmFeature()) return;
     const latest = scenes.find((s) => s.id === scene.id) || scene;
     if (latest.frameSuggestStatus === "loading") return;
 
@@ -4174,6 +4203,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   const handleBulkCreateShotFrames = async (
     mode: "all" | "errors" = "all"
   ) => {
+    if (!guardFilmFeature()) return;
     const targets = scenes.filter((s) => {
       if (s.frameStatus === "creating") return false;
       if (mode === "errors") return s.frameStatus === "error";
@@ -4192,6 +4222,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
   const handleCreateVideo = async (scene: FilmSceneRecord) => {
     if (!project) return;
+    if (!guardFilmFeature()) return;
     const latest = scenes.find((s) => s.id === scene.id) || scene;
     if (latest.videoStatus === "creating" && latest.videoMediaJobId) return;
 
@@ -4404,6 +4435,7 @@ export default function FilmWorkspace({ projectId }: Props) {
   );
 
   const handleBulkCreateVideos = async (mode: "all" | "errors" = "all") => {
+    if (!guardFilmFeature()) return;
     const targets = scenes.filter((s) => {
       if (s.videoStatus === "creating") return false;
       if (mode === "errors") return s.videoStatus === "error";
@@ -4493,15 +4525,7 @@ export default function FilmWorkspace({ projectId }: Props) {
     const trimmedText = String(text || "").trim();
     if (!trimmedText) return;
 
-    const blocked = filmDialogueVoiceBlockReason(
-      customer,
-      marketplaceStopped,
-      voiceId
-    );
-    if (blocked) {
-      toast.warn(t(blocked));
-      return;
-    }
+    if (!guardFilmVoice(voiceId)) return;
 
     const key = filmVoiceAbortKey(scene.id, dialogueLineId);
     voiceAbortRef.current.get(key)?.abort();
@@ -4576,15 +4600,7 @@ export default function FilmWorkspace({ projectId }: Props) {
 
     for (const item of pending) {
       const linked = resolveDialogueLineVoiceLink(item.line, characters);
-      const blocked = filmDialogueVoiceBlockReason(
-        customer,
-        marketplaceStopped,
-        linked.voiceId || ""
-      );
-      if (blocked) {
-        toast.warn(t(blocked));
-        return;
-      }
+      if (!guardFilmVoice(linked.voiceId || "")) return;
     }
 
     voiceBulkAbortRef.current?.abort();

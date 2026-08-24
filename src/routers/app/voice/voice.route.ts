@@ -27,6 +27,7 @@ import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { getFlow2Config } from "../../api-media/flow2/_shared";
 import { assertVoiceGenerationAllowed, authVoiceCustomer } from "./_access";
+import { assertFilmFeatureAllowed } from "../film/_film-access";
 import {
   collectFreeGenAudioUrls,
   fetchFreeGenAudioBytes,
@@ -406,18 +407,24 @@ export default [
     action: async (req: Request, res: Response) => {
       try {
         const context = authVoiceCustomer(req);
-        const body = (req.body || {}) as { text?: string; voice?: string };
+        const body = (req.body || {}) as { text?: string; voice?: string; film?: boolean };
         const text = String(body.text || "").trim();
         const voice = String(body.voice || "").trim().toLowerCase();
         if (!text) return res.status(400).json({ message: "Thiếu text" });
         if (!voice) return res.status(400).json({ message: "Thiếu voice" });
+        if (body.film) {
+          await assertFilmFeatureAllowed(context);
+        }
 
         const { jobId, status } = await createAndEnqueueMediaJob(
           {
             customerId: context.id,
             type: MediaGenerationJobType.VOICE_FREE_GEN_AUDIO,
             requestPayload: { text, voice },
-            metadata: { module: "voice", tool: "free-gen-audio" },
+            metadata: {
+              module: body.film ? "film" : "voice",
+              tool: "free-gen-audio",
+            },
           },
           { skipStreamCheck: true }
         );

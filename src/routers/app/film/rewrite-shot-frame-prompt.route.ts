@@ -4,9 +4,7 @@
  */
 import { GoogleGenAI } from "@google/genai";
 import { Request, Response } from "express";
-import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
-import { Context } from "../../../libs/graphql";
 import {
   callChatGPTGateway,
   checkRequestLimit,
@@ -14,6 +12,7 @@ import {
   incrementRequestCount,
   parseGeminiJsonResponse,
 } from "../affiliate-scene/_shared";
+import { authFilmFeature } from "./_film-access";
 import {
   filmCustomerId,
   resolveFilmAiCredentialFromDb,
@@ -255,8 +254,7 @@ export default [
     midd: [],
     action: async (req: Request, res: Response) => {
       try {
-        const context = new Context({ req });
-        context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
+        const context = await authFilmFeature(req);
 
         const body = req.body as {
           prompt?: string;

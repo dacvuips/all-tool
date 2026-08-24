@@ -2,9 +2,14 @@ import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { HiPlus } from "react-icons/hi";
+import { useAuth } from "../../lib/providers/auth-provider";
+import { useSettingPublic } from "../../lib/hooks/useSettingPublic";
 import { useAlert } from "../../lib/providers/alert-provider";
 import { useToast } from "../../lib/providers/toast-provider";
+import { useGlobalContext } from "../../lib/providers/global-provider";
+import { customerIdOf } from "../app/voice/voice-access";
 import { Button } from "../shared/utilities/form";
+import { filmFeatureBlockReason } from "./film-access";
 import FilmCreateDialog from "./film-create-dialog";
 import {
   createFilmProject,
@@ -21,6 +26,10 @@ const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
   const router = useRouter();
   const alert = useAlert();
   const toast = useToast();
+  const { customer } = useAuth();
+  const { setOpenCustomerLoginDialog } = useGlobalContext();
+  const blockSetting = useSettingPublic("pa-b-page");
+  const marketplaceStopped = Boolean(blockSetting?.key);
   const [projects, setProjects] = useState<FilmProjectRecord[]>([]);
   const [ready, setReady] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -50,7 +59,18 @@ const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
     };
   }, []);
 
+  const guardFilmFeature = (): boolean => {
+    const reason = filmFeatureBlockReason(customer, marketplaceStopped);
+    if (!reason) return true;
+    toast.warn(t(reason));
+    if (!customerIdOf(customer)) {
+      setOpenCustomerLoginDialog(true);
+    }
+    return false;
+  };
+
   const openCreate = () => {
+    if (!guardFilmFeature()) return;
     setEditingProject(null);
     setDialogOpen(true);
   };
@@ -94,6 +114,7 @@ const FilmPage = ({ hideHeader = false }: { hideHeader?: boolean }) => {
 
   const handleSubmit = async (data: FilmProjectCreateInput) => {
     if (saving) return;
+    if (!editingProject && !guardFilmFeature()) return;
     setSaving(true);
     try {
       if (editingProject) {

@@ -1,14 +1,9 @@
-import type { Customer } from "../../lib/repo/customer/customer.repo";
 import {
-  createFreeGenAudio,
+  createFilmFreeGenAudio,
   fetchFreeGenAudioOutputBlobWithRetry,
   pollFreeGenAudioJob,
 } from "../app/voice/free-voice-api";
 import { isFreeGenAudioVoiceId } from "../app/voice/free-voice-voices";
-import {
-  freeVoiceCreateBlockReason,
-  voiceCreateBlockReason,
-} from "../app/voice/voice-access";
 import {
   createTextToSpeech,
   fetchVoiceJobOutputBlob,
@@ -18,20 +13,7 @@ import {
 
 import type { FilmSceneRecord } from "./film-types";
 
-/** Chặn FE trước khi gọi API tạo giọng (free chỉ cần login; paid cần gói + credit). */
-export function filmDialogueVoiceBlockReason(
-  customer: Customer | null | undefined,
-  marketplaceStopped: boolean,
-  voiceId: string
-): string {
-  if (isFreeGenAudioVoiceId(voiceId)) {
-    return freeVoiceCreateBlockReason(customer);
-  }
-  return voiceCreateBlockReason(customer, marketplaceStopped);
-}
-
 export const FILM_VOICE_BULK_CONCURRENCY = 3;
-
 export type FilmVoiceGenerateInput = {
   scene: FilmSceneRecord;
   dialogueLineId: string;
@@ -62,7 +44,7 @@ async function generateFilmDialogueFreeVoiceBlob(
   voiceId: string,
   signal?: AbortSignal
 ): Promise<Blob> {
-  const job = await createFreeGenAudio({ text, voice: voiceId.toLowerCase() }, signal);
+  const job = await createFilmFreeGenAudio({ text, voice: voiceId.toLowerCase() }, signal);
   throwIfAborted(signal);
   const id = jobIdOf(job);
   if (!id) throw new Error("Không nhận được job ID");

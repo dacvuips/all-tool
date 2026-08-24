@@ -33,7 +33,7 @@ export function isFreeGenAudioJob(job: MicroxJob | null | undefined): boolean {
 }
 
 export function createFreeGenAudio(
-  input: { text: string; voice: string },
+  input: { text: string; voice: string; film?: boolean },
   signal?: AbortSignal
 ) {
   return requestFreeGenAudioJson<MicroxJob>("/api/app/voice/free-gen-audio/", {
@@ -41,6 +41,14 @@ export function createFreeGenAudio(
     body: JSON.stringify(input),
     signal,
   });
+}
+
+/** Giọng miễn phí gọi từ module Film — backend yêu cầu gói Standard+. */
+export function createFilmFreeGenAudio(
+  input: { text: string; voice: string },
+  signal?: AbortSignal
+) {
+  return createFreeGenAudio({ ...input, film: true }, signal);
 }
 
 export function fetchFreeGenAudioJob(id: string, signal?: AbortSignal) {
@@ -207,13 +215,14 @@ function freeGenAudioJobErrorMessage(job: unknown, fallback: string): string {
 /** Tạo audio ngắn để nghe thử giọng miễn phí. */
 export async function previewFreeGenAudioVoice(
   voiceId: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  opts?: { film?: boolean }
 ): Promise<Blob> {
   const voice = String(voiceId || "").trim().toLowerCase();
   if (!voice) throw new Error("Chưa chọn giọng");
 
   const job = await createFreeGenAudio(
-    { text: FREE_VOICE_PREVIEW_TEXT, voice },
+    { text: FREE_VOICE_PREVIEW_TEXT, voice, film: opts?.film },
     signal
   );
   const id = jobIdOf(job);
