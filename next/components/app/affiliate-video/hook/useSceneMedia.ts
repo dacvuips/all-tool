@@ -475,6 +475,8 @@ export function useSceneMedia({
         selectedProductImages,
         noText,
         objectToPersonifyImage,
+        artStyle: affiliateVideoFormConfig?.artStyle,
+        artStyleId: affiliateVideoFormConfig?.artStyleId,
       });
 
       const result = await generateImage({
@@ -658,6 +660,8 @@ export function useSceneMedia({
         generatedImage: videoRefImage,
         nextGeneratedImage: isStitch ? stitchEndImage : undefined,
         requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
+        artStyle: affiliateVideoFormConfig?.artStyle,
+        artStyleId: affiliateVideoFormConfig?.artStyleId,
       });
 
       const result = await generateVideo({

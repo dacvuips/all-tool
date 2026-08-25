@@ -10,6 +10,7 @@ import {
   RiDeleteBinLine,
   RiLoader4Line,
   RiRefreshLine,
+  RiMusic2Line,
   RiUploadCloud2Line,
   RiVideoLine,
 } from "react-icons/ri";
@@ -21,7 +22,12 @@ import {
   GENERATION_IMAGE_ACCEPTED_TYPES,
 } from "../../shared/compressGenerationImage";
 import { Button, Field } from "../../../../shared/utilities/form";
-import { ElementFormImage, ElementFormVideo, StoryboardImageStatus } from "../../constants";
+import {
+  ElementFormAudio,
+  ElementFormImage,
+  ElementFormVideo,
+  StoryboardImageStatus,
+} from "../../constants";
 import { getElementFormImagePreviewSrc, getImageDisplayName } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = GENERATION_IMAGE_ACCEPTED_TYPES;
@@ -889,6 +895,310 @@ export function ElementVideoUpload({
         maxSizeMB={maxSizeMB}
       />
     </div>
+  );
+}
+
+// ── Audio upload ──────────────────────────────────────────────────────────
+const ACCEPTED_AUDIO_TYPES = [
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/wav",
+  "audio/x-wav",
+  "audio/wave",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/aac",
+  "audio/ogg",
+  "audio/flac",
+  "audio/webm",
+];
+const ACCEPTED_AUDIO_EXTENSIONS = ".mp3,.wav,.m4a,.aac,.ogg,.flac,.webm";
+const ACCEPTED_AUDIO_EXT_RE = /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i;
+
+function fileToBase64Audio(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+      if (base64) resolve(base64);
+      else reject(new Error("Failed to read audio as base64"));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function base64AudioToBlobUrl(base64: string, mimeType: string): string {
+  const byteChars = atob(base64);
+  const byteNumbers = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) {
+    byteNumbers[i] = byteChars.charCodeAt(i);
+  }
+  const blob = new Blob([byteNumbers], { type: mimeType });
+  return URL.createObjectURL(blob);
+}
+
+function guessAudioMimeType(file: File): string {
+  if (file.type) return file.type;
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".mp3")) return "audio/mpeg";
+  if (name.endsWith(".wav")) return "audio/wav";
+  if (name.endsWith(".m4a")) return "audio/mp4";
+  if (name.endsWith(".aac")) return "audio/aac";
+  if (name.endsWith(".ogg")) return "audio/ogg";
+  if (name.endsWith(".flac")) return "audio/flac";
+  if (name.endsWith(".webm")) return "audio/webm";
+  return "audio/mpeg";
+}
+
+export interface ElementAudioUploadProps {
+  audioRef?: ElementFormAudio[];
+  onAudioRefChange: (value: ElementFormAudio[] | undefined) => void;
+  readOnly?: boolean;
+  maxSizeMB?: number;
+  label?: string;
+  maxFiles?: number;
+}
+
+export function ElementAudioUpload({
+  audioRef = [],
+  onAudioRefChange,
+  readOnly = false,
+  maxSizeMB = 50,
+  label,
+  maxFiles = 1,
+}: ElementAudioUploadProps) {
+  const { t } = useTranslation();
+  const toast = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const value = audioRef || [];
+
+  const processFile = useCallback(
+    async (file: File): Promise<ElementFormAudio | null> => {
+      if (readOnly) return null;
+
+      const isAudio =
+        ACCEPTED_AUDIO_TYPES.includes(file.type) ||
+        file.type.startsWith("audio/") ||
+        ACCEPTED_AUDIO_EXT_RE.test(file.name);
+      if (!isAudio) {
+        toast.error(t("Chỉ hỗ trợ file audio (MP3, WAV, M4A, AAC, OGG, FLAC)"));
+        return null;
+      }
+
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > maxSizeMB) {
+        toast.error(
+          `${t("File quá lớn")}. ${t("Tối đa")}: ${maxSizeMB}MB, ${t("file")}: ${sizeMB.toFixed(
+            1
+          )}MB`
+        );
+        return null;
+      }
+
+      try {
+        const audioBytes = await fileToBase64Audio(file);
+        return {
+          fifeUrl: "",
+          audioBytes,
+          mimeType: guessAudioMimeType(file),
+          name: file.name,
+        };
+      } catch (err) {
+        console.error("[ElementAudioUpload] Error processing file:", err);
+        toast.error(t("Lỗi khi xử lý audio. Vui lòng thử lại."));
+        return null;
+      }
+    },
+    [maxSizeMB, readOnly, t, toast]
+  );
+
+  const addFiles = useCallback(
+    async (files: FileList | File[]) => {
+      if (readOnly || uploading) return;
+      const fileArr = Array.from(files);
+      if (!fileArr.length) return;
+
+      setUploading(true);
+      const added: ElementFormAudio[] = [];
+      for (const file of fileArr) {
+        if (maxFiles === 1 && (value.length > 0 || added.length > 0)) break;
+        if (maxFiles > 1 && value.length + added.length >= maxFiles) break;
+        const audio = await processFile(file);
+        if (audio) added.push(audio);
+      }
+      setUploading(false);
+
+      if (!added.length) return;
+
+      const next =
+        maxFiles === 1 ? added.slice(0, 1) : [...value, ...added].slice(0, maxFiles);
+      onAudioRefChange(next);
+      toast.success(
+        added.length === 1
+          ? t("Đã upload audio thành công")
+          : `${t("Đã upload")} ${added.length} ${t("audio")}`
+      );
+    },
+    [maxFiles, onAudioRefChange, processFile, readOnly, t, toast, uploading, value]
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files?.length) void addFiles(files);
+    e.target.value = "";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!readOnly) setDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files?.length) void addFiles(files);
+  };
+
+  const handleRemove = (index: number) => {
+    const next = value.filter((_, i) => i !== index);
+    onAudioRefChange(next.length ? next : undefined);
+  };
+
+  const openFilePicker = () => {
+    if (!readOnly && !uploading) fileInputRef.current?.click();
+  };
+
+  return (
+    <Field noError label={label || t("Upload audio")}>
+      <div className="space-y-2">
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={openFilePicker}
+          className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 transition-all ${
+            readOnly ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+          } ${
+            dragOver
+              ? "bg-pink-50 border-pink-400"
+              : "border-gray-300 hover:border-pink-300 hover:bg-pink-50/30"
+          }`}
+        >
+          {uploading ? (
+            <div className="flex flex-col gap-2 items-center">
+              <RiLoader4Line className="text-3xl text-pink-500 animate-spin" />
+              <span className="text-sm font-medium text-pink-600">{t("Đang xử lý")}...</span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-center items-center mb-2 w-10 h-10 bg-pink-50 rounded-full">
+                <RiMusic2Line className="text-xl text-pink-500" />
+              </div>
+              <span className="text-sm font-semibold text-center text-gray-700">
+                {value.length > 0 && maxFiles > 1
+                  ? t("Kéo thả hoặc bấm để thêm audio")
+                  : t("Kéo thả hoặc bấm để chọn audio")}
+              </span>
+              <span className="mt-1 text-xs text-center text-gray-400">
+                MP3, WAV, M4A, AAC, OGG, FLAC • {t("Tối đa")} {maxSizeMB}MB
+                {maxFiles > 1 ? ` • ${t("Tối đa")} ${maxFiles} ${t("file")}` : ""}
+              </span>
+            </>
+          )}
+        </div>
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept={`audio/*,${ACCEPTED_AUDIO_EXTENSIONS}`}
+          multiple={maxFiles > 1}
+          className="sr-only"
+          disabled={readOnly}
+          onChange={handleFileChange}
+        />
+
+        {value.length > 0 && (
+          <ul className="space-y-2">
+            {value.map((audio, index) => (
+              <AudioUploadListItem
+                key={`${audio.name}-${index}`}
+                audio={audio}
+                readOnly={readOnly}
+                onRemove={() => handleRemove(index)}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </Field>
+  );
+}
+
+function AudioUploadListItem({
+  audio,
+  readOnly,
+  onRemove,
+}: {
+  audio: ElementFormAudio;
+  readOnly: boolean;
+  onRemove: () => void;
+}) {
+  const { t } = useTranslation();
+  const previewSrc = useMemo(() => {
+    if (!audio.audioBytes && !audio.fifeUrl) return null;
+    if (audio.fifeUrl) return audio.fifeUrl;
+    return base64AudioToBlobUrl(audio.audioBytes, audio.mimeType || "audio/mpeg");
+  }, [audio.audioBytes, audio.fifeUrl, audio.mimeType]);
+
+  useEffect(() => {
+    return () => {
+      if (previewSrc?.startsWith("blob:")) URL.revokeObjectURL(previewSrc);
+    };
+  }, [previewSrc]);
+
+  const displayName =
+    (audio.name || "audio").replace(/\.[^./\\]+$/, "").trim() || "audio";
+
+  return (
+    <li className="relative flex flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+      {!readOnly && (
+        <Button
+          onClick={(e) => {
+            e?.stopPropagation?.();
+            onRemove();
+          }}
+          icon={<RiCloseLine />}
+          className="absolute right-2 top-2 z-10 h-6 w-6 rounded-full bg-white px-0 text-danger hover:bg-red-50"
+          iconClassName="text-sm"
+          tooltip={t("Xóa")}
+        />
+      )}
+      <div className="flex items-center gap-2 pr-8">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-pink-100">
+          <RiMusic2Line className="text-lg text-pink-500" />
+        </div>
+        <span className="truncate text-sm font-medium text-gray-800" title={displayName}>
+          {displayName}
+        </span>
+      </div>
+      {previewSrc ? (
+        <audio src={previewSrc} controls className="w-full" preload="metadata" />
+      ) : null}
+    </li>
   );
 }
 

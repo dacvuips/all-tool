@@ -7,7 +7,10 @@ import {
   MediaGenerationVideoResult,
 } from "../../../libs/dal/mediaGenerationJob";
 import { Flow2VideoMode } from "../../../routers/api-media/flow2/video-generation";
-import { incrementVideoCount } from "../../../routers/app/affiliate-scene/_shared";
+import {
+  incrementVideoCount,
+  resolveArtStyleTextForGeneration,
+} from "../../../routers/app/affiliate-scene/_shared";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
 import { MediaJobEmitter } from "../job-emitter";
 import { loadMediaJobPayload } from "../media-job-data";
@@ -20,6 +23,8 @@ export type GenerationVideoPayload = {
   noText?: boolean;
   voiceDisable?: boolean;
   voice?: string;
+  artStyleId?: string;
+  artStyle?: string;
   /** Alias top-level — ưu tiên thấp hơn config.videoMode */
   video_mode?: Flow2VideoMode | string;
   config?: {
@@ -29,6 +34,8 @@ export type GenerationVideoPayload = {
     noText?: boolean;
     voiceDisable?: boolean;
     voice?: string;
+    artStyleId?: string;
+    artStyle?: string;
     /** frame = startImage/endImage; component = Reference */
     videoMode?: Flow2VideoMode | string;
     serviceImageType?: ServiceImageEnum;
@@ -43,7 +50,12 @@ export async function handleGenerationVideo(
 
   await emitter.progress(10, "Đang chuẩn bị tạo video...");
 
-  const fullPrompt = buildVideoPromptFromPayload(payload);
+  const artStyleText = await resolveArtStyleTextForGeneration({
+    artStyleId: payload.artStyleId || payload.config?.artStyleId,
+    artStyle: payload.artStyle || payload.config?.artStyle,
+  });
+
+  const fullPrompt = buildVideoPromptFromPayload(payload, { prepend: artStyleText });
 
   const result = await runFlow2VideoPipeline({
     customerId: job.customerId,

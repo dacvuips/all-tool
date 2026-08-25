@@ -89,6 +89,8 @@ export enum MediaGenerationJobType {
   FILM_GENERATION_VIDEO = "FILM_GENERATION_VIDEO",
   /** POST /api/app/voice/free-gen-audio/ — Flow2 gen_audio qua media job queue */
   VOICE_FREE_GEN_AUDIO = "VOICE_FREE_GEN_AUDIO",
+  /** POST /api/app/generate-text/ — Flow2 gen_text generic (JSON/text) */
+  GENERATE_TEXT = "GENERATE_TEXT",
 }
 
 /** Output cuối khi job tạo ảnh thành công (1 hoặc nhiều ảnh base64/url) */

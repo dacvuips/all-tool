@@ -155,13 +155,24 @@ export const AffiliateVideoContext = createContext<
   }>
 >({});
 
-export function AffiliateVideoProvider(props) {
+const DEFAULT_CACHE_KEYS = {
+  lastScript: CACHE_KEY.lastStoryboardScript,
+  input: CACHE_KEY.storyboardInput,
+  history: CACHE_KEY.storyboardHistory,
+};
+
+export function AffiliateVideoProvider({
+  children,
+  cacheKeys,
+}: {
+  children?: React.ReactNode;
+  cacheKeys?: Partial<typeof DEFAULT_CACHE_KEYS>;
+}) {
+  const keys = { ...DEFAULT_CACHE_KEYS, ...cacheKeys };
   const {
     analyzeStoryboard,
     analyzeStoryboardImage,
     generateSceneFromText,
-    getStoryboardHistory,
-    clearStoryboardHistory: clearStoryboardHistoryApi,
   } = useAffiliateVideoApi();
   const { customer } = useAuth();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
@@ -304,12 +315,12 @@ export function AffiliateVideoProvider(props) {
   /** Refresh history list from IndexedDB */
   const refreshSceneHistory = useCallback(async () => {
     try {
-      const history = await getStoryboardHistory();
+      const history = (await scriptDB.get(keys.history)) || [];
       setSceneHistory(history);
     } catch (err) {
       console.warn("[storyboard] Failed to load scene history", err);
     }
-  }, [getStoryboardHistory]);
+  }, [scriptDB, keys.history]);
 
   /** Select a history item by ID and apply its data to scriptData */
   const selectHistoryItem = useCallback(
@@ -319,7 +330,7 @@ export function AffiliateVideoProvider(props) {
         setSelectedHistoryId(id);
         setScriptData(item.data);
         // Also update lastScript so it persists across page reloads
-        scriptDB.set(CACHE_KEY.lastStoryboardScript, item.data).catch(() => {});
+        scriptDB.set(keys.lastScript, item.data).catch(() => {});
       }
     },
     [sceneHistory, scriptDB]
@@ -327,10 +338,10 @@ export function AffiliateVideoProvider(props) {
 
   /** Clear all history */
   const clearSceneHistoryFn = useCallback(async () => {
-    await clearStoryboardHistoryApi();
+    await scriptDB.set(keys.history, []);
     setSceneHistory([]);
     setSelectedHistoryId(null);
-  }, [clearStoryboardHistoryApi]);
+  }, [scriptDB, keys.history]);
 
   /** Rename a history item and persist */
   const renameHistoryItem = useCallback(
@@ -339,7 +350,7 @@ export function AffiliateVideoProvider(props) {
       if (!next) return;
       setSceneHistory(next);
       try {
-        await scriptDB.set(CACHE_KEY.storyboardHistory, next);
+        await scriptDB.set(keys.history, next);
       } catch (err) {
         console.warn("[storyboard] Failed to rename history", err);
       }
@@ -349,7 +360,7 @@ export function AffiliateVideoProvider(props) {
 
   const getSceneList = async () => {
     try {
-      const cached = await scriptDB.get(CACHE_KEY.lastStoryboardScript);
+      const cached = await scriptDB.get(keys.lastScript);
       if (cached) {
         setScriptData(cached);
       }
@@ -362,7 +373,7 @@ export function AffiliateVideoProvider(props) {
 
   const restoreConfigFromDB = async () => {
     try {
-      const cachedConfig = await scriptDB.get(CACHE_KEY.storyboardInput);
+      const cachedConfig = await scriptDB.get(keys.input);
       if (cachedConfig) {
         setAffiliateVideoFormConfig(cachedConfig);
       }
@@ -462,7 +473,7 @@ export function AffiliateVideoProvider(props) {
           setScriptData(partial);
           setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "done" }));
           scriptDB
-            .set(CACHE_KEY.lastStoryboardScript, partial)
+            .set(keys.lastScript, partial)
             .catch((e) => console.warn("[storyboard] Failed to persist script", e));
           return;
         }
@@ -492,7 +503,7 @@ export function AffiliateVideoProvider(props) {
         setStoryboardImageStatuses((prev) => ({ ...prev, [imageIndex]: "done" }));
 
         scriptDB
-          .set(CACHE_KEY.lastStoryboardScript, nextScript)
+          .set(keys.lastScript, nextScript)
           .catch((e) => console.warn("[storyboard] Failed to persist script", e));
       } catch (err: any) {
         console.error("[storyboard] retry error", err?.message);
@@ -513,7 +524,7 @@ export function AffiliateVideoProvider(props) {
   /** Persist config to IndexedDB */
   const persistConfig = (config: AffiliateVideoFormConfig) => {
     scriptDB
-      .set(CACHE_KEY.storyboardInput, config)
+      .set(keys.input, config)
       .catch((err) => console.warn("[storyboard] Failed to persist config", err));
   };
 
@@ -532,8 +543,8 @@ export function AffiliateVideoProvider(props) {
           selectedHistoryId,
           setSceneHistory,
           scriptDB,
-          lastScriptCacheKey: CACHE_KEY.lastStoryboardScript,
-          historyCacheKey: CACHE_KEY.storyboardHistory,
+          lastScriptCacheKey: keys.lastScript,
+          historyCacheKey: keys.history,
           logTag: "storyboard",
         });
       }
@@ -606,10 +617,10 @@ export function AffiliateVideoProvider(props) {
         setStoryModeType: (mode: StoryModeTypeEnum) => {
           setStoryModeType(mode);
           // Persist storyModeType into lastScript
-          scriptDB.get(CACHE_KEY.lastStoryboardScript).then((cached) => {
+          scriptDB.get(keys.lastScript).then((cached) => {
             if (cached) {
               scriptDB
-                .set(CACHE_KEY.lastStoryboardScript, { ...cached, storyModeType: mode })
+                .set(keys.lastScript, { ...cached, storyModeType: mode })
                 .catch((e) => console.warn("[storyboard] Failed to persist storyModeType", e));
             }
           });
@@ -620,7 +631,7 @@ export function AffiliateVideoProvider(props) {
         retryStoryboardImage,
       }}
     >
-      {props.children}
+      {children}
     </AffiliateVideoContext.Provider>
   );
 }

@@ -741,13 +741,14 @@ export function ArtStylePickerDialog({
   const handleUse = useCallback(
     async (artStyleId: string, artStyleName: string) => {
       const prompt = await getArtStylePromptById(artStyleId);
-      setSelectedName(artStyleName);
-      if (onChange) onChange(artStyleName);
+      const nextValue = (prompt || artStyleName).trim();
+      setSelectedName(nextValue);
+      if (onChange) onChange(nextValue);
       if (onCodeChange) onCodeChange(artStyleId);
       setIsDialogOpen(false);
-      if (prompt) toast.success(t("Ðã chọn phong cách hình ảnh"));
+      if (nextValue) toast.success(t("Đã chọn phong cách hình ảnh"));
     },
-    [onChange, onCodeChange]
+    [getArtStylePromptById, onChange, onCodeChange, t, toast]
   );
 
   const handlePageChange = useCallback(

@@ -495,6 +495,29 @@ export async function resolveArtStylePrompt(opts: {
   }
 }
 
+/**
+ * Chọn text art style để gắn vào prompt gen ảnh/video:
+ * - Có artStyleId → lấy prompt từ DB theo ID
+ * - Không có ID, hoặc user đã sửa value khác name/prompt của style → dùng value ô nhập
+ */
+export async function resolveArtStyleTextForGeneration(opts: {
+  artStyleId?: string;
+  artStyle?: string;
+}): Promise<string> {
+  const freeText = String(opts.artStyle || "").trim();
+  if (!opts.artStyleId) return freeText;
+
+  const { prompt, name } = await resolveArtStylePrompt(opts);
+  const dbPrompt = String(prompt || "").trim();
+  if (!dbPrompt) return freeText;
+
+  const styleName = String(name || "").trim();
+  if (!freeText || freeText === styleName || freeText === dbPrompt) {
+    return dbPrompt;
+  }
+  return freeText;
+}
+
 export interface MediaImageBytes {
   name: string;
   imageBytes: string;

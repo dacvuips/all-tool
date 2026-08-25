@@ -22,6 +22,7 @@ import { TrendingTypeEnum } from "../../../lib/repo/list/trending.repo";
 import { TabGroup } from "../../shared/utilities/tab/tab-group";
 import { VoicePage } from "../voice/voice-page";
 import { AppPage } from "./app/app-page";
+import { AudioImageToVideoPage } from "./audio-image-to-video/audio-image-to-video-page";
 import { TAB_TYPE } from "./constants";
 import { AffiliateCopyVideoPage } from "./copy-video/copy-video-page";
 import { ElementPage } from "./elements/element-page";
@@ -96,6 +97,12 @@ export default function AffiliateMainPage() {
       component: <StoryboardPage />,
     },
     {
+      icon: <RiVideoLine />,
+      label: t("Audio/Image to Video"),
+      value: "audio-image-to-video",
+      component: <AudioImageToVideoPage />,
+    },
+    {
       icon: <RiMagicLine />,
       label: t("Xóa Logo AI"),
       value: "remove-logo",
@@ -107,16 +114,6 @@ export default function AffiliateMainPage() {
       label: t("Voice"),
       value: "voice",
       component: <VoicePage />,
-    },
-    {
-      icon: <RiVideoLine />,
-      label: t("Audio/Image to Video"),
-      value: "audio-image-to-video",
-      component: (
-        <div className="flex flex-1 items-center justify-center text-sm text-gray-500">
-          {t("Chức năng đang phát triển...")}
-        </div>
-      ),
     },
 
     // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },

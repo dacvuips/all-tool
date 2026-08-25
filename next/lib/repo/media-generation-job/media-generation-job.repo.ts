@@ -73,6 +73,7 @@ export const MEDIA_GENERATION_JOB_TYPE_LABELS: Record<string, string> = {
   COPY_VIDEO_ANALYSIS: "Phân tích video sao chép",
   GENERATION_TRENDING: "Tạo kịch bản trending",
   VOICE_FREE_GEN_AUDIO: "Tạo audio miễn phí",
+  GENERATE_TEXT: "Generate text",
 };
 
 export function getMediaGenerationJobTypeLabel(type?: string | null): string {

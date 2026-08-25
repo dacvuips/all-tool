@@ -1,49 +1,25 @@
 /**
- * Proxy Flow2 gen_text — API key chỉ nằm server-side.
- *
- * POST   /api/app/generate-text/        tạo request (poll nội bộ đến done)
- * GET    /api/app/generate-text/:id/    poll status
- * DELETE /api/app/generate-text/:id/    hủy khi queued/running
+ * POST   /api/app/generate-text/
+ *   - mặc định: enqueue job GENERATE_TEXT → 202 { jobId }
+ *   - direct: true → gọi Flow2 sync, trả kết quả ngay (dùng cho audio/image to video analyze)
+ * GET    /api/app/generate-text/:id/    poll status Flow2 request
+ * DELETE /api/app/generate-text/:id/    hủy Flow2 request khi queued/running
  */
 import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
+import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import {
   cancelFlow2TextRequest,
-  createFlow2TextRequest,
-  DEFAULT_FLOW2_TEXT_MODEL,
-  DEFAULT_FLOW2_THINKING_LEVEL,
   generateTextWithFlow2,
   getFlow2TextRequestStatus,
-  MAX_FLOW2_TEXT_IMAGES,
   sanitizeFlow2TextStatus,
   serializeFlow2TextClientResult,
-  type Flow2ImageInput,
 } from "../../api-media/flow2";
+import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { checkRequestLimit, incrementRequestCount } from "../affiliate-scene/_shared";
-
-const MAX_PROMPT_CHARS = 80_000;
-const MAX_SYSTEM_INSTRUCTION_CHARS = 20_000;
-
-type GenerateTextBody = {
-  prompt?: string;
-  systemInstruction?: string;
-  system_instruction?: string;
-  model?: string;
-  thinkingLevel?: string;
-  thinking_level?: string;
-  images?: Flow2ImageInput[];
-  image_base64s?: Flow2ImageInput[];
-  /** Bật JSON output mode (json: true + response_mime_type: application/json) */
-  jsonMode?: boolean;
-  json?: boolean;
-  /** Schema JSON enforce output structure */
-  jsonSchema?: Record<string, unknown>;
-  schema?: Record<string, unknown>;
-  /** true = trả requestId ngay, client tự poll GET */
-  async?: boolean;
-};
+import { parseGenerateTextParams, type GenerateTextBody } from "./generate-text.params";
 
 function sendRouteError(res: Response, err: any) {
   const status = err?.statusCode || 500;
@@ -52,44 +28,6 @@ function sendRouteError(res: Response, err: any) {
 
 function asTrimmed(value: unknown): string {
   return String(value ?? "").trim();
-}
-
-function collectImageInputs(body: GenerateTextBody): Flow2ImageInput[] {
-  const raw = Array.isArray(body.images)
-    ? body.images
-    : Array.isArray(body.image_base64s)
-    ? body.image_base64s
-    : [];
-  return raw.filter(Boolean).slice(0, MAX_FLOW2_TEXT_IMAGES);
-}
-
-function parseGenerateTextParams(body: GenerateTextBody) {
-  const prompt = asTrimmed(body.prompt).slice(0, MAX_PROMPT_CHARS);
-  if (!prompt) {
-    throw Object.assign(new Error("Thiếu prompt"), { statusCode: 400 });
-  }
-
-  const systemInstruction = asTrimmed(body.systemInstruction || body.system_instruction).slice(
-    0,
-    MAX_SYSTEM_INSTRUCTION_CHARS
-  );
-
-  const rawSchema = body.jsonSchema ?? body.schema;
-  const jsonSchema =
-    rawSchema && typeof rawSchema === "object" && !Array.isArray(rawSchema)
-      ? (rawSchema as Record<string, unknown>)
-      : undefined;
-  const jsonMode = body.jsonMode === true || body.json === true || jsonSchema != null;
-
-  return {
-    prompt,
-    systemInstruction: systemInstruction || undefined,
-    model: asTrimmed(body.model) || DEFAULT_FLOW2_TEXT_MODEL,
-    thinkingLevel: asTrimmed(body.thinkingLevel || body.thinking_level) || DEFAULT_FLOW2_THINKING_LEVEL,
-    imageInputs: collectImageInputs(body),
-    jsonMode: jsonMode || undefined,
-    jsonSchema: jsonSchema || undefined,
-  };
 }
 
 export default [
@@ -110,44 +48,50 @@ export default [
         context.auth(TOKEN_ROLES.ADMIN_STAFF_PARTNER_SHOP_CUSTOMER_SHOP_STAFF);
         contextId = context.id;
 
-        const body = (req.body || {}) as GenerateTextBody;
+        const body = (req.body || {}) as GenerateTextBody & {
+          _metadata?: Record<string, unknown>;
+          /** true = gọi Flow2 thẳng, không enqueue media job */
+          direct?: boolean;
+          sync?: boolean;
+        };
         const params = parseGenerateTextParams(body);
         await checkRequestLimit(context.id);
 
-        const flow2Params = {
-          ...params,
-          customerId: context.id,
-          onRequestCreated: async (id: string) => {
-            requestId = id;
-          },
-        };
+        const useDirect = body.direct === true || body.sync === true;
+        if (useDirect) {
+          req.on("close", onClose);
+          const { requestId: createdId, result } = await generateTextWithFlow2({
+            ...params,
+            customerId: context.id,
+            onRequestCreated: async (id: string) => {
+              requestId = id;
+            },
+          });
+          requestId = createdId;
+          req.off("close", onClose);
 
-        if (body.async === true) {
-          const created = await createFlow2TextRequest(flow2Params);
-          requestId = created.requestId;
           await incrementRequestCount(context.id);
-          return res.status(202).json({
+          return res.json({
             success: true,
-            requestId: created.requestId,
-            status: "queued",
+            requestId: createdId,
+            status: "done",
             type: "gen_text",
-            message: "Đã tạo request. Poll GET /api/app/generate-text/:id/ đến khi status=done.",
+            data: serializeFlow2TextClientResult(result),
           });
         }
 
-        req.on("close", onClose);
-        const { requestId: createdId, result } = await generateTextWithFlow2(flow2Params);
-        requestId = createdId;
-        req.off("close", onClose);
+        const { _metadata, direct: _direct, sync: _sync, ...requestPayload } = body;
+        const { jobId, status } = await createAndEnqueueMediaJob(
+          {
+            customerId: context.id,
+            type: MediaGenerationJobType.GENERATE_TEXT,
+            requestPayload: requestPayload as Record<string, unknown>,
+            metadata: _metadata,
+          },
+          { skipStreamCheck: true }
+        );
 
-        await incrementRequestCount(context.id);
-        res.json({
-          success: true,
-          requestId: createdId,
-          status: "done",
-          type: "gen_text",
-          data: serializeFlow2TextClientResult(result),
-        });
+        res.status(202).json({ success: true, jobId, status });
       } catch (err: any) {
         req.off("close", onClose);
         logger.error(`[generate-text] Lỗi: ${err?.message}`);

@@ -11,6 +11,7 @@ import {
   buildImageReferenceNotes,
   filterReferenceImages,
   incrementImageCount,
+  resolveArtStyleTextForGeneration,
   ReferenceImageInput,
 } from "../../../routers/app/affiliate-scene/_shared";
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
@@ -25,11 +26,15 @@ export type GenerationImagePayload = {
   productImages?: string[];
   objectToPersonifyImages?: ReferenceImageInput[];
   productImagePrompt?: string;
+  artStyleId?: string;
+  artStyle?: string;
   config?: {
     numberOfImages?: number;
     aspectRatio?: "16:9" | "9:16";
     noText?: boolean;
     imageModel?: string;
+    artStyleId?: string;
+    artStyle?: string;
   };
 };
 
@@ -53,8 +58,15 @@ export async function handleGenerationImage(
     personifyImages: personifyImageRefs,
   });
 
+  const artStyleText = await resolveArtStyleTextForGeneration({
+    artStyleId: payload.artStyleId || payload.config?.artStyleId,
+    artStyle: payload.artStyle || payload.config?.artStyle,
+  });
+
   const noTextStr = !payload.config?.noText ? NO_TEXT_NOTE : "";
-  const fullPrompt = `${payload.prompt} ${imageReferenceNote} ${noTextStr}`;
+  const fullPrompt = [artStyleText, payload.prompt, imageReferenceNote, noTextStr]
+    .filter((part) => String(part || "").trim())
+    .join(" ");
 
   const images = await runImagePipeline({
     customerId: job.customerId,

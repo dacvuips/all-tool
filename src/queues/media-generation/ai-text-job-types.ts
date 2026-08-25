@@ -12,6 +12,7 @@ export const AI_TEXT_JOB_TYPES: ReadonlyArray<MediaGenerationJobType> = [
   MediaGenerationJobType.COPY_VIDEO_ANALYSIS,
   MediaGenerationJobType.GENERATION_TRENDING,
   MediaGenerationJobType.VOICE_FREE_GEN_AUDIO,
+  MediaGenerationJobType.GENERATE_TEXT,
 ];
 
 export function isAiTextJobType(type: MediaGenerationJobType): boolean {

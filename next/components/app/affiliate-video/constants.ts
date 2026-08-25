@@ -120,6 +120,13 @@ export interface ElementFormVideo {
   name: string;
 }
 
+export interface ElementFormAudio {
+  fifeUrl: string;
+  audioBytes: string;
+  mimeType: string;
+  name: string;
+}
+
 export interface ElementFormConfig {
   prompt: string;
   /** Ảnh tham chiếu – có thể upload nhiều ảnh */
@@ -238,6 +245,7 @@ export interface ScriptData {
   storyModeType: StoryModeTypeEnum;
   topicTitle: string;
   artStyle: string;
+  artStyleId?: string;
   environment: string;
   characterName: string;
   characterBaseDescription: string;
@@ -350,6 +358,9 @@ export const CACHE_KEY = {
   lastStoryboardScript: "lastStoryboardScript",
   storyboardInput: "storyboardInput",
   storyboardHistory: "storyboardHistory",
+  lastAudioImageScript: "lastAudioImageScript",
+  audioImageInput: "audioImageInput",
+  audioImageHistory: "audioImageHistory",
   /** Lịch sử xóa logo AI */
   removeLogoHistory: "removeLogoHistory",
   /** Mặc định tự động tải ảnh/video sau khi gen (localStorage) */

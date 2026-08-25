@@ -64,14 +64,30 @@ export type AffiliateScriptLike =
       voiceGender?: string;
       voiceStyle?: string;
       voiceTone?: string;
+      artStyle?: string;
+      artStyleId?: string;
     }
   | null
   | undefined;
 
-function buildAffiliateAudioDesc(scriptData?: AffiliateScriptLike): string {
-  return [scriptData?.voiceGender, scriptData?.voiceStyle, scriptData?.voiceTone]
-    .filter(Boolean)
-    .join(", ");
+export type AffiliateArtStyleOptions = {
+  artStyle?: string;
+  artStyleId?: string;
+};
+
+/** Ưu tiên art style đang chọn trên form (live), fallback scriptData. */
+export function resolveAffiliateArtStyle(
+  formConfig?: AffiliateArtStyleOptions | null,
+  scriptData?: AffiliateScriptLike
+): AffiliateArtStyleOptions {
+  const artStyle =
+    formConfig?.artStyle !== undefined ? formConfig.artStyle : scriptData?.artStyle;
+  const artStyleId =
+    formConfig?.artStyleId !== undefined ? formConfig.artStyleId : scriptData?.artStyleId;
+  return {
+    artStyle: artStyle || undefined,
+    artStyleId: artStyleId || undefined,
+  };
 }
 
 /** Video prompt – matches useSceneMedia.handleGenerateVideo. */
@@ -80,7 +96,6 @@ export function buildAffiliateVideoPrompt(
   scriptData?: AffiliateScriptLike,
   isStitch?: boolean
 ): string {
-  const audioDesc = buildAffiliateAudioDesc(scriptData);
   const audioText = normalizeSceneAudioField(scene.audio);
   if (isStitch) {
     return scene.voiceDisable
@@ -104,9 +119,20 @@ export function buildAffiliateImageGenerateParams(options: {
   selectedProductImages?: string[];
   noText?: boolean;
   objectToPersonifyImage?: ElementFormImage;
+  /** Art style live từ form sidebar — ưu tiên hơn scriptData */
+  artStyle?: string;
+  artStyleId?: string;
 }): GenerateImageParams {
-  const { scene, scriptData, aspectRatio, selectedProductImages, noText, objectToPersonifyImage } =
-    options;
+  const {
+    scene,
+    scriptData,
+    aspectRatio,
+    selectedProductImages,
+    noText,
+    objectToPersonifyImage,
+    artStyle,
+    artStyleId,
+  } = options;
 
   const storyboardReference = scene.storyboardCropImage
     ? {
@@ -114,6 +140,8 @@ export function buildAffiliateImageGenerateParams(options: {
         mimeType: scene.storyboardCropImage.mimeType,
       }
     : undefined;
+
+  const resolvedArtStyle = resolveAffiliateArtStyle({ artStyle, artStyleId }, scriptData);
 
   return {
     sceneId: scene.id,
@@ -124,6 +152,8 @@ export function buildAffiliateImageGenerateParams(options: {
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
     noText: noText ?? scene.noText,
+    artStyle: resolvedArtStyle.artStyle,
+    artStyleId: resolvedArtStyle.artStyleId,
     ...buildAutoDownloadOptions(scene),
   };
 }
@@ -141,6 +171,9 @@ export async function buildAffiliateVideoGenerateParams(options: {
    * true / undefined ngoài storyboard → frame (khung ảnh).
    */
   requireImageBeforeVideo?: boolean;
+  /** Art style live từ form sidebar — ưu tiên hơn scriptData */
+  artStyle?: string;
+  artStyleId?: string;
 }): Promise<GenerateVideoParams> {
   const {
     scene,
@@ -150,6 +183,8 @@ export async function buildAffiliateVideoGenerateParams(options: {
     generatedImage,
     nextGeneratedImage,
     requireImageBeforeVideo,
+    artStyle,
+    artStyleId,
   } = options;
 
   let images: GenerateVideoParams["images"];
@@ -165,6 +200,8 @@ export async function buildAffiliateVideoGenerateParams(options: {
     images = [await generatedImageToApiBase64Input(generatedImage)];
   }
 
+  const resolvedArtStyle = resolveAffiliateArtStyle({ artStyle, artStyleId }, scriptData);
+
   return {
     sceneId: isStitch ? scene.id + "::stitch" : scene.id,
     prompt: buildAffiliateVideoPrompt(scene, scriptData, isStitch),
@@ -174,6 +211,8 @@ export async function buildAffiliateVideoGenerateParams(options: {
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
     generateAudio: scene.voiceDisable ? false : undefined,
+    artStyle: resolvedArtStyle.artStyle,
+    artStyleId: resolvedArtStyle.artStyleId,
     ...buildAutoDownloadOptions(scene, isStitch),
   };
 }

@@ -134,6 +134,10 @@ export interface GenerateImageParams {
   productImagePrompt?: string;
   /** Bật/tắt text (watermark/chữ) trong ảnh tạo ra */
   noText?: boolean;
+  /** ID phong cách hình ảnh — backend resolve prompt theo ID */
+  artStyleId?: string;
+  /** Value ô Phong cách hình ảnh (fallback khi không có ID / user sửa) */
+  artStyle?: string;
   /** Tự động tải ảnh sau khi gen xong */
   autoDownload?: boolean;
   sceneNumber?: number;
@@ -173,6 +177,10 @@ export interface GenerateVideoParams {
   voiceDisable?: boolean;
   /** Giọng Flow2 — chỉ gắn khi mode component + có ảnh */
   voice?: string;
+  /** ID phong cách hình ảnh — backend resolve prompt theo ID */
+  artStyleId?: string;
+  /** Value ô Phong cách hình ảnh (fallback khi không có ID / user sửa) */
+  artStyle?: string;
   /** Generate audio (tuỳ chọn, default true) */
   generateAudio?: boolean;
   /** Tự động tải video sau khi gen xong */
@@ -1420,6 +1428,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         autoDownload,
         sceneNumber,
         autoDownloadImageResolution,
+        artStyleId,
+        artStyle,
       } = params;
       const images: { imageBytes: string; mimeType: string }[] = [];
       if (referenceImage) {
@@ -1443,6 +1453,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             productImages: productImages?.length ? productImages : undefined,
             objectToPersonifyImages: personifyApiImages.length ? personifyApiImages : undefined,
             productImagePrompt: productImagePrompt || undefined,
+            artStyleId: artStyleId || undefined,
+            artStyle: artStyle || undefined,
             config: { numberOfImages: 1, aspectRatio, noText },
             _metadata: { sceneId },
           },
@@ -1523,6 +1535,8 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
         voiceDisable,
         voice,
         videoMode,
+        artStyleId,
+        artStyle,
         onProgress,
         onStatusMessage,
         onError,
@@ -1547,12 +1561,16 @@ export function useAffiliateVideoApi(): UseAffiliateVideoApiReturn {
             noText,
             voiceDisable,
             voice,
+            artStyleId: artStyleId || undefined,
+            artStyle: artStyle || undefined,
             config: {
               aspectRatio,
               generateAudio: resolvedGenerateAudio,
               noText,
               voiceDisable,
               voice,
+              artStyleId: artStyleId || undefined,
+              artStyle: artStyle || undefined,
               videoMode: videoMode ?? Flow2VideoModeEnum.FRAME,
             },
             _metadata: { sceneId },

@@ -1,6 +1,9 @@
+import { stripDataUrlFromBase64 } from "../../helpers/handleUploadGoogleLabImages";
 import { normalizeImageToDataUrl, type Flow2ImageInput } from "./image-generation";
 
 export type { Flow2ImageInput };
+
+export type Flow2AudioInput = string | { audioBytes: string; mimeType?: string };
 import {
   cancelFlow2Request,
   createFlow2Request,
@@ -20,6 +23,7 @@ export const DEFAULT_FLOW2_TEXT_MODEL = "gemini-3-flash-preview";
 export const DEFAULT_FLOW2_THINKING_LEVEL = "LOW";
 export const FLOW2_TEXT_THINKING_LEVELS = ["LOW", "MEDIUM", "HIGH"] as const;
 export const MAX_FLOW2_TEXT_IMAGES = 10;
+export const MAX_FLOW2_TEXT_AUDIOS = 10;
 
 export type Flow2ThinkingLevel = (typeof FLOW2_TEXT_THINKING_LEVELS)[number];
 
@@ -53,6 +57,7 @@ export type Flow2CreateTextRequestParams = {
   model?: string;
   thinkingLevel?: string;
   imageInputs?: Flow2ImageInput[];
+  audioInputs?: Flow2AudioInput[];
   /** Bật chế độ JSON output (json: true + response_mime_type: "application/json") */
   jsonMode?: boolean;
   /** Schema JSON để Flow2 enforce output structure */
@@ -198,6 +203,19 @@ export function sanitizeFlow2TextStatus(statusData: Flow2StatusResponse) {
   };
 }
 
+export async function normalizeAudioToDataUrl(input: Flow2AudioInput): Promise<string> {
+  if (typeof input === "string") {
+    const trimmed = input.trim();
+    if (!trimmed) throw new Error("Audio đầu vào rỗng");
+    if (trimmed.startsWith("data:")) return trimmed;
+    const stripped = stripDataUrlFromBase64(trimmed, "audio/mpeg");
+    return `data:${stripped.mimeType};base64,${stripped.imageBytes}`;
+  }
+
+  const stripped = stripDataUrlFromBase64(input.audioBytes, input.mimeType || "audio/mpeg");
+  return `data:${stripped.mimeType};base64,${stripped.imageBytes}`;
+}
+
 export async function createFlow2TextRequest(
   params: Flow2CreateTextRequestParams
 ): Promise<{ requestId: string; raw: Record<string, unknown> }> {
@@ -207,7 +225,9 @@ export async function createFlow2TextRequest(
   }
 
   const imageInputs = (params.imageInputs || []).slice(0, MAX_FLOW2_TEXT_IMAGES);
+  const audioInputs = (params.audioInputs || []).slice(0, MAX_FLOW2_TEXT_AUDIOS);
   const image_base64s = await Promise.all(imageInputs.map(normalizeImageToDataUrl));
+  const audio_base64s = await Promise.all(audioInputs.map(normalizeAudioToDataUrl));
   const systemInstruction = String(params.systemInstruction || "").trim();
   const model = String(params.model || DEFAULT_FLOW2_TEXT_MODEL).trim() || DEFAULT_FLOW2_TEXT_MODEL;
   const thinkingLevel = normalizeFlow2ThinkingLevel(params.thinkingLevel);
@@ -223,6 +243,7 @@ export async function createFlow2TextRequest(
         model,
         thinking_level: thinkingLevel,
         ...(image_base64s.length > 0 ? { image_base64s } : {}),
+        ...(audio_base64s.length > 0 ? { audio_base64s } : {}),
         ...(useJsonMode ? { json: true, response_mime_type: "application/json" } : {}),
         ...(params.jsonSchema ? { schema: params.jsonSchema } : {}),
       },
