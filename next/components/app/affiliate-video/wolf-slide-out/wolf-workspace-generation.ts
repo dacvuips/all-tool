@@ -8,7 +8,9 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useMediaGenerationJob } from "../../../../lib/hooks/useMediaGenerationJob";
+import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
+import { CustomerService } from "../../../../lib/repo/customer/customer.repo";
 import { Flow2VideoModeEnum, uid, DB_NAME, STORE_NAME } from "../constants";
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
 import { useConcurrencyLimits } from "../hook/useConcurrencyLimits";
@@ -37,7 +39,52 @@ export type WolfImageAspectRatio = "16:9" | "9:16";
 export type WolfVideoAspectRatio = "16:9" | "9:16";
 export type WolfMediaType = "image" | "video";
 export type WolfVideoMode = "frame" | "component";
-export type WolfMultiplier = "1x" | "x2" | "x3" | "x4" | "x5" | "x6" | "x8" | "x16";
+
+/** Preset chips trong UI — vẫn lưu dạng "1x" / "xN" */
+export const WOLF_MULTIPLIER_PRESETS = ["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"] as const;
+export type WolfPresetMultiplier = (typeof WOLF_MULTIPLIER_PRESETS)[number];
+/** Cho phép số tùy chỉnh ngoài preset (vd: "x7", "x10") */
+export type WolfMultiplier = WolfPresetMultiplier | string;
+
+export const WOLF_MIN_MULTIPLIER = 1;
+/** Trần tuyệt đối (an toàn) — hạn mức thực tế lấy theo gói còn lại */
+export const WOLF_MAX_MULTIPLIER = 99999;
+
+export type WolfPackageQuotaInput = {
+  mediaType: WolfMediaType;
+  imageLimit?: number | null;
+  imageCount?: number | null;
+  videoLimit?: number | null;
+  videoCount?: number | null;
+};
+
+/** Hạn mức còn lại theo gói — limit < 0 = không giới hạn; chưa có gói → trần tuyệt đối */
+export function getWolfPackageRemainingQuota(input: WolfPackageQuotaInput): {
+  remaining: number;
+  unlimited: boolean;
+} {
+  const isImage = input.mediaType === "image";
+  const limitRaw = isImage ? input.imageLimit : input.videoLimit;
+  const usedRaw = isImage ? input.imageCount : input.videoCount;
+
+  if (limitRaw === undefined || limitRaw === null) {
+    return { remaining: WOLF_MAX_MULTIPLIER, unlimited: true };
+  }
+
+  const limit = Number(limitRaw);
+  const used = Number(usedRaw ?? 0);
+  if (limit < 0) {
+    return { remaining: WOLF_MAX_MULTIPLIER, unlimited: true };
+  }
+  return { remaining: Math.max(0, limit - used), unlimited: false };
+}
+
+/** Trần số lượng gen lần này: min(còn lại, absoluteMax khi unlimited) */
+export function getWolfMultiplierCap(input: WolfPackageQuotaInput): number {
+  const { remaining, unlimited } = getWolfPackageRemainingQuota(input);
+  if (unlimited) return WOLF_MAX_MULTIPLIER;
+  return remaining;
+}
 
 export type WolfImageModelKey = "bananaPro" | "banana2";
 
@@ -95,10 +142,40 @@ export function wolfMediaAssetsToApiImages(
     }));
 }
 
-export function parseWolfMultiplier(multiplier: WolfMultiplier): number {
-  const value = multiplier.replace(/^x/i, "");
+export function clampWolfMultiplierCount(count: number, max = WOLF_MAX_MULTIPLIER): number {
+  if (!Number.isFinite(count)) return WOLF_MIN_MULTIPLIER;
+  const upper = Math.max(WOLF_MIN_MULTIPLIER, max);
+  return Math.min(upper, Math.max(WOLF_MIN_MULTIPLIER, Math.floor(count)));
+}
+
+export function formatWolfMultiplier(count: number, max = WOLF_MAX_MULTIPLIER): WolfMultiplier {
+  const n = clampWolfMultiplierCount(count, max);
+  return n === 1 ? "1x" : `x${n}`;
+}
+
+export function parseWolfMultiplier(
+  multiplier: string | null | undefined,
+  max = WOLF_MAX_MULTIPLIER
+): number {
+  if (!multiplier) return WOLF_MIN_MULTIPLIER;
+  const value = String(multiplier).replace(/^x/i, "");
   const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  return clampWolfMultiplierCount(
+    Number.isFinite(parsed) && parsed > 0 ? parsed : WOLF_MIN_MULTIPLIER,
+    max
+  );
+}
+
+export function normalizeWolfMultiplier(raw: unknown, max = WOLF_MAX_MULTIPLIER): WolfMultiplier {
+  if (typeof raw === "number") return formatWolfMultiplier(raw, max);
+  if (typeof raw === "string" && raw.trim()) {
+    return formatWolfMultiplier(parseWolfMultiplier(raw, max), max);
+  }
+  return formatWolfMultiplier(2, max);
+}
+
+export function isWolfMultiplierPreset(multiplier: string): multiplier is WolfPresetMultiplier {
+  return (WOLF_MULTIPLIER_PRESETS as readonly string[]).includes(multiplier);
 }
 
 /** Chia tổng số ảnh thành các lô ≤ maxPerRequest (mặc định 4) — mỗi lô là một job */
@@ -128,6 +205,26 @@ export function countWolfActiveGenerationSlots(
     slots.add(item.generationBatchId || item.jobId || item.id);
   }
   return slots.size;
+}
+
+/** Đếm từng item đang gen / chờ gen (status=generating) — dùng trừ hạn mức gói */
+export function countWolfGeneratingItems(
+  items: WolfProjectItem[],
+  mediaType: WolfMediaType
+): number {
+  let count = 0;
+  for (const item of items) {
+    if (item.status === "generating" && item.mediaType === mediaType) count += 1;
+  }
+  return count;
+}
+
+/** Hạn mức còn dùng được = còn lại gói − đang gen/chờ gen */
+export function getWolfEffectiveMultiplierCap(
+  packageRemaining: number,
+  generatingCount: number
+): number {
+  return Math.max(0, packageRemaining - Math.max(0, generatingCount));
 }
 
 /** Worker pool — số worker = min(concurrency, taskCount), mỗi worker lấy task kế tiếp */
@@ -359,6 +456,7 @@ async function generatedVideoToWolfAsset(
 export function useWolfWorkspaceGeneration() {
   const { t } = useTranslation();
   const toast = useToast();
+  const { customer, setCustomer } = useAuth();
   const { IMAGE_CONCURRENCY, VIDEO_CONCURRENCY } = useConcurrencyLimits();
   const assetDB = useIndexedDB<WolfMediaAsset>(STORE_NAME.wolfAssets, DB_NAME.wolf);
   const itemDB = useIndexedDB<WolfProjectItem>(STORE_NAME.wolfItems, DB_NAME.wolf);
@@ -541,12 +639,59 @@ export function useWolfWorkspaceGeneration() {
         }
       }
 
+      // Lấy customer mới nhất trước khi check hạn mức — tránh spam khi FE còn cache cũ
+      let pkg = customer?.googlePackage;
+      try {
+        const info = await CustomerService.customerGetInfo();
+        if (info?.customer) {
+          setCustomer?.(info.customer);
+          pkg = info.customer.googlePackage ?? pkg;
+        }
+      } catch {
+        // fallback dùng customer đang có trên FE
+      }
+
+      const allProjectItems = await itemDB.getAll();
+      const packageRemaining = getWolfMultiplierCap({
+        mediaType: input.mediaType,
+        imageLimit: pkg?.imageLimit,
+        imageCount: pkg?.imageCount,
+        videoLimit: pkg?.videoLimit,
+        videoCount: pkg?.videoCount,
+      });
+      const inFlightCount = countWolfGeneratingItems(allProjectItems, input.mediaType);
+      const multiplierCap = getWolfEffectiveMultiplierCap(packageRemaining, inFlightCount);
+      const requestedCount = parseWolfMultiplier(
+        input.mediaType === "image" ? input.image?.multiplier : input.video?.multiplier,
+        Math.max(multiplierCap, WOLF_MIN_MULTIPLIER)
+      );
+
+      if (multiplierCap < WOLF_MIN_MULTIPLIER) {
+        const message =
+          inFlightCount > 0
+            ? t("Hạn mức còn lại đang được dùng cho các tác vụ đang tạo. Vui lòng chờ hoàn thành.")
+            : input.mediaType === "image"
+              ? t("Hết hạn mức ảnh. Vui lòng nâng cấp gói hoặc chờ reset.")
+              : t("Hết hạn mức video. Vui lòng nâng cấp gói hoặc chờ reset.");
+        setError(message);
+        toast.error(message);
+        return undefined;
+      }
+
+      if (requestedCount > multiplierCap) {
+        const message = t("Số lượng vượt hạn mức còn lại (tối đa {{count}})", {
+          count: multiplierCap,
+        });
+        setError(message);
+        toast.error(message);
+        return undefined;
+      }
+
       setGenerating(true);
       setProgress(0);
       setStatusMessage("");
       setError(null);
 
-      const allProjectItems = await itemDB.getAll();
       if (input.mediaType === "image") {
         const activeImageSlots = countWolfActiveGenerationSlots(allProjectItems, "image");
         if (activeImageSlots >= IMAGE_CONCURRENCY) {
@@ -573,7 +718,7 @@ export function useWolfWorkspaceGeneration() {
 
       try {
         if (input.mediaType === "image" && input.image) {
-          const imageCount = parseWolfMultiplier(input.image.multiplier);
+          const imageCount = parseWolfMultiplier(input.image.multiplier, multiplierCap);
           const generationBatchId = uid();
           const imageGenerationConfig = buildWolfImageItemGenerationConfig(input.image);
           const pendingItems = await createWolfPendingItems(itemDB, {
@@ -692,7 +837,7 @@ export function useWolfWorkspaceGeneration() {
         }
 
         if (input.mediaType === "video" && input.video) {
-          const videoCount = parseWolfMultiplier(input.video.multiplier);
+          const videoCount = parseWolfMultiplier(input.video.multiplier, multiplierCap);
           const generationBatchId = uid();
           const videoGenerationConfig = buildWolfVideoItemGenerationConfig(input.video);
           const pendingItems = await createWolfPendingItems(itemDB, {
@@ -802,9 +947,16 @@ export function useWolfWorkspaceGeneration() {
         return undefined;
       } finally {
         setGenerating(false);
+        // Đồng bộ lại hạn mức sau khi gen (backend đã trừ lượt)
+        try {
+          const info = await CustomerService.customerGetInfo();
+          if (info?.customer) setCustomer?.(info.customer);
+        } catch {
+          // ignore
+        }
       }
     },
-    [assetDB, finalizeImageItem, finalizeVideoItem, imageJob, itemDB, sceneVideoDB, t, toast, videoJob, IMAGE_CONCURRENCY, VIDEO_CONCURRENCY]
+    [assetDB, customer, finalizeImageItem, finalizeVideoItem, imageJob, itemDB, sceneVideoDB, setCustomer, t, toast, videoJob, IMAGE_CONCURRENCY, VIDEO_CONCURRENCY]
   );
 
   const retryItem = useCallback(

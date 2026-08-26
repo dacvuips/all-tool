@@ -133,7 +133,7 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     sceneImageDB,
     sceneVideoDB,
   } = useWolfProjectItems(projectId);
-  const { stopItem, deleteItem } = useWolfItemActions();
+  const { stopItem, stopAllGeneratingItems, deleteItem } = useWolfItemActions();
   const { generating, progress, submit, retryItem } = useWolfWorkspaceGeneration();
 
   const getSceneImage = useCallback(
@@ -152,10 +152,25 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     [sceneVideos, sceneVideoDB]
   );
 
+  const handleItemUpdated = useCallback(
+    (item: WolfProjectItem) => {
+      setItemProgress((prev) => {
+        if (!(item.id in prev)) return prev;
+        const next = { ...prev };
+        delete next[item.id];
+        return next;
+      });
+      void patchItem(item);
+    },
+    [patchItem]
+  );
+
   const {
     downloading,
     downloadingVideo,
     deletingAll,
+    stoppingAll,
+    generatingCount,
     downloadLabel,
     downloadVideoLabel,
     availableImageCount,
@@ -171,6 +186,7 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     handleDownloadAllVideos1080p,
     handleDownloadAllVideos1080pZip,
     handleDeleteAllProjectMedia,
+    handleStopAllGenerating,
   } = useWolfProjectBatchActions({
     items,
     sceneImages,
@@ -179,6 +195,10 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
     getSceneVideo,
     deleteItem,
     removeItemFromState,
+    stopAllGeneratingItems,
+    onItemsStopped: (updated) => {
+      for (const entry of updated) handleItemUpdated(entry);
+    },
     isBusy: generating,
   });
 
@@ -210,19 +230,6 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
       return changed ? next : prev;
     });
   }, []);
-
-  const handleItemUpdated = useCallback(
-    (item: WolfProjectItem) => {
-      setItemProgress((prev) => {
-        if (!(item.id in prev)) return prev;
-        const next = { ...prev };
-        delete next[item.id];
-        return next;
-      });
-      void patchItem(item);
-    },
-    [patchItem]
-  );
 
   const handleSceneMediaUpdated = useCallback(
     (sceneId: string, media: Parameters<typeof patchSceneMedia>[1]) => {
@@ -311,6 +318,8 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
             downloading={downloading}
             downloadingVideo={downloadingVideo}
             deletingAll={deletingAll}
+            stoppingAll={stoppingAll}
+            generatingCount={generatingCount}
             downloadLabel={downloadLabel}
             downloadVideoLabel={downloadVideoLabel}
             availableImageCount={availableImageCount}
@@ -327,6 +336,7 @@ export function WolfWorkspace({ projectId, onBack }: WolfWorkspaceProps) {
             onDownloadAllVideosZip={() => void handleDownloadAllVideosZip()}
             onDownloadAllVideos1080pZip={() => void handleDownloadAllVideos1080pZip()}
             onDeleteAllProjectMedia={() => void handleDeleteAllProjectMedia()}
+            onStopAllGenerating={() => void handleStopAllGenerating()}
           />
         </div>
       )}

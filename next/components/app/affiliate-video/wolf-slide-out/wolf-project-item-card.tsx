@@ -226,7 +226,7 @@ export const WolfProjectItemCard = memo(function WolfProjectItemCard({
           }}
           onClick={() => setShowVideoModal(true)}
         />
-        <div className="flex absolute inset-0 justify-center items-center bg-black bg-opacity-20 rounded-sm pointer-events-none">
+        <div className="flex absolute inset-0 justify-center items-center bg-black bg-opacity-20 rounded-sm pointer-events-none opacity-100 transition-opacity group-hover:opacity-0">
           <div className="flex justify-center items-center w-10 h-10 bg-white bg-opacity-80 rounded-full">
             <BiPlayCircle className="w-12 h-12 text-white" />
           </div>

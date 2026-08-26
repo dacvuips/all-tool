@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { RiDeleteBinLine, RiLoader4Line } from "react-icons/ri";
+import { RiDeleteBinLine, RiLoader4Line, RiStopCircleLine } from "react-icons/ri";
 
 import { BatchMediaDownloadDropdown } from "../shared/batch-download-dropdown";
 
@@ -7,6 +7,8 @@ export function WolfProjectBatchToolbar({
   downloading,
   downloadingVideo,
   deletingAll,
+  stoppingAll,
+  generatingCount,
   downloadLabel,
   downloadVideoLabel,
   availableImageCount,
@@ -23,10 +25,13 @@ export function WolfProjectBatchToolbar({
   onDownloadAllVideos1080p,
   onDownloadAllVideos1080pZip,
   onDeleteAllProjectMedia,
+  onStopAllGenerating,
 }: {
   downloading: boolean;
   downloadingVideo: boolean;
   deletingAll: boolean;
+  stoppingAll: boolean;
+  generatingCount: number;
   downloadLabel: string;
   downloadVideoLabel: string;
   availableImageCount: number;
@@ -43,13 +48,28 @@ export function WolfProjectBatchToolbar({
   onDownloadAllVideos1080p: () => void;
   onDownloadAllVideos1080pZip: () => void;
   onDeleteAllProjectMedia: () => void;
+  onStopAllGenerating: () => void;
 }) {
   const { t } = useTranslation();
-  const isBusy = disabled || downloading || downloadingVideo || deletingAll;
+  const isBusy = disabled || downloading || downloadingVideo || deletingAll || stoppingAll;
   const hasMedia = availableImageCount > 0 || availableVideoCount > 0;
+  const canStop = generatingCount > 0;
 
   return (
     <div className="flex flex-wrap gap-2 items-center">
+      {canStop && (
+        <button
+          type="button"
+          disabled={stoppingAll}
+          onClick={onStopAllGenerating}
+          className="flex items-center whitespace-nowrap gap-1.5 px-3 py-1.5 rounded-lg text-white text-xs font-semibold cursor-pointer border-0 transition-colors disabled:opacity-60 disabled:cursor-not-allowed bg-danger hover:bg-danger-dark"
+        >
+          {stoppingAll ? <RiLoader4Line className="animate-spin" /> : <RiStopCircleLine />}
+          {stoppingAll
+            ? t("Đang dừng...")
+            : t("Dừng tất cả ({{count}})", { count: generatingCount })}
+        </button>
+      )}
       <BatchMediaDownloadDropdown
         id="wolf-batch-download-media"
         downloading={downloading}

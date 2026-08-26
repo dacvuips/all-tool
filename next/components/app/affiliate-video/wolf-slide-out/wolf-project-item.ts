@@ -174,6 +174,41 @@ export function useWolfItemActions() {
     [itemDB, t]
   );
 
+  /** Dừng mọi item đang gen / chờ gen trong danh sách (hàng loạt) */
+  const stopAllGeneratingItems = useCallback(
+    async (items: WolfProjectItem[]): Promise<WolfProjectItem[]> => {
+      const generatingItems = items.filter((item) => item.status === "generating");
+      if (generatingItems.length === 0) return [];
+
+      const cancelledMessage = t("Đã dừng");
+      const updated: WolfProjectItem[] = [];
+      const cancelledJobIds = new Set<string>();
+
+      for (const item of generatingItems) {
+        if (item.jobId) {
+          if (cancelledJobIds.has(item.jobId)) continue;
+          cancelledJobIds.add(item.jobId);
+          const batchUpdated = await stopWolfProjectItemsByJob(item.jobId, itemDB, cancelledMessage);
+          updated.push(...batchUpdated);
+          continue;
+        }
+
+        const latest = (await itemDB.get(item.id)) ?? item;
+        if (latest.status !== "generating") continue;
+        const cancelled: WolfProjectItem = {
+          ...latest,
+          status: "cancelled",
+          errorMessage: cancelledMessage,
+        };
+        await itemDB.set(cancelled.id, cancelled);
+        updated.push(cancelled);
+      }
+
+      return updated;
+    },
+    [itemDB, t]
+  );
+
   const deleteItem = useCallback(
     async (item: WolfProjectItem): Promise<void> => {
       if (item.status === "generating" && item.jobId) {
@@ -185,7 +220,7 @@ export function useWolfItemActions() {
     [assetDB, itemDB, sceneImageDB, sceneVideoDB, t]
   );
 
-  return { stopItem, deleteItem };
+  return { stopItem, stopAllGeneratingItems, deleteItem };
 }
 
 export function useWolfProjectItems(projectId?: string | null) {

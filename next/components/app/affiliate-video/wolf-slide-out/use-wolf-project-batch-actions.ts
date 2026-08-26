@@ -30,6 +30,8 @@ export function useWolfProjectBatchActions(options: {
   getSceneVideo: (sceneId: string) => Promise<GeneratedVideoData | undefined>;
   deleteItem: (item: WolfProjectItem) => Promise<void>;
   removeItemFromState: (item: WolfProjectItem) => void;
+  stopAllGeneratingItems: (items: WolfProjectItem[]) => Promise<WolfProjectItem[]>;
+  onItemsStopped?: (items: WolfProjectItem[]) => void;
   isBusy?: boolean;
 }) {
   const {
@@ -40,6 +42,8 @@ export function useWolfProjectBatchActions(options: {
     getSceneVideo,
     deleteItem,
     removeItemFromState,
+    stopAllGeneratingItems,
+    onItemsStopped,
     isBusy = false,
   } = options;
   const { t } = useTranslation();
@@ -48,8 +52,14 @@ export function useWolfProjectBatchActions(options: {
   const [downloading, setDownloading] = useState(false);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
   const [deletingAll, setDeletingAll] = useState(false);
+  const [stoppingAll, setStoppingAll] = useState(false);
   const [downloadLabel, setDownloadLabel] = useState("");
   const [downloadVideoLabel, setDownloadVideoLabel] = useState("");
+
+  const generatingCount = useMemo(
+    () => items.filter((item) => item.status === "generating").length,
+    [items]
+  );
 
   const wolfScenes = useMemo((): WolfBatchScene[] => {
     const readyItems = items.filter((item) => item.status === "ready");
@@ -333,10 +343,41 @@ export function useWolfProjectBatchActions(options: {
     }
   }, [deleteItem, deletingAll, isBusy, items, removeItemFromState, t, toast]);
 
+  const handleStopAllGenerating = useCallback(async () => {
+    if (stoppingAll || generatingCount === 0) return;
+    if (!confirm(t("Dừng tất cả các tác vụ đang tạo?"))) return;
+
+    setStoppingAll(true);
+    try {
+      const updated = await stopAllGeneratingItems(items);
+      onItemsStopped?.(updated);
+      if (updated.length === 0) {
+        toast.info(t("Không còn tác vụ nào đang tạo"));
+      } else {
+        toast.success(t("Đã dừng {{count}} tác vụ", { count: updated.length }));
+      }
+    } catch (err) {
+      console.error("[wolf handleStopAllGenerating] Error:", err);
+      toast.error(t("Lỗi khi dừng hàng loạt"));
+    } finally {
+      setStoppingAll(false);
+    }
+  }, [
+    generatingCount,
+    items,
+    onItemsStopped,
+    stopAllGeneratingItems,
+    stoppingAll,
+    t,
+    toast,
+  ]);
+
   return {
     downloading,
     downloadingVideo,
     deletingAll,
+    stoppingAll,
+    generatingCount,
     downloadLabel,
     downloadVideoLabel,
     availableImageCount,
@@ -352,5 +393,6 @@ export function useWolfProjectBatchActions(options: {
     handleDownloadAllVideos1080p,
     handleDownloadAllVideos1080pZip,
     handleDeleteAllProjectMedia,
+    handleStopAllGenerating,
   };
 }

@@ -1,4 +1,8 @@
-import type { WolfImageModelKey, WolfMultiplier } from "./wolf-workspace-generation";
+import {
+  normalizeWolfMultiplier,
+  type WolfImageModelKey,
+  type WolfMultiplier,
+} from "./wolf-workspace-generation";
 
 export type WolfComposerMediaType = "image" | "video";
 export type WolfComposerVideoMode = "frame" | "component";
@@ -33,7 +37,6 @@ export const DEFAULT_WOLF_COMPOSER_SETTINGS: Omit<WolfComposerSettings, "project
 const IMAGE_ASPECT_RATIOS: WolfComposerImageAspectRatio[] = ["16:9", "9:16"];
 const VIDEO_ASPECT_RATIOS: WolfComposerVideoAspectRatio[] = ["16:9", "9:16"];
 const DURATIONS: WolfComposerDuration[] = ["4s", "6s", "8s", "10s"];
-const MULTIPLIERS: WolfMultiplier[] = ["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"];
 const IMAGE_MODEL_KEYS: WolfImageModelKey[] = ["bananaPro", "banana2"];
 
 export function getWolfComposerSettingsKey(projectId?: string | null): string {
@@ -70,9 +73,9 @@ export function normalizeWolfComposerSettings(
   const imageModelKey = IMAGE_MODEL_KEYS.includes(raw.imageModelKey as WolfImageModelKey)
     ? (raw.imageModelKey as WolfImageModelKey)
     : DEFAULT_WOLF_COMPOSER_SETTINGS.imageModelKey;
-  const multiplier = MULTIPLIERS.includes(raw.multiplier as WolfMultiplier)
-    ? (raw.multiplier as WolfMultiplier)
-    : DEFAULT_WOLF_COMPOSER_SETTINGS.multiplier;
+  const multiplier = normalizeWolfMultiplier(
+    raw.multiplier ?? DEFAULT_WOLF_COMPOSER_SETTINGS.multiplier
+  );
 
   const maxVideoModelIndex = Math.max(videoModelCount - 1, 0);
   const videoModelIndex =

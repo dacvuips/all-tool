@@ -16,7 +16,6 @@ import {
   RiAspectRatioLine,
   RiCloseLine,
   RiImageLine,
-  RiLoader4Line,
   RiPlayCircleLine,
   RiTShirtLine,
 } from "react-icons/ri";
@@ -37,10 +36,18 @@ import {
   WolfComposerSettings,
 } from "./wolf-workspace-composer-settings";
 import {
+  countWolfGeneratingItems,
+  formatWolfMultiplier,
+  getWolfEffectiveMultiplierCap,
+  getWolfPackageRemainingQuota,
+  isWolfMultiplierPreset,
+  parseWolfMultiplier,
   useWolfWorkspaceGeneration,
   WOLF_IMAGE_MODELS,
   WOLF_MAX_COMPONENT_REFERENCES,
   WOLF_MAX_IMAGE_REFERENCES,
+  WOLF_MIN_MULTIPLIER,
+  WOLF_MULTIPLIER_PRESETS,
   WolfGenerationSubmitInput,
   WolfImageModelKey,
   WolfMultiplier,
@@ -107,19 +114,22 @@ function ChipButton({
   children,
   onClick,
   className = "",
+  disabled,
 }: {
   active?: boolean;
   children: ReactNode;
   onClick: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       className={`rounded-lg px-1.5 py-1 text-[11px] font-medium transition-all duration-200 ${className} ${
         active ? BTN_ACTIVE : BTN_INACTIVE
-      }`}
+      } ${disabled ? "cursor-not-allowed opacity-40" : ""}`}
     >
       {children}
     </button>
@@ -270,8 +280,70 @@ export function WolfWorkspaceComposer({
   const [imageModelKey, setImageModelKey] = useState<WolfImageModelKey>("bananaPro");
   const [videoModelIndex, setVideoModelIndex] = useState(0);
   const [multiplier, setMultiplier] = useState<WolfMultiplier>("x2");
+  const [multiplierDraft, setMultiplierDraft] = useState("2");
   const [showModelMenu, setShowModelMenu] = useState(false);
   const [isSettingsHydrated, setIsSettingsHydrated] = useState(false);
+  const [inFlightGeneratingCount, setInFlightGeneratingCount] = useState(0);
+
+  const itemDB = useIndexedDB<WolfProjectItem>(STORE_NAME.wolfItems, DB_NAME.wolf);
+
+  const packageRemaining = useMemo(
+    () =>
+      getWolfPackageRemainingQuota({
+        mediaType,
+        imageLimit: customer?.googlePackage?.imageLimit,
+        imageCount: customer?.googlePackage?.imageCount,
+        videoLimit: customer?.googlePackage?.videoLimit,
+        videoCount: customer?.googlePackage?.videoCount,
+      }).remaining,
+    [
+      customer?.googlePackage?.imageCount,
+      customer?.googlePackage?.imageLimit,
+      customer?.googlePackage?.videoCount,
+      customer?.googlePackage?.videoLimit,
+      mediaType,
+    ]
+  );
+  const multiplierCap = getWolfEffectiveMultiplierCap(
+    packageRemaining,
+    inFlightGeneratingCount
+  );
+  const multiplierInputMax = Math.max(WOLF_MIN_MULTIPLIER, multiplierCap);
+
+  const refreshInFlightGeneratingCount = useCallback(async () => {
+    const allItems = await itemDB.getAll();
+    setInFlightGeneratingCount(countWolfGeneratingItems(allItems, mediaType));
+  }, [itemDB, mediaType]);
+
+  useEffect(() => {
+    void refreshInFlightGeneratingCount();
+  }, [refreshInFlightGeneratingCount, generating, customer?.googlePackage?.imageCount, customer?.googlePackage?.videoCount]);
+
+  // Trong lúc đang gen: poll lại vì item được ghi DB sau khi `generating` đã = true
+  useEffect(() => {
+    if (!generating) return;
+    void refreshInFlightGeneratingCount();
+    const timer = window.setInterval(() => {
+      void refreshInFlightGeneratingCount();
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [generating, refreshInFlightGeneratingCount]);
+
+  const applyMultiplier = useCallback(
+    (next: WolfMultiplier, max = multiplierInputMax) => {
+      const normalized = formatWolfMultiplier(parseWolfMultiplier(next, max), max);
+      setMultiplier(normalized);
+      setMultiplierDraft(String(parseWolfMultiplier(normalized, max)));
+    },
+    [multiplierInputMax]
+  );
+
+  useEffect(() => {
+    if (multiplierCap < WOLF_MIN_MULTIPLIER) return;
+    if (parseWolfMultiplier(multiplier) > multiplierCap) {
+      applyMultiplier(formatWolfMultiplier(multiplierCap, multiplierCap), multiplierCap);
+    }
+  }, [applyMultiplier, multiplier, multiplierCap]);
 
   const settingsDB = useIndexedDB<WolfComposerSettings>(
     STORE_NAME.wolfComposerSettings,
@@ -288,6 +360,7 @@ export function WolfWorkspaceComposer({
     setImageModelKey(settings.imageModelKey);
     setVideoModelIndex(settings.videoModelIndex);
     setMultiplier(settings.multiplier);
+    setMultiplierDraft(String(parseWolfMultiplier(settings.multiplier)));
   }, []);
 
   useEffect(() => {
@@ -413,7 +486,7 @@ export function WolfWorkspaceComposer({
   };
 
   const handleSubmit = useCallback(() => {
-    if (generating || !prompt.trim()) return;
+    if (!prompt.trim()) return;
 
     if (!customer) {
       void alert.warn(
@@ -434,9 +507,16 @@ export function WolfWorkspaceComposer({
     void submit({
       mediaType,
       projectId,
-      onItemsCreated: onGenerationItemsCreated,
+      onItemsCreated: (items) => {
+        onGenerationItemsCreated?.(items);
+        // Item vừa tạo (status=generating) — cập nhật ngay trần số lượng
+        void refreshInFlightGeneratingCount();
+      },
       onItemProgress: onGenerationItemProgress,
-      onItemUpdated: onGenerationItemUpdated,
+      onItemUpdated: (item) => {
+        onGenerationItemUpdated?.(item);
+        void refreshInFlightGeneratingCount();
+      },
       onSceneMediaUpdated: onGenerationSceneMediaUpdated,
       image:
         mediaType === "image"
@@ -466,20 +546,21 @@ export function WolfWorkspaceComposer({
     attachedAssets,
     customer,
     endFrameAsset,
-    generating,
     imageAspectRatio,
     imageModelKey,
     mediaType,
     multiplier,
     onGenerationItemProgress,
-    onGenerationItemsCreated,
     onGenerationItemUpdated,
+    onGenerationItemsCreated,
     onGenerationSceneMediaUpdated,
     projectId,
     prompt,
+    refreshInFlightGeneratingCount,
     setOpenCustomerLoginDialog,
     startFrameAsset,
     submit,
+    t,
     videoAspectRatio,
     videoMode,
   ]);
@@ -567,7 +648,6 @@ export function WolfWorkspaceComposer({
           placeholder={t("Bạn muốn tạo gì?")}
           className="w-full text-sm leading-relaxed bg-transparent outline-none resize-none text-slate-700 placeholder:text-slate-400"
         />
-
         <div
           ref={settingsRef}
           className="flex gap-3 justify-between items-center pt-3 mt-3 border-t border-slate-100"
@@ -616,15 +696,11 @@ export function WolfWorkspaceComposer({
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={generating || !prompt.trim()}
+              disabled={!prompt.trim()}
               className="flex flex-shrink-0 justify-center items-center w-9 h-9 text-white bg-blue-600 rounded-full border border-blue-500 shadow-sm transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               aria-label={generating ? t("Đang tạo...") : t("Tạo")}
             >
-              {generating ? (
-                <RiLoader4Line className="text-lg animate-spin" />
-              ) : (
-                <RiArrowRightLine className="text-lg" />
-              )}
+              <RiArrowRightLine className="text-lg" />
             </button>
           </div>
         </div>
@@ -734,19 +810,75 @@ export function WolfWorkspaceComposer({
             </div>
 
             {(mediaType === "image" || mediaType === "video") && (
-              <div className="grid grid-cols-4 gap-1">
-                {(["1x", "x2", "x3", "x4", "x5", "x6", "x8", "x16"] as WolfMultiplier[]).map(
-                  (value) => (
-                    <ChipButton
-                      key={value}
-                      active={multiplier === value}
-                      onClick={() => setMultiplier(value)}
-                      className="flex-1"
-                    >
-                      {value}
-                    </ChipButton>
-                  )
-                )}
+              <div className="space-y-1">
+                <div className="grid grid-cols-4 gap-1">
+                  {WOLF_MULTIPLIER_PRESETS.map((value) => {
+                    const presetCount = parseWolfMultiplier(value);
+                    const overCap =
+                      multiplierCap < WOLF_MIN_MULTIPLIER || presetCount > multiplierCap;
+                    return (
+                      <ChipButton
+                        key={value}
+                        active={multiplier === value}
+                        disabled={overCap}
+                        onClick={() => applyMultiplier(value)}
+                        className="flex-1"
+                      >
+                        {value}
+                      </ChipButton>
+                    );
+                  })}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label
+                    htmlFor="wolf-multiplier-input"
+                    className="flex-shrink-0 text-[11px] font-medium text-slate-500"
+                  >
+                    {t("Số lượng")}
+                  </label>
+                  <input
+                    id="wolf-multiplier-input"
+                    type="number"
+                    min={WOLF_MIN_MULTIPLIER}
+                    max={multiplierInputMax}
+                    inputMode="numeric"
+                    disabled={multiplierCap < WOLF_MIN_MULTIPLIER}
+                    value={multiplierDraft}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      if (raw !== "" && !/^\d+$/.test(raw)) return;
+                      if (raw === "") {
+                        setMultiplierDraft(raw);
+                        return;
+                      }
+                      const n = Number.parseInt(raw, 10);
+                      if (!Number.isFinite(n)) return;
+                      // Vượt hạn mức → tự về max
+                      applyMultiplier(
+                        formatWolfMultiplier(n, multiplierInputMax),
+                        multiplierInputMax
+                      );
+                    }}
+                    onBlur={() => {
+                      if (multiplierDraft.trim() === "") {
+                        setMultiplierDraft(
+                          String(parseWolfMultiplier(multiplier, multiplierInputMax))
+                        );
+                        return;
+                      }
+                      applyMultiplier(
+                        formatWolfMultiplier(
+                          Number.parseInt(multiplierDraft, 10),
+                          multiplierInputMax
+                        )
+                      );
+                    }}
+                    className={`w-full rounded-lg px-2 py-1 text-center text-[11px] font-medium outline-none transition-all duration-200 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isWolfMultiplierPreset(multiplier) ? BTN_INACTIVE : BTN_ACTIVE
+                    }`}
+                    aria-label={t("Nhập số lượng")}
+                  />
+                </div>
               </div>
             )}
 
