@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import {
@@ -11,13 +11,16 @@ import {
 import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../lib/providers/global-provider";
-import { Button, Field, Form, Select, Textarea } from "../../../shared/utilities/form";
+import { Button, Field, Form, Select, Switch, Textarea } from "../../../shared/utilities/form";
 import { ASPECT_RATIOS, CACHE_KEY, DB_NAME, STORE_NAME } from "../constants";
 import { ElementAudioUpload, ElementImagesUpload } from "../elements/sibar/element-images-upload";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { AffiliateVideoSidebarLayout } from "../shared/affiliate-video-sidebar-layout";
 import { ArtStylePickerDialog } from "../shared/art-style-picker-dialog";
-import { AffiliateVideoProvider, useAffiliateVideoContext } from "../storyboard/providers/affiliate-video-provider";
+import {
+  AffiliateVideoProvider,
+  useAffiliateVideoContext,
+} from "../storyboard/providers/affiliate-video-provider";
 import {
   AUDIO_IMAGE_RHYTHM_OPTIONS,
   type AudioImageToVideoFormState,
@@ -45,6 +48,8 @@ const DEFAULT_FORM: AudioImageToVideoFormState = {
   artStyle: "",
   artStyleId: "",
   rhythm: AUDIO_IMAGE_RHYTHM_OPTIONS[3].value,
+  showDrawingHand: true,
+  useAiReferenceImage: true,
   textContent: "",
   imageRefs: [],
   audioRefs: [],
@@ -181,6 +186,35 @@ function AudioImageToVideoSidebar({
             </Field>
           </div>
 
+          <div id="drawing-hand-section">
+            <Field
+              noError
+              name="showDrawingHand"
+              label={t("Bàn tay đang vẽ")}
+              description={t("Có bàn tay cầm bút đang vẽ")
+              }
+            >
+              <Switch
+                value={form.showDrawingHand}
+                onChange={(value) => onChange({ showDrawingHand: !!value })}
+              />
+            </Field>
+          </div>
+
+          <div id="ai-reference-image-section">
+            <Field
+              noError
+              name="useAiReferenceImage"
+              label={t("Lấy ảnh tham chiếu từ AI")}
+              description={t("Bật để bắt buộc lấy ảnh từ tab gen 'Ảnh'")}
+            >
+              <Switch
+                value={form.useAiReferenceImage}
+                onChange={(value) => onChange({ useAiReferenceImage: !!value })}
+              />
+            </Field>
+          </div>
+
           {sourceTab === "image" && (
             <div id="image-upload-section">
               <ElementImagesUpload
@@ -221,7 +255,7 @@ function AudioImageToVideoSidebar({
       <div className="border-t border-gray-100 bg-white px-4 py-3">
         <button
           type="button"
-          disabled={isRunning||true}
+          disabled={isRunning}
           onClick={onCreate}
           className="w-full rounded-xl border-0 bg-primary px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
@@ -249,22 +283,82 @@ export function AudioImageToVideoPage() {
 function AudioImageToVideoBody() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [form, setForm] = useState<AudioImageToVideoFormState>(DEFAULT_FORM);
+  const [formReady, setFormReady] = useState(false);
   const { customer } = useAuth();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
   const { setScriptData, patchConfig } = useAffiliateVideoContext();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = await scriptDB.get(CACHE_KEY.audioImageForm);
+        if (!cancelled && cached && typeof cached === "object") {
+          setForm((prev) => ({
+            ...prev,
+            ...cached,
+            showDrawingHand: cached.showDrawingHand ?? true,
+            useAiReferenceImage: cached.useAiReferenceImage ?? true,
+          }));
+          if (
+            cached.artStyle ||
+            cached.artStyleId ||
+            cached.aspectRatio ||
+            cached.useAiReferenceImage !== undefined
+          ) {
+            patchConfig?.({
+              ...(cached.artStyle !== undefined ? { artStyle: cached.artStyle } : {}),
+              ...(cached.artStyleId !== undefined ? { artStyleId: cached.artStyleId } : {}),
+              ...(cached.aspectRatio !== undefined ? { aspectRatio: cached.aspectRatio } : {}),
+              requireImageBeforeVideo: cached.useAiReferenceImage ?? true,
+            });
+          }
+        } else if (!cancelled) {
+          patchConfig?.({ requireImageBeforeVideo: true });
+        }
+      } catch {
+        if (!cancelled) patchConfig?.({ requireImageBeforeVideo: true });
+      } finally {
+        if (!cancelled) setFormReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [scriptDB, patchConfig]);
+
+  useEffect(() => {
+    if (!formReady) return;
+    scriptDB.set(CACHE_KEY.audioImageForm, form).catch(() => {});
+  }, [form, formReady, scriptDB]);
+
+  useEffect(() => {
+    if (!formReady) return;
+    patchConfig?.({ requireImageBeforeVideo: form.useAiReferenceImage });
+  }, [form.useAiReferenceImage, formReady, patchConfig]);
+
   const pipeline = useAudioImagePipeline({
+    useAiReferenceImage: form.useAiReferenceImage,
     getForm: () => form,
+    onTranscribed: (text) => {
+      setForm((prev) => ({ ...prev, textContent: text }));
+    },
     onAnalyzed: (script) => {
       setScriptData?.(script);
       scriptDB.set(CACHE_KEY.lastAudioImageScript, script).catch(() => {});
+      patchConfig?.({
+        artStyle: script.artStyle || "",
+        artStyleId: script.artStyleId || form.artStyleId || "",
+      });
+      if (!form.artStyle?.trim() && script.artStyle) {
+        setForm((prev) => ({ ...prev, artStyle: script.artStyle || prev.artStyle }));
+      }
     },
   });
 
   const handleFormChange = (patch: Partial<AudioImageToVideoFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
-    // Art style lấy live mỗi lần gen — sync ngay vào form config, không chờ "Tạo Video"
     if (patch.artStyle !== undefined || patch.artStyleId !== undefined) {
       patchConfig?.({
         ...(patch.artStyle !== undefined ? { artStyle: patch.artStyle } : {}),
@@ -273,6 +367,9 @@ function AudioImageToVideoBody() {
     }
     if (patch.aspectRatio !== undefined) {
       patchConfig?.({ aspectRatio: patch.aspectRatio });
+    }
+    if (patch.useAiReferenceImage !== undefined) {
+      patchConfig?.({ requireImageBeforeVideo: patch.useAiReferenceImage });
     }
   };
 

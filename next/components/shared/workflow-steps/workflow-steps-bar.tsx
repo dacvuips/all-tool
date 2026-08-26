@@ -33,6 +33,7 @@ export function WorkflowStepsBar({
   autoAdvance,
   onAutoAdvanceChange,
   onContinue,
+  onRerunFrom,
 }: {
   title?: string;
   steps: WorkflowStep[];
@@ -42,6 +43,8 @@ export function WorkflowStepsBar({
   autoAdvance: boolean;
   onAutoAdvanceChange: (value: boolean) => void;
   onContinue?: () => void;
+  /** Click step đã xong / lỗi / step kế tiếp để chạy lại từ đó */
+  onRerunFrom?: (stepId: string) => void;
 }) {
   const { t } = useTranslation();
   const current = steps.find((step) => step.status === "running");
@@ -52,6 +55,18 @@ export function WorkflowStepsBar({
       ? t("Hoàn tất")
       : "";
 
+  const canClickStep = (index: number) => {
+    if (!onRerunFrom || isRunning) return false;
+    const step = steps[index];
+    if (!step) return false;
+    if (step.status === "done" || step.status === "error") return true;
+    // Step kế tiếp (idle) khi mọi step trước đã done
+    if (step.status === "idle") {
+      return steps.slice(0, index).every((s) => s.status === "done");
+    }
+    return false;
+  };
+
   return (
     <div className="flex flex-shrink-0 items-center gap-3 border-b border-gray-100 bg-white px-3 py-2">
       {title ? (
@@ -61,9 +76,20 @@ export function WorkflowStepsBar({
       <div className="flex min-w-0 flex-1 items-center">
         {steps.map((step, index) => {
           const isLast = index === steps.length - 1;
+          const clickable = canClickStep(index);
           return (
             <div key={step.id} className={`flex items-center ${isLast ? "" : "flex-1"}`}>
-              <div className="flex min-w-0 flex-col items-center">
+              <button
+                type="button"
+                disabled={!clickable}
+                title={clickable ? t("Chạy lại từ bước này") : undefined}
+                onClick={() => {
+                  if (clickable) onRerunFrom?.(step.id);
+                }}
+                className={`flex min-w-0 flex-col items-center border-0 bg-transparent p-0 ${
+                  clickable ? "cursor-pointer hover:opacity-80" : "cursor-default"
+                }`}
+              >
                 <div
                   className={`flex h-6 w-6 items-center justify-center rounded-full border ${statusClass(
                     step.status
@@ -78,7 +104,7 @@ export function WorkflowStepsBar({
                 >
                   {t(step.label)}
                 </span>
-              </div>
+              </button>
               {!isLast && (
                 <div className={`mx-1.5 mb-3 h-0.5 flex-1 rounded ${lineClass(step.status)}`} />
               )}

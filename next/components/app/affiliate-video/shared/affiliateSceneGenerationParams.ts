@@ -8,6 +8,43 @@ import { buildAutoDownloadOptions } from "./autoDownloadUtils";
 import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
 import { normalizeSceneAudioField } from "./sceneAudioUtils";
 
+const NO_DRAWING_HAND_IMAGE_NOTE =
+  "IMPORTANT: still image only — do NOT show any human hand, fingers, arm, pen, marker, pencil, or drawing utensil.";
+
+function stripDrawingHandPhrases(text: string): string {
+  if (!text?.trim()) return text || "";
+  return text
+    .replace(/\b(realistic|stylized|cartoon|2d|human)?\s*(right|left)?\s*hand[s]?\b[^.\[;\n]{0,120}/gi, " ")
+    .replace(/\b(holding|gripping|grasping)\s+(a\s+)?(grey|gray|white|black)?\s*(dry-?erase\s+)?(marker|pen|pencil|brush)\b[^.\[;\n]{0,80}/gi, " ")
+    .replace(/\b(as if|currently|progressively)\s+(drawing|writing|sketching)[^.\[;\n]{0,80}/gi, " ")
+    .replace(/\bdrawing[- ]in[- ]progress\b/gi, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function shouldForceNoDrawingHand(options: {
+  prompt?: string;
+  artStyle?: string;
+}): boolean {
+  const blob = `${options.prompt || ""} ${options.artStyle || ""}`.toLowerCase();
+  return (
+    blob.includes("whiteboard") ||
+    blob.includes("2d flat") ||
+    blob.includes("stil image") ||
+    blob.includes("still image") ||
+    blob.includes("no human hand") ||
+    blob.includes("style lock") ||
+    blob.includes("explainer")
+  );
+}
+
+function applyNoDrawingHandToImagePrompt(prompt: string, artStyle?: string): string {
+  if (!shouldForceNoDrawingHand({ prompt, artStyle })) return prompt || "";
+  const cleaned = stripDrawingHandPhrases(prompt || "");
+  if (cleaned.toLowerCase().includes("do not show any human hand")) return cleaned;
+  return `${cleaned} ${NO_DRAWING_HAND_IMAGE_NOTE}`.trim();
+}
+
 /** Chuyển ảnh storyboard crop → shape dùng cho gen video */
 export function elementFormImageToGeneratedImage(
   img?: ElementFormImage | null
@@ -142,17 +179,24 @@ export function buildAffiliateImageGenerateParams(options: {
     : undefined;
 
   const resolvedArtStyle = resolveAffiliateArtStyle({ artStyle, artStyleId }, scriptData);
+  const rawPrompt = scene.imageGenPrompt || "";
+  const safeArtStyle = shouldForceNoDrawingHand({
+    prompt: rawPrompt,
+    artStyle: resolvedArtStyle.artStyle,
+  })
+    ? stripDrawingHandPhrases(resolvedArtStyle.artStyle || "")
+    : resolvedArtStyle.artStyle;
 
   return {
     sceneId: scene.id,
-    prompt: scene.imageGenPrompt || "",
+    prompt: applyNoDrawingHandToImagePrompt(rawPrompt, resolvedArtStyle.artStyle),
     aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
     referenceImage: storyboardReference,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
     noText: noText ?? scene.noText,
-    artStyle: resolvedArtStyle.artStyle,
+    artStyle: safeArtStyle || undefined,
     artStyleId: resolvedArtStyle.artStyleId,
     ...buildAutoDownloadOptions(scene),
   };

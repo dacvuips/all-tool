@@ -12,6 +12,10 @@ export type WorkflowStep<TId extends string = string> = WorkflowStepDef<TId> & {
   status: WorkflowStepStatus;
 };
 
+function statusesStorageKey(storageKey: string | undefined) {
+  return storageKey ? `${storageKey}:statuses` : undefined;
+}
+
 function readStoredBoolean(key: string | undefined, fallback: boolean) {
   if (!key || typeof window === "undefined") return fallback;
   try {
@@ -33,8 +37,57 @@ function writeStoredBoolean(key: string | undefined, value: boolean) {
   }
 }
 
+function readStoredStatuses<TId extends string>(
+  key: string | undefined,
+  defs: WorkflowStepDef<TId>[]
+): WorkflowStepStatus[] | null {
+  if (!key || typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    if (!parsed || typeof parsed !== "object") return null;
+    return defs.map((def) => {
+      const status = parsed[def.id];
+      if (status === "done" || status === "error" || status === "idle") return status;
+      // "running" lúc reload = bị gián đoạn → idle để làm lại
+      return "idle";
+    });
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredStatuses<TId extends string>(
+  key: string | undefined,
+  steps: Array<{ id: TId; status: WorkflowStepStatus }>
+) {
+  if (!key || typeof window === "undefined") return;
+  try {
+    const payload: Record<string, WorkflowStepStatus> = {};
+    for (const step of steps) {
+      payload[step.id] = step.status === "running" ? "idle" : step.status;
+    }
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
+
 function toIdleSteps<TId extends string>(defs: WorkflowStepDef<TId>[]): WorkflowStep<TId>[] {
-  return defs.map((step) => ({ ...step, status: "idle" }));
+  return defs.map((step) => ({ ...step, status: "idle" as const }));
+}
+
+function hydrateSteps<TId extends string>(
+  defs: WorkflowStepDef<TId>[],
+  storageKey: string | undefined
+): WorkflowStep<TId>[] {
+  const stored = readStoredStatuses(statusesStorageKey(storageKey), defs);
+  if (!stored) return toIdleSteps(defs);
+  return defs.map((def, index) => ({
+    ...def,
+    status: stored[index] || "idle",
+  }));
 }
 
 export function useWorkflowSteps<TId extends string = string>({
@@ -48,8 +101,11 @@ export function useWorkflowSteps<TId extends string = string>({
 }) {
   const defsRef = useRef(stepDefs);
   defsRef.current = stepDefs;
+  const statusKey = statusesStorageKey(storageKey);
 
-  const [steps, setSteps] = useState<WorkflowStep<TId>[]>(() => toIdleSteps(stepDefs));
+  const [steps, setSteps] = useState<WorkflowStep<TId>[]>(() =>
+    hydrateSteps(stepDefs, storageKey)
+  );
   const [isRunning, setIsRunning] = useState(false);
   const [autoAdvance, setAutoAdvanceState] = useState(() =>
     readStoredBoolean(storageKey, defaultAutoAdvance)
@@ -64,8 +120,12 @@ export function useWorkflowSteps<TId extends string = string>({
 
   const stepIds = stepDefs.map((step) => step.id).join("|");
   useEffect(() => {
-    setSteps(toIdleSteps(defsRef.current));
-  }, [stepIds]);
+    setSteps(hydrateSteps(defsRef.current, storageKey));
+  }, [stepIds, storageKey]);
+
+  useEffect(() => {
+    writeStoredStatuses(statusKey, steps);
+  }, [steps, statusKey]);
 
   const patchStatus = useCallback((id: TId, status: WorkflowStepStatus) => {
     setSteps((prev) => prev.map((step) => (step.id === id ? { ...step, status } : step)));
@@ -132,6 +192,33 @@ export function useWorkflowSteps<TId extends string = string>({
     await executeFrom(nextIndex);
   }, [executeFrom]);
 
+  /** Chạy lại từ step chỉ định; các step sau bị reset về idle. */
+  const rerunFrom = useCallback(
+    async (stepId: TId) => {
+      if (runningRef.current) return;
+      const defs = defsRef.current;
+      const startIndex = defs.findIndex((step) => step.id === stepId);
+      if (startIndex < 0) return;
+
+      // Chỉ cho phép nếu mọi step trước đó đã done
+      const current = stepsRef.current;
+      for (let i = 0; i < startIndex; i++) {
+        if (current[i]?.status !== "done") return;
+      }
+
+      runIdRef.current += 1;
+      runningRef.current = false;
+      setIsRunning(false);
+      setSteps((prev) =>
+        prev.map((step, index) =>
+          index >= startIndex ? { ...step, status: "idle" as const } : step
+        )
+      );
+      await executeFrom(startIndex);
+    },
+    [executeFrom]
+  );
+
   const stop = useCallback(() => {
     runIdRef.current += 1;
     runningRef.current = false;
@@ -175,6 +262,7 @@ export function useWorkflowSteps<TId extends string = string>({
     setAutoAdvance,
     start,
     runNext,
+    rerunFrom,
     stop,
   };
 }

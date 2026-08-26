@@ -5,19 +5,12 @@
   uid,
 } from "../constants";
 import {
-  AUDIO_IMAGE_SCENE_JSON_SCHEMA,
   type AudioImageScene,
   type AudioImageToVideoFormState,
+  type SourceTab,
 } from "./audio-image-types";
-import { buildAudioImageAnalyzePrompt, validateAudioImageAnalyzeForm } from "./build-analyze-prompt";
-import {
-  AUDIO_ANALYZE_CHUNK_SEC,
-  splitAudioBase64IntoChunks,
-  type AudioChunk,
-} from "./split-audio-chunks";
-
-/** Khoảng cách giữa các lần enqueue generate-text song song (ms). */
-export const AUDIO_ANALYZE_STAGGER_MS = 5_000;
+import { applyStyleLockToScenes, resolveAudioImageArtStyle, toStillImageGenPrompt } from "./default-art-style";
+import { validateAudioImageAnalyzeForm } from "./build-analyze-prompt";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -37,6 +30,31 @@ function parseJsonPayload(value: unknown): Record<string, unknown> | null {
     }
   }
   return null;
+}
+
+function extractPlainText(payload: SourceToVideoApiResult): string {
+  const data = payload?.data;
+  if (!data) return "";
+
+  if (typeof data.text === "string" && data.text.trim()) {
+    return data.text.trim();
+  }
+
+  const jsonValue = data.json;
+  if (typeof jsonValue === "string" && jsonValue.trim()) {
+    return jsonValue.trim();
+  }
+
+  if (isRecord(jsonValue)) {
+    for (const key of ["transcript", "text", "content"]) {
+      const value = jsonValue[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+
+  return "";
 }
 
 function normalizeScenes(raw: unknown): AudioImageScene[] {
@@ -65,14 +83,19 @@ function collectImageInputs(form: AudioImageToVideoFormState) {
     }));
 }
 
+function collectAudioInputs(form: AudioImageToVideoFormState) {
+  if (form.sourceTab !== "audio") return [];
+  const source = (form.audioRefs || []).find((aud) => aud.audioBytes);
+  if (!source?.audioBytes) return [];
+  return [{ audioBytes: source.audioBytes, mimeType: source.mimeType || "audio/mpeg" }];
+}
+
 function renumberScenes(scenes: AudioImageScene[]): AudioImageScene[] {
   return scenes.map((scene, index) => ({
     ...scene,
     sceneNumber: index + 1,
   }));
 }
-
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export function mapAudioImageScenesToScriptData(
   form: AudioImageToVideoFormState,
@@ -83,19 +106,17 @@ export function mapAudioImageScenesToScriptData(
     sceneNumber: scene.sceneNumber || index + 1,
     camera: "WIDE SHOT",
     visualPrompt: scene.visualPrompt,
-    imageGenPrompt: scene.visualPrompt,
+    // Generate Image: luôn dùng bản đã loại bàn tay / bút
+    imageGenPrompt: toStillImageGenPrompt(scene.visualPrompt),
     motionPrompt: scene.motionPrompt,
     dialogue: scene.dialogue,
     aspectRatio: form.aspectRatio,
   }));
 
   return {
-    storyModeType:
-      form.sourceTab === "image"
-        ? StoryModeTypeEnum.image_to_video
-        : StoryModeTypeEnum.prompt_to_video,
+    storyModeType: StoryModeTypeEnum.image_to_video,
     topicTitle: "",
-    artStyle: form.artStyle || "",
+    artStyle: form.artStyle?.trim() || resolveAudioImageArtStyle(form),
     artStyleId: form.artStyleId || "",
     environment: "",
     characterName: "",
@@ -108,228 +129,92 @@ export function mapAudioImageScenesToScriptData(
   };
 }
 
-export type GenerateTextJobResult = {
+export type SourceToVideoApiResult = {
   data?: {
     json?: unknown;
     text?: unknown;
   };
 };
 
-export type AudioImageGenerateTextBody = {
-  prompt: string;
-  systemInstruction: string;
-  jsonMode: true;
-  jsonSchema: typeof AUDIO_IMAGE_SCENE_JSON_SCHEMA;
-  images?: Array<{ imageBytes: string; mimeType: string }>;
-  audios?: Array<{ audioBytes: string; mimeType: string }>;
-  /** Metadata job — giữ đúng vị trí chunk khi chạy song song */
-  _metadata?: {
-    source: "audio-image-to-video";
-    chunkIndex: number;
-    chunkCount: number;
-    startSec?: number;
-    endSec?: number;
-  };
-};
+function sourceApiPath(sourceTab: SourceTab): string {
+  if (sourceTab === "audio") return "/api/app/audio-to-video/";
+  if (sourceTab === "image") return "/api/app/image-to-video/";
+  return "/api/app/text-to-video/";
+}
 
-const WHITEBOARD_SYSTEM_INSTRUCTION =
-  "You are an expert AI whiteboard animation / drawing-pen slideshow director. Split source media/text into timed scenes for 8-second videos. Every visualPrompt must be a whiteboard slide with a hand holding a marker drawing a flat 2D illustration. Every motionPrompt must describe the hand progressively drawing that slide.";
-
-export function buildAudioImageGenerateTextBody(
+async function callSourceToVideoApi(
   form: AudioImageToVideoFormState,
-  options?: {
-    chunk?: AudioChunk;
-    audios?: Array<{ audioBytes: string; mimeType: string }>;
-  }
-): AudioImageGenerateTextBody {
+  phase: "transcribe" | "analyze",
+  sourceText?: string
+): Promise<SourceToVideoApiResult> {
   const images = collectImageInputs(form);
-  const audios =
-    options?.audios ||
-    (options?.chunk
-      ? [{ audioBytes: options.chunk.audioBytes, mimeType: options.chunk.mimeType }]
-      : []);
+  const audios = collectAudioInputs(form);
 
-  const chunk = options?.chunk;
-  return {
-    prompt: buildAudioImageAnalyzePrompt(form, chunk),
-    systemInstruction: WHITEBOARD_SYSTEM_INSTRUCTION,
-    jsonMode: true,
-    jsonSchema: AUDIO_IMAGE_SCENE_JSON_SCHEMA,
-    ...(images.length ? { images } : {}),
-    ...(audios.length ? { audios } : {}),
-    _metadata: {
-      source: "audio-image-to-video",
-      chunkIndex: chunk?.chunkIndex ?? 0,
-      chunkCount: chunk?.chunkCount ?? 1,
-      startSec: chunk?.startSec,
-      endSec: chunk?.endSec,
-    },
-  };
-}
-
-async function analyzeOneGenerateTextBody(
-  body: AudioImageGenerateTextBody,
-  runGenerateTextJob: (body: AudioImageGenerateTextBody) => Promise<GenerateTextJobResult>
-): Promise<AudioImageScene[]> {
-  const payload = await runGenerateTextJob(body);
-  const parsed =
-    parseJsonPayload(payload?.data?.json) || parseJsonPayload(payload?.data?.text) || payload?.data;
-  return normalizeScenes(isRecord(parsed) ? parsed.scenes : parsed);
-}
-
-type ChunkAnalyzeResult = {
-  chunkIndex: number;
-  scenes: AudioImageScene[];
-};
-
-/**
- * Gửi các đoạn audio lên generate-text song song.
- * Đoạn thứ i bắt đầu sau i * staggerMs (mặc định 5s).
- * Kết quả được sắp theo chunkIndex dù API trả về lệch tốc độ.
- */
-export async function analyzeAudioChunksInParallel(options: {
-  form: AudioImageToVideoFormState;
-  chunks: AudioChunk[];
-  runGenerateTextJob: (body: AudioImageGenerateTextBody) => Promise<GenerateTextJobResult>;
-  staggerMs?: number;
-  onChunkEnqueued?: (info: {
-    chunkIndex: number;
-    chunkCount: number;
-    startSec: number;
-    endSec: number;
-  }) => void;
-  onChunkDone?: (info: {
-    chunkIndex: number;
-    chunkCount: number;
-    sceneCount: number;
-  }) => void;
-}): Promise<AudioImageScene[]> {
-  const {
-    form,
-    chunks,
-    runGenerateTextJob,
-    staggerMs = AUDIO_ANALYZE_STAGGER_MS,
-    onChunkEnqueued,
-    onChunkDone,
-  } = options;
-
-  const jobs = chunks.map(async (chunk, launchIndex): Promise<ChunkAnalyzeResult> => {
-    if (launchIndex > 0) {
-      await wait(launchIndex * staggerMs);
-    }
-
-    onChunkEnqueued?.({
-      chunkIndex: chunk.chunkIndex,
-      chunkCount: chunk.chunkCount,
-      startSec: chunk.startSec,
-      endSec: chunk.endSec,
-    });
-
-    try {
-      const scenes = await analyzeOneGenerateTextBody(
-        buildAudioImageGenerateTextBody(form, { chunk }),
-        runGenerateTextJob
-      );
-      if (!scenes.length) {
-        throw new Error(
-          `AI không trả về phân cảnh hợp lệ cho đoạn ${chunk.chunkIndex + 1}/${chunk.chunkCount}`
-        );
-      }
-      onChunkDone?.({
-        chunkIndex: chunk.chunkIndex,
-        chunkCount: chunk.chunkCount,
-        sceneCount: scenes.length,
-      });
-      return { chunkIndex: chunk.chunkIndex, scenes };
-    } catch (err: any) {
-      const message =
-        err?.message ||
-        `Phân tích đoạn ${chunk.chunkIndex + 1}/${chunk.chunkCount} thất bại`;
-      throw Object.assign(new Error(message), {
-        chunkIndex: chunk.chunkIndex,
-        chunkCount: chunk.chunkCount,
-        cause: err,
-      });
-    }
+  const res = await fetch(sourceApiPath(form.sourceTab), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phase,
+      language: form.language,
+      rhythm: form.rhythm,
+      aspectRatio: form.aspectRatio,
+      artStyle: form.artStyle,
+      artStyleId: form.artStyleId,
+      showDrawingHand: form.showDrawingHand,
+      textContent: form.textContent,
+      ...(sourceText ? { sourceText } : {}),
+      ...(images.length ? { images } : {}),
+      ...(audios.length ? { audios } : {}),
+    }),
   });
 
-  const settled = await Promise.allSettled(jobs);
-  const failures = settled.filter(
-    (item): item is PromiseRejectedResult => item.status === "rejected"
-  );
-  if (failures.length) {
-    const first = failures[0]?.reason;
-    throw first instanceof Error ? first : new Error(String(first || "Phân tích song song thất bại"));
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(payload?.message || `Lỗi API (${res.status})`);
   }
-
-  const results = settled
-    .filter((item): item is PromiseFulfilledResult<ChunkAnalyzeResult> => item.status === "fulfilled")
-    .map((item) => item.value)
-    .sort((a, b) => a.chunkIndex - b.chunkIndex);
-
-  for (let i = 0; i < chunks.length; i++) {
-    if (results[i]?.chunkIndex !== i) {
-      throw new Error(`Thiếu kết quả phân tích đoạn ${i + 1}/${chunks.length}`);
-    }
-  }
-
-  return results.flatMap((item) => item.scenes);
+  return { data: payload?.data };
 }
 
-export async function analyzeAudioImageToVideo(
-  form: AudioImageToVideoFormState,
-  runGenerateTextJob: (body: AudioImageGenerateTextBody) => Promise<GenerateTextJobResult>,
-  options?: {
-    onChunkProgress?: (info: {
-      chunkIndex: number;
-      chunkCount: number;
-      startSec: number;
-      endSec: number;
-    }) => void;
-    onChunkDone?: (info: {
-      chunkIndex: number;
-      chunkCount: number;
-      sceneCount: number;
-    }) => void;
-  }
-): Promise<ScriptData> {
+/** Step 1: lấy text từ audio / ảnh, hoặc dùng text có sẵn. */
+export async function transcribeSourceText(
+  form: AudioImageToVideoFormState
+): Promise<string> {
   const invalid = validateAudioImageAnalyzeForm(form);
   if (invalid) {
     throw new Error(invalid);
   }
 
-  if (form.sourceTab === "audio") {
-    const source = (form.audioRefs || []).find((aud) => aud.audioBytes);
-    if (!source?.audioBytes) {
-      throw new Error("Vui lòng upload file audio");
-    }
+  const payload = await callSourceToVideoApi(form, "transcribe");
+  const text = extractPlainText(payload);
+  if (!text) {
+    if (form.sourceTab === "audio") throw new Error("Không lấy được text từ audio");
+    if (form.sourceTab === "image") throw new Error("Không lấy được nội dung từ ảnh");
+    throw new Error("Vui lòng nhập nội dung văn bản");
+  }
+  return text;
+}
 
-    const chunks = await splitAudioBase64IntoChunks({
-      audioBytes: source.audioBytes,
-      mimeType: source.mimeType || "audio/mpeg",
-      chunkSec: AUDIO_ANALYZE_CHUNK_SEC,
-    });
-
-    const allScenes = await analyzeAudioChunksInParallel({
-      form,
-      chunks,
-      runGenerateTextJob,
-      onChunkEnqueued: options?.onChunkProgress,
-      onChunkDone: options?.onChunkDone,
-    });
-
-    return mapAudioImageScenesToScriptData(form, renumberScenes(allScenes));
+/** Step 2: phân tích toàn bộ text → scenes với visual/motion prompt. */
+export async function analyzeSourceTextToScenes(
+  form: AudioImageToVideoFormState,
+  sourceText: string
+): Promise<ScriptData> {
+  const text = sourceText.trim();
+  if (!text) {
+    throw new Error("Chưa có nội dung text để phân tích. Hãy chạy bước Lấy text trước.");
   }
 
-  const scenes = await analyzeOneGenerateTextBody(
-    buildAudioImageGenerateTextBody(form, {
-      audios: [],
-    }),
-    runGenerateTextJob
-  );
+  const payload = await callSourceToVideoApi(form, "analyze", text);
+  const parsed =
+    parseJsonPayload(payload?.data?.json) || parseJsonPayload(payload?.data?.text) || payload?.data;
+  const scenesRaw = isRecord(parsed) && "scenes" in parsed ? parsed.scenes : parsed;
+  const scenes = normalizeScenes(scenesRaw);
   if (!scenes.length) {
     throw new Error("AI không trả về phân cảnh hợp lệ");
   }
 
-  return mapAudioImageScenesToScriptData(form, renumberScenes(scenes));
+  const artStyle = resolveAudioImageArtStyle(form);
+  const styledScenes = applyStyleLockToScenes(scenes, artStyle);
+
+  return mapAudioImageScenesToScriptData(form, renumberScenes(styledScenes));
 }

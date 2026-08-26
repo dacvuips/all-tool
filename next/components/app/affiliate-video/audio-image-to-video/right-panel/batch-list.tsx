@@ -1,5 +1,6 @@
+import { NotifyText } from "../../../../shared/common/notify-text";
+import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import {
-  CACHE_KEY,
   CharacterItem,
   DB_NAME,
   SceneScript,
@@ -10,19 +11,31 @@ import {
 import { useAffiliateVideoApi } from "../../hook/useAffiliateVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { SharedBatchListPanel } from "../../shared/batch-list";
-import { IntroGuideKey } from "../../../../shared/utilities/intro/intro-guide-storage";
 import { useAffiliateBatchListIntro } from "../../shared/use-affiliate-batch-list-intro";
 import { useAffiliateVideoContext } from "../../storyboard/providers/affiliate-video-provider";
 import { BatchActionBar } from "../../storyboard/right-panel/batch-action-bar";
 import { SceneRowGroup } from "../../storyboard/right-panel/scene-batch-row";
+import { registerAudioImageBatchActions } from "../audio-image-batch-bridge";
+
+function AudioImageBatchActionBar({ scenes }: { scenes: SceneScript[] }) {
+  return (
+    <BatchActionBar scenes={scenes} onActionsReady={registerAudioImageBatchActions} />
+  );
+}
 
 interface BatchListPanelProps {
   scenes: SceneScript[];
   characters: CharacterItem[];
   storyModeType: StoryModeTypeEnum;
+  scriptCacheKey: string;
 }
 
-export function BatchListPanel({ scenes, characters, storyModeType }: BatchListPanelProps) {
+export function BatchListPanel({
+  scenes,
+  characters,
+  storyModeType,
+  scriptCacheKey,
+}: BatchListPanelProps) {
   const {
     scriptData,
     setScriptData,
@@ -31,7 +44,6 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     selectHistoryItem,
     clearSceneHistory,
     renameHistoryItem,
-    affiliateVideoFormConfig,
   } = useAffiliateVideoContext();
   const db = useIndexedDB<ScriptData>(STORE_NAME.generateScene, DB_NAME.generateScene);
   const { insertScene } = useAffiliateVideoApi();
@@ -42,14 +54,10 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
     hasProductImages: !!scriptData?.productImages?.length,
   });
 
-  const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
-  const hideImageColumn =
-    storyModeType === StoryModeTypeEnum.prompt_to_video || !requireImageBeforeVideo;
-
   const handlePersistScenes = async (updatedScenes: any[]) => {
     try {
-      const current = await db.get(CACHE_KEY.lastAudioImageScript);
-      await db.set(CACHE_KEY.lastAudioImageScript, {
+      const current = await db.get(scriptCacheKey);
+      await db.set(scriptCacheKey, {
         ...(current ?? scriptData),
         scenes: updatedScenes as any,
       });
@@ -60,7 +68,7 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
 
   const handleSyncScenes = async (updatedScenes: any[]) => {
     try {
-      await db.set(CACHE_KEY.lastAudioImageScript, {
+      await db.set(scriptCacheKey, {
         ...scriptData,
         scenes: updatedScenes as any,
       });
@@ -138,10 +146,14 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
   return (
     <>
       {introElement}
+      <NotifyText
+        text="Chức năng này đang xây dựng , sẽ có nhiều sai sót và chưa được tối ưu đầy đủ"
+        color="red"
+      />
       <SharedBatchListPanel
         scenes={scenes}
         characters={characters}
-        hideImageColumn={hideImageColumn}
+        hideImageColumn={false}
         selectedHistoryId={selectedHistoryId}
         history={
           sceneHistory?.length
@@ -157,9 +169,13 @@ export function BatchListPanel({ scenes, characters, storyModeType }: BatchListP
         onPersistScenes={handlePersistScenes}
         onSyncScenes={handleSyncScenes}
         onBuildInsertedScene={handleBuildInsertedScene}
-        ActionBarComponent={BatchActionBar}
+        ActionBarComponent={AudioImageBatchActionBar}
         SceneRowComponent={SceneRowGroup}
-        sceneRowExtraProps={{ storyModeType: scriptData?.storyModeType }}
+        sceneRowExtraProps={{
+          storyModeType,
+          hideImageColumn: false,
+          forceShowImageTab: true,
+        }}
         onOpenIntro={openIntro}
       />
     </>

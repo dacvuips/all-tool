@@ -9,6 +9,13 @@ export type AudioImageToVideoFormState = {
   artStyle: string;
   artStyleId: string;
   rhythm: string;
+  /** Bật: có bàn tay đang vẽ trên bảng. Tắt: slide 2D tĩnh, không bàn tay / không hành động viết. */
+  showDrawingHand: boolean;
+  /**
+   * Bật: bắt buộc gen ảnh ở tab Ảnh rồi dùng ảnh đó làm tham chiếu video.
+   * Tắt: không bắt buộc lấy ảnh từ tab gen Ảnh.
+   */
+  useAiReferenceImage: boolean;
   textContent: string;
   imageRefs?: ElementFormImage[];
   audioRefs?: ElementFormAudio[];

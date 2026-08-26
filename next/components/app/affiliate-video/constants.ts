@@ -360,6 +360,7 @@ export const CACHE_KEY = {
   storyboardHistory: "storyboardHistory",
   lastAudioImageScript: "lastAudioImageScript",
   audioImageInput: "audioImageInput",
+  audioImageForm: "audioImageForm",
   audioImageHistory: "audioImageHistory",
   /** Lịch sử xóa logo AI */
   removeLogoHistory: "removeLogoHistory",

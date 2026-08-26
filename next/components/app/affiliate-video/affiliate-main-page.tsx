@@ -37,9 +37,9 @@ export default function AffiliateMainPage() {
   const { t } = useTranslation();
   const router = useRouter();
   const xl = useScreen("xl");
+
   /** Các tab chế độ tạo video */
   const navigationTabs = [
-    // { icon: <RiStackLine />, label: t("Nhân Bản"), value: " nhân bản" },
     {
       icon: (
         <div className="px-1 -mr-1 text-xs font-semibold text-red-600 rounded-full border border-red-600">
@@ -58,19 +58,12 @@ export default function AffiliateMainPage() {
       component: <AppPage />,
     },
 
-    // {
-    //   icon: <RiFileTextLine />,
-    //   label: t("Đơn Lẻ"),
-    //   value: "single",
-    //   component: <AffiliateSingleVideoPage type={TAB_TYPE.single} />,
-    // },
     {
       icon: <RiGridLine />,
       label: t("Kịch Bản"),
       value: "batch",
       component: <AffiliateSingleVideoPage type={TAB_TYPE.batch} />,
     },
-    // { icon: <RiBookOpenLine />, label: t("Cốt Truyện"), value: "story" },
     {
       icon: <RiFileCopy2Line />,
       label: t("Sao Chép"),
@@ -115,9 +108,6 @@ export default function AffiliateMainPage() {
       value: "voice",
       component: <VoicePage />,
     },
-
-    // { icon: <RiSettings3Line />, label: t("Chế độ Nâng cao") },
-    // { icon: <RiVideoDownloadLine />, label: t("Review sản phẩm") },
   ];
 
   return (

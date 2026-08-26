@@ -92,6 +92,8 @@ export interface SharedBatchListPanelProps {
 
   /** Hiện select giọng áp dụng cho tất cả phân cảnh (mode Thành phần) */
   showBatchVideoVoice?: boolean;
+  /** Tab media mặc định khi mở panel (vd. tab Ảnh) */
+  defaultGlobalTab?: SceneTabKey | null;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -112,10 +114,11 @@ export function SharedBatchListPanel({
   getDragHandleId,
   lazyMountSceneRows = false,
   showBatchVideoVoice = false,
+  defaultGlobalTab = null,
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
-  const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(null);
+  const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(defaultGlobalTab);
   const [currentPage, setCurrentPage] = useState(1);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const { customer } = useAuth();

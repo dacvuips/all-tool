@@ -4,6 +4,7 @@
  * className only – Tailwind CSS, no inline styles
  */
 import { useTranslation } from "react-i18next";
+import { useEffect } from "react";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
   RiCloseLine,
@@ -24,12 +25,24 @@ import { useAffiliateVideoContext } from "../providers/affiliate-video-provider"
 
 interface BatchActionBarProps {
   scenes: SceneScript[];
+  /** Luôn hiện nút tạo ảnh hàng loạt (vd. audio-image to video) */
+  forceShowBatchImage?: boolean;
+  /** Expose batch handlers ra ngoài (workflow steps) */
+  onActionsReady?: (actions: {
+    generateAllImages: () => Promise<void>;
+    generateAllVideos: () => Promise<void>;
+  } | null) => void;
 }
 
-export function BatchActionBar({ scenes }: BatchActionBarProps) {
+export function BatchActionBar({
+  scenes,
+  forceShowBatchImage = false,
+  onActionsReady,
+}: BatchActionBarProps) {
   const { t } = useTranslation();
   const storyboardContext = useAffiliateVideoContext();
   const requireImageBeforeVideo =
+    forceShowBatchImage ||
     storyboardContext.affiliateVideoFormConfig?.requireImageBeforeVideo === true;
   const {
     // Voice export dialog
@@ -135,6 +148,19 @@ export function BatchActionBar({ scenes }: BatchActionBarProps) {
     // Export
     handleExportPromptCSV,
   } = useBatchActions(scenes, storyboardContext);
+
+  useEffect(() => {
+    if (!onActionsReady) return;
+    onActionsReady({
+      generateAllImages: async () => {
+        await handleCreateAllImage();
+      },
+      generateAllVideos: async () => {
+        await handleCreateAllVideo();
+      },
+    });
+    return () => onActionsReady(null);
+  }, [onActionsReady, handleCreateAllImage, handleCreateAllVideo]);
 
   const actions = [
     ...(requireImageBeforeVideo

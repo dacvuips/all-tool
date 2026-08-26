@@ -69,6 +69,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   isGroupHovered,
   storyModeType,
   hideImageColumn,
+  forceShowImageTab,
   nextSceneId,
   forcedTab,
   onMouseEnter,
@@ -90,6 +91,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   isGroupHovered?: boolean;
   storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
+  /** Tab Ảnh riêng — bật dù prompt_to_video */
+  forceShowImageTab?: boolean;
   /** Tab được ép chọn đồng loạt từ bên ngoài */
   forcedTab?: SceneTabKey | null;
   onMouseEnter?: () => void;
@@ -581,7 +584,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
       {/* ── Media tabs (Hình ảnh / Video đơn / Video nối) ── */}
       <SceneCardTabs
-        hideImageTab={isPromptToVideo || !!hideImageColumn || !requireImageBeforeVideo}
+        hideImageTab={
+          !forceShowImageTab &&
+          (isPromptToVideo || !!hideImageColumn || !requireImageBeforeVideo)
+        }
         hideExtendTab={isPromptToVideo || !nextSceneId}
         forcedTab={forcedTab}
         tabStatus={{
@@ -739,6 +745,7 @@ interface SceneRowGroupProps {
   characters: CharacterItem[];
   storyModeType?: StoryModeTypeEnum;
   hideImageColumn?: boolean;
+  forceShowImageTab?: boolean;
   forcedTab?: SceneTabKey | null;
   onInsert: (
     scene: SceneScript,
@@ -763,6 +770,8 @@ export function SceneRowGroup({
   isDisabled,
   characters,
   storyModeType,
+  hideImageColumn,
+  forceShowImageTab,
   forcedTab,
   onInsert,
   onUpdateScene,
@@ -805,6 +814,8 @@ export function SceneRowGroup({
         isDisabled={isDisabled}
         isGroupHovered={hovered}
         storyModeType={storyModeType}
+        hideImageColumn={hideImageColumn}
+        forceShowImageTab={forceShowImageTab}
         forcedTab={forcedTab}
         onMouseEnter={enter}
         onMouseLeave={leave}

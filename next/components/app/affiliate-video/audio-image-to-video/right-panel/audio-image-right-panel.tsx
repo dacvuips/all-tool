@@ -1,24 +1,24 @@
 import { useTranslation } from "react-i18next";
 import { TabGroup } from "../../../../shared/utilities/tab/tab-group";
 import { WorkflowStepsBar, type WorkflowStepsState } from "../../../../shared/workflow-steps";
+import { CACHE_KEY, StoryModeTypeEnum } from "../../constants";
 import { useAffiliateVideoContext } from "../../storyboard/providers/affiliate-video-provider";
 import { AiGeneratingSpinner } from "../../storyboard/right-panel/ai-generating-spinner";
 import type { AudioImagePipelineStepId } from "../use-audio-image-pipeline";
 import { BatchListPanel } from "./batch-list";
 
-const TAB_NAMES = ["script", "batch"] as const;
-
 export const AudioImageRightPanel = ({
   pipeline,
+  scriptCacheKey = CACHE_KEY.lastAudioImageScript,
 }: {
   pipeline: WorkflowStepsState<AudioImagePipelineStepId>;
+  scriptCacheKey?: string;
 }) => {
   const { t } = useTranslation();
-  const { scriptData, scriptTab, setScriptTab, batchRunning } = useAffiliateVideoContext();
-  const tabIndex =
-    TAB_NAMES.indexOf(scriptTab as any) >= 0 ? TAB_NAMES.indexOf(scriptTab as any) : 0;
+  const { scriptData, batchRunning } = useAffiliateVideoContext();
   const sceneCount = scriptData?.scenes?.length ?? 0;
   const batchTabLabel = `${t("Danh sách hàng loạt")}${sceneCount > 0 ? ` (${sceneCount})` : ""}`;
+  const storyModeType = scriptData?.storyModeType ?? StoryModeTypeEnum.image_to_video;
 
   return (
     <div className="flex overflow-hidden flex-col flex-1">
@@ -30,10 +30,13 @@ export const AudioImageRightPanel = ({
         autoAdvance={pipeline.autoAdvance}
         onAutoAdvanceChange={pipeline.setAutoAdvance}
         onContinue={pipeline.runNext}
+        onRerunFrom={(stepId) => {
+          void pipeline.rerunFrom(stepId as AudioImagePipelineStepId);
+        }}
       />
       <TabGroup
-        index={tabIndex}
-        onChange={(i) => setScriptTab && setScriptTab(TAB_NAMES[i])}
+        index={0}
+        onChange={() => {}}
         name="audio-image-to-video-right"
         flex={false}
         tabClassName="px-4 py-3"
@@ -63,7 +66,8 @@ export const AudioImageRightPanel = ({
                 cropRegion: s.cropRegion,
                 storyboardCropImage: s.storyboardCropImage,
               }))}
-              storyModeType={scriptData?.storyModeType}
+              storyModeType={storyModeType}
+              scriptCacheKey={scriptCacheKey}
               characters={[]}
             />
           )}
