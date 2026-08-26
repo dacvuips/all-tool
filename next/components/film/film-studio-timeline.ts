@@ -21,6 +21,11 @@ export type FilmStudioVideoClip = {
   videoUrl?: string;
   thumbUrl?: string;
   ready: boolean;
+  /**
+   * Độ dài file video nguồn (giây) khi timeline đã giãn/nén theo thoại.
+   * Không set → map 1:1 timeline ↔ nguồn.
+   */
+  sourceDurationSec?: number;
 };
 
 export type FilmStudioVoiceClip = {
@@ -269,6 +274,7 @@ export function resetFilmStudioTimelineFromScratch(
 
 /**
  * Cập nhật durationSec theo metadata video thật (sau khi gắn lại blob/url).
+ * Cũng ghi sourceDurationSec = độ dài file (dùng khi giãn/nén theo thoại).
  */
 export async function refreshFilmStudioSceneDurations(
   scenes: FilmSceneRecord[],
@@ -282,15 +288,51 @@ export async function refreshFilmStudioSceneDurations(
       continue;
     }
     const dur = await readVideoUrlDurationSec(src);
+    const sourceDur = Math.max(FILM_STUDIO_MIN_CLIP_SEC, dur);
     next.push({
       ...scene,
-      durationSec: Math.max(FILM_STUDIO_MIN_CLIP_SEC, dur),
+      durationSec: sourceDur,
+      sourceDurationSec: sourceDur,
       videoTrimInSec: 0,
       videoTrimOutSec: undefined,
       updatedAt: new Date().toISOString(),
     });
   }
   return rebuildFilmSceneTimeline(next);
+}
+
+/**
+ * Map playhead timeline → thời gian trong file video nguồn.
+ * Khi có sourceDurationSec khác durationSec (giãn/nén), map tỉ lệ.
+ */
+export function mapFilmStudioVideoLocalSec(
+  clip: Pick<FilmStudioVideoClip, "startSec" | "durationSec" | "trimInSec" | "sourceDurationSec">,
+  timelineSec: number
+): number {
+  const offset = Math.max(0, timelineSec - clip.startSec);
+  const timelineDur = Math.max(FILM_STUDIO_MIN_CLIP_SEC, clip.durationSec || FILM_STUDIO_MIN_CLIP_SEC);
+  const sourceDur =
+    clip.sourceDurationSec != null && Number.isFinite(clip.sourceDurationSec)
+      ? Math.max(FILM_STUDIO_MIN_CLIP_SEC, clip.sourceDurationSec)
+      : timelineDur;
+  const trimIn = Math.max(0, clip.trimInSec || 0);
+  if (Math.abs(sourceDur - timelineDur) < 0.05) {
+    return trimIn + offset;
+  }
+  const ratio = Math.min(1, offset / timelineDur);
+  return trimIn + ratio * sourceDur;
+}
+
+/** Tốc độ phát video nguồn để khớp độ dài timeline (1 = không giãn). */
+export function filmStudioVideoStretchRate(
+  clip: Pick<FilmStudioVideoClip, "durationSec" | "sourceDurationSec">
+): number {
+  const timelineDur = Math.max(FILM_STUDIO_MIN_CLIP_SEC, clip.durationSec || FILM_STUDIO_MIN_CLIP_SEC);
+  const sourceDur =
+    clip.sourceDurationSec != null && Number.isFinite(clip.sourceDurationSec)
+      ? Math.max(FILM_STUDIO_MIN_CLIP_SEC, clip.sourceDurationSec)
+      : timelineDur;
+  return sourceDur / timelineDur;
 }
 
 export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
@@ -336,6 +378,10 @@ export function buildFilmStudioTimeline(scenes: FilmSceneRecord[]): {
       videoUrl: videoUrl || undefined,
       thumbUrl: undefined,
       ready: !!videoUrl || hasVideoBlob,
+      sourceDurationSec:
+        scene.sourceDurationSec != null && Number.isFinite(scene.sourceDurationSec)
+          ? Math.max(FILM_STUDIO_MIN_CLIP_SEC, scene.sourceDurationSec)
+          : undefined,
     });
     videoCursor += durationSec;
   }

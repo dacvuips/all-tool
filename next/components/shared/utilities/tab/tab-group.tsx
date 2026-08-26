@@ -251,7 +251,7 @@ export function TabGroup({
                       hidden={!isActive}
                       aria-hidden={!isActive}
                       // hidden + display:none: giữ instance React (state / async crawl) khi đổi tab
-                      className={isActive ? undefined : "hidden"}
+                      className={isActive ? "flex flex-1 flex-col min-h-0 h-full" : "hidden"}
                     >
                       {tab.child}
                     </div>

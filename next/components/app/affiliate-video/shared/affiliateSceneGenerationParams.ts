@@ -4,8 +4,13 @@
 import { Flow2VideoModeEnum, type ElementFormImage, type SceneScript } from "../constants";
 import type { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import type { GenerateImageParams, GenerateVideoParams } from "../hook/useAffiliateVideoApi";
+import {
+  DRAWING_HAND_REFERENCE_PROMPT,
+  ensureMotionStartsFromBlankPaper,
+} from "../audio-image-to-video/default-art-style";
 import { buildAutoDownloadOptions } from "./autoDownloadUtils";
 import { generatedImageToApiBase64Input } from "./generatedMediaUtils";
+import { resolveComponentVideoVoiceParam } from "./scene-component-video-voice-select";
 import { normalizeSceneAudioField } from "./sceneAudioUtils";
 
 const NO_DRAWING_HAND_IMAGE_NOTE =
@@ -131,21 +136,43 @@ export function resolveAffiliateArtStyle(
 export function buildAffiliateVideoPrompt(
   scene: SceneScript,
   scriptData?: AffiliateScriptLike,
-  isStitch?: boolean
+  isStitch?: boolean,
+  /**
+   * Audio/Image to Video (component): chỉ [MOTION] + [DIALOGUE],
+   * không gắn rule nền / visualPrompt / AUDIO.
+   */
+  useComponentVideo?: boolean,
+  /** Có ảnh draw-audio.jpg → gắn rule dùng bàn tay tham chiếu */
+  useDrawingHandReference?: boolean
 ): string {
   const audioText = normalizeSceneAudioField(scene.audio);
+  let motion = (scene.motionPrompt || "").trim();
+  if (useComponentVideo) {
+    motion = ensureMotionStartsFromBlankPaper(motion);
+    if (useDrawingHandReference) {
+      const note = DRAWING_HAND_REFERENCE_PROMPT;
+      if (!motion.toLowerCase().includes("hand-holding-pen reference")) {
+        motion = motion ? `${motion} ${note}` : note;
+      }
+    }
+    const motionPart = motion ? `[MOTION]${motion}` : "";
+    if (scene.voiceDisable) return motionPart;
+    const dialoguePart = scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : "";
+    return [motionPart, dialoguePart].filter(Boolean).join(", ");
+  }
+  const motionPart = motion ? `[MOTION]${motion}` : "";
   if (isStitch) {
     return scene.voiceDisable
-      ? `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}`
-      : `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}, ${
-          audioText ? `[AUDIO]${audioText}` : ""
-        }, ${scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""}`;
+      ? `${motionPart}`
+      : `${motionPart}, ${audioText ? `[AUDIO]${audioText}` : ""}, ${
+          scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""
+        }`;
   }
   return scene.voiceDisable
-    ? `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}`
-    : `${scene.motionPrompt ? `[MOTION]${scene.motionPrompt}` : ""}, ${
-        audioText ? `[AUDIO]${audioText}` : ""
-      }, ${scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""}`;
+    ? `${motionPart}`
+    : `${motionPart}, ${audioText ? `[AUDIO]${audioText}` : ""}, ${
+        scene.dialogue ? `[DIALOGUE]${scene.dialogue}` : ""
+      }`;
 }
 
 export function buildAffiliateImageGenerateParams(options: {
@@ -159,6 +186,8 @@ export function buildAffiliateImageGenerateParams(options: {
   /** Art style live từ form sidebar — ưu tiên hơn scriptData */
   artStyle?: string;
   artStyleId?: string;
+  /** Audio/Image to Video: ảnh nền làm reference khi gen ảnh */
+  backgroundImage?: ElementFormImage | null;
 }): GenerateImageParams {
   const {
     scene,
@@ -169,6 +198,7 @@ export function buildAffiliateImageGenerateParams(options: {
     objectToPersonifyImage,
     artStyle,
     artStyleId,
+    backgroundImage,
   } = options;
 
   const storyboardReference = scene.storyboardCropImage
@@ -177,6 +207,14 @@ export function buildAffiliateImageGenerateParams(options: {
         mimeType: scene.storyboardCropImage.mimeType,
       }
     : undefined;
+
+  const backgroundReference =
+    !storyboardReference && backgroundImage?.imageBytes
+      ? {
+          imageBytes: backgroundImage.imageBytes,
+          mimeType: backgroundImage.mimeType || "image/jpeg",
+        }
+      : undefined;
 
   const resolvedArtStyle = resolveAffiliateArtStyle({ artStyle, artStyleId }, scriptData);
   const rawPrompt = scene.imageGenPrompt || "";
@@ -187,11 +225,17 @@ export function buildAffiliateImageGenerateParams(options: {
     ? stripDrawingHandPhrases(resolvedArtStyle.artStyle || "")
     : resolvedArtStyle.artStyle;
 
+  // Audio-image (có ảnh nền): IMAGE PROMPT chỉ gửi visual — không gắn rule nền / no-hand / no-text.
+  // Các tab khác vẫn áp no-hand note khi cần.
+  const imagePrompt = backgroundReference
+    ? rawPrompt.trim()
+    : applyNoDrawingHandToImagePrompt(rawPrompt, resolvedArtStyle.artStyle);
+
   return {
     sceneId: scene.id,
-    prompt: applyNoDrawingHandToImagePrompt(rawPrompt, resolvedArtStyle.artStyle),
+    prompt: imagePrompt,
     aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
-    referenceImage: storyboardReference,
+    referenceImage: storyboardReference || backgroundReference,
     productImages: selectedProductImages?.length ? selectedProductImages : undefined,
     objectToPersonifyImage,
     productImagePrompt: scene.product_image_prompt || undefined,
@@ -208,8 +252,18 @@ export async function buildAffiliateVideoGenerateParams(options: {
   /** Fallback khi scriptData chưa có aspectRatio */
   aspectRatio?: string;
   isStitch?: boolean;
+  /**
+   * Audio/Image to Video: mode `component` (thành phần).
+   * generatedImage = ảnh đầu (nền), nextGeneratedImage = ảnh cuối (gen tab Ảnh) — cả hai bắt buộc.
+   */
+  useComponentVideo?: boolean;
   generatedImage?: GeneratedImageData | null;
   nextGeneratedImage?: GeneratedImageData | null;
+  /**
+   * Ảnh bàn tay (draw-audio.jpg) — chỉ khi bật "Bàn tay đang vẽ".
+   * Gửi thêm làm ảnh tham chiếu thành phần thứ 3 + gắn prompt khớp bàn tay.
+   */
+  drawingHandImage?: GeneratedImageData | null;
   /**
    * Storyboard: false → dùng ảnh gốc + videoMode component (thành phần).
    * true / undefined ngoài storyboard → frame (khung ảnh).
@@ -224,15 +278,34 @@ export async function buildAffiliateVideoGenerateParams(options: {
     scriptData,
     aspectRatio,
     isStitch,
+    useComponentVideo,
     generatedImage,
     nextGeneratedImage,
+    drawingHandImage,
     requireImageBeforeVideo,
     artStyle,
     artStyleId,
   } = options;
 
+  const useDrawingHandReference =
+    useComponentVideo === true && !!(drawingHandImage && hasDrawingHandBinary(drawingHandImage));
+
   let images: GenerateVideoParams["images"];
-  if (isStitch) {
+  if (useComponentVideo) {
+    if (!generatedImage) {
+      throw new Error("Thiếu ảnh đầu (ảnh nền) cho video thành phần");
+    }
+    if (!nextGeneratedImage) {
+      throw new Error("Thiếu ảnh cuối (ảnh gen tab Ảnh) cho video thành phần");
+    }
+    images = [
+      await generatedImageToApiBase64Input(generatedImage),
+      await generatedImageToApiBase64Input(nextGeneratedImage),
+    ];
+    if (useDrawingHandReference && drawingHandImage) {
+      images.push(await generatedImageToApiBase64Input(drawingHandImage));
+    }
+  } else if (isStitch) {
     if (!generatedImage || !nextGeneratedImage) {
       throw new Error("Missing start or end image for stitch video");
     }
@@ -245,18 +318,39 @@ export async function buildAffiliateVideoGenerateParams(options: {
   }
 
   const resolvedArtStyle = resolveAffiliateArtStyle({ artStyle, artStyleId }, scriptData);
+  const imageCount = images?.length ?? 0;
+  const voice = resolveComponentVideoVoiceParam({
+    voice: scene.videoVoice,
+    componentTab: useComponentVideo === true,
+    imageCount,
+    voiceDisable: scene.voiceDisable,
+  });
 
   return {
     sceneId: isStitch ? scene.id + "::stitch" : scene.id,
-    prompt: buildAffiliateVideoPrompt(scene, scriptData, isStitch),
+    prompt: buildAffiliateVideoPrompt(
+      scene,
+      scriptData,
+      isStitch,
+      useComponentVideo,
+      useDrawingHandReference
+    ),
     images,
     aspectRatio: scriptData?.aspectRatio ?? aspectRatio,
-    videoMode: resolveAffiliateVideoMode({ isStitch, scene, requireImageBeforeVideo }),
+    videoMode: useComponentVideo
+      ? Flow2VideoModeEnum.COMPONENT
+      : resolveAffiliateVideoMode({ isStitch, scene, requireImageBeforeVideo }),
     noText: scene.noText,
     voiceDisable: scene.voiceDisable,
+    voice,
     generateAudio: scene.voiceDisable ? false : undefined,
-    artStyle: resolvedArtStyle.artStyle,
-    artStyleId: resolvedArtStyle.artStyleId,
+    // Component audio-image: không gửi artStyle (tránh lẫn visual vào prompt video)
+    artStyle: useComponentVideo ? undefined : resolvedArtStyle.artStyle,
+    artStyleId: useComponentVideo ? undefined : resolvedArtStyle.artStyleId,
     ...buildAutoDownloadOptions(scene, isStitch),
   };
+}
+
+function hasDrawingHandBinary(img: GeneratedImageData): boolean {
+  return !!(img.mediaBlob || (img.imageBytes || "").trim());
 }

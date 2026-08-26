@@ -1,17 +1,18 @@
 /**
  * Shared helpers cho POST /api/app/{audio|image|text}-to-video/
+ * Tạo request Flow2 → trả requestId; client poll GET /api/app/generate-text/:id/
  */
 import { Request, Response } from "express";
+import logger from "../../../helpers/logger";
 import {
-  cancelFlow2TextRequest,
-  generateTextWithFlow2,
-  serializeFlow2TextClientResult,
+  createFlow2TextRequest,
   type Flow2AudioInput,
   type Flow2ImageInput,
 } from "../../api-media/flow2";
 import { checkRequestLimit, incrementRequestCount } from "../affiliate-scene/_shared";
 import {
   AUDIO_IMAGE_SCENE_JSON_SCHEMA,
+  AUDIO_TIMED_TRANSCRIPT_JSON_SCHEMA,
   TRANSCRIBE_SYSTEM_INSTRUCTION,
   buildAudioImageAnalyzePrompt,
   buildAudioImageAnalyzeSystemInstruction,
@@ -88,41 +89,39 @@ function validateSource(sourceTab: SourceTab, body: SourceToVideoBody): string |
   return null;
 }
 
-async function runFlow2Direct(
+/** Tạo request Flow2 gen_text — không chờ kết quả; client poll theo requestId. */
+async function createFlow2AndReturnId(
   res: Response,
-  req: Request,
   customerId: string,
-  params: Parameters<typeof generateTextWithFlow2>[0]
+  params: Parameters<typeof createFlow2TextRequest>[0]
 ) {
-  let requestId = "";
-  const onClose = () => {
-    if (!requestId) return;
-    void cancelFlow2TextRequest(requestId, customerId).catch(() => undefined as void);
-  };
-
-  req.on("close", onClose);
-  try {
-    const { requestId: createdId, result } = await generateTextWithFlow2({
-      ...params,
-      customerId,
-      onRequestCreated: async (id: string) => {
-        requestId = id;
-      },
-    });
-    requestId = createdId;
-    req.off("close", onClose);
-    await incrementRequestCount(customerId);
-    return res.json({
-      success: true,
-      requestId: createdId,
-      status: "done",
-      type: "gen_text",
-      data: serializeFlow2TextClientResult(result),
-    });
-  } catch (err) {
-    req.off("close", onClose);
-    throw err;
+  const audios = params.audioInputs || [];
+  if (audios.length) {
+    let b64 = 0;
+    for (const item of audios) {
+      b64 +=
+        typeof item === "string" ? item.length : String(item?.audioBytes || "").length;
+    }
+    logger.info(
+      `[source-to-video] Flow2 create gen_text: audios=${audios.length}, base64Chars≈${b64} (~${(
+        (b64 * 3) /
+        4 /
+        (1024 * 1024)
+      ).toFixed(1)}MB raw)`
+    );
   }
+
+  const { requestId } = await createFlow2TextRequest({
+    ...params,
+    customerId,
+  });
+  await incrementRequestCount(customerId);
+  return res.status(202).json({
+    success: true,
+    requestId,
+    status: "queued",
+    type: "gen_text",
+  });
 }
 
 export async function handleSourceToVideoRequest(
@@ -153,14 +152,16 @@ export async function handleSourceToVideoRequest(
     await checkRequestLimit(customerId);
 
     if (sourceTab === "audio") {
-      return runFlow2Direct(res, req, customerId, {
+      return createFlow2AndReturnId(res, customerId, {
         prompt: buildAudioTranscribePrompt(form),
         systemInstruction: TRANSCRIBE_SYSTEM_INSTRUCTION,
         audioInputs: collectAudios(body),
+        jsonMode: true,
+        jsonSchema: AUDIO_TIMED_TRANSCRIPT_JSON_SCHEMA,
       });
     }
 
-    return runFlow2Direct(res, req, customerId, {
+    return createFlow2AndReturnId(res, customerId, {
       prompt: buildImageExtractTextPrompt(form),
       systemInstruction: TRANSCRIBE_SYSTEM_INSTRUCTION,
       imageInputs: collectImages(body),
@@ -177,11 +178,12 @@ export async function handleSourceToVideoRequest(
 
   await checkRequestLimit(customerId);
 
-  return runFlow2Direct(res, req, customerId, {
+  // Phân tích chỉ dựa trên text đã lấy (audio/image/text) — giống luồng audio.
+  // Không gửi lại ảnh OCR ở bước analyze để tránh lệch nội dung.
+  return createFlow2AndReturnId(res, customerId, {
     prompt: buildAudioImageAnalyzePrompt(form, sourceText),
     systemInstruction: buildAudioImageAnalyzeSystemInstruction(form),
     jsonMode: true,
     jsonSchema: AUDIO_IMAGE_SCENE_JSON_SCHEMA,
-    imageInputs: sourceTab === "image" ? collectImages(body) : undefined,
   });
 }

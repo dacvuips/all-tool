@@ -6,7 +6,7 @@ import {
   analyzeSourceTextToScenes,
   transcribeSourceText,
 } from "./analyze-audio-image";
-import type { AudioImageToVideoFormState } from "./audio-image-types";
+import type { AudioImageToVideoFormState, SourceTab } from "./audio-image-types";
 import { getAudioImageBatchActions } from "./audio-image-batch-bridge";
 
 export type AudioImagePipelineStepId =
@@ -16,10 +16,14 @@ export type AudioImagePipelineStepId =
   | "generateVideo"
   | "export";
 
-const SOURCE_TEXT_KEY = "audio-image-to-video:sourceText:v1";
+const SOURCE_TEXT_PREFIX = "audio-image-to-video:sourceText:";
 const WORKFLOW_STORAGE_KEY = "audio-image-to-video:workflow:v1";
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function sourceTextStorageKey(sourceTab: SourceTab) {
+  return `${SOURCE_TEXT_PREFIX}${sourceTab}:v1`;
+}
 
 function readStoredSourceText(key: string) {
   if (typeof window === "undefined") return "";
@@ -40,16 +44,29 @@ function writeStoredSourceText(key: string, text: string) {
   }
 }
 
+function transcribeStepLabel(sourceTab: SourceTab): string {
+  if (sourceTab === "image") return "Trích text ảnh";
+  if (sourceTab === "text") return "Chuẩn bị text";
+  return "Lấy text";
+}
+
 export function useAudioImagePipeline({
-  useAiReferenceImage = true,
   getForm,
+  sourceTab,
   onTranscribed,
   onAnalyzed,
+  onAnalyzeComplete,
+  onVideosGenerated,
 }: {
-  useAiReferenceImage?: boolean;
   getForm: () => AudioImageToVideoFormState;
+  /** Tab nguồn đang chọn — đổi label bước + kho text riêng */
+  sourceTab: SourceTab;
   onTranscribed?: (text: string) => void;
   onAnalyzed: (script: ScriptData) => void;
+  /** Sau phân tích xong — vd. xóa timeline Studio cũ */
+  onAnalyzeComplete?: () => void;
+  /** Sau tạo video xong — Studio seed lại với video mới */
+  onVideosGenerated?: () => void;
 }): WorkflowStepsState<AudioImagePipelineStepId> {
   const toast = useToast();
   const getFormRef = useRef(getForm);
@@ -58,15 +75,29 @@ export function useAudioImagePipeline({
   onTranscribedRef.current = onTranscribed;
   const onAnalyzedRef = useRef(onAnalyzed);
   onAnalyzedRef.current = onAnalyzed;
-  const sourceTextRef = useRef(readStoredSourceText(SOURCE_TEXT_KEY));
+  const onAnalyzeCompleteRef = useRef(onAnalyzeComplete);
+  onAnalyzeCompleteRef.current = onAnalyzeComplete;
+  const onVideosGeneratedRef = useRef(onVideosGenerated);
+  onVideosGeneratedRef.current = onVideosGenerated;
+  const sourceTabRef = useRef(sourceTab);
+  sourceTabRef.current = sourceTab;
+
+  const textKey = sourceTextStorageKey(sourceTab);
+  const sourceTextRef = useRef(readStoredSourceText(textKey));
 
   useEffect(() => {
-    sourceTextRef.current = readStoredSourceText(SOURCE_TEXT_KEY);
+    const key = sourceTextStorageKey(sourceTab);
+    sourceTextRef.current = readStoredSourceText(key);
     const stored = sourceTextRef.current;
-    if (stored && !getFormRef.current().textContent?.trim()) {
+    // Image/audio: khôi phục text đã trích. Text: ưu tiên ô nhập form.
+    if (sourceTab === "text") {
+      const formText = getFormRef.current().textContent?.trim() || "";
+      if (formText) sourceTextRef.current = formText;
+      else if (stored) onTranscribedRef.current?.(stored);
+    } else if (stored && !getFormRef.current().textContent?.trim()) {
       onTranscribedRef.current?.(stored);
     }
-  }, []);
+  }, [sourceTab]);
 
   const stepDefs = useMemo(() => {
     const steps: Array<{
@@ -76,12 +107,26 @@ export function useAudioImagePipeline({
     }> = [
       {
         id: "transcribe",
-        label: "Lấy text",
+        label: transcribeStepLabel(sourceTab),
         run: async () => {
           try {
-            const text = await transcribeSourceText(getFormRef.current());
+            const form = getFormRef.current();
+            const tab = form.sourceTab || sourceTabRef.current;
+            const key = sourceTextStorageKey(tab);
+
+            // Text: dùng luôn nội dung ô nhập — không cần OCR/API nặng.
+            if (tab === "text") {
+              const text = (form.textContent || "").trim();
+              if (!text) throw new Error("Vui lòng nhập nội dung văn bản");
+              sourceTextRef.current = text;
+              writeStoredSourceText(key, text);
+              onTranscribedRef.current?.(text);
+              return;
+            }
+
+            const text = await transcribeSourceText(form);
             sourceTextRef.current = text;
-            writeStoredSourceText(SOURCE_TEXT_KEY, text);
+            writeStoredSourceText(key, text);
             onTranscribedRef.current?.(text);
           } catch (err: any) {
             toast.error(err?.message || "Lấy text thất bại");
@@ -95,28 +140,28 @@ export function useAudioImagePipeline({
         run: async () => {
           try {
             const form = getFormRef.current();
+            const tab = form.sourceTab || sourceTabRef.current;
+            const key = sourceTextStorageKey(tab);
             const sourceText =
               sourceTextRef.current.trim() ||
               form.textContent?.trim() ||
-              readStoredSourceText(SOURCE_TEXT_KEY);
+              readStoredSourceText(key);
             if (sourceText) {
               sourceTextRef.current = sourceText;
-              writeStoredSourceText(SOURCE_TEXT_KEY, sourceText);
+              writeStoredSourceText(key, sourceText);
             }
             const script = await analyzeSourceTextToScenes(form, sourceText);
             onAnalyzedRef.current(script);
+            onAnalyzeCompleteRef.current?.();
           } catch (err: any) {
             toast.error(err?.message || "Phân tích thất bại");
             throw err;
           }
         },
       },
-    ];
-
-    if (useAiReferenceImage) {
-      steps.push({
+      {
         id: "generateImage",
-        label: "Generate Image",
+        label: "Tạo ảnh",
         run: async () => {
           const actions = getAudioImageBatchActions();
           if (!actions?.generateAllImages) {
@@ -126,31 +171,25 @@ export function useAudioImagePipeline({
           try {
             await actions.generateAllImages();
           } catch (err: any) {
-            toast.error(err?.message || "Generate Image thất bại");
+            toast.error(err?.message || "Tạo ảnh thất bại");
             throw err;
           }
         },
-      });
-    }
-
-    steps.push(
+      },
       {
         id: "generateVideo",
-        label: "Generate Video",
+        label: "Tạo video",
         run: async () => {
           const actions = getAudioImageBatchActions();
           if (!actions?.generateAllVideos) {
-            toast.error(
-              useAiReferenceImage
-                ? "Chưa sẵn sàng tạo video. Hãy generate ảnh trước."
-                : "Chưa sẵn sàng tạo video. Hãy hoàn thành Phân tích trước."
-            );
+            toast.error("Chưa sẵn sàng tạo video. Hãy tạo ảnh trước.");
             throw new Error("Batch video actions chưa sẵn sàng");
           }
           try {
             await actions.generateAllVideos();
+            onVideosGeneratedRef.current?.();
           } catch (err: any) {
-            toast.error(err?.message || "Generate Video thất bại");
+            toast.error(err?.message || "Tạo video thất bại");
             throw err;
           }
         },
@@ -159,17 +198,19 @@ export function useAudioImagePipeline({
         id: "export",
         label: "Xuất video",
         run: async () => {
-          await wait(1200);
+          // Timeline + phụ đề chỉnh trong tab Studio (giống Film).
+          toast.success("Mở tab Studio để ghép timeline và xuất video.");
+          await wait(400);
         },
-      }
-    );
+      },
+    ];
 
     return steps;
-  }, [toast, useAiReferenceImage]);
+  }, [toast, sourceTab]);
 
   return useWorkflowSteps({
     steps: stepDefs,
-    storageKey: WORKFLOW_STORAGE_KEY,
+    storageKey: `${WORKFLOW_STORAGE_KEY}:${sourceTab}`,
     defaultAutoAdvance: false,
   });
 }

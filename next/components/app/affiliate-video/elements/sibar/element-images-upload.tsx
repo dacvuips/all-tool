@@ -5,6 +5,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { saveAs } from "file-saver";
+import { MdPerson } from "react-icons/md";
 import {
   RiCloseLine,
   RiDeleteBinLine,
@@ -16,6 +18,7 @@ import {
 } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
+import { VoiceWaveformPlayer } from "../../../voice/voice-catalog-card";
 import {
   fileToGenerationImageBase64,
   GENERATION_IMAGE_ACCEPTED_EXTENSIONS,
@@ -960,7 +963,12 @@ export interface ElementAudioUploadProps {
   maxSizeMB?: number;
   label?: string;
   maxFiles?: number;
+  /** Nén MP3 mono 16kHz trước khi lưu base64 (ffmpeg.wasm). Mặc định bật. */
+  compressSpeech?: boolean;
 }
+
+/** Bỏ qua nén nếu file đã nhỏ và không phải WAV/FLAC (đã nén). */
+const SKIP_COMPRESS_UNDER_BYTES = 1.5 * 1024 * 1024;
 
 export function ElementAudioUpload({
   audioRef = [],
@@ -969,11 +977,13 @@ export function ElementAudioUpload({
   maxSizeMB = 50,
   label,
   maxFiles = 1,
+  compressSpeech = true,
 }: ElementAudioUploadProps) {
   const { t } = useTranslation();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [compressProgress, setCompressProgress] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const value = audioRef || [];
 
@@ -1001,20 +1011,55 @@ export function ElementAudioUpload({
       }
 
       try {
-        const audioBytes = await fileToBase64Audio(file);
+        let source: Blob = file;
+        let mimeType = guessAudioMimeType(file);
+        let name = file.name;
+
+        const hay = `${file.name} ${file.type}`.toLowerCase();
+        const likelyUncompressed =
+          hay.includes("wav") || hay.includes("flac") || hay.includes("aiff");
+        const shouldCompress =
+          compressSpeech && (file.size > SKIP_COMPRESS_UNDER_BYTES || likelyUncompressed);
+
+        if (shouldCompress) {
+          setCompressProgress(t("Đang nén audio..."));
+          const { compressSpeechAudioInBrowser } = await import(
+            /* webpackChunkName: "ffmpeg-browser" */
+            "../../../../video-affiliate-plus/ffmpeg-browser"
+          );
+          const compressed = await compressSpeechAudioInBrowser(file, {
+            fileName: file.name,
+            mimeType: file.type,
+            onProgress: (p) => setCompressProgress(p.message || t("Đang nén audio...")),
+          });
+          // Chỉ dùng bản nén nếu nhỏ hơn (hoặc WAV/FLAC luôn dùng bản nén)
+          if (compressed.blob.size < file.size || likelyUncompressed) {
+            source = compressed.blob;
+            mimeType = compressed.mimeType;
+            name = file.name.replace(/\.[^.]+$/i, "") + ".mp3";
+          }
+          setCompressProgress(null);
+        }
+
+        const audioBytes = await fileToBase64Audio(
+          source instanceof File
+            ? source
+            : new File([source], name, { type: mimeType })
+        );
         return {
           fifeUrl: "",
           audioBytes,
-          mimeType: guessAudioMimeType(file),
-          name: file.name,
+          mimeType,
+          name,
         };
       } catch (err) {
         console.error("[ElementAudioUpload] Error processing file:", err);
+        setCompressProgress(null);
         toast.error(t("Lỗi khi xử lý audio. Vui lòng thử lại."));
         return null;
       }
     },
-    [maxSizeMB, readOnly, t, toast]
+    [compressSpeech, maxSizeMB, readOnly, t, toast]
   );
 
   const addFiles = useCallback(
@@ -1038,9 +1083,14 @@ export function ElementAudioUpload({
       const next =
         maxFiles === 1 ? added.slice(0, 1) : [...value, ...added].slice(0, maxFiles);
       onAudioRefChange(next);
+
+      const first = added[0];
+      const approxMb = first?.audioBytes
+        ? ((first.audioBytes.length * 3) / 4 / (1024 * 1024)).toFixed(1)
+        : "?";
       toast.success(
         added.length === 1
-          ? t("Đã upload audio thành công")
+          ? `${t("Đã upload audio")} (~${approxMb}MB)`
           : `${t("Đã upload")} ${added.length} ${t("audio")}`
       );
     },
@@ -1083,43 +1133,58 @@ export function ElementAudioUpload({
   };
 
   return (
-    <Field noError label={label || t("Upload audio")}>
+    <Field noError label={label || t("Chọn audio")}>
       <div className="space-y-2">
-        <div
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={openFilePicker}
-          className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 transition-all ${
-            readOnly ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
-          } ${
-            dragOver
-              ? "bg-pink-50 border-pink-400"
-              : "border-gray-300 hover:border-pink-300 hover:bg-pink-50/30"
-          }`}
-        >
-          {uploading ? (
-            <div className="flex flex-col gap-2 items-center">
-              <RiLoader4Line className="text-3xl text-pink-500 animate-spin" />
-              <span className="text-sm font-medium text-pink-600">{t("Đang xử lý")}...</span>
-            </div>
-          ) : (
-            <>
-              <div className="flex justify-center items-center mb-2 w-10 h-10 bg-pink-50 rounded-full">
-                <RiMusic2Line className="text-xl text-pink-500" />
+        {/* maxFiles=1 và đã có file: ẩn dropzone — chỉ hiện card nghe như source */}
+        {(maxFiles !== 1 || value.length === 0) && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={openFilePicker}
+            className={`relative flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-5 transition-all ${
+              readOnly ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
+            } ${
+              dragOver
+                ? "bg-pink-50 border-pink-400"
+                : "border-gray-300 hover:border-pink-300 hover:bg-pink-50/30"
+            }`}
+          >
+            {uploading ? (
+              <div className="flex flex-col gap-2 items-center">
+                <RiLoader4Line className="text-3xl text-pink-500 animate-spin" />
+                <span className="text-sm font-medium text-pink-600">
+                  {compressProgress || `${t("Đang xử lý")}...`}
+                </span>
               </div>
-              <span className="text-sm font-semibold text-center text-gray-700">
-                {value.length > 0 && maxFiles > 1
-                  ? t("Kéo thả hoặc bấm để thêm audio")
-                  : t("Kéo thả hoặc bấm để chọn audio")}
-              </span>
-              <span className="mt-1 text-xs text-center text-gray-400">
-                MP3, WAV, M4A, AAC, OGG, FLAC • {t("Tối đa")} {maxSizeMB}MB
-                {maxFiles > 1 ? ` • ${t("Tối đa")} ${maxFiles} ${t("file")}` : ""}
-              </span>
-            </>
-          )}
-        </div>
+            ) : (
+              <>
+                <div className="flex justify-center items-center mb-2 w-10 h-10 bg-pink-50 rounded-full">
+                  <RiMusic2Line className="text-xl text-pink-500" />
+                </div>
+                <span className="text-sm font-semibold text-center text-gray-700">
+                  {value.length > 0 && maxFiles > 1
+                    ? t("Kéo thả hoặc bấm để thêm audio")
+                    : t("Kéo thả hoặc bấm để chọn audio")}
+                </span>
+                <span className="mt-1 text-xs text-center text-gray-400">
+                  MP3, WAV, M4A, AAC, OGG, FLAC • {t("Tối đa")} {maxSizeMB}MB
+                  {compressSpeech ? ` • ${t("Tự nén MP3 thoại trước khi gửi")}` : ""}
+                  {maxFiles > 1 ? ` • ${t("Tối đa")} ${maxFiles} ${t("file")}` : ""}
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {uploading && maxFiles === 1 && value.length > 0 ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-pink-200 bg-pink-50 px-3 py-4">
+            <RiLoader4Line className="text-xl text-pink-500 animate-spin" />
+            <span className="text-sm font-medium text-pink-600">
+              {compressProgress || `${t("Đang xử lý")}...`}
+            </span>
+          </div>
+        ) : null}
 
         <input
           ref={fileInputRef}
@@ -1158,6 +1223,8 @@ function AudioUploadListItem({
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
+  /** Accent giống Voice / Tạo giọng nói */
+  const accent = "#F2890D";
   const previewSrc = useMemo(() => {
     if (!audio.audioBytes && !audio.fifeUrl) return null;
     if (audio.fifeUrl) return audio.fifeUrl;
@@ -1172,34 +1239,79 @@ function AudioUploadListItem({
 
   const displayName =
     (audio.name || "audio").replace(/\.[^./\\]+$/, "").trim() || "audio";
+  const fileLabel = audio.name || `${displayName}.mp3`;
+  const mimeHint = (audio.mimeType || "audio/mpeg").replace(/^audio\//i, "").toUpperCase();
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!previewSrc) return;
+    try {
+      if (audio.audioBytes) {
+        const blob = base64ToBlobAudio(
+          audio.audioBytes,
+          audio.mimeType || "audio/mpeg"
+        );
+        saveAs(blob, fileLabel);
+        return;
+      }
+      saveAs(previewSrc, fileLabel);
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
-    <li className="relative flex flex-col gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
-      {!readOnly && (
-        <Button
+    <li
+      className="relative group flex flex-col w-full min-w-0 overflow-hidden text-left bg-white rounded-xl border p-2"
+      style={{ borderColor: accent }}
+    >
+      {!readOnly ? (
+        <button
+          type="button"
+          title={t("Xóa")}
+          aria-label={t("Xóa")}
           onClick={(e) => {
-            e?.stopPropagation?.();
+            e.stopPropagation();
             onRemove();
           }}
-          icon={<RiCloseLine />}
-          className="absolute right-2 top-2 z-10 h-6 w-6 rounded-full bg-white px-0 text-danger hover:bg-red-50"
-          iconClassName="text-sm"
-          tooltip={t("Xóa")}
-        />
-      )}
-      <div className="flex items-center gap-2 pr-8">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-pink-100">
-          <RiMusic2Line className="text-lg text-pink-500" />
+          className="flex absolute top-1.5 right-1.5 z-10 justify-center items-center w-7 h-7 text-white bg-red-500 rounded-full border-0 cursor-pointer"
+        >
+          <RiCloseLine className="text-base" />
+        </button>
+      ) : null}
+
+      <div className={`flex gap-2.5 items-center min-w-0 ${readOnly ? "" : "pr-7"}`}>
+        <div
+          className="flex flex-shrink-0 justify-center items-center w-9 h-9 rounded-lg"
+          style={{ background: `${accent}22` }}
+        >
+          <MdPerson className="text-xl" style={{ color: accent }} />
         </div>
-        <span className="truncate text-sm font-medium text-gray-800" title={displayName}>
-          {displayName}
-        </span>
+        <div className="flex-1 min-w-0">
+          <div className="text-base font-bold leading-tight text-gray-900 truncate" title={displayName}>
+            {displayName}
+          </div>
+          <div className="mt-0.5 text-xs tracking-widest text-gray-400 uppercase truncate">
+            {mimeHint || t("Audio")}
+          </div>
+        </div>
       </div>
+
       {previewSrc ? (
-        <audio src={previewSrc} controls className="w-full" preload="metadata" />
+        <div className="pt-2 mt-2 border-t border-gray-100">
+          <VoiceWaveformPlayer src={previewSrc} color={accent} onDownload={handleDownload} />
+        </div>
       ) : null}
     </li>
   );
+}
+
+function base64ToBlobAudio(base64: string, mimeType: string): Blob {
+  const payload = base64.includes(",") ? base64.split(",")[1] : base64;
+  const binary = atob(payload.replace(/\s/g, ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeType || "audio/mpeg" });
 }
 
 export function ElementImagesUpload({

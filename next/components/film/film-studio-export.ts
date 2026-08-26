@@ -9,6 +9,7 @@ import {
 } from "../app/affiliate-video/shared/videoDownloadUtils";
 import {
     burnSubtitlesOntoVideoInBrowser,
+    changeSpeedInBrowser,
     destroyFFmpegInstance,
     mergeVideosInBrowser,
     mixTimedAudioClipsInBrowser,
@@ -23,6 +24,8 @@ import {
 } from "../video-affiliate-plus/ffmpeg-browser";
 import {
     buildFilmStudioTimeline,
+    filmStudioVideoStretchRate,
+    FILM_STUDIO_MIN_CLIP_SEC,
     type FilmStudioSubtitleClip,
     type FilmStudioVideoClip,
     type FilmStudioVoiceClip,
@@ -138,20 +141,39 @@ async function buildTrimmedVideoBlob(
     }
     throwIfExportAborted(signal);
     if (!source) continue;
-    const start = Math.max(0, clip.trimInSec || 0);
-    const end = start + Math.max(0.05, clip.durationSec || 0.05);
-    const piece = await trimVideoInBrowser(source, start, end, {
+    const trimIn = Math.max(0, clip.trimInSec || 0);
+    const stretch = filmStudioVideoStretchRate(clip);
+    const sourceSpan =
+      clip.sourceDurationSec != null && Number.isFinite(clip.sourceDurationSec)
+        ? Math.max(0.05, clip.sourceDurationSec)
+        : Math.max(0.05, clip.durationSec || 0.05);
+    const trimEnd = trimIn + sourceSpan;
+    let piece = await trimVideoInBrowser(source, trimIn, trimEnd, {
       onProgress: mapProgress(
         onProgress,
         0.05 + (i / ready.length) * 0.35,
-        0.05 + ((i + 1) / ready.length) * 0.35,
+        0.05 + ((i + 0.5) / ready.length) * 0.35,
         undefined,
         signal
       ),
     });
     throwIfExportAborted(signal);
+    // Giãn/nén để khớp duration timeline (thoại dài → chậm; thoại ngắn → nhanh)
+    if (Math.abs(stretch - 1) > 0.04) {
+      const sped = await changeSpeedInBrowser(piece, stretch, {
+        onProgress: mapProgress(
+          onProgress,
+          0.05 + ((i + 0.5) / ready.length) * 0.35,
+          0.05 + ((i + 1) / ready.length) * 0.35,
+          undefined,
+          signal
+        ),
+      });
+      piece = sped.blob;
+    }
+    throwIfExportAborted(signal);
     trimmed.push(piece);
-    durationSec += clip.durationSec;
+    durationSec += Math.max(FILM_STUDIO_MIN_CLIP_SEC, clip.durationSec || 0.05);
   }
 
   if (!trimmed.length) return null;

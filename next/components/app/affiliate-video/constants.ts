@@ -68,6 +68,19 @@ export interface AffiliateVideoFormConfig extends VideoFormBase {
    */
   requireImageBeforeVideo?: boolean;
   /**
+   * Audio/Image to Video: gen video mode `component` (thành phần).
+   * Ảnh tham chiếu bắt buộc: ảnh đầu (videoBackgroundImage / bg-audio.jpg) + ảnh cuối (gen tab Ảnh).
+   * Prompt video chỉ gửi motion + dialogue.
+   */
+  useComponentVideo?: boolean;
+  /** Ảnh nền video — upload tùy chọn; trống → bg-audio.jpg */
+  videoBackgroundImage?: ElementFormImage;
+  /**
+   * Audio/Image to Video: bật bàn tay đang vẽ → gen video gửi thêm draw-audio.jpg
+   * làm ảnh tham chiếu thành phần + prompt khớp bàn tay.
+   */
+  showDrawingHand?: boolean;
+  /**
    * Chế độ tạo batch ở tab "Đơn":
    * - single_variant: "Tự động" – AI tự tạo nhiều phiên bản dựa trên prompt gốc
    * - story_script: "Tùy chỉnh phân cảnh" – Người dùng tự bố cục phân cảnh
@@ -213,6 +226,10 @@ export interface SceneScript {
   imageGenPrompt: string;
   motionPrompt: string;
   dialogue: string;
+  /** Giây bắt đầu đoạn thoại trên audio nguồn (Audio/Image → Video) */
+  dialogueStartSec?: number;
+  /** Giây kết thúc đoạn thoại trên audio nguồn */
+  dialogueEndSec?: number;
   disabled?: boolean;
   voiceDisable?: boolean;
   noText?: boolean;
@@ -362,6 +379,8 @@ export const CACHE_KEY = {
   audioImageInput: "audioImageInput",
   audioImageForm: "audioImageForm",
   audioImageHistory: "audioImageHistory",
+  /** Timeline Studio (FilmStudioPanel) — audio-image-to-video */
+  audioImageStudioTimeline: "audioImageStudioTimeline",
   /** Lịch sử xóa logo AI */
   removeLogoHistory: "removeLogoHistory",
   /** Mặc định tự động tải ảnh/video sau khi gen (localStorage) */

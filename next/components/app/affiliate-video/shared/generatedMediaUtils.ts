@@ -842,6 +842,8 @@ export async function resumePendingGeneratedImageBinary<T extends GeneratedImage
 /**
  * Lưu link vào IndexedDB ngay (hiển thị trước).
  * ClearWatermark chạy ngầm — xong thì thay blob + blob URL ảnh đã xóa logo.
+ *
+ * `waitForClear: true` — chờ clear + blob xong mới onUpdate/return (UI loading không tắt sớm).
  */
 export async function persistGeneratedImageWithEnrichment<T extends GeneratedImageLike>(
   sceneId: string,
@@ -851,7 +853,7 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
     onUpdate?: (data: T) => void;
     /** Sau khi clear/fallback có blob — dùng auto-download ảnh đã xóa logo */
     onReady?: (data: T) => void;
-    /** true: chờ clear xong mới return (Wolf asset). Mặc định false — hiện link trước */
+    /** true: chờ clear xong mới return + onUpdate. Mặc định false — hiện link trước */
     waitForClear?: boolean;
   }
 ): Promise<T | undefined> {
@@ -863,7 +865,11 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
   const initial = await ensureGeneratedImageBinary(preview);
   await storage.set(sceneId, toPersistGeneratedImage(initial));
   const initialUi = toUiGeneratedImage(initial);
-  options?.onUpdate?.(initialUi);
+
+  // Chỉ báo UI sớm khi không bắt chờ clear — tránh tắt loading khi chưa có blob hiển thị.
+  if (!options?.waitForClear) {
+    options?.onUpdate?.(initialUi);
+  }
 
   const runClear = persistImageAfterClearWatermark(
     sceneId,
@@ -887,6 +893,11 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
       return fallback;
     } catch (fallbackErr) {
       console.warn("[persistGeneratedImageWithEnrichment] fallback blob", fallbackErr);
+      // Vẫn đẩy bản có binary nếu được, để UI thoát loading.
+      if (hasStoredGeneratedImageBinary(initialUi)) {
+        options?.onUpdate?.(initialUi);
+        options?.onReady?.(initialUi);
+      }
       return initialUi;
     }
   });
@@ -897,6 +908,18 @@ export async function persistGeneratedImageWithEnrichment<T extends GeneratedIma
 
   void runClear;
   return initialUi;
+}
+
+/** Ảnh đã sẵn sàng hiện UI (có blob hoặc legacy base64) — chưa đủ nếu chỉ còn URL remote. */
+export function isGeneratedImageReadyForUi(
+  img: GeneratedImageLike | null | undefined
+): boolean {
+  if (!img) return false;
+  if (img.mediaBlob) return true;
+  if ((img.imageBytes || "").trim()) return true;
+  // Object URL local cũng coi là ảnh thật đã hiện được (sau clear → blob).
+  if ((img.previewUrl || "").startsWith("blob:")) return true;
+  return false;
 }
 
 /** Lưu link trước; enrich Blob chạy ngầm (xem persistGeneratedImageWithEnrichment). */

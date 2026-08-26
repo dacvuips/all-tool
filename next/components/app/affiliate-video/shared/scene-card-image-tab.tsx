@@ -21,7 +21,7 @@ import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
-import { buildSceneImageFileName, getGeneratedImagePreviewSrc } from "./generatedMediaUtils";
+import { buildSceneImageFileName, getGeneratedImagePreviewSrc, isGeneratedImageReadyForUi } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
@@ -126,7 +126,9 @@ export function SceneCardImageTab({
 
   const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
   const imagePaddingTop = `${paddingPct}%`;
-
+  // Chỉ coi là có ảnh thật khi đã có mediaBlob/base64 — URL remote (sau clear WM chưa blob) vẫn giữ loading.
+  const imageReady = isGeneratedImageReadyForUi(generatedImage);
+  const showImageLoading = generatingImage || (!!generatedImage && !imageReady);
   /** Khung rỗng / loading khớp kích thước khung ảnh */
   const renderUniformPlaceholder = (inner: React.ReactNode, clickable?: boolean) => (
     <div className="relative w-full">
@@ -204,7 +206,7 @@ export function SceneCardImageTab({
 
       {/* ── Generated Image section ── */}
       <div className="flex gap-2 justify-center items-center group w-full">
-        {generatedImage ? (
+        {imageReady && generatedImage ? (
           <div className="flex flex-col gap-1.5 items-center w-full">
             {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
             <div className="relative w-full rounded-md overflow-hidden border-2 border-transparent transition-all hover:border-primary hover:shadow-lg">
@@ -275,7 +277,7 @@ export function SceneCardImageTab({
               {renderUploadGalleryButtons()}
             </div>
           </div>
-        ) : generatingImage ? (
+        ) : showImageLoading ? (
           uniformFrame ? (
             renderUniformPlaceholder(
               <SceneMediaGenerationProgress

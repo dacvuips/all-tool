@@ -719,6 +719,12 @@ export function useBatchActions(
         addBatchGeneratingSceneId(scene.id);
         reportSceneError?.(scene.id, "image", null);
         try {
+          const { resolveAudioImageBackgroundElement } = await import(
+            "../audio-image-to-video/resolve-start-frame"
+          );
+          const bg = await resolveAudioImageBackgroundElement(
+            affiliateVideoFormConfig?.videoBackgroundImage
+          );
           const imageParams = await buildAffiliateImageGenerateParams({
             scene,
             scriptData,
@@ -728,7 +734,14 @@ export function useBatchActions(
             selectedProductImages: scene.selectedProductImages,
             noText: scene.noText,
             objectToPersonifyImage,
+            backgroundImage: bg,
           });
+          if (
+            affiliateVideoFormConfig?.useComponentVideo === true &&
+            !imageParams.referenceImage?.imageBytes
+          ) {
+            throw new Error("Gen ảnh chưa gắn được base64 ảnh nền");
+          }
           await generateImage(
             bindSceneJobEnqueue(
               {
@@ -845,7 +858,7 @@ export function useBatchActions(
           return;
         }
 
-        if (!requireImageBeforeVideo) {
+        if (!requireImageBeforeVideo && affiliateVideoFormConfig?.useComponentVideo !== true) {
           const originImage = elementFormImageToGeneratedImage(scene.storyboardCropImage);
           if (originImage) {
             addBatchGeneratingVideoSceneId(scene.id);
@@ -898,6 +911,12 @@ export function useBatchActions(
           try {
             addBatchGeneratingSceneId(scene.id);
             reportSceneError?.(scene.id, "image", null);
+            const { resolveAudioImageBackgroundElement } = await import(
+              "../audio-image-to-video/resolve-start-frame"
+            );
+            const bg = await resolveAudioImageBackgroundElement(
+              affiliateVideoFormConfig?.videoBackgroundImage
+            );
             const imageParams = await buildAffiliateImageGenerateParams({
               scene,
               scriptData,
@@ -907,6 +926,7 @@ export function useBatchActions(
               selectedProductImages: scene.selectedProductImages,
               noText: scene.noText,
               objectToPersonifyImage,
+              backgroundImage: bg,
             });
             existingImage = await generateImage(
               bindSceneJobEnqueue(
@@ -937,13 +957,39 @@ export function useBatchActions(
         addBatchGeneratingVideoSceneId(scene.id);
         reportSceneError?.(scene.id, "video", null);
         try {
+          const useComponent = affiliateVideoFormConfig?.useComponentVideo === true;
+          let backgroundImage = existingImage;
+          let genEndImage: typeof existingImage | undefined;
+          if (useComponent) {
+            const { resolveAudioImageVideoBackground } = await import(
+              "../audio-image-to-video/resolve-start-frame"
+            );
+            backgroundImage = await resolveAudioImageVideoBackground(
+              affiliateVideoFormConfig?.videoBackgroundImage
+            );
+            genEndImage = existingImage;
+          }
+          let drawingHandImage = null as Awaited<
+            ReturnType<
+              typeof import("../audio-image-to-video/resolve-start-frame").resolveDrawingHandVideoReference
+            >
+          > | null;
+          if (useComponent && affiliateVideoFormConfig?.showDrawingHand === true) {
+            const { resolveDrawingHandVideoReference } = await import(
+              "../audio-image-to-video/resolve-start-frame"
+            );
+            drawingHandImage = await resolveDrawingHandVideoReference();
+          }
           const videoParams = await buildAffiliateVideoGenerateParams({
             scene,
             scriptData,
             aspectRatio: affiliateVideoFormConfig?.aspectRatio,
             artStyle: affiliateVideoFormConfig?.artStyle,
             artStyleId: affiliateVideoFormConfig?.artStyleId,
-            generatedImage: existingImage,
+            generatedImage: backgroundImage,
+            nextGeneratedImage: genEndImage,
+            drawingHandImage,
+            useComponentVideo: useComponent,
             requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
           });
           await generateVideo(
@@ -1202,6 +1248,12 @@ export function useBatchActions(
           try {
             addBatchGeneratingSceneId(scene.id);
             reportSceneError?.(scene.id, "image", null);
+            const { resolveAudioImageBackgroundElement } = await import(
+              "../audio-image-to-video/resolve-start-frame"
+            );
+            const bgRetry = await resolveAudioImageBackgroundElement(
+              affiliateVideoFormConfig?.videoBackgroundImage
+            );
             const imageParams = await buildAffiliateImageGenerateParams({
               scene,
               scriptData,
@@ -1211,6 +1263,7 @@ export function useBatchActions(
               selectedProductImages: scene.selectedProductImages,
               noText: scene.noText,
               objectToPersonifyImage,
+              backgroundImage: bgRetry,
             });
             await generateImage(
               bindSceneJobEnqueue(
@@ -1269,9 +1322,20 @@ export function useBatchActions(
               affiliateVideoFormConfig?.requireImageBeforeVideo
             );
 
-            if (!existingImage && requireImageBeforeVideo && scene.imageGenPrompt) {
+            if (
+              !existingImage &&
+              scene.imageGenPrompt &&
+              (requireImageBeforeVideo ||
+                affiliateVideoFormConfig?.useComponentVideo === true)
+            ) {
               addBatchGeneratingSceneId(scene.id);
               reportSceneError?.(scene.id, "image", null);
+              const { resolveAudioImageBackgroundElement } = await import(
+                "../audio-image-to-video/resolve-start-frame"
+              );
+              const bgRetry2 = await resolveAudioImageBackgroundElement(
+                affiliateVideoFormConfig?.videoBackgroundImage
+              );
               const imageParams = await buildAffiliateImageGenerateParams({
                 scene,
                 scriptData,
@@ -1281,6 +1345,7 @@ export function useBatchActions(
                 selectedProductImages: scene.selectedProductImages,
                 noText: scene.noText,
                 objectToPersonifyImage,
+                backgroundImage: bgRetry2,
               });
               existingImage = await generateImage(
                 bindSceneJobEnqueue(
@@ -1301,13 +1366,39 @@ export function useBatchActions(
 
             addBatchGeneratingVideoSceneId(scene.id);
             reportSceneError?.(scene.id, "video", null);
+            const useComponent = affiliateVideoFormConfig?.useComponentVideo === true;
+            let backgroundImage = existingImage;
+            let genEndImage: typeof existingImage | undefined;
+            if (useComponent) {
+              const { resolveAudioImageVideoBackground } = await import(
+                "../audio-image-to-video/resolve-start-frame"
+              );
+              backgroundImage = await resolveAudioImageVideoBackground(
+                affiliateVideoFormConfig?.videoBackgroundImage
+              );
+              genEndImage = existingImage;
+            }
+            let drawingHandImage = null as Awaited<
+              ReturnType<
+                typeof import("../audio-image-to-video/resolve-start-frame").resolveDrawingHandVideoReference
+              >
+            > | null;
+            if (useComponent && affiliateVideoFormConfig?.showDrawingHand === true) {
+              const { resolveDrawingHandVideoReference } = await import(
+                "../audio-image-to-video/resolve-start-frame"
+              );
+              drawingHandImage = await resolveDrawingHandVideoReference();
+            }
             const videoParams = await buildAffiliateVideoGenerateParams({
               scene,
               scriptData,
               aspectRatio: affiliateVideoFormConfig?.aspectRatio,
               artStyle: affiliateVideoFormConfig?.artStyle,
               artStyleId: affiliateVideoFormConfig?.artStyleId,
-              generatedImage: existingImage,
+              generatedImage: backgroundImage,
+              nextGeneratedImage: genEndImage,
+              drawingHandImage,
+              useComponentVideo: useComponent,
               requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
             });
             await generateVideo(

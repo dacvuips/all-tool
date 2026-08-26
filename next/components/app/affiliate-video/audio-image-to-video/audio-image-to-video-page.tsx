@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BsFile } from "react-icons/bs";
 import {
@@ -12,7 +12,14 @@ import { useOptionsTranslation } from "../../../../lib/hooks/useOptionsTranslate
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../lib/providers/global-provider";
 import { Button, Field, Form, Select, Switch, Textarea } from "../../../shared/utilities/form";
-import { ASPECT_RATIOS, CACHE_KEY, DB_NAME, STORE_NAME } from "../constants";
+import {
+  ASPECT_RATIOS,
+  CACHE_KEY,
+  DB_NAME,
+  STORE_NAME,
+  type SceneHistoryItem,
+  type ScriptData,
+} from "../constants";
 import { ElementAudioUpload, ElementImagesUpload } from "../elements/sibar/element-images-upload";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { AffiliateVideoSidebarLayout } from "../shared/affiliate-video-sidebar-layout";
@@ -30,6 +37,33 @@ import { AudioImageRightPanel } from "./right-panel/audio-image-right-panel";
 import { useAudioImagePipeline } from "./use-audio-image-pipeline";
 
 const DEFAULT_SOURCE_TAB: SourceTab = "audio";
+const MAX_AUDIO_IMAGE_HISTORY = 50;
+
+const SOURCE_HISTORY_LABEL: Record<SourceTab, string> = {
+  audio: "Audio → Video",
+  image: "Image → Video",
+  text: "Text → Video",
+};
+
+function buildAudioImageHistoryLabel(sourceTab: SourceTab): string {
+  const now = new Date();
+  const date = now.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+  const time = now.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" });
+  return `${SOURCE_HISTORY_LABEL[sourceTab] || "Audio → Video"} – ${date} ${time}`;
+}
+
+function withAudioImageTopicTitle(script: ScriptData, sourceTab: SourceTab): ScriptData {
+  if (script.topicTitle?.trim()) return script;
+  const firstDialogue = (script.scenes || [])
+    .map((s) => (s.dialogue || "").trim())
+    .find(Boolean);
+  const snippet = firstDialogue
+    ? firstDialogue.length > 48
+      ? `${firstDialogue.slice(0, 48)}…`
+      : firstDialogue
+    : SOURCE_HISTORY_LABEL[sourceTab] || "Audio / Image / Text";
+  return { ...script, topicTitle: snippet };
+}
 
 const SOURCE_TABS: {
   value: SourceTab;
@@ -49,7 +83,7 @@ const DEFAULT_FORM: AudioImageToVideoFormState = {
   artStyleId: "",
   rhythm: AUDIO_IMAGE_RHYTHM_OPTIONS[3].value,
   showDrawingHand: true,
-  useAiReferenceImage: true,
+  startFrameImages: [],
   textContent: "",
   imageRefs: [],
   audioRefs: [],
@@ -201,18 +235,16 @@ function AudioImageToVideoSidebar({
             </Field>
           </div>
 
-          <div id="ai-reference-image-section">
-            <Field
-              noError
-              name="useAiReferenceImage"
-              label={t("Lấy ảnh tham chiếu từ AI")}
-              description={t("Bật để bắt buộc lấy ảnh từ tab gen 'Ảnh'")}
-            >
-              <Switch
-                value={form.useAiReferenceImage}
-                onChange={(value) => onChange({ useAiReferenceImage: !!value })}
-              />
-            </Field>
+          <div id="start-frame-upload-section">
+            <ElementImagesUpload
+              label={t("Ảnh nền video")}
+              artStyleImg={form.startFrameImages}
+              onArtStyleImgChange={(value) => onChange({ startFrameImages: value || [] })}
+              maxImages={1}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              {t("Không upload thì dùng ảnh giấy trắng mặc định. Gen video: thành phần — ảnh đầu (nền) + ảnh cuối (tab Ảnh); prompt chỉ motion + thoại.")}
+            </p>
           </div>
 
           {sourceTab === "image" && (
@@ -223,6 +255,23 @@ function AudioImageToVideoSidebar({
                 onArtStyleImgChange={(value) => onChange({ imageRefs: value || [] })}
                 maxImages={12}
               />
+              <p className="mt-1 text-xs text-gray-500">
+                {t(
+                  "Trích text trong ảnh → phân tích thành phân cảnh → tạo ảnh/video whiteboard → ghép trong Studio."
+                )}
+              </p>
+              {!!form.textContent?.trim() && (
+                <div className="mt-3">
+                  <Field noError name="textContent" label={t("Text đã trích từ ảnh")}>
+                    <Textarea
+                      maxRows={6}
+                      className="border-gray-200"
+                      value={form.textContent}
+                      onChange={(value) => onChange({ textContent: value })}
+                    />
+                  </Field>
+                </div>
+              )}
             </div>
           )}
 
@@ -233,6 +282,7 @@ function AudioImageToVideoSidebar({
                 onAudioRefChange={(value) => onChange({ audioRefs: value || [] })}
                 maxFiles={1}
               />
+             
             </div>
           )}
 
@@ -247,6 +297,11 @@ function AudioImageToVideoSidebar({
                   onChange={(value) => onChange({ textContent: value })}
                 />
               </Field>
+              <p className="mt-1 text-xs text-gray-500">
+                {t(
+                  "Phân tích đoạn văn thành phân cảnh → tạo ảnh/video whiteboard → ghép timeline trong Studio."
+                )}
+              </p>
             </div>
           )}
         </div>
@@ -259,7 +314,7 @@ function AudioImageToVideoSidebar({
           onClick={onCreate}
           className="w-full rounded-xl border-0 bg-primary px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {isRunning ? t("Đang tạo video...") : t("Tạo Video")}
+          {isRunning ? t("Đang tạo video...") : t("Bắt đầu")}
         </button>
       </div>
     </Form>
@@ -286,8 +341,38 @@ function AudioImageToVideoBody() {
   const [formReady, setFormReady] = useState(false);
   const { customer } = useAuth();
   const { setOpenCustomerLoginDialog } = useGlobalContext();
-  const { setScriptData, patchConfig } = useAffiliateVideoContext();
+  const { setScriptData, patchConfig, refreshSceneHistory, selectHistoryItem } =
+    useAffiliateVideoContext();
   const scriptDB = useIndexedDB<any>(STORE_NAME.generateScene, DB_NAME.generateScene);
+
+  const pushAudioImageHistory = async (script: ScriptData, sourceTab: SourceTab) => {
+    try {
+      const existing: SceneHistoryItem[] =
+        (await scriptDB.get(CACHE_KEY.audioImageHistory)) || [];
+      const newItem: SceneHistoryItem = {
+        id: crypto.randomUUID(),
+        createdAt: Date.now(),
+        label: buildAudioImageHistoryLabel(sourceTab),
+        data: script,
+      };
+      const updated = [newItem, ...existing].slice(0, MAX_AUDIO_IMAGE_HISTORY);
+      await scriptDB.set(CACHE_KEY.audioImageHistory, updated);
+      await refreshSceneHistory?.();
+      selectHistoryItem?.(newItem.id);
+      return newItem.id;
+    } catch (err) {
+      console.warn("[audio-image] Failed to push history", err);
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    // Prefetch bg-audio.jpg (gen ảnh/video) + draw-audio.jpg (chỉ gen video khi bật bàn tay)
+    void import("./resolve-start-frame").then((m) => {
+      void m.loadDefaultAudioImageBackground().catch(() => {});
+      void m.loadDrawingHandReferenceImage().catch(() => {});
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -299,26 +384,33 @@ function AudioImageToVideoBody() {
             ...prev,
             ...cached,
             showDrawingHand: cached.showDrawingHand ?? true,
-            useAiReferenceImage: cached.useAiReferenceImage ?? true,
+            startFrameImages: cached.startFrameImages || [],
           }));
-          if (
-            cached.artStyle ||
-            cached.artStyleId ||
-            cached.aspectRatio ||
-            cached.useAiReferenceImage !== undefined
-          ) {
-            patchConfig?.({
-              ...(cached.artStyle !== undefined ? { artStyle: cached.artStyle } : {}),
-              ...(cached.artStyleId !== undefined ? { artStyleId: cached.artStyleId } : {}),
-              ...(cached.aspectRatio !== undefined ? { aspectRatio: cached.aspectRatio } : {}),
-              requireImageBeforeVideo: cached.useAiReferenceImage ?? true,
-            });
-          }
+          patchConfig?.({
+            useComponentVideo: true,
+            requireImageBeforeVideo: true,
+            showDrawingHand: cached.showDrawingHand ?? true,
+            videoBackgroundImage: cached.startFrameImages?.[0] || undefined,
+            ...(cached.artStyle !== undefined ? { artStyle: cached.artStyle } : {}),
+            ...(cached.artStyleId !== undefined ? { artStyleId: cached.artStyleId } : {}),
+            ...(cached.aspectRatio !== undefined ? { aspectRatio: cached.aspectRatio } : {}),
+          });
         } else if (!cancelled) {
-          patchConfig?.({ requireImageBeforeVideo: true });
+          patchConfig?.({
+            requireImageBeforeVideo: true,
+            useComponentVideo: true,
+            showDrawingHand: true,
+            videoBackgroundImage: undefined,
+          });
         }
       } catch {
-        if (!cancelled) patchConfig?.({ requireImageBeforeVideo: true });
+        if (!cancelled) {
+          patchConfig?.({
+            requireImageBeforeVideo: true,
+            useComponentVideo: true,
+            showDrawingHand: true,
+          });
+        }
       } finally {
         if (!cancelled) setFormReady(true);
       }
@@ -328,34 +420,69 @@ function AudioImageToVideoBody() {
     };
   }, [scriptDB, patchConfig]);
 
+  // Lưu form (kèm audio/image base64 đã convert lúc upload). Debounce để tránh ghi IDB liên tục.
   useEffect(() => {
     if (!formReady) return;
-    scriptDB.set(CACHE_KEY.audioImageForm, form).catch(() => {});
+    const timer = window.setTimeout(() => {
+      scriptDB.set(CACHE_KEY.audioImageForm, form).catch(() => {});
+    }, 400);
+    return () => window.clearTimeout(timer);
   }, [form, formReady, scriptDB]);
 
   useEffect(() => {
     if (!formReady) return;
-    patchConfig?.({ requireImageBeforeVideo: form.useAiReferenceImage });
-  }, [form.useAiReferenceImage, formReady, patchConfig]);
+    patchConfig?.({
+      useComponentVideo: true,
+      requireImageBeforeVideo: true,
+      showDrawingHand: form.showDrawingHand,
+      videoBackgroundImage: form.startFrameImages?.[0] || undefined,
+    });
+  }, [form.startFrameImages, form.showDrawingHand, formReady, patchConfig]);
+
+  const [studioEpoch, setStudioEpoch] = useState(0);
 
   const pipeline = useAudioImagePipeline({
-    useAiReferenceImage: form.useAiReferenceImage,
     getForm: () => form,
+    sourceTab: form.sourceTab || DEFAULT_SOURCE_TAB,
     onTranscribed: (text) => {
       setForm((prev) => ({ ...prev, textContent: text }));
     },
     onAnalyzed: (script) => {
-      setScriptData?.(script);
-      scriptDB.set(CACHE_KEY.lastAudioImageScript, script).catch(() => {});
+      const sourceTab = form.sourceTab || DEFAULT_SOURCE_TAB;
+      const nextScript = withAudioImageTopicTitle(script, sourceTab);
+      setScriptData?.(nextScript);
+      scriptDB.set(CACHE_KEY.lastAudioImageScript, nextScript).catch(() => {});
+      void pushAudioImageHistory(nextScript, sourceTab);
       patchConfig?.({
-        artStyle: script.artStyle || "",
-        artStyleId: script.artStyleId || form.artStyleId || "",
+        artStyle: nextScript.artStyle || "",
+        artStyleId: nextScript.artStyleId || form.artStyleId || "",
+        useComponentVideo: true,
+        requireImageBeforeVideo: true,
       });
-      if (!form.artStyle?.trim() && script.artStyle) {
-        setForm((prev) => ({ ...prev, artStyle: script.artStyle || prev.artStyle }));
+      if (!form.artStyle?.trim() && nextScript.artStyle) {
+        setForm((prev) => ({ ...prev, artStyle: nextScript.artStyle || prev.artStyle }));
       }
     },
+    onAnalyzeComplete: () => {
+      // Timeline Studio cũ theo script trước — seed lại sau gen video.
+      setStudioEpoch((n) => n + 1);
+      void scriptDB.remove(CACHE_KEY.audioImageStudioTimeline).catch(() => undefined);
+    },
+    onVideosGenerated: () => {
+      setStudioEpoch((n) => n + 1);
+    },
   });
+
+  const analyzeRunning =
+    pipeline.steps.find((step) => step.id === "analyze")?.status === "running";
+  const prevAnalyzeRunningRef = useRef(false);
+
+  useEffect(() => {
+    if (analyzeRunning && !prevAnalyzeRunningRef.current) {
+      setScriptData?.(null);
+    }
+    prevAnalyzeRunningRef.current = analyzeRunning;
+  }, [analyzeRunning, setScriptData]);
 
   const handleFormChange = (patch: Partial<AudioImageToVideoFormState>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -368,8 +495,14 @@ function AudioImageToVideoBody() {
     if (patch.aspectRatio !== undefined) {
       patchConfig?.({ aspectRatio: patch.aspectRatio });
     }
-    if (patch.useAiReferenceImage !== undefined) {
-      patchConfig?.({ requireImageBeforeVideo: patch.useAiReferenceImage });
+    if (patch.startFrameImages !== undefined) {
+      patchConfig?.({
+        useComponentVideo: true,
+        videoBackgroundImage: patch.startFrameImages?.[0] || undefined,
+      });
+    }
+    if (patch.showDrawingHand !== undefined) {
+      patchConfig?.({ showDrawingHand: patch.showDrawingHand });
     }
   };
 
@@ -395,7 +528,13 @@ function AudioImageToVideoBody() {
         />
       }
     >
-      <AudioImageRightPanel pipeline={pipeline} />
+      <AudioImageRightPanel
+        pipeline={pipeline}
+        sourceAudio={form.sourceTab === "audio" ? form.audioRefs?.[0] || null : null}
+        aspectRatio={form.aspectRatio}
+        studioEpoch={studioEpoch}
+        onStudioEpochBump={() => setStudioEpoch((n) => n + 1)}
+      />
     </AffiliateVideoSidebarLayout>
   );
 }

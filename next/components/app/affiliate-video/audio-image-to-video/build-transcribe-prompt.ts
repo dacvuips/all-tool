@@ -2,16 +2,27 @@ import type { AudioImageToVideoFormState } from "./audio-image-types";
 
 export function buildAudioTranscribePrompt(form: AudioImageToVideoFormState): string {
   const language = form.language || "Vietnamese";
-  return `Transcribe the attached audio file completely and accurately.
+  return `Transcribe the attached audio file completely and accurately WITH precise timing.
 
 Requirements:
 - Language: ${language}
 - Include all spoken words, narration, and dialogue
-- Preserve natural paragraph breaks if helpful
+- Split into natural phrase/sentence segments (not one giant blob)
+- For EACH segment provide:
+  - text: the spoken words
+  - startTime: start time in seconds from the beginning of the audio (number, e.g. 0, 1.2, 12.5)
+  - endTime: end time in seconds (number, must be > startTime)
+- Timestamps must be accurate and non-overlapping (or only slightly overlapping), covering the full audio in order
 - Do NOT summarize or skip content
 - Do NOT add commentary
 
-Output: return ONLY the full transcript as plain text. No JSON, no markdown, no explanation.`;
+Output: ONLY valid JSON matching this shape (no markdown fences):
+{
+  "segments": [
+    { "text": "Lời thoại đoạn 1", "startTime": 0, "endTime": 3.5 },
+    { "text": "Lời thoại đoạn 2", "startTime": 3.5, "endTime": 8.0 }
+  ]
+}`;
 }
 
 export function buildImageExtractTextPrompt(form: AudioImageToVideoFormState): string {

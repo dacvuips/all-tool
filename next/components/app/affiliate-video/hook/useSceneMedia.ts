@@ -17,7 +17,7 @@ import {
   elementFormImageToGeneratedImage,
   resolveAffiliateVideoReferenceImage,
 } from "../shared/affiliateSceneGenerationParams";
-import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedVideoBase64, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
+import { downloadGeneratedVideo, downloadSceneImage, hasGeneratedImageData, hasPendingGeneratedImageBinary, hasPendingGeneratedVideoBase64, isGeneratedImageReadyForUi, resumePendingGeneratedImageBinary, resumePendingGeneratedVideoBase64, toUiGeneratedImage, toUiGeneratedVideo } from "../shared/generatedMediaUtils";
 import { useGeneratedMediaReplaceReload } from "../shared/useGeneratedMediaReplaceReload";
 
 import { GeneratedImageData, GeneratedVideoData } from "../copy-video/hook/useCopyVideoApi";
@@ -383,6 +383,10 @@ export function useSceneMedia({
   useEffect(() => {
     getGeneratedImage(scene.id).then(async (img) => {
       if (!img) return;
+      // URL remote chưa blob → đẩy vào state để UI giữ loading (không hiện ảnh tạm).
+      if (hasPendingGeneratedImageBinary(img) || !isGeneratedImageReadyForUi(img)) {
+        setGeneratedImage(toUiGeneratedImage(img));
+      }
       await resumePendingGeneratedImageBinary<GeneratedImageData>(
         scene.id,
         img,
@@ -468,6 +472,12 @@ export function useSceneMedia({
     addBatchGeneratingSceneId(scene.id);
 
     try {
+      const { resolveAudioImageBackgroundElement } = await import(
+        "../audio-image-to-video/resolve-start-frame"
+      );
+      const bg = await resolveAudioImageBackgroundElement(
+        affiliateVideoFormConfig?.videoBackgroundImage
+      );
       const imageParams = await buildAffiliateImageGenerateParams({
         scene,
         scriptData,
@@ -477,7 +487,17 @@ export function useSceneMedia({
         objectToPersonifyImage,
         artStyle: affiliateVideoFormConfig?.artStyle,
         artStyleId: affiliateVideoFormConfig?.artStyleId,
+        backgroundImage: bg,
       });
+      if (
+        affiliateVideoFormConfig?.useComponentVideo === true &&
+        !imageParams.referenceImage?.imageBytes
+      ) {
+        const message = t("Gen ảnh chưa gắn được base64 ảnh nền");
+        setImageError(message);
+        reportSceneError?.(scene.id, "image", message);
+        throw new Error(message);
+      }
 
       const result = await generateImage({
         ...imageParams,
@@ -511,6 +531,7 @@ export function useSceneMedia({
       imageGenActions.markGenerationEnded(true);
     } finally {
       removeBatchGeneratingSceneId(scene.id);
+      // Flag gen tắt; nếu chưa có blob thì SceneCard vẫn giữ loading qua !imageReady.
       setGeneratingImage(false);
     }
   };
@@ -627,13 +648,63 @@ export function useSceneMedia({
         }
       }
 
-      const videoRefImage = isStitch
+      const useComponentVideo =
+        !isStitch && affiliateVideoFormConfig?.useComponentVideo === true;
+
+      let videoStartImage = isStitch
         ? stitchStartImage
         : resolveAffiliateVideoReferenceImage(
             scene,
             generatedImage,
             affiliateVideoFormConfig?.requireImageBeforeVideo
           );
+      let videoEndImage = isStitch ? stitchEndImage : undefined;
+
+      if (useComponentVideo) {
+        const { resolveAudioImageVideoBackground } = await import(
+          "../audio-image-to-video/resolve-start-frame"
+        );
+        try {
+          videoStartImage = await resolveAudioImageVideoBackground(
+            affiliateVideoFormConfig?.videoBackgroundImage
+          );
+        } catch (err: any) {
+          const message = err?.message || t("Không lấy được ảnh nền video");
+          setVideoError(message);
+          reportSceneError?.(scene.id, "video", message);
+          throw err;
+        }
+        const endFromState = generatedImage;
+        const endFromIdb = await getGeneratedImage(scene.id);
+        videoEndImage = hasGeneratedImageData(endFromState)
+          ? endFromState
+          : endFromIdb
+            ? toUiGeneratedImage(endFromIdb)
+            : null;
+        if (!hasGeneratedImageData(videoEndImage)) {
+          const message = t("Chưa có ảnh gen ở tab Ảnh để làm ảnh cuối (tham chiếu thành phần)");
+          setVideoError(message);
+          reportSceneError?.(scene.id, "video", message);
+          throw new Error("Missing end image for component video");
+        }
+      }
+
+      let drawingHandImage: GeneratedImageData | null = null;
+      if (useComponentVideo && affiliateVideoFormConfig?.showDrawingHand === true) {
+        try {
+          const { resolveDrawingHandVideoReference } = await import(
+            "../audio-image-to-video/resolve-start-frame"
+          );
+          drawingHandImage = await resolveDrawingHandVideoReference();
+        } catch (err: any) {
+          const message = err?.message || t("Không lấy được ảnh bàn tay tham chiếu");
+          setVideoError(message);
+          reportSceneError?.(scene.id, "video", message);
+          throw err;
+        }
+      }
+
+      const videoRefImage = videoStartImage;
 
       const isStoryboardScene =
         !!scene.storyboardCropImage ||
@@ -642,6 +713,7 @@ export function useSceneMedia({
 
       if (
         !isStitch &&
+        !useComponentVideo &&
         requireImageBeforeVideo !== true &&
         isStoryboardScene &&
         !hasGeneratedImageData(videoRefImage)
@@ -657,8 +729,11 @@ export function useSceneMedia({
         scriptData,
         aspectRatio: affiliateVideoFormConfig?.aspectRatio,
         isStitch,
+        useComponentVideo,
         generatedImage: videoRefImage,
-        nextGeneratedImage: isStitch ? stitchEndImage : undefined,
+        nextGeneratedImage:
+          isStitch || useComponentVideo ? videoEndImage : undefined,
+        drawingHandImage,
         requireImageBeforeVideo: affiliateVideoFormConfig?.requireImageBeforeVideo,
         artStyle: affiliateVideoFormConfig?.artStyle,
         artStyleId: affiliateVideoFormConfig?.artStyleId,

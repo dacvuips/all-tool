@@ -1,6 +1,5 @@
 import type { AudioImageToVideoFormState } from "./audio-image-types";
 import { AUDIO_IMAGE_RHYTHM_OPTIONS } from "./audio-image-types";
-import { hasCustomArtStyle, resolveAudioImageArtStyle, STYLE_CONSISTENCY_PROMPT_BLOCK } from "./default-art-style";
 
 const SCENE_DURATION_SEC = 8;
 
@@ -15,141 +14,146 @@ function rhythmRule(value: string, imageCount: number): string {
         imageCount || "N"
       }). Vẫn chia thoại theo đoạn ~${SCENE_DURATION_SEC}s nếu thoại dài hơn.`;
     case "single_image":
-      return `Một visual xuyên suốt. Vẫn tách nhiều scene theo thoại, mỗi scene ~${SCENE_DURATION_SEC}s, visualPrompt nhất quán.`;
+      return `Một visual xuyên suốt theo nội dung. Vẫn tách nhiều scene theo thoại, mỗi scene ~${SCENE_DURATION_SEC}s.`;
     case "full_analysis":
-      return `Phân tích đầy đủ: mỗi nhịp ý nghĩa trong thoại = 1 scene / 1 slide. Mỗi scene ~${SCENE_DURATION_SEC}s video.`;
+      return `Phân tích đầy đủ: mỗi nhịp ý nghĩa trong thoại = 1 scene. Mỗi scene ~${SCENE_DURATION_SEC}s video.`;
     case "balanced":
-      return `Cân bằng: visual đổi chậm (khoảng 1-3 phút nội dung/ảnh), nhưng vẫn cắt scene video ~${SCENE_DURATION_SEC}s.`;
+      return `Cân bằng: cắt scene video ~${SCENE_DURATION_SEC}s theo nhịp thoại.`;
     case "chapter":
-      return `Theo chương: visual đổi chậm hơn (khoảng 3-8 phút nội dung/ảnh), vẫn cắt scene video ~${SCENE_DURATION_SEC}s.`;
+      return `Theo chương: cắt scene video ~${SCENE_DURATION_SEC}s theo đoạn nội dung.`;
     default:
-      return `Auto theo nội dung: chia scene theo ngữ cảnh thoại tự nhiên, mỗi scene hợp với video ~${SCENE_DURATION_SEC}s.`;
+      return `Auto theo nội dung: chia scene theo ngữ cảnh thoại, mỗi scene ~${SCENE_DURATION_SEC}s.`;
   }
 }
 
 export function buildAudioImageAnalyzeSystemInstruction(form: AudioImageToVideoFormState): string {
-  if (form.showDrawingHand !== false) {
+  const showDrawingHand = form.showDrawingHand !== false;
+  const visualRule =
+    "visualPrompt MUST be grounded in THAT scene's dialogue: extract and depict the setting/environment, objects/phenomena, actions, and characters (or people/roles) mentioned or clearly implied — as close to the spoken lines as possible. Do not use generic filler icons unrelated to the dialogue.";
+  const timingRule =
+    "Always return startTime and endTime (seconds) for every scene. If source has timestamps, preserve them; otherwise estimate from natural speaking pace (~8s/scene), contiguous, non-overlapping.";
+
+  if (showDrawingHand) {
     return (
-      "You are an expert 2D flat whiteboard animation director. Split source text into timed scenes for 8-second videos. " +
-      "Every visualPrompt MUST start with '2D flat illustration:' and describe a completed static 2D flat slide for IMAGE generation — NO hand, NO marker, NO drawing-in-progress. " +
-      "Every visualPrompt must tightly match that scene's dialogue. " +
-      "Every motionPrompt MUST start with '2D whiteboard drawing animation:' and describe a hand with marker progressively drawing that slide (video only)."
+      "You split source text into ~8-second scenes. " +
+      timingRule +
+      " For each scene return dialogue, visualPrompt, motionPrompt, startTime, endTime that match that scene's dialogue only. " +
+      visualRule +
+      " visualPrompt: completed static illustration — no hand, no marker, no text/numbers/logos. " +
+      "motionPrompt: hand with marker drawing that same illustration for video. " +
+      "Do NOT invent story beyond the source text. Do NOT apply any art-style brand brief."
     );
   }
 
   return (
-    "You are an expert 2D flat explainer animation director. Split source text into timed scenes for 8-second videos. " +
-    "Every visualPrompt MUST start with '2D flat illustration:' and describe a completed static 2D flat slide — no hand, no marker, no drawing-in-progress. " +
-    "Never 3D, photorealistic, or live-action. Every visualPrompt must tightly match that scene's dialogue. " +
-    "Every motionPrompt MUST start with '2D flat slide animation:' and describe subtle motion on the finished illustration only (fade, slide, scale, Ken Burns) — no hand drawing."
+    "You split source text into ~8-second scenes. " +
+    timingRule +
+    " For each scene return dialogue, visualPrompt, motionPrompt, startTime, endTime that match that scene's dialogue only. " +
+    visualRule +
+    " visualPrompt: completed static illustration — no hand, no marker, no text/numbers/logos. " +
+    "motionPrompt: content appearing/revealing on screen for video — no hand drawing. " +
+    "Do NOT invent story beyond the source text. Do NOT apply any art-style brand brief."
   );
 }
 
 function buildVisualMotionBlocks(form: AudioImageToVideoFormState): {
-  styleIntro: string;
   visualBlock: string;
   motionBlock: string;
 } {
   const showDrawingHand = form.showDrawingHand !== false;
 
-  // visualPrompt luôn là ảnh tĩnh hoàn chỉnh — KHÔNG bàn tay (dùng cho Generate Image)
-  const visualBlock = `- visualPrompt: mô tả hình ảnh tĩnh để GENERATE IMAGE bằng tiếng Anh. BẮT ĐẦU bằng cụm "2D flat illustration:" rồi mô tả chi tiết. Yêu cầu:
-  + Bám sát 1:1 với dialogue của scene: mọi đối tượng / hành động / khái niệm chính trong lời thoại phải hiện rõ trong hình
-  + Không dùng visual chung chung nếu dialogue đang nói về chủ đề cụ thể
-  + Nếu dialogue nhắc số liệu, tên, so sánh, ví dụ → minh họa đúng các yếu tố đó
-  + STRICT 2D ONLY: flat vector cartoon / doodle / explainer style — no 3D, no photorealistic, no live-action
-  + Plain white / light paper background, slide đã hoàn thiện (finished illustration)
-  + Simple bold outlines, flat color fills, minimal shading
-  + KHÔNG có bàn tay, KHÔNG có bút marker, KHÔNG mô tả đang vẽ / viết lên bảng (ảnh tĩnh không có hand)
-  + Composition like a presentation slide: main idea centered
-  + Enough detail to generate a still image`;
+  const visualBlock = `- visualPrompt (tiếng Anh): mô tả hình ảnh tĩnh BÁM SÁT NHẤT dialogue của scene này.
+  + Đọc kỹ dialogue trước, rồi chuyển thành hình: bối cảnh / không gian, sự vật / hiện tượng, hành động, nhân vật (hoặc người/vai trò) — chỉ những gì thoại nhắc hoặc rõ ràng hàm ý
+  + Ưu tiên chi tiết cụ thể trong lời thoại (ai, làm gì, ở đâu, với vật gì, chuyện gì đang xảy ra) thay vì icon chung chung
+  + Mỗi scene chủ thể/bố cục khác nhau theo đúng đoạn thoại đó
+  + Không bịa thêm nhân vật/cảnh/vật ngoài thoại
+  + Không chữ, số, logo, caption
+  + Không bàn tay / bút / đang vẽ
+  + Đủ chi tiết cụ thể để generate ảnh sau`;
 
   if (showDrawingHand) {
     return {
-      styleIntro:
-        "- visualPrompt (GENERATE ẢNH) = slide 2D tĩnh hoàn chỉnh, KHÔNG bàn tay. motionPrompt (VIDEO) = bàn tay cầm bút marker đang vẽ slide đó.",
       visualBlock,
-      motionBlock: `- motionPrompt: mô tả chuyển động WHITEBOARD 2D HAND-DRAWING bằng tiếng Anh (chỉ dùng cho VIDEO). BẮT ĐẦU bằng "2D whiteboard drawing animation:". Yêu cầu:
-  + A realistic or stylized hand holding a marker progressively draws/reveals the flat illustration matching this scene's dialogue
-  + Smooth drawing strokes, flat elements appear as they are drawn
-  + Soft camera hold or very subtle Ken Burns only
-  + Suitable for an ${SCENE_DURATION_SEC}s video clip`,
+      motionBlock: `- motionPrompt (tiếng Anh): chuyển động video ~${SCENE_DURATION_SEC}s — bàn tay cầm marker vẽ dần đúng illustration đã mô tả trong visualPrompt (khớp dialogue).
+  + Bắt đầu từ nền trống nội dung, rồi vẽ dần
+  + Khớp đúng nội dung dialogue của scene`,
     };
   }
 
   return {
-    styleIntro:
-      "- Toàn bộ visual + motion theo phong cách 2D FLAT SLIDE: slide tĩnh hoàn chỉnh, KHÔNG bàn tay, KHÔNG bút marker.",
     visualBlock,
-    motionBlock: `- motionPrompt: mô tả chuyển động 2D SLIDE bằng tiếng Anh. BẮT ĐẦU bằng "2D flat slide animation:". Yêu cầu:
-  + Subtle motion on the finished flat illustration only: gentle fade-in, slide-in, scale, or Ken Burns
-  + KHÔNG mô tả bàn tay, bút marker, nét vẽ xuất hiện dần, drawing strokes
-  + Soft camera hold or very subtle Ken Burns only
-  + Suitable for an ${SCENE_DURATION_SEC}s video clip`,
+    motionBlock: `- motionPrompt (tiếng Anh): chuyển động video ~${SCENE_DURATION_SEC}s — reveal đúng illustration đã mô tả trong visualPrompt (khớp dialogue).
+  + Không bàn tay / bút vẽ
+  + Khớp đúng nội dung dialogue của scene`,
   };
 }
 
+/** Prompt phân tích: dialogue + visual + motion (+ thời gian nếu nguồn có timestamp). */
 export function buildAudioImageAnalyzePrompt(
   form: AudioImageToVideoFormState,
   sourceText: string
 ): string {
   const language = form.language || "Vietnamese";
-  const customArtStyle = hasCustomArtStyle(form);
-  const artStyle = resolveAudioImageArtStyle(form);
-  const artStyleNote = customArtStyle
-    ? ""
-    : `\n(Lưu ý: người dùng chưa chọn phong cách riêng — dùng PHONG CÁCH MẶC ĐỊNH whiteboard explainer như mô tả trên, bám layout: icon line-art đen trên nền trắng, ý chính giữa, so sánh trái/phải với dấu X đỏ / tick xanh khi phù hợp nội dung dialogue. Ảnh tĩnh KHÔNG có bàn tay.)`;
   const source =
     form.sourceTab === "audio" ? "AUDIO" : form.sourceTab === "image" ? "ẢNH" : "VĂN BẢN";
-  const textBlock = sourceText.trim()
-    ? `\nNỘI DUNG NGUỒN (đã trích xuất ở bước trước):\n${sourceText.trim()}`
+  const trimmed = sourceText.trim();
+  const looksTimed =
+    trimmed.startsWith("[") ||
+    trimmed.startsWith("{") ||
+    /"startTime"\s*:/.test(trimmed) ||
+    /"endTime"\s*:/.test(trimmed);
+  const textBlock = trimmed
+    ? looksTimed
+      ? `\nNỘI DUNG NGUỒN (các đoạn đã có thời gian — dùng đúng startTime/endTime, không bịa lại):\n${trimmed}`
+      : `\nNỘI DUNG NGUỒN:\n${trimmed}`
     : "";
-  const { styleIntro, visualBlock, motionBlock } = buildVisualMotionBlocks(form);
+  const { visualBlock, motionBlock } = buildVisualMotionBlocks(form);
   const showDrawingHand = form.showDrawingHand !== false;
-  const directorRole = showDrawingHand
-    ? "2D WHITEBOARD (ảnh tĩnh không tay; video có tay vẽ)"
-    : "2D FLAT EXPLAINER SLIDE (không bàn tay)";
 
-  return `Bạn là đạo diễn kịch bản AI Video dạng ${directorRole}. Phân tích toàn bộ nội dung nguồn ${source} và tách thành các phân cảnh.
+  const timingRules = looksTimed
+    ? `
+THỜI GIAN (BẮT BUỘC — nguồn đã có startTime/endTime từ audio):
+- Mỗi scene lấy dialogue từ một hoặc vài segment liên tiếp trong nguồn timed.
+- startTime / endTime của scene = giây bắt đầu / kết thúc thật của đoạn thoại đó trên audio (số thập phân OK).
+- Không để scene chồng thời gian; nối tiếp theo thứ tự audio.
+- Độ dài scene (endTime - startTime) nên khoảng ${SCENE_DURATION_SEC}s khi tách, nhưng ƯU TIÊN đúng timestamp nguồn hơn là ép đúng ${SCENE_DURATION_SEC}s.`
+    : `
+THỜI GIAN (BẮT BUỘC — nguồn Image/Text hoặc text chưa có timestamp):
+- AI PHẢI ước lượng startTime / endTime hợp lý cho mỗi scene dựa trên độ dài dialogue (nhịp đọc/nói tự nhiên).
+- Scene đầu: startTime ≈ 0; các scene sau nối tiếp (startTime = endTime scene trước).
+- Mỗi scene khoảng ${SCENE_DURATION_SEC}s (± vài giây nếu thoại ngắn/dài hơn); thoại ngắn có thể < ${SCENE_DURATION_SEC}s, thoại dài có thể > ${SCENE_DURATION_SEC}s nhưng đừng gộp nhiều ý.
+- endTime luôn > startTime; không chồng thời gian giữa các scene.`;
+
+  return `Phân tích nội dung nguồn ${source} và tách thành các phân cảnh video.
 
 MỤC TIÊU:
-- Mỗi scene tương ứng khoảng ${SCENE_DURATION_SEC} giây video.
-- Số lượng scene bám sát từng ngữ cảnh / nhịp ý nghĩa trong lời thoại.
-- Tiếp tục tách scene cho đến khi hết nội dung đoạn nguồn đã gửi.
-- Không gộp nhiều ý thoại khác nhau vào một scene nếu vượt ~${SCENE_DURATION_SEC}s khi đọc tự nhiên.
-- Không bịa thêm cốt truyện ngoài nguồn đã cho.
-${styleIntro}
-- Chỉ dùng nội dung đã cho ở NỘI DUNG NGUỒN; không transcribe lại audio, không bịa thêm.
-- visualPrompt BẮT BUỘC bám sát đúng nội dung dialogue của scene đó.
-- visualPrompt dùng để GENERATE IMAGE → tuyệt đối không có bàn tay / bút viết.
-
-QUY TẮC PHONG CÁCH 2D (BẮT BUỘC cho mọi visualPrompt / motionPrompt):
-- Chỉ dùng minh họa 2D phẳng: flat vector, cartoon, doodle, explainer animation
-- KHÔNG được dùng: 3D render, CGI, photorealistic, live-action (trừ bàn tay trong motionPrompt khi được phép)
-- Nhân vật / vật thể: silhouette phẳng, nét vẽ đơn giản, màu block
-- Bối cảnh: như slide presentation trên nền trắng
+- Mỗi scene ≈ ${SCENE_DURATION_SEC} giây video (đọc thoại tự nhiên), trừ khi nguồn đã có timestamp chi tiết.
+- Tách theo nhịp ý nghĩa / ngữ cảnh lời thoại đến hết nguồn.
+- Không gộp nhiều ý khác nhau vào 1 scene nếu vượt ~${SCENE_DURATION_SEC}s (trừ khi timestamp nguồn bắt buộc).
+- Không bịa thêm ngoài NỘI DUNG NGUỒN.
+- visualPrompt phải suy ra từ dialogue: bối cảnh, sự vật/hiện tượng, hành động, nhân vật — sát lời thoại nhất có thể.
+- Không gắn / không nhắc art style, brand look, palette cố định, template layout (lightbulb, X/tick…).
+${timingRules}
 
 THÔNG TIN:
 - Ngôn ngữ lời thoại: ${language}
-- Nhịp ảnh: ${rhythmLabel(form.rhythm)} — ${rhythmRule(form.rhythm, form.imageRefs?.length || 0)}
+- Nhịp cắt scene: ${rhythmLabel(form.rhythm)} — ${rhythmRule(
+    form.rhythm,
+    form.imageRefs?.length || 0
+  )}
 - Tỉ lệ khung hình: ${form.aspectRatio || "9:16"}
-- Phong cách hình ảnh (generate ảnh): ${artStyle}${artStyleNote}
-- Bàn tay đang vẽ: ${
-    showDrawingHand
-      ? "CHỈ trong motionPrompt (video) — visualPrompt / generate ảnh KHÔNG có bàn tay"
-      : "KHÔNG — cấm bàn tay ở cả visualPrompt và motionPrompt"
-  }
-- BẮT BUỘC phản ánh phong cách hình ảnh ở trên, luôn giữ dạng 2D flat (không chuyển sang 3D/realistic).
-${STYLE_CONSISTENCY_PROMPT_BLOCK}
+- Bàn tay trong motion: ${showDrawingHand ? "có (chỉ motionPrompt)" : "không"}
 ${textBlock}
 
-CHO MỖI SCENE, trả về:
-- sceneNumber: số thứ tự bắt đầu từ 1
-- dialogue: lời thoại/narration bằng ${language}, đúng đoạn nội dung của scene đó
+CHO MỖI SCENE trả về:
+- sceneNumber: số thứ tự từ 1
+- dialogue: lời thoại/narration bằng ${language}, đúng đoạn của scene
+- startTime: giây bắt đầu (number) — bắt buộc
+- endTime: giây kết thúc (number, > startTime) — bắt buộc
 ${visualBlock}
 ${motionBlock}
 
-OUTPUT: chỉ JSON object { "scenes": [...] }, không markdown, không giải thích.`;
+OUTPUT: chỉ JSON { "scenes": [...] }, không markdown, không giải thích.`;
 }
 
 export function validateAudioImageAnalyzeForm(form: AudioImageToVideoFormState): string | null {

@@ -68,6 +68,41 @@
   }
 }
 
+/** Scroll ngang timeline Studio — thanh kéo dày, dễ kéo */
+.film-studio-timeline-hscroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: auto;
+
+  &::-webkit-scrollbar {
+    height: 12px;
+  }
+
+  &::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    @apply bg-gray-400 rounded;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+.film-studio-timeline-hide-hscroll {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    height: 0;
+    width: 0;
+    display: none;
+  }
+}
+
 .hidden-scrollbar {
   overflow-x: auto;
 

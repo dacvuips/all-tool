@@ -1731,6 +1731,53 @@ const STT_MAX_BYTES = Math.floor(3.2 * 1024 * 1024);
 const STT_CHUNK_SEC = 10 * 60;
 const SPEECH_MP3_ARGS = ["-vn", "-ac", "1", "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "32k"];
 
+/**
+ * Nén audio thoại → MP3 mono 16kHz 32kbps (ffmpeg.wasm).
+ * Dùng trước khi gửi Flow2 / upload — giảm mạnh payload base64.
+ */
+export async function compressSpeechAudioInBrowser(
+  input: Blob,
+  options: FfmpegMergeOptions & { fileName?: string; mimeType?: string } = {}
+): Promise<{ blob: Blob; mimeType: string; ext: string }> {
+  if (!input || input.size <= 0) throw new Error("Chưa có file audio");
+
+  const fileName = options.fileName || "audio.mp3";
+  const mimeType = options.mimeType || input.type || "";
+  const inExt = fileExtOf(
+    fileName,
+    isAudioMediaFile({ name: fileName, type: mimeType }) ? "mp3" : "mp4"
+  );
+
+  let result: { blob: Blob; mimeType: string; ext: string } | null = null;
+
+  await enqueue(async () => {
+    const ff = await getFFmpeg(options.onProgress);
+    const stamp = Date.now();
+    const inName = `cmp_in_${stamp}.${inExt}`;
+    const outName = `cmp_out_${stamp}.mp3`;
+
+    options.onProgress?.({ ratio: 0.08, message: "Đang nén audio..." });
+    await ff.writeFile(inName, new Uint8Array(await input.arrayBuffer()));
+    try {
+      options.onProgress?.({ ratio: 0.4, message: "Đang encode MP3 (mono 16kHz)..." });
+      const code = await ff.exec(["-i", inName, ...SPEECH_MP3_ARGS, "-y", outName]);
+      if (code !== 0) {
+        throw new Error(`Nén audio thất bại (exit ${code})`);
+      }
+      const blob = toMediaBlob((await ff.readFile(outName)) as Uint8Array | string, "audio/mpeg");
+      if (!blob.size) throw new Error("Nén audio trả về file rỗng");
+      result = { blob, mimeType: "audio/mpeg", ext: "mp3" };
+    } finally {
+      await ff.deleteFile(inName).catch(() => undefined);
+      await ff.deleteFile(outName).catch(() => undefined);
+    }
+    options.onProgress?.({ ratio: 1, message: "Đã nén audio" });
+  });
+
+  if (!result) throw new Error("Nén audio thất bại");
+  return result;
+}
+
 export type SpeechAudioChunk = {
   blob: Blob;
   mimeType: string;

@@ -28,6 +28,7 @@ import {
   RiSkipForwardLine,
 } from "react-icons/ri";
 import { toDownloadProxyUrl } from "../app/affiliate-video/shared/videoDownloadUtils";
+import { getOrCreateBlobPreviewUrl } from "../app/affiliate-video/shared/generatedMediaUtils";
 import { Dialog } from "../shared/utilities/dialog/dialog";
 import { Button } from "../shared/utilities/form";
 import { Dropdown } from "../shared/utilities/popover/dropdown";
@@ -61,8 +62,10 @@ import {
   FILM_STUDIO_PX_PER_SEC,
   FILM_STUDIO_TRACK_LABEL_W,
   findFilmStudioClipAtTime,
+  filmStudioVideoStretchRate,
   insertFilmIndependentLine,
   insertFilmSceneAfter,
+  mapFilmStudioVideoLocalSec,
   moveFilmSceneByDropSec,
   patchFilmDialogueLineTiming,
   patchFilmDialogueLineVolume,
@@ -114,6 +117,11 @@ type Props = {
   onReloadScenes?: () => Promise<FilmSceneRecord[]>;
   /** Ghi đè timeline Studio (không đụng scenes gốc) */
   onReplaceScenes?: (scenes: FilmSceneRecord[]) => Promise<FilmSceneRecord[] | void>;
+  /**
+   * Nhúng trong panel hẹp (Audio/Image to Video):
+   * stack preview/inspector đến xl, timeline thấp hơn, inspector rộng hơn.
+   */
+  embedded?: boolean;
 };
 
 const TRACK_LABEL_W = FILM_STUDIO_TRACK_LABEL_W;
@@ -390,6 +398,7 @@ export default function FilmStudioPanel({
   onScenesChange,
   onReloadScenes,
   onReplaceScenes,
+  embedded = false,
 }: Props) {
   const { t } = useTranslation();
   const { customer } = useAuth();
@@ -401,6 +410,8 @@ export default function FilmStudioPanel({
   const dialogVideoRef = useRef<HTMLVideoElement>(null);
   const previewFullscreenRef = useRef(false);
   const timelineRef = useRef<HTMLDivElement>(null);
+  const timelineScrollBarRef = useRef<HTMLDivElement>(null);
+  const timelineScrollSyncRef = useRef(false);
   const blobUrlRef = useRef<Map<string, string>>(new Map());
   const audioElsRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const dragRef = useRef<DragMode | null>(null);
@@ -588,11 +599,21 @@ export default function FilmStudioPanel({
         const fromBlob = scene?.videoBlob ? getFilmEntityVideoSrc(scene) : "";
         const urlFromScene = resolveFilmStudioVideoSrc(scene?.videoUrl || c.videoUrl);
         const videoUrl = (cached || fromBlob || urlFromScene || "").trim();
+        let thumbUrl: string | undefined;
+        if (scene?.frameImageBlob instanceof Blob && scene.frameImageBlob.size > 0) {
+          thumbUrl = getOrCreateBlobPreviewUrl(scene.frameImageBlob);
+        } else {
+          const rawFrame = String(scene?.frameImageUrl || "").trim();
+          // Bỏ marker affiliate / URL rỗng — không set src ảo cho <img>
+          if (rawFrame && rawFrame !== "audio-image-scene") {
+            thumbUrl = normalizeFilmImageSrc(rawFrame) || undefined;
+          }
+        }
         return {
           ...c,
           videoUrl,
           ready: c.ready || !!videoUrl,
-          thumbUrl: normalizeFilmImageSrc(scene?.frameImageUrl) || undefined,
+          thumbUrl,
         };
       }),
     [timeline.videoClips, localScenes]
@@ -628,6 +649,19 @@ export default function FilmStudioPanel({
     setTimelineViewportW((prev) => {
       const next = Math.max(200, w);
       return prev === next ? prev : next;
+    });
+  }, []);
+
+  const syncTimelineScrollFrom = useCallback((from: "main" | "bar") => {
+    if (timelineScrollSyncRef.current) return;
+    const main = timelineRef.current;
+    const bar = timelineScrollBarRef.current;
+    if (!main || !bar) return;
+    timelineScrollSyncRef.current = true;
+    if (from === "main") bar.scrollLeft = main.scrollLeft;
+    else main.scrollLeft = bar.scrollLeft;
+    requestAnimationFrame(() => {
+      timelineScrollSyncRef.current = false;
     });
   }, []);
 
@@ -735,8 +769,9 @@ export default function FilmStudioPanel({
         if (loadedClipIdRef.current !== clip.id) return;
       }
 
-      const localTime = Math.max(0, timelineSec - clip.startSec + clip.trimInSec);
-      v.playbackRate = playbackRate;
+      const localTime = mapFilmStudioVideoLocalSec(clip, timelineSec);
+      const stretch = filmStudioVideoStretchRate(clip);
+      v.playbackRate = Math.max(0.25, Math.min(4, playbackRate * stretch));
       const vol = videoAudioVolumeRef.current / 100;
       v.volume = vol;
       v.muted = videoAudioVolumeRef.current <= 0;
@@ -821,13 +856,15 @@ export default function FilmStudioPanel({
     }
     void syncVideoToClip(clip, currentSec, playingRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeVideoClip?.id, activeVideoClip?.videoUrl, activeVideoClip?.trimInSec]);
+  }, [activeVideoClip?.id, activeVideoClip?.videoUrl, activeVideoClip?.trimInSec, activeVideoClip?.sourceDurationSec, activeVideoClip?.durationSec]);
 
   useEffect(() => {
     const v = previewFullscreenRef.current ? dialogVideoRef.current : videoRef.current;
     if (!v) return;
-    v.playbackRate = playbackRate;
-  }, [playbackRate]);
+    const clip = activeVideoClip;
+    const stretch = clip ? filmStudioVideoStretchRate(clip) : 1;
+    v.playbackRate = Math.max(0.25, Math.min(4, playbackRate * stretch));
+  }, [playbackRate, activeVideoClip]);
 
   /** RAF playhead + sync voice tracks */
   useEffect(() => {
@@ -2541,11 +2578,26 @@ export default function FilmStudioPanel({
     );
   }
 
-  /** Chiều cao cố định thanh timeline (neo đáy khi scroll trang Studio) */
-  const TIMELINE_DOCK_H = 300;
+  /** Chiều cao các track timeline — dock phải đủ cao để không scroll dọc */
+  const TIMELINE_RULER_H = 20;
+  const TIMELINE_TRACK_VIDEO_H = 88;
+  const TIMELINE_TRACK_AUDIO_H = 44;
+  const TIMELINE_TRACK_SUBTITLE_H = 72;
+  /** Thanh kéo ngang riêng dưới track (dày, luôn hiện) */
+  const TIMELINE_H_SCROLLBAR = 16;
+  const TIMELINE_BODY_H =
+    TIMELINE_RULER_H +
+    TIMELINE_TRACK_VIDEO_H +
+    TIMELINE_TRACK_AUDIO_H +
+    TIMELINE_TRACK_SUBTITLE_H;
+  const portraitPreviewMaxW = embedded ? 200 : 260;
 
   return (
-    <div className="relative flex flex-col flex-1 min-h-0 w-full h-full bg-gray-100 gap-2  ">
+    <div
+      className={`relative flex flex-col flex-1 min-h-0 w-full h-full bg-gray-100 overflow-hidden ${
+        embedded ? "gap-1.5 p-1" : "gap-2"
+      }`}
+    >
       {toast || exportProgress ? (
         <div
           className="absolute z-50 left-1/4 top-3 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-gray-900 border border-gray-700 text-xs text-white shadow-lg flex items-center gap-2"
@@ -2567,10 +2619,18 @@ export default function FilmStudioPanel({
       ) : null}
 
       {/* Preview + inspector — chiếm phần còn lại phía trên timeline */}
-      <div className="grid flex-1 min-h-0 w-full grid-cols-1 md:grid-cols-4 gap-2 md:gap-3">
-        {/* Preview trái */}  
+      <div
+        className={
+          embedded
+            ? "grid flex-1 min-h-0 w-full grid-cols-1 grid-rows-[minmax(160px,1.15fr)_minmax(140px,0.85fr)] xl:grid-rows-1 xl:grid-cols-5 gap-1.5"
+            : "grid flex-1 min-h-0 w-full grid-cols-1 md:grid-cols-4 gap-2 md:gap-3"
+        }
+      >
+        {/* Preview trái */}
         <section
-          className="md:col-span-3 flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+          className={`${
+            embedded ? "xl:col-span-3" : "md:col-span-3"
+          } flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm`}
         >
           <div className="flex-shrink-0 flex items-center justify-between px-3 py-1.5 border-b border-gray-100">
             <h3 className="m-0 text-sm font-bold text-gray-800">{t("Preview")}</h3>
@@ -2586,8 +2646,8 @@ export default function FilmStudioPanel({
                 ref={previewFrameRef}
                 className="relative w-full h-full"
                 style={{
-                  minHeight: 160,
-                  ...(isPortrait ? { maxWidth: 260 } : null),
+                  minHeight: embedded ? 120 : 160,
+                  ...(isPortrait ? { maxWidth: portraitPreviewMaxW } : null),
                 }}
           >
             {hasAnyPlayableVideo ? (
@@ -2961,7 +3021,9 @@ export default function FilmStudioPanel({
 
         {/* Cột tab — nội dung scroll bên trong thẻ */}
         <aside
-          className="md:col-span-1 flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+          className={`${
+            embedded ? "xl:col-span-2" : "md:col-span-1"
+          } flex flex-col min-h-0 h-full min-w-0 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm`}
         >
           <div className="flex-shrink-0 px-2 sm:px-2.5 py-1.5 border-b border-gray-100">
             <div className="flex gap-0.5 sm:gap-1 p-0.5 rounded-lg bg-gray-100 border border-gray-200">
@@ -3582,11 +3644,8 @@ export default function FilmStudioPanel({
         </aside>
       </div>
 
-      {/* Timeline — neo đáy panel Studio */}
-      <section
-        className="z-20 flex flex-col flex-shrink-0 w-full overflow-hidden border border-gray-200 bg-white shadow rounded-lg"
-        style={{ height: TIMELINE_DOCK_H, minHeight: TIMELINE_DOCK_H, maxHeight: TIMELINE_DOCK_H }}
-      >
+      {/* Timeline — neo đáy; track đầy đủ + thanh kéo ngang riêng bên dưới */}
+      <section className="z-20 flex flex-col flex-shrink-0 w-full overflow-hidden border border-gray-200 bg-white shadow rounded-lg">
         <div className="flex flex-wrap gap-2 items-center justify-end px-3 sm:px-4 py-0.5 sm:py-1 border-b border-gray-100 bg-gray-50 flex-shrink-0">
           <div className="flex flex-wrap gap-1">
             <ToolBtn
@@ -3635,45 +3694,59 @@ export default function FilmStudioPanel({
           </div>
         </div>
 
-        <div className="flex flex-1 min-h-0 overflow-hidden" style={{ flexBasis: 0 }}>
+        <div
+          className="flex overflow-hidden flex-shrink-0"
+          style={{ height: TIMELINE_BODY_H, minHeight: TIMELINE_BODY_H }}
+        >
           {/* Cột tiêu đề cố định — không scroll ngang */}
           <div
             className="flex-shrink-0 flex flex-col bg-gray-50 border-r border-gray-200 z-10"
-            style={{ width: TRACK_LABEL_W }}
+            style={{ width: TRACK_LABEL_W, height: TIMELINE_BODY_H }}
           >
-            <div className="flex-shrink-0 h-5 border-b border-gray-200 bg-gray-50 flex items-center justify-center">
+            <div
+              className="flex-shrink-0 border-b border-gray-200 bg-gray-50 flex items-center justify-center"
+              style={{ height: TIMELINE_RULER_H, minHeight: TIMELINE_RULER_H }}
+            >
             
             </div>
             <TimelineTrackLabel
               label={t("Video")}
               locked={videoLocked}
               onToggleLock={() => setVideoLocked((v) => !v)}
-              heightPx={88}
+              heightPx={TIMELINE_TRACK_VIDEO_H}
             />
             <TimelineTrackLabel
               label={t("Audio")}
               locked={audioLocked}
               onToggleLock={() => setAudioLocked((v) => !v)}
-              heightPx={44}
+              heightPx={TIMELINE_TRACK_AUDIO_H}
             />
             <TimelineTrackLabel
               label={t("Phụ đề")}
               locked={subtitleLocked}
               onToggleLock={() => setSubtitleLocked((v) => !v)}
-              heightPx={72}
+              heightPx={TIMELINE_TRACK_SUBTITLE_H}
               last
             />
           </div>
 
-          {/* Vùng timeline — chỉ scroll ngang/dọc bên trong */}
+          {/* Vùng timeline — ẩn scrollbar native; thanh kéo riêng ở dưới */}
         <div
           ref={timelineRef}
-            className="relative flex-1 min-w-0 min-h-0 overflow-x-auto overflow-y-auto v-scrollbar h-scrollbar select-none bg-white"
-            style={{ scrollbarWidth: "thin" }}
+            className="relative flex-1 min-w-0 overflow-x-auto overflow-y-hidden film-studio-timeline-hide-hscroll select-none bg-white"
+            style={{
+              height: TIMELINE_BODY_H,
+              minHeight: TIMELINE_BODY_H,
+            }}
+            onScroll={() => syncTimelineScrollFrom("main")}
         >
           <div
-            className="flex-shrink-0 z-20 h-5 border-b border-gray-200 bg-slate-900 cursor-ew-resize relative"
-            style={{ width: timelineWidth, minWidth: timelineWidth }}
+            className="flex-shrink-0 z-20 border-b border-gray-200 bg-slate-900 cursor-ew-resize relative"
+            style={{
+              width: timelineWidth,
+              minWidth: timelineWidth,
+              height: TIMELINE_RULER_H,
+            }}
             onPointerDown={beginTimelineScrub}
             title={t("Kéo để tua playhead (giây)")}
           >
@@ -3714,7 +3787,7 @@ export default function FilmStudioPanel({
           >
           <TimelineTrack
             width={timelineWidth}
-            heightPx={88}
+            heightPx={TIMELINE_TRACK_VIDEO_H}
             onLanePointerDown={beginTimelineScrub}
             dropActive={timelineDrop?.track === "video"}
             dropSec={timelineDrop?.track === "video" ? timelineDrop.insertSec : null}
@@ -3884,7 +3957,7 @@ export default function FilmStudioPanel({
 
           <TimelineTrack
             width={timelineWidth}
-            heightPx={44}
+            heightPx={TIMELINE_TRACK_AUDIO_H}
             onLanePointerDown={beginTimelineScrub}
             dropActive={timelineDrop?.track === "audio"}
             dropSec={timelineDrop?.track === "audio" ? timelineDrop.sec : null}
@@ -4025,7 +4098,7 @@ export default function FilmStudioPanel({
 
           <TimelineTrack
             width={timelineWidth}
-            heightPx={72}
+            heightPx={TIMELINE_TRACK_SUBTITLE_H}
             last
             onLanePointerDown={beginTimelineScrub}
           >
@@ -4046,12 +4119,12 @@ export default function FilmStudioPanel({
                       : selected
                         ? "rgba(221,214,254,0.98)"
                         : "rgba(237,233,254,0.95)",
-                    color: !clipOn ? "#6b7280" : "#4c1d95",
+                    color: !clipOn ? "#4b5563" : "#4c1d95",
                     opacity:
                       draggingClipId === `${clip.sceneId}:${clip.lineId}:sub`
                         ? 0.75
                         : !clipOn
-                          ? 0.55
+                          ? 0.7
                           : 1,
                     zIndex:
                       draggingClipId === `${clip.sceneId}:${clip.lineId}:sub` ? 30 : undefined,
@@ -4075,7 +4148,7 @@ export default function FilmStudioPanel({
                 }}
                 title={`${clip.text || t("Phụ đề")} · ${t("Kéo để đổi vị trí")}`}
               >
-                  <div className="absolute inset-0 overflow-visible rounded px-1.5 py-0.5 flex items-center justify-center text-center pointer-events-none whitespace-normal break-words leading-snug">
+                  <div className="absolute inset-0 overflow-hidden rounded px-1.5 py-1 flex items-center justify-center text-center pointer-events-none whitespace-normal break-words leading-snug font-semibold text-violet-900">
                     {clip.text || t("Phụ đề")}
               </div>
                   <button
@@ -4136,6 +4209,33 @@ export default function FilmStudioPanel({
           </TimelineTrack>
         </div>
       </div>
+        </div>
+
+        {/* Thanh kéo timeline — luôn hiện dưới track, không bị che */}
+        <div
+          className="flex flex-shrink-0 border-t border-gray-200 bg-gray-50"
+          style={{ height: TIMELINE_H_SCROLLBAR, minHeight: TIMELINE_H_SCROLLBAR }}
+        >
+          <div
+            className="flex-shrink-0 border-r border-gray-200 bg-gray-50"
+            style={{ width: TRACK_LABEL_W }}
+            aria-hidden
+          />
+          <div
+            ref={timelineScrollBarRef}
+            className="flex-1 min-w-0 film-studio-timeline-hscroll"
+            style={{ height: TIMELINE_H_SCROLLBAR }}
+            onScroll={() => syncTimelineScrollFrom("bar")}
+            title={t("Kéo để cuộn timeline")}
+          >
+            <div
+              style={{
+                width: Math.max(timelineWidth, timelineViewportW + 1),
+                height: 1,
+              }}
+              aria-hidden
+            />
+          </div>
         </div>
       </section>
     </div>

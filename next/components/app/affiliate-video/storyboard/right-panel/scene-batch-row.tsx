@@ -44,6 +44,7 @@ import {
 } from "../../shared/generatedMediaUtils";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
+import { SceneComponentVideoVoiceSelect } from "../../shared/scene-component-video-voice-select";
 import { normalizeSceneAudioField } from "../../shared/sceneAudioUtils";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { InsertPosition, NewSceneData } from "./add-scene-modal";
@@ -54,7 +55,8 @@ export type EditField =
   | "motionPrompt"
   | "dialogue"
   | "audio"
-  | "product_image_prompt";
+  | "product_image_prompt"
+  | "videoVoice";
 
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
@@ -121,7 +123,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
+  const [activeMediaTab, setActiveMediaTab] = useState<SceneTabKey>("image");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (forcedTab) setActiveMediaTab(forcedTab);
+  }, [forcedTab]);
 
   // ── Product image selection (per-scene, persisted in IndexedDB) ──
   const storyboardContext = useAffiliateVideoContext();
@@ -207,6 +214,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   });
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
   const requireImageBeforeVideo = affiliateVideoFormConfig?.requireImageBeforeVideo === true;
+  const useComponentVideo = affiliateVideoFormConfig?.useComponentVideo === true;
   const hasOriginImage = !!(scene.storyboardCropImage?.imageBytes || "").trim();
 
   /** Ảnh panel đã cắt từ storyboard – hiển thị dưới phần ảnh SP (ngoài tab Ảnh) */
@@ -583,6 +591,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       </div>
 
       {/* ── Media tabs (Hình ảnh / Video đơn / Video nối) ── */}
+      {useComponentVideo && activeMediaTab === "video" ? (
+        <div className={`px-3 pt-1 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+          <SceneComponentVideoVoiceSelect
+            value={scene.videoVoice}
+            disabled={isDisabled || !!scene.voiceDisable}
+            onChange={(voiceId) => onUpdateScene(scene.id, "videoVoice", voiceId)}
+          />
+        </div>
+      ) : null}
       <SceneCardTabs
         hideImageTab={
           !forceShowImageTab &&
@@ -590,6 +607,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         }
         hideExtendTab={isPromptToVideo || !nextSceneId}
         forcedTab={forcedTab}
+        onActiveTabChange={setActiveMediaTab}
         tabStatus={{
           image: { loading: generatingImage, progress: imageProgress, done: !!generatedImage },
           video: { loading: generatingVideo, progress: videoProgress, done: !!generatedVideo },

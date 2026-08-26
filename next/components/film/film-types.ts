@@ -453,6 +453,11 @@ export type FilmSceneRecord = {
   /** Thời lượng giây (độ dài clip trên Studio timeline) */
   durationSec?: number;
   /**
+   * Độ dài file video nguồn (giây) — dùng khi timeline giãn/nén theo thoại
+   * (durationSec ≠ độ dài file). Không set → 1:1 với durationSec.
+   */
+  sourceDurationSec?: number;
+  /**
    * Studio: trim vào trong file video nguồn (giây).
    * Playhead local = timelineSec - sceneStart + videoTrimInSec.
    */

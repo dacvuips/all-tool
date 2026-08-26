@@ -28,6 +28,8 @@ interface BatchListPanelProps {
   characters: CharacterItem[];
   storyModeType: StoryModeTypeEnum;
   scriptCacheKey: string;
+  /** Sau khi chọn bản lịch sử khác — vd. seed lại Studio */
+  onHistorySelect?: (id: string) => void;
 }
 
 export function BatchListPanel({
@@ -35,6 +37,7 @@ export function BatchListPanel({
   characters,
   storyModeType,
   scriptCacheKey,
+  onHistorySelect,
 }: BatchListPanelProps) {
   const {
     scriptData,
@@ -160,7 +163,10 @@ export function BatchListPanel({
             ? {
                 items: sceneHistory,
                 selectedId: selectedHistoryId ?? null,
-                onSelect: (id) => selectHistoryItem?.(id),
+                onSelect: (id) => {
+                  selectHistoryItem?.(id);
+                  onHistorySelect?.(id);
+                },
                 onClear: () => clearSceneHistory?.(),
                 onRename: (id, label) => renameHistoryItem?.(id, label),
               }
@@ -171,6 +177,7 @@ export function BatchListPanel({
         onBuildInsertedScene={handleBuildInsertedScene}
         ActionBarComponent={AudioImageBatchActionBar}
         SceneRowComponent={SceneRowGroup}
+        showBatchVideoVoice
         sceneRowExtraProps={{
           storyModeType,
           hideImageColumn: false,

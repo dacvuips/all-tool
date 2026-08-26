@@ -1,7 +1,8 @@
 /**
  * Select giọng miễn phí cho gen video Flow2 mode `component` (+ có ảnh).
- * Đặt dưới hàng "Ảnh tham chiếu". Mặc định: không chọn giọng.
+ * Style đồng bộ upload audio / source (pink).
  */
+import { useTranslation } from "react-i18next";
 import { FreeVoiceSelect } from "../../voice/free-voice-list";
 
 type Props = {
@@ -17,9 +18,16 @@ export function SceneComponentVideoVoiceSelect({
   disabled = false,
   className = "",
 }: Props) {
+  const { t } = useTranslation();
   return (
     <div className={`mt-2 ${className}`}>
-      <FreeVoiceSelect value={value} onChange={onChange} disabled={disabled} />
+      <div className="mb-1 text-xs font-semibold text-gray-700">{t("Giọng video")}</div>
+      <FreeVoiceSelect
+        value={value}
+        onChange={onChange}
+        disabled={disabled}
+        placeholder={t("Chọn giọng")}
+      />
     </div>
   );
 }

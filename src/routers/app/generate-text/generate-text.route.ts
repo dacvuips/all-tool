@@ -112,7 +112,11 @@ export default [
         if (!id) return res.status(400).json({ message: "Thiếu request id" });
 
         const statusData = await getFlow2TextRequestStatus(id, context.id);
-        res.json({ success: true, data: sanitizeFlow2TextStatus(statusData) });
+        const sanitized = sanitizeFlow2TextStatus(statusData);
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+        res.setHeader("Pragma", "no-cache");
+        res.removeHeader("ETag");
+        res.json({ success: true, data: sanitized });
       } catch (err: any) {
         logger.error(`[generate-text] Poll lỗi: ${err?.message}`);
         sendRouteError(res, err);

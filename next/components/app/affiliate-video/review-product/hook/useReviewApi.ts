@@ -581,6 +581,7 @@ export function useReviewApi(): UseAffiliateVideoApiReturn {
           resultImages[0],
           imageDB,
           {
+            waitForClear: true,
             onUpdate: onMediaUpdate,
             onReady: (ready) =>
               triggerAutoDownloadAfterImageGen(ready, {

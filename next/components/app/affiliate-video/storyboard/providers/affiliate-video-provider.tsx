@@ -325,15 +325,31 @@ export function AffiliateVideoProvider({
   /** Select a history item by ID and apply its data to scriptData */
   const selectHistoryItem = useCallback(
     (id: string) => {
-      const item = sceneHistory.find((h) => h.id === id);
-      if (item) {
+      const apply = (item: SceneHistoryItem) => {
         setSelectedHistoryId(id);
         setScriptData(item.data);
-        // Also update lastScript so it persists across page reloads
         scriptDB.set(keys.lastScript, item.data).catch(() => {});
+      };
+
+      const item = sceneHistory.find((h) => h.id === id);
+      if (item) {
+        apply(item);
+        return;
       }
+
+      // State chưa kịp refresh sau push — đọc lại từ IndexedDB
+      void (async () => {
+        try {
+          const history: SceneHistoryItem[] = (await scriptDB.get(keys.history)) || [];
+          if (history.length) setSceneHistory(history);
+          const found = history.find((h) => h.id === id);
+          if (found) apply(found);
+        } catch (err) {
+          console.warn("[storyboard] Failed to select history from DB", err);
+        }
+      })();
     },
-    [sceneHistory, scriptDB]
+    [sceneHistory, scriptDB, keys.lastScript, keys.history]
   );
 
   /** Clear all history */
@@ -375,7 +391,17 @@ export function AffiliateVideoProvider({
     try {
       const cachedConfig = await scriptDB.get(keys.input);
       if (cachedConfig) {
-        setAffiliateVideoFormConfig(cachedConfig);
+        setAffiliateVideoFormConfig((prev) => {
+          const next = { ...prev, ...cachedConfig };
+          // Giữ ảnh nền đang có trên UI nếu cache cũ chưa có base64
+          if (
+            !cachedConfig.videoBackgroundImage?.imageBytes &&
+            prev.videoBackgroundImage?.imageBytes
+          ) {
+            next.videoBackgroundImage = prev.videoBackgroundImage;
+          }
+          return next;
+        });
       }
     } catch (err) {
       console.warn("[affiliate-video] Failed to restore config from IndexedDB", err);
