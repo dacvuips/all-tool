@@ -92,126 +92,150 @@ async function loadFreePackageLimitsFromSettings(): Promise<PackageLimitsConfig>
   };
 }
 
+export type ResetGooglePackageResult = {
+  processedCount: number;
+  resetCount: number;
+  downgradeCount: number;
+  skippedTrialCount: number;
+  errorCount: number;
+};
+
 export class ResetGooglePackageJob {
   static jobName = "ResetGooglePackage";
+  /** Job duyệt toàn bộ customer — cần lock dài hơn mặc định 10s */
+  static lockLifetime = 10 * 60 * 1000;
 
   static create(data: any) {
     return Agenda.create(this.jobName, data);
   }
 
-  static async execute(job: Job) {
-    const now = new Date();
+  /** Chạy logic reset (cron hoặc admin trigger thủ công) */
+  static async run(now: Date = new Date()): Promise<ResetGooglePackageResult> {
     logger.info(`[${ResetGooglePackageJob.jobName}] Started at ${moment(now).format()}`);
 
-    try {
-      const freeLimits = await loadFreePackageLimitsFromSettings();
-      const freeDefaults = {
-        subscription: SubscriptionPlanEnum.FREE,
-        videoCount: 0,
-        imageCount: 0,
-        requestCount: 0,
-        textCreditCount: 0,
-        ...freeLimits,
-      };
+    const freeLimits = await loadFreePackageLimitsFromSettings();
+    const freeDefaults = {
+      subscription: SubscriptionPlanEnum.FREE,
+      videoCount: 0,
+      imageCount: 0,
+      requestCount: 0,
+      textCreditCount: 0,
+      ...freeLimits,
+    };
 
-      // Lấy tất cả customer có gói Google (bao gồm Trial)
-      const customers = await CustomerModel.find({
-        "googlePackage.subscription": { $exists: true },
-      }).lean();
+    const customers = await CustomerModel.find({
+      "googlePackage.subscription": { $exists: true },
+    }).lean();
 
-      logger.info(
-        `[${ResetGooglePackageJob.jobName}] Found ${customers.length} customers to process`
-      );
+    logger.info(
+      `[${ResetGooglePackageJob.jobName}] Found ${customers.length} customers to process`
+    );
 
-      let resetCount = 0;
-      let downgradeCount = 0;
-      let errorCount = 0;
+    let resetCount = 0;
+    let downgradeCount = 0;
+    let skippedTrialCount = 0;
+    let errorCount = 0;
 
-      for (const customer of customers) {
-        try {
-          const pkg = customer.googlePackage || {};
-          const expiryDate = getExpiryDate(pkg);
-          const isTrial = pkg.subscription === SubscriptionPlanEnum.TRIAL;
+    for (const customer of customers) {
+      try {
+        const pkg = customer.googlePackage || {};
+        const expiryDate = getExpiryDate(pkg);
+        const isTrial = pkg.subscription === SubscriptionPlanEnum.TRIAL;
 
-          // Trial còn hạn: không reset count hàng ngày, giữ nguyên limit, chờ hết hạn mới downgrade
-          if (isTrial && expiryDate && expiryDate > now) {
-            continue;
-          }
-
-          if (isActivePackage(pkg, now)) {
-            // Free + gói trả phí (Basic/Standard/...) còn hạn → reset count, giữ nguyên limit hiện có
-            await CustomerModel.updateOne(
-              { _id: customer._id },
-              {
-                $set: {
-                  "googlePackage.videoCount": 0,
-                  "googlePackage.imageCount": 0,
-                  "googlePackage.requestCount": 0,
-                  "googlePackage.textCreditCount": 0,
-                },
-              }
-            );
-
-            const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
-            logger.info(
-              `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription}${isFree ? "" : expiryDate ? ` (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})` : ""}`
-            );
-
-            resetCount++;
-          } else if (isExpiredPaidPackage(pkg, now)) {
-            // Gói hết hạn → hạ xuống Free với thông số từ settings
-            const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
-
-            const afterSnapshot: PackageTransactionSnapshot = {
-              ...freeDefaults,
-              expiryPackageDate: undefined,
-            };
-
-            await CustomerModel.updateOne(
-              { _id: customer._id },
-              {
-                $set: {
-                  "googlePackage.subscription": freeDefaults.subscription,
-                  "googlePackage.videoCount": freeDefaults.videoCount,
-                  "googlePackage.videoLimit": freeDefaults.videoLimit,
-                  "googlePackage.imageCount": freeDefaults.imageCount,
-                  "googlePackage.imageLimit": freeDefaults.imageLimit,
-                  "googlePackage.requestCount": freeDefaults.requestCount,
-                  "googlePackage.requestLimit": freeDefaults.requestLimit,
-                  "googlePackage.textCreditCount": freeDefaults.textCreditCount,
-                  "googlePackage.textCreditLimit": freeDefaults.textCreditLimit,
-                  "googlePackage.imageStreamCount": freeDefaults.imageStreamCount,
-                  "googlePackage.videoStreamCount": freeDefaults.videoStreamCount,
-                },
-                $unset: {
-                  "googlePackage.expiryPackageDate": "",
-                },
-              }
-            );
-
-            // Ghi log transaction
-            await PackageTransactionModel.create({
-              customerId: customer._id.toString(),
-              customerCode: customer.code,
-              type: PackageTransactionTypeEnum.EXPIRED_DOWNGRADE,
-              before: beforeSnapshot,
-              after: afterSnapshot,
-              description: `Gói ${pkg.subscription} đã hết hạn${expiryDate ? ` (${moment(expiryDate).format("DD/MM/YYYY")})` : ""} → chuyển về Free`,
-            });
-
-            downgradeCount++;
-          }
-        } catch (err) {
-          errorCount++;
-          logger.error(
-            `[${ResetGooglePackageJob.jobName}] Error processing customer ${customer._id}: ${err.message}`
-          );
+        // Trial còn hạn: không reset count hàng ngày, giữ nguyên limit, chờ hết hạn mới downgrade
+        if (isTrial && expiryDate && expiryDate > now) {
+          skippedTrialCount++;
+          continue;
         }
-      }
 
-      logger.info(
-        `[${ResetGooglePackageJob.jobName}] Completed: ${resetCount} reset, ${downgradeCount} downgraded, ${errorCount} errors`
-      );
+        if (isActivePackage(pkg, now)) {
+          // Free + gói trả phí (Basic/Standard/...) còn hạn → reset count, giữ nguyên limit hiện có
+          await CustomerModel.updateOne(
+            { _id: customer._id },
+            {
+              $set: {
+                "googlePackage.videoCount": 0,
+                "googlePackage.imageCount": 0,
+                "googlePackage.requestCount": 0,
+                "googlePackage.textCreditCount": 0,
+              },
+            }
+          );
+
+          const isFree = pkg.subscription === SubscriptionPlanEnum.FREE;
+          logger.info(
+            `[${ResetGooglePackageJob.jobName}] Reset count cho customer ${customer.code} - gói ${pkg.subscription}${isFree ? "" : expiryDate ? ` (còn hạn đến ${moment(expiryDate).format("DD/MM/YYYY")})` : ""}`
+          );
+
+          resetCount++;
+        } else if (isExpiredPaidPackage(pkg, now)) {
+          // Gói hết hạn → hạ xuống Free với thông số từ settings
+          const beforeSnapshot: PackageTransactionSnapshot = snapshotGooglePackage(pkg);
+
+          const afterSnapshot: PackageTransactionSnapshot = {
+            ...freeDefaults,
+            expiryPackageDate: undefined,
+          };
+
+          await CustomerModel.updateOne(
+            { _id: customer._id },
+            {
+              $set: {
+                "googlePackage.subscription": freeDefaults.subscription,
+                "googlePackage.videoCount": freeDefaults.videoCount,
+                "googlePackage.videoLimit": freeDefaults.videoLimit,
+                "googlePackage.imageCount": freeDefaults.imageCount,
+                "googlePackage.imageLimit": freeDefaults.imageLimit,
+                "googlePackage.requestCount": freeDefaults.requestCount,
+                "googlePackage.requestLimit": freeDefaults.requestLimit,
+                "googlePackage.textCreditCount": freeDefaults.textCreditCount,
+                "googlePackage.textCreditLimit": freeDefaults.textCreditLimit,
+                "googlePackage.imageStreamCount": freeDefaults.imageStreamCount,
+                "googlePackage.videoStreamCount": freeDefaults.videoStreamCount,
+              },
+              $unset: {
+                "googlePackage.expiryPackageDate": "",
+              },
+            }
+          );
+
+          await PackageTransactionModel.create({
+            customerId: customer._id.toString(),
+            customerCode: customer.code,
+            type: PackageTransactionTypeEnum.EXPIRED_DOWNGRADE,
+            before: beforeSnapshot,
+            after: afterSnapshot,
+            description: `Gói ${pkg.subscription} đã hết hạn${expiryDate ? ` (${moment(expiryDate).format("DD/MM/YYYY")})` : ""} → chuyển về Free`,
+          });
+
+          downgradeCount++;
+        }
+      } catch (err) {
+        errorCount++;
+        logger.error(
+          `[${ResetGooglePackageJob.jobName}] Error processing customer ${customer._id}: ${err.message}`
+        );
+      }
+    }
+
+    const result: ResetGooglePackageResult = {
+      processedCount: customers.length,
+      resetCount,
+      downgradeCount,
+      skippedTrialCount,
+      errorCount,
+    };
+
+    logger.info(
+      `[${ResetGooglePackageJob.jobName}] Completed: ${resetCount} reset, ${downgradeCount} downgraded, ${skippedTrialCount} skipped trial, ${errorCount} errors`
+    );
+
+    return result;
+  }
+
+  static async execute(job: Job) {
+    try {
+      await ResetGooglePackageJob.run(new Date());
     } catch (err) {
       logger.error(`[${ResetGooglePackageJob.jobName}] Fatal error: ${err.message}`);
     }

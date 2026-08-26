@@ -312,6 +312,25 @@ export class CustomerRepository extends CrudRepository<Customer> {
     }).then((res) => res.data.g0);
   }
 
+  /** Chạy thủ công reset hạn mức gói Google hàng loạt (giống cron 00:00) */
+  async customerBulkResetGooglePackage(): Promise<{
+    processedCount: number;
+    resetCount: number;
+    downgradeCount: number;
+    skippedTrialCount: number;
+    errorCount: number;
+  }> {
+    return this.mutate({
+      mutation: `customerBulkResetGooglePackage {
+        processedCount
+        resetCount
+        downgradeCount
+        skippedTrialCount
+        errorCount
+      }`,
+    }).then((res) => res.data.g0);
+  }
+
   async customerUpdatePackageField(data: {
     customerId: string;
     fieldData: {

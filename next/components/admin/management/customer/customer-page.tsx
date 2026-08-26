@@ -1,6 +1,8 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 import { HiBadgeCheck, HiBan } from "react-icons/hi";
+import { RiRestartLine } from "react-icons/ri";
+import { useAlert } from "../../../../lib/providers/alert-provider";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
 
@@ -34,8 +36,10 @@ export function CustomerPage(props) {
   const [filter, setFilter] = useState<any>({});
   const [timeRange, setTimeRange] = useState<any>(null);
   const [packageFilter, setPackageFilter] = useState<SubscriptionPlanEnum>(null);
+  const [resettingPackages, setResettingPackages] = useState(false);
 
   const toast = useToast();
+  const alert = useAlert();
   useEffect(() => {
     if (router.query["create"]) {
       setCustomerId("");
@@ -61,6 +65,45 @@ export function CustomerPage(props) {
       ...(packageFilter ? { "googlePackage.subscription": packageFilter } : {}),
     });
   }, [timeRange, packageFilter]);
+
+  const onBulkResetPackages = async () => {
+    if (user?.role !== "ADMIN") return;
+
+    const confirmed = await alert.warn(
+      t("Xác nhận reset gói hàng loạt"),
+      t(
+        "Chạy giống cron 00:00: đưa mức đã dùng về 0 cho Free/gói còn hạn; bỏ qua Trial còn hạn; gói hết hạn chuyển về Free. Tiếp tục?"
+      ),
+      t("Xác nhận"),
+      async () => {
+        setResettingPackages(true);
+        try {
+          const result = await CustomerService.customerBulkResetGooglePackage();
+          toast.success(
+            t(
+              "Đã xử lý {{processed}} KH: {{reset}} reset, {{downgrade}} hạ Free, {{skipped}} bỏ qua Trial, {{errors}} lỗi",
+              {
+                processed: result.processedCount,
+                reset: result.resetCount,
+                downgrade: result.downgradeCount,
+                skipped: result.skippedTrialCount,
+                errors: result.errorCount,
+              }
+            )
+          );
+          return true;
+        } catch (error: any) {
+          toast.error(error?.message || t("Reset gói hàng loạt thất bại"));
+          return false;
+        } finally {
+          setResettingPackages(false);
+        }
+      }
+    );
+
+    if (!confirmed) return;
+  };
+
   return (
     <Card>
       <DataTable<Customer>
@@ -77,6 +120,16 @@ export function CustomerPage(props) {
         <DataTable.Header>
           <DataTable.Title />
           <DataTable.Buttons>
+            {user?.role === "ADMIN" && (
+              <DataTable.Button
+                outline
+                text={t("Reset gói hàng loạt")}
+                icon={<RiRestartLine />}
+                disabled={resettingPackages}
+                onClick={onBulkResetPackages}
+                refreshAfterTask
+              />
+            )}
             <DataTable.Button outline isRefreshButton refreshAfterTask />
           </DataTable.Buttons>
         </DataTable.Header>
