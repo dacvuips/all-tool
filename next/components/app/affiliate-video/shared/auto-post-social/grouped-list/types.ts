@@ -24,6 +24,7 @@ export interface SocialPostPublishInfo {
   /** Key IndexedDB (generated-videos store) */
   videoStorageKey?: string;
   youtubeUrl?: string;
+  facebookUrl?: string;
   postedAt?: number;
   videoCount?: number;
   message?: string;
@@ -164,6 +165,7 @@ export function normalizeSocialPostPublish(
   const status = publish.status === "posted" || publish.status === "ready" ? publish.status : "ready";
   const videoStorageKey = asTrimmed(publish.videoStorageKey) || undefined;
   const youtubeUrl = asTrimmed(publish.youtubeUrl) || undefined;
+  const facebookUrl = asTrimmed(publish.facebookUrl) || undefined;
   const message = asTrimmed(publish.message) || undefined;
   const postedAt =
     typeof publish.postedAt === "number" && Number.isFinite(publish.postedAt)
@@ -173,8 +175,8 @@ export function normalizeSocialPostPublish(
     typeof publish.videoCount === "number" && publish.videoCount > 0
       ? publish.videoCount
       : undefined;
-  if (!videoStorageKey && !youtubeUrl && !postedAt) return undefined;
-  return { status, videoStorageKey, youtubeUrl, postedAt, videoCount, message };
+  if (!videoStorageKey && !youtubeUrl && !facebookUrl && !postedAt) return undefined;
+  return { status, videoStorageKey, youtubeUrl, facebookUrl, postedAt, videoCount, message };
 }
 
 /** Dòng header: **Tiêu đề|Mô tả|Hashtag|Link|Riêng tư|Trẻ em|Danh mục**
@@ -250,6 +252,38 @@ export function applyFieldsToAllPlatforms(
     youtube: { ...fields },
     facebook: { ...fields },
     tiktok: { ...fields },
+  };
+}
+
+/** Map fields → payload đăng Facebook Fanpage GraphQL */
+export function toPostFacebookPageVideoMeta(
+  fields?: Partial<SocialPostPlatformFields> | null
+): {
+  title: string;
+  description: string;
+  privacyStatus: "private" | "public" | "unlisted";
+} {
+  const f = normalizeSocialPostFields(fields);
+
+  const privacy = normalizePrivacyStatus(f.privacyStatus);
+  const privacyStatus =
+    privacy === "public" || privacy === "unlisted" || privacy === "private"
+      ? privacy
+      : "private";
+
+  const hashtagText = f.hashtag
+    .split(/[\s,]+/)
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .map((t) => (t.startsWith("#") ? t : `#${t}`))
+    .join(" ");
+
+  const description = [f.description, hashtagText, f.link].filter(Boolean).join("\n\n");
+
+  return {
+    title: f.title,
+    description,
+    privacyStatus,
   };
 }
 

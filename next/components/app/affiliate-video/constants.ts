@@ -475,6 +475,7 @@ export interface SocialPostGroupData {
     status: "posted" | "ready";
     videoStorageKey?: string;
     youtubeUrl?: string;
+    facebookUrl?: string;
     postedAt?: number;
     videoCount?: number;
     message?: string;

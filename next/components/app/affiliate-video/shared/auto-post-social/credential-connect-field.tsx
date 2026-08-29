@@ -1,7 +1,8 @@
 /**
  * Credential UX (lưu MongoDB qua GraphQL CredentialCustomer):
  * - YouTube: tách Access token / Refresh token / Client ID / Client secret → ghép JSON khi Lưu
- * - Facebook / TikTok: 1 ô token (giữ đơn giản)
+ * - Facebook: Page Access Token + Page ID → ghép JSON khi Lưu
+ * - TikTok: 1 ô token (giữ đơn giản)
  */
 import { useState } from "react";
 import { useTranslation } from "react-i18next";

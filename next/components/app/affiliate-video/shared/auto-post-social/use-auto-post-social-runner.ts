@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { youtubePostRepository } from "../../../../../lib/repo/youtube/youtube-post.repo";
+import { facebookPostRepository } from "../../../../../lib/repo/facebook/facebook-post.repo";
 import { CopyVideoScene } from "../../constants";
 import { mergeSceneVideosToBlob } from "../batchMergeVideos";
 import type { GeneratedVideoLike } from "../generatedMediaUtils";
@@ -38,6 +39,7 @@ import {
   buildGroupsFromScenes,
   normalizeSocialPostFields,
   SocialPostGroup,
+  toPostFacebookPageVideoMeta,
   toPostYoutubeVideoMeta,
 } from "./grouped-list";
 import type { PersistSocialPostPublishParams } from "./use-persist-social-post-publish";
@@ -57,6 +59,12 @@ async function blobToRawBase64(blob: Blob): Promise<string> {
 }
 
 type GroupRunOutcome = "done" | "error" | "stopped" | "skipped";
+
+type PlatformUploadFlags = { youtube: boolean; facebook: boolean };
+
+function hasAnyUploadPlatform(flags: PlatformUploadFlags): boolean {
+  return flags.youtube || flags.facebook;
+}
 
 const PUBLISH_PIPELINE_STATUSES = new Set(["merging", "uploading", "done"]);
 
@@ -195,12 +203,26 @@ export function useAutoPostSocialRunner({
       return false;
     }
     const youtubeOn = settings.platforms.youtube?.enabled;
+    const facebookOn = settings.platforms.facebook?.enabled;
     if (youtubeOn && !credentials.youtube?.active) {
       toast.warn(t("Chưa kết nối YouTube — mở Setting để thêm OAuth"));
       return false;
     }
+    if (facebookOn && !credentials.facebook?.active) {
+      toast.warn(t("Chưa kết nối Facebook — mở Setting để thêm Page Access Token"));
+      return false;
+    }
     return true;
-  }, [credentials.youtube?.active, hydrated, settings.enabled, settings.platforms.youtube?.enabled, t, toast]);
+  }, [
+    credentials.facebook?.active,
+    credentials.youtube?.active,
+    hydrated,
+    settings.enabled,
+    settings.platforms.facebook?.enabled,
+    settings.platforms.youtube?.enabled,
+    t,
+    toast,
+  ]);
 
   const syncPackageQuota = useCallback(async (): Promise<AutoPostPackageSnapshot | null> => {
     try {
@@ -220,7 +242,7 @@ export function useAutoPostSocialRunner({
     async (
       group: SocialPostGroup,
       displayIndex: number,
-      youtubeOn: boolean
+      platforms: PlatformUploadFlags
     ): Promise<GroupRunOutcome> => {
       const n = displayIndex + 1;
       const videosReady = await countScenesWithVideo(group.sceneIds, getGeneratedVideo);
@@ -291,8 +313,8 @@ export function useAutoPostSocialRunner({
         setAutoPostGroupInfo(group.id, { mergedVideoUrl });
       }
 
-      if (!youtubeOn) {
-        const message = t("Bỏ qua upload (YouTube tắt)");
+      if (!hasAnyUploadPlatform(platforms)) {
+        const message = t("Bỏ qua upload (không có nền tảng nào bật)");
         try {
           await persistRef.current?.({
             groupId: group.id,
@@ -316,21 +338,23 @@ export function useAutoPostSocialRunner({
         return "stopped";
       }
 
+      const uploadTargets: string[] = [];
+      if (platforms.youtube) uploadTargets.push("YouTube");
+      if (platforms.facebook) uploadTargets.push("Facebook");
+
       patchAutoPostRunState({
-        statusLabel: t("Bài đăng #{{n}}: đăng YouTube…", { n }),
+        statusLabel: t("Bài đăng #{{n}}: đăng {{platforms}}…", {
+          n,
+          platforms: uploadTargets.join(" + "),
+        }),
       });
       setAutoPostGroupInfo(group.id, {
         status: "uploading",
         mergedVideoUrl,
-        message: t("Đang upload YouTube…"),
+        message: t("Đang upload {{platforms}}…", { platforms: uploadTargets.join(" + ") }),
       });
 
       try {
-        const meta = toPostYoutubeVideoMeta(group.platforms?.youtube);
-        const affiliateLink = normalizeSocialPostFields(group.platforms?.youtube).link;
-        if (!meta.title?.trim()) {
-          meta.title = t("Bài đăng #{{n}}", { n }).slice(0, 100);
-        }
         const videoBase64 = await blobToRawBase64(blob);
         if (isAutoPostGroupStopped(group.id) || stopRef.current) {
           setAutoPostGroupInfo(group.id, {
@@ -340,16 +364,79 @@ export function useAutoPostSocialRunner({
           });
           return "stopped";
         }
-        const result = await youtubePostRepository.postYoutubeVideo({
-          videoBase64,
-          ...meta,
-          affiliateLink: affiliateLink || undefined,
-        });
-        const message = result.linkCommentWarning
-          ? t("Đã đăng YouTube (comment link thất bại)")
-          : result.linkCommentId
-          ? t("Đã đăng YouTube + comment link")
-          : t("Đã đăng YouTube");
+
+        const publishResult: {
+          youtubeUrl?: string;
+          facebookUrl?: string;
+          messageParts: string[];
+        } = { messageParts: [] };
+        const errors: string[] = [];
+
+        if (platforms.youtube) {
+          try {
+            const meta = toPostYoutubeVideoMeta(group.platforms?.youtube);
+            const affiliateLink = normalizeSocialPostFields(group.platforms?.youtube).link;
+            if (!meta.title?.trim()) {
+              meta.title = t("Bài đăng #{{n}}", { n }).slice(0, 100);
+            }
+            const result = await youtubePostRepository.postYoutubeVideo({
+              videoBase64,
+              ...meta,
+              affiliateLink: affiliateLink || undefined,
+            });
+            publishResult.youtubeUrl = result.url;
+            if (result.linkCommentWarning) {
+              publishResult.messageParts.push(t("YouTube (comment link thất bại)"));
+            } else if (result.linkCommentId) {
+              publishResult.messageParts.push(t("YouTube + comment link"));
+            } else {
+              publishResult.messageParts.push(t("YouTube"));
+            }
+          } catch (err: any) {
+            errors.push(err?.message || t("Lỗi đăng YouTube"));
+          }
+        }
+
+        if (platforms.facebook) {
+          try {
+            const meta = toPostFacebookPageVideoMeta(group.platforms?.facebook);
+            const affiliateLink = normalizeSocialPostFields(group.platforms?.facebook).link;
+            if (!meta.title?.trim()) {
+              meta.title = t("Bài đăng #{{n}}", { n }).slice(0, 255);
+            }
+            const result = await facebookPostRepository.postFacebookPageVideo({
+              videoBase64,
+              ...meta,
+              affiliateLink: affiliateLink || undefined,
+            });
+            publishResult.facebookUrl = result.url;
+            if (result.linkCommentWarning) {
+              publishResult.messageParts.push(t("Facebook (comment link thất bại)"));
+            } else if (result.linkCommentId) {
+              publishResult.messageParts.push(t("Facebook + comment link"));
+            } else {
+              publishResult.messageParts.push(t("Facebook"));
+            }
+          } catch (err: any) {
+            errors.push(err?.message || t("Lỗi đăng Facebook"));
+          }
+        }
+
+        if (!publishResult.youtubeUrl && !publishResult.facebookUrl) {
+          const message = errors.join(" · ") || t("Lỗi upload");
+          setAutoPostGroupInfo(group.id, {
+            status: "error",
+            mergedVideoUrl,
+            message,
+          });
+          return "error";
+        }
+
+        const message = publishResult.messageParts.length
+          ? t("Đã đăng {{platforms}}", { platforms: publishResult.messageParts.join(", ") })
+          : t("Đã đăng");
+        const partialError = errors.length ? ` (${errors.join(" · ")})` : "";
+
         try {
           await persistRef.current?.({
             groupId: group.id,
@@ -357,25 +444,28 @@ export function useAutoPostSocialRunner({
             videoCount,
             publish: {
               status: "posted",
-              youtubeUrl: result.url,
-              message,
+              youtubeUrl: publishResult.youtubeUrl,
+              facebookUrl: publishResult.facebookUrl,
+              message: message + partialError,
             },
           });
         } catch (err: any) {
           console.error("[auto-post] persist posted:", err);
         }
+
         setAutoPostGroupInfo(group.id, {
           status: "done",
           mergedVideoUrl,
-          youtubeUrl: result.url,
-          message,
+          youtubeUrl: publishResult.youtubeUrl,
+          facebookUrl: publishResult.facebookUrl,
+          message: message + partialError,
         });
-        return "done";
+        return errors.length ? "error" : "done";
       } catch (err: any) {
         setAutoPostGroupInfo(group.id, {
           status: "error",
           mergedVideoUrl,
-          message: err?.message || t("Lỗi đăng YouTube"),
+          message: err?.message || t("Lỗi upload"),
         });
         return "error";
       }
@@ -569,7 +659,10 @@ export function useAutoPostSocialRunner({
         return;
       }
 
-      const youtubeOn = !!settings.platforms.youtube?.enabled;
+      const platformFlags: PlatformUploadFlags = {
+        youtube: !!settings.platforms.youtube?.enabled,
+        facebook: !!settings.platforms.facebook?.enabled,
+      };
       const allGroups = buildGroupsFromScenes(scenesRef.current, groupsRef.current);
 
       if (options?.resetAll) {
@@ -628,7 +721,7 @@ export function useAutoPostSocialRunner({
           0,
           allGroups.findIndex((g) => g.id === group.id)
         );
-        const promise = publishOneGroup(group, displayIndex, youtubeOn).finally(() => {
+        const promise = publishOneGroup(group, displayIndex, platformFlags).finally(() => {
           publishInFlight.delete(group.id);
         });
         publishInFlight.set(group.id, promise);
@@ -737,6 +830,7 @@ export function useAutoPostSocialRunner({
     [
       publishOneGroup,
       runGlobalGeneration,
+      settings.platforms.facebook?.enabled,
       settings.platforms.youtube?.enabled,
       syncPackageQuota,
       t,

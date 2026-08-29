@@ -19,6 +19,7 @@ export interface AutoPostGroupRunInfo {
   /** Object URL — video đã nối (≥2 cảnh) để preview trên UI */
   mergedVideoUrl?: string;
   youtubeUrl?: string;
+  facebookUrl?: string;
 }
 
 export interface AutoPostRunState {
