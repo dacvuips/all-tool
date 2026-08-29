@@ -16,20 +16,25 @@ import {
   RiMagicFill,
   RiUploadCloud2Line,
 } from "react-icons/ri";
-import { Button } from "../../../shared/utilities/form";
 import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
+import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
-import { buildSceneImageFileName, getGeneratedImagePreviewSrc, hasGeneratedImageData, isGeneratedImageReadyForUi } from "./generatedMediaUtils";
-import { SceneMediaError } from "./scene-media-error";
-import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+import {
+  buildSceneImageFileName,
+  getGeneratedImagePreviewSrc,
+  hasGeneratedImageData,
+  isGeneratedImageReadyForUi,
+} from "./generatedMediaUtils";
 import {
   INLINE_LIST_TOOLBAR_BTN,
   SceneInlineListCell,
   SceneInlineMediaColumn,
 } from "./scene-inline-list-media";
+import { SceneMediaError } from "./scene-media-error";
+import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -289,112 +294,116 @@ export function SceneCardImageTab({
       )}
 
       {/* ── Generated Image section ── */}
-      <div className={`flex gap-2 ${inline ? "justify-start items-start" : "justify-center items-center"} group w-full`}>
+      <div
+        className={`flex gap-2 ${
+          inline ? "justify-start items-start" : "justify-center items-center"
+        } group w-full`}
+      >
         {inline ? (
           <SceneInlineMediaColumn error={errorMessage}>
             {canShowInlineImage && generatedImage ? (
-            <SceneInlineListCell
-              aspectRatio={aspectRatio}
-              variant="image"
-              frameClassName="ring-1 ring-green-400"
-              preview={
-                <button
-                  type="button"
-                  onClick={handleOpenImageZoom}
-                  title={t("Phóng to")}
-                  className="relative w-full h-full cursor-zoom-in border-0 p-0 bg-transparent block"
-                >
-                  <img
-                    key={imagePreviewSrc || sceneNumber}
-                    src={imagePreviewSrc || undefined}
-                    alt={`Scene ${sceneNumber}`}
-                    className="w-full h-full object-cover pointer-events-none"
+              <SceneInlineListCell
+                aspectRatio={aspectRatio}
+                variant="image"
+                frameClassName="ring-1 ring-green-400"
+                preview={
+                  <button
+                    type="button"
+                    onClick={handleOpenImageZoom}
+                    title={t("Phóng to")}
+                    className="relative w-full h-full cursor-zoom-in border-0 p-0 bg-transparent block"
+                  >
+                    <img
+                      key={imagePreviewSrc || sceneNumber}
+                      src={imagePreviewSrc || undefined}
+                      alt={`Scene ${sceneNumber}`}
+                      className="w-full h-full object-cover pointer-events-none"
+                    />
+                    {slotAssignCount > 0 && onAssignToSlot && (
+                      <div className="absolute top-0 left-0 z-20 flex flex-wrap gap-0.5 p-0.5 max-w-full pointer-events-auto">
+                        {Array.from({ length: slotAssignCount }, (_, i) => {
+                          const isAssigned = assignedSlotIndices.includes(i);
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAssignToSlot(i);
+                              }}
+                              title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
+                              className={`flex items-center justify-center min-w-4 h-4 rounded text-9 font-bold shadow ${
+                                isAssigned
+                                  ? "bg-white ring-1 ring-green-500 text-green-600"
+                                  : "bg-black/70 text-white"
+                              }`}
+                            >
+                              {isAssigned ? <RiCheckLine className="text-9" /> : i + 1}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </button>
+                }
+                toolbar={
+                  <>
+                    <GeneratedImageDownloadButtons
+                      image={generatedImage}
+                      fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
+                      disabled={isDisabled}
+                      compact
+                    />
+                    {renderInlineImageToolbar()}
+                  </>
+                }
+              />
+            ) : showImageLoading ? (
+              <SceneInlineListCell
+                aspectRatio={aspectRatio}
+                variant="image"
+                frameClassName="ring-1 ring-dashed ring-pink-200"
+                preview={
+                  <SceneMediaGenerationProgress
+                    variant="image"
+                    progress={imageProgress}
+                    layout="inline-cell"
+                    actionPending={generationActionPending}
+                    onStop={onStopGeneration}
                   />
-                  {slotAssignCount > 0 && onAssignToSlot && (
-                    <div className="absolute top-0 left-0 z-20 flex flex-wrap gap-0.5 p-0.5 max-w-full pointer-events-auto">
-                      {Array.from({ length: slotAssignCount }, (_, i) => {
-                        const isAssigned = assignedSlotIndices.includes(i);
-                        return (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAssignToSlot(i);
-                            }}
-                            title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
-                            className={`flex items-center justify-center min-w-4 h-4 rounded text-9 font-bold shadow ${
-                              isAssigned
-                                ? "bg-white ring-1 ring-green-500 text-green-600"
-                                : "bg-black/70 text-white"
-                            }`}
-                          >
-                            {isAssigned ? <RiCheckLine className="text-9" /> : i + 1}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </button>
-              }
-              toolbar={
-                <>
-                  <GeneratedImageDownloadButtons
-                    image={generatedImage}
-                    fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
-                    disabled={isDisabled}
-                    compact
-                  />
-                  {renderInlineImageToolbar()}
-                </>
-              }
-            />
-          ) : showImageLoading ? (
-            <SceneInlineListCell
-              aspectRatio={aspectRatio}
-              variant="image"
-              frameClassName="ring-1 ring-dashed ring-pink-200"
-              preview={
-                <SceneMediaGenerationProgress
-                  variant="image"
-                  progress={imageProgress}
-                  layout="inline-cell"
-                  actionPending={generationActionPending}
-                  onStop={onStopGeneration}
-                />
-              }
-            />
-          ) : (
-            <SceneInlineListCell
-              aspectRatio={aspectRatio}
-              variant="image"
-              frameClassName="ring-1 ring-dashed ring-gray-200"
-              preview={
-                <button
-                  id={generateButtonId}
-                  type="button"
-                  onClick={onGenerateImage}
-                  className="w-full h-full flex items-center justify-center bg-gray-50 hover:bg-pink-50 transition-colors"
-                  title={t("Tạo ảnh")}
-                >
-                  <RiMagicFill className="text-lg text-pink-300" />
-                </button>
-              }
-              toolbar={
-                <>
-                  <Button
+                }
+              />
+            ) : (
+              <SceneInlineListCell
+                aspectRatio={aspectRatio}
+                variant="image"
+                frameClassName="ring-1 ring-dashed ring-gray-200"
+                preview={
+                  <button
+                    id={generateButtonId}
+                    type="button"
                     onClick={onGenerateImage}
-                    icon={<RiMagicFill />}
-                    placement="bottom"
-                    className={`${INLINE_LIST_TOOLBAR_BTN} text-pink-500`}
-                    iconClassName="text-base"
-                    tooltip={t("Tạo ảnh")}
-                  />
-                  {renderUploadGalleryButtons(true)}
-                </>
-              }
-            />
-          )}
+                    className="w-full h-full flex items-center justify-center bg-gray-50 hover:bg-pink-50 transition-colors"
+                    title={t("Tạo ảnh")}
+                  >
+                    <RiMagicFill className="text-lg text-pink-300" />
+                  </button>
+                }
+                toolbar={
+                  <>
+                    <Button
+                      onClick={onGenerateImage}
+                      icon={<RiMagicFill />}
+                      placement="bottom"
+                      className={`${INLINE_LIST_TOOLBAR_BTN} text-pink-500`}
+                      iconClassName="text-base"
+                      tooltip={t("Tạo ảnh")}
+                    />
+                    {renderUploadGalleryButtons(true)}
+                  </>
+                }
+              />
+            )}
           </SceneInlineMediaColumn>
         ) : imageReady && generatedImage ? (
           <div className={mediaStackClass}>
@@ -432,9 +441,7 @@ export function SceneCardImageTab({
                         }}
                         title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
                         className={`flex items-center gap-0.5 rounded-md font-bold shadow-md transition-all ${
-                          inline
-                            ? "min-w-5 h-5 px-1 text-10"
-                            : "min-w-[28px] h-7 px-1.5 text-sm"
+                          inline ? "min-w-5 h-5 px-1 text-10" : "min-w-[28px] h-7 px-1.5 text-sm"
                         } ${
                           isAssigned
                             ? "bg-white ring-2 ring-green-500"
@@ -442,7 +449,11 @@ export function SceneCardImageTab({
                         }`}
                       >
                         {isAssigned && (
-                          <RiCheckLine className={inline ? "text-xs text-green-600" : "text-base text-green-600"} />
+                          <RiCheckLine
+                            className={
+                              inline ? "text-xs text-green-600" : "text-base text-green-600"
+                            }
+                          />
                         )}
                         <span className={isAssigned ? "text-green-600" : "text-white"}>
                           {i + 1}

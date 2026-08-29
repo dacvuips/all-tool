@@ -30,13 +30,7 @@ function ExternalLink({ href, children }: { href: string; children: ReactNode })
   );
 }
 
-function GuideSection({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
+function GuideSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="space-y-2">
       <h4 className="text-xs font-bold text-amber-950">{title}</h4>
@@ -124,20 +118,16 @@ export function YoutubeAccessTokenGuide() {
             <StepList
               items={[
                 <>
-                  {t("Vào")}{" "}
-                  <ExternalLink href={URL.credentials}>Credentials</ExternalLink>{" "}
+                  {t("Vào")} <ExternalLink href={URL.credentials}>Credentials</ExternalLink>{" "}
                   {t("→ Create Credentials → OAuth client ID.")}
                 </>,
                 <>
                   {t("Application type chọn")} <strong>Desktop app</strong>{" "}
                   {t("(đơn giản nhất) hoặc Web application nếu bạn có redirect URI riêng.")}
                 </>,
+                <>{t("Đặt tên (vd: All-tool YouTube Upload) → Create.")}</>,
                 <>
-                  {t("Đặt tên (vd: All-tool YouTube Upload) → Create.")}
-                </>,
-                <>
-                  {t("Copy")} <strong>Client ID</strong> {t("và")}{" "}
-                  <strong>Client secret</strong>{" "}
+                  {t("Copy")} <strong>Client ID</strong> {t("và")} <strong>Client secret</strong>{" "}
                   {t("(giữ bí mật, không chia sẻ công khai).")}
                 </>,
               ]}
@@ -162,8 +152,8 @@ export function YoutubeAccessTokenGuide() {
                   {t("→ dán Client ID và Client secret vừa tạo → Close.")}
                 </>,
                 <>
-                  {t("Bước 1 — Select & authorize APIs: tìm")}{" "}
-                  <strong>YouTube Data API v3</strong> {t("và chọn scope:")}{" "}
+                  {t("Bước 1 — Select & authorize APIs: tìm")} <strong>YouTube Data API v3</strong>{" "}
+                  {t("và chọn scope:")}{" "}
                   <code className="px-1 py-0.5 text-10 bg-white rounded border border-amber-200 break-all">
                     {URL.youtubeUploadScope}
                   </code>
@@ -182,9 +172,10 @@ export function YoutubeAccessTokenGuide() {
                   <strong>Exchange authorization code for tokens</strong>.
                 </>,
                 <>
-                  {t("Copy")} <strong>Access token</strong> {t("và")}{" "}
-                  <strong>Refresh token</strong>{" "}
-                  {t("(refresh_token chỉ hiện lần đầu khi cấp quyền; nếu không thấy, đăng xuất Google và Authorize lại với prompt consent).")}
+                  {t("Copy")} <strong>Access token</strong> {t("và")} <strong>Refresh token</strong>{" "}
+                  {t(
+                    "(refresh_token chỉ hiện lần đầu khi cấp quyền; nếu không thấy, đăng xuất Google và Authorize lại với prompt consent)."
+                  )}
                 </>,
               ]}
             />
@@ -204,16 +195,16 @@ export function YoutubeAccessTokenGuide() {
                   {t("Quay lại tab")} <strong>Credential</strong> {t("trong dialog này.")}
                 </>,
                 <>
-                  {t("Nhấn")} <strong>{t("Nhập Credential")}</strong>{" "}
-                  {t("hoặc Sửa nếu đã có.")}
+                  {t("Nhấn")} <strong>{t("Nhập Credential")}</strong> {t("hoặc Sửa nếu đã có.")}
                 </>,
                 <>
-                  {t("Dán lần lượt: Access token (bắt buộc), Refresh token, Client ID, Client secret.")}
+                  {t(
+                    "Dán lần lượt: Access token (bắt buộc), Refresh token, Client ID, Client secret."
+                  )}
                 </>,
                 <>
-                  {t("Lưu → trạng thái")} <strong>{t("Đã kết nối")}</strong>{" "}
-                  {t("→ bật")} <strong>{t("Bật đăng lên Youtube")}</strong>{" "}
-                  {t("để dùng pipeline tự động đăng.")}
+                  {t("Lưu → trạng thái")} <strong>{t("Đã kết nối")}</strong> {t("→ bật")}{" "}
+                  <strong>{t("Bật đăng lên Youtube")}</strong> {t("để dùng pipeline tự động đăng.")}
                 </>,
               ]}
             />

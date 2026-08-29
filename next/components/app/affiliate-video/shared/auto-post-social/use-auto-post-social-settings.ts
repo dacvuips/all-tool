@@ -6,10 +6,10 @@ import {
   AutoPostSocialSettings,
   createEmptyCredentialState,
   PlatformAutoPostConfig,
+  SOCIAL_PLATFORM_CREDENTIAL_KEY,
   SOCIAL_PLATFORMS,
   SocialCredentialState,
   SocialPlatform,
-  SOCIAL_PLATFORM_CREDENTIAL_KEY,
 } from "./types";
 
 export function useAutoPostSocialSettings() {
@@ -52,7 +52,8 @@ export function useAutoPostSocialSettings() {
 
     const onSettingsChange = () => setSettings(loadAutoPostSettings());
     window.addEventListener("affiliate-auto-post-settings-changed", onSettingsChange);
-    return () => window.removeEventListener("affiliate-auto-post-settings-changed", onSettingsChange);
+    return () =>
+      window.removeEventListener("affiliate-auto-post-settings-changed", onSettingsChange);
   }, [loadCredentialsFromDb]);
 
   const updateSettings = useCallback(

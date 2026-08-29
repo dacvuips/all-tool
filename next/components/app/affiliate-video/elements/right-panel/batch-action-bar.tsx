@@ -8,25 +8,24 @@ import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
   RiCloseLine,
-  RiDownloadLine,
   RiFileCopyLine,
   RiImageFill,
   RiLoader4Line,
   RiRefreshLine,
   RiVideoFill,
 } from "react-icons/ri";
-import { VoiceExportDialog } from "../../shared/voice-export-dialog";
-import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
-import { BatchClearWatermarkDialog } from "../../shared/batch-clear-watermark-dialog";
-import { BatchMergeVideosDropdown } from "../../shared/batch-merge-videos-dropdown";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { CustomerService } from "../../../../../lib/repo/customer/customer.repo";
+import { CopyVideoScene } from "../../constants";
 import { BatchAutoPostSocialControl } from "../../shared/auto-post-social";
 import { useAutoPostRunState } from "../../shared/auto-post-social/auto-post-social-run-store";
 import { useAutoPostSocialRunner } from "../../shared/auto-post-social/use-auto-post-social-runner";
 import { usePersistSocialPostPublish } from "../../shared/auto-post-social/use-persist-social-post-publish";
+import { BatchClearWatermarkDialog } from "../../shared/batch-clear-watermark-dialog";
+import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
+import { BatchMergeVideosDropdown } from "../../shared/batch-merge-videos-dropdown";
+import { VoiceExportDialog } from "../../shared/voice-export-dialog";
 import { useElementSocialPostGroups } from "../hook/use-element-social-post-groups";
-import { CopyVideoScene } from "../../constants";
-import { useAuth } from "../../../../../lib/providers/auth-provider";
-import { CustomerService } from "../../../../../lib/repo/customer/customer.repo";
 import { useCopyVideoBatchActions } from "../hook/useElementBatchActions";
 
 interface BatchActionBarProps {
@@ -43,7 +42,8 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     showVoiceExportDialog,
     setShowVoiceExportDialog,
     dialogueCopied,
-    dialogueItems,    dialogueExportText,
+    dialogueItems,
+    dialogueExportText,
     audioExportText,
     handleCopyDialogue,
     handleSaveDialogue,
@@ -182,11 +182,7 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     needsImageBeforeVideo: !componentTab,
     busy:
       !autoPostRunning &&
-      (batchRunning ||
-        videoBatchRunning ||
-        extendBatchRunning ||
-        retryRunning ||
-        mergingVideos),
+      (batchRunning || videoBatchRunning || extendBatchRunning || retryRunning || mergingVideos),
   });
 
   const actions = [
@@ -326,7 +322,10 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
 
   return (
     <>
-      <div id="batch-action-bar" className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100">
+      <div
+        id="batch-action-bar"
+        className="flex flex-col flex-shrink-0 bg-white border-b border-gray-100"
+      >
         <div className="flex overflow-x-auto flex-nowrap gap-2 items-center p-3">
           {actions.map((action) => {
             if ("mediaDownloadDropdown" in action && action.mediaDownloadDropdown) {
@@ -365,7 +364,13 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
                   getGeneratedVideo={getGeneratedVideo}
                   availableVideoCount={availableVideoCount}
                   availableExtendCount={availableExtendCount}
-                  disabled={batchRunning || videoBatchRunning || extendBatchRunning || downloading || downloadingVideo}
+                  disabled={
+                    batchRunning ||
+                    videoBatchRunning ||
+                    extendBatchRunning ||
+                    downloading ||
+                    downloadingVideo
+                  }
                   onMergeNormal={handleMergeNormalVideos}
                   onMergeStitch={handleMergeStitchVideos}
                 />
@@ -604,4 +609,3 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     </>
   );
 }
-

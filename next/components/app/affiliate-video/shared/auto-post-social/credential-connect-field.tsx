@@ -102,9 +102,7 @@ export function CredentialConnectField({
     setEditing(false);
   };
 
-  const canSave = isYoutube
-    ? !!youtubeForm.accessToken.trim()
-    : !!value.trim();
+  const canSave = isYoutube ? !!youtubeForm.accessToken.trim() : !!value.trim();
 
   const handleSave = async () => {
     if (!canSave || saving) return;
@@ -234,9 +232,7 @@ export function CredentialConnectField({
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs text-gray-500 mb-1.5">
-                        {t("Client ID")}
-                      </label>
+                      <label className="block text-xs text-gray-500 mb-1.5">{t("Client ID")}</label>
                       <input
                         type="text"
                         value={youtubeForm.clientId}
@@ -281,13 +277,7 @@ export function CredentialConnectField({
 
               <div className="flex gap-2 justify-end items-center">
                 {hasCred && (
-                  <Button
-                    outline
-                    danger
-                    text={t("Xóa")}
-                    disabled={saving}
-                    onClick={handleDelete}
-                  />
+                  <Button outline danger text={t("Xóa")} disabled={saving} onClick={handleDelete} />
                 )}
                 <Button
                   outline
