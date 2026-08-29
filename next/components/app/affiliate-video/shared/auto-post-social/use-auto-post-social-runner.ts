@@ -672,7 +672,7 @@ export function useAutoPostSocialRunner({
         });
 
         if (publishInFlight.size > 0) {
-          const outcomes = await Promise.all([...publishInFlight.values()]);
+          const outcomes = await Promise.all(Array.from(publishInFlight.values()));
           for (const outcome of outcomes) {
             if (recordOutcome(outcome)) break;
           }

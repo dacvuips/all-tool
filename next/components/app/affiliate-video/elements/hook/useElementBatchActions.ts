@@ -932,7 +932,7 @@ export function useCopyVideoBatchActions(
 
     const cancelTasks: Promise<void>[] = [];
 
-    for (const sceneId of [...batchGeneratingSceneIdsRef.current]) {
+    for (const sceneId of Array.from(batchGeneratingSceneIdsRef.current)) {
       const jobId = getSceneJob(sceneId, "image");
       if (jobId) {
         cancelTasks.push(cancelImageJob(jobId).catch(() => undefined));
@@ -942,7 +942,7 @@ export function useCopyVideoBatchActions(
       reportSceneError?.(sceneId, "image", t("Đã dừng"));
     }
 
-    for (const rawId of [...batchGeneratingVideoSceneIdsRef.current]) {
+    for (const rawId of Array.from(batchGeneratingVideoSceneIdsRef.current)) {
       const isStitch = rawId.endsWith("::stitch");
       const kind: SceneProgressKind = isStitch ? "extend" : "video";
       const jobId = getSceneJob(rawId, kind);
@@ -976,7 +976,7 @@ export function useCopyVideoBatchActions(
       const idSet = new Set(sceneIds);
       const cancelTasks: Promise<void>[] = [];
 
-      for (const sceneId of [...batchGeneratingSceneIdsRef.current]) {
+      for (const sceneId of Array.from(batchGeneratingSceneIdsRef.current)) {
         if (!idSet.has(sceneId)) continue;
         const jobId = getSceneJob(sceneId, "image");
         if (jobId) {
@@ -987,7 +987,7 @@ export function useCopyVideoBatchActions(
         reportSceneError?.(sceneId, "image", t("Đã dừng"));
       }
 
-      for (const rawId of [...batchGeneratingVideoSceneIdsRef.current]) {
+      for (const rawId of Array.from(batchGeneratingVideoSceneIdsRef.current)) {
         const isStitch = rawId.endsWith("::stitch");
         const baseId = isStitch ? rawId.slice(0, -"::stitch".length) : rawId;
         if (!idSet.has(rawId) && !idSet.has(baseId)) continue;

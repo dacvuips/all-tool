@@ -2,7 +2,7 @@
  * Shared run state for auto-post MXH (Play pipeline).
  * Action bar + group rows subscribe without prop drilling.
  */
-import { useSyncExternalStore } from "react";
+import { useExternalStore } from "../../../../../lib/hooks/useExternalStore";
 
 export type AutoPostGroupPhase =
   | "idle"
@@ -134,7 +134,7 @@ export const autoPostPipelineStopRef = { current: false };
 export const autoPostPipelineRunningRef = { current: false };
 
 export function useAutoPostRunState(): AutoPostRunState {
-  return useSyncExternalStore(subscribeAutoPostRunState, getAutoPostRunState, getAutoPostRunState);
+  return useExternalStore(subscribeAutoPostRunState, getAutoPostRunState);
 }
 
 export function useAutoPostGroupRunInfo(groupId: string): AutoPostGroupRunInfo | undefined {
@@ -143,9 +143,5 @@ export function useAutoPostGroupRunInfo(groupId: string): AutoPostGroupRunInfo |
 }
 
 export function useAutoPostRunnerActions(): AutoPostRunnerActions | null {
-  return useSyncExternalStore(
-    subscribeAutoPostRunState,
-    getAutoPostRunnerActions,
-    getAutoPostRunnerActions
-  );
+  return useExternalStore(subscribeAutoPostRunState, getAutoPostRunnerActions);
 }

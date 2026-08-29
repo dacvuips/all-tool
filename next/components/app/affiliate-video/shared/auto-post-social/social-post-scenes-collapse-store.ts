@@ -2,7 +2,7 @@
  * Ẩn/hiện phân cảnh trong từng bài đăng MXH.
  * Global toggle trên toolbar + override từng nhóm.
  */
-import { useSyncExternalStore } from "react";
+import { useExternalStore } from "../../../../../lib/hooks/useExternalStore";
 
 interface SocialPostScenesCollapseState {
   /** Mặc định cho mọi nhóm khi chưa có override */
@@ -61,11 +61,7 @@ export function subscribeSocialPostScenesCollapse(cb: () => void) {
 }
 
 export function useSocialPostScenesCollapseState(): SocialPostScenesCollapseState {
-  return useSyncExternalStore(
-    subscribeSocialPostScenesCollapse,
-    getSocialPostScenesCollapseState,
-    getSocialPostScenesCollapseState
-  );
+  return useExternalStore(subscribeSocialPostScenesCollapse, getSocialPostScenesCollapseState);
 }
 
 export function useSocialPostGroupScenesExpanded(groupId: string): boolean {
