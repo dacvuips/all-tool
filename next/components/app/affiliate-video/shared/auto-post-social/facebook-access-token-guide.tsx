@@ -61,7 +61,7 @@ export function FacebookAccessTokenGuide() {
             </p>
             <p className="mt-1 text-xs leading-relaxed text-amber-800">
               {t(
-                "Cần Page Access Token (long-lived) và Page ID của Fanpage. Dán vào tab Credential để đăng video tự động."
+                "Cách nhanh: tab Credential → bấm Kết nối Facebook → đăng nhập → chọn Fanpage. Không cần copy token thủ công."
               )}
             </p>
           </div>
@@ -109,7 +109,7 @@ export function FacebookAccessTokenGuide() {
             />
           </GuideSection>
 
-          <GuideSection title={t("Bước 3 — Lấy Page Access Token & Page ID")}>
+          <GuideSection title={t("Bước 3 — Lấy Page Access Token")}>
             <StepList
               items={[
                 <>
@@ -120,8 +120,7 @@ export function FacebookAccessTokenGuide() {
                 </>,
                 <>
                   {t("Trong kết quả, tìm Fanpage cần đăng → copy")}{" "}
-                  <strong>access_token</strong> {t("(Page token) và")} <strong>id</strong>{" "}
-                  {t("(Page ID).")}
+                  <strong>access_token</strong> {t("(đây là Page Access Token).")}
                 </>,
                 <>
                   {t("Xem thêm:")}{" "}
@@ -138,14 +137,11 @@ export function FacebookAccessTokenGuide() {
             <StepList
               items={[
                 <>
-                  {t("Quay lại tab Credential → nhập")} <strong>Page Access Token</strong>{" "}
-                  {t("và")} <strong>Page ID</strong>.
+                  {t("Quay lại tab Credential → dán")} <strong>Page Access Token</strong>{" "}
+                  {t("vào ô token.")}
                 </>,
                 <>
-                  {t("Hệ thống lưu dạng JSON:")}{" "}
-                  <code className="px-1 rounded bg-amber-100 break-all">
-                    {`{ "access_token": "...", "page_id": "..." }`}
-                  </code>
+                  {t("Không cần nhập Page ID — hệ thống tự lấy từ token khi đăng video.")}
                 </>,
                 <>
                   {t("Bật đăng Facebook trong cài đặt, sau đó chạy auto-post như YouTube.")}

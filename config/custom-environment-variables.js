@@ -76,6 +76,10 @@ module.exports = {
   upload: {
     uploadImageApiLink: "UPLOAD_IMAGE_API_LINK",
   },
+  facebook: {
+    appId: "FACEBOOK_APP_ID",
+    appSecret: "FACEBOOK_APP_SECRET",
+  },
   casso: {
     secret: "CASSO_SECRET",
     apiKey: "CASSO_API_KEY",

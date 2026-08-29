@@ -1,7 +1,7 @@
 /**
  * Credential UX (lưu MongoDB qua GraphQL CredentialCustomer):
  * - YouTube: tách Access token / Refresh token / Client ID / Client secret → ghép JSON khi Lưu
- * - Facebook: Page Access Token + Page ID → ghép JSON khi Lưu
+ * - Facebook: Page Access Token (hệ thống tự lấy Page ID từ token)
  * - TikTok: 1 ô token (giữ đơn giản)
  */
 import { useState } from "react";
@@ -16,6 +16,7 @@ import {
   RiSaveLine,
 } from "react-icons/ri";
 import { Button } from "../../../../shared/utilities/form";
+import { FacebookConnectButton } from "./facebook-connect-button";
 import { SocialCredentialState, SocialPlatform } from "./types";
 
 interface CredentialConnectFieldProps {
@@ -27,6 +28,7 @@ interface CredentialConnectFieldProps {
     id?: string | null;
   }) => Promise<unknown>;
   onDelete: (platform: SocialPlatform) => Promise<void>;
+  onOAuthConnected?: () => void | Promise<void>;
 }
 
 type YoutubeOAuthForm = {
@@ -72,6 +74,7 @@ export function CredentialConnectField({
   credential,
   onSave,
   onDelete,
+  onOAuthConnected,
 }: CredentialConnectFieldProps) {
   const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
@@ -82,6 +85,7 @@ export function CredentialConnectField({
   const hasCred = !!credential?.id;
   const loaded = !!credential?.loaded;
   const isYoutube = platform === "youtube";
+  const isFacebook = platform === "facebook";
 
   const resetForm = () => {
     setValue("");
@@ -165,6 +169,13 @@ export function CredentialConnectField({
         </div>
       ) : (
         <>
+          {isFacebook && !editing ? (
+            <FacebookConnectButton
+              disabled={saving}
+              onConnected={onOAuthConnected}
+            />
+          ) : null}
+
           {hasCred && !editing && (
             <div className="flex items-center gap-3 px-3.5 py-3 rounded-lg bg-gray-50 border border-gray-100">
               <RiEyeOffLine className="flex-shrink-0 text-base text-gray-400" />
@@ -184,6 +195,14 @@ export function CredentialConnectField({
             </div>
           )}
 
+          {isFacebook && !hasCred && !editing ? (
+            <div className="flex items-center gap-3 text-xs text-gray-400">
+              <span className="flex-1 h-px bg-gray-200" />
+              <span>{t("hoặc dán token thủ công")}</span>
+              <span className="flex-1 h-px bg-gray-200" />
+            </div>
+          ) : null}
+
           {!hasCred && !editing && (
             <button
               type="button"
@@ -191,7 +210,7 @@ export function CredentialConnectField({
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-semibold cursor-pointer hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
             >
               <RiKey2Line className="text-base" />
-              {t("Nhập Credential")}
+              {isFacebook ? t("Nhập token thủ công") : t("Nhập Credential")}
             </button>
           )}
 
@@ -261,13 +280,25 @@ export function CredentialConnectField({
                 </>
               ) : (
                 <div>
+                  <p className="text-xs text-gray-500 leading-relaxed">
+                    {isFacebook
+                      ? t(
+                          "Dán Page Access Token (long-lived). Hệ thống tự nhận Fanpage từ token — không cần nhập Page ID."
+                        )
+                      : null}
+                  </p>
                   <label className="block text-xs text-gray-500 mb-1.5">
-                    {t("Token / Access key")}
+                    {isFacebook ? t("Page Access Token") : t("Token / Access key")}{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    placeholder={t("Nhập token / OAuth access key tài khoản")}
+                    placeholder={
+                      isFacebook
+                        ? t("Page access_token (long-lived)")
+                        : t("Nhập token / OAuth access key tài khoản")
+                    }
                     rows={3}
                     autoFocus
                     disabled={saving}

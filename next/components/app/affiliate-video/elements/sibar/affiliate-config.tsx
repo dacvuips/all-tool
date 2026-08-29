@@ -17,7 +17,7 @@ import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } fro
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { formatSocialPostHeaderTemplate, useAutoPostSocialSettings } from "../../shared/auto-post-social";
+import { formatSocialPostHeaderTemplateForEnabledPlatforms, useAutoPostSocialSettings } from "../../shared/auto-post-social";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -51,6 +51,12 @@ export const AffiliateConfig = ({
   const { settings: autoPostSettings, hydrated: autoPostHydrated } = useAutoPostSocialSettings();
   const autoPostEnabled =
     isElementBatchMode && autoPostHydrated && autoPostSettings.enabled;
+
+  const autoPostHeaderTemplate = formatSocialPostHeaderTemplateForEnabledPlatforms({
+    youtube: autoPostSettings.platforms.youtube?.enabled,
+    facebook: autoPostSettings.platforms.facebook?.enabled,
+    tiktok: autoPostSettings.platforms.tiktok?.enabled,
+  });
 
   const actionImageType = elementFormConfig?.actionImageType ?? ActionImageEnum.auto;
   const isSequentialImageMode =
@@ -191,7 +197,7 @@ export const AffiliateConfig = ({
                 maxRows={10}
                 placeholder={
                   autoPostEnabled
-                    ? `${t("Mỗi nhóm bài đăng MXH bắt đầu bằng dòng")}:\n${formatSocialPostHeaderTemplate()}\n${t("prompt1")}\n${t("prompt2")}\n${formatSocialPostHeaderTemplate()}\n${t("prompt3")}`
+                    ? `${t("Mỗi nhóm bài đăng MXH bắt đầu bằng dòng")}:\n${autoPostHeaderTemplate}\n${t("prompt1")}\n${t("prompt2")}\n${autoPostHeaderTemplate}\n${t("prompt3")}`
                     : `${t("Mỗi dòng xuống hàng (Enter) là một phân cảnh")}:\n${t("Mô tả cảnh đầu")}...\n${t("Mô tả cảnh hai")}...\n${t("Mô tả cảnh ba")}...`
                 }
                 value={elementFormConfig?.prompt}

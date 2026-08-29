@@ -2,8 +2,8 @@
  * Facebook Graph API — đăng video lên Fanpage.
  *
  * Credential `FACEBOOK_OAUTH_KEY` (Customer):
- * - JSON: { access_token, page_id }
- * - Hoặc chuỗi Page Access Token thuần (khi page_id gửi kèm trong request)
+ * - Page Access Token thuần, hoặc
+ * - JSON: { access_token, page_id? } — page_id tuỳ chọn, tự lấy từ token nếu thiếu
  */
 import fs from "fs";
 import axios, { AxiosError } from "axios";
@@ -118,6 +118,29 @@ function buildFacebookVideoUrl(videoId: string): string {
   return `https://www.facebook.com/watch/?v=${videoId}`;
 }
 
+async function resolvePageIdFromToken(accessToken: string): Promise<string> {
+  const resp = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/me`, {
+    params: { access_token: accessToken, fields: "id,name" },
+    timeout: 30000,
+  });
+  const pageId = asString(resp.data?.id);
+  if (!pageId) {
+    throw new Error(
+      "Không lấy được Page ID từ token — hãy dùng Page Access Token (không phải User token)"
+    );
+  }
+  return pageId;
+}
+
+async function resolvePageId(
+  accessToken: string,
+  explicitPageId?: string
+): Promise<string> {
+  const pageId = asString(explicitPageId);
+  if (pageId) return pageId;
+  return resolvePageIdFromToken(accessToken);
+}
+
 function resolvePublished(privacyStatus: FacebookPrivacyStatus): boolean {
   return privacyStatus !== "private";
 }
@@ -170,12 +193,10 @@ export async function postFacebookPageVideo(
   const affiliateLink = asString(input.affiliateLink);
 
   const credential = await loadFacebookCredential(input.customerId);
-  const pageId = asString(input.pageId) || credential.pageId;
-  if (!pageId) {
-    throw new Error(
-      "Thiếu Page ID — thêm page_id vào credential Facebook (JSON: { access_token, page_id })"
-    );
-  }
+  const pageId = await resolvePageId(
+    credential.accessToken,
+    asString(input.pageId) || credential.pageId
+  );
 
   const { filePath, cleanup } = await resolveVideoToTempFile({
     videoUrl: input.videoUrl,

@@ -311,7 +311,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     textColor: string,
     labelEl: React.ReactNode,
     compact = false
-  ) => (
+  ) => {
+    const isCompactPrompt = compact || layout === "row";
+
+    return (
     <div
       className="relative w-full min-w-0"
       onMouseEnter={() => setHoveredField(field)}
@@ -320,12 +323,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       {editingField === field ? (
         /* ── Edit mode ── */
         <div>
-          {!compact && labelEl}
+          {!isCompactPrompt && labelEl}
           <textarea
             ref={field === editingField ? textareaRef : undefined}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            rows={compact ? 3 : 4}
+            rows={isCompactPrompt ? 3 : 4}
             className="w-full rounded-lg border border-blue-300 bg-blue-50 text-xs text-gray-700 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-none transition-colors leading-snug"
           />
           <div className="flex items-center gap-1.5 mt-1.5 justify-end">
@@ -353,10 +356,10 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         </div>
       ) : (
         /* ── Display mode ── */
-        <div className={compact ? "flex gap-1.5 items-start" : "relative"}>
+        <div className={isCompactPrompt ? "flex gap-1.5 items-start" : "relative"}>
           <div
             className={`text-xs leading-snug ${textColor} ${
-              compact
+              isCompactPrompt
                 ? `flex-1 min-w-0 break-words ${
                     expandedField === field
                       ? "whitespace-pre-line"
@@ -367,18 +370,18 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                   }`
             }`}
           >
-            {!compact && labelEl}
+            {!isCompactPrompt && labelEl}
             {text}
           </div>
           <div
-            className={`flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity shrink-0 ${
-              compact
+            className={`flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md shrink-0 transition-all ${
+              isCompactPrompt ? "" : "absolute z-10 -top-3 -right-1.5 sm:-right-2.5"
+            } ${
+              hoveredField === field
                 ? "opacity-100 pointer-events-auto"
-                : `absolute z-10 -top-3 -right-1.5 sm:-right-2.5 ${
-                    hoveredField === field
-                      ? "md:opacity-100 md:pointer-events-auto"
-                      : "md:opacity-0 md:pointer-events-none"
-                  }`
+                : isCompactPrompt
+                  ? "opacity-0 pointer-events-none w-0 overflow-hidden border-0 shadow-none"
+                  : "opacity-0 pointer-events-none"
             }`}
           >
             <button
@@ -419,6 +422,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       )}
     </div>
   );
+  };
 
   const isRowLayout = layout === "row";
   const utilBtnIdle = isRowLayout

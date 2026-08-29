@@ -3,7 +3,7 @@
  * metadata + video nằm trong panel mở rộng.
  */
 import type { MouseEvent, ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   RiArrowDownSLine,
@@ -44,7 +44,8 @@ import { useSocialPostGroupVideoReady } from "../use-social-post-group-video-rea
 import { useSocialPostPublishedVideoUrl } from "../use-social-post-published-video-url";
 
 import {
-  SOCIAL_POST_HEADER_FIELD_KEYS,
+  getSocialPostFieldMeta,
+  getSocialPostHeaderFieldKeys,
   SOCIAL_POST_HEADER_FIELD_META,
   SocialPostGroup,
   SocialPostGroupPlatformMeta,
@@ -54,6 +55,8 @@ import {
   normalizeSocialPostFields,
   normalizeSocialPostPublish,
 } from "./types";
+import { useAutoPostSocialSettings } from "../use-auto-post-social-settings";
+import type { SocialPlatform } from "../types";
 
 const FIELD_ICONS: Record<SocialPostHeaderFieldKey, ReactNode> = {
   title: <RiText className="text-xs" />,
@@ -149,7 +152,14 @@ function getRunStatusMessageClass(
 
 function inferErrorPhase(message?: string): StepKey {
   const m = (message || "").toLowerCase();
-  if (m.includes("youtube") || m.includes("đăng") || m.includes("upload")) return "upload";
+  if (
+    m.includes("youtube") ||
+    m.includes("facebook") ||
+    m.includes("đăng") ||
+    m.includes("upload")
+  ) {
+    return "upload";
+  }
   if (m.includes("nối") || m.includes("merge")) return "merge";
   return "generate";
 }
@@ -163,6 +173,7 @@ function resolveStepStates(
   runExtras?: {
     mergedVideoUrl?: string;
     youtubeUrl?: string;
+    facebookUrl?: string;
     allScenesHaveVideo?: boolean;
     hasMergedVideo?: boolean;
   }
@@ -437,7 +448,24 @@ export function SocialPostGroupLabel({
   onPlatformsChange?: (groupId: string, platforms: SocialPostGroupPlatformMeta) => void;
 }) {
   const { t } = useTranslation();
+  const { settings: autoPostSettings } = useAutoPostSocialSettings();
   const f = normalizeSocialPostFields(group.platforms?.youtube);
+
+  const metadataPlatform: SocialPlatform = useMemo(() => {
+    if (autoPostSettings.platforms.youtube?.enabled) return "youtube";
+    if (autoPostSettings.platforms.facebook?.enabled) return "facebook";
+    if (autoPostSettings.platforms.tiktok?.enabled) return "tiktok";
+    return "youtube";
+  }, [
+    autoPostSettings.platforms.facebook?.enabled,
+    autoPostSettings.platforms.tiktok?.enabled,
+    autoPostSettings.platforms.youtube?.enabled,
+  ]);
+
+  const visibleFieldKeys = useMemo(
+    () => getSocialPostHeaderFieldKeys(metadataPlatform),
+    [metadataPlatform]
+  );
   const publish = normalizeSocialPostPublish(group.publish);
   const runInfo = useAutoPostGroupRunInfo(group.id);
   const runState = useAutoPostRunState();
@@ -462,6 +490,7 @@ export function SocialPostGroupLabel({
     {
       mergedVideoUrl: runInfo?.mergedVideoUrl,
       youtubeUrl: runInfo?.youtubeUrl,
+      facebookUrl: runInfo?.facebookUrl,
       allScenesHaveVideo,
       hasMergedVideo,
     }
@@ -469,16 +498,20 @@ export function SocialPostGroupLabel({
 
   const videoPreviewUrl = publishedVideoUrl || runInfo?.mergedVideoUrl || null;
   const youtubeUrl = publish?.youtubeUrl || runInfo?.youtubeUrl;
+  const facebookUrl = publish?.facebookUrl || runInfo?.facebookUrl;
   const youtubeVideoId = extractYoutubeVideoId(youtubeUrl || "");
   const youtubeEmbedUrl = youtubeVideoId ? `https://www.youtube.com/embed/${youtubeVideoId}` : null;
   const isVideoPosted =
-    publish?.status === "posted" || (!!youtubeUrl && runInfo?.status === "done");
+    publish?.status === "posted" ||
+    (!!youtubeUrl && runInfo?.status === "done") ||
+    (!!facebookUrl && runInfo?.status === "done");
   const hasStoredVideo = !!(publish?.videoStorageKey || publish?.status);
   const showVideoInPanel =
     videoPreviewUrl ||
     publishedVideoLoading ||
     hasStoredVideo ||
     youtubeUrl ||
+    facebookUrl ||
     runInfo?.mergedVideoUrl;
 
   const isThisRunning = runState.running && runState.currentGroupId === group.id;
@@ -619,8 +652,8 @@ export function SocialPostGroupLabel({
         <div className="px-3 pb-3 pl-12 space-y-3">
           {/* Metadata */}
           <div className="flex flex-wrap items-center gap-1.5">
-            {SOCIAL_POST_HEADER_FIELD_KEYS.map((key) => {
-              const meta = SOCIAL_POST_HEADER_FIELD_META[key];
+            {visibleFieldKeys.map((key) => {
+              const meta = getSocialPostFieldMeta(metadataPlatform, key);
               return (
                 <EditableMetaField
                   key={key}
@@ -654,7 +687,7 @@ export function SocialPostGroupLabel({
           {/* Video nối (Blob) + YouTube embed */}
           {showVideoInPanel && (
             <div className="flex flex-col gap-2 p-3 bg-white rounded-lg border border-purple-200 shadow-sm">
-              {(isVideoPosted || youtubeUrl || publish?.postedAt) && (
+              {(isVideoPosted || youtubeUrl || facebookUrl || publish?.postedAt) && (
                 <div className="flex flex-wrap gap-y-1 gap-x-2 items-center min-w-0 text-gray-500 text-10">
                   {isVideoPosted ? (
                     <span className="inline-flex gap-1 items-center text-xs font-semibold shrink-0 text-success">
@@ -673,9 +706,20 @@ export function SocialPostGroupLabel({
                       {t("YouTube")}
                     </a>
                   ) : null}
+                  {facebookUrl ? (
+                    <a
+                      href={facebookUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={facebookUrl}
+                      className="text-xs font-semibold text-blue-600 shrink-0 hover:text-blue-700 hover:underline"
+                    >
+                      {t("Facebook")}
+                    </a>
+                  ) : null}
                   {publish?.postedAt ? (
                     <>
-                      {youtubeUrl ? (
+                      {youtubeUrl || facebookUrl ? (
                         <span className="text-gray-300 shrink-0" aria-hidden>
                           ·
                         </span>

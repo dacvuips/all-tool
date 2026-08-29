@@ -25,7 +25,7 @@ import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
 import {
   buildAnalysisDataFromGroupedPrompt,
-  formatSocialPostHeaderTemplate,
+  formatSocialPostHeaderTemplateForEnabledPlatforms,
   hasAutoPostSocialHeaderInPrompt,
 } from "../../shared/auto-post-social";
 import { loadAutoPostSettings } from "../../shared/auto-post-social/storage";
@@ -77,10 +77,16 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         return;
       }
 
-      const autoPostEnabled = loadAutoPostSettings().enabled;
+      const autoPostSettings = loadAutoPostSettings();
+      const autoPostEnabled = autoPostSettings.enabled;
       if (autoPostEnabled && !hasAutoPostSocialHeaderInPrompt(promptText)) {
+        const headerTemplate = formatSocialPostHeaderTemplateForEnabledPlatforms({
+          youtube: autoPostSettings.platforms.youtube?.enabled,
+          facebook: autoPostSettings.platforms.facebook?.enabled,
+          tiktok: autoPostSettings.platforms.tiktok?.enabled,
+        });
         toast.error(
-          `${t("Khi bật Tự động đăng MXH, Prompt phân cảnh cần có ít nhất một dòng dạng")} ${formatSocialPostHeaderTemplate()}. ${t(
+          `${t("Khi bật Tự động đăng MXH, Prompt phân cảnh cần có ít nhất một dòng dạng")} ${headerTemplate}. ${t(
             "Dòng đó phải bắt đầu bằng ** và kết thúc bằng ** trên cùng một hàng"
           )}.`
         );

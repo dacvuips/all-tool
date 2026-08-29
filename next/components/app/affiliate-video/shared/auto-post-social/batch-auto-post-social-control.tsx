@@ -31,6 +31,7 @@ export function BatchAutoPostSocialControl({
     patchPlatform,
     saveCredential,
     removeCredential,
+    reloadCredentials,
   } = useAutoPostSocialSettings();
   const [showSettings, setShowSettings] = useState(false);
   const runState = useAutoPostRunState();
@@ -137,6 +138,7 @@ export function BatchAutoPostSocialControl({
         patchPlatform={patchPlatform}
         saveCredential={saveCredential}
         removeCredential={removeCredential}
+        reloadCredentials={reloadCredentials}
       />
     </>
   );

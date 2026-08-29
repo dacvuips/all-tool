@@ -17,8 +17,9 @@ import { Switch } from "../../../../shared/utilities/form/switch";
 import { CredentialConnectField } from "./credential-connect-field";
 import {
   formatSocialPostPromptSample,
-  SOCIAL_POST_HEADER_FIELD_KEYS,
-  SOCIAL_POST_HEADER_FIELD_META,
+  getSocialPostFieldMeta,
+  getSocialPostHeaderFieldKeys,
+  getSocialPostPromptGuideIntro,
 } from "./grouped-list/types";
 import {
   AutoPostSocialSettings,
@@ -28,18 +29,13 @@ import {
   SocialPlatform,
 } from "./types";
 import { YoutubeAccessTokenGuide } from "./youtube-access-token-guide";
+import { FacebookAccessTokenGuide } from "./facebook-access-token-guide";
 
 const PLATFORM_ICONS: Record<SocialPlatform, JSX.Element> = {
   youtube: <RiYoutubeFill className="text-base text-red-500" />,
   facebook: <RiFacebookCircleFill className="text-base text-blue-500" />,
   tiktok: <FaTiktok className="text-base text-gray-800" />,
 };
-
-const PROMPT_FIELD_GUIDES = SOCIAL_POST_HEADER_FIELD_KEYS.map((key) => ({
-  key,
-  label: SOCIAL_POST_HEADER_FIELD_META[key].label,
-  hint: SOCIAL_POST_HEADER_FIELD_META[key].hint,
-}));
 
 type ContentTab = "credential" | "prompt" | "access-token";
 
@@ -57,14 +53,23 @@ const CONTENT_TABS: { id: ContentTab; labelKey: string; icon: JSX.Element }[] = 
   },
 ];
 
-function PromptGuidePanel({ promptSample }: { promptSample: string }) {
+function PromptGuidePanel({ platform }: { platform: SocialPlatform }) {
   const { t } = useTranslation();
+  const promptSample = formatSocialPostPromptSample(platform);
+  const fieldKeys = getSocialPostHeaderFieldKeys(platform);
+  const platformLabel = SOCIAL_PLATFORMS.find((p) => p.id === platform)?.label || platform;
+
   return (
     <div className="px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
       <div className="flex gap-2 items-start">
         <RiInformationLine className="mt-0.5 text-base text-indigo-500 shrink-0" />
         <div className="space-y-2 min-w-0">
-          <p className="text-sm font-semibold text-indigo-900">{t("Hướng dẫn Prompt phân cảnh")}</p>
+          <p className="text-sm font-semibold text-indigo-900">
+            {t("Hướng dẫn Prompt phân cảnh")} — {t(platformLabel)}
+          </p>
+          <p className="text-xs leading-relaxed text-indigo-800">
+            {t(getSocialPostPromptGuideIntro(platform))}
+          </p>
           <p className="text-xs leading-relaxed text-indigo-800">
             {t("Mỗi nhóm bài đăng cần bắt đầu bằng một dòng dạng")}:
           </p>
@@ -76,16 +81,29 @@ function PromptGuidePanel({ promptSample }: { promptSample: string }) {
               "Dòng đầu (trong **) là metadata đăng MXH. Các dòng tiếp theo là prompt từng phân cảnh thuộc cùng một bài đăng."
             )}
           </p>
+          {platform === "facebook" ? (
+            <p className="text-xs text-indigo-700">
+              {t(
+                "Nếu bật cả YouTube, có thể thêm |Trẻ em|Danh mục ở cuối dòng — Facebook sẽ bỏ qua 2 field đó."
+              )}
+            </p>
+          ) : null}
           <p className="text-xs text-indigo-700">
-            {t("Các field trên dòng metadata (gửi API đăng YouTube)")}:
+            {t("Các field trên dòng metadata (gửi API đăng {{platform}})", {
+              platform: platformLabel,
+            })}
+            :
           </p>
           <ul className="space-y-1.5">
-            {PROMPT_FIELD_GUIDES.map((field) => (
-              <li key={field.key} className="text-xs leading-relaxed text-indigo-800">
-                <span className="font-bold text-indigo-900">&quot;{t(field.label)}&quot;</span>:{" "}
-                {t(field.hint)}
-              </li>
-            ))}
+            {fieldKeys.map((key) => {
+              const meta = getSocialPostFieldMeta(platform, key);
+              return (
+                <li key={key} className="text-xs leading-relaxed text-indigo-800">
+                  <span className="font-bold text-indigo-900">&quot;{t(meta.label)}&quot;</span>:{" "}
+                  {t(meta.hint)}
+                </li>
+              );
+            })}
           </ul>
         </div>
       </div>
@@ -100,15 +118,11 @@ function AccessTokenGuidePanel({ platform }: { platform: SocialPlatform }) {
     return <YoutubeAccessTokenGuide />;
   }
 
-  const steps: Record<Exclude<SocialPlatform, "youtube">, string[]> = {
-    facebook: [
-      t(
-        "Vào Meta for Developers → tạo App → thêm quyền pages_manage_posts, pages_read_engagement."
-      ),
-      t("Lấy User Access Token qua Graph API Explorer hoặc Login flow."),
-      t("Đổi sang Page Access Token (long-lived) cho trang cần đăng."),
-      t("Dán token vào tab Credential."),
-    ],
+  if (platform === "facebook") {
+    return <FacebookAccessTokenGuide />;
+  }
+
+  const steps: Record<"tiktok", string[]> = {
     tiktok: [
       t("Đăng ký app trên TikTok for Developers và bật Content Posting API."),
       t("Hoàn tất OAuth để lấy access_token cho tài khoản TikTok."),
@@ -154,6 +168,7 @@ interface AutoPostSocialSettingsDialogProps {
     id?: string | null;
   }) => Promise<unknown>;
   removeCredential: (platform: SocialPlatform) => Promise<void>;
+  reloadCredentials?: () => void | Promise<void>;
 }
 
 export function AutoPostSocialSettingsDialog({
@@ -164,6 +179,7 @@ export function AutoPostSocialSettingsDialog({
   patchPlatform,
   saveCredential,
   removeCredential,
+  reloadCredentials,
 }: AutoPostSocialSettingsDialogProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<SocialPlatform>("youtube");
@@ -172,7 +188,6 @@ export function AutoPostSocialSettingsDialog({
   const meta = SOCIAL_PLATFORMS.find((p) => p.id === activeTab)!;
   const platformCfg = settings.platforms[activeTab];
   const credential = credentials[activeTab];
-  const promptSample = formatSocialPostPromptSample();
 
   useEffect(() => {
     setContentTab("credential");
@@ -256,6 +271,7 @@ export function AutoPostSocialSettingsDialog({
                   credential={credential}
                   onSave={saveCredential}
                   onDelete={removeCredential}
+                  onOAuthConnected={reloadCredentials}
                 />
 
                 <div className="px-4 py-3 bg-white rounded-xl border border-gray-200">
@@ -300,7 +316,7 @@ export function AutoPostSocialSettingsDialog({
               </>
             ) : null}
             {contentTab === "access-token" ? <AccessTokenGuidePanel platform={activeTab} /> : null}
-            {contentTab === "prompt" ? <PromptGuidePanel promptSample={promptSample} /> : null}
+            {contentTab === "prompt" ? <PromptGuidePanel platform={activeTab} /> : null}
           </div>
         </div>
       </Dialog.Body>

@@ -1,6 +1,6 @@
 import { SocialPlatform } from "../types";
 
-/** Metadata đăng MXH — map sang PostYoutubeVideoInput khi đăng YouTube */
+/** Metadata đăng MXH — map sang API từng nền tảng khi upload */
 export interface SocialPostPlatformFields {
   title: string;
   description: string;
@@ -37,7 +37,7 @@ export interface SocialPostGroup {
   publish?: SocialPostPublishInfo;
 }
 
-/** Thứ tự field trong dòng **a|b|c...** — khớp YouTube API có thể gửi */
+/** Thứ tự field trong dòng **a|b|c...** — đủ 7 field (YouTube); nền tảng khác dùng tập con */
 export const SOCIAL_POST_HEADER_FIELD_KEYS = [
   "title",
   "description",
@@ -50,10 +50,13 @@ export const SOCIAL_POST_HEADER_FIELD_KEYS = [
 
 export type SocialPostHeaderFieldKey = (typeof SOCIAL_POST_HEADER_FIELD_KEYS)[number];
 
-export const SOCIAL_POST_HEADER_FIELD_META: Record<
-  SocialPostHeaderFieldKey,
-  { label: string; hint: string; templateValue: string }
-> = {
+type SocialPostFieldMeta = {
+  label: string;
+  hint: string;
+  templateValue: string;
+};
+
+export const SOCIAL_POST_HEADER_FIELD_META: Record<SocialPostHeaderFieldKey, SocialPostFieldMeta> = {
   title: {
     label: "Tiêu đề",
     hint: "Là nơi ghi tiêu đề của video (gửi API: title).",
@@ -66,30 +69,105 @@ export const SOCIAL_POST_HEADER_FIELD_META: Record<
   },
   hashtag: {
     label: "Hashtag",
-    hint: "Là nơi ghi các hashtag, ví dụ #affiliate #review (gửi API: tags).",
+    hint: "Là nơi ghi các hashtag, ví dụ #affiliate #review (YouTube: tags).",
     templateValue: "Hashtag",
   },
   link: {
     label: "Link",
-    hint: "Link affiliate — nối vào mô tả video và đăng thêm comment trên video (cần scope youtube.force-ssl). Card/end screen YouTube không hỗ trợ qua API chính thức.",
+    hint: "Link affiliate — nối vào mô tả và đăng comment trên video.",
     templateValue: "Link",
   },
   privacyStatus: {
     label: "Riêng tư",
-    hint: "Quyền riêng tư video: private | public | unlisted (gửi API: privacyStatus).",
+    hint: "Quyền riêng tư: private | public | unlisted (YouTube API: privacyStatus).",
     templateValue: "Riêng tư",
   },
   madeForKids: {
     label: "Trẻ em",
-    hint: "Nội dung dành cho trẻ em hay không: true | false hoặc có | không (gửi API: madeForKids).",
+    hint: "Nội dung dành cho trẻ em: true | false (chỉ YouTube API: madeForKids).",
     templateValue: "Trẻ em",
   },
   categoryId: {
     label: "Danh mục",
-    hint: "YouTube categoryId, ví dụ 22 = People & Blogs (gửi API: categoryId).",
+    hint: "YouTube categoryId, ví dụ 22 = People & Blogs (chỉ YouTube).",
     templateValue: "Danh mục",
   },
 };
+
+/** Field hiển thị trong prompt guide / placeholder theo nền tảng */
+export const SOCIAL_POST_PLATFORM_FIELD_KEYS: Record<
+  SocialPlatform,
+  readonly SocialPostHeaderFieldKey[]
+> = {
+  youtube: SOCIAL_POST_HEADER_FIELD_KEYS,
+  facebook: ["title", "description", "hashtag", "link", "privacyStatus"],
+  tiktok: ["title", "description", "hashtag", "link", "privacyStatus"],
+};
+
+const SOCIAL_POST_PLATFORM_FIELD_META_OVERRIDES: Partial<
+  Record<SocialPlatform, Partial<Record<SocialPostHeaderFieldKey, Partial<SocialPostFieldMeta>>>>
+> = {
+  facebook: {
+    title: {
+      hint: "Tiêu đề video trên Fanpage (Facebook API: title).",
+    },
+    description: {
+      hint: "Caption / mô tả bài đăng video (Facebook API: description).",
+    },
+    hashtag: {
+      hint: "Hashtag được gộp vào cuối mô tả, ví dụ #affiliate #review.",
+    },
+    link: {
+      hint: "Link affiliate — nối vào mô tả và đăng thêm comment trên video.",
+    },
+    privacyStatus: {
+      hint: "public = đăng công khai | private = lưu nháp chưa đăng (Facebook API: published).",
+    },
+  },
+  tiktok: {
+    title: {
+      hint: "Tiêu đề video TikTok (sẽ hỗ trợ khi bật upload).",
+    },
+    description: {
+      hint: "Mô tả / caption video TikTok.",
+    },
+    hashtag: {
+      hint: "Hashtag cho video, ví dụ #affiliate #review.",
+    },
+    link: {
+      hint: "Link affiliate (nếu API TikTok hỗ trợ).",
+    },
+    privacyStatus: {
+      hint: "public | private (tuỳ API TikTok).",
+    },
+  },
+};
+
+export function getSocialPostFieldMeta(
+  platform: SocialPlatform,
+  key: SocialPostHeaderFieldKey
+): SocialPostFieldMeta {
+  const base = SOCIAL_POST_HEADER_FIELD_META[key];
+  const override = SOCIAL_POST_PLATFORM_FIELD_META_OVERRIDES[platform]?.[key];
+  return override ? { ...base, ...override } : base;
+}
+
+export function getSocialPostHeaderFieldKeys(
+  platform: SocialPlatform
+): readonly SocialPostHeaderFieldKey[] {
+  return SOCIAL_POST_PLATFORM_FIELD_KEYS[platform];
+}
+
+export function getSocialPostPromptGuideIntro(platform: SocialPlatform): string {
+  switch (platform) {
+    case "facebook":
+      return "Facebook Fanpage dùng 5 field — không cần Trẻ em / Danh mục như YouTube.";
+    case "tiktok":
+      return "TikTok dùng 5 field cơ bản — upload API đang được bổ sung.";
+    default:
+      return "YouTube dùng đủ 7 field metadata (gồm Trẻ em và Danh mục).";
+  }
+}
 
 export function createEmptySocialPostFields(): SocialPostPlatformFields {
   return {
@@ -226,16 +304,27 @@ export function hasAutoPostSocialHeaderInPrompt(prompt: string): boolean {
   });
 }
 
-export function formatSocialPostHeaderTemplate(): string {
-  const labels = SOCIAL_POST_HEADER_FIELD_KEYS.map(
-    (k) => SOCIAL_POST_HEADER_FIELD_META[k].templateValue
-  );
+export function formatSocialPostHeaderTemplate(platform: SocialPlatform = "youtube"): string {
+  const keys = getSocialPostHeaderFieldKeys(platform);
+  const labels = keys.map((k) => getSocialPostFieldMeta(platform, k).templateValue);
   return `**${labels.join("|")}**`;
 }
 
 /** Prompt mẫu — 1 dòng metadata + các dòng prompt phân cảnh */
-export function formatSocialPostPromptSample(): string {
-  return `${formatSocialPostHeaderTemplate()}\nPrompt 1\nPrompt 2`;
+export function formatSocialPostPromptSample(platform: SocialPlatform = "youtube"): string {
+  return `${formatSocialPostHeaderTemplate(platform)}\nPrompt 1\nPrompt 2`;
+}
+
+/** Placeholder prompt khi bật nhiều nền tảng — ưu tiên template đủ field nhất (YouTube). */
+export function formatSocialPostHeaderTemplateForEnabledPlatforms(input: {
+  youtube?: boolean;
+  facebook?: boolean;
+  tiktok?: boolean;
+}): string {
+  if (input.youtube) return formatSocialPostHeaderTemplate("youtube");
+  if (input.facebook) return formatSocialPostHeaderTemplate("facebook");
+  if (input.tiktok) return formatSocialPostHeaderTemplate("tiktok");
+  return formatSocialPostHeaderTemplate("youtube");
 }
 
 export function formatSocialPostHeaderLine(fields: SocialPostPlatformFields): string {

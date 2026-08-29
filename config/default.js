@@ -104,5 +104,9 @@ module.exports = {
   "upload": {
     "uploadImageApiLink": null,
   },
+  "facebook": {
+    "appId": process.env.FACEBOOK_APP_ID || null,
+    "appSecret": process.env.FACEBOOK_APP_SECRET || null,
+  },
   
 }
