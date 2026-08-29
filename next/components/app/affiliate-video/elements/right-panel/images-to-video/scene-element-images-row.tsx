@@ -45,6 +45,7 @@ export interface SceneElementImagesRowProps {
   savedSlots?: (ElementFormImage | undefined)[];
   readOnly?: boolean;
   onSlotsChange: ElementImageSlotsChangeHandler;
+  hideLabel?: boolean;
 }
 
 export function SceneElementImagesRow({
@@ -56,6 +57,7 @@ export function SceneElementImagesRow({
   savedSlots,
   readOnly = false,
   onSlotsChange,
+  hideLabel = false,
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
   const actionImageType = resolveActionImageType(elementFormConfig);
@@ -106,11 +108,13 @@ export function SceneElementImagesRow({
   );
   const prevActionImageTypeRef = useRef(actionImageType);
 
+  const manualMaskRef = useRef(manualMask);
+  manualMaskRef.current = manualMask;
+
   const savedSlotsKey = useMemo(
     () => (savedSlots?.length ? elementImageSlotsFingerprint(savedSlots) : ""),
     [savedSlots]
   );
-  const manualMaskKey = manualMask.map(String).join(",");
 
   useEffect(() => {
     setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...resolvedMatched], slotCount));
@@ -134,19 +138,11 @@ export function SceneElementImagesRow({
     if (!savedSlotsKey) return;
     const next = trimSlots([...savedSlots!], slotCount);
     setSlots((prev) => {
-      const prevKey = elementImageSlotsFingerprint(prev);
-      if (prevKey === savedSlotsKey) return prev;
-      // Chỉnh tay đang chờ persist — không ghi đè bằng savedSlots cũ từ parent.
-      if (manualMask.some(Boolean) && prevKey !== savedSlotsKey) return prev;
+      if (elementImageSlotsFingerprint(prev) === savedSlotsKey) return prev;
       return next;
     });
-    setManualMask((prev) => {
-      const prevKey = elementImageSlotsFingerprint(slots);
-      if (prevKey === savedSlotsKey) return prev;
-      if (manualMask.some(Boolean) && prevKey !== savedSlotsKey) return prev;
-      return Array.from({ length: slotCount }, (_, i) => !!savedSlots![i]);
-    });
-  }, [savedSlotsKey, slotCount, savedSlots, manualMaskKey, slots]);
+    setManualMask(Array.from({ length: slotCount }, (_, i) => !!savedSlots![i]));
+  }, [savedSlotsKey, slotCount, savedSlots]);
 
   useEffect(() => {
     setSlots((prev) => trimSlots(prev, slotCount));
@@ -157,22 +153,35 @@ export function SceneElementImagesRow({
     });
   }, [slotCount]);
 
+  // Chỉ khi nguồn auto-match đổi — tránh race ghi đè slot vừa gắn.
   useEffect(() => {
     setSlots((prev) => {
+      const mask = manualMaskRef.current;
       const next = trimSlots(
-        resolvedMatched.map((img, i) => (manualMask[i] ? prev[i] : img)),
+        resolvedMatched.map((img, i) => (mask[i] ? prev[i] : img)),
         slotCount
       );
-      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next) ? prev : next;
+      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next)
+        ? prev
+        : next;
     });
-  }, [resolvedMatchedKey, manualMaskKey, resolvedMatched, slotCount]);
+  }, [resolvedMatchedKey, resolvedMatched, slotCount]);
 
   useSceneElementImagesRowNotify(sceneId, slots, manualMask, onSlotsChange);
 
-  const displaySlots = useMemo(
-    () => resolveSlotsFromCatalog(slots, elementFormConfig),
-    [slots, elementFormConfig, resolvedMatchedKey]
-  );
+  /** Parent (assign/card/list) là nguồn sự thật khi đã có ảnh — tránh race state nội bộ làm slot trống. */
+  const displaySlots = useMemo(() => {
+    const merged = Array.from({ length: slotCount }, (_, i) => {
+      const saved = savedSlots?.[i];
+      const local = slots[i];
+      const savedHasMedia = !!(saved?.imageBytes || saved?.fifeUrl);
+      const localHasMedia = !!(local?.imageBytes || local?.fifeUrl);
+      if (savedHasMedia) return saved;
+      if (localHasMedia) return local;
+      return saved ?? local ?? resolvedMatched[i];
+    });
+    return resolveSlotsFromCatalog(merged, elementFormConfig);
+  }, [savedSlots, slots, elementFormConfig, resolvedMatched, resolvedMatchedKey, slotCount]);
 
   const handleSlotChange = useCallback(
     (index: number, value: ElementFormImage | undefined) => {
@@ -194,18 +203,20 @@ export function SceneElementImagesRow({
 
   return (
     <div className="relative">
-      <div className="flex justify-between items-center">
-        {" "}
-        <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
-          {t("Ảnh tham chiếu")}:
-        </span>
-        {filledCount > 0 && (
-          <span className="text-9 text-blue-500 mt-0.5 block">
-            {t("Đã gắn")} {filledCount}/{slotCount}
+      {!hideLabel && (
+        <div className="flex justify-between items-center">
+          {" "}
+          <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
+            {t("Ảnh tham chiếu")}:
           </span>
-        )}
-      </div>
-      <div className="flex gap-2 mt-1">
+          {filledCount > 0 && (
+            <span className="text-9 text-blue-500 mt-0.5 block">
+              {t("Đã gắn")} {filledCount}/{slotCount}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-1 flex flex-nowrap gap-2">
         {Array.from({ length: slotCount }, (_, i) => (
           <SceneElementImageSlot
             key={i}

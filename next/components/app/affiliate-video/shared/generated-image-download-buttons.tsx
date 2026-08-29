@@ -27,6 +27,8 @@ export interface GeneratedImageDownloadButtonsProps {
   className?: string;
   /** inline: hàng nút dưới ảnh; overlay: góc trong ảnh (hover) */
   variant?: "inline" | "overlay";
+  /** Khối toolbar MXH inline — nút 28×28 trong ô lưới */
+  compact?: boolean;
 }
 
 const OVERLAY_BTN =
@@ -104,6 +106,7 @@ export function GeneratedImageDownloadButtons({
   show1kLabel = false,
   className,
   variant = "inline",
+  compact = false,
 }: GeneratedImageDownloadButtonsProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -186,31 +189,35 @@ export function GeneratedImageDownloadButtons({
     );
   }
 
+  const downloadBtnClass = compact
+    ? "w-7 h-7 min-w-[28px] max-w-[28px] min-h-[28px] max-h-[28px] p-0 rounded-md bg-transparent border-0 shadow-none text-success hover:bg-transparent"
+    : isDownloading
+      ? "w-8 h-8 rounded-lg bg-success-light text-success-dark"
+      : show1kLabel
+        ? "px-2 h-8 text-xs font-bold rounded-lg min-w-8 bg-success-light text-success"
+        : "w-8 h-8 rounded-lg bg-success-light text-success";
+
+  const wrapperClass = compact
+    ? "flex items-center justify-center w-7 h-7 min-w-[28px] max-w-[28px] overflow-hidden shrink-0"
+    : className || "flex flex-row gap-1 items-center justify-center flex-wrap";
+
   return (
-    <>
-      <div className={className || "flex flex-row gap-1 items-center justify-center flex-wrap"}>
-        <Button
-          innerRef={downloadTriggerRef}
-          disabled={disabled}
-          className={
-            isDownloading
-              ? "w-8 h-8 rounded-lg bg-success-light text-success-dark"
-              : show1kLabel
-              ? "px-2 h-8 text-xs font-bold rounded-lg min-w-8 bg-success-light text-success"
-              : "w-8 h-8 rounded-lg bg-success-light text-success"
-          }
-          iconClassName="text-xl font-bold"
-          icon={
-            isDownloading ? (
-              <RiLoader4Line className="animate-spin" />
-            ) : show1kLabel ? undefined : (
-              <HiOutlineArrowDownTray />
-            )
-          }
-        >
-          {!isDownloading && show1kLabel ? "1K" : undefined}
-        </Button>
-      </div>
+    <div className={wrapperClass}>
+      <Button
+        innerRef={downloadTriggerRef}
+        disabled={disabled}
+        className={downloadBtnClass}
+        iconClassName={compact ? "text-base" : "text-xl font-bold"}
+        icon={
+          isDownloading ? (
+            <RiLoader4Line className="animate-spin" />
+          ) : show1kLabel ? undefined : (
+            <HiOutlineArrowDownTray />
+          )
+        }
+      >
+        {!isDownloading && show1kLabel ? "1K" : undefined}
+      </Button>
 
       <Popover
         reference={downloadTriggerRef}
@@ -251,6 +258,6 @@ export function GeneratedImageDownloadButtons({
           )}
         </div>
       </Popover>
-    </>
+    </div>
   );
 }

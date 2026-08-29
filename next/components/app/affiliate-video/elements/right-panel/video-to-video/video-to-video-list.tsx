@@ -10,6 +10,7 @@ import { IntroGuideKey } from "../../../../../shared/utilities/intro/intro-guide
 import { useAffiliateBatchListIntro } from "../../../shared/use-affiliate-batch-list-intro";
 import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { useElementApi } from "../../hook/useElementApi";
+import { useElementSocialPostGroups } from "../../hook/use-element-social-post-groups";
 import { useElementContext } from "../../providers/element-provider";
 import { BatchActionBar } from "../batch-action-bar";
 import { SceneRowGroup } from "./scene-batch-row";
@@ -36,6 +37,7 @@ export function VideoToVideoListPanel({
   } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
+  const { socialPostGroups, onSocialPostGroupsChange } = useElementSocialPostGroups();
 
   const { introElement, openIntro } = useAffiliateBatchListIntro({
     sidebarIntroKey: IntroGuideKey.ELEMENT_SIDEBAR,
@@ -150,6 +152,9 @@ export function VideoToVideoListPanel({
       SceneRowComponent={SceneRowGroup}
       lazyMountSceneRows
       onOpenIntro={openIntro}
+      socialPostGroups={socialPostGroups}
+      onSocialPostGroupsChange={onSocialPostGroupsChange}
+      autoPostListLayout
     />
     </>
   );

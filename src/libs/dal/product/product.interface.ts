@@ -23,6 +23,10 @@ export enum AiProviderKeyEnum {
   GOOGLE_LABS_API_KEY = "GOOGLE_LABS_API_KEY",
   /** Film / Flow2 ChatGPT gateway — JSON { endpoint, apiKey, model } */
   CHATGPT_GATEWAY_KEY = "CHATGPT_GATEWAY_KEY",
+  /** OAuth / token đăng MXH (customer hoặc admin) */
+  YOUTUBE_OAUTH_KEY = "YOUTUBE_OAUTH_KEY",
+  FACEBOOK_OAUTH_KEY = "FACEBOOK_OAUTH_KEY",
+  TIKTOK_OAUTH_KEY = "TIKTOK_OAUTH_KEY",
 }
 
 export type PropertySelectOption = {

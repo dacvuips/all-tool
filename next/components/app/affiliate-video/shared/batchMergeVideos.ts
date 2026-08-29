@@ -133,3 +133,34 @@ export async function mergeSceneVideosAndDownload<T extends SceneWithNumber>(opt
   triggerBlobDownload(blob, fileName);
   return items.length;
 }
+
+/**
+ * Nối video scene thành 1 Blob (không download) — dùng cho auto-post MXH.
+ * 1 video → trả blob của video đó; ≥2 → ffmpeg merge.
+ */
+export async function mergeSceneVideosToBlob<T extends SceneWithNumber>(options: {
+  scenes: T[];
+  getGeneratedVideo: (sceneId: string) => Promise<GeneratedVideoLike | null | undefined>;
+  sceneIds: string[];
+  onProgress?: (ratio: number, message: string) => void;
+}): Promise<{ blob: Blob; count: number }> {
+  const scenes = options.scenes.filter((s) => options.sceneIds.includes(s.id) && !s.disabled);
+  const items = await collectSceneVideoFiles(scenes, options.getGeneratedVideo);
+  if (items.length === 0) {
+    throw new Error("Chưa có video nào để đăng — hãy tạo video cho các cảnh trong nhóm");
+  }
+  if (items.length === 1) {
+    const blob = await generatedVideoToBlob(items[0].vid);
+    return { blob, count: 1 };
+  }
+  if (items.length > MAX_MERGE_VIDEOS) {
+    throw new Error(`Tối đa ${MAX_MERGE_VIDEOS} video mỗi lần nối (hiện có ${items.length})`);
+  }
+  const blobs = await collectVideoBlobs(items.map((i) => i.vid));
+  const blob = await mergeVideosInBrowser(blobs, {
+    onProgress: options.onProgress
+      ? (p) => options.onProgress!(p.ratio, p.message)
+      : undefined,
+  });
+  return { blob, count: items.length };
+}

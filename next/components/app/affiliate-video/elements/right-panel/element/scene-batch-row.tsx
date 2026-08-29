@@ -28,9 +28,8 @@ import { Dialog } from "../../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../../shared/utilities/form";
 import { Img } from "../../../../../shared/utilities/misc";
 import { CharacterItem, CopyVideoScene, DB_NAME, ElementFormImage } from "../../../constants";
-import { SceneAutoDownloadButton } from "../../../shared/scene-auto-download-button";
-import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
-import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
+import { AutoPostSocialSceneTableRow, type SceneBatchLayout } from "../../../shared/auto-post-social/grouped-list";
+import { getAutoDownloadDefault } from "../../../shared/autoDownloadUtils";
 import { fileToGenerationImageBase64 } from "../../../shared/compressGenerationImage";
 import {
   generatedImageToApiBase64Input,
@@ -38,6 +37,9 @@ import {
   hasGeneratedImageData,
   toUiGeneratedImage,
 } from "../../../shared/generatedMediaUtils";
+import { SceneAutoDownloadButton } from "../../../shared/scene-auto-download-button";
+import { SceneCardExtendVideoTab } from "../../../shared/scene-card-extend-video-tab";
+import { SceneCardImageTab } from "../../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../../shared/scene-card-video-tab";
 import { SceneComponentVideoVoiceSelect } from "../../../shared/scene-component-video-voice-select";
@@ -45,15 +47,15 @@ import { GeneratedImageData } from "../../hook/useElementApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
+import { ActionImageEnum } from "../../constants";
 import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
-import { ActionImageEnum } from "../../constants";
+import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import {
   pickSceneSavedImageSlots,
   resolveActionImageType,
 } from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
-import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
@@ -70,15 +72,46 @@ export type EditField =
 /** Số ký tự tối đa trước khi cắt */
 const PROMPT_MAX_CHARS = 160;
 
+function getGeneratedImageAssignStamp(generated: GeneratedImageData): string {
+  const remote = (generated.fifeUrl || generated.imageUrl || "").trim();
+  if (remote && !remote.startsWith("blob:") && !remote.startsWith("data:")) return remote;
+  if (generated.mediaBlob) return `blob:${generated.mediaBlob.size}:${generated.mimeType || ""}`;
+  if ((generated.previewUrl || "").trim()) return generated.previewUrl!.trim();
+  return `scene-image`;
+}
+
+function buildGeneratedAssignSlotName(
+  sceneNumber: number | undefined,
+  slotIndex: number,
+  stamp: string
+): string {
+  return `gen-assign|${sceneNumber ?? 0}|${slotIndex}|${stamp.slice(0, 120)}`;
+}
+
 function isSlotMatchingGeneratedImage(
   slot: ElementFormImage | undefined,
-  generated: GeneratedImageData
+  generated: GeneratedImageData,
+  slotIndex: number,
+  sceneNumber?: number
 ): boolean {
   if (!slot) return false;
-  const genUrl =
-    generated.fifeUrl || generated.imageUrl || generated.previewUrl || "";
-  const slotUrl = slot.fifeUrl || "";
-  if (genUrl && slotUrl && genUrl === slotUrl) return true;
+  // Badge chỉ khi slot thật sự có ảnh hiển thị được
+  if (!(slot.imageBytes || slot.fifeUrl)) return false;
+  const stamp = getGeneratedImageAssignStamp(generated);
+  if (slot.name === buildGeneratedAssignSlotName(sceneNumber, slotIndex, stamp)) {
+    return true;
+  }
+  const genRemote = (generated.fifeUrl || generated.imageUrl || "").trim();
+  const slotUrl = (slot.fifeUrl || "").trim();
+  if (
+    genRemote &&
+    !genRemote.startsWith("blob:") &&
+    !genRemote.startsWith("data:") &&
+    slotUrl &&
+    slotUrl === genRemote
+  ) {
+    return true;
+  }
   if (generated.imageBytes && slot.imageBytes) {
     return slot.imageBytes === generated.imageBytes;
   }
@@ -96,6 +129,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   hideImageColumn,
   nextSceneId,
   forcedTab,
+  layout = "card",
   onMouseEnter,
   onMouseLeave,
   onUpdateScene,
@@ -117,6 +151,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   hideImageColumn?: boolean;
   /** Tab được ép chọn đồng loạt từ bên ngoài */
   forcedTab?: SceneTabKey | null;
+  layout?: SceneBatchLayout;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   onUpdateScene: (sceneId: string, field: EditField, value: string) => void;
@@ -192,7 +227,21 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.selectedProductImages]);
 
   useEffect(() => {
-    setSelectedElementImageSlots(sceneSavedImageSlots || []);
+    // undefined = mode lệch / chưa persist — không xóa slot local (tránh mất ảnh vừa gắn).
+    if (sceneSavedImageSlots === undefined) return;
+    setSelectedElementImageSlots((prev) => {
+      const incoming = sceneSavedImageSlots;
+      const len = Math.max(prev.length, incoming.length, ELEMENT_COMPONENT_IMAGE_SLOT_COUNT);
+      return Array.from({ length: len }, (_, i) => {
+        const local = prev[i];
+        const saved = incoming[i];
+        const localOk = !!(local?.imageBytes || local?.fifeUrl);
+        const savedOk = !!(saved?.imageBytes || saved?.fifeUrl);
+        // Giữ bản local còn media nếu scene đã strip mất bytes.
+        if (localOk && !savedOk) return local;
+        return saved ?? local;
+      });
+    });
   }, [scene.id, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
@@ -301,40 +350,50 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   // auto-resize textarea
   useEffect(() => {
+    if (layout === "row") return;
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
       textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
     }
-  }, [editValue]);
+  }, [editValue, layout]);
 
   const imageSlotCount = ELEMENT_COMPONENT_IMAGE_SLOT_COUNT;
 
   const assignedSlotIndices = useMemo(() => {
     if (!generatedImage) return [];
     return selectedElementImageSlots.reduce<number[]>((acc, slot, i) => {
-      if (isSlotMatchingGeneratedImage(slot, generatedImage)) acc.push(i);
+      if (isSlotMatchingGeneratedImage(slot, generatedImage, i, scene.sceneNumber)) {
+        acc.push(i);
+      }
       return acc;
     }, []);
-  }, [generatedImage, selectedElementImageSlots]);
+  }, [generatedImage, selectedElementImageSlots, scene.sceneNumber]);
 
   const handleAssignGeneratedImageToSlot = useCallback(
     async (slotIndex: number) => {
       if (!generatedImage || isDisabled) return;
-      const existingSlot = selectedElementImageSlots[slotIndex];
       try {
-        const { imageBytes, mimeType } =
-          await generatedImageToApiBase64Input(generatedImage);
+        // Không dùng blob:/previewUrl của ảnh chính — tránh revoke làm mất ảnh cột Ảnh.
+        const remoteUrl = (
+          generatedImage.fifeUrl ||
+          generatedImage.imageUrl ||
+          ""
+        ).trim();
+        const safeRemoteUrl =
+          remoteUrl &&
+          !remoteUrl.startsWith("blob:") &&
+          !remoteUrl.startsWith("data:")
+            ? remoteUrl
+            : "";
+
+        // Luôn lấy bản copy base64 riêng để slot tự preview (data:) — ảnh chính không đổi.
+        const converted = await generatedImageToApiBase64Input(generatedImage);
+        const stamp = getGeneratedImageAssignStamp(generatedImage);
         const elementImage: ElementFormImage = {
-          fifeUrl:
-            generatedImage.fifeUrl ||
-            generatedImage.imageUrl ||
-            generatedImage.previewUrl ||
-            "",
-          imageBytes,
-          mimeType: mimeType || generatedImage.mimeType || "image/png",
-          name:
-            existingSlot?.name ||
-            `generated-scene-${scene.sceneNumber}-slot-${slotIndex + 1}`,
+          fifeUrl: safeRemoteUrl,
+          imageBytes: converted.imageBytes,
+          mimeType: converted.mimeType || generatedImage.mimeType || "image/png",
+          name: buildGeneratedAssignSlotName(scene.sceneNumber, slotIndex, stamp),
         };
         const nextSlots = [...selectedElementImageSlots];
         while (nextSlots.length < imageSlotCount) nextSlots.push(undefined);
@@ -363,23 +422,24 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     field: EditField,
     text: string,
     textColor: string,
-    labelEl: React.ReactNode
+    labelEl: React.ReactNode,
+    compact = false
   ) => (
     <div
-      className="relative"
+      className="relative w-full min-w-0"
       onMouseEnter={() => setHoveredField(field)}
       onMouseLeave={() => setHoveredField(null)}
     >
       {editingField === field ? (
         /* ── Edit mode ── */
         <div>
-          {labelEl}
+          {!compact && labelEl}
           <textarea
             ref={field === editingField ? textareaRef : undefined}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            rows={4}
-            className="w-full rounded-lg border border-blue-300 bg-blue-50 text-xs text-gray-700 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-none transition-colors leading-relaxed"
+            rows={compact ? 3 : 4}
+            className="w-full rounded-lg border border-blue-300 bg-blue-50 text-xs text-gray-700 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-none transition-colors leading-snug"
           />
           <div className="flex items-center gap-1.5 mt-1.5 justify-end">
             <button
@@ -406,32 +466,35 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         </div>
       ) : (
         /* ── Display mode ── */
-        <div className="relative">
-          <span
-            className={`text-xs leading-relaxed whitespace-pre-line ${textColor}`}
-            style={
-              expandedField !== field
-                ? {
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical" as any,
-                    overflow: "hidden",
-                  }
-                : {}
-            }
-          >
-            {labelEl}
-            {text}
-          </span>
-          {/* Action icons – always visible on mobile, hover on desktop */}
+        <div className={compact ? "flex gap-1.5 items-start" : "relative"}>
           <div
-            className={`absolute -top-3 -right-1.5 sm:-right-2.5 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity opacity-100 pointer-events-auto ${
-              hoveredField === field
-                ? "md:opacity-100 md:pointer-events-auto"
-                : "md:opacity-0 md:pointer-events-none"
+            className={`text-xs leading-snug ${textColor} ${
+              compact
+                ? `flex-1 min-w-0 break-words ${
+                    expandedField === field
+                      ? "whitespace-pre-line"
+                      : "overflow-hidden text-ellipsis-3"
+                  }`
+                : `w-full whitespace-pre-line ${
+                    expandedField !== field ? "text-ellipsis-2 break-words" : ""
+                  }`
             }`}
           >
-            {/* Toggle view prompt button */}
+            {!compact && labelEl}
+            {text}
+          </div>
+          {/* Action icons – compact: inline; card: hover absolute */}
+          <div
+            className={`flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity shrink-0 ${
+              compact
+                ? "opacity-100 pointer-events-auto"
+                : `absolute z-10 -top-3 -right-1.5 sm:-right-2.5 ${
+                    hoveredField === field
+                      ? "md:opacity-100 md:pointer-events-auto"
+                      : "md:opacity-0 md:pointer-events-none"
+                  }`
+            }`}
+          >
             <button
               onClick={() => setExpandedField(expandedField === field ? null : field)}
               title={expandedField === field ? t("Thu gọn") : t("Xem prompt")}
@@ -447,7 +510,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 <RiEyeLine className="text-sm" />
               )}
             </button>
-            {/* Copy prompt button */}
             <button
               onClick={() => handleCopy(field, text)}
               title="Copy prompt"
@@ -459,7 +521,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
                 <RiFileCopyLine className="text-sm" />
               )}
             </button>
-            {/* Edit pencil button */}
             <button
               onClick={() => openEdit(field)}
               title={t("Chỉnh sửa")}
@@ -472,6 +533,224 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       )}
     </div>
   );
+
+  const isRowLayout = layout === "row";
+  const utilBtnIdle = isRowLayout
+    ? "text-gray-500 bg-transparent shadow-none hover:bg-gray-200 hover:text-gray-700"
+    : "text-gray-400 bg-white shadow-sm hover:text-red-500 hover:bg-red-50";
+  const utilBtnActive = isRowLayout
+    ? "text-gray-700 bg-gray-200 shadow-none hover:bg-gray-300"
+    : "text-blue-500 bg-blue-50 shadow-sm hover:bg-blue-100";
+  const utilBtnVoiceOff = isRowLayout
+    ? "text-gray-700 bg-gray-200 shadow-none hover:bg-gray-300"
+    : "text-red-500 bg-red-50 shadow-sm hover:bg-red-100";
+
+  const utilityButtons = (
+    <div
+      className={`flex flex-row flex-wrap gap-0.5 items-center ${
+        isRowLayout ? "p-1 rounded-lg bg-gray-50 border border-gray-100" : ""
+      }`}
+    >
+      <Button
+        onClick={() => onToggleDisable(scene.id)}
+        className={`w-6 h-6 px-2 rounded-md ${
+          isDisabled ? utilBtnActive : utilBtnIdle
+        }`}
+        iconClassName="text-sm"
+        icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
+        tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
+        placement="bottom"
+      />
+      <SceneAutoDownloadButton
+        disabled={isDisabled}
+        noDownload={scene.noDownload}
+        autoDownloadImageResolution={scene.autoDownloadImageResolution}
+        autoDownloadVideoResolution={scene.autoDownloadVideoResolution}
+        onToggle={() => onToggleNoDownload(scene.id)}
+        onImageResolutionChange={(resolution) =>
+          onSetSceneAutoDownloadImageResolution(scene.id, resolution)
+        }
+        onVideoResolutionChange={(resolution) =>
+          onSetSceneAutoDownloadVideoResolution(scene.id, resolution)
+        }
+        buttonClassName={`w-6 h-6 px-2 rounded-md ${
+          (scene.noDownload ?? getAutoDownloadDefault()) ? utilBtnActive : utilBtnIdle
+        }`}
+      />
+      <Button
+        disabled={isDisabled}
+        onClick={() => onToggleNoText(scene.id)}
+        className={`w-6 h-6 px-2 rounded-md ${scene.noText ? utilBtnActive : utilBtnIdle}`}
+        iconClassName="text-sm"
+        icon={scene.noText ? <RiText /> : <NoTextIcon />}
+        tooltip={
+          scene.noText
+            ? t("Đang cho phép hiển thị 'Chữ' trong ảnh")
+            : t("Không cho phép hiển thị 'Chữ' trong ảnh")
+        }
+        placement="bottom"
+      />
+      <Button
+        disabled={isDisabled}
+        onClick={() => onToggleVoiceDisable(scene.id)}
+        className={`w-6 h-6 px-2 rounded-md ${
+          scene.voiceDisable ? utilBtnVoiceOff : utilBtnIdle
+        }`}
+        iconClassName="text-sm"
+        icon={scene.voiceDisable ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
+        tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
+        placement="bottom"
+      />
+      {onDeleteScene && (
+        <Button
+          onClick={() => void handleDeleteScene()}
+          className={`px-2 w-6 h-6 rounded-md ${utilBtnIdle}`}
+          iconClassName="text-sm"
+          icon={<RiDeleteBinLine />}
+          tooltip={t("Xoá phân cảnh")}
+          placement="bottom"
+        />
+      )}
+    </div>
+  );
+
+  const galleryAndUpload = (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={async (e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          try {
+            const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
+            handleSetImage({
+              imageBytes,
+              mimeType,
+              fifeUrl: "",
+            });
+            toast.success(t("Đã upload ảnh thành công"));
+          } catch {
+            toast.error(t("Lỗi khi xử lý ảnh. Vui lòng thử lại."));
+          }
+        }}
+      />
+      <ImageGalleryDialog
+        isOpen={showGalleryDialog}
+        onClose={() => setShowGalleryDialog(false)}
+        onSelect={(imageData) => {
+          handleSetImage(imageData);
+          setShowGalleryDialog(false);
+          toast.success(t("Đã chọn ảnh từ Gallery"));
+        }}
+      />
+    </>
+  );
+
+  const imageTab = (
+    <SceneCardImageTab
+      aspectRatio={aspectRatio}
+      generatedImage={generatedImage}
+      generatingImage={generatingImage}
+      imageProgress={imageProgress}
+      sceneNumber={scene.sceneNumber}
+      isDisabled={isDisabled}
+      onGenerateImage={handleGenerateImage}
+      onSetImage={handleSetImage}
+      onOpenGallery={() => setShowGalleryDialog(true)}
+      originThumbnailUrl={thumbnailOriginImage}
+      originThumbnailLoading={thumbnailLoading}
+      sceneTimestamp={scene.timestamp}
+      errorMessage={imageError}
+      slotAssignCount={imageSlotCount}
+      assignedSlotIndices={assignedSlotIndices}
+      onAssignToSlot={handleAssignGeneratedImageToSlot}
+      onStopGeneration={() => void handleStopImageGeneration()}
+      generationActionPending={imageActionPending}
+      inline={layout === "row"}
+    />
+  );
+
+  const videoTab = (
+    <SceneCardVideoTab
+      generatedVideo={generatedVideo}
+      generatingVideo={generatingVideo}
+      videoProgress={videoProgress}
+      isDisabled={isDisabled}
+      hasImage={!!generatedImage}
+      isPromptToVideo
+      aspectRatio={aspectRatio}
+      errorMessage={videoError}
+      onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
+      sceneNumber={scene.sceneNumber}
+      onGenerateVideo={() => handleGenerateVideo()}
+      onStopGeneration={() => void handleStopVideoGeneration()}
+      generationActionPending={videoActionPending}
+      inline={layout === "row"}
+      inlineFooter={
+        layout === "row" ? (
+          <SceneComponentVideoVoiceSelect
+            compact
+            value={scene.videoVoice}
+            disabled={isDisabled}
+            onChange={(voiceId) => onUpdateScene(scene.id, "videoVoice", voiceId)}
+          />
+        ) : undefined
+      }
+    />
+  );
+
+  if (layout === "row") {
+    return (
+      <>
+        <AutoPostSocialSceneTableRow
+          isDisabled={isDisabled}
+          isHovered={!!isGroupHovered}
+          onMouseEnter={() => {
+            setRowHovered(true);
+            onMouseEnter?.();
+          }}
+          onMouseLeave={() => {
+            setRowHovered(false);
+            onMouseLeave?.();
+          }}
+          reference={
+            <div className="flex flex-row gap-2 items-start shrink-0">
+              <span className="inline-flex shrink-0 items-center justify-center min-w-6 h-6 px-1.5 rounded-md text-16  font-bold text-gray-400 ">
+                {`#${scene.sceneNumber}`}
+              </span>
+              <SceneElementImagesRow
+                sceneId={scene.id}
+                sceneNumber={scene.sceneNumber ?? 1}
+                prompt={scene.visual_prompt || ""}
+                elementFormConfig={elementFormConfig}
+                savedSlots={selectedElementImageSlots}
+                readOnly={isDisabled}
+                hideLabel
+                onSlotsChange={handleElementImageSlotsChange}
+              />
+            </div>
+          }
+          prompt={renderEditablePrompt(
+            "visual_prompt",
+            scene.visual_prompt,
+            "text-gray-600",
+            <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
+              PROMPT
+            </span>,
+            true
+          )}
+          image={imageTab}
+          video={videoTab}
+          actions={utilityButtons}
+        />
+        {galleryAndUpload}
+      </>
+    );
+  }
 
   return (
     <div
@@ -492,73 +771,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-gray-800 text-white whitespace-nowrap mr-1">
           {`${t("Cảnh")} #${scene.sceneNumber}`}
         </span>
-        <div className="flex gap-1 items-center">
-          <Button
-            onClick={() => onToggleDisable(scene.id)}
-            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
-              isDisabled
-                ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-            }`}
-            iconClassName="text-sm"
-            icon={isDisabled ? <RiEyeLine /> : <RiEyeOffLine />}
-            tooltip={isDisabled ? t("Hiện Cảnh") : t("Ẩn Cảnh")}
-            placement="bottom"
-          />
-          <SceneAutoDownloadButton
-            disabled={isDisabled}
-            noDownload={scene.noDownload}
-            autoDownloadImageResolution={scene.autoDownloadImageResolution}
-            autoDownloadVideoResolution={scene.autoDownloadVideoResolution}
-            onToggle={() => onToggleNoDownload(scene.id)}
-            onImageResolutionChange={(resolution) =>
-              onSetSceneAutoDownloadImageResolution(scene.id, resolution)
-            }
-            onVideoResolutionChange={(resolution) =>
-              onSetSceneAutoDownloadVideoResolution(scene.id, resolution)
-            }
-          />
-          <Button
-            disabled={isDisabled}
-            onClick={() => onToggleNoText(scene.id)}
-            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
-              scene.noText
-                ? "text-blue-500 bg-blue-50 hover:bg-blue-100"
-                : "text-gray-400 bg-white hover:text-blue-500 hover:bg-blue-50"
-            }`}
-            iconClassName="text-sm"
-            icon={scene.noText ? <RiText /> : <NoTextIcon />}
-            tooltip={
-              scene.noText
-                ? t("Đang cho phép hiển thị 'Chữ' trong ảnh")
-                : t("Không cho phép hiển thị 'Chữ' trong ảnh")
-            }
-            placement="bottom"
-          />
-          <Button
-            disabled={isDisabled}
-            onClick={() => onToggleVoiceDisable(scene.id)}
-            className={`w-6 h-6 px-2 rounded-md shadow-sm ${
-              scene.voiceDisable
-                ? "text-red-500 bg-red-50 hover:bg-red-100"
-                : "text-gray-400 bg-white hover:text-red-500 hover:bg-red-50"
-            }`}
-            iconClassName="text-sm"
-            icon={scene.voiceDisable ? <MdVoiceOverOff /> : <MdRecordVoiceOver />}
-            tooltip={scene.voiceDisable ? t("Bật thoại") : t("Tắt thoại")}
-            placement="bottom"
-          />
-          {onDeleteScene && (
-            <Button
-              onClick={() => void handleDeleteScene()}
-              className="w-6 h-6 px-2 rounded-md shadow-sm text-gray-400 bg-white hover:text-red-600 hover:bg-red-50"
-              iconClassName="text-sm"
-              icon={<RiDeleteBinLine />}
-              tooltip={t("Xoá phân cảnh")}
-              placement="bottom"
-            />
-          )}
-        </div>
+        {utilityButtons}
       </div>
       {/* ── Ảnh tham chiếu (3 ô, match tên trong prompt) ── */}
       <div className={`px-3 py-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
@@ -567,7 +780,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           sceneNumber={scene.sceneNumber ?? 1}
           prompt={scene.visual_prompt || ""}
           elementFormConfig={elementFormConfig}
-          savedSlots={sceneSavedImageSlots}
+          savedSlots={selectedElementImageSlots}
           readOnly={isDisabled}
           onSlotsChange={handleElementImageSlotsChange}
         />
@@ -594,45 +807,8 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             done: !!generatedExtendVideo,
           },
         }}
-        renderImageTab={() => (
-          <SceneCardImageTab
-            aspectRatio={aspectRatio}
-            generatedImage={generatedImage}
-            generatingImage={generatingImage}
-            imageProgress={imageProgress}
-            sceneNumber={scene.sceneNumber}
-            isDisabled={isDisabled}
-            onGenerateImage={handleGenerateImage}
-            onSetImage={handleSetImage}
-            onOpenGallery={() => setShowGalleryDialog(true)}
-            originThumbnailUrl={thumbnailOriginImage}
-            originThumbnailLoading={thumbnailLoading}
-            sceneTimestamp={scene.timestamp}
-            errorMessage={imageError}
-            slotAssignCount={imageSlotCount}
-            assignedSlotIndices={assignedSlotIndices}
-            onAssignToSlot={handleAssignGeneratedImageToSlot}
-            onStopGeneration={() => void handleStopImageGeneration()}
-            generationActionPending={imageActionPending}
-          />
-        )}
-        renderVideoTab={() => (
-          <SceneCardVideoTab
-            generatedVideo={generatedVideo}
-            generatingVideo={generatingVideo}
-            videoProgress={videoProgress}
-            isDisabled={isDisabled}
-            hasImage={!!generatedImage}
-            isPromptToVideo
-            aspectRatio={aspectRatio}
-            errorMessage={videoError}
-            onImageRequired={() => reportVideoError(t("Cần tạo ảnh trước khi tạo video"))}
-            sceneNumber={scene.sceneNumber}
-            onGenerateVideo={() => handleGenerateVideo()}
-            onStopGeneration={() => void handleStopVideoGeneration()}
-            generationActionPending={videoActionPending}
-          />
-        )}
+        renderImageTab={() => imageTab}
+        renderVideoTab={() => videoTab}
         renderExtendTab={() => (
           <SceneCardExtendVideoTab
             generatedExtendVideo={generatedExtendVideo}
@@ -697,37 +873,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
           </div>
         )}
       />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (!file) return;
-          try {
-            const { imageBytes, mimeType } = await fileToGenerationImageBase64(file);
-            handleSetImage({
-              imageBytes,
-              mimeType,
-              fifeUrl: "",
-            });
-            toast.success(t("Đã upload ảnh thành công"));
-          } catch {
-            toast.error(t("Lỗi khi xử lý ảnh. Vui lòng thử lại."));
-          }
-        }}
-      />
-      <ImageGalleryDialog
-        isOpen={showGalleryDialog}
-        onClose={() => setShowGalleryDialog(false)}
-        onSelect={(imageData) => {
-          handleSetImage(imageData);
-          setShowGalleryDialog(false);
-          toast.success(t("Đã chọn ảnh từ Gallery"));
-        }}
-      />
+      {galleryAndUpload}
     </div>
   );
 });
@@ -745,6 +891,7 @@ interface SceneRowGroupProps {
   characters: CharacterItem[];
   hideImageColumn?: boolean;
   forcedTab?: SceneTabKey | null;
+  layout?: SceneBatchLayout;
   onToggleNoText: (sceneId: string) => void;
   onToggleNoDownload: (sceneId: string) => void;
   onSetSceneAutoDownloadImageResolution: (sceneId: string, resolution: "1K" | "2K" | "4K") => void;
@@ -774,6 +921,7 @@ export function SceneRowGroup({
   isDisabled,
   characters,
   forcedTab,
+  layout = "card",
   onInsert,
   onUpdateScene,
   onToggleDisable,
@@ -791,7 +939,11 @@ export function SceneRowGroup({
   const leave = () => setHovered(false);
 
   return (
-    <div className="flex relative flex-col group" onMouseEnter={enter} onMouseLeave={leave}>
+    <div
+      className={layout === "row" ? "w-full" : "flex relative flex-col group"}
+      onMouseEnter={enter}
+      onMouseLeave={leave}
+    >
       {/* Add ABOVE button – centered on top border, only visible on hover
       {index === 0 && (
         <div
@@ -817,6 +969,7 @@ export function SceneRowGroup({
           isDisabled={isDisabled}
           isGroupHovered={hovered}
           forcedTab={forcedTab}
+          layout={layout}
           onMouseEnter={enter}
           onMouseLeave={leave}
           onUpdateScene={onUpdateScene}

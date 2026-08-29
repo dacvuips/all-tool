@@ -1,17 +1,17 @@
 /**
  * Ô ảnh tham chiếu vuông (kéo thả / hiển thị / xóa) – dùng trong scene batch row.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { ImageDialog } from "../../../../shared/utilities/dialog/image-dialog";
+import { ElementFormImage } from "../../constants";
 import {
   fileToGenerationImageBase64,
   GENERATION_IMAGE_ACCEPTED_EXTENSIONS,
   GENERATION_IMAGE_ACCEPTED_TYPES,
 } from "../../shared/compressGenerationImage";
-import { ElementFormImage } from "../../constants";
 import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = GENERATION_IMAGE_ACCEPTED_TYPES;
@@ -44,15 +44,7 @@ export function SceneElementImageSlot({
   const previewSrc = useMemo(() => {
     if (!value) return null;
     return getElementFormImagePreviewSrc(value);
-  }, [value]);
-
-  useEffect(() => {
-    return () => {
-      if (previewSrc?.startsWith("blob:")) {
-        URL.revokeObjectURL(previewSrc);
-      }
-    };
-  }, [previewSrc]);
+  }, [value?.fifeUrl, value?.imageBytes, value?.mimeType]);
 
   const processFile = useCallback(
     async (file: File) => {
@@ -127,16 +119,14 @@ export function SceneElementImageSlot({
   const hasImage = !!(value && previewSrc);
 
   return (
-    <div className="relative flex-shrink-0 border-0.5 border-dashed ">
+    <div className="relative flex-shrink-0 border-0.5 border-dashed bg-white">
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={hasImage ? () => setZoomImage(previewSrc || "") : openFilePicker}
         className={`${imageClass} relative   overflow-hidden transition-all ${
-          readOnly && !hasImage
-            ? "opacity-60 cursor-not-allowed"
-            : "cursor-pointer"
+          readOnly && !hasImage ? "opacity-60 cursor-not-allowed" : "cursor-pointer"
         } ${readOnly && hasImage ? "opacity-60" : ""} ${
           dragOver
             ? "bg-blue-50 ring-2 ring-blue-400"
@@ -145,7 +135,7 @@ export function SceneElementImageSlot({
             : "bg-gray-100/80 hover:bg-gray-100"
         } `}
       >
-        <span className="absolute top-0 left-0 z-10 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-gray-600 rounded-br-md">
+        <span className="flex absolute top-0 left-0 z-10 justify-center items-center px-1 font-bold text-white bg-gray-600 rounded-br-md min-w-4 h-min-w-4 text-10">
           {slotIndex}
         </span>
 
@@ -167,7 +157,7 @@ export function SceneElementImageSlot({
                   e.stopPropagation();
                   onChange(undefined);
                 }}
-                className="flex absolute top-0 right-0 z-20 justify-center items-center w-5 h-5 text-white rounded-bl-md transition-colors bg-black/50 hover:bg-red-600"
+                className="flex absolute top-0 right-0 z-[2] justify-center items-center w-5 h-5 text-white rounded-bl-md transition-colors bg-black/50 hover:bg-red-600"
                 aria-label={t("Xóa ảnh")}
               >
                 <RiCloseLine className="text-sm" />

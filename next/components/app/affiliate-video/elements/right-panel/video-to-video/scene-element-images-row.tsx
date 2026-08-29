@@ -22,6 +22,7 @@ export interface SceneElementImagesRowProps {
   savedSlots?: (ElementFormImage | undefined)[];
   readOnly?: boolean;
   onSlotsChange: ElementImageSlotsChangeHandler;
+  hideLabel?: boolean;
 }
 
 export function SceneElementImagesRow({
@@ -31,6 +32,7 @@ export function SceneElementImagesRow({
   savedSlots,
   readOnly = false,
   onSlotsChange,
+  hideLabel = false,
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
 
@@ -87,18 +89,20 @@ export function SceneElementImagesRow({
 
   return (
     <div className="relative">
-      <div className="flex justify-between items-center">
-        {" "}
-        <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
-          {t("Ảnh tham chiếu")}:
-        </span>
-        {filledCount > 0 && (
-          <span className="text-9 text-blue-500 mt-0.5 block">
-            {t("Đã gắn")} {filledCount}/{SLOT_COUNT}
+      {!hideLabel && (
+        <div className="flex justify-between items-center">
+          {" "}
+          <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
+            {t("Ảnh tham chiếu")}:
           </span>
-        )}
-      </div>
-      <div className="flex gap-2 mt-1 flex-wrap">
+          {filledCount > 0 && (
+            <span className="text-9 text-blue-500 mt-0.5 block">
+              {t("Đã gắn")} {filledCount}/{SLOT_COUNT}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-1 flex flex-nowrap gap-2">
         {Array.from({ length: SLOT_COUNT }, (_, i) => (
           <SceneElementImageSlot
             key={i}

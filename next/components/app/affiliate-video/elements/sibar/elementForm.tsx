@@ -23,6 +23,12 @@ import { ELEMENT_SCRIPT_TAB_ENUM, setScenesForTab } from "../../shared/script-ta
 import { ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { buildAnalysisDataFromNumberedPrompt } from "../utils/parseNumberedPrompt";
+import {
+  buildAnalysisDataFromGroupedPrompt,
+  formatSocialPostHeaderTemplate,
+  hasAutoPostSocialHeaderInPrompt,
+} from "../../shared/auto-post-social";
+import { loadAutoPostSettings } from "../../shared/auto-post-social/storage";
 import { AffiliateConfig } from "./affiliate-config";
 import { AffiliateSubmit } from "./affiliate-submit";
 
@@ -71,6 +77,16 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
         return;
       }
 
+      const autoPostEnabled = loadAutoPostSettings().enabled;
+      if (autoPostEnabled && !hasAutoPostSocialHeaderInPrompt(promptText)) {
+        toast.error(
+          `${t("Khi bật Tự động đăng MXH, Prompt phân cảnh cần có ít nhất một dòng dạng")} ${formatSocialPostHeaderTemplate()}. ${t(
+            "Dòng đó phải bắt đầu bằng ** và kết thúc bằng ** trên cùng một hàng"
+          )}.`
+        );
+        return;
+      }
+
       try {
         setBatchRunning?.(true);
         persistElementInput?.();
@@ -79,13 +95,21 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
           activeTab,
           elementFormConfig?.serviceImageType
         );
-        const parsed = buildAnalysisDataFromNumberedPrompt(
-          promptText,
-          elementFormConfig?.aspectRatio,
-          elementFormConfig?.artStyleId,
-          elementFormConfig?.artStyle,
-          serviceImageType
-        );
+        const parsed = autoPostEnabled
+          ? buildAnalysisDataFromGroupedPrompt(
+              promptText,
+              elementFormConfig?.aspectRatio,
+              elementFormConfig?.artStyleId,
+              elementFormConfig?.artStyle,
+              serviceImageType
+            )
+          : buildAnalysisDataFromNumberedPrompt(
+              promptText,
+              elementFormConfig?.aspectRatio,
+              elementFormConfig?.artStyleId,
+              elementFormConfig?.artStyle,
+              serviceImageType
+            );
         if (!parsed?.scenes?.length) {
           toast.error(
             `${t("Không tách được cảnh nào từ prompt")}. ${t(
@@ -102,6 +126,9 @@ export const ElementForm = ({ onClose }: { onClose?: () => void }) => {
             artStyleId: parsed.artStyleId ?? scriptData?.artStyleId,
             artStyle: parsed.artStyle ?? scriptData?.artStyle,
             serviceImageType,
+            ...(autoPostEnabled && "socialPostGroups" in parsed
+              ? { socialPostGroups: parsed.socialPostGroups }
+              : {}),
           },
           activeTab,
           ELEMENT_SCRIPT_TAB_ENUM,

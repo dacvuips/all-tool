@@ -395,3 +395,52 @@ export function useIndexedDB<T = unknown>(
     [set, get, remove, clear, getAll, getAllWithKeys]
   );
 }
+
+/** Non-hook IDB client — dùng trong runner / storage module. */
+export function openIndexedDBStore<T = unknown>(
+  storeName: string,
+  dbName: DB_NAME_TYPE
+): UseIndexedDBReturn<T> {
+  return {
+    set: async (key, value) => {
+      await withRetry<IDBValidKey>(storeName, dbName, "readwrite", (s) => s.put(value, key));
+    },
+    get: async (key) => {
+      try {
+        return await withRetry<T>(storeName, dbName, "readonly", (s) => s.get(key));
+      } catch {
+        return undefined;
+      }
+    },
+    remove: async (key) => {
+      await withRetry<undefined>(storeName, dbName, "readwrite", (s) => s.delete(key));
+    },
+    clear: async () => {
+      await withRetry<undefined>(storeName, dbName, "readwrite", (s) => s.clear());
+    },
+    getAll: async () => {
+      try {
+        return await withRetry<T[]>(storeName, dbName, "readonly", (s) => s.getAll());
+      } catch {
+        return [];
+      }
+    },
+    getAllWithKeys: async () => {
+      try {
+        const keys = await withRetry<IDBValidKey[]>(storeName, dbName, "readonly", (s) =>
+          s.getAllKeys()
+        );
+        const results: { key: IDBValidKey; value: T }[] = [];
+        for (const key of keys) {
+          const value = await withRetry<T | undefined>(storeName, dbName, "readonly", (s) =>
+            s.get(key)
+          );
+          if (value !== undefined) results.push({ key, value });
+        }
+        return results;
+      } catch {
+        return [];
+      }
+    },
+  };
+}

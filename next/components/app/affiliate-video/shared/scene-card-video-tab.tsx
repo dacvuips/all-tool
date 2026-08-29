@@ -20,6 +20,7 @@ import {
   RiVideoFill,
 } from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
+import { VideoDialog } from "../../../shared/common/video-dialog";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
 import {
   GeneratedVideoLike,
@@ -28,6 +29,11 @@ import {
 } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+import {
+  INLINE_LIST_TOOLBAR_BTN,
+  SceneInlineListCell,
+  SceneInlineMediaColumn,
+} from "./scene-inline-list-media";
 
 const CONTROL_BTN_INSIDE =
   "flex items-center justify-center w-8 h-8 rounded-md bg-black bg-opacity-60 text-white hover:bg-opacity-80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -105,6 +111,10 @@ export interface SceneCardVideoTabProps {
   onSetVideo?: (videoData: GeneratedVideoData) => void;
   /** Mở Gallery video */
   onOpenGallery?: () => void;
+  /** Gộp preview + nút thành 1 hàng (danh sách MXH) */
+  inline?: boolean;
+  /** Slot dưới preview (vd. chọn giọng) — chỉ inline */
+  inlineFooter?: ReactNode;
 }
 
 export function SceneCardVideoTab({
@@ -125,6 +135,8 @@ export function SceneCardVideoTab({
   uniformFrame = false,
   onSetVideo,
   onOpenGallery,
+  inline = false,
+  inlineFooter,
 }: SceneCardVideoTabProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -135,8 +147,11 @@ export function SceneCardVideoTab({
   const [playingWithSound, setPlayingWithSound] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showVideoZoom, setShowVideoZoom] = useState(false);
 
   const canAssignVideo = !!onSetVideo;
+  const progressLayout = inline ? "minimal" : "compact";
+  const loadingProgressLayout = inline ? "minimal" : "card";
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -152,7 +167,7 @@ export function SceneCardVideoTab({
     });
   };
 
-  const renderUploadGalleryButtons = () => {
+  const renderUploadGalleryButtons = (compact?: boolean) => {
     if (!canAssignVideo) return null;
     return (
       <>
@@ -160,8 +175,12 @@ export function SceneCardVideoTab({
           onClick={() => fileInputRef.current?.click()}
           icon={<RiUploadCloud2Line />}
           placement="bottom"
-          className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
-          iconClassName="text-xl font-bold"
+          className={
+            compact
+              ? `${INLINE_LIST_TOOLBAR_BTN} text-blue-500`
+              : "w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
+          }
+          iconClassName={compact ? "text-base" : "text-xl font-bold"}
           tooltip={t("Upload video")}
         />
         {onOpenGallery ? (
@@ -169,14 +188,50 @@ export function SceneCardVideoTab({
             onClick={onOpenGallery}
             icon={<RiGalleryLine />}
             placement="bottom"
-            className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
-            iconClassName="text-xl font-bold"
+            className={
+              compact
+                ? `${INLINE_LIST_TOOLBAR_BTN} text-purple-500`
+                : "w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
+            }
+            iconClassName={compact ? "text-base" : "text-xl font-bold"}
             tooltip={t("Chọn từ Gallery")}
           />
         ) : null}
       </>
     );
   };
+
+  const renderInlineVideoToolbar = () => (
+    <>
+      {generatedVideo ? (
+        <GeneratedVideoDownloadButtons
+          video={generatedVideo}
+          fileName={videoFileName}
+          disabled={isDisabled}
+          compact
+        />
+      ) : null}
+      {generatingVideo ? (
+        <SceneMediaGenerationProgress
+          variant="video"
+          progress={videoProgress}
+          layout="minimal"
+          actionPending={generationActionPending}
+          onStop={onStopGeneration}
+        />
+      ) : (
+        <Button
+          onClick={handleClickGenerate}
+          icon={<AiOutlineReload />}
+          placement="bottom"
+          className={`${INLINE_LIST_TOOLBAR_BTN} text-orange`}
+          iconClassName="text-base"
+          tooltip={t("Tạo lại")}
+        />
+      )}
+      {renderUploadGalleryButtons(true)}
+    </>
+  );
 
   const handleClickGenerate = () => {
     if (!isPromptToVideo && !hasImage) {
@@ -193,6 +248,7 @@ export function SceneCardVideoTab({
   const canClickVideo = !!videoSrc && isVideoFrameReady && !isDisabled;
 
   const videoMimeType = generatedVideo?.mimeType || "video/mp4";
+  const videoFileName = `scene-${sceneNumber || "video"}-video.mp4`;
 
   useEffect(() => {
     const prev = prevVideoSrcRef.current;
@@ -301,6 +357,12 @@ export function SceneCardVideoTab({
     handleTogglePlayPause();
   };
 
+  const handleInlineVideoZoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!videoSrc || isDisabled) return;
+    setShowVideoZoom(true);
+  };
+
   const handleExitFullscreen = async (e?: React.MouseEvent) => {
     e?.preventDefault();
     e?.stopPropagation();
@@ -347,10 +409,24 @@ export function SceneCardVideoTab({
   };
 
   const isPortrait = aspectRatio === "9:16";
-  const previewBoxClass = isPortrait
+  /** Chế độ inline (danh sách MXH): preview nhỏ, nút bên cạnh */
+  const inlineMediaWidthClass = isPortrait ? "w-16 shrink-0" : "w-28 shrink-0";
+  /** Chế độ card (phân cảnh thường): giữ kích thước ban đầu */
+  const cardPreviewBoxClass = isPortrait
     ? "w-[140px] shrink-0 aspect-[9/16]"
     : "w-full max-w-[240px] shrink-0 aspect-video";
-  const videoFileName = `scene-${sceneNumber || "video"}-video.mp4`;
+  const inlinePreviewBoxClass = isPortrait
+    ? `${inlineMediaWidthClass} aspect-[9/16]`
+    : `${inlineMediaWidthClass} aspect-video`;
+  const previewBoxClass = inline ? inlinePreviewBoxClass : cardPreviewBoxClass;
+  const usePaddingFrame = uniformFrame || inline;
+  const mediaStackClass = inline
+    ? "flex flex-row items-center gap-1.5"
+    : "flex flex-col gap-1.5 items-center w-full";
+  const videoColumnClass = inline ? inlineMediaWidthClass : "w-full";
+  const actionToolsClass = inline
+    ? "grid grid-cols-2 gap-1 shrink-0 content-center"
+    : "flex flex-row flex-nowrap gap-1.5 items-center justify-center";
 
   /** Cùng padding aspect với SceneCardImageTab (film) */
   const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
@@ -387,14 +463,131 @@ export function SceneCardVideoTab({
     );
   };
 
+  if (inline) {
+    return (
+      <SceneInlineMediaColumn error={errorMessage}>
+        <div
+          className={`inline-flex flex-col items-stretch gap-0.5 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}
+        >
+        {generatedVideo && videoSrc ? (
+          <SceneInlineListCell
+            aspectRatio={aspectRatio}
+            variant="video"
+            frameClassName="ring-1 ring-purple-400 bg-black"
+            preview={
+              <div className="relative w-full h-full">
+                <video
+                  ref={videoRef}
+                  key={videoSrc}
+                  className={`z-0 w-full h-full object-contain ${
+                    videoSrc && !isDisabled ? "cursor-zoom-in" : "pointer-events-none"
+                  }`}
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  onClick={handleInlineVideoZoom}
+                  onLoadedMetadata={markVideoReady}
+                  onLoadedData={markVideoReady}
+                  onCanPlay={markVideoReady}
+                >
+                  <source src={videoSrc} type={videoMimeType} />
+                </video>
+                {videoSrc && !isDisabled && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20">
+                    <BiPlayCircle className="text-white text-xl opacity-90" />
+                  </div>
+                )}
+                {!isVideoFrameReady && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-purple-50/90 pointer-events-none">
+                    <RiLoader4Line className="text-lg text-purple-400 animate-spin" />
+                  </div>
+                )}
+              </div>
+            }
+            toolbar={renderInlineVideoToolbar()}
+          />
+        ) : generatingVideo ? (
+          <SceneInlineListCell
+            aspectRatio={aspectRatio}
+            variant="video"
+            frameClassName="ring-1 ring-dashed ring-purple-200"
+            preview={
+              <SceneMediaGenerationProgress
+                variant="video"
+                progress={videoProgress}
+                layout="inline-cell"
+                actionPending={generationActionPending}
+                onStop={onStopGeneration}
+              />
+            }
+          />
+        ) : (
+          <SceneInlineListCell
+            aspectRatio={aspectRatio}
+            variant="video"
+            frameClassName="ring-1 ring-dashed ring-gray-200"
+              preview={
+                <button
+                  id={generateButtonId}
+                  type="button"
+                  onClick={handleClickGenerate}
+                  className="w-full h-full flex items-center justify-center bg-gray-50 hover:bg-purple-50 transition-colors"
+                  title={t("Tạo video")}
+                >
+                  <AiOutlineVideoCamera className="text-lg text-purple-300" />
+                </button>
+              }
+            toolbar={
+              <>
+                <Button
+                  onClick={handleClickGenerate}
+                  icon={<AiOutlineVideoCamera />}
+                  placement="bottom"
+                  className={`${INLINE_LIST_TOOLBAR_BTN} text-purple-500`}
+                  iconClassName="text-base"
+                  tooltip={t("Tạo video")}
+                />
+                {renderUploadGalleryButtons(true)}
+              </>
+            }
+          />
+        )}
+        {canAssignVideo ? (
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*,.mp4,.webm,.mov,.mkv,.m4v"
+            className="hidden"
+            onChange={handleFileUpload}
+          />
+        ) : null}
+        {inlineFooter}
+        {videoSrc ? (
+          <VideoDialog
+            videoUrl={videoSrc}
+            isOpen={showVideoZoom}
+            onClose={() => setShowVideoZoom(false)}
+            aspectRatio={aspectRatio}
+          />
+        ) : null}
+        </div>
+      </SceneInlineMediaColumn>
+    );
+  }
+
   return (
-    <div className={`flex flex-col gap-2 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-      <div className="flex items-center justify-center gap-2 group w-full">
+    <div
+      className={`flex flex-col gap-2 ${inline ? "w-full items-center" : ""} ${
+        isDisabled ? "opacity-40 pointer-events-none" : ""
+      }`}
+    >
+      <div className={`flex items-center justify-center gap-2 group ${inline ? "" : "w-full"}`}>
         {generatedVideo ? (
-          <div className="flex flex-col gap-1.5 items-center w-full">
-            <div className="flex flex-col gap-1 items-center w-full">
+          <div className={mediaStackClass}>
+            <div className={`flex flex-col gap-1 items-center ${videoColumnClass}`}>
               {videoSrc ? (
-                uniformFrame ? (
+                usePaddingFrame ? (
                   <div
                     ref={containerRef}
                     className={`relative w-full rounded-md overflow-hidden border-2 border-purple-300 shadow-sm bg-black ${
@@ -580,7 +773,7 @@ export function SceneCardVideoTab({
                   )}
                 </div>
                 )
-              ) : uniformFrame ? (
+              ) : usePaddingFrame ? (
                 renderUniformPlaceholder(
                   <RiVideoFill className="text-purple-400 text-xl" />,
                   { dashedPurple: true }
@@ -593,7 +786,7 @@ export function SceneCardVideoTab({
                 </div>
               )}
             </div>
-            <div className="flex flex-row gap-1.5 items-center justify-center">
+            <div className={actionToolsClass}>
               <GeneratedVideoDownloadButtons
                 video={generatedVideo}
                 fileName={videoFileName}
@@ -603,7 +796,7 @@ export function SceneCardVideoTab({
                 <SceneMediaGenerationProgress
                   variant="video"
                   progress={videoProgress}
-                  layout="compact"
+                  layout={progressLayout}
                   actionPending={generationActionPending}
                   onStop={onStopGeneration}
                 />
@@ -621,17 +814,27 @@ export function SceneCardVideoTab({
             </div>
           </div>
         ) : generatingVideo ? (
-          uniformFrame ? (
-            renderUniformPlaceholder(
-              <SceneMediaGenerationProgress
-                variant="video"
-                progress={videoProgress}
-                layout="card"
-                actionPending={generationActionPending}
-                onStop={onStopGeneration}
-              />,
-              { dashedPurple: true }
-            )
+          inline ? (
+            <SceneMediaGenerationProgress
+              variant="video"
+              progress={videoProgress}
+              layout={loadingProgressLayout}
+              actionPending={generationActionPending}
+              onStop={onStopGeneration}
+            />
+          ) : usePaddingFrame ? (
+            <div className={inline ? inlineMediaWidthClass : "w-full"}>
+              {renderUniformPlaceholder(
+                <SceneMediaGenerationProgress
+                  variant="video"
+                  progress={videoProgress}
+                  layout="card"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />,
+                { dashedPurple: true }
+              )}
+            </div>
           ) : (
             <SceneMediaGenerationProgress
               variant="video"
@@ -641,18 +844,22 @@ export function SceneCardVideoTab({
               onStop={onStopGeneration}
             />
           )
-        ) : uniformFrame ? (
-          <div className="flex flex-col gap-1.5 items-center w-full">
-            {renderUniformPlaceholder(
-              <>
-                <AiOutlineVideoCamera className="text-xl mb-0.5 text-gray-300 group-hover:text-purple-400" />
-                <span className="text-xs font-medium text-gray-400 group-hover:text-purple-500">
-                  {t("Tạo video đơn")}
-                </span>
-              </>,
-              { clickable: true }
-            )}
-            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+        ) : usePaddingFrame ? (
+          <div className={mediaStackClass}>
+            <div className={inline ? inlineMediaWidthClass : "w-full"}>
+              {renderUniformPlaceholder(
+                <>
+                  <AiOutlineVideoCamera className="text-xl mb-0.5 text-gray-300 group-hover:text-purple-400" />
+                  {!inline && (
+                    <span className="px-1 text-10 font-medium text-center text-gray-400 group-hover:text-purple-500">
+                      {t("Tạo video đơn")}
+                    </span>
+                  )}
+                </>,
+                { clickable: true }
+              )}
+            </div>
+            <div className={actionToolsClass}>
               <Button
                 onClick={handleClickGenerate}
                 icon={<AiOutlineVideoCamera />}

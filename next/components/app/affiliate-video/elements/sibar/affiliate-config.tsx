@@ -17,6 +17,7 @@ import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } fro
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { formatSocialPostHeaderTemplate, useAutoPostSocialSettings } from "../../shared/auto-post-social";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -47,6 +48,9 @@ export const AffiliateConfig = ({
   const isImagesToVideo = activeScriptTab === ElementScriptTabEnum.imagesToVideo;
   const isVideoToVideo = activeScriptTab === ElementScriptTabEnum.videoToVideo;
   const isElementBatchMode = activeScriptTab === ElementScriptTabEnum.batch;
+  const { settings: autoPostSettings, hydrated: autoPostHydrated } = useAutoPostSocialSettings();
+  const autoPostEnabled =
+    isElementBatchMode && autoPostHydrated && autoPostSettings.enabled;
 
   const actionImageType = elementFormConfig?.actionImageType ?? ActionImageEnum.auto;
   const isSequentialImageMode =
@@ -185,7 +189,11 @@ export const AffiliateConfig = ({
                 id="scene-prompt-list"
                 className="border-gray-200 min-h-[200px]"
                 maxRows={10}
-                placeholder={`${t("Mỗi dòng xuống hàng (Enter) là một phân cảnh")}:\n${t("Mô tả cảnh đầu")}...\n${t("Mô tả cảnh hai")}...\n${t("Mô tả cảnh ba")}...`}
+                placeholder={
+                  autoPostEnabled
+                    ? `${t("Mỗi nhóm bài đăng MXH bắt đầu bằng dòng")}:\n${formatSocialPostHeaderTemplate()}\n${t("prompt1")}\n${t("prompt2")}\n${formatSocialPostHeaderTemplate()}\n${t("prompt3")}`
+                    : `${t("Mỗi dòng xuống hàng (Enter) là một phân cảnh")}:\n${t("Mô tả cảnh đầu")}...\n${t("Mô tả cảnh hai")}...\n${t("Mô tả cảnh ba")}...`
+                }
                 value={elementFormConfig?.prompt}
                 onChange={(v) => patchConfig && patchConfig({ prompt: v })}
               />

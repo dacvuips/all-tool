@@ -22,6 +22,9 @@ export enum AiProviderKeyEnum {
   SEE_DANCE_KEY = "SEE_DANCE_KEY",
   GOOGLE_LABS_API_KEY = "GOOGLE_LABS_API_KEY",
   CHATGPT_GATEWAY_KEY = "CHATGPT_GATEWAY_KEY",
+  YOUTUBE_OAUTH_KEY = "YOUTUBE_OAUTH_KEY",
+  FACEBOOK_OAUTH_KEY = "FACEBOOK_OAUTH_KEY",
+  TIKTOK_OAUTH_KEY = "TIKTOK_OAUTH_KEY",
 }
 
 // ─── Repository ───────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@
  * Tái sử dụng cho: single, trending, copy-video modules
  * className only – Tailwind CSS, no inline styles
  */
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AiOutlineReload } from "react-icons/ai";
 import {
@@ -17,13 +17,19 @@ import {
   RiUploadCloud2Line,
 } from "react-icons/ri";
 import { Button } from "../../../shared/utilities/form";
+import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
 import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
-import { buildSceneImageFileName, getGeneratedImagePreviewSrc, isGeneratedImageReadyForUi } from "./generatedMediaUtils";
+import { buildSceneImageFileName, getGeneratedImagePreviewSrc, hasGeneratedImageData, isGeneratedImageReadyForUi } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+import {
+  INLINE_LIST_TOOLBAR_BTN,
+  SceneInlineListCell,
+  SceneInlineMediaColumn,
+} from "./scene-inline-list-media";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
@@ -77,6 +83,8 @@ export interface SceneCardImageTabProps {
    * Tool mặc định: false (empty h-20 như cũ).
    */
   uniformFrame?: boolean;
+  /** Gộp preview + nút thành 1 hàng (danh sách MXH) */
+  inline?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -103,9 +111,11 @@ export function SceneCardImageTab({
   onStopGeneration,
   generationActionPending = false,
   uniformFrame = false,
+  inline = false,
 }: SceneCardImageTabProps) {
   const { t } = useTranslation();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [previewImage, setPreviewImage] = useState("");
 
   /** Xử lý upload ảnh từ file input */
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,55 +135,129 @@ export function SceneCardImageTab({
   };
 
   const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
+  const progressLayout = inline ? "inline-cell" : "compact";
+  const loadingProgressLayout = inline ? "inline-cell" : "card";
   const imagePaddingTop = `${paddingPct}%`;
+  const isPortrait = aspectRatio === "9:16";
+  /** List/inline: cùng width với SceneCardVideoTab */
+  const mediaBoxClass = isPortrait ? "w-16 shrink-0" : "w-28 shrink-0";
+  /** inline: ảnh trái + icon phải (2×2); card: ảnh trên + icon dưới */
+  const mediaStackClass = inline
+    ? "flex flex-row items-center gap-1.5"
+    : "flex flex-col gap-1.5 items-center w-full";
+  const actionToolsClass = inline
+    ? "grid grid-cols-2 gap-1 shrink-0 content-center"
+    : "flex flex-row flex-nowrap gap-1.5 items-center justify-center";
   // Chỉ coi là có ảnh thật khi đã có mediaBlob/base64 — URL remote (sau clear WM chưa blob) vẫn giữ loading.
   const imageReady = isGeneratedImageReadyForUi(generatedImage);
-  const showImageLoading = generatingImage || (!!generatedImage && !imageReady);
-  /** Khung rỗng / loading khớp kích thước khung ảnh */
-  const renderUniformPlaceholder = (inner: React.ReactNode, clickable?: boolean) => (
+  const imagePreviewSrc = generatedImage ? getGeneratedImagePreviewSrc(generatedImage) : null;
+  const canShowInlineImage =
+    !!generatedImage && hasGeneratedImageData(generatedImage) && !!imagePreviewSrc;
+  const showImageLoading =
+    generatingImage || (!!generatedImage && !imageReady && !canShowInlineImage);
+
+  const handleOpenImageZoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (imagePreviewSrc) setPreviewImage(imagePreviewSrc);
+  };
+
+  /** Khung padding-aspect cố định (list + film) — đồng kích thước ảnh/video */
+  const renderAspectFrame = (
+    inner: React.ReactNode,
+    frameClass: string,
+    opts?: { onClick?: () => void }
+  ) => (
     <div className="relative w-full">
       <div style={{ paddingTop: imagePaddingTop }} className="w-full" />
-      {clickable ? (
+      {opts?.onClick ? (
         <button
           id={generateButtonId}
           type="button"
-          onClick={onGenerateImage}
-          className="absolute inset-0 flex flex-col justify-center items-center w-full h-full bg-gray-50 rounded-md border-2 border-gray-200 border-dashed transition-all cursor-pointer hover:border-pink-300 hover:bg-pink-50 group"
+          onClick={opts.onClick}
+          className={`absolute inset-0 flex flex-col justify-center items-center w-full h-full rounded-md border-2 border-dashed transition-all cursor-pointer group ${frameClass}`}
         >
           {inner}
         </button>
       ) : (
-        <div className="absolute inset-0 flex flex-col justify-center items-center w-full h-full bg-gray-50 rounded-md border-2 border-pink-200 border-dashed">
+        <div
+          className={`absolute inset-0 flex flex-col justify-center items-center w-full h-full rounded-md border-2 border-dashed ${frameClass}`}
+        >
           {inner}
         </div>
       )}
     </div>
   );
 
+  /** Khung rỗng / loading khớp kích thước khung ảnh */
+  const renderUniformPlaceholder = (inner: React.ReactNode, clickable?: boolean) =>
+    renderAspectFrame(
+      inner,
+      clickable
+        ? "bg-gray-50 border-gray-200 hover:border-pink-300 hover:bg-pink-50"
+        : "bg-gray-50 border-pink-200",
+      clickable ? { onClick: onGenerateImage } : undefined
+    );
+
   /** Upload + Gallery — dùng khi đã có ảnh hoặc empty (chưa gen vẫn gán ảnh) */
-  const renderUploadGalleryButtons = () => (
+  const renderUploadGalleryButtons = (compact?: boolean) => (
     <>
       <Button
         onClick={() => fileInputRef.current?.click()}
         icon={<RiUploadCloud2Line />}
         placement="bottom"
-        className="w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
-        iconClassName="text-xl font-bold"
+        className={
+          compact
+            ? `${INLINE_LIST_TOOLBAR_BTN} text-blue-500`
+            : "w-8 h-8 text-blue-500 bg-blue-50 rounded-lg"
+        }
+        iconClassName={compact ? "text-base" : "text-xl font-bold"}
         tooltip={t("Upload ảnh")}
       />
       <Button
         onClick={onOpenGallery}
         icon={<RiGalleryLine />}
         placement="bottom"
-        className="w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
-        iconClassName="text-xl font-bold"
+        className={
+          compact
+            ? `${INLINE_LIST_TOOLBAR_BTN} text-purple-500`
+            : "w-8 h-8 text-purple-500 bg-purple-50 rounded-lg"
+        }
+        iconClassName={compact ? "text-base" : "text-xl font-bold"}
         tooltip={t("Chọn từ Gallery")}
       />
     </>
   );
 
+  const renderInlineImageToolbar = () => (
+    <>
+      {generatingImage ? (
+        <SceneMediaGenerationProgress
+          variant="image"
+          progress={imageProgress}
+          layout="minimal"
+          actionPending={generationActionPending}
+          onStop={onStopGeneration}
+        />
+      ) : (
+        <Button
+          onClick={onGenerateImage}
+          icon={<AiOutlineReload />}
+          placement="bottom"
+          className={`${INLINE_LIST_TOOLBAR_BTN} text-orange`}
+          iconClassName="text-base"
+          tooltip={t("Tạo lại")}
+        />
+      )}
+      {renderUploadGalleryButtons(true)}
+    </>
+  );
+
   return (
-    <div className={`flex flex-col gap-3 ${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
+    <div
+      className={`flex flex-col ${inline ? "gap-0 w-full items-start" : "gap-3"} ${
+        isDisabled ? "opacity-40 pointer-events-none" : ""
+      }`}
+    >
       {/* ── Origin Thumbnail (copy-video / storyboard) ── */}
       {(originThumbnailUrl || originThumbnailLoading) && (
         <div className="flex flex-col">
@@ -205,22 +289,137 @@ export function SceneCardImageTab({
       )}
 
       {/* ── Generated Image section ── */}
-      <div className="flex gap-2 justify-center items-center group w-full">
-        {imageReady && generatedImage ? (
-          <div className="flex flex-col gap-1.5 items-center w-full">
-            {/* Ảnh đã generate — tỷ lệ theo aspectRatio (16:9 → 56.25%, 9:16 → 177.78%) */}
-            <div className="relative w-full rounded-md overflow-hidden border-2 border-transparent transition-all hover:border-primary hover:shadow-lg">
-              <Img
-                key={getGeneratedImagePreviewSrc(generatedImage) || sceneNumber}
-                showImageOnClick
-                lazyload={false}
-                percent={paddingPct}
-                src={getGeneratedImagePreviewSrc(generatedImage)}
-                alt={`Scene ${sceneNumber}`}
-                className="overflow-hidden w-full rounded-md border border-green-300 border-dashed shadow-sm object-cover"
-              />
+      <div className={`flex gap-2 ${inline ? "justify-start items-start" : "justify-center items-center"} group w-full`}>
+        {inline ? (
+          <SceneInlineMediaColumn error={errorMessage}>
+            {canShowInlineImage && generatedImage ? (
+            <SceneInlineListCell
+              aspectRatio={aspectRatio}
+              variant="image"
+              frameClassName="ring-1 ring-green-400"
+              preview={
+                <button
+                  type="button"
+                  onClick={handleOpenImageZoom}
+                  title={t("Phóng to")}
+                  className="relative w-full h-full cursor-zoom-in border-0 p-0 bg-transparent block"
+                >
+                  <img
+                    key={imagePreviewSrc || sceneNumber}
+                    src={imagePreviewSrc || undefined}
+                    alt={`Scene ${sceneNumber}`}
+                    className="w-full h-full object-cover pointer-events-none"
+                  />
+                  {slotAssignCount > 0 && onAssignToSlot && (
+                    <div className="absolute top-0 left-0 z-20 flex flex-wrap gap-0.5 p-0.5 max-w-full pointer-events-auto">
+                      {Array.from({ length: slotAssignCount }, (_, i) => {
+                        const isAssigned = assignedSlotIndices.includes(i);
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAssignToSlot(i);
+                            }}
+                            title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
+                            className={`flex items-center justify-center min-w-4 h-4 rounded text-9 font-bold shadow ${
+                              isAssigned
+                                ? "bg-white ring-1 ring-green-500 text-green-600"
+                                : "bg-black/70 text-white"
+                            }`}
+                          >
+                            {isAssigned ? <RiCheckLine className="text-9" /> : i + 1}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </button>
+              }
+              toolbar={
+                <>
+                  <GeneratedImageDownloadButtons
+                    image={generatedImage}
+                    fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
+                    disabled={isDisabled}
+                    compact
+                  />
+                  {renderInlineImageToolbar()}
+                </>
+              }
+            />
+          ) : showImageLoading ? (
+            <SceneInlineListCell
+              aspectRatio={aspectRatio}
+              variant="image"
+              frameClassName="ring-1 ring-dashed ring-pink-200"
+              preview={
+                <SceneMediaGenerationProgress
+                  variant="image"
+                  progress={imageProgress}
+                  layout="inline-cell"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />
+              }
+            />
+          ) : (
+            <SceneInlineListCell
+              aspectRatio={aspectRatio}
+              variant="image"
+              frameClassName="ring-1 ring-dashed ring-gray-200"
+              preview={
+                <button
+                  id={generateButtonId}
+                  type="button"
+                  onClick={onGenerateImage}
+                  className="w-full h-full flex items-center justify-center bg-gray-50 hover:bg-pink-50 transition-colors"
+                  title={t("Tạo ảnh")}
+                >
+                  <RiMagicFill className="text-lg text-pink-300" />
+                </button>
+              }
+              toolbar={
+                <>
+                  <Button
+                    onClick={onGenerateImage}
+                    icon={<RiMagicFill />}
+                    placement="bottom"
+                    className={`${INLINE_LIST_TOOLBAR_BTN} text-pink-500`}
+                    iconClassName="text-base"
+                    tooltip={t("Tạo ảnh")}
+                  />
+                  {renderUploadGalleryButtons(true)}
+                </>
+              }
+            />
+          )}
+          </SceneInlineMediaColumn>
+        ) : imageReady && generatedImage ? (
+          <div className={mediaStackClass}>
+            {/* Ảnh đã generate — cùng padding-aspect với khung video */}
+            <div className={`relative ${inline ? mediaBoxClass : "w-full"}`}>
+              <div className="relative w-full overflow-hidden rounded-md border-2 border-green-300 border-dashed shadow-sm transition-all hover:border-primary hover:shadow-lg">
+                <div style={{ paddingTop: imagePaddingTop }} className="w-full" />
+                <img
+                  key={getGeneratedImagePreviewSrc(generatedImage) || sceneNumber}
+                  src={getGeneratedImagePreviewSrc(generatedImage) || undefined}
+                  alt={`Scene ${sceneNumber}`}
+                  className="absolute inset-0 w-full h-full object-cover cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const src = getGeneratedImagePreviewSrc(generatedImage);
+                    if (src) setPreviewImage(src);
+                  }}
+                />
+              </div>
               {slotAssignCount > 0 && onAssignToSlot && (
-                <div className="absolute top-0 left-0 z-10 flex gap-1.5 p-1">
+                <div
+                  className={`absolute top-0 left-0 z-20 flex flex-wrap gap-1 p-1 ${
+                    inline ? "max-w-full" : ""
+                  }`}
+                >
                   {Array.from({ length: slotAssignCount }, (_, i) => {
                     const isAssigned = assignedSlotIndices.includes(i);
                     return (
@@ -232,13 +431,19 @@ export function SceneCardImageTab({
                           onAssignToSlot(i);
                         }}
                         title={t("Gắn vào ô ảnh {{n}}", { n: i + 1 })}
-                        className={`flex items-center gap-0.5 min-w-[28px] h-7 px-1.5 rounded-md text-sm font-bold shadow-md transition-all ${
+                        className={`flex items-center gap-0.5 rounded-md font-bold shadow-md transition-all ${
+                          inline
+                            ? "min-w-5 h-5 px-1 text-10"
+                            : "min-w-[28px] h-7 px-1.5 text-sm"
+                        } ${
                           isAssigned
                             ? "bg-white ring-2 ring-green-500"
                             : "bg-black hover:bg-gray-900"
                         }`}
                       >
-                        {isAssigned && <RiCheckLine className="text-base text-green-600" />}
+                        {isAssigned && (
+                          <RiCheckLine className={inline ? "text-xs text-green-600" : "text-base text-green-600"} />
+                        )}
                         <span className={isAssigned ? "text-green-600" : "text-white"}>
                           {i + 1}
                         </span>
@@ -248,8 +453,8 @@ export function SceneCardImageTab({
                 </div>
               )}
             </div>
-            {/* Action buttons bên dưới ảnh */}
-            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+            {/* Action: dưới ảnh (card) / bên phải 2×2 (list) */}
+            <div className={actionToolsClass}>
               <GeneratedImageDownloadButtons
                 image={generatedImage}
                 fileName={buildSceneImageFileName(sceneNumber, generatedImage.mimeType)}
@@ -260,7 +465,7 @@ export function SceneCardImageTab({
                 <SceneMediaGenerationProgress
                   variant="image"
                   progress={imageProgress}
-                  layout="compact"
+                  layout={progressLayout}
                   actionPending={generationActionPending}
                   onStop={onStopGeneration}
                 />
@@ -279,15 +484,17 @@ export function SceneCardImageTab({
           </div>
         ) : showImageLoading ? (
           uniformFrame ? (
-            renderUniformPlaceholder(
-              <SceneMediaGenerationProgress
-                variant="image"
-                progress={imageProgress}
-                layout="card"
-                actionPending={generationActionPending}
-                onStop={onStopGeneration}
-              />
-            )
+            <div className={inline ? mediaBoxClass : "w-full"}>
+              {renderUniformPlaceholder(
+                <SceneMediaGenerationProgress
+                  variant="image"
+                  progress={imageProgress}
+                  layout="card"
+                  actionPending={generationActionPending}
+                  onStop={onStopGeneration}
+                />
+              )}
+            </div>
           ) : (
             <SceneMediaGenerationProgress
               variant="image"
@@ -298,18 +505,22 @@ export function SceneCardImageTab({
             />
           )
         ) : uniformFrame ? (
-          /* Empty film: khung Tạo ảnh + Upload / Gallery (chưa có ảnh → không hiện Tạo lại) */
-          <div className="flex flex-col gap-1.5 items-center w-full">
-            {renderUniformPlaceholder(
-              <>
-                <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-2xl mb-0.5" />
-                <span className="text-xs font-medium text-gray-400 group-hover:text-pink-500">
-                  {t("Tạo ảnh")}
-                </span>
-              </>,
-              true
-            )}
-            <div className="flex flex-row gap-1.5 items-center justify-center flex-wrap">
+          /* Empty: khung Tạo ảnh + Upload / Gallery (chưa có ảnh → không hiện Tạo lại) */
+          <div className={mediaStackClass}>
+            <div className={inline ? mediaBoxClass : "w-full"}>
+              {renderUniformPlaceholder(
+                <>
+                  <RiImageFill className="text-gray-300 group-hover:text-pink-400 text-2xl mb-0.5" />
+                  {!inline && (
+                    <span className="text-xs font-medium text-gray-400 group-hover:text-pink-500">
+                      {t("Tạo ảnh")}
+                    </span>
+                  )}
+                </>,
+                true
+              )}
+            </div>
+            <div className={actionToolsClass}>
               <Button
                 onClick={onGenerateImage}
                 icon={<RiMagicFill />}
@@ -345,7 +556,13 @@ export function SceneCardImageTab({
         onChange={handleFileUpload}
       />
 
-      {errorSlot ?? <SceneMediaError message={errorMessage} />}
+      {errorSlot ?? (!inline ? <SceneMediaError message={errorMessage} /> : null)}
+
+      <ImageDialog
+        isOpen={!!previewImage}
+        image={previewImage}
+        onClose={() => setPreviewImage("")}
+      />
     </div>
   );
 }

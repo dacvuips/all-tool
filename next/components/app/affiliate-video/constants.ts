@@ -429,6 +429,8 @@ export interface CopyVideoScene {
   videoVoice?: string;
   product_image_prompt?: string;
   sceneNumber?: number;
+  /** Nhóm đăng MXH (prompt nối thành 1 video) */
+  socialPostGroupId?: string;
 }
 
 export interface CopyVideoAnalysisData {
@@ -450,6 +452,35 @@ export enum ElementScriptTabEnum {
 /** Query param key for element right-panel active tab (value = ElementScriptTabEnum) */
 export const ELEMENT_SCRIPT_TAB_QUERY_KEY = "elementScriptTab";
 
+/** Metadata đăng MXH theo nền tảng (lưu trong scriptData) — map YouTube API */
+export interface SocialPostPlatformFieldsData {
+  title: string;
+  description: string;
+  hashtag: string;
+  link: string;
+  privacyStatus?: string;
+  madeForKids?: string;
+  categoryId?: string;
+}
+
+export interface SocialPostGroupData {
+  id: string;
+  platforms: {
+    youtube: SocialPostPlatformFieldsData;
+    facebook: SocialPostPlatformFieldsData;
+    tiktok: SocialPostPlatformFieldsData;
+  };
+  sceneIds: string[];
+  publish?: {
+    status: "posted" | "ready";
+    videoStorageKey?: string;
+    youtubeUrl?: string;
+    postedAt?: number;
+    videoCount?: number;
+    message?: string;
+  };
+}
+
 export interface ElementAnalysisData {
   scenes: ElementScene[];
   /** Danh sách riêng tab Images to video */
@@ -460,6 +491,8 @@ export interface ElementAnalysisData {
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;
+  /** Nhóm metadata đăng MXH (tab Hàng loạt + auto post) */
+  socialPostGroups?: SocialPostGroupData[];
 }
 
 export interface ElementHistoryItem {
@@ -502,9 +535,9 @@ export interface ElementScene {
   videoVoice?: string;
   product_image_prompt?: string;
   sceneNumber?: number;
+  /** Nhóm đăng MXH (prompt nối thành 1 video) */
+  socialPostGroupId?: string;
 }
-
-/** A single entry in the scene generation history */
 export interface SceneHistoryItem {
   /** Unique ID for this history entry */
   id: string;

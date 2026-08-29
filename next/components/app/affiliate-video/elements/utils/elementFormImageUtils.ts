@@ -98,8 +98,14 @@ export function base64ToBlobUrl(base64: string, mimeType: string): string {
 
 export function getElementFormImagePreviewSrc(img: ElementFormImage): string | null {
   if (!img.imageBytes && !img.fifeUrl) return null;
+  // Ưu tiên bản copy base64 (gắn từ ảnh generate) — ổn định, không phụ thuộc blob shared.
+  if ((img.imageBytes || "").trim()) {
+    const raw = img.imageBytes.trim();
+    if (raw.startsWith("data:")) return raw;
+    return `data:${img.mimeType || "image/png"};base64,${raw}`;
+  }
   if (img.fifeUrl) return img.fifeUrl;
-  return base64ToBlobUrl(img.imageBytes, img.mimeType || "image/png");
+  return null;
 }
 
 /** Chuyển URL/data URL ảnh tham chiếu (cùng nguồn tab Ảnh) thành payload API. */

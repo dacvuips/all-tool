@@ -18,6 +18,7 @@ export interface SceneElementVideosRowProps {
   savedSlots?: (ElementFormVideo | undefined)[];
   readOnly?: boolean;
   onSlotsChange: (slots: (ElementFormVideo | undefined)[]) => void;
+  hideLabel?: boolean;
 }
 
 export function SceneElementVideosRow({
@@ -27,6 +28,7 @@ export function SceneElementVideosRow({
   savedSlots,
   readOnly = false,
   onSlotsChange,
+  hideLabel = false,
 }: SceneElementVideosRowProps) {
   const { t } = useTranslation();
 
@@ -99,12 +101,14 @@ export function SceneElementVideosRow({
 
   return (
     <div className="relative">
-      <div className="flex justify-between items-center mb-1">
-        <span className="flex items-center gap-1 text-xs font-bold tracking-wide text-violet-600 uppercase">
-          <RiVideoLine className="text-sm" />
-          {t("Video tham chiếu")}:
-        </span>
-      </div>
+      {!hideLabel && (
+        <div className="flex justify-between items-center mb-1">
+          <span className="flex items-center gap-1 text-xs font-bold tracking-wide text-violet-600 uppercase">
+            <RiVideoLine className="text-sm" />
+            {t("Video tham chiếu")}:
+          </span>
+        </div>
+      )}
 
       <div className="flex gap-2 mt-0.5">
         <SceneElementVideoSlot

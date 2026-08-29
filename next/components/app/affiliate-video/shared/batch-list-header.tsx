@@ -17,6 +17,13 @@ import { FreeVoiceSelect } from "../../voice/free-voice-list";
 import { AffiliateRightPanelGuideButton } from "./affiliate-right-panel-guide-button";
 import { AutoDownloadSettingsButton } from "./auto-download-settings-button";
 import {
+  toggleAllSocialPostScenesExpanded,
+  useSocialPostScenesCollapseState,
+} from "./auto-post-social/social-post-scenes-collapse-store";
+import {
+  SocialPostScenesCollapseSwitch,
+} from "./auto-post-social/social-post-scenes-collapse-switch";
+import {
   getAutoDownloadDefault,
   getAutoDownloadImageResolutionDefault,
   getAutoDownloadVideoResolutionDefault,
@@ -152,6 +159,8 @@ export interface BatchListHeaderProps {
   /** Mode Thành phần: hiện select giọng áp dụng cho tất cả phân cảnh */
   showBatchVideoVoice?: boolean;
   onSetAllVideoVoice?: (voiceId: string) => void;
+  /** Tab MXH: switch ẩn/hiện phân cảnh tất cả bài đăng */
+  showSocialPostScenesToggle?: boolean;
   ActionBarComponent: React.ComponentType<{ scenes: any[] }>;
   onOpenIntro?: () => void;
 }
@@ -168,11 +177,13 @@ export function BatchListHeader({
   onSetAllAutoDownloadVideoResolution,
   showBatchVideoVoice = false,
   onSetAllVideoVoice,
+  showSocialPostScenesToggle = false,
   ActionBarComponent,
   onOpenIntro,
 }: BatchListHeaderProps) {
   const { t } = useTranslation();
   const introEnabled = useAffiliateIntroEnabled();
+  const collapseState = useSocialPostScenesCollapseState();
   const defaultAutoDownload = getAutoDownloadDefault();
   const allNoText = scenes.every((s) => s.noText);
   const allNoDownload = scenes.every((s) => s.noDownload ?? defaultAutoDownload);
@@ -203,7 +214,7 @@ export function BatchListHeader({
 
       <ActionBarComponent scenes={scenes} />
 
-      <div id="batch-scene-toolbar" className="flex sticky top-0 z-20 gap-3 items-center px-3 py-1 bg-gray-50 border-b border-gray-200">
+      <div id="batch-scene-toolbar" className="flex sticky top-0 z-30 gap-3 items-center px-3 py-1 bg-gray-50 border-b border-gray-200">
         <div
           id="batch-scene-count"
           className="flex items-center gap-1.5 text-xs font-bold text-gray-500 uppercase tracking-wide"
@@ -222,12 +233,24 @@ export function BatchListHeader({
         </div>
 
         {showBatchVideoVoice && onSetAllVideoVoice ? (
-          <div id="batch-set-all-video-voice" className="w-52 max-w-[14rem] shrink-0">
+          <div id="batch-set-all-video-voice" className="relative z-40 w-52 max-w-[14rem] shrink-0">
             <FreeVoiceSelect
               value={sharedVideoVoice}
               onChange={onSetAllVideoVoice}
               placeholder={t("Chọn giọng tất cả phân cảnh")}
               className="!min-w-0 !flex-none w-full"
+            />
+          </div>
+        ) : null}
+
+        {showSocialPostScenesToggle ? (
+          <div
+            id="batch-social-post-scenes-toggle"
+            className="flex items-center px-2 py-1 bg-white rounded-lg shadow-sm shrink-0"
+          >
+            <SocialPostScenesCollapseSwitch
+              expanded={collapseState.allExpanded}
+              onToggle={toggleAllSocialPostScenesExpanded}
             />
           </div>
         ) : null}

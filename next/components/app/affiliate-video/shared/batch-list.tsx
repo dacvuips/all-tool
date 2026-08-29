@@ -27,6 +27,11 @@ import {
   BatchScenePagination,
 } from "./batch-scene-pagination";
 import { SceneTabKey } from "./scene-card-tabs";
+import {
+  AutoPostSocialGroupedList,
+  SocialPostGroup,
+} from "./auto-post-social/grouped-list";
+import { useAutoPostSocialBatchList } from "./auto-post-social/use-auto-post-social-batch-list";
 
 export type { BatchListHistoryConfig };
 
@@ -94,6 +99,11 @@ export interface SharedBatchListPanelProps {
   showBatchVideoVoice?: boolean;
   /** Tab media mặc định khi mở panel (vd. tab Ảnh) */
   defaultGlobalTab?: SceneTabKey | null;
+  /** Nhóm metadata đăng MXH (lưu scriptData). Chỉ tab Hàng Loạt truyền autoPostListLayout. */
+  socialPostGroups?: SocialPostGroup[];
+  onSocialPostGroupsChange?: (groups: SocialPostGroup[]) => void;
+  /** Chỉ tab Hàng Loạt: bật Tự động đăng MXH thì đổi card → danh sách. Tab khác giữ card. */
+  autoPostListLayout?: boolean;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -115,15 +125,25 @@ export function SharedBatchListPanel({
   lazyMountSceneRows = false,
   showBatchVideoVoice = false,
   defaultGlobalTab = null,
+  socialPostGroups,
+  onSocialPostGroupsChange,
+  autoPostListLayout = false,
 }: SharedBatchListPanelProps) {
   const { t } = useTranslation();
   const [sceneList, setSceneList] = useState<any[]>(scenes);
+  const { listConfig } = useAutoPostSocialBatchList({
+    scenes: sceneList,
+    socialPostGroups,
+    onSocialPostGroupsChange,
+  });
+  const autoPostList = autoPostListLayout ? listConfig : null;
   const [globalTab, setGlobalTab] = useState<SceneTabKey | null>(defaultGlobalTab);
   const [currentPage, setCurrentPage] = useState(1);
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const { customer } = useAuth();
 
-  const paginationEnabled = sceneList.length > BATCH_SCENE_PAGINATION_THRESHOLD;
+  const paginationEnabled =
+    !autoPostList?.enabled && sceneList.length > BATCH_SCENE_PAGINATION_THRESHOLD;
   const totalPages = paginationEnabled
     ? Math.ceil(sceneList.length / BATCH_SCENE_PAGE_SIZE)
     : 1;
@@ -384,6 +404,14 @@ export function SharedBatchListPanel({
       .map((s, i) => ({ ...s, sceneNumber: i + 1 }));
     setSceneList(updated);
     try {
+      if (onSocialPostGroupsChange && socialPostGroups?.length) {
+        onSocialPostGroupsChange(
+          socialPostGroups.map((g) => ({
+            ...g,
+            sceneIds: g.sceneIds.filter((id) => id !== sceneId),
+          }))
+        );
+      }
       await onSyncScenes(updated);
     } catch (err) {
       console.error("[handleDeleteScene] Failed to persist:", err);
@@ -532,11 +560,12 @@ export function SharedBatchListPanel({
           onUpdateElementVideoSlots={handleUpdateElementVideoSlots}
           onDeleteScene={handleDeleteScene}
           forcedTab={globalTab}
+          layout={autoPostList?.enabled ? "row" : "card"}
           {...sceneRowExtraProps}
         />
       );
 
-      if (!lazyMountSceneRows) return row;
+      if (!lazyMountSceneRows || autoPostList?.enabled) return row;
 
       return (
         <LazySceneCard sceneNumber={scene.sceneNumber}>
@@ -550,6 +579,7 @@ export function SharedBatchListPanel({
       hideImageColumn,
       globalTab,
       sceneRowExtraProps,
+      autoPostList?.enabled,
       handleInsert,
       handleUpdateScene,
       handleToggleDisable,
@@ -615,6 +645,7 @@ export function SharedBatchListPanel({
         onSetAllAutoDownloadVideoResolution={handleSetAllAutoDownloadVideoResolution}
         showBatchVideoVoice={showBatchVideoVoice}
         onSetAllVideoVoice={handleSetAllVideoVoice}
+        showSocialPostScenesToggle={!!autoPostList?.enabled}
         onOpenIntro={onOpenIntro}
       />
 
@@ -628,19 +659,28 @@ export function SharedBatchListPanel({
         />
       )}
 
-      {/* ── Scrollable card grid – kéo thả đổi thứ tự scene ── */}
+      {/* ── Danh sách scene: flat grid hoặc nhóm đăng MXH ── */}
       <div id="batch-scene-grid" ref={gridContainerRef} className="flex-1 p-2 sm:p-3">
-        <SortableCardGrid
-          items={paginatedScenes}
-          getItemId={getSceneId}
-          onReorder={handleReorderScenes}
-          renderItem={renderSceneRow}
-          renderDragOverlay={renderSceneDragOverlay}
-          keyPrefix={selectedHistoryId || "default"}
-          gridClassName="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
-          useDragHandle
-          getDragHandleId={getDragHandleId}
-        />
+        {autoPostList?.enabled ? (
+          <AutoPostSocialGroupedList
+            scenes={sceneList}
+            groups={autoPostList.groups}
+            onGroupsChange={autoPostList.onGroupsChange}
+            renderSceneRow={(scene, index) => renderSceneRow(scene, index)}
+          />
+        ) : (
+          <SortableCardGrid
+            items={paginatedScenes}
+            getItemId={getSceneId}
+            onReorder={handleReorderScenes}
+            renderItem={renderSceneRow}
+            renderDragOverlay={renderSceneDragOverlay}
+            keyPrefix={selectedHistoryId || "default"}
+            gridClassName="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6"
+            useDragHandle
+            getDragHandleId={getDragHandleId}
+          />
+        )}
       </div>
 
       {paginationEnabled && (

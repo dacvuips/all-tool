@@ -43,6 +43,7 @@ import {
   runBatchRetryWorkerPool,
 } from "../../shared/batchRetryFailed";
 import { runBoundedMediaBatch } from "../../shared/runBoundedMediaBatch";
+import type { SceneProgressKind } from "../../hook/useSceneProgressBroadcast";
 import { dialogueTextForTts } from "../../shared/voice-export-audio-cache";
 import { useElementApi } from "./useElementApi";
 
@@ -57,6 +58,39 @@ function getSceneMotionPrompt(scene: CopyVideoScene): string {
 function sceneHasVideoPrompt(scene: CopyVideoScene): boolean {
   return !!getSceneMotionPrompt(scene);
 }
+
+function orderScenesByPreferredIds<T extends { id: string }>(
+  scenes: T[],
+  idSet: Set<string>,
+  preferredOrder?: string[]
+): T[] {
+  if (!preferredOrder?.length) return scenes;
+  const byId = new Map(scenes.map((s) => [s.id, s]));
+  const ordered: T[] = [];
+  const seen = new Set<string>();
+  for (const id of preferredOrder) {
+    if (!idSet.has(id)) continue;
+    const scene = byId.get(id);
+    if (scene) {
+      ordered.push(scene);
+      seen.add(id);
+    }
+  }
+  for (const scene of scenes) {
+    if (!seen.has(scene.id)) ordered.push(scene);
+  }
+  return ordered;
+}
+
+export type AutoPostSceneGenOptions = {
+  maxToGenerate?: number;
+  /** Thứ tự ưu tiên — dùng xen kẽ giữa các bài đăng */
+  sceneOrder?: string[];
+  onSceneActive?: (sceneId: string) => void;
+  onSceneComplete?: (sceneId: string) => void;
+  /** Bỏ qua / hủy scene (vd. bài đăng bị dừng riêng trong batch). */
+  shouldAbortScene?: (sceneId: string) => boolean;
+};
 
 export type ElementBatchActionsOptions = {
   /** Tab Thành phần: luôn component mode + 3 slot ảnh tham chiếu khi tạo video */
@@ -79,12 +113,16 @@ export function useCopyVideoBatchActions(
     generateAudioTTS,
     getGeneratedAudio,
     saveGeneratedAudio,
+    cancelImageJob,
+    cancelVideoJob,
   } = useElementApi();
   const {
     addBatchGeneratingSceneId,
     removeBatchGeneratingSceneId,
     addBatchGeneratingVideoSceneId,
     removeBatchGeneratingVideoSceneId,
+    batchGeneratingSceneIdsRef,
+    batchGeneratingVideoSceneIdsRef,
     reportSceneError,
     reportSceneProgress,
     getSceneErrors,
@@ -92,6 +130,7 @@ export function useCopyVideoBatchActions(
     updateScriptData,
     elementFormConfig,
     registerSceneJob,
+    getSceneJob,
   } = useElementContext();
   // Elements: tạo video trực tiếp từ prompt, không bắt buộc ảnh trước
   const isPromptToVideo = true;
@@ -884,6 +923,353 @@ export function useCopyVideoBatchActions(
     videoStopRef.current = true;
   };
 
+  /** Dừng worker pool + hủy job backend đang chạy (auto-post / batch). */
+  const abortActiveBatchGeneration = useCallback(async () => {
+    stopRef.current = true;
+    videoStopRef.current = true;
+    extendStopRef.current = true;
+    retryStopRef.current = true;
+
+    const cancelTasks: Promise<void>[] = [];
+
+    for (const sceneId of [...batchGeneratingSceneIdsRef.current]) {
+      const jobId = getSceneJob(sceneId, "image");
+      if (jobId) {
+        cancelTasks.push(cancelImageJob(jobId).catch(() => undefined));
+      }
+      removeBatchGeneratingSceneId(sceneId);
+      reportSceneProgress?.(sceneId, "image", null);
+      reportSceneError?.(sceneId, "image", t("Đã dừng"));
+    }
+
+    for (const rawId of [...batchGeneratingVideoSceneIdsRef.current]) {
+      const isStitch = rawId.endsWith("::stitch");
+      const kind: SceneProgressKind = isStitch ? "extend" : "video";
+      const jobId = getSceneJob(rawId, kind);
+      if (jobId) {
+        cancelTasks.push(cancelVideoJob(jobId).catch(() => undefined));
+      }
+      removeBatchGeneratingVideoSceneId(rawId);
+      reportSceneProgress?.(rawId, kind, null);
+      reportSceneError?.(rawId, isStitch ? "extend" : "video", t("Đã dừng"));
+      registerSceneJob(rawId, kind, null);
+    }
+
+    await Promise.allSettled(cancelTasks);
+  }, [
+    batchGeneratingSceneIdsRef,
+    batchGeneratingVideoSceneIdsRef,
+    cancelImageJob,
+    cancelVideoJob,
+    getSceneJob,
+    registerSceneJob,
+    removeBatchGeneratingSceneId,
+    removeBatchGeneratingVideoSceneId,
+    reportSceneError,
+    reportSceneProgress,
+    t,
+  ]);
+
+  /** Hủy job đang chạy cho scene cụ thể — không dừng batch khác. */
+  const abortGenerationForSceneIds = useCallback(
+    async (sceneIds: string[]) => {
+      const idSet = new Set(sceneIds);
+      const cancelTasks: Promise<void>[] = [];
+
+      for (const sceneId of [...batchGeneratingSceneIdsRef.current]) {
+        if (!idSet.has(sceneId)) continue;
+        const jobId = getSceneJob(sceneId, "image");
+        if (jobId) {
+          cancelTasks.push(cancelImageJob(jobId).catch(() => undefined));
+        }
+        removeBatchGeneratingSceneId(sceneId);
+        reportSceneProgress?.(sceneId, "image", null);
+        reportSceneError?.(sceneId, "image", t("Đã dừng"));
+      }
+
+      for (const rawId of [...batchGeneratingVideoSceneIdsRef.current]) {
+        const isStitch = rawId.endsWith("::stitch");
+        const baseId = isStitch ? rawId.slice(0, -"::stitch".length) : rawId;
+        if (!idSet.has(rawId) && !idSet.has(baseId)) continue;
+        const kind: SceneProgressKind = isStitch ? "extend" : "video";
+        const jobId = getSceneJob(rawId, kind);
+        if (jobId) {
+          cancelTasks.push(cancelVideoJob(jobId).catch(() => undefined));
+        }
+        removeBatchGeneratingVideoSceneId(rawId);
+        reportSceneProgress?.(rawId, kind, null);
+        reportSceneError?.(rawId, isStitch ? "extend" : "video", t("Đã dừng"));
+        registerSceneJob(rawId, kind, null);
+      }
+
+      await Promise.allSettled(cancelTasks);
+    },
+    [
+      batchGeneratingSceneIdsRef,
+      batchGeneratingVideoSceneIdsRef,
+      cancelImageJob,
+      cancelVideoJob,
+      getSceneJob,
+      registerSceneJob,
+      removeBatchGeneratingSceneId,
+      removeBatchGeneratingVideoSceneId,
+      reportSceneError,
+      reportSceneProgress,
+      t,
+    ]
+  );
+
+  /**
+   * Gen video cho danh sách sceneId (auto-post MXH).
+   * Dùng chung concurrency + stopRef với batch video.
+   */
+  const runGenerateVideosForSceneIds = async (
+    sceneIds: string[],
+    externalStopRef?: { current: boolean },
+    options?: AutoPostSceneGenOptions
+  ): Promise<{
+    completed: number;
+    errors: number;
+    skipped: number;
+    stopped: boolean;
+    quotaSkipped: number;
+  }> => {
+    const idSet = new Set(sceneIds);
+    const eligibleScenes = orderScenesByPreferredIds(
+      scenes.filter((s) => idSet.has(s.id) && !s.disabled && sceneHasVideoPrompt(s)),
+      idSet,
+      options?.sceneOrder
+    );
+    if (eligibleScenes.length === 0) {
+      return { completed: 0, errors: 0, skipped: 0, stopped: false, quotaSkipped: 0 };
+    }
+
+    const maxToGenerate = options?.maxToGenerate;
+    const cappedSceneIds = new Set<string>();
+    let quotaSkipped = 0;
+    if (maxToGenerate != null && maxToGenerate >= 0) {
+      let allowed = 0;
+      for (const scene of eligibleScenes) {
+        if (await getGeneratedVideo(scene.id)) continue;
+        if (allowed < maxToGenerate) {
+          cappedSceneIds.add(scene.id);
+          allowed += 1;
+        } else {
+          quotaSkipped += 1;
+        }
+      }
+    }
+
+    videoStopRef.current = false;
+    const stopRef = {
+      get current() {
+        return !!(externalStopRef?.current || videoStopRef.current);
+      },
+      set current(v: boolean) {
+        videoStopRef.current = v;
+        if (externalStopRef) externalStopRef.current = v;
+      },
+    };
+    setVideoBatchRunning(true);
+    setVideoBatchDone(false);
+
+    try {
+      const result = await runBoundedMediaBatch({
+        items: eligibleScenes,
+        concurrency: VIDEO_CONCURRENCY,
+        stopRef,
+        progress: {
+          setTotal: setVideoBatchTotal,
+          setCompleted: setVideoBatchCompleted,
+          setErrors: setVideoBatchErrors,
+          setSkipped: setVideoBatchSkipped,
+          setCurrentLabel: (label) => setVideoBatchCurrentSceneLabel(label),
+        },
+        getLabel: (scene) => `#${scene.sceneNumber}`,
+        shouldSkip: async (scene) => {
+          if (options?.shouldAbortScene?.(scene.id)) return true;
+          if (await getGeneratedVideo(scene.id)) {
+            options?.onSceneComplete?.(scene.id);
+            return true;
+          }
+          if (maxToGenerate != null && maxToGenerate >= 0 && !cappedSceneIds.has(scene.id)) {
+            return true;
+          }
+          return false;
+        },
+        execute: async (scene) => {
+          if (options?.shouldAbortScene?.(scene.id)) return "skip";
+          options?.onSceneActive?.(scene.id);
+          addBatchGeneratingVideoSceneId(scene.id);
+          reportSceneError?.(scene.id, "video", null);
+          try {
+            const selectedUrls = await getSceneProductImageUrls(scene);
+            const videoParams = await buildElementVideoGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: elementFormConfig?.aspectRatio,
+              serviceImageType: elementFormConfig?.serviceImageType,
+              selectedProductImages: selectedUrls,
+              selectedElementImageSlots: scene.elementImageSlots,
+              elementFormConfig,
+              componentTab,
+            });
+            const videoData = await generateVideo(
+              bindSceneJobEnqueue(
+                {
+                  ...videoParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "video", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "video", msg),
+                },
+                scene.id,
+                "video",
+                registerSceneJob
+              )
+            );
+            if (videoData) {
+              options?.onSceneComplete?.(scene.id);
+            }
+          } catch (err: any) {
+            console.error(`[AutoPostGenVideo] Scene #${scene.sceneNumber} error:`, err);
+            reportSceneError?.(scene.id, "video", err?.message || t("Lỗi tạo video"));
+            throw err;
+          } finally {
+            reportSceneProgress?.(scene.id, "video", null);
+            removeBatchGeneratingVideoSceneId(scene.id);
+          }
+        },
+      });
+      return { ...result, quotaSkipped };
+    } finally {
+      setVideoBatchRunning(false);
+      setVideoBatchDone(true);
+      setVideoBatchCurrentIndex(-1);
+      setVideoBatchCurrentSceneLabel("");
+    }
+  };
+
+  const runGenerateImagesForSceneIds = async (
+    sceneIds: string[],
+    externalStopRef?: { current: boolean },
+    options?: AutoPostSceneGenOptions
+  ): Promise<{
+    completed: number;
+    errors: number;
+    skipped: number;
+    stopped: boolean;
+    quotaSkipped: number;
+  }> => {
+    const idSet = new Set(sceneIds);
+    const eligibleScenes = orderScenesByPreferredIds(
+      scenes.filter((s) => idSet.has(s.id) && !s.disabled && s.visual_prompt),
+      idSet,
+      options?.sceneOrder
+    );
+    if (eligibleScenes.length === 0) {
+      return { completed: 0, errors: 0, skipped: 0, stopped: false, quotaSkipped: 0 };
+    }
+
+    const maxToGenerate = options?.maxToGenerate;
+    const cappedSceneIds = new Set<string>();
+    let quotaSkipped = 0;
+    if (maxToGenerate != null && maxToGenerate >= 0) {
+      let allowed = 0;
+      for (const scene of eligibleScenes) {
+        if (await getGeneratedImage(scene.id)) continue;
+        if (allowed < maxToGenerate) {
+          cappedSceneIds.add(scene.id);
+          allowed += 1;
+        } else {
+          quotaSkipped += 1;
+        }
+      }
+    }
+
+    stopRef.current = false;
+    const imageStopRef = {
+      get current() {
+        return !!(externalStopRef?.current || stopRef.current);
+      },
+      set current(v: boolean) {
+        stopRef.current = v;
+        if (externalStopRef) externalStopRef.current = v;
+      },
+    };
+    setBatchRunning(true);
+    setBatchDone(false);
+
+    try {
+      const result = await runBoundedMediaBatch({
+        items: eligibleScenes,
+        concurrency: IMAGE_CONCURRENCY,
+        stopRef: imageStopRef,
+        progress: {
+          setTotal: setBatchTotal,
+          setCompleted: setBatchCompleted,
+          setErrors: setBatchErrors,
+          setSkipped: setBatchSkipped,
+          setCurrentLabel: (label) => setBatchCurrentSceneLabel(label),
+        },
+        getLabel: (scene) => `#${scene.sceneNumber}`,
+        shouldSkip: async (scene) => {
+          if (options?.shouldAbortScene?.(scene.id)) return true;
+          if (await getGeneratedImage(scene.id)) return true;
+          if (maxToGenerate != null && maxToGenerate >= 0 && !cappedSceneIds.has(scene.id)) {
+            return true;
+          }
+          return false;
+        },
+        execute: async (scene) => {
+          if (options?.shouldAbortScene?.(scene.id)) return "skip";
+          options?.onSceneActive?.(scene.id);
+          addBatchGeneratingSceneId(scene.id);
+          reportSceneError?.(scene.id, "image", null);
+          try {
+            const selectedUrls = await getSceneProductImageUrls(scene);
+            const thumbnailUrl = await getSceneThumbnailUrl(scene.id);
+            const imageParams = await buildElementImageGenerateParams({
+              scene,
+              scriptData,
+              aspectRatio: elementFormConfig?.aspectRatio,
+              serviceImageType: elementFormConfig?.serviceImageType,
+              thumbnailOriginImage: thumbnailUrl,
+              selectedProductImages: selectedUrls,
+              selectedElementImageSlots: scene.elementImageSlots,
+              elementFormConfig,
+              componentTab,
+              noText: scene.noText,
+            });
+            await elementGenerateImage(
+              bindSceneJobEnqueue(
+                {
+                  ...imageParams,
+                  onProgress: (pct) => reportSceneProgress?.(scene.id, "image", pct),
+                  onError: (msg) => reportSceneError?.(scene.id, "image", msg),
+                },
+                scene.id,
+                "image",
+                registerSceneJob
+              )
+            );
+          } catch (err: any) {
+            console.error(`[AutoPostGenImage] Scene #${scene.sceneNumber} error:`, err);
+            reportSceneError?.(scene.id, "image", err?.message || t("Lỗi tạo ảnh"));
+            throw err;
+          } finally {
+            reportSceneProgress?.(scene.id, "image", null);
+            removeBatchGeneratingSceneId(scene.id);
+          }
+        },
+      });
+      return { ...result, quotaSkipped };
+    } finally {
+      setBatchRunning(false);
+      setBatchDone(true);
+      setBatchCurrentIndex(-1);
+      setBatchCurrentSceneLabel("");
+    }
+  };
+
   // ═══════════════════════════════════════════════════════════════════
   // ── handleCreateAllExtendVideo: batch stitch consecutive scene pairs ──
   // ═══════════════════════════════════════════════════════════════════
@@ -1316,6 +1702,10 @@ export function useCopyVideoBatchActions(
     videoBatchSkipped,
     handleCreateAllVideo,
     handleStopVideoBatch,
+    abortActiveBatchGeneration,
+    abortGenerationForSceneIds,
+    runGenerateVideosForSceneIds,
+    runGenerateImagesForSceneIds,
 
     // Batch extend video generation
     extendBatchRunning,

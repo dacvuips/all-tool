@@ -27,6 +27,7 @@ export interface SceneElementImagesRowProps {
   savedSlots?: (ElementFormImage | undefined)[];
   readOnly?: boolean;
   onSlotsChange: ElementImageSlotsChangeHandler;
+  hideLabel?: boolean;
 }
 
 export function SceneElementImagesRow({
@@ -37,6 +38,7 @@ export function SceneElementImagesRow({
   savedSlots,
   readOnly = false,
   onSlotsChange,
+  hideLabel = false,
 }: SceneElementImagesRowProps) {
   const { t } = useTranslation();
 
@@ -67,6 +69,9 @@ export function SceneElementImagesRow({
   );
   const prevActionImageTypeRef = useRef(actionImageType);
 
+  const manualMaskRef = useRef(manualMask);
+  manualMaskRef.current = manualMask;
+
   const savedSlotsKey = useMemo(
     () => (savedSlots?.length ? elementImageSlotsFingerprint(savedSlots) : ""),
     [savedSlots]
@@ -92,27 +97,41 @@ export function SceneElementImagesRow({
   }, [actionImageType, autoMatchedKey]);
 
   useEffect(() => {
-    if (isSequentialImageMode || !savedSlotsKey) return;
+    if (!savedSlotsKey) return;
     const next = [...savedSlots!].slice(0, SLOT_COUNT);
-    setSlots((prev) => (elementImageSlotsFingerprint(prev) === savedSlotsKey ? prev : next));
+    setSlots((prev) =>
+      elementImageSlotsFingerprint(prev) === savedSlotsKey ? prev : next
+    );
     setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots![i]));
-  }, [savedSlotsKey, isSequentialImageMode, savedSlots]);
+  }, [savedSlotsKey, savedSlots]);
 
-  const manualMaskKey = manualMask.map(String).join(",");
-
+  // Chỉ chạy khi nguồn auto-match đổi — không chạy lại theo manualMask
+  // (tránh race ghi đè slot vừa gắn từ parent).
   useEffect(() => {
     setSlots((prev) => {
-      const next = autoMatched.map((img, i) => (manualMask[i] ? prev[i] : img));
-      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next) ? prev : next;
+      const mask = manualMaskRef.current;
+      const next = autoMatched.map((img, i) => (mask[i] ? prev[i] : img));
+      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(next)
+        ? prev
+        : next;
     });
-  }, [autoMatchedKey, manualMaskKey, autoMatched]);
+  }, [autoMatchedKey, autoMatched]);
 
   useSceneElementImagesRowNotify(sceneId, slots, manualMask, onSlotsChange);
 
-  const displaySlots = useMemo(
-    () => resolveSlotsFromCatalog(slots, elementFormConfig),
-    [slots, elementFormConfig, autoMatchedKey]
-  );
+  /** Parent (assign/card/list) là nguồn sự thật khi đã có ảnh — tránh race state nội bộ làm slot trống. */
+  const displaySlots = useMemo(() => {
+    const merged = Array.from({ length: SLOT_COUNT }, (_, i) => {
+      const saved = savedSlots?.[i];
+      const local = slots[i];
+      const savedHasMedia = !!(saved?.imageBytes || saved?.fifeUrl);
+      const localHasMedia = !!(local?.imageBytes || local?.fifeUrl);
+      if (savedHasMedia) return saved;
+      if (localHasMedia) return local;
+      return saved ?? local ?? autoMatched[i];
+    });
+    return resolveSlotsFromCatalog(merged, elementFormConfig);
+  }, [savedSlots, slots, elementFormConfig, autoMatched, autoMatchedKey]);
 
   const handleSlotChange = useCallback((index: number, value: ElementFormImage | undefined) => {
     setManualMask((mask) => {
@@ -131,19 +150,21 @@ export function SceneElementImagesRow({
   const filledCount = slots.filter(Boolean).length;
 
   return (
-    <div className="relative">
-      <div className="flex justify-between items-center">
-        {" "}
-        <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
-          {t("Ảnh tham chiếu")}:
-        </span>
-        {filledCount > 0 && (
-          <span className="text-9 text-blue-500 mt-0.5 block">
-            {t("Đã gắn")} {filledCount}/{SLOT_COUNT}
+    <div className="relative shrink-0">
+      {!hideLabel && (
+        <div className="flex justify-between items-center">
+          {" "}
+          <span className="mr-1 text-xs font-bold tracking-wide text-blue-600 uppercase">
+            {t("Ảnh tham chiếu")}:
           </span>
-        )}
-      </div>
-      <div className="flex gap-2 mt-1">
+          {filledCount > 0 && (
+            <span className="text-9 text-blue-500 mt-0.5 block">
+              {t("Đã gắn")} {filledCount}/{SLOT_COUNT}
+            </span>
+          )}
+        </div>
+      )}
+      <div className="mt-1 flex flex-nowrap gap-2">
         {Array.from({ length: SLOT_COUNT }, (_, i) => (
           <SceneElementImageSlot
             key={i}

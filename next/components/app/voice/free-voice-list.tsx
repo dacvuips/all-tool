@@ -18,6 +18,8 @@ type SharedProps = {
   className?: string;
   /** Placeholder khi chưa chọn (mặc định: "Chọn giọng") */
   placeholder?: string;
+  /** Danh sách MXH — gọn, không nền icon */
+  compact?: boolean;
 };
 
 function normalizeVoiceValue(value?: string | null): string {
@@ -33,6 +35,7 @@ export function FreeVoiceSelect({
   disabled = false,
   className = "",
   placeholder,
+  compact = false,
 }: SharedProps) {
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -58,7 +61,7 @@ export function FreeVoiceSelect({
   };
 
   return (
-    <div ref={rootRef} className={`relative min-w-[10rem] flex-1 ${className}`}>
+    <div ref={rootRef} className={`relative ${compact ? "min-w-0" : "min-w-[10rem] flex-1"} ${className}`}>
       <button
         type="button"
         disabled={disabled}
@@ -66,22 +69,28 @@ export function FreeVoiceSelect({
         onClick={() => {
           if (!disabled) setOpen((v) => !v);
         }}
-        className={`w-full flex items-center gap-1.5 text-left text-xs bg-white border rounded-lg py-1.5 pl-2 pr-2 shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-pink-300 focus:border-pink-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`w-full flex items-center gap-1 text-left bg-white border rounded-md shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-pink-300 focus:border-pink-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+          compact ? "py-0.5 pl-1 pr-1 text-10" : "gap-1.5 text-xs py-1.5 pl-2 pr-2 rounded-lg"
+        } ${
           selected
             ? "border-pink-300 text-gray-800"
             : "border-gray-200 text-gray-400 hover:border-pink-300"
         }`}
       >
-        <span
-          className={`inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-md ${
-            selected ? "bg-pink-100" : "bg-gray-100"
-          }`}
-        >
-          <MdRecordVoiceOver
-            className={`text-sm ${selected ? "text-pink-500" : "text-gray-400"}`}
-            aria-hidden
-          />
-        </span>
+        {compact ? (
+          <MdRecordVoiceOver className="flex-shrink-0 text-sm text-purple-400" aria-hidden />
+        ) : (
+          <span
+            className={`inline-flex flex-shrink-0 items-center justify-center w-6 h-6 rounded-md ${
+              selected ? "bg-pink-100" : "bg-gray-100"
+            }`}
+          >
+            <MdRecordVoiceOver
+              className={`text-sm ${selected ? "text-pink-500" : "text-gray-400"}`}
+              aria-hidden
+            />
+          </span>
+        )}
         <span className="flex-1 min-w-0 truncate font-medium">
           {selectedLabel || placeholderText}
         </span>
@@ -89,7 +98,9 @@ export function FreeVoiceSelect({
           <span
             role="button"
             tabIndex={0}
-            className="inline-flex flex-shrink-0 items-center justify-center w-5 h-5 rounded-full text-gray-400 hover:text-danger hover:bg-red-50"
+            className={`inline-flex flex-shrink-0 items-center justify-center rounded-full text-gray-400 hover:text-danger hover:bg-red-50 ${
+              compact ? "w-4 h-4" : "w-5 h-5"
+            }`}
             title={t("Xóa giọng")}
             aria-label={t("Xóa giọng")}
             onClick={(e) => {

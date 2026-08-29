@@ -10,6 +10,7 @@ import { IntroGuideKey } from "../../../../../shared/utilities/intro/intro-guide
 import { useAffiliateBatchListIntro } from "../../../shared/use-affiliate-batch-list-intro";
 import { mergeSceneListIntoData, type TabSceneListKey } from "../../../shared/script-tab-scenes";
 import { useElementApi } from "../../hook/useElementApi";
+import { useElementSocialPostGroups } from "../../hook/use-element-social-post-groups";
 import { useElementContext } from "../../providers/element-provider";
 import { ServiceImageEnum } from "../../constants";
 import { BatchActionBar } from "../batch-action-bar";
@@ -38,6 +39,7 @@ export function ImagesToVideoListPanel({
   } = useElementContext();
   const db = useIndexedDB<any>(STORE_NAME.generateElement, DB_NAME.generateElement);
   const { insertScene } = useElementApi();
+  const { socialPostGroups, onSocialPostGroupsChange } = useElementSocialPostGroups();
   const showBatchVideoVoice =
     elementFormConfig?.serviceImageType === ServiceImageEnum.startAddEnd ||
     scriptData?.serviceImageType === ServiceImageEnum.startAddEnd;
@@ -156,6 +158,9 @@ export function ImagesToVideoListPanel({
       lazyMountSceneRows
       showBatchVideoVoice={showBatchVideoVoice}
       onOpenIntro={openIntro}
+      socialPostGroups={socialPostGroups}
+      onSocialPostGroupsChange={onSocialPostGroupsChange}
+      autoPostListLayout
     />
     </>
   );

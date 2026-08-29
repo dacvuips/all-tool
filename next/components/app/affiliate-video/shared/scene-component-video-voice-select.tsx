@@ -10,6 +10,8 @@ type Props = {
   onChange: (voiceId: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Danh sách MXH — ẩn label, thu gọn */
+  compact?: boolean;
 };
 
 export function SceneComponentVideoVoiceSelect({
@@ -17,16 +19,20 @@ export function SceneComponentVideoVoiceSelect({
   onChange,
   disabled = false,
   className = "",
+  compact = false,
 }: Props) {
   const { t } = useTranslation();
   return (
-    <div className={`mt-2 ${className}`}>
-      <div className="mb-1 text-xs font-semibold text-gray-700">{t("Giọng video")}</div>
+    <div className={compact ? `w-full ${className}` : `mt-2 ${className}`}>
+      {!compact && (
+        <div className="mb-1 text-xs font-semibold text-gray-700">{t("Giọng video")}</div>
+      )}
       <FreeVoiceSelect
         value={value}
         onChange={onChange}
         disabled={disabled}
-        placeholder={t("Chọn giọng")}
+        compact={compact}
+        placeholder={compact ? t("Giọng") : t("Chọn giọng")}
       />
     </div>
   );

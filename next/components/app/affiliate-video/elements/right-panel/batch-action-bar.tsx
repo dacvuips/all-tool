@@ -3,6 +3,7 @@
  * BatchActionBar – thanh action buttons trên cùng của Batch List Panel
  * className only – Tailwind CSS, no inline styles
  */
+import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver } from "react-icons/md";
 import {
@@ -18,7 +19,14 @@ import { VoiceExportDialog } from "../../shared/voice-export-dialog";
 import { BatchMediaDownloadDropdown } from "../../shared/batch-download-dropdown";
 import { BatchClearWatermarkDialog } from "../../shared/batch-clear-watermark-dialog";
 import { BatchMergeVideosDropdown } from "../../shared/batch-merge-videos-dropdown";
+import { BatchAutoPostSocialControl } from "../../shared/auto-post-social";
+import { useAutoPostRunState } from "../../shared/auto-post-social/auto-post-social-run-store";
+import { useAutoPostSocialRunner } from "../../shared/auto-post-social/use-auto-post-social-runner";
+import { usePersistSocialPostPublish } from "../../shared/auto-post-social/use-persist-social-post-publish";
+import { useElementSocialPostGroups } from "../hook/use-element-social-post-groups";
 import { CopyVideoScene } from "../../constants";
+import { useAuth } from "../../../../../lib/providers/auth-provider";
+import { CustomerService } from "../../../../../lib/repo/customer/customer.repo";
 import { useCopyVideoBatchActions } from "../hook/useElementBatchActions";
 
 interface BatchActionBarProps {
@@ -29,6 +37,7 @@ interface BatchActionBarProps {
 
 export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
   const { t } = useTranslation();
+  const { customer, setCustomer } = useAuth();
   const {
     // Voice export dialog
     showVoiceExportDialog,
@@ -74,6 +83,10 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     videoBatchSkipped,
     handleCreateAllVideo,
     handleStopVideoBatch,
+    abortActiveBatchGeneration,
+    abortGenerationForSceneIds,
+    runGenerateVideosForSceneIds,
+    runGenerateImagesForSceneIds,
 
     // Batch extend video generation
     extendBatchRunning,
@@ -133,6 +146,49 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
     handleExportPromptCSV,
   } = useCopyVideoBatchActions(scenes, { componentTab });
 
+  const { socialPostGroups, onSocialPostGroupsChange } = useElementSocialPostGroups();
+  const { persistGroupPublish } = usePersistSocialPostPublish({
+    scenes,
+    socialPostGroups,
+    onSocialPostGroupsChange,
+  });
+  const autoPostRunState = useAutoPostRunState();
+  const autoPostRunning = autoPostRunState.running;
+
+  const refreshPackageQuota = useCallback(async () => {
+    try {
+      const info = await CustomerService.customerGetInfo();
+      if (info?.customer) {
+        setCustomer(info.customer);
+        return info.customer.googlePackage ?? null;
+      }
+    } catch {
+      // fallback cache FE
+    }
+    return customer?.googlePackage ?? null;
+  }, [customer?.googlePackage, setCustomer]);
+
+  const autoPostRunner = useAutoPostSocialRunner({
+    scenes,
+    socialPostGroups,
+    runGenerateVideosForSceneIds,
+    runGenerateImagesForSceneIds,
+    getGeneratedVideo,
+    getGeneratedImage,
+    persistGroupPublish,
+    refreshPackageQuota,
+    abortGeneration: abortActiveBatchGeneration,
+    abortGenerationForSceneIds,
+    needsImageBeforeVideo: !componentTab,
+    busy:
+      !autoPostRunning &&
+      (batchRunning ||
+        videoBatchRunning ||
+        extendBatchRunning ||
+        retryRunning ||
+        mergingVideos),
+  });
+
   const actions = [
     {
       id: "batch-create-img",
@@ -144,7 +200,7 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
           }`,
       color: batchRunning ? "bg-pink-400 cursor-wait" : "bg-pink-500 hover:bg-pink-600",
       method: handleCreateAllImage,
-      disabled: batchRunning,
+      disabled: batchRunning || autoPostRunning,
     },
     ...(batchRunning
       ? [
@@ -168,7 +224,7 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
           }`,
       color: videoBatchRunning ? "bg-purple-400 cursor-wait" : "bg-purple-500 hover:bg-purple-600",
       method: handleCreateAllVideo,
-      disabled: videoBatchRunning || batchRunning,
+      disabled: videoBatchRunning || batchRunning || autoPostRunning,
     },
     ...(videoBatchRunning
       ? [
@@ -177,7 +233,10 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
             icon: <RiCloseLine />,
             label: t("Dừng"),
             color: "bg-red-500 hover:bg-red-600",
-            method: handleStopVideoBatch,
+            method: () => {
+              handleStopVideoBatch();
+              if (autoPostRunning) autoPostRunner.stop();
+            },
             disabled: false,
           },
         ]
@@ -192,7 +251,7 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
           }`,
       color: extendBatchRunning ? "bg-yellow-400 cursor-wait" : "bg-yellow-500 hover:bg-yellow-600",
       method: handleCreateAllExtendVideo,
-      disabled: extendBatchRunning || videoBatchRunning || batchRunning,
+      disabled: extendBatchRunning || videoBatchRunning || batchRunning || autoPostRunning,
     },
     ...(extendBatchRunning
       ? [
@@ -227,7 +286,14 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
       color: retryRunning ? "bg-red-400 cursor-wait" : "bg-red-500 hover:bg-red-600",
       method: handleRetryAllFailed,
       disabled:
-        retryRunning || batchRunning || videoBatchRunning || extendBatchRunning || downloading || downloadingVideo || mergingVideos,
+        retryRunning ||
+        batchRunning ||
+        videoBatchRunning ||
+        extendBatchRunning ||
+        downloading ||
+        downloadingVideo ||
+        mergingVideos ||
+        autoPostRunning,
     },
     ...(retryRunning
       ? [
@@ -344,6 +410,18 @@ export function BatchActionBar({ scenes, componentTab }: BatchActionBarProps) {
               </button>
             );
           })}
+          <BatchAutoPostSocialControl
+            onPlay={autoPostRunner.start}
+            onStop={autoPostRunner.stop}
+            playDisabled={
+              !autoPostRunning &&
+              (batchRunning ||
+                videoBatchRunning ||
+                extendBatchRunning ||
+                retryRunning ||
+                mergingVideos)
+            }
+          />
         </div>
 
         {/* Progress bar – hiển thị khi đang chạy hoặc đã hoàn thành */}

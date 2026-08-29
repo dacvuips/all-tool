@@ -36,7 +36,7 @@ export interface SceneMediaGenerationProgressProps {
   variant: SceneMediaGenerationVariant;
   progress: number;
   actionPending?: boolean;
-  layout?: "compact" | "card";
+  layout?: "compact" | "card" | "minimal" | "inline-cell";
   onStop?: () => void;
 }
 
@@ -50,14 +50,26 @@ export function SceneMediaGenerationProgress({
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const styles = VARIANT_STYLES[variant];
+  const isMinimal = layout === "minimal";
+  const isInlineCell = layout === "inline-cell";
   const isCard = layout === "card";
-  const iconSize = isCard ? "text-xl" : "text-sm";
-  const textSize = isCard ? "text-[10px]" : "text-10";
+  const iconSize = isInlineCell ? "text-sm" : isMinimal ? "text-xs" : isCard ? "text-xl" : "text-sm";
+  const textSize = isInlineCell
+    ? "text-10"
+    : isMinimal
+      ? "text-[9px]"
+      : isCard
+        ? "text-[10px]"
+        : "text-10";
   const showStop = Boolean(onStop) && hovered;
 
-  const shellClass = isCard
-    ? `flex justify-center items-center w-16 min-h-16 rounded-xl border-2 ${styles.border} ${styles.bg}`
-    : `flex justify-center items-center min-h-8 min-w-8 px-2 py-1 rounded-lg border ${styles.border} ${styles.bg}`;
+  const shellClass = isInlineCell
+    ? "flex justify-center items-center w-full h-full"
+    : isMinimal
+      ? "flex justify-center items-center shrink-0"
+      : isCard
+        ? `flex justify-center items-center w-16 min-h-16 rounded-xl border-2 ${styles.border} ${styles.bg}`
+        : `flex justify-center items-center min-h-8 min-w-8 px-2 py-1 rounded-lg border ${styles.border} ${styles.bg}`;
 
   const content = showStop ? (
     <div className="flex flex-col items-center gap-0.5 pointer-events-none">

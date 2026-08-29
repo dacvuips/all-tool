@@ -16,6 +16,7 @@ export function SceneAutoDownloadButton({
   onImageResolutionChange,
   onVideoResolutionChange,
   id,
+  buttonClassName,
 }: {
   disabled?: boolean;
   noDownload?: boolean;
@@ -25,6 +26,7 @@ export function SceneAutoDownloadButton({
   onImageResolutionChange: (resolution: AutoDownloadImageResolution) => void;
   onVideoResolutionChange: (resolution: VideoDownloadResolution) => void;
   id?: string;
+  buttonClassName?: string;
 }) {
   const enabled = noDownload ?? getAutoDownloadDefault();
   const imageResolution =
@@ -42,6 +44,7 @@ export function SceneAutoDownloadButton({
       videoResolution={videoResolution}
       onImageResolutionChange={onImageResolutionChange}
       onVideoResolutionChange={onVideoResolutionChange}
+      buttonClassName={buttonClassName}
     />
   );
 }

@@ -24,6 +24,8 @@ export interface GeneratedVideoDownloadButtonsProps {
   className?: string;
   /** inline: nút + popover; overlay: góc trong video (hover) — giống ảnh 1K/2K/4K */
   variant?: "inline" | "overlay";
+  /** Khối toolbar MXH inline — nút 28×28 trong ô lưới */
+  compact?: boolean;
 }
 
 const OVERLAY_BTN =
@@ -100,6 +102,7 @@ export function GeneratedVideoDownloadButtons({
   disabled = false,
   className,
   variant = "inline",
+  compact = false,
 }: GeneratedVideoDownloadButtonsProps) {
   const { t } = useTranslation();
   const toast = useToast();
@@ -158,19 +161,25 @@ export function GeneratedVideoDownloadButtons({
     );
   }
 
+  const downloadBtnClass = compact
+    ? "w-7 h-7 min-w-[28px] max-w-[28px] min-h-[28px] max-h-[28px] p-0 rounded-md bg-transparent border-0 shadow-none text-success hover:bg-transparent"
+    : "w-8 h-8 rounded-lg bg-success-light text-success";
+
+  const wrapperClass = compact
+    ? "flex items-center justify-center w-7 h-7 min-w-[28px] max-w-[28px] overflow-hidden shrink-0"
+    : className || "flex flex-row gap-1 items-center justify-center";
+
   return (
-    <>
-      <div className={className || "flex flex-row gap-1 items-center justify-center"}>
-        <Button
-          innerRef={downloadTriggerRef}
-          disabled={disabled || isDownloading}
-          className="w-8 h-8 rounded-lg bg-success-light text-success"
-          iconClassName="text-xl font-bold"
-          icon={isDownloading ? <RiLoader4Line className="animate-spin" /> : <HiOutlineArrowDownTray />}
-          tooltip={t("Tải video")}
-          placement="bottom"
-        />
-      </div>
+    <div className={wrapperClass}>
+      <Button
+        innerRef={downloadTriggerRef}
+        disabled={disabled || isDownloading}
+        className={downloadBtnClass}
+        iconClassName={compact ? "text-base" : "text-xl font-bold"}
+        icon={isDownloading ? <RiLoader4Line className="animate-spin" /> : <HiOutlineArrowDownTray />}
+        tooltip={t("Tải video")}
+        placement="bottom"
+      />
 
       <Popover
         reference={downloadTriggerRef}
@@ -201,6 +210,6 @@ export function GeneratedVideoDownloadButtons({
           )}
         </div>
       </Popover>
-    </>
+    </div>
   );
 }

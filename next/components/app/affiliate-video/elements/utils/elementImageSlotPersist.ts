@@ -78,6 +78,21 @@ export function stripSlotsForPersist(
   return slots.map((slot) => {
     if (!slot) return undefined;
 
+    // Ảnh gắn từ generate (bản copy) — giữ imageBytes để preview ổn định.
+    if ((slot.name || "").startsWith("gen-assign|") && slot.imageBytes) {
+      return {
+        name: slot.name,
+        fifeUrl:
+          slot.fifeUrl &&
+          !slot.fifeUrl.startsWith("blob:") &&
+          !slot.fifeUrl.startsWith("data:")
+            ? slot.fifeUrl
+            : "",
+        mimeType: slot.mimeType || "image/png",
+        imageBytes: slot.imageBytes,
+      };
+    }
+
     const catalogHit = resolveImageFromCatalog(slot, config);
     const token = getImageMatchToken(slot);
 
