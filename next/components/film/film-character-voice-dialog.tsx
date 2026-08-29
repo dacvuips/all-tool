@@ -300,10 +300,10 @@ function FilmCharacterVoiceBody({
         <p className="text-10 text-gray-400 m-0">
           {tier === "paid" ? (
             <>
-              {t("Text credit")}: {credits}
+              {t("Voice Credit")}: {credits}
             </>
           ) : (
-            t("Miễn phí — không trừ text credit")
+            t("Miễn phí — không trừ Voice Credit")
           )}
         </p>
       </div>

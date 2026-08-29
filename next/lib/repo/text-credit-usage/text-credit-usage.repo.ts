@@ -21,7 +21,7 @@ export type MicroxVoiceAccount = {
 
 export class TextCreditUsageRepository extends CrudRepository<TextCreditUsage> {
   apiName: string = "TextCreditUsage";
-  displayName: string = t("sử dụng text credit");
+  displayName: string = t("sử dụng Voice Credit");
   shortFragment: string = this.parseFragment(`
     id: String
     createdAt: DateTime

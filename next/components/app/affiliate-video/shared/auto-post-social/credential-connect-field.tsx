@@ -170,10 +170,14 @@ export function CredentialConnectField({
       ) : (
         <>
           {isFacebook && !editing ? (
-            <FacebookConnectButton
-              disabled={saving}
-              onConnected={onOAuthConnected}
-            />
+            <>
+              <FacebookConnectButton disabled={saving} onConnected={onOAuthConnected} />
+              <p className="text-xs leading-relaxed text-gray-500">
+                {t(
+                  "Chưa thấy mục Facebook Login / Pages API trên Meta? Xem tab «Hướng dẫn lấy AccessToken» — hướng dẫn theo giao diện mới (Trường hợp sử dụng → Truy cập API Video trực tiếp)."
+                )}
+              </p>
+            </>
           ) : null}
 
           {hasCred && !editing && (

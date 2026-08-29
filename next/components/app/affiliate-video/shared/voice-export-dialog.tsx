@@ -207,7 +207,7 @@ function TierTabs({
       </div>
       {tier === "paid" && textCredits ? (
         <p className="m-0 text-xs text-gray-500">
-          {t("Text credit")}: <span className="font-semibold text-gray-700">{textCredits}</span>
+          {t("Voice Credit")}: <span className="font-semibold text-gray-700">{textCredits}</span>
         </p>
       ) : null}
     </div>

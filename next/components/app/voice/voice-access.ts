@@ -46,7 +46,7 @@ export function voiceCreateBlockReason(
   const count = customer?.googlePackage?.textCreditCount ?? 0;
   const limit = customer?.googlePackage?.textCreditLimit ?? 0;
   if (remainingTextCredit(count, limit) < 1) {
-    return `Bạn đã hết text credit (${count}/${limit === -1 ? "∞" : limit}). Vui lòng nâng cấp gói hoặc liên hệ admin.`;
+    return `Bạn đã hết Voice Credit (${count}/${limit === -1 ? "∞" : limit}). Vui lòng nâng cấp gói hoặc liên hệ admin.`;
   }
   return "";
 }

@@ -50,7 +50,7 @@ function FreeVoicePickList({
   return (
     <div className="space-y-3 bg-white p-2 rounded-md">
       <p className="text-xs text-gray-500 m-0">
-        {t("Chọn giọng miễn phí — không trừ text credit")}
+        {t("Chọn giọng miễn phí — không trừ Voice Credit")}
       </p>
       <input
         type="search"

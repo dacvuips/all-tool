@@ -169,6 +169,9 @@ interface AutoPostSocialSettingsDialogProps {
   }) => Promise<unknown>;
   removeCredential: (platform: SocialPlatform) => Promise<void>;
   reloadCredentials?: () => void | Promise<void>;
+  /** Ẩn tab hướng dẫn prompt (đăng video đơn / profile) */
+  hidePromptGuide?: boolean;
+  initialPlatform?: SocialPlatform;
 }
 
 export function AutoPostSocialSettingsDialog({
@@ -180,14 +183,26 @@ export function AutoPostSocialSettingsDialog({
   saveCredential,
   removeCredential,
   reloadCredentials,
+  hidePromptGuide = false,
+  initialPlatform,
 }: AutoPostSocialSettingsDialogProps) {
   const { t } = useTranslation();
-  const [activeTab, setActiveTab] = useState<SocialPlatform>("youtube");
+  const [activeTab, setActiveTab] = useState<SocialPlatform>(initialPlatform ?? "youtube");
   const [contentTab, setContentTab] = useState<ContentTab>("credential");
 
   const meta = SOCIAL_PLATFORMS.find((p) => p.id === activeTab)!;
   const platformCfg = settings.platforms[activeTab];
   const credential = credentials[activeTab];
+
+  const visibleContentTabs = hidePromptGuide
+    ? CONTENT_TABS.filter((tab) => tab.id !== "prompt")
+    : CONTENT_TABS;
+
+  useEffect(() => {
+    if (isOpen && initialPlatform) {
+      setActiveTab(initialPlatform);
+    }
+  }, [isOpen, initialPlatform]);
 
   useEffect(() => {
     setContentTab("credential");
@@ -243,7 +258,7 @@ export function AutoPostSocialSettingsDialog({
 
           {/* Tab nội dung */}
           <div className="flex overflow-x-auto gap-1 p-1 mb-4 bg-white rounded-xl border border-gray-100">
-            {CONTENT_TABS.map((tab) => {
+            {visibleContentTabs.map((tab) => {
               const isActive = contentTab === tab.id;
               return (
                 <button

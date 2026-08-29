@@ -55,7 +55,7 @@ function SnapshotCell({ snapshot }: { snapshot?: PackageTransactionSnapshot }) {
     items.push(`Text: ${snapshot.requestCount}/${snapshot.requestLimit ?? "—"}`);
   if (snapshot.textCreditCount !== undefined && snapshot.textCreditCount !== null)
     items.push(
-      `Text credit: ${snapshot.textCreditCount}/${
+      `Voice Credit: ${snapshot.textCreditCount}/${
         snapshot.textCreditLimit === -1 ? "∞" : snapshot.textCreditLimit ?? "—"
       }`
     );

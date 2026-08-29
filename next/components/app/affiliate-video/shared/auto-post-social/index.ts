@@ -5,6 +5,8 @@ export {
 } from "./auto-post-social-run-store";
 export { AutoPostSocialSettingsDialog } from "./auto-post-social-settings-dialog";
 export { BatchAutoPostSocialControl } from "./batch-auto-post-social-control";
+export { SocialPostVideoButton } from "./social-post-video-button";
+export { SocialPostVideoDialog } from "./social-post-video-dialog";
 export * from "./grouped-list";
 export {
   toggleAllSocialPostScenesExpanded,

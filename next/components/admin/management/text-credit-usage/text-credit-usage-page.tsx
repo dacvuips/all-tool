@@ -78,7 +78,7 @@ export function TextCreditUsagePage() {
             )}
           />
           <DataTable.Column
-            label={t("Text credit")}
+            label={t("Voice Credit")}
             render={(item: TextCreditUsage) => <DataTable.CellNumber value={item.amount} />}
           />
           <DataTable.Column

@@ -538,7 +538,7 @@ export function FreeTextToSpeechPanel({
       }
     >
       <p className="text-xs text-gray-500" style={{ color }}>
-        {t("Miễn phí — không trừ text credit")}
+        {t("Miễn phí — không trừ Voice Credit")}
       </p>
       <FreeVoiceSelect value={voice} onChange={setVoice} />
       {onPickFreeVoice ? (

@@ -22,6 +22,7 @@ import {
 import { VideoDialog } from "../../../shared/common/video-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { GeneratedVideoDownloadButtons } from "./generated-video-download-buttons";
+import { SocialPostVideoButton } from "./auto-post-social/social-post-video-button";
 import {
   GeneratedVideoLike,
   getGeneratedVideoPreviewSrc,
@@ -229,6 +230,12 @@ export function SceneCardVideoTab({
           tooltip={t("Tạo lại")}
         />
       )}
+      <SocialPostVideoButton
+        video={generatedVideo}
+        sceneNumber={sceneNumber}
+        disabled={isDisabled}
+        compact
+      />
       {renderUploadGalleryButtons(true)}
     </>
   );
@@ -810,6 +817,11 @@ export function SceneCardVideoTab({
                   tooltip={t("Tạo lại")}
                 />
               )}
+              <SocialPostVideoButton
+                video={generatedVideo}
+                sceneNumber={sceneNumber}
+                disabled={isDisabled}
+              />
               {renderUploadGalleryButtons()}
             </div>
           </div>

@@ -376,7 +376,7 @@ export default function FilmVoicePanel({
                   {readyCount}/{visibleList.length || 0} {t("đã tạo")}
                 </span>
                 <span>·</span>
-                <span>{t("Text credit")}: {credits}</span>
+                <span>{t("Voice Credit")}: {credits}</span>
                 {voiceConfigured ? (
                   <span className="inline-flex items-center px-2 py-0.5 rounded-md text-10 font-semibold bg-green-50 text-green-600 border border-green-100">
                     {t("Đã cấu hình")}

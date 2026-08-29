@@ -12,6 +12,7 @@ import {
   RiExchangeLine,
   RiImageLine,
   RiQuestionLine,
+  RiShareForwardLine,
   RiShoppingCart2Line,
   RiUserHeartLine,
 } from "react-icons/ri";
@@ -23,6 +24,7 @@ import { ProfileMediaGallery } from "./components/media-gallery/profile-media-ga
 import { ProfileNotificationPage } from "./components/notification/profile-notification-page";
 import { ProfileOrderBuyPage } from "./components/order-buy/order-buy-page";
 import { ProfilePackageTransactionPage } from "./components/package-transaction/profile-package-transaction-page";
+import { ProfileSocialPlatforms } from "./components/social-platforms/profile-social-platforms";
 import { ProfileTrainingPage } from "./components/training/training-page";
 import { ProfileMenu } from "./profile-menu";
 
@@ -89,6 +91,7 @@ export function ProfilePage({ ...props }) {
                       "/profile/orders-buy": <ProfileOrderBuyPage />,
                       "/profile/media-gallery": <ProfileMediaGallery />,
                       "/profile/package-transactions": <ProfilePackageTransactionPage />,
+                      "/profile/social-platforms": <ProfileSocialPlatforms />,
                       "/profile/introduce": <ProfileIntroduce />,
                     }[selectedMenu.href]
                   }
@@ -112,6 +115,7 @@ export const ProfileMenuList = () => {
     { label: t("Giao dịch gói"), icon: <RiExchangeLine />, href: "/profile/package-transactions" },
     { label: t("Đơn mua"), icon: <RiShoppingCart2Line />, href: "/profile/orders-buy" },
     { label: t("Thư viện Media"), icon: <RiImageLine />, href: "/profile/media-gallery" },
+    { label: t("Đăng MXH"), icon: <RiShareForwardLine />, href: "/profile/social-platforms" },
     { label: t("Nạp gói"), icon: <RiBankCardLine />, href: "/checkout" },
     // { label: t("API Key"), icon: <RiKey2Line />, href: "/profile/credential" },
     {

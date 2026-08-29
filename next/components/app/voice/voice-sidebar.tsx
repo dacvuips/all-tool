@@ -32,7 +32,7 @@ export function VoiceSidebar({ onClose }: { onClose?: () => void }) {
           <div className="flex flex-col min-w-0">
             <span className="text-base font-bold text-gray-800">{t(active.labelKey)}</span>
             <span className="text-xs text-gray-500 truncate">
-              {showCredits ? `${t("Text credit")}: ${credits}` : t(active.descKey)}
+              {showCredits ? `${t("Voice Credit")}: ${credits}` : t(active.descKey)}
             </span>
           </div>
         </div>

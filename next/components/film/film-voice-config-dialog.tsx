@@ -290,7 +290,7 @@ function FilmVoiceConfigBody({
         </div>
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <p className="text-10 text-gray-400 m-0">
-            {t("Text credit")}: {credits}
+            {t("Voice Credit")}: {credits}
           </p>
           <Button
             primary

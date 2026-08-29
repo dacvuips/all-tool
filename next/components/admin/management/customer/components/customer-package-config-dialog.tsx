@@ -160,14 +160,14 @@ const EDITABLE_FIELDS: {
   },
   {
     key: "textCreditLimit",
-    label: "Giới hạn text credit",
+    label: "Giới hạn Voice Credit",
     icon: <RiMicLine className="text-base" />,
     iconColor: "text-rose-500",
     type: "number",
   },
   {
     key: "textCreditCount",
-    label: "Text credit đã dùng",
+    label: "Voice Credit đã dùng",
     icon: <RiMicLine className="text-base" />,
     iconColor: "text-rose-400",
     type: "number",
@@ -418,7 +418,7 @@ export function CustomerPackageConfigDialog({
                           <div className="flex items-center gap-2">
                             <RiMicLine className="text-base text-rose-500" />
                             <span>
-                              {t("Text credit")}:{" "}
+                              {t("Voice Credit")}:{" "}
                               <strong>{formatNumber(config.textCreditLimit)}</strong>
                             </span>
                           </div>

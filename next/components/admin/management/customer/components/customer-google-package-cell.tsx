@@ -150,7 +150,7 @@ export function GooglePackagePopoverContent({ googlePackage }: { googlePackage?:
         value={`${pkg?.requestCount ?? 0} / ${pkg?.requestLimit ?? 0}`}
       />
       <DetailRow
-        label={t("Text credit")}
+        label={t("Voice Credit")}
         value={`${pkg?.textCreditCount ?? 0} / ${pkg?.textCreditLimit === -1 ? "∞" : pkg?.textCreditLimit ?? 0}`}
       />
       <DetailRow label={t("Luồng video đồng thời")} value={pkg?.videoStreamCount ?? 0} />
@@ -211,7 +211,7 @@ export function CustomerGooglePackageCell({ googlePackage }: { googlePackage?: G
             progressClass={packageStyle.progress}
           />
           <UsageRow
-            label={t("Text credit")}
+            label={t("Voice Credit")}
             count={pkg.textCreditCount}
             limit={pkg.textCreditLimit}
             progressClass={packageStyle.progress}

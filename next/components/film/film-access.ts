@@ -35,7 +35,7 @@ export function canUseFilmFeatures(
   return !filmFeatureBlockReason(customer, marketplaceStopped);
 }
 
-/** Tạo giọng trong Film: Standard+; giọng thu phí thêm kiểm tra text credit. */
+/** Tạo giọng trong Film: Standard+; giọng thu phí thêm kiểm tra Voice Credit. */
 export function filmDialogueVoiceBlockReason(
   customer: Customer | null | undefined,
   marketplaceStopped: boolean,
@@ -47,7 +47,7 @@ export function filmDialogueVoiceBlockReason(
   const count = customer?.googlePackage?.textCreditCount ?? 0;
   const limit = customer?.googlePackage?.textCreditLimit ?? 0;
   if (remainingTextCredit(count, limit) < 1) {
-    return `Bạn đã hết text credit (${count}/${limit === -1 ? "∞" : limit}). Vui lòng nâng cấp gói hoặc liên hệ admin.`;
+    return `Bạn đã hết Voice Credit (${count}/${limit === -1 ? "∞" : limit}). Vui lòng nâng cấp gói hoặc liên hệ admin.`;
   }
   return "";
 }
