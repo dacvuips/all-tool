@@ -48,7 +48,17 @@ export function saveAutoPostSettings(settings: AutoPostSocialSettings) {
     },
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(cleaned));
+  notifyAutoPostSettingsChanged();
+}
+
+export function notifyAutoPostSettingsChanged() {
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent("affiliate-auto-post-settings-changed"));
+  }
+}
+
+export function notifyAutoPostCredentialsChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("affiliate-auto-post-credentials-changed"));
   }
 }

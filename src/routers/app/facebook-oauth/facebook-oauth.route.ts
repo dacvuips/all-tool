@@ -10,7 +10,7 @@ import { Request, Response } from "express";
 import { TOKEN_ROLES } from "../../../constants/role.const";
 import logger from "../../../helpers/logger";
 import { renderFacebookOAuthCallbackHtml } from "../../../facebook-oauth/callback-html";
-import { buildFacebookOAuthUrl } from "../../../facebook-oauth/config";
+import { buildFacebookOAuthUrl, isFacebookOAuthAvailable } from "../../../facebook-oauth/config";
 import { saveFacebookPageCredential } from "../../../facebook-oauth/save-facebook-credential";
 import {
   consumeOAuthState,
@@ -40,6 +40,14 @@ function requireCustomer(context: Context): string {
 }
 
 export default [
+  {
+    method: "get",
+    path: "/api/app/facebook-oauth/status",
+    midd: [],
+    action: async (_req: Request, res: Response) => {
+      res.json({ success: true, available: isFacebookOAuthAvailable() });
+    },
+  },
   {
     method: "get",
     path: "/api/app/facebook-oauth/start",

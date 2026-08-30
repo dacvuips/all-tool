@@ -1,17 +1,14 @@
 /**
- * Hướng dẫn cấu hình Facebook Fanpage — khớp giao diện Meta for Developers mới (Use cases).
+ * Hướng dẫn lấy Page Access Token — khớp giao diện Graph API Explorer (tiếng Việt).
  */
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { RiExternalLinkLine, RiKey2Line } from "react-icons/ri";
 
 const URL = {
-  developers: "https://developers.facebook.com/apps/",
   graphExplorer: "https://developers.facebook.com/tools/explorer/",
-  videoApiDoc: "https://developers.facebook.com/docs/video-api/guides/publishing/",
-  pagesVideoDoc: "https://developers.facebook.com/docs/pages-api/posts/#publish-a-video",
-  pageTokenDoc: "https://developers.facebook.com/docs/pages-api/overview#access-tokens",
-  loginDoc: "https://developers.facebook.com/docs/facebook-login/",
+  tokenDebugger: "https://developers.facebook.com/tools/debug/accesstoken/",
+  developers: "https://developers.facebook.com/apps/",
 } as const;
 
 function ExternalLink({ href, children }: { href: string; children: ReactNode }) {
@@ -51,6 +48,10 @@ function PermCode({ children }: { children: ReactNode }) {
   return <code className="px-1 rounded bg-amber-100">{children}</code>;
 }
 
+function UiLabel({ children }: { children: ReactNode }) {
+  return <strong className="text-amber-950">{children}</strong>;
+}
+
 export function FacebookAccessTokenGuide() {
   const { t } = useTranslation();
 
@@ -59,125 +60,103 @@ export function FacebookAccessTokenGuide() {
       <div className="flex gap-2 items-start">
         <RiKey2Line className="mt-0.5 text-base text-amber-600 shrink-0" />
         <div className="min-w-0 space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-amber-950">
-              {t("Hướng dẫn lấy AccessToken")} — Facebook Fanpage
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-amber-800">
-              {t(
-                "Cách nhanh nhất: tab Credential → bấm Kết nối Facebook → đăng nhập → chọn Fanpage. Phần dưới dành cho admin cấu hình App Meta trước khi dùng nút kết nối."
-              )}
-            </p>
-          </div>
+          <p className="text-sm font-semibold text-amber-950">
+            {t("Hướng dẫn lấy Page Access Token")} — Facebook Fanpage
+          </p>
 
-          <GuideSection title={t("Bước 1 — Tạo App trên Meta for Developers (giao diện mới)")}>
+          <GuideSection title={t("Bước 1 — Mở Graph API Explorer")}>
             <StepList
               items={[
                 <>
                   {t("Truy cập")}{" "}
-                  <ExternalLink href={URL.developers}>Meta for Developers</ExternalLink>{" "}
-                  {t("→ Ứng dụng của tôi → Tạo ứng dụng (Business hoặc Other).")}
+                  <ExternalLink href={URL.graphExplorer}>Graph API Explorer</ExternalLink>
                 </>,
                 <>
-                  {t(
-                    "Vào Bảng điều khiển (Dashboard) → mục Tùy chỉnh ứng dụng và các yêu cầu / Trường hợp sử dụng (Use cases)."
-                  )}
+                  {t("Thanh bên phải →")} <UiLabel>{t("Ứng dụng trên Meta")}</UiLabel>
+                  {t(": chọn app của bạn (vd. app đăng video Fanpage).")}
+                  {t(" Chưa có app →")}{" "}
+                  <ExternalLink href={URL.developers}>Meta for Developers</ExternalLink>
+                  {t(" → tạo app + Use case Video / Quản lý Trang.")}
+                </>,
+              ]}
+            />
+          </GuideSection>
+
+          <GuideSection title={t("Bước 2 — Thêm quyền (tab Quyền)")}>
+            <StepList
+              items={[
+                <>
+                  {t("Thanh bên phải, chọn tab")} <UiLabel>{t("Quyền")}</UiLabel>
+                  {t("(Permissions).")}
                 </>,
                 <>
-                  {t("Thêm và hoàn tất các trường hợp sử dụng liên quan:")}
-                  <ul className="pl-4 mt-1 space-y-1 list-disc">
+                  {t("Bấm")} <UiLabel>{t("Thêm quyền")}</UiLabel>
+                  {t("→ tìm và thêm:")}
+                  <ul className="pl-4 mt-1 space-y-0.5 list-disc">
                     <li>
-                      <strong>{t("Truy cập API Video trực tiếp")}</strong>
-                      {t(" — đăng video lên Fanpage (như trong ảnh Bảng điều khiển).")}
+                      <PermCode>pages_show_list</PermCode>
                     </li>
                     <li>
-                      <strong>{t("Đăng nhập bằng Facebook")}</strong> (
-                      <ExternalLink href={URL.loginDoc}>Facebook Login</ExternalLink>
-                      {t(") — bắt buộc nếu dùng nút Kết nối Facebook trong app.")}
+                      <PermCode>pages_read_engagement</PermCode>
                     </li>
                     <li>
-                      <strong>{t("Quản lý Trang / Pages")}</strong>
-                      {t(" — liệt kê Fanpage và lấy Page Access Token.")}
+                      <PermCode>pages_manage_posts</PermCode>
+                    </li>
+                    <li>
+                      <PermCode>publish_video</PermCode>
+                    </li>
+                    <li>
+                      <PermCode>pages_manage_engagement</PermCode>
+                      {t(" (tuỳ chọn — comment link)")}
                     </li>
                   </ul>
                 </>,
                 <>
-                  {t(
-                    "Lưu ý: Meta đã đổi giao diện — không còn mục Thêm sản phẩm Facebook Login / Pages API như trước. Thay vào đó chọn Trường hợp sử dụng tương ứng trong Bảng điều khiển."
-                  )}
+                  {t("Bấm nút xanh")} <UiLabel>Generate Access Token</UiLabel>
+                  {t("→ đăng nhập Facebook → đồng ý quyền.")}
                 </>,
               ]}
             />
           </GuideSection>
 
-          <GuideSection title={t("Bước 2 — Quyền (Permissions) cần bật")}>
+          <GuideSection title={t("Bước 3 — Lấy Page Access Token đúng Fanpage")}>
             <StepList
               items={[
                 <>
-                  {t("Trong từng trường hợp sử dụng → Permissions / Quyền, bật:")}{" "}
-                  <PermCode>pages_show_list</PermCode>, <PermCode>pages_manage_posts</PermCode>,{" "}
-                  <PermCode>pages_read_engagement</PermCode>,{" "}
-                  <PermCode>pages_manage_engagement</PermCode>.
+                  <UiLabel>{t("Người dùng hoặc Trang")}</UiLabel>
+                  {t("→ chọn")} <strong>{t("tên Fanpage")}</strong>
+                  {t("(không để Mã người dùng).")}
                 </>,
                 <>
-                  {t(
-                    "Nếu App ở chế độ Development: thêm tài khoản Facebook và Fanpage vào vai trò Tester trong"
-                  )}{" "}
-                  <strong>{t("Vai trò trong ứng dụng")}</strong>.
-                </>,
-                <>
-                  {t("Khi đưa lên Production: hoàn tất")}{" "}
-                  <strong>{t("Xét duyệt ứng dụng (App Review)")}</strong>{" "}
-                  {t("cho các quyền trên.")}
+                  {t("Copy")} <UiLabel>{t("Mã truy cập")}</UiLabel>
+                  {t("→ Credential → Lưu.")}
                 </>,
               ]}
             />
+            <p className="mt-1.5 text-xs text-red-800">
+              {t("Không dán token khi còn chọn Mã người dùng — đó là User Token, không đăng được video.")}
+            </p>
           </GuideSection>
 
-          <GuideSection title={t("Bước 3 — Cấu hình OAuth (cho nút Kết nối Facebook)")}>
+          <GuideSection title={t("Bước 4 — Token dài hạn (~60 ngày / không hết hạn Page token)")}>
             <StepList
               items={[
                 <>
-                  {t("Trong App →")} <strong>{t("Đăng nhập bằng Facebook")}</strong>{" "}
-                  {t("→ Cài đặt → Valid OAuth Redirect URIs, thêm:")}
-                  <pre className="px-2 py-1.5 mt-1 text-10 font-mono text-amber-950 break-all bg-white rounded border border-amber-200">
-                    {"{DOMAIN}/api/app/facebook-oauth/callback"}
-                  </pre>
-                  <span className="block mt-1 text-amber-800">
-                    {t("Thay {DOMAIN} bằng domain server (ví dụ https://your-domain.com).")}
-                  </span>
+                  {t("Sau Generate, mở")}{" "}
+                  <ExternalLink href={URL.tokenDebugger}>{t("Access Token Debugger")}</ExternalLink>
+                  {t("→ dán User Token →")} <UiLabel>{t("Extend Access Token")}</UiLabel>
+                  {t("(kéo dài ~60 ngày).")}
                 </>,
                 <>
-                  {t("Đặt biến môi trường server:")}{" "}
-                  <PermCode>FACEBOOK_APP_ID</PermCode>, <PermCode>FACEBOOK_APP_SECRET</PermCode>,{" "}
-                  <PermCode>DOMAIN</PermCode> {t("rồi khởi động lại server.")}
+                  {t("Dán token dài hạn vào ô")} <UiLabel>{t("Mã truy cập")}</UiLabel>
+                  {t("trên Explorer →")} <UiLabel>{t("Người dùng hoặc Trang")}</UiLabel>
+                  {t("→ chọn lại Fanpage → copy")} <UiLabel>{t("Mã truy cập")}</UiLabel>
+                  {t("mới → Lưu.")}
                 </>,
               ]}
             />
-          </GuideSection>
-
-          <GuideSection title={t("Bước 4 — Kết nối Fanpage trong app")}>
-            <StepList
-              items={[
-                <>
-                  {t("Quay lại tab Credential → bấm")} <strong>{t("Kết nối Facebook")}</strong>{" "}
-                  {t("→ đăng nhập Meta → chọn Fanpage cần đăng video.")}
-                </>,
-                <>
-                  {t("Hoặc thủ công: dùng")}{" "}
-                  <ExternalLink href={URL.graphExplorer}>Graph API Explorer</ExternalLink>{" "}
-                  {t("lấy Page Access Token (GET /me/accounts) rồi dán vào ô token.")}
-                </>,
-                <>{t("Không cần nhập Page ID — hệ thống tự lấy từ token khi đăng video.")}</>,
-              ]}
-            />
-            <p className="pt-1 text-xs text-amber-800">
-              {t("Tham khảo:")}{" "}
-              <ExternalLink href={URL.videoApiDoc}>{t("Video API — Publishing")}</ExternalLink>
-              {" · "}
-              <ExternalLink href={URL.pagesVideoDoc}>{t("Pages API — Video")}</ExternalLink>
-              {" · "}
-              <ExternalLink href={URL.pageTokenDoc}>{t("Page Access Tokens")}</ExternalLink>
+            <p className="mt-1.5 text-xs text-amber-800">
+              {t("Page token lấy từ user token dài hạn thường không hết hạn — dùng lâu dài, không cần lấy lại mỗi ngày.")}
             </p>
           </GuideSection>
         </div>

@@ -107,6 +107,7 @@ module.exports = {
   "facebook": {
     "appId": process.env.FACEBOOK_APP_ID || null,
     "appSecret": process.env.FACEBOOK_APP_SECRET || null,
+    "oauthConfigId": process.env.FACEBOOK_OAUTH_CONFIG_ID || null,
   },
   
 }

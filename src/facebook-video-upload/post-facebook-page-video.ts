@@ -12,6 +12,7 @@ import { credentialService } from "../libs/dal/credential";
 import { AiProviderKeyEnum } from "../libs/dal/product";
 import { decryptProviderSecret } from "../packages/encryption/encrypt-provider";
 import { resolveVideoToTempFile } from "../shopee-video-upload/pipeline/resolve-video-file";
+import { assertFacebookPageAccessToken } from "./validate-page-access-token";
 
 export type FacebookPrivacyStatus = "private" | "public" | "unlisted";
 
@@ -54,11 +55,21 @@ function facebookApiErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const ax = err as AxiosError<any>;
     const data = ax.response?.data;
+    const code = data?.error?.code;
     const msg =
       data?.error?.message ||
       data?.error_description ||
       (typeof data?.error === "string" ? data.error : null) ||
       ax.message;
+
+    if (code === 100 && /no permission to publish the video/i.test(String(msg))) {
+      return (
+        "Facebook API: Không có quyền đăng video (#100). " +
+        "Thường do dán User Token thay vì Page Access Token, hoặc thiếu quyền pages_manage_posts / publish_video. " +
+        "Xem Hướng dẫn Facebook → Bước 3: gọi GET /me/accounts → copy access_token của Fanpage."
+      );
+    }
+
     return `Facebook API: ${msg}`;
   }
   if (err instanceof Error) return err.message;
@@ -114,22 +125,18 @@ function buildAffiliateLinkCommentText(link: string): string {
   return `🔗 Link sản phẩm:\n${asString(link)}`;
 }
 
-function buildFacebookVideoUrl(videoId: string): string {
-  return `https://www.facebook.com/watch/?v=${videoId}`;
+function buildFacebookVideoUrl(videoId: string, pageId?: string): string {
+  const id = asString(videoId);
+  const page = asString(pageId);
+  if (page) {
+    return `https://www.facebook.com/${page}/videos/${id}/`;
+  }
+  return `https://www.facebook.com/watch/?v=${id}`;
 }
 
 async function resolvePageIdFromToken(accessToken: string): Promise<string> {
-  const resp = await axios.get(`https://graph.facebook.com/${GRAPH_API_VERSION}/me`, {
-    params: { access_token: accessToken, fields: "id,name" },
-    timeout: 30000,
-  });
-  const pageId = asString(resp.data?.id);
-  if (!pageId) {
-    throw new Error(
-      "Không lấy được Page ID từ token — hãy dùng Page Access Token (không phải User token)"
-    );
-  }
-  return pageId;
+  const info = await assertFacebookPageAccessToken(accessToken);
+  return info.pageId;
 }
 
 async function resolvePageId(
@@ -187,7 +194,7 @@ export async function postFacebookPageVideo(
     throw new Error("Thiếu videoUrl hoặc videoBase64");
   }
 
-  const privacyStatus: FacebookPrivacyStatus = input.privacyStatus || "private";
+  const privacyStatus: FacebookPrivacyStatus = input.privacyStatus || "public";
   const published = resolvePublished(privacyStatus);
   const description = asString(input.description);
   const affiliateLink = asString(input.affiliateLink);
@@ -230,7 +237,7 @@ export async function postFacebookPageVideo(
 
     const result: PostFacebookPageVideoResult = {
       videoId,
-      url: buildFacebookVideoUrl(videoId),
+      url: buildFacebookVideoUrl(videoId, pageId),
       title,
       pageId,
       published,

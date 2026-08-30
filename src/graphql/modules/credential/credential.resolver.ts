@@ -1,8 +1,10 @@
 import { ForbiddenError } from "apollo-server-express";
 import _ from "lodash";
 import { TOKEN_ROLES } from "../../../constants/role.const";
+import { assertFacebookPageAccessToken } from "../../../facebook-video-upload/validate-page-access-token";
 import { Scope } from "../../../libs/dal/authority";
 import { CredentialModel, credentialService, ICredential } from "../../../libs/dal/credential";
+import { AiProviderKeyEnum } from "../../../libs/dal/product";
 import { Context } from "../../../libs/graphql";
 
 const maskCredentialValue = (value?: string) => {
@@ -25,6 +27,13 @@ const maskCredential = (credential: ICredential | null) => {
     updatedAt: doc.updatedAt,
   };
 };
+
+async function validateCustomerFacebookCredential(data: { key?: string; value?: string }) {
+  if (data.key !== AiProviderKeyEnum.FACEBOOK_OAUTH_KEY) return;
+  const value = String(data.value || "").trim();
+  if (!value || value === "****") return;
+  await assertFacebookPageAccessToken(value);
+}
 
 const Query = {
   getAllCredential: async (root: any, args: any, context: Context) => {
@@ -131,6 +140,7 @@ const Mutation = {
     if (existingCredential) {
       throw new ForbiddenError("Credential already exists");
     }
+    await validateCustomerFacebookCredential(data);
     const created = await credentialService.create({
       key: data.key,
       value: data.value,
@@ -158,6 +168,7 @@ const Mutation = {
     if (credential) {
       throw new ForbiddenError("Credential already exists");
     }
+    await validateCustomerFacebookCredential(data);
     const credentialUpdated = await credentialService.updateOneCustomer(id, data, context);
 
     if (!credentialUpdated) {

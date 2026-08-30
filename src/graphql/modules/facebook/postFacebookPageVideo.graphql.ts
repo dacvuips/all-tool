@@ -28,7 +28,7 @@ export default {
       videoBase64: String
       title: String!
       description: String
-      privacyStatus: FacebookPrivacyStatus = private
+      privacyStatus: FacebookPrivacyStatus = public
       """Link affiliate — nối vào mô tả và đăng comment trên video"""
       affiliateLink: String
       """Ghi đè page_id từ credential (tuỳ chọn)"""
@@ -71,7 +71,7 @@ export default {
           throw ErrorHelper.error("Thiếu videoUrl hoặc videoBase64");
         }
 
-        const privacyStatus = (data.privacyStatus || "private") as FacebookPrivacyStatus;
+        const privacyStatus = (data.privacyStatus || "public") as FacebookPrivacyStatus;
         if (!["private", "public", "unlisted"].includes(privacyStatus)) {
           throw ErrorHelper.error("privacyStatus không hợp lệ");
         }

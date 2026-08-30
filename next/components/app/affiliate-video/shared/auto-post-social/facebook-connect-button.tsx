@@ -19,6 +19,7 @@ import {
   startFacebookOAuth,
   type FacebookOAuthPage,
 } from "../../../../../lib/repo/facebook/facebook-oauth.repo";
+import { useToast } from "../../../../../lib/providers/toast-provider";
 
 export function FacebookConnectButton({
   disabled,
@@ -28,6 +29,7 @@ export function FacebookConnectButton({
   onConnected?: () => void | Promise<void>;
 }) {
   const { t } = useTranslation();
+  const toast = useToast();
   const [connecting, setConnecting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -128,6 +130,7 @@ export function FacebookConnectButton({
       setPickerOpen(false);
       setSessionId(null);
       setPages([]);
+      toast.success(t("Đã kết nối Fanpage «{{name}}»", { name: page.name }));
       await onConnected?.();
     } catch (err: any) {
       setError(err?.message || t("Không thể lưu Fanpage"));
@@ -151,9 +154,11 @@ export function FacebookConnectButton({
         {error && !pickerOpen ? (
           <p className="text-xs text-red-600 leading-relaxed">{error}</p>
         ) : null}
-        <p className="text-xs text-gray-400 leading-relaxed">
-          {t("Đăng nhập Facebook và chọn Fanpage — không cần copy token thủ công.")}
-        </p>
+              <p className="text-xs leading-relaxed text-gray-500">
+                {t(
+                  "Đăng nhập Facebook, chọn Fanpage — hệ thống tự lưu Page Access Token. Không cần Graph API Explorer."
+                )}
+              </p>
       </div>
 
       <Dialog

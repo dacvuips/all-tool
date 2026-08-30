@@ -30,6 +30,7 @@ import {
 } from "./types";
 import { YoutubeAccessTokenGuide } from "./youtube-access-token-guide";
 import { FacebookAccessTokenGuide } from "./facebook-access-token-guide";
+import { SocialAccessTokenGuideVideoButton } from "./social-access-token-guide-video-button";
 
 const PLATFORM_ICONS: Record<SocialPlatform, JSX.Element> = {
   youtube: <RiYoutubeFill className="text-base text-red-500" />,
@@ -114,44 +115,51 @@ function PromptGuidePanel({ platform }: { platform: SocialPlatform }) {
 function AccessTokenGuidePanel({ platform }: { platform: SocialPlatform }) {
   const { t } = useTranslation();
 
+  let guide: JSX.Element;
+
   if (platform === "youtube") {
-    return <YoutubeAccessTokenGuide />;
-  }
+    guide = <YoutubeAccessTokenGuide />;
+  } else if (platform === "facebook") {
+    guide = <FacebookAccessTokenGuide />;
+  } else {
+    const steps: Record<"tiktok", string[]> = {
+      tiktok: [
+        t("Đăng ký app trên TikTok for Developers và bật Content Posting API."),
+        t("Hoàn tất OAuth để lấy access_token cho tài khoản TikTok."),
+        t("Dán access_token vào tab Credential."),
+        t("Kiểm tra quyền upload video trước khi chạy tự động đăng."),
+      ],
+    };
 
-  if (platform === "facebook") {
-    return <FacebookAccessTokenGuide />;
-  }
-
-  const steps: Record<"tiktok", string[]> = {
-    tiktok: [
-      t("Đăng ký app trên TikTok for Developers và bật Content Posting API."),
-      t("Hoàn tất OAuth để lấy access_token cho tài khoản TikTok."),
-      t("Dán access_token vào tab Credential."),
-      t("Kiểm tra quyền upload video trước khi chạy tự động đăng."),
-    ],
-  };
-
-  return (
-    <div className="px-4 py-3 bg-amber-50 rounded-xl border border-amber-100">
-      <div className="flex gap-2 items-start">
-        <RiKey2Line className="mt-0.5 text-base text-amber-600 shrink-0" />
-        <div className="space-y-2 min-w-0">
-          <p className="text-sm font-semibold text-amber-900">
-            {t("Hướng dẫn lấy AccessToken")} —{" "}
-            {t(SOCIAL_PLATFORMS.find((p) => p.id === platform)!.label)}
-          </p>
-          <ol className="pl-4 space-y-2 list-decimal">
-            {steps[platform].map((step, i) => (
-              <li key={i} className="text-xs leading-relaxed text-amber-900">
-                {step}
-              </li>
-            ))}
-          </ol>
-          <p className="pt-1 text-xs text-amber-800">
-            {t("Sau khi có token, quay lại tab Credential để lưu và kích hoạt đăng tự động.")}
-          </p>
+    guide = (
+      <div className="px-4 py-3 bg-amber-50 rounded-xl border border-amber-100">
+        <div className="flex gap-2 items-start">
+          <RiKey2Line className="mt-0.5 text-base text-amber-600 shrink-0" />
+          <div className="space-y-2 min-w-0">
+            <p className="text-sm font-semibold text-amber-900">
+              {t("Hướng dẫn lấy AccessToken")} —{" "}
+              {t(SOCIAL_PLATFORMS.find((p) => p.id === platform)!.label)}
+            </p>
+            <ol className="pl-4 space-y-2 list-decimal">
+              {steps[platform].map((step, i) => (
+                <li key={i} className="text-xs leading-relaxed text-amber-900">
+                  {step}
+                </li>
+              ))}
+            </ol>
+            <p className="pt-1 text-xs text-amber-800">
+              {t("Sau khi có token, quay lại tab Credential để lưu và kích hoạt đăng tự động.")}
+            </p>
+          </div>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {guide}
+      <SocialAccessTokenGuideVideoButton platform={platform} />
     </div>
   );
 }

@@ -410,7 +410,9 @@ export function useAutoPostSocialRunner({
               affiliateLink: affiliateLink || undefined,
             });
             publishResult.facebookUrl = result.url;
-            if (result.linkCommentWarning) {
+            if (!result.published) {
+              publishResult.messageParts.push(t("Facebook (chưa công khai — đặt Riêng tư = public)"));
+            } else if (result.linkCommentWarning) {
               publishResult.messageParts.push(t("Facebook (comment link thất bại)"));
             } else if (result.linkCommentId) {
               publishResult.messageParts.push(t("Facebook + comment link"));

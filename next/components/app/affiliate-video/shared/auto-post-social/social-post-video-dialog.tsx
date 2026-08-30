@@ -129,7 +129,15 @@ export function SocialPostVideoDialog({
           affiliateLink,
         });
         setLastResultUrl(result.url);
-        toast.success(t("Đã đăng video lên Facebook"));
+        if (!result.published) {
+          toast.warn(
+            t(
+              "Video đã upload nhưng chưa công khai trên Fanpage (private). Đổi «Riêng tư» sang public rồi đăng lại, hoặc publish thủ công trong Meta Business Suite."
+            )
+          );
+        } else {
+          toast.success(t("Đã đăng video lên Facebook"));
+        }
         if (result.linkCommentWarning) {
           toast.warn(result.linkCommentWarning);
         }

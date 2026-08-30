@@ -79,6 +79,7 @@ module.exports = {
   facebook: {
     appId: "FACEBOOK_APP_ID",
     appSecret: "FACEBOOK_APP_SECRET",
+    oauthConfigId: "FACEBOOK_OAUTH_CONFIG_ID",
   },
   casso: {
     secret: "CASSO_SECRET",

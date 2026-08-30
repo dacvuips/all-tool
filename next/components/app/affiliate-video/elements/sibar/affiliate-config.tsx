@@ -17,7 +17,7 @@ import { ASPECT_RATIOS, ELEMENT_SCRIPT_TAB_QUERY_KEY, ElementScriptTabEnum } fro
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getElementSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
-import { formatSocialPostHeaderTemplateForEnabledPlatforms, useAutoPostSocialSettings } from "../../shared/auto-post-social";
+import { formatSocialPostHeaderTemplateForEnabledPlatforms, useAutoPostSocialPreferences } from "../../shared/auto-post-social";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
 import { useElementContext } from "../providers/element-provider";
 import { getSequentialArtStyleImgTabCount } from "../utils/elementFormImageUtils";
@@ -38,6 +38,9 @@ export const AffiliateConfig = ({
   const [queryParams] = useQueryParams({
     [ELEMENT_SCRIPT_TAB_QUERY_KEY]: "",
   });
+  const { settings: autoPostSettings, hydrated: autoPostHydrated } = useAutoPostSocialPreferences();
+  const introSteps = useMemo(() => getElementSidebarIntroSteps(t), [t]);
+
   const tabParam = queryParams[ELEMENT_SCRIPT_TAB_QUERY_KEY] as string | undefined;
   /** Đồng bộ với elementForm / right-panel — URL có thể thiếu elementScriptTab sau shallow route */
   const activeScriptTab: ElementScriptTabEnum =
@@ -48,7 +51,6 @@ export const AffiliateConfig = ({
   const isImagesToVideo = activeScriptTab === ElementScriptTabEnum.imagesToVideo;
   const isVideoToVideo = activeScriptTab === ElementScriptTabEnum.videoToVideo;
   const isElementBatchMode = activeScriptTab === ElementScriptTabEnum.batch;
-  const { settings: autoPostSettings, hydrated: autoPostHydrated } = useAutoPostSocialSettings();
   const autoPostEnabled =
     isElementBatchMode && autoPostHydrated && autoPostSettings.enabled;
 
@@ -95,8 +97,6 @@ export const AffiliateConfig = ({
     // Chỉ đổi chế độ — giữ nguyên artStyleImg (auto) và artStyleImgSequential (tuần tự).
     patchConfig?.({ actionImageType: val });
   };
-
-  const introSteps = useMemo(() => getElementSidebarIntroSteps(t), [t]);
 
   return (
     <>

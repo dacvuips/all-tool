@@ -24,5 +24,6 @@ export type {
 } from "./types";
 export { useAutoPostSocialBatchList } from "./use-auto-post-social-batch-list";
 export type { UseAutoPostSocialBatchListOptions } from "./use-auto-post-social-batch-list";
+export { useAutoPostSocialPreferences } from "./use-auto-post-social-preferences";
 export { useAutoPostSocialRunner } from "./use-auto-post-social-runner";
 export { useAutoPostSocialSettings } from "./use-auto-post-social-settings";

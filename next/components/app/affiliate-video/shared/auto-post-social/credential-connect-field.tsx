@@ -16,7 +16,6 @@ import {
   RiSaveLine,
 } from "react-icons/ri";
 import { Button } from "../../../../shared/utilities/form";
-import { FacebookConnectButton } from "./facebook-connect-button";
 import { SocialCredentialState, SocialPlatform } from "./types";
 
 interface CredentialConnectFieldProps {
@@ -148,7 +147,7 @@ export function CredentialConnectField({
     <div className="px-4 py-3 space-y-3 bg-white rounded-xl border border-gray-200">
       <div className="flex gap-2 justify-between items-center">
         <label className="block text-xs font-medium text-gray-700">
-          {t("Credential to connect with /Oauth")}
+          {isFacebook ? t("Page Access Token") : t("Credential to connect with /Oauth")}
         </label>
         {hasCred && !editing && (
           <button
@@ -169,15 +168,22 @@ export function CredentialConnectField({
         </div>
       ) : (
         <>
-          {isFacebook && !editing ? (
-            <>
-              <FacebookConnectButton disabled={saving} onConnected={onOAuthConnected} />
-              <p className="text-xs leading-relaxed text-gray-500">
+          {isFacebook && !editing && !hasCred ? (
+            <div className="space-y-2">
+              <p className="text-xs leading-relaxed text-gray-600">
                 {t(
-                  "Chưa thấy mục Facebook Login / Pages API trên Meta? Xem tab «Hướng dẫn lấy AccessToken» — hướng dẫn theo giao diện mới (Trường hợp sử dụng → Truy cập API Video trực tiếp)."
+                  "Dán Page Access Token → Lưu vào MongoDB (Credential FACEBOOK_OAUTH_KEY). Xem tab «Hướng dẫn lấy AccessToken»."
                 )}
               </p>
-            </>
+              <button
+                type="button"
+                onClick={startCreate}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-semibold cursor-pointer hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
+              >
+                <RiKey2Line className="text-base" />
+                {t("Nhập Page Access Token")}
+              </button>
+            </div>
           ) : null}
 
           {hasCred && !editing && (
@@ -199,24 +205,16 @@ export function CredentialConnectField({
             </div>
           )}
 
-          {isFacebook && !hasCred && !editing ? (
-            <div className="flex items-center gap-3 text-xs text-gray-400">
-              <span className="flex-1 h-px bg-gray-200" />
-              <span>{t("hoặc dán token thủ công")}</span>
-              <span className="flex-1 h-px bg-gray-200" />
-            </div>
-          ) : null}
-
-          {!hasCred && !editing && (
+          {isFacebook && !hasCred && !editing ? null : !hasCred && !editing ? (
             <button
               type="button"
               onClick={startCreate}
               className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-dashed border-indigo-300 bg-indigo-50 text-indigo-700 text-sm font-semibold cursor-pointer hover:bg-indigo-100 hover:border-indigo-400 transition-colors"
             >
               <RiKey2Line className="text-base" />
-              {isFacebook ? t("Nhập token thủ công") : t("Nhập Credential")}
+              {isFacebook ? t("Nhập Page Access Token") : t("Nhập Credential")}
             </button>
-          )}
+          ) : null}
 
           {editing && (
             <div className="space-y-3">
@@ -284,23 +282,17 @@ export function CredentialConnectField({
                 </>
               ) : (
                 <div>
-                  <p className="text-xs text-gray-500 leading-relaxed">
-                    {isFacebook
-                      ? t(
-                          "Dán Page Access Token (long-lived). Hệ thống tự nhận Fanpage từ token — không cần nhập Page ID."
-                        )
-                      : null}
-                  </p>
-                  <label className="block text-xs text-gray-500 mb-1.5">
-                    {isFacebook ? t("Page Access Token") : t("Token / Access key")}{" "}
-                    <span className="text-red-500">*</span>
-                  </label>
+                  {!isFacebook ? (
+                    <label className="block text-xs text-gray-500 mb-1.5">
+                      {t("Token / Access key")} <span className="text-red-500">*</span>
+                    </label>
+                  ) : null}
                   <textarea
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
                     placeholder={
                       isFacebook
-                        ? t("Page access_token (long-lived)")
+                        ? t("Dán access token tại đây")
                         : t("Nhập token / OAuth access key tài khoản")
                     }
                     rows={3}

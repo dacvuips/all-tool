@@ -121,7 +121,7 @@ const SOCIAL_POST_PLATFORM_FIELD_META_OVERRIDES: Partial<
       hint: "Link affiliate — nối vào mô tả và đăng thêm comment trên video.",
     },
     privacyStatus: {
-      hint: "public = đăng công khai | private = lưu nháp chưa đăng (Facebook API: published).",
+      hint: "public = hiện trên Fanpage | private = chỉ upload, chưa đăng lên trang (nháp).",
     },
   },
   tiktok: {
@@ -358,7 +358,7 @@ export function toPostFacebookPageVideoMeta(
   const privacyStatus =
     privacy === "public" || privacy === "unlisted" || privacy === "private"
       ? privacy
-      : "private";
+      : "public";
 
   const hashtagText = f.hashtag
     .split(/[\s,]+/)

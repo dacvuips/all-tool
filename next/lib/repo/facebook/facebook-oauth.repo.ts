@@ -20,6 +20,13 @@ async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
+export async function fetchFacebookOAuthStatus(): Promise<{ available: boolean }> {
+  const data = await apiFetch<{ success: boolean; available: boolean }>(
+    "/api/app/facebook-oauth/status"
+  );
+  return { available: !!data.available };
+}
+
 export async function startFacebookOAuth(): Promise<{ authUrl: string }> {
   const data = await apiFetch<{ success: boolean; authUrl: string }>(
     "/api/app/facebook-oauth/start"

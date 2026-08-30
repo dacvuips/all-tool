@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { credentialCustomerService } from "../../../../../lib/repo";
-import { loadAutoPostSettings, saveAutoPostSettings } from "./storage";
+import {
+  loadAutoPostSettings,
+  notifyAutoPostCredentialsChanged,
+  saveAutoPostSettings,
+} from "./storage";
 import {
   AutoPostSocialSettings,
   createEmptyCredentialState,
@@ -13,6 +18,7 @@ import {
 } from "./types";
 
 export function useAutoPostSocialSettings() {
+  const { t } = useTranslation();
   const toast = useToast();
   const [settings, setSettings] = useState<AutoPostSocialSettings>(() => loadAutoPostSettings());
   const [credentials, setCredentials] = useState<Record<SocialPlatform, SocialCredentialState>>({
@@ -51,9 +57,15 @@ export function useAutoPostSocialSettings() {
     loadCredentialsFromDb();
 
     const onSettingsChange = () => setSettings(loadAutoPostSettings());
+    const onCredentialsChange = () => {
+      void loadCredentialsFromDb();
+    };
     window.addEventListener("affiliate-auto-post-settings-changed", onSettingsChange);
-    return () =>
+    window.addEventListener("affiliate-auto-post-credentials-changed", onCredentialsChange);
+    return () => {
       window.removeEventListener("affiliate-auto-post-settings-changed", onSettingsChange);
+      window.removeEventListener("affiliate-auto-post-credentials-changed", onCredentialsChange);
+    };
   }, [loadCredentialsFromDb]);
 
   const updateSettings = useCallback(
@@ -94,17 +106,34 @@ export function useAutoPostSocialSettings() {
       if (!val) return null;
 
       const existingId = input.id || credentials[input.platform]?.id;
-      if (existingId) {
-        await credentialCustomerService.update({
-          id: existingId,
-          data: { value: val, key },
-          toast,
-        });
-      } else {
-        await credentialCustomerService.create({
-          data: { key, value: val, active: true },
-          toast,
-        });
+      const isFacebook = input.platform === "facebook";
+
+      try {
+        if (existingId) {
+          await credentialCustomerService.update({
+            id: existingId,
+            data: { value: val, key },
+            toast: isFacebook ? undefined : toast,
+          });
+        } else {
+          await credentialCustomerService.create({
+            data: { key, value: val, active: true },
+            toast: isFacebook ? undefined : toast,
+          });
+        }
+      } catch (err: any) {
+        if (isFacebook) {
+          toast.error(
+            err?.message
+              ? `${t("Lưu Credential thất bại")}: ${err.message}`
+              : t("Lưu Credential thất bại")
+          );
+        }
+        throw err;
+      }
+
+      if (isFacebook) {
+        toast.success(t("Đã lưu Page Access Token vào Credential (MongoDB)"));
       }
 
       const cred = await credentialCustomerService.getCredentialByKey(key);
@@ -116,9 +145,10 @@ export function useAutoPostSocialSettings() {
           loaded: true,
         },
       }));
+      notifyAutoPostCredentialsChanged();
       return cred;
     },
-    [credentials, toast]
+    [credentials, toast, t]
   );
 
   const removeCredential = useCallback(
@@ -130,6 +160,7 @@ export function useAutoPostSocialSettings() {
         ...prev,
         [platform]: { id: null, active: false, loaded: true },
       }));
+      notifyAutoPostCredentialsChanged();
     },
     [credentials, toast]
   );
@@ -138,6 +169,11 @@ export function useAutoPostSocialSettings() {
     (platform: SocialPlatform) => credentials[platform],
     [credentials]
   );
+
+  const reloadCredentials = useCallback(async () => {
+    await loadCredentialsFromDb();
+    notifyAutoPostCredentialsChanged();
+  }, [loadCredentialsFromDb]);
 
   return {
     hydrated,
@@ -148,6 +184,6 @@ export function useAutoPostSocialSettings() {
     saveCredential,
     removeCredential,
     getCredential,
-    reloadCredentials: loadCredentialsFromDb,
+    reloadCredentials,
   };
 }

@@ -22,7 +22,7 @@ export function createDefaultSocialPostFormFields(
     fields.categoryId = "22";
   }
   if (!fields.privacyStatus) {
-    fields.privacyStatus = "private";
+    fields.privacyStatus = platform === "facebook" ? "public" : "private";
   }
   return fields;
 }
