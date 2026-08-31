@@ -12,7 +12,13 @@ import {
   sequentialImagesFingerprint,
 } from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
-import { elementImageSlotsFingerprint, ElementImageSlotsChangeHandler, resolveSlotsFromCatalog } from "../../utils/elementImageSlotPersist";
+import {
+  deriveManualMaskForElementSlots,
+  elementImageSlotsFingerprint,
+  ElementImageSlotsChangeHandler,
+  resolveSlotsFromCatalog,
+  slotHasDisplayMedia,
+} from "../../utils/elementImageSlotPersist";
 import { matchElementImagesForScene } from "../../utils/matchElementImagesInPrompt";
 import { useSceneElementImagesRowNotify } from "../useSceneElementImagesRowNotify";
 import { SceneElementImageSlot } from "../scene-element-image-slot";
@@ -82,7 +88,7 @@ export function SceneElementImagesRow({
     setSlots(initial);
     setManualMask(
       savedSlots?.length
-        ? Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots[i])
+        ? deriveManualMaskForElementSlots(savedSlots, autoMatched, SLOT_COUNT)
         : Array.from({ length: SLOT_COUNT }, () => false)
     );
     prevActionImageTypeRef.current = actionImageType;
@@ -102,8 +108,8 @@ export function SceneElementImagesRow({
     setSlots((prev) =>
       elementImageSlotsFingerprint(prev) === savedSlotsKey ? prev : next
     );
-    setManualMask(Array.from({ length: SLOT_COUNT }, (_, i) => !!savedSlots![i]));
-  }, [savedSlotsKey, savedSlots]);
+    setManualMask(deriveManualMaskForElementSlots(savedSlots!, autoMatched, SLOT_COUNT));
+  }, [savedSlotsKey, savedSlots, autoMatchedKey]);
 
   // Chỉ chạy khi nguồn auto-match đổi — không chạy lại theo manualMask
   // (tránh race ghi đè slot vừa gắn từ parent).
@@ -124,8 +130,8 @@ export function SceneElementImagesRow({
     const merged = Array.from({ length: SLOT_COUNT }, (_, i) => {
       const saved = savedSlots?.[i];
       const local = slots[i];
-      const savedHasMedia = !!(saved?.imageBytes || saved?.fifeUrl);
-      const localHasMedia = !!(local?.imageBytes || local?.fifeUrl);
+      const savedHasMedia = slotHasDisplayMedia(saved);
+      const localHasMedia = slotHasDisplayMedia(local);
       if (savedHasMedia) return saved;
       if (localHasMedia) return local;
       return saved ?? local ?? autoMatched[i];

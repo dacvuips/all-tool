@@ -18,6 +18,49 @@ export type ElementImageSlotsChangeHandler = (
   meta?: ElementImageSlotsChangeMeta
 ) => void;
 
+/** Slot có media hiển thị / gửi API (bytes hoặc URL). */
+export function slotHasDisplayMedia(img: ElementFormImage | undefined): boolean {
+  return !!(img?.imageBytes || img?.fifeUrl);
+}
+
+/**
+ * Gộp slot từ scene (persist nhẹ) với state local — không hạ cấp bytes / gen-assign.
+ */
+export function mergeElementImageSlotsFromScene(
+  prev: (ElementFormImage | undefined)[],
+  incoming: (ElementFormImage | undefined)[],
+  minLength = 0
+): (ElementFormImage | undefined)[] {
+  const len = Math.max(prev.length, incoming.length, minLength);
+  return Array.from({ length: len }, (_, i) => {
+    const local = prev[i];
+    const saved = incoming[i];
+    const localOk = slotHasDisplayMedia(local);
+    const savedOk = slotHasDisplayMedia(saved);
+    if (localOk && !savedOk) return local;
+    if (localOk && savedOk && local!.imageBytes && !saved!.imageBytes) return local;
+    if ((local?.name || "").startsWith("gen-assign|") && localOk) return local;
+    return saved ?? local;
+  });
+}
+
+/** Ô được gắn thủ công (gen-assign hoặc khác auto-match). */
+export function deriveManualMaskForElementSlots(
+  savedSlots: (ElementFormImage | undefined)[],
+  autoMatched: (ElementFormImage | undefined)[],
+  slotCount: number
+): boolean[] {
+  return Array.from({ length: slotCount }, (_, i) => {
+    const saved = savedSlots[i];
+    if (!slotHasDisplayMedia(saved)) return false;
+    const name = saved!.name || "";
+    if (name.startsWith("gen-assign|")) return true;
+    const auto = autoMatched[i];
+    if (!slotHasDisplayMedia(auto)) return true;
+    return elementImageSlotsFingerprint([saved!]) !== elementImageSlotsFingerprint([auto!]);
+  });
+}
+
 /** Fingerprint nhẹ cho slot — không dùng độ dài base64 khi đã có URL/name. */
 export function elementImageSlotsFingerprint(
   slots: (ElementFormImage | undefined)[]

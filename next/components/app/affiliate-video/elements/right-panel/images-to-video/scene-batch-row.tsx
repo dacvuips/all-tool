@@ -56,6 +56,7 @@ import {
   resolveActionImageType,
 } from "../../utils/elementActionImageUtils";
 import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
+import { mergeElementImageSlotsFromScene, slotHasDisplayMedia } from "../../utils/elementImageSlotPersist";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
@@ -95,7 +96,9 @@ function isSlotMatchingGeneratedImage(
   sceneNumber?: number
 ): boolean {
   if (!slot) return false;
-  if (!(slot.imageBytes || slot.fifeUrl)) return false;
+  if (!slotHasDisplayMedia(slot)) return false;
+  const assignPrefix = `gen-assign|${sceneNumber ?? 0}|${slotIndex}|`;
+  if ((slot.name || "").startsWith(assignPrefix)) return true;
   const stamp = getGeneratedImageAssignStamp(generated);
   if (slot.name === buildGeneratedAssignSlotName(sceneNumber, slotIndex, stamp)) {
     return true;
@@ -200,6 +203,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const aspectRatio = resolveElementAspectRatio(scriptData, elementFormConfig?.aspectRatio) as
     | "16:9"
     | "9:16";
+  const imageSlotCount = getSceneImageSlotCount(elementFormConfig?.serviceImageType);
 
   // ── Ảnh tham chiếu 3 ô (per-scene) ──
   const selectedProductImagesDB = useIndexedDB<string[]>(
@@ -226,19 +230,14 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
 
   useEffect(() => {
     if (actionImageType === ActionImageEnum.sequential) {
-      setSelectedElementImageSlots(sceneSavedImageSlots);
+      setSelectedElementImageSlots(sceneSavedImageSlots ?? []);
       return;
     }
     if (!scene.elementImageSlots) return;
-    setSelectedElementImageSlots((prev) => {
-      const incoming = scene.elementImageSlots ?? [];
-      const prevFilled = prev.filter(Boolean).length;
-      const incomingFilled = incoming.filter(Boolean).length;
-      // Assign local đã có ảnh mà scene chưa kịp — giữ local.
-      if (prevFilled > incomingFilled) return prev;
-      return incoming;
-    });
-  }, [scene.id, scene.elementImageSlots, sceneSavedImageSlots, actionImageType]);
+    setSelectedElementImageSlots((prev) =>
+      mergeElementImageSlotsFromScene(prev, scene.elementImageSlots ?? [], imageSlotCount)
+    );
+  }, [scene.id, scene.elementImageSlots, sceneSavedImageSlots, actionImageType, imageSlotCount]);
 
   const handleElementImageSlotsChange = useCallback(
     createElementImageSlotsChangeHandler({
@@ -356,7 +355,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const isImageOnly = elementFormConfig?.serviceImageType === ServiceImageEnum.imageOnly;
   const showComponentVoice =
     elementFormConfig?.serviceImageType === ServiceImageEnum.startAddEnd;
-  const imageSlotCount = getSceneImageSlotCount(elementFormConfig?.serviceImageType);
 
   const assignedSlotIndices = useMemo(() => {
     if (!generatedImage) return [];

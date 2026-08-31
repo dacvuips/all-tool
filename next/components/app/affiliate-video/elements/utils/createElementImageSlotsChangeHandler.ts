@@ -27,13 +27,14 @@ export function createElementImageSlotsChangeHandler(options: {
   resolvePersistActionMode?: (actionImageType: ActionImageEnum) => ActionImageEnum | undefined;
 }): ElementImageSlotsChangeHandler {
   return (slots, meta) => {
+    // Auto-match chỉ sync nội bộ row — không đẩy parent (tránh loop persist nhẹ ↔ resolve catalog).
+    if (meta?.persist === false) return;
+
     const resolved = resolveSlotsFromCatalog(slots, options.elementFormConfig);
     const urls = elementImageSlotsToUrls(resolved);
 
     options.setSelectedElementImageSlots(resolved);
     options.setSelectedProductImages(urls);
-
-    if (meta?.persist === false) return;
 
     const lightSlots = stripSlotsForPersist(slots, options.elementFormConfig);
     const actionMode = options.actionImageType

@@ -51,7 +51,7 @@ import { GeneratedImageData } from "../../hook/useElementApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
-import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
+import { mergeElementImageSlotsFromScene } from "../../utils/elementImageSlotPersist";
 import { useElementContext } from "../../providers/element-provider";
 import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
@@ -172,7 +172,9 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   }, [scene.id, scene.selectedProductImages]);
 
   useEffect(() => {
-    setSelectedElementImageSlots(scene.elementImageSlots || []);
+    setSelectedElementImageSlots((prev) =>
+      mergeElementImageSlotsFromScene(prev, scene.elementImageSlots || [])
+    );
   }, [scene.id, scene.elementImageSlots]);
 
   const handleElementImageSlotsChange = useCallback(

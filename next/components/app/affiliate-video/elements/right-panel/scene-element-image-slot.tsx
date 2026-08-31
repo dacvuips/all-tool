@@ -1,7 +1,7 @@
 /**
  * Ô ảnh tham chiếu vuông (kéo thả / hiển thị / xóa) – dùng trong scene batch row.
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RiAddLine, RiCloseLine, RiLoader4Line } from "react-icons/ri";
 import { useToast } from "../../../../../lib/providers/toast-provider";

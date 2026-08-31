@@ -12,9 +12,11 @@ import { ActionImageEnum } from "../../constants";
 import { resolveActionImageType, sequentialImagesFingerprint } from "../../utils/elementActionImageUtils";
 import { getSceneImageSlotCount } from "../../utils/elementFormImageUtils";
 import {
+  deriveManualMaskForElementSlots,
   elementImageSlotsFingerprint,
   ElementImageSlotsChangeHandler,
   resolveSlotsFromCatalog,
+  slotHasDisplayMedia,
 } from "../../utils/elementImageSlotPersist";
 import {
   matchArtStyleImagesForScene,
@@ -120,7 +122,7 @@ export function SceneElementImagesRow({
     setSlots(trimSlots(savedSlots?.length ? [...savedSlots] : [...resolvedMatched], slotCount));
     setManualMask(
       savedSlots?.length
-        ? Array.from({ length: slotCount }, (_, i) => !!savedSlots[i])
+        ? deriveManualMaskForElementSlots(savedSlots, resolvedMatched, slotCount)
         : Array.from({ length: slotCount }, () => false)
     );
     prevActionImageTypeRef.current = actionImageType;
@@ -141,8 +143,8 @@ export function SceneElementImagesRow({
       if (elementImageSlotsFingerprint(prev) === savedSlotsKey) return prev;
       return next;
     });
-    setManualMask(Array.from({ length: slotCount }, (_, i) => !!savedSlots![i]));
-  }, [savedSlotsKey, slotCount, savedSlots]);
+    setManualMask(deriveManualMaskForElementSlots(savedSlots!, resolvedMatched, slotCount));
+  }, [savedSlotsKey, slotCount, savedSlots, resolvedMatchedKey]);
 
   useEffect(() => {
     setSlots((prev) => trimSlots(prev, slotCount));
@@ -174,8 +176,8 @@ export function SceneElementImagesRow({
     const merged = Array.from({ length: slotCount }, (_, i) => {
       const saved = savedSlots?.[i];
       const local = slots[i];
-      const savedHasMedia = !!(saved?.imageBytes || saved?.fifeUrl);
-      const localHasMedia = !!(local?.imageBytes || local?.fifeUrl);
+      const savedHasMedia = slotHasDisplayMedia(saved);
+      const localHasMedia = slotHasDisplayMedia(local);
       if (savedHasMedia) return saved;
       if (localHasMedia) return local;
       return saved ?? local ?? resolvedMatched[i];

@@ -56,6 +56,7 @@ import {
   resolveActionImageType,
 } from "../../utils/elementActionImageUtils";
 import { ELEMENT_COMPONENT_IMAGE_SLOT_COUNT } from "../../utils/elementFormImageUtils";
+import { mergeElementImageSlotsFromScene, slotHasDisplayMedia } from "../../utils/elementImageSlotPersist";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
@@ -95,8 +96,9 @@ function isSlotMatchingGeneratedImage(
   sceneNumber?: number
 ): boolean {
   if (!slot) return false;
-  // Badge chỉ khi slot thật sự có ảnh hiển thị được
-  if (!(slot.imageBytes || slot.fifeUrl)) return false;
+  if (!slotHasDisplayMedia(slot)) return false;
+  const assignPrefix = `gen-assign|${sceneNumber ?? 0}|${slotIndex}|`;
+  if ((slot.name || "").startsWith(assignPrefix)) return true;
   const stamp = getGeneratedImageAssignStamp(generated);
   if (slot.name === buildGeneratedAssignSlotName(sceneNumber, slotIndex, stamp)) {
     return true;
@@ -229,19 +231,13 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   useEffect(() => {
     // undefined = mode lệch / chưa persist — không xóa slot local (tránh mất ảnh vừa gắn).
     if (sceneSavedImageSlots === undefined) return;
-    setSelectedElementImageSlots((prev) => {
-      const incoming = sceneSavedImageSlots;
-      const len = Math.max(prev.length, incoming.length, ELEMENT_COMPONENT_IMAGE_SLOT_COUNT);
-      return Array.from({ length: len }, (_, i) => {
-        const local = prev[i];
-        const saved = incoming[i];
-        const localOk = !!(local?.imageBytes || local?.fifeUrl);
-        const savedOk = !!(saved?.imageBytes || saved?.fifeUrl);
-        // Giữ bản local còn media nếu scene đã strip mất bytes.
-        if (localOk && !savedOk) return local;
-        return saved ?? local;
-      });
-    });
+    setSelectedElementImageSlots((prev) =>
+      mergeElementImageSlotsFromScene(
+        prev,
+        sceneSavedImageSlots,
+        ELEMENT_COMPONENT_IMAGE_SLOT_COUNT
+      )
+    );
   }, [scene.id, sceneSavedImageSlots, actionImageType]);
 
   const handleElementImageSlotsChange = useCallback(
