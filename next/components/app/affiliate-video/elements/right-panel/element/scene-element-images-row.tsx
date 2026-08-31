@@ -16,6 +16,7 @@ import {
   deriveManualMaskForElementSlots,
   elementImageSlotsFingerprint,
   ElementImageSlotsChangeHandler,
+  mergeElementImageSlotsFromScene,
   resolveSlotsFromCatalog,
   slotHasDisplayMedia,
 } from "../../utils/elementImageSlotPersist";
@@ -104,10 +105,16 @@ export function SceneElementImagesRow({
 
   useEffect(() => {
     if (!savedSlotsKey) return;
-    const next = [...savedSlots!].slice(0, SLOT_COUNT);
-    setSlots((prev) =>
-      elementImageSlotsFingerprint(prev) === savedSlotsKey ? prev : next
-    );
+    setSlots((prev) => {
+      const merged = mergeElementImageSlotsFromScene(
+        prev,
+        savedSlots!.slice(0, SLOT_COUNT),
+        SLOT_COUNT
+      );
+      return elementImageSlotsFingerprint(prev) === elementImageSlotsFingerprint(merged)
+        ? prev
+        : merged;
+    });
     setManualMask(deriveManualMaskForElementSlots(savedSlots!, autoMatched, SLOT_COUNT));
   }, [savedSlotsKey, savedSlots, autoMatchedKey]);
 

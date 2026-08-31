@@ -44,6 +44,33 @@ export function mergeElementImageSlotsFromScene(
   });
 }
 
+/** Hai slot cùng ảnh catalog (theo token/URL) — bỏ qua khác bytes nhẹ vs full. */
+export function slotMatchesAutoMatched(
+  saved: ElementFormImage,
+  auto: ElementFormImage | undefined
+): boolean {
+  if (!auto || !slotHasDisplayMedia(auto)) return false;
+  if ((saved.name || "").startsWith("gen-assign|")) return false;
+
+  const savedToken = getImageMatchToken(saved);
+  const autoToken = getImageMatchToken(auto);
+  if (savedToken && autoToken && savedToken === autoToken) return true;
+
+  const savedUrl = (saved.fifeUrl || "").trim();
+  const autoUrl = (auto.fifeUrl || "").trim();
+  if (
+    savedUrl &&
+    autoUrl &&
+    savedUrl === autoUrl &&
+    !savedUrl.startsWith("blob:") &&
+    !savedUrl.startsWith("data:")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 /** Ô được gắn thủ công (gen-assign hoặc khác auto-match). */
 export function deriveManualMaskForElementSlots(
   savedSlots: (ElementFormImage | undefined)[],
@@ -56,8 +83,9 @@ export function deriveManualMaskForElementSlots(
     const name = saved!.name || "";
     if (name.startsWith("gen-assign|")) return true;
     const auto = autoMatched[i];
+    if (slotMatchesAutoMatched(saved!, auto)) return false;
     if (!slotHasDisplayMedia(auto)) return true;
-    return elementImageSlotsFingerprint([saved!]) !== elementImageSlotsFingerprint([auto!]);
+    return true;
   });
 }
 

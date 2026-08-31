@@ -30,13 +30,11 @@ export function useSceneElementImagesRowNotify(
     if (key === lastLiveKeyRef.current) return;
     lastLiveKeyRef.current = key;
 
-    if (shouldPersist) {
-      if (key !== lastPersistKeyRef.current) {
-        lastPersistKeyRef.current = key;
-        onSlotsChange(slots, { persist: true });
-      }
-    } else {
-      onSlotsChange(slots, { persist: false });
+    if (!shouldPersist) return;
+
+    if (key !== lastPersistKeyRef.current) {
+      lastPersistKeyRef.current = key;
+      onSlotsChange(slots, { persist: true });
     }
   }, [slots, manualMaskKey, onSlotsChange]);
 }

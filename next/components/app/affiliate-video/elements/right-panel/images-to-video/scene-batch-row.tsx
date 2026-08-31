@@ -199,7 +199,12 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
       return pickSceneSavedImageSlots(scene, actionImageType) ?? [];
     }
     return scene.elementImageSlots ?? [];
-  }, [scene, actionImageType]);
+  }, [
+    scene.id,
+    scene.elementImageSlots,
+    scene.elementImageSlotsActionMode,
+    actionImageType,
+  ]);
   const aspectRatio = resolveElementAspectRatio(scriptData, elementFormConfig?.aspectRatio) as
     | "16:9"
     | "9:16";

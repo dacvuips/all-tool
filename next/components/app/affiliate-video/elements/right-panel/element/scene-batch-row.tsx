@@ -198,7 +198,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const actionImageType = resolveActionImageType(elementFormConfig);
   const sceneSavedImageSlots = useMemo(
     () => pickSceneSavedImageSlots(scene, actionImageType),
-    [scene, actionImageType]
+    [scene.id, scene.elementImageSlots, scene.elementImageSlotsActionMode, actionImageType]
   );
   const aspectRatio = resolveElementAspectRatio(
     scriptData,
