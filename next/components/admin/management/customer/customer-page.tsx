@@ -1,7 +1,7 @@
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { HiBadgeCheck, HiBan } from "react-icons/hi";
-import { RiRestartLine } from "react-icons/ri";
+import { RiEdit2Line, RiRestartLine } from "react-icons/ri";
 import { useAlert } from "../../../../lib/providers/alert-provider";
 import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useToast } from "../../../../lib/providers/toast-provider";
@@ -21,6 +21,7 @@ import {
   CustomerGooglePackageCell,
   formatSubscription,
 } from "./components/customer-google-package-cell";
+import { CustomerBulkPackageLimitsDialog } from "./components/customer-bulk-package-limits-dialog";
 import { CustomerSlideout } from "./components/customer-slideout";
 
 const PACKAGE_FILTER_OPTIONS = Object.values(SubscriptionPlanEnum).map((plan) => ({
@@ -37,6 +38,9 @@ export function CustomerPage(props) {
   const [timeRange, setTimeRange] = useState<any>(null);
   const [packageFilter, setPackageFilter] = useState<SubscriptionPlanEnum>(null);
   const [resettingPackages, setResettingPackages] = useState(false);
+  const [selectedCustomers, setSelectedCustomers] = useState<Partial<Customer>[]>([]);
+  const [bulkLimitsDialogOpen, setBulkLimitsDialogOpen] = useState(false);
+  const loadAllRef = useRef<(() => void) | null>(null);
 
   const toast = useToast();
   const alert = useAlert();
@@ -110,6 +114,8 @@ export function CustomerPage(props) {
         crudService={CustomerService}
         order={{ createdAt: -1 }}
         filter={filter}
+        multiSelection
+        onSelectItems={setSelectedCustomers}
         updateItem={(item) => {
           router.replace({ pathname: location.pathname, query: { id: item.id } });
         }}
@@ -121,14 +127,22 @@ export function CustomerPage(props) {
           <DataTable.Title />
           <DataTable.Buttons>
             {user?.role === "ADMIN" && (
-              <DataTable.Button
-                outline
-                text={t("Reset gói hàng loạt")}
-                icon={<RiRestartLine />}
-                disabled={resettingPackages}
-                onClick={onBulkResetPackages}
-                refreshAfterTask
-              />
+              <>
+                <DataTable.Button
+                  outline
+                  text={t("Cập nhật limit hàng loạt")}
+                  icon={<RiEdit2Line />}
+                  onClick={() => setBulkLimitsDialogOpen(true)}
+                />
+                <DataTable.Button
+                  outline
+                  text={t("Reset gói hàng loạt")}
+                  icon={<RiRestartLine />}
+                  disabled={resettingPackages}
+                  onClick={onBulkResetPackages}
+                  refreshAfterTask
+                />
+              </>
             )}
             <DataTable.Button outline isRefreshButton refreshAfterTask />
           </DataTable.Buttons>
@@ -252,9 +266,20 @@ export function CustomerPage(props) {
         <DataTable.Pagination />
 
         <DataTable.Consumer>
-          {({ loadAll }) => <CustomerSlideout id={customerId} loadAll={loadAll} />}
+          {({ loadAll }) => {
+            loadAllRef.current = loadAll;
+            return <CustomerSlideout id={customerId} loadAll={loadAll} />;
+          }}
         </DataTable.Consumer>
       </DataTable>
+
+      <CustomerBulkPackageLimitsDialog
+        isOpen={bulkLimitsDialogOpen}
+        onClose={() => setBulkLimitsDialogOpen(false)}
+        selectedCustomers={selectedCustomers}
+        currentFilter={filter}
+        onSuccess={() => loadAllRef.current?.()}
+      />
     </Card>
   );
 }

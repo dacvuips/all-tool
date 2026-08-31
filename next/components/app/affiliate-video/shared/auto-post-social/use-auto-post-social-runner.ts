@@ -12,6 +12,7 @@ import { youtubePostRepository } from "../../../../../lib/repo/youtube/youtube-p
 import { facebookPostRepository } from "../../../../../lib/repo/facebook/facebook-post.repo";
 import { CopyVideoScene } from "../../constants";
 import { mergeSceneVideosToBlob } from "../batchMergeVideos";
+import { clearVideoBlobWatermark } from "../batchClearWatermark";
 import type { GeneratedVideoLike } from "../generatedMediaUtils";
 import {
   AutoPostPackageSnapshot,
@@ -302,15 +303,50 @@ export function useAutoPostSocialRunner({
         return "stopped";
       }
 
+      patchAutoPostRunState({
+        statusLabel: t("Bài đăng #{{n}}: xóa logo AI…", { n }),
+      });
+      setAutoPostGroupInfo(group.id, {
+        status: "merging",
+        message: t("Đang xóa logo AI…"),
+      });
+
+      let clearWarning: string | undefined;
+      try {
+        const cleared = await clearVideoBlobWatermark({
+          blob,
+          clientId: `social-post-${group.id}`,
+          name: `social-post-${n}.mp4`,
+        });
+        blob = cleared.blob;
+        if (!cleared.cleared && cleared.warning) {
+          clearWarning = cleared.warning;
+          console.warn("[auto-post] clear watermark skipped:", cleared.warning);
+        }
+      } catch (err: any) {
+        clearWarning = err?.message || t("Lỗi xóa logo AI");
+        console.warn("[auto-post] clear watermark failed:", err);
+      }
+
+      if (isAutoPostGroupStopped(group.id) || stopRef.current) {
+        setAutoPostGroupInfo(group.id, { status: "stopped", message: t("Đã dừng") });
+        return "stopped";
+      }
+
       const mergedVideoUrl = URL.createObjectURL(blob);
+      const mergeMessage =
+        videoCount >= 2
+          ? t("Đã nối {{count}} video", { count: videoCount })
+          : t("Đã chuẩn bị video");
+      const clearSuffix = clearWarning ? ` (${clearWarning})` : "";
       if (videoCount >= 2) {
         setAutoPostGroupInfo(group.id, {
           status: "merging",
           mergedVideoUrl,
-          message: t("Đã nối {{count}} video", { count: videoCount }),
+          message: mergeMessage + clearSuffix,
         });
       } else {
-        setAutoPostGroupInfo(group.id, { mergedVideoUrl });
+        setAutoPostGroupInfo(group.id, { mergedVideoUrl, message: mergeMessage + clearSuffix });
       }
 
       if (!hasAnyUploadPlatform(platforms)) {
@@ -438,6 +474,7 @@ export function useAutoPostSocialRunner({
           ? t("Đã đăng {{platforms}}", { platforms: publishResult.messageParts.join(", ") })
           : t("Đã đăng");
         const partialError = errors.length ? ` (${errors.join(" · ")})` : "";
+        const clearNote = clearWarning ? ` · ${t("Xóa logo")}: ${clearWarning}` : "";
 
         try {
           await persistRef.current?.({
@@ -448,7 +485,7 @@ export function useAutoPostSocialRunner({
               status: "posted",
               youtubeUrl: publishResult.youtubeUrl,
               facebookUrl: publishResult.facebookUrl,
-              message: message + partialError,
+              message: message + partialError + clearNote,
             },
           });
         } catch (err: any) {
@@ -460,7 +497,7 @@ export function useAutoPostSocialRunner({
           mergedVideoUrl,
           youtubeUrl: publishResult.youtubeUrl,
           facebookUrl: publishResult.facebookUrl,
-          message: message + partialError,
+          message: message + partialError + clearNote,
         });
         return errors.length ? "error" : "done";
       } catch (err: any) {

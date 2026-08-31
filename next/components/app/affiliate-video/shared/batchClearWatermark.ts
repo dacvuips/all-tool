@@ -2,6 +2,7 @@
  * Xóa watermark 1 ảnh/video rồi thay file gốc bằng blob + blob URL.
  */
 import type { CleanWatermarkProcessed } from "../remove-logo/hook/useRemoveLogoApi";
+import { requestCleanWatermark } from "../remove-logo/hook/cleanWatermarkClient";
 import { base64ToBlob as watermarkBase64ToBlob, stripToPureBase64 } from "../remove-logo/constants";
 import {
   fetchUrlToBlob,
@@ -13,6 +14,73 @@ import {
 } from "./generatedMediaUtils";
 import { notifyGeneratedMediaReplaced } from "./generatedMediaReplaceBus";
 import { triggerBlobDownload } from "./videoDownloadUtils";
+
+export type ClearVideoBlobWatermarkResult = {
+  blob: Blob;
+  cleared: boolean;
+  warning?: string;
+};
+
+async function blobToRawBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/** Xóa logo AI trên blob video (vd. sau nối cảnh, trước đăng MXH). Lỗi/hết hạn mức → giữ blob gốc. */
+export async function clearVideoBlobWatermark(args: {
+  blob: Blob;
+  clientId: string;
+  name?: string;
+  mimeType?: string;
+}): Promise<ClearVideoBlobWatermarkResult> {
+  const mimeType = args.mimeType || args.blob.type || "video/mp4";
+  try {
+    const mediaBase64 = await blobToRawBase64(args.blob);
+    const result = await requestCleanWatermark([
+      {
+        clientId: args.clientId,
+        kind: "video",
+        mediaBase64,
+        mimeType,
+        name: args.name || "merged-social-post.mp4",
+      },
+    ]);
+
+    const processed =
+      result.processed.find((p) => p.clientId === args.clientId) || result.processed[0];
+    const skipped =
+      result.skipped.find((s) => s.clientId === args.clientId) || result.skipped[0];
+
+    if (skipped) {
+      return { blob: args.blob, cleared: false, warning: skipped.reason };
+    }
+    if (!processed) {
+      return {
+        blob: args.blob,
+        cleared: false,
+        warning: "Không nhận được kết quả xóa logo",
+      };
+    }
+
+    const clearedBlob = await cleanedResultToBlob(processed);
+    return { blob: clearedBlob, cleared: true };
+  } catch (err) {
+    console.warn("[clearVideoBlobWatermark]", err);
+    return {
+      blob: args.blob,
+      cleared: false,
+      warning: err instanceof Error ? err.message : "Lỗi xóa logo AI",
+    };
+  }
+}
 
 export async function cleanedResultToBlob(processed: CleanWatermarkProcessed): Promise<Blob> {
   const mime = processed.mimeType || (processed.kind === "video" ? "video/mp4" : "image/jpeg");

@@ -17,7 +17,11 @@ import { youtubePostRepository } from "../../../../../lib/repo/youtube/youtube-p
 import { useToast } from "../../../../../lib/providers/toast-provider";
 import { Button } from "../../../../shared/utilities/form";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
-import type { GeneratedVideoLike } from "../generatedMediaUtils";
+import { clearVideoBlobWatermark } from "../batchClearWatermark";
+import {
+  generatedVideoToBlob,
+  type GeneratedVideoLike,
+} from "../generatedMediaUtils";
 import { AutoPostSocialSettingsDialog } from "./auto-post-social-settings-dialog";
 import {
   toPostFacebookPageVideoMeta,
@@ -29,7 +33,6 @@ import {
   SocialPostPlatformPostForm,
 } from "./social-post-platform-post-form";
 import {
-  generatedVideoToRawBase64,
   isSocialPlatformCredentialReady,
 } from "./social-post-video-utils";
 import { SOCIAL_PLATFORMS, type SocialPlatform } from "./types";
@@ -106,7 +109,28 @@ export function SocialPostVideoDialog({
     setUploading(true);
     setLastResultUrl(null);
     try {
-      const videoBase64 = await generatedVideoToRawBase64(video);
+      let videoBlob = await generatedVideoToBlob(video);
+
+      const cleared = await clearVideoBlobWatermark({
+        blob: videoBlob,
+        clientId: `manual-social-post-${activeTab}`,
+        name: `${fields.title.trim() || "video"}.mp4`,
+      });
+      videoBlob = cleared.blob;
+      if (!cleared.cleared && cleared.warning) {
+        toast.warn(cleared.warning);
+      }
+
+      const videoBase64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result as string;
+          const comma = result.indexOf(",");
+          resolve(comma >= 0 ? result.slice(comma + 1) : result);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(videoBlob);
+      });
       const affiliateLink = fields.link.trim() || undefined;
 
       if (activeTab === "youtube") {

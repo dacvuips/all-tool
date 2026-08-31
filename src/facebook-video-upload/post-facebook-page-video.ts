@@ -51,16 +51,50 @@ function asString(v: unknown): string {
   return String(v ?? "").trim();
 }
 
+function parseFacebookErrorPayload(data: unknown): Record<string, unknown> | null {
+  if (data == null) return null;
+  if (typeof data === "object" && !Buffer.isBuffer(data)) {
+    return data as Record<string, unknown>;
+  }
+  const text = Buffer.isBuffer(data) ? data.toString("utf8") : String(data);
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    const trimmed = text.trim();
+    return trimmed ? { raw: trimmed.slice(0, 500) } : null;
+  }
+}
+
 function facebookApiErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const ax = err as AxiosError<any>;
-    const data = ax.response?.data;
-    const code = data?.error?.code;
+    const parsed = parseFacebookErrorPayload(ax.response?.data);
+    const fbError =
+      parsed?.error && typeof parsed.error === "object"
+        ? (parsed.error as Record<string, unknown>)
+        : null;
+    const code = fbError?.code ?? parsed?.code;
     const msg =
-      data?.error?.message ||
-      data?.error_description ||
-      (typeof data?.error === "string" ? data.error : null) ||
+      asString(fbError?.error_user_msg) ||
+      asString(fbError?.message) ||
+      asString(parsed?.error_description) ||
+      (typeof parsed?.error === "string" ? parsed.error : "") ||
+      asString(parsed?.raw) ||
       ax.message;
+
+    console.warn("[postFacebookPageVideo] Facebook API error:", {
+      status: ax.response?.status,
+      code,
+      message: msg,
+      data: parsed,
+    });
+
+    if (code === 190 || /invalid oauth|access token/i.test(String(msg))) {
+      return (
+        "Facebook API: Token không hợp lệ hoặc đã hết hạn (#190). " +
+        "Lấy lại Page Access Token trong Graph API Explorer → chọn đúng Fanpage → Lưu credential."
+      );
+    }
 
     if (code === 100 && /no permission to publish the video/i.test(String(msg))) {
       return (
@@ -68,6 +102,15 @@ function facebookApiErrorMessage(err: unknown): string {
         "Thường do dán User Token thay vì Page Access Token, hoặc thiếu quyền pages_manage_posts / publish_video. " +
         "Xem Hướng dẫn Facebook → Bước 3: gọi GET /me/accounts → copy access_token của Fanpage."
       );
+    }
+
+    if (code === 200 || /permission/i.test(String(msg))) {
+      return `Facebook API: Thiếu quyền (#${code ?? "?"}): ${msg}`;
+    }
+
+    const status = ax.response?.status;
+    if (status) {
+      return `Facebook API (${status}${code ? ` #${code}` : ""}): ${msg}`;
     }
 
     return `Facebook API: ${msg}`;
