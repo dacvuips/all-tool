@@ -51,9 +51,10 @@ import { GeneratedImageData } from "../../hook/useElementApi";
 
 import { useIndexedDB } from "../../../hook/useIndexedDB";
 import { useSceneThumbnail } from "../../../hook/useVideoThumbnail";
-import { mergeElementImageSlotsFromScene } from "../../utils/elementImageSlotPersist";
+import { useElementSceneMedia } from "../../hook/useElementSceneMedia";
 import { useElementContext } from "../../providers/element-provider";
 import { createElementImageSlotsChangeHandler } from "../../utils/createElementImageSlotsChangeHandler";
+import { mergeElementImageSlotsFromScene } from "../../utils/elementImageSlotPersist";
 import { resolveElementAspectRatio } from "../../utils/elementSceneGenerationParams";
 import { InsertPosition, NewSceneData } from "../add-scene-modal";
 import { SceneElementImagesRow } from "./scene-element-images-row";
