@@ -12,7 +12,10 @@ import {
   GENERATION_IMAGE_ACCEPTED_EXTENSIONS,
   GENERATION_IMAGE_ACCEPTED_TYPES,
 } from "../../shared/compressGenerationImage";
-import { getElementFormImagePreviewSrc } from "../utils/elementFormImageUtils";
+import {
+  getElementFormImagePreviewSrc,
+  revokeElementFormImagePreviewUrl,
+} from "../utils/elementFormImageUtils";
 
 const ACCEPTED_IMAGE_TYPES = GENERATION_IMAGE_ACCEPTED_TYPES;
 const ACCEPTED_EXTENSIONS = GENERATION_IMAGE_ACCEPTED_EXTENSIONS;
@@ -44,7 +47,13 @@ export function SceneElementImageSlot({
   const previewSrc = useMemo(() => {
     if (!value) return null;
     return getElementFormImagePreviewSrc(value);
-  }, [value?.fifeUrl, value?.imageBytes, value?.mimeType]);
+  }, [value?.fifeUrl, value?.imageBytes, value?.mimeType, value?.name]);
+
+  useEffect(() => {
+    return () => {
+      if (value) revokeElementFormImagePreviewUrl(value);
+    };
+  }, [value]);
 
   const processFile = useCallback(
     async (file: File) => {

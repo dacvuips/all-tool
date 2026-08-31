@@ -22,6 +22,8 @@ import {
   persistGeneratedVideoWithEnrichment,
   prepareGeneratedImageForIdb,
   prepareGeneratedVideoForIdb,
+  toUiGeneratedImage,
+  toUiGeneratedVideo,
 } from "../../shared/generatedMediaUtils";
 import {
   type AutoDownloadImageResolution,
@@ -493,7 +495,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
   // ── getGeneratedImage – lấy ảnh đã tạo từ IndexedDB ──
   const getGeneratedImage = useCallback(
     async (sceneId: string): Promise<GeneratedImageData | undefined> => {
-      return imageDB.get(sceneId);
+      const raw = await imageDB.get(sceneId);
+      return raw ? toUiGeneratedImage(raw) : undefined;
     },
     [imageDB]
   );
@@ -613,7 +616,8 @@ export function useElementApi(): UseAffiliateVideoApiReturn {
   // ── getGeneratedVideo – lấy video đã tạo từ IndexedDB ──
   const getGeneratedVideo = useCallback(
     async (sceneId: string): Promise<GeneratedVideoData | undefined> => {
-      return videoDB.get(sceneId);
+      const raw = await videoDB.get(sceneId);
+      return raw ? toUiGeneratedVideo(raw) : undefined;
     },
     [videoDB]
   );

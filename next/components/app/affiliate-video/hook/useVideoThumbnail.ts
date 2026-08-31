@@ -284,9 +284,19 @@ export function useSceneThumbnail(
     thumbnailDB
       .get(`${THUMBNAIL_KEY_PREFIX}${sceneId}`)
       .then((dataUrl) => {
-        if (!cancelled) {
-          setThumbnailUrl(dataUrl || null);
+        if (cancelled) return;
+        if (!dataUrl) {
+          setThumbnailUrl(null);
+          return;
         }
+        if (dataUrl.startsWith("data:")) {
+          const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+          if (match) {
+            setThumbnailUrl(base64ToBlobUrl(match[2], match[1] || "image/jpeg"));
+            return;
+          }
+        }
+        setThumbnailUrl(dataUrl);
       })
       .catch(() => {
         if (!cancelled) setThumbnailUrl(null);
@@ -297,6 +307,12 @@ export function useSceneThumbnail(
 
     return () => {
       cancelled = true;
+      setThumbnailUrl((prev) => {
+        if (prev?.startsWith("blob:")) {
+          URL.revokeObjectURL(prev);
+        }
+        return null;
+      });
     };
   }, [sceneId, refreshKey]);
 

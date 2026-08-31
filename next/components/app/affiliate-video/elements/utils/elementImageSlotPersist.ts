@@ -78,7 +78,7 @@ export function stripSlotsForPersist(
   return slots.map((slot) => {
     if (!slot) return undefined;
 
-    // Ảnh gắn từ generate (bản copy) — giữ imageBytes để preview ổn định.
+    // Ảnh gắn từ generate (bản copy) — giữ imageBytes để persist; UI preview qua blob URL.
     if ((slot.name || "").startsWith("gen-assign|") && slot.imageBytes) {
       return {
         name: slot.name,

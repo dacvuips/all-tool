@@ -96,16 +96,63 @@ export function base64ToBlobUrl(base64: string, mimeType: string): string {
   return URL.createObjectURL(blob);
 }
 
+function stripElementImageBase64Payload(value: string): string {
+  const trimmed = value.trim();
+  const dataMatch = trimmed.match(/^data:([^;]+);base64,(.+)$/);
+  return dataMatch ? dataMatch[2] : trimmed;
+}
+
+/** Cache blob: preview theo fingerprint — tránh tạo lại mỗi render / DOM data: nặng. */
+const elementImagePreviewUrlCache = new Map<string, string>();
+
+function elementImagePreviewCacheKey(img: ElementFormImage): string {
+  const url = (img.fifeUrl || "").trim();
+  if (url && !url.startsWith("data:")) return `url:${url}`;
+  const raw = stripElementImageBase64Payload(img.imageBytes || "");
+  if (!raw) return "";
+  const head = raw.slice(0, 48);
+  const tail = raw.length > 48 ? raw.slice(-16) : "";
+  return `bytes:${img.name || ""}:${raw.length}:${head}:${tail}`;
+}
+
+export function revokeElementFormImagePreviewUrl(img: ElementFormImage | undefined): void {
+  if (!img) return;
+  const key = elementImagePreviewCacheKey(img);
+  const url = elementImagePreviewUrlCache.get(key);
+  if (url?.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+    elementImagePreviewUrlCache.delete(key);
+  }
+}
+
 export function getElementFormImagePreviewSrc(img: ElementFormImage): string | null {
   if (!img.imageBytes && !img.fifeUrl) return null;
-  // Ưu tiên bản copy base64 (gắn từ ảnh generate) — ổn định, không phụ thuộc blob shared.
-  if ((img.imageBytes || "").trim()) {
-    const raw = img.imageBytes.trim();
-    if (raw.startsWith("data:")) return raw;
-    return `data:${img.mimeType || "image/png"};base64,${raw}`;
+
+  const remote = (img.fifeUrl || "").trim();
+  if (remote && !remote.startsWith("data:")) return remote;
+
+  const raw = stripElementImageBase64Payload(img.imageBytes || "");
+  if (!raw && remote.startsWith("data:")) {
+    const dataMatch = remote.match(/^data:([^;]+);base64,(.+)$/);
+    if (!dataMatch) return remote;
+    const cacheKey = `data-url:${dataMatch[1]}:${dataMatch[2].length}:${dataMatch[2].slice(0, 48)}`;
+    const cached = elementImagePreviewUrlCache.get(cacheKey);
+    if (cached) return cached;
+    const blobUrl = base64ToBlobUrl(dataMatch[2], dataMatch[1]);
+    elementImagePreviewUrlCache.set(cacheKey, blobUrl);
+    return blobUrl;
   }
-  if (img.fifeUrl) return img.fifeUrl;
-  return null;
+
+  if (!raw) return null;
+
+  const cacheKey = elementImagePreviewCacheKey(img);
+  const cached = elementImagePreviewUrlCache.get(cacheKey);
+  if (cached) return cached;
+
+  const mimeType = img.mimeType || "image/png";
+  const blobUrl = base64ToBlobUrl(raw, mimeType);
+  elementImagePreviewUrlCache.set(cacheKey, blobUrl);
+  return blobUrl;
 }
 
 /** Chuyển URL/data URL ảnh tham chiếu (cùng nguồn tab Ảnh) thành payload API. */

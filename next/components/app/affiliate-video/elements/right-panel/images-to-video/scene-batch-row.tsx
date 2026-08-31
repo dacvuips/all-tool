@@ -385,7 +385,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
             ? remoteUrl
             : "";
 
-        // Luôn lấy bản copy base64 riêng để slot tự preview (data:) — ảnh chính không đổi.
+        // Copy binary riêng (base64 trong slot) — preview qua blob URL, không dùng chung blob ảnh generate.
         const converted = await generatedImageToApiBase64Input(generatedImage);
         const stamp = getGeneratedImageAssignStamp(generatedImage);
         const elementImage: ElementFormImage = {
