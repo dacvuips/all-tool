@@ -6,7 +6,11 @@ import { HiCheck, HiKey, HiLockClosed } from "react-icons/hi";
 import { RiFileCopy2Line, RiStackLine } from "react-icons/ri";
 import { TbGauge } from "react-icons/tb";
 import { useToast } from "../../../../../lib/providers/toast-provider";
-import { buildApiMediaRequestBody } from "../../../../api-media/api-media-guide-config";
+import {
+  API_MEDIA_KEY_PLACEHOLDER,
+  API_MEDIA_KEY_VAR,
+  buildApiMediaRequestBody,
+} from "../../../../api-media/api-media-guide-config";
 import {
   buildCreateJobSnippet,
   buildPollJobSnippet,
@@ -23,8 +27,6 @@ import {
   ROUTE_HIGHLIGHT,
   ROUTE_LOOP_MS,
 } from "./home-api-media-console-config";
-
-const PLACEHOLDER_API_KEY = "YOUR_API_KEY";
 
 const CODE_SYNTAX = {
   bg: "#0d1117",
@@ -141,12 +143,15 @@ function SyntaxCode({ code, compact = false }: { code: string; compact?: boolean
 
 function buildNodeSnippet(routeId: ApiMediaRouteId): string {
   const base = getApiBaseUrl();
+  const keyLine = `const ${API_MEDIA_KEY_VAR} = "${API_MEDIA_KEY_PLACEHOLDER}";`;
 
   if (routeId === "poll_job") {
-    return `const jobId = "JOB_ID_FROM_CREATE_RESPONSE";
+    return `${keyLine}
+
+const jobId = "JOB_ID_FROM_CREATE_RESPONSE";
 
 const res = await fetch(\`${base}/api/api-media/job/\${jobId}\`, {
-  headers: { "x-api-key": API_MEDIA_KEY },
+  headers: { "x-api-key": ${API_MEDIA_KEY_VAR} },
 });
 const { data } = await res.json();
 console.log(data.status, data.progress);
@@ -155,10 +160,12 @@ console.log(data.status, data.progress);
   }
 
   if (routeId === "upsample_image") {
-    return `const enqueue = await fetch("${base}/api/api-media/upsample-image", {
+    return `${keyLine}
+
+const enqueue = await fetch("${base}/api/api-media/upsample-image", {
   method: "POST",
   headers: {
-    "x-api-key": API_MEDIA_KEY,
+    "x-api-key": ${API_MEDIA_KEY_VAR},
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -172,10 +179,12 @@ const { jobId } = await enqueue.json();
   }
 
   if (routeId === "upsample_video") {
-    return `const enqueue = await fetch("${base}/api/api-media/upsample-video", {
+    return `${keyLine}
+
+const enqueue = await fetch("${base}/api/api-media/upsample-video", {
   method: "POST",
   headers: {
-    "x-api-key": API_MEDIA_KEY,
+    "x-api-key": ${API_MEDIA_KEY_VAR},
     "Content-Type": "application/json",
   },
   body: JSON.stringify({
@@ -193,10 +202,12 @@ const { jobId } = await enqueue.json();
   const model = config.creationType === "image" ? config.imageModel : config.videoQuality;
   const bodyJson = JSON.stringify(body, null, 2).replace(/\n/g, "\n  ");
 
-  return `const res = await fetch("${base}/api/api-media?type=${action}", {
+  return `${keyLine}
+
+const res = await fetch("${base}/api/api-media?type=${action}", {
   method: "POST",
   headers: {
-    "x-api-key": API_MEDIA_KEY,
+    "x-api-key": ${API_MEDIA_KEY_VAR},
     "Content-Type": "application/json",
   },
   body: JSON.stringify(${bodyJson}),
@@ -214,15 +225,15 @@ function getRouteCode(routeId: ApiMediaRouteId, lang: ConsoleCodeLang): string {
     return buildNodeSnippet(routeId);
   }
   if (routeId === "poll_job") {
-    return buildPollJobSnippet(PLACEHOLDER_API_KEY, lang);
+    return buildPollJobSnippet(lang);
   }
   if (routeId === "upsample_image") {
-    return buildUpsampleImageSnippet(PLACEHOLDER_API_KEY, config, lang);
+    return buildUpsampleImageSnippet(config, lang);
   }
   if (routeId === "upsample_video") {
-    return buildUpsampleVideoSnippet(PLACEHOLDER_API_KEY, lang);
+    return buildUpsampleVideoSnippet(lang);
   }
-  return buildCreateJobSnippet(PLACEHOLDER_API_KEY, config, lang);
+  return buildCreateJobSnippet(config, lang);
 }
 
 function StatCard({

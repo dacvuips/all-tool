@@ -13,6 +13,12 @@ export type VideoQualityId = "lite" | "fast" | "lite_relaxed" | "omni_flash";
 export type CodeLang = "curl" | "python";
 export type UpsampleImageResolution = "2K" | "4K";
 
+/** Giá trị mẫu trong hướng dẫn — thay bằng API Key thật từ trang Quản lý API Key Media. */
+export const API_MEDIA_KEY_PLACEHOLDER = "YOUR_API_MEDIA_KEY";
+
+/** Tên biến mẫu trong code Python / JavaScript. */
+export const API_MEDIA_KEY_VAR = "API_MEDIA_KEY";
+
 export type ApiMediaGuideConfig = {
   creationType: CreationType;
   inputSource: InputSource;

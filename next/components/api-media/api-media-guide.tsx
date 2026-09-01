@@ -154,7 +154,7 @@ function GuideCodeCard({
   );
 }
 
-export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
+export default function ApiMediaGuide() {
   const { t } = useTranslation();
 
   const [config, setConfig] = useState<ApiMediaGuideConfig>(DEFAULT_API_MEDIA_GUIDE_CONFIG);
@@ -205,17 +205,17 @@ export default function ApiMediaGuide({ apiKey }: { apiKey: string }) {
   }, []);
 
   const createCode = useMemo(
-    () => buildCreateJobSnippet(apiKey, config, createLang),
-    [apiKey, config, createLang]
+    () => buildCreateJobSnippet(config, createLang),
+    [config, createLang]
   );
-  const pollCode = useMemo(() => buildPollJobSnippet(apiKey, pollLang), [apiKey, pollLang]);
+  const pollCode = useMemo(() => buildPollJobSnippet(pollLang), [pollLang]);
   const upsampleImageCode = useMemo(
-    () => buildUpsampleImageSnippet(apiKey, config, upsampleLang),
-    [apiKey, config, upsampleLang]
+    () => buildUpsampleImageSnippet(config, upsampleLang),
+    [config, upsampleLang]
   );
   const upsampleVideoCode = useMemo(
-    () => buildUpsampleVideoSnippet(apiKey, upsampleLang),
-    [apiKey, upsampleLang]
+    () => buildUpsampleVideoSnippet(upsampleLang),
+    [upsampleLang]
   );
 
   const createTitle = useMemo(() => getCreateJobTitle(config), [config]);

@@ -220,16 +220,11 @@ const ApiMediaPage = ({
     return { activeCount, totalRequests, usedRequests };
   }, [tokens]);
 
-  const [openSettingToken, setOpenSettingToken] = useState<string>("");
+  const [guideOpen, setGuideOpen] = useState(false);
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  const openTokenGuide = (token: ApiMediaToken) => {
-    const key = getTokenPlainKey(token, plainKeys);
-    if (!key) {
-      toast.warn(t("Key đã được bảo mật. Nhấn [Tạo lại key] để tạo key mới và xem hướng dẫn API."));
-      return;
-    }
-    setOpenSettingToken(key);
+  const openTokenGuide = () => {
+    setGuideOpen(true);
   };
 
   const handleRotateKey = async (token: ApiMediaToken) => {
@@ -579,8 +574,9 @@ const ApiMediaPage = ({
                               }
                             />
                             <Button
-                              onClick={() => openTokenGuide(token)}
+                              onClick={() => openTokenGuide()}
                               className=" bg-gray-50"
+                              tooltip={t("Hướng dẫn tích hợp API")}
                               icon={<RiSettings4Line />}
                             />
                           </div>
@@ -717,8 +713,9 @@ const ApiMediaPage = ({
                           }
                         />
                         <Button
-                          onClick={() => openTokenGuide(token)}
+                          onClick={() => openTokenGuide()}
                           className=" bg-gray-50"
+                          tooltip={t("Hướng dẫn tích hợp API")}
                           icon={<RiSettings4Line />}
                         />
                       </div>
@@ -807,11 +804,7 @@ const ApiMediaPage = ({
           </div>
         )}
       </div>
-      <ApiKeyGuideDialog
-        isOpen={!!openSettingToken}
-        onClose={() => setOpenSettingToken("")}
-        apiKey={openSettingToken}
-      />
+      <ApiKeyGuideDialog isOpen={guideOpen} onClose={() => setGuideOpen(false)} />
     </div>
   );
 };
@@ -820,22 +813,11 @@ const ApiMediaPage = ({
 const ApiKeyGuideDialog = ({
   isOpen,
   onClose,
-  apiKey,
 }: {
   isOpen: boolean;
   onClose: () => void;
-  apiKey: string;
 }) => {
   const { t } = useTranslation();
-  const toast = useToast();
-  const [keyCopied, setKeyCopied] = useState(false);
-
-  const handleCopyKey = useCallback(() => {
-    copy(apiKey);
-    setKeyCopied(true);
-    toast.success(t("Đã sao chép API Key"));
-    setTimeout(() => setKeyCopied(false), 2000);
-  }, [apiKey, t, toast]);
 
   return (
     <Dialog
@@ -846,37 +828,7 @@ const ApiKeyGuideDialog = ({
       maxWidth="96vw"
     >
       <Dialog.Body>
-        <div className="space-y-5">
-          <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-              API Key
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 flex items-center bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 font-mono text-sm text-gray-800 overflow-hidden">
-                <HiKey className="text-orange-500 mr-2 flex-shrink-0" />
-                <span className="truncate select-all">{apiKey}</span>
-              </div>
-              <button
-                type="button"
-                onClick={handleCopyKey}
-                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 border ${
-                  keyCopied
-                    ? "bg-emerald-50 border-emerald-200 text-emerald-600"
-                    : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:border-gray-300"
-                }`}
-              >
-                {keyCopied ? (
-                  <HiCheck className="text-sm" />
-                ) : (
-                  <HiClipboardCopy className="text-sm" />
-                )}
-                {keyCopied ? t("Đã chép") : t("Sao chép")}
-              </button>
-            </div>
-          </div>
-
-          <ApiMediaGuide apiKey={apiKey} />
-        </div>
+        <ApiMediaGuide />
       </Dialog.Body>
     </Dialog>
   );
