@@ -17,6 +17,8 @@ import { GeneratedVideoDownloadButtons } from "./generated-video-download-button
 import { GeneratedVideoLike, getGeneratedVideoPreviewSrc } from "./generatedMediaUtils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+import type { AspectRatio } from "../constants";
+import { getAspectPaddingPercent } from "./aspect-ratio-utils";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 export type GeneratedExtendVideoData = GeneratedVideoLike;
@@ -34,7 +36,7 @@ export interface SceneCardExtendVideoTabProps {
   /** Có scene kế tiếp không (bắt buộc để tạo video nối) */
   nextSceneId?: string;
   /** Aspect ratio của video (preview + dialog) */
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: AspectRatio;
   /** Số phân cảnh — dùng đặt tên file tải */
   sceneNumber?: number;
   /** Lỗi tạo video nối (hiển thị inline) */
@@ -73,7 +75,7 @@ export function SceneCardExtendVideoTab({
   };
 
   const extVideoSrc = getExtendVideoSrc();
-  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "174.78%";
+  const videoPaddingTop = `${getAspectPaddingPercent(aspectRatio ?? "16:9")}%`;
   const videoFileName = `scene-${sceneNumber || "video"}-extend-video.mp4`;
 
   /* Không có scene kế tiếp → hiển thị thông báo */

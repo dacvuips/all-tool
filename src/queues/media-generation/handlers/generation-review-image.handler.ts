@@ -15,6 +15,7 @@ import {
 } from "../../../routers/app/affiliate-scene/_shared";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
+import { ApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 import { runImagePipeline } from "./_image-pipeline";
 
 export type GenerationReviewImagePayload = {
@@ -23,13 +24,13 @@ export type GenerationReviewImagePayload = {
   productImages?: string[];
   objectToPersonifyImages?: ReferenceImageInput[];
   productImagePrompt?: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   noText?: boolean;
   artStyleId?: string;
   artStyle?: string;
   config?: {
     numberOfImages?: number;
-    aspectRatio?: "16:9" | "9:16";
+    aspectRatio?: ApiMediaAspectRatio;
     noText?: boolean;
   };
 };

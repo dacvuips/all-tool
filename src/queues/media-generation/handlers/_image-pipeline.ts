@@ -9,6 +9,7 @@
  */
 import logger from "../../../helpers/logger";
 import { GeneratedImage, generateImageWithFlow2 } from "../../../routers/api-media/flow2/image-generation";
+import { ApiMediaAspectRatio, normalizeApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 import { MediaJobEmitter } from "../job-emitter";
 
 import { UploadableReferenceImage } from "../../../routers/app/affiliate-scene/_shared";
@@ -30,7 +31,7 @@ export type RunImagePipelineArgs = {
   customerId: string;
   /** Prompt đã ráp xong (artStyle + prompt + reference notes + noText) */
   prompt: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   variantCount?: number;
   imageModel?: string;
   imageGroups: ImageGroups;
@@ -63,7 +64,7 @@ export async function runImagePipeline(args: RunImagePipelineArgs): Promise<Gene
 
   const { requestId, images } = await generateImageWithFlow2({
     prompt,
-    aspectRatio,
+    aspectRatio: normalizeApiMediaAspectRatio(aspectRatio),
     variantCount,
     imageModel,
     imageInputs: orderedInputs,

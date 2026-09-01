@@ -12,6 +12,7 @@ import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { checkImageLimit } from "./_shared";
+import { ApiMediaAspectRatio } from "../../api-media/api-media-constants";
 
 export default [
   {
@@ -29,7 +30,7 @@ export default [
           productImages?: string[];
           objectToPersonifyImages?: Array<string | { imageBytes: string; mimeType?: string }>;
           productImagePrompt?: string;
-          aspectRatio?: "16:9" | "9:16";
+          aspectRatio?: ApiMediaAspectRatio;
           noText?: boolean;
           artStyleId?: string;
           artStyle?: string;

@@ -6,6 +6,7 @@ import { RiFileCopy2Line } from "react-icons/ri";
 import { useToast } from "../../lib/providers/toast-provider";
 import {
   ApiMediaGuideConfig,
+  API_MEDIA_GUIDE_ASPECT_RATIOS,
   clampComponentImageCount,
   CreationType,
   DEFAULT_API_MEDIA_GUIDE_CONFIG,
@@ -43,8 +44,8 @@ import {
   CodeLang,
 } from "./api-media-guide-snippets";
 
-const IMAGE_ASPECT_RATIOS: ImageAspectRatio[] = ["16:9", "9:16"];
-const VIDEO_ASPECT_RATIOS: VideoAspectRatio[] = ["16:9", "9:16"];
+const IMAGE_ASPECT_RATIOS = API_MEDIA_GUIDE_ASPECT_RATIOS;
+const VIDEO_ASPECT_RATIOS = API_MEDIA_GUIDE_ASPECT_RATIOS;
 
 function SegmentGroup<T extends string>({
   options,
@@ -333,7 +334,7 @@ export default function ApiMediaGuide() {
             <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
               {t("Tỉ lệ")}
             </p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
               {aspectRatios.map((ratio) => {
                 const active = currentAspect === ratio;
                 return (

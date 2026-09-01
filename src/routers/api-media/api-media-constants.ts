@@ -1,7 +1,18 @@
 /** Hằng số giới hạn đầu vào API Media — khớp UI hướng dẫn, tách khỏi luồng app. */
 
-export const API_MEDIA_ASPECT_RATIOS = ["16:9", "9:16"] as const;
+export const API_MEDIA_ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4"] as const;
 export type ApiMediaAspectRatio = (typeof API_MEDIA_ASPECT_RATIOS)[number];
+
+/** Chuẩn hóa aspect ratio Flow2 — fallback khi client gửi giá trị lạ. */
+export function normalizeApiMediaAspectRatio(
+  value: unknown,
+  fallback: ApiMediaAspectRatio = "16:9"
+): ApiMediaAspectRatio {
+  const ratio = String(value ?? "").trim();
+  return (API_MEDIA_ASPECT_RATIOS as readonly string[]).includes(ratio)
+    ? (ratio as ApiMediaAspectRatio)
+    : fallback;
+}
 
 export const API_MEDIA_IMAGE_MODELS = ["NANO_BANANA_PRO", "NANO_BANANA"] as const;
 

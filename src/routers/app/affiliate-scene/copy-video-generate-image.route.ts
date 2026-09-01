@@ -10,6 +10,7 @@ import { MediaGenerationJobType } from "../../../libs/dal/mediaGenerationJob";
 import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { checkImageLimit, ReferenceImageInput } from "./_shared";
+import { ApiMediaAspectRatio } from "../../api-media/api-media-constants";
 
 export default [
   {
@@ -29,7 +30,7 @@ export default [
           productImagePrompt?: string;
           config?: {
             numberOfImages?: number;
-            aspectRatio?: "16:9" | "9:16";
+            aspectRatio?: ApiMediaAspectRatio;
           };
           noText?: boolean;
           _metadata?: Record<string, unknown>;

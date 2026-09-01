@@ -3,6 +3,8 @@
  * Khối gom: preview trái + lưới icon 2×2 phải, cùng chiều cao.
  */
 import type { ReactNode } from "react";
+import type { AspectRatio } from "../constants";
+import { getInlinePreviewWidth } from "./aspect-ratio-utils";
 import { SceneMediaError } from "./scene-media-error";
 
 /** h-7 / w-7 Tailwind */
@@ -17,11 +19,9 @@ export const INLINE_LIST_TOOLBAR_BTN =
 export const INLINE_LIST_TOOLBAR_GRID_CLASS =
   "[&_button]:!w-7 [&_button]:!h-7 [&_button]:!min-w-[28px] [&_button]:!max-w-[28px] [&_button]:!min-h-[28px] [&_button]:!max-h-[28px] [&_button]:!p-0 [&_button]:!bg-transparent [&_button]:hover:!bg-transparent [&_button]:border-0 [&_button]:shadow-none [&_button]:rounded-md [&>div]:!w-7 [&>div]:!h-7 [&>div]:!min-w-0 [&>div]:!max-w-[28px] [&>div]:overflow-hidden";
 
-function getPreviewSize(aspectRatio?: "16:9" | "9:16"): { width: number; height: number } {
+function getPreviewSize(aspectRatio?: AspectRatio): { width: number; height: number } {
   const height = INLINE_BLOCK_HEIGHT_PX;
-  const width =
-    aspectRatio === "9:16" ? Math.round((height * 9) / 16) : Math.round((height * 16) / 9);
-  return { width, height };
+  return { width: getInlinePreviewWidth(height, aspectRatio ?? "16:9"), height };
 }
 
 export function SceneInlineListCell({
@@ -31,7 +31,7 @@ export function SceneInlineListCell({
   frameClassName = "",
   variant = "image",
 }: {
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: AspectRatio;
   preview: ReactNode;
   toolbar?: ReactNode;
   frameClassName?: string;

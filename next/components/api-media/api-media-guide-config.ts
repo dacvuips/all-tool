@@ -6,8 +6,16 @@ export type VideoMode = "frame" | "component";
 export type FrameImageCount = "1" | "2";
 export type OmniComponentInput = "images_only" | "with_video";
 export type OmniDuration = 4 | 6 | 8 | 10;
-export type ImageAspectRatio = "16:9" | "9:16";
-export type VideoAspectRatio = "16:9" | "9:16";
+export type ImageAspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+export type VideoAspectRatio = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
+
+export const API_MEDIA_GUIDE_ASPECT_RATIOS: ImageAspectRatio[] = [
+  "16:9",
+  "9:16",
+  "1:1",
+  "4:3",
+  "3:4",
+];
 export type ImageModelId = "NANO_BANANA_PRO" | "NANO_BANANA";
 export type VideoQualityId = "lite" | "fast" | "lite_relaxed" | "omni_flash";
 export type CodeLang = "curl" | "python";

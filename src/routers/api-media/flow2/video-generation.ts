@@ -1,4 +1,5 @@
 import logger from "../../../helpers/logger";
+import { ApiMediaAspectRatio } from "../api-media-constants";
 import {
   buildFlow2DerivedVideoUrl,
   collectFlow2VideoUrls,
@@ -61,7 +62,7 @@ export type Flow2CreateVideoRequestParams = {
    * - 1–3 ảnh → `gen_image_video` kèm `videoMode`
    */
   imageInputs?: Flow2ImageInput[];
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   videoQuality?: Flow2VideoQuality;
   /**
    * Chế độ ảnh trên Flow2 (`video_mode`):

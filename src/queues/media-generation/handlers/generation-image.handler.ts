@@ -18,6 +18,7 @@ import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/d
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
+import { ApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 
 /** Payload mong đợi trong Redis (`dataRedisKey`) */
 export type GenerationImagePayload = {
@@ -30,7 +31,7 @@ export type GenerationImagePayload = {
   artStyle?: string;
   config?: {
     numberOfImages?: number;
-    aspectRatio?: "16:9" | "9:16";
+    aspectRatio?: ApiMediaAspectRatio;
     noText?: boolean;
     imageModel?: string;
     artStyleId?: string;

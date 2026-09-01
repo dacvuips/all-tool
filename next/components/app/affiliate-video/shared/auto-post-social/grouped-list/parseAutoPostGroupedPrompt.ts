@@ -1,6 +1,7 @@
-import { uid } from "../../../constants";
+import { uid, type AspectRatio } from "../../../constants";
 import { ElementAnalysisData, ElementScene } from "../../../constants";
 import { ensureTabSceneLists } from "../../script-tab-scenes";
+import { isAspectRatio } from "../../aspect-ratio-utils";
 import { ServiceImageEnum } from "../../../elements/constants";
 import {
   applyFieldsToAllPlatforms,
@@ -98,7 +99,9 @@ export function buildAnalysisDataFromGroupedPrompt(
 
   const base = ensureTabSceneLists({
     scenes,
-    aspectRatio,
+    aspectRatio: isAspectRatio(String(aspectRatio ?? ""))
+      ? (aspectRatio as AspectRatio)
+      : undefined,
     artStyleId,
     artStyle,
     serviceImageType,

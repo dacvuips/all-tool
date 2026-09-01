@@ -32,7 +32,7 @@ export const uid = () => `${Date.now()}-${++_uid}`;
 // ── Core Types ─────────────────────────────────────────────────────────────
 export type MediaType = "image" | "video";
 export type ItemRole = "input" | "keyframe" | "output";
-export type AspectRatio = "9:16" | "16:9";
+export type AspectRatio = "9:16" | "16:9" | "1:1" | "4:3" | "3:4";
 export type Quality = "standard" | "high";
 export type OutputFormat = "mp4" | "webm";
 export type SpeedMode = "fast" | "relaxed" | "quality";
@@ -120,9 +120,17 @@ export type OpStatus = "idle" | "loading" | "done" | "error";
 
 // ── Model Options ──────────────────────────────────────────────────────────
 
-export const ASPECT_RATIOS: { value: AspectRatio; label: string; icon: string }[] = [
-  { value: "9:16", label: "9:16 Portrait", icon: "📱" },
-  { value: "16:9", label: "16:9 Landscape", icon: "🖥" },
+export const ASPECT_RATIOS: {
+  value: AspectRatio;
+  label: string;
+  icon: string;
+  orientation: "portrait" | "landscape" | "square";
+}[] = [
+  { value: "9:16", label: "9:16 Portrait", icon: "📱", orientation: "portrait" },
+  { value: "16:9", label: "16:9 Landscape", icon: "🖥", orientation: "landscape" },
+  { value: "1:1", label: "1:1 Square", icon: "◻", orientation: "square" },
+  { value: "4:3", label: "4:3 Landscape", icon: "🖼", orientation: "landscape" },
+  { value: "3:4", label: "3:4 Portrait", icon: "📱", orientation: "portrait" },
 ];
 
 // ── Duration Options (seconds) ─────────────────────────────────────────────
@@ -179,7 +187,7 @@ export interface SceneScript {
   autoDownloadImageResolution?: "1K" | "2K" | "4K";
   autoDownloadVideoResolution?: "720p" | "1080p";
   audio?: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: AspectRatio;
   selectedProductImages?: string[];
   product_image_prompt?: string;
 }
@@ -194,7 +202,7 @@ export interface ScriptData {
   voiceGender: string;
   voiceTone: string;
   voiceStyle: string;
-  aspectRatio: "16:9" | "9:16";
+  aspectRatio: AspectRatio;
   scenes: SceneScript[];
   productImages?: string[];
   objectToPersonifyImage?: ReviewFormImage;
@@ -272,7 +280,7 @@ export interface CopyVideoAnalysisData {
   characters: ReviewCharacter[];
   props: ReviewProp[];
   scenes: CopyVideoLegacyScene[];
-  aspectRatio?: string;
+  aspectRatio?: AspectRatio;
   productImages?: string[];
   objectToPersonifyImage?: ReviewFormImage;
 }
@@ -291,7 +299,7 @@ export interface ReviewAnalysisData {
   scenes: ReviewScene[];
   imagesToVideoScenes?: ReviewScene[];
   videoToVideoScenes?: ReviewScene[];
-  aspectRatio?: string;
+  aspectRatio?: AspectRatio;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;

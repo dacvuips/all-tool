@@ -5,13 +5,12 @@
  * Field names aligned with AffiliateFormConfig interface.
  */
 import { useTranslation } from "react-i18next";
-import { BsFile } from "react-icons/bs";
 import { useMemo } from "react";
 
 import { useAuth } from "../../../../../lib/providers/auth-provider";
 import { Button, Field, Select, Textarea } from "../../../../shared/utilities/form";
-import { ASPECT_RATIOS } from "../../constants";
 import { ArtStylePickerDialog } from "../../shared/art-style-picker-dialog";
+import { AspectRatioPicker } from "../../shared/aspect-ratio-picker";
 import { AffiliateSidebarIntro } from "../../shared/affiliate-sidebar-intro";
 import { getReviewSidebarIntroSteps } from "../../shared/affiliate-sidebar-intro-steps";
 
@@ -49,29 +48,10 @@ export const AffiliateConfig = ({
       <div className="px-4 pb-4 space-y-3">
         <div id="aspect-ratio-section">
         <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
-          <div className="grid grid-cols-2 gap-2">
-            {ASPECT_RATIOS.map((ar) => {
-              const isPortrait = ar.value === "9:16";
-              const isActive = reviewFormConfig?.aspectRatio === ar.value;
-              return (
-                <Button
-                  key={ar.value}
-                  id={`aspect-ratio-${ar.value.replace(":", "-")}`}
-                  onClick={() => patchConfig && patchConfig({ aspectRatio: ar.value })}
-                  className={`flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                    isActive
-                      ? "text-blue-600 bg-blue-50 border-blue-400"
-                      : "text-gray-600 bg-white border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-base">
-                    {isPortrait ? <BsFile /> : <BsFile style={{ transform: "rotate(90deg)" }} />}
-                  </span>
-                  {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
-                </Button>
-              );
-            })}
-          </div>
+          <AspectRatioPicker
+            value={reviewFormConfig?.aspectRatio}
+            onChange={(aspectRatio) => patchConfig && patchConfig({ aspectRatio })}
+          />
         </Field>
         </div>
         <div>

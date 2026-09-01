@@ -34,7 +34,7 @@ export const uid = () => `${Date.now()}-${++_uid}`;
 // ── Core Types ─────────────────────────────────────────────────────────────
 export type MediaType = "image" | "video";
 export type ItemRole = "input" | "keyframe" | "output";
-export type AspectRatio = "9:16" | "16:9";
+export type AspectRatio = "9:16" | "16:9" | "1:1" | "4:3" | "3:4";
 export type Quality = "standard" | "high";
 export type OutputFormat = "mp4" | "webm";
 export type SpeedMode = "fast" | "relaxed" | "quality";
@@ -166,9 +166,17 @@ export type OpStatus = "idle" | "loading" | "done" | "error";
 
 // ── Model Options ──────────────────────────────────────────────────────────
 
-export const ASPECT_RATIOS: { value: AspectRatio; label: string; icon: string }[] = [
-  { value: "9:16", label: "9:16 Portrait", icon: "📱" },
-  { value: "16:9", label: "16:9 Landscape", icon: "🖥" },
+export const ASPECT_RATIOS: {
+  value: AspectRatio;
+  label: string;
+  icon: string;
+  orientation: "portrait" | "landscape" | "square";
+}[] = [
+  { value: "9:16", label: "9:16 Portrait", icon: "📱", orientation: "portrait" },
+  { value: "16:9", label: "16:9 Landscape", icon: "🖥", orientation: "landscape" },
+  { value: "1:1", label: "1:1 Square", icon: "◻", orientation: "square" },
+  { value: "4:3", label: "4:3 Landscape", icon: "🖼", orientation: "landscape" },
+  { value: "3:4", label: "3:4 Portrait", icon: "📱", orientation: "portrait" },
 ];
 
 // ── Duration Options (seconds) ─────────────────────────────────────────────
@@ -240,7 +248,7 @@ export interface SceneScript {
   /** Độ phân giải video khi tự động tải (override mặc định toàn cục) */
   autoDownloadVideoResolution?: "720p" | "1080p";
   audio?: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: AspectRatio;
   selectedProductImages?: string[];
   product_image_prompt?: string;
   /** Vùng cắt panel trên ảnh storyboard gốc */
@@ -273,7 +281,7 @@ export interface ScriptData {
   voicePacing?: string;
   /** Prompt casting giọng đọc đầy đủ */
   audioPrompt?: string;
-  aspectRatio: "16:9" | "9:16";
+  aspectRatio: AspectRatio;
   scenes: SceneScript[];
   productImages?: string[];
   objectToPersonifyImage?: ElementFormImage;
@@ -313,7 +321,7 @@ export interface TrendingScriptData {
   voiceGender: string;
   voiceTone: string;
   voiceStyle: string;
-  aspectRatio: "16:9" | "9:16";
+  aspectRatio: AspectRatio;
   scenes: SceneScript[];
   productImages?: string[];
 }
@@ -437,7 +445,7 @@ export interface CopyVideoAnalysisData {
   characters: CopyVideoCharacter[];
   props: CopyVideoProp[];
   scenes: CopyVideoScene[];
-  aspectRatio?: string;
+  aspectRatio?: AspectRatio;
   productImages?: string[];
   objectToPersonifyImage?: ElementFormImage;
 }
@@ -488,7 +496,7 @@ export interface ElementAnalysisData {
   imagesToVideoScenes?: ElementScene[];
   /** Danh sách riêng tab Video to video */
   videoToVideoScenes?: ElementScene[];
-  aspectRatio?: string;
+  aspectRatio?: AspectRatio;
   artStyleId?: string;
   artStyle?: string;
   serviceImageType?: ServiceImageEnum;

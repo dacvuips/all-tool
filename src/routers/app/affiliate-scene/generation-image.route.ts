@@ -12,6 +12,7 @@ import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkImageLimit, ReferenceImageInput } from "./_shared";
+import { ApiMediaAspectRatio } from "../../api-media/api-media-constants";
 
 export default [
   {
@@ -31,7 +32,7 @@ export default [
           productImagePrompt?: string;
           config?: {
             numberOfImages?: number;
-            aspectRatio?: "16:9" | "9:16";
+            aspectRatio?: ApiMediaAspectRatio;
             noText?: boolean;
             imageModel?: string;
           };

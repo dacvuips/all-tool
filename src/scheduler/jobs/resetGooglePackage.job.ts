@@ -64,6 +64,15 @@ function isExpiredPaidPackage(pkg: Record<string, any>, now: Date): boolean {
   return !!expiryDate && expiryDate <= now;
 }
 
+/** Chuẩn hóa document cũ: $inc có thể tạo googlePackage chỉ có count, không có subscription. */
+function normalizeGooglePackage(pkg: Record<string, any> | null | undefined): Record<string, any> {
+  const base = pkg || {};
+  return {
+    ...base,
+    subscription: base.subscription ?? SubscriptionPlanEnum.FREE,
+  };
+}
+
 /** Load limit gói Free từ Setting (chỉ dùng khi hạ gói hết hạn) */
 async function loadFreePackageLimitsFromSettings(): Promise<PackageLimitsConfig> {
   const plan = SubscriptionPlanEnum.FREE;
@@ -124,7 +133,11 @@ export class ResetGooglePackageJob {
     };
 
     const customers = await CustomerModel.find({
-      "googlePackage.subscription": { $exists: true },
+      $or: [
+        { googlePackage: { $exists: true } },
+        { "googlePackage.imageCount": { $exists: true } },
+        { "googlePackage.videoCount": { $exists: true } },
+      ],
     }).lean();
 
     logger.info(
@@ -138,7 +151,7 @@ export class ResetGooglePackageJob {
 
     for (const customer of customers) {
       try {
-        const pkg = customer.googlePackage || {};
+        const pkg = normalizeGooglePackage(customer.googlePackage as Record<string, any>);
         const expiryDate = getExpiryDate(pkg);
         const isTrial = pkg.subscription === SubscriptionPlanEnum.TRIAL;
 
@@ -154,6 +167,7 @@ export class ResetGooglePackageJob {
             { _id: customer._id },
             {
               $set: {
+                "googlePackage.subscription": pkg.subscription,
                 "googlePackage.videoCount": 0,
                 "googlePackage.imageCount": 0,
                 "googlePackage.requestCount": 0,

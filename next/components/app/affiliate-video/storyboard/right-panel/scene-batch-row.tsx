@@ -28,7 +28,8 @@ import { NoTextIcon } from "../../../../../public/assets/svg/no-text-icon";
 import { Dialog } from "../../../../shared/utilities/dialog/dialog";
 import { Button, Input } from "../../../../shared/utilities/form";
 import { Img } from "../../../../shared/utilities/misc";
-import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum } from "../../constants";
+import { CharacterItem, DB_NAME, SceneScript, StoryModeTypeEnum, type AspectRatio } from "../../constants";
+import { getAspectPaddingPercent, isAspectRatio } from "../../shared/aspect-ratio-utils";
 import { GeneratedImageData } from "../../copy-video/hook/useCopyVideoApi";
 import { useIndexedDB } from "../../hook/useIndexedDB";
 import { useSceneMedia } from "../../hook/useSceneMedia";
@@ -224,14 +225,15 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     return `data:${crop.mimeType || "image/png"};base64,${crop.imageBytes}`;
   }, [scene.storyboardCropImage]);
 
-  const aspectRatio = (scriptData?.aspectRatio ??
-    affiliateVideoFormConfig?.aspectRatio ??
-    "9:16") as "16:9" | "9:16";
+  const aspectRatio: AspectRatio = (() => {
+    const raw = scriptData?.aspectRatio ?? affiliateVideoFormConfig?.aspectRatio ?? "9:16";
+    return isAspectRatio(String(raw)) ? raw : "9:16";
+  })();
   const sceneAudioText = useMemo(
     () => normalizeSceneAudioField(scene.audio),
     [scene.audio]
   );
-  const videoPaddingTop = aspectRatio === "16:9" ? "56.25%" : "177.78%";
+  const videoPaddingTop = `${getAspectPaddingPercent(aspectRatio)}%`;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const openEdit = (field: EditField) => {

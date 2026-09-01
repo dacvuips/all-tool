@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { BsFile } from "react-icons/bs";
 import {
   RiCloseLine,
   RiFileTextFill,
@@ -13,13 +12,13 @@ import { useAuth } from "../../../../lib/providers/auth-provider";
 import { useGlobalContext } from "../../../../lib/providers/global-provider";
 import { Button, Field, Form, Select, Switch, Textarea } from "../../../shared/utilities/form";
 import {
-  ASPECT_RATIOS,
   CACHE_KEY,
   DB_NAME,
   STORE_NAME,
   type SceneHistoryItem,
   type ScriptData,
 } from "../constants";
+import { AspectRatioPicker } from "../shared/aspect-ratio-picker";
 import { ElementAudioUpload, ElementImagesUpload } from "../elements/sibar/element-images-upload";
 import { useIndexedDB } from "../hook/useIndexedDB";
 import { AffiliateVideoSidebarLayout } from "../shared/affiliate-video-sidebar-layout";
@@ -158,32 +157,10 @@ function AudioImageToVideoSidebar({
         <div className="space-y-4 px-4 pb-4">
           <div id="aspect-ratio-section">
             <Field noError name="aspectRatio" label={t("Tỉ lệ khung hình")}>
-              <div className="grid grid-cols-2 gap-2">
-                {ASPECT_RATIOS.map((ar) => {
-                  const isPortrait = ar.value === "9:16";
-                  const isActive = form.aspectRatio === ar.value;
-                  return (
-                    <Button
-                      key={ar.value}
-                      onClick={() => onChange({ aspectRatio: ar.value })}
-                      className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-semibold transition-all ${
-                        isActive
-                          ? "border-blue-400 bg-blue-50 text-blue-600"
-                          : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
-                      }`}
-                    >
-                      <span className="text-base">
-                        {isPortrait ? (
-                          <BsFile />
-                        ) : (
-                          <BsFile style={{ transform: "rotate(90deg)" }} />
-                        )}
-                      </span>
-                      {isPortrait ? `${ar.value} ${t("Dọc")}` : `${ar.value} ${t("Ngang")}`}
-                    </Button>
-                  );
-                })}
-              </div>
+              <AspectRatioPicker
+                value={form.aspectRatio}
+                onChange={(aspectRatio) => onChange({ aspectRatio })}
+              />
             </Field>
           </div>
           <div id="language-section">

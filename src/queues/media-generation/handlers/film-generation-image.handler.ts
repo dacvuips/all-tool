@@ -13,6 +13,10 @@ import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
 import { runImagePipeline } from "./_image-pipeline";
 import {
+  ApiMediaAspectRatio,
+  normalizeApiMediaAspectRatio,
+} from "../../../routers/api-media/api-media-constants";
+import {
   prependFilmArtStyleToPrompt,
   type FilmJobContext,
   type FilmMediaAssetKind,
@@ -23,7 +27,7 @@ export type FilmGenerationImagePayload = FilmJobContext & {
   prompt: string;
   /** Ảnh reference (character sheet gen thường không cần; shot frame có thể đính) */
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   numberOfImages?: number;
   imageModel?: string;
   noText?: boolean;
@@ -82,7 +86,7 @@ export async function handleFilmGenerationImage(
   const images = await runImagePipeline({
     customerId: job.customerId,
     prompt: fullPrompt,
-    aspectRatio: payload.aspectRatio === "9:16" ? "9:16" : "16:9",
+    aspectRatio: normalizeApiMediaAspectRatio(payload.aspectRatio, "16:9"),
     variantCount: payload.numberOfImages || 1,
     imageModel: payload.imageModel,
     imageGroups: {

@@ -203,7 +203,7 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const aspectRatio = resolveElementAspectRatio(
     scriptData,
     elementFormConfig?.aspectRatio
-  ) as "16:9" | "9:16";
+  );
 
   // ── Ảnh tham chiếu 3 ô (per-scene) ──
   const selectedProductImagesDB = useIndexedDB<string[]>(

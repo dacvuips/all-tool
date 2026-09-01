@@ -20,6 +20,7 @@ import { ImageDialog } from "../../../shared/utilities/dialog/image-dialog";
 import { Button } from "../../../shared/utilities/form";
 import { Img } from "../../../shared/utilities/misc";
 import { GeneratedImageData } from "../copy-video/hook/useCopyVideoApi";
+import type { AspectRatio } from "../constants";
 import { fileToGenerationImageBase64 } from "./compressGenerationImage";
 import { GeneratedImageDownloadButtons } from "./generated-image-download-buttons";
 import {
@@ -33,13 +34,14 @@ import {
   SceneInlineListCell,
   SceneInlineMediaColumn,
 } from "./scene-inline-list-media";
+import { getAspectPaddingPercent, isPortraitAspectRatio } from "./aspect-ratio-utils";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
 
 // ── Props ────────────────────────────────────────────────────────────────────
 export interface SceneCardImageTabProps {
   /** Aspect ratio của ảnh */
-  aspectRatio: "16:9" | "9:16";
+  aspectRatio: AspectRatio;
   /** Dữ liệu ảnh đã generate (null nếu chưa có) */
   generatedImage: GeneratedImageData | null;
   /** Đang trong quá trình generate ảnh */
@@ -139,11 +141,11 @@ export function SceneCardImageTab({
     }
   };
 
-  const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
+  const paddingPct = getAspectPaddingPercent(aspectRatio);
   const progressLayout = inline ? "inline-cell" : "compact";
   const loadingProgressLayout = inline ? "inline-cell" : "card";
   const imagePaddingTop = `${paddingPct}%`;
-  const isPortrait = aspectRatio === "9:16";
+  const isPortrait = isPortraitAspectRatio(aspectRatio);
   /** List/inline: cùng width với SceneCardVideoTab */
   const mediaBoxClass = isPortrait ? "w-16 shrink-0" : "w-28 shrink-0";
   /** inline: ảnh trái + icon phải (2×2); card: ảnh trên + icon dưới */

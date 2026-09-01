@@ -13,6 +13,7 @@ import { Context } from "../../../libs/graphql";
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkImageLimit } from "./_shared";
+import { ApiMediaAspectRatio } from "../../api-media/api-media-constants";
 
 export default [
   {
@@ -27,7 +28,7 @@ export default [
         const body = req.body as {
           prompt: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
-          aspectRatio?: "16:9" | "9:16";
+          aspectRatio?: ApiMediaAspectRatio;
           noText?: boolean;
           artStyleId?: string;
           artStyle?: string;

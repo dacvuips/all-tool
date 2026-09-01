@@ -13,6 +13,7 @@ import {
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
+import { ApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 import { runImagePipeline } from "./_image-pipeline";
 
 export type CopyVideoGenerateImagePayload = {
@@ -23,7 +24,7 @@ export type CopyVideoGenerateImagePayload = {
   productImagePrompt?: string;
   config?: {
     numberOfImages?: number;
-    aspectRatio?: "16:9" | "9:16";
+    aspectRatio?: ApiMediaAspectRatio;
   };
   noText?: boolean;
 };

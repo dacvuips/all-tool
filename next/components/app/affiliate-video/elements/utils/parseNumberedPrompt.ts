@@ -1,6 +1,7 @@
-import { ElementAnalysisData, ElementScene, uid } from "../../constants";
+import { ElementAnalysisData, ElementScene, uid, type AspectRatio } from "../../constants";
 import { ServiceImageEnum } from "../constants";
 import { ensureTabSceneLists } from "../../shared/script-tab-scenes";
+import { isAspectRatio } from "../../shared/aspect-ratio-utils";
 
 /** Một dòng prompt = một phân cảnh. */
 export interface NumberedPromptItem {
@@ -54,7 +55,9 @@ export function buildAnalysisDataFromNumberedPrompt(
 
   return ensureTabSceneLists({
     scenes,
-    aspectRatio,
+    aspectRatio: isAspectRatio(String(aspectRatio ?? ""))
+      ? (aspectRatio as AspectRatio)
+      : undefined,
     artStyleId,
     artStyle,
     serviceImageType,

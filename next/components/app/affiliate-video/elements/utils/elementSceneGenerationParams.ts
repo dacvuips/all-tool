@@ -2,8 +2,9 @@
  * Shared payloads for element image/video generation (single scene + batch).
  * Batch handlers must call these so each item uses the same API params as the per-scene UI.
  */
-import { CopyVideoScene, ElementAnalysisData, ElementFormConfig, ElementFormImage } from "../../constants";
+import { CopyVideoScene, ElementAnalysisData, ElementFormConfig, ElementFormImage, type AspectRatio } from "../../constants";
 import { ActionImageEnum, ServiceImageEnum } from "../constants";
+import { isAspectRatio } from "../../shared/aspect-ratio-utils";
 import type {
   GeneratedImageData,
   GenerateImageParams,
@@ -37,8 +38,9 @@ export type ElementScriptLike =
 export function resolveElementAspectRatio(
   scriptData?: ElementScriptLike,
   fallbackAspectRatio?: string
-): string | undefined {
-  return scriptData?.aspectRatio ?? fallbackAspectRatio;
+): AspectRatio {
+  const raw = scriptData?.aspectRatio ?? fallbackAspectRatio;
+  return isAspectRatio(String(raw)) ? (raw as AspectRatio) : "16:9";
 }
 
 /** Ưu tiên sidebar config (live); fallback scriptData khi sidebar chưa có giá trị. */

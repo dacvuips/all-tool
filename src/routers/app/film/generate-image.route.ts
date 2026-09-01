@@ -12,6 +12,10 @@ import {
 import { createAndEnqueueMediaJob } from "../media-generation-job/_enqueue-helper";
 import { sendEnqueueErrorResponse } from "../media-generation-job/send-enqueue-error";
 import { checkImageLimit } from "../affiliate-scene/_shared";
+import {
+  ApiMediaAspectRatio,
+  normalizeApiMediaAspectRatio,
+} from "../../api-media/api-media-constants";
 import { authFilmFeature } from "./_film-access";
 
 export default [
@@ -26,7 +30,7 @@ export default [
         const body = req.body as {
           prompt?: string;
           images?: Array<string | { imageBytes: string; mimeType?: string }>;
-          aspectRatio?: "16:9" | "9:16";
+          aspectRatio?: ApiMediaAspectRatio;
           numberOfImages?: number;
           imageModel?: string;
           noText?: boolean;
@@ -66,7 +70,7 @@ export default [
           prompt,
           images: body.images,
           // default 16:9 khớp sheet nhân vật/vật phẩm; client luôn gửi ratio đúng
-          aspectRatio: body.aspectRatio === "9:16" ? "9:16" : body.aspectRatio === "16:9" ? "16:9" : "16:9",
+          aspectRatio: normalizeApiMediaAspectRatio(body.aspectRatio, "16:9"),
           numberOfImages: body.numberOfImages || 1,
           imageModel: body.imageModel,
           noText: body.noText === true,

@@ -35,6 +35,8 @@ import {
 } from "./scene-inline-list-media";
 import { SceneMediaError } from "./scene-media-error";
 import { SceneMediaGenerationProgress } from "./scene-media-generation-progress";
+import type { AspectRatio } from "../constants";
+import { getAspectPaddingPercent, isPortraitAspectRatio } from "./aspect-ratio-utils";
 
 const CONTROL_BTN_INSIDE =
   "flex items-center justify-center w-8 h-8 rounded-md bg-black bg-opacity-60 text-white hover:bg-opacity-80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed";
@@ -95,7 +97,7 @@ export interface SceneCardVideoTabProps {
   isDisabled?: boolean;
   hasImage: boolean;
   isPromptToVideo?: boolean;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: AspectRatio;
   sceneNumber?: number;
   onImageRequired?: () => void;
   errorMessage?: string | null;
@@ -415,7 +417,7 @@ export function SceneCardVideoTab({
     }
   };
 
-  const isPortrait = aspectRatio === "9:16";
+  const isPortrait = isPortraitAspectRatio(aspectRatio ?? "16:9");
   /** Chế độ inline (danh sách MXH): preview nhỏ, nút bên cạnh */
   const inlineMediaWidthClass = isPortrait ? "w-16 shrink-0" : "w-28 shrink-0";
   /** Chế độ card (phân cảnh thường): giữ kích thước ban đầu */
@@ -436,7 +438,7 @@ export function SceneCardVideoTab({
     : "flex flex-row flex-nowrap gap-1.5 items-center justify-center";
 
   /** Cùng padding aspect với SceneCardImageTab (film) */
-  const paddingPct = aspectRatio === "16:9" ? 56.25 : 177.78;
+  const paddingPct = getAspectPaddingPercent(aspectRatio ?? "16:9");
   const imagePaddingTop = `${paddingPct}%`;
 
   const renderUniformPlaceholder = (

@@ -2,6 +2,7 @@ import {
   fetchImageAsBase64,
   stripDataUrlFromBase64,
 } from "../../helpers/handleUploadGoogleLabImages";
+import { ApiMediaAspectRatio } from "../api-media-constants";
 import {
   collectFlow2ImageUrls,
   createFlow2Request,
@@ -21,7 +22,7 @@ export type Flow2ImageInput = string | { imageBytes: string; mimeType?: string }
 export type Flow2CreateImageRequestParams = {
   prompt: string;
   imageInputs?: Flow2ImageInput[];
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   imageModel?: string;
   variantCount?: number;
   imageInputTypes?: string[];

@@ -11,12 +11,13 @@ import {
   resolveFlow2VideoMode,
 } from "../../../routers/api-media/flow2/video-generation";
 import { ServiceImageEnum } from "../../../routers/app/constanst";
+import { ApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 import { MediaJobEmitter } from "../job-emitter";
 
 export type RunFlow2VideoPipelineArgs = {
   customerId: string;
   prompt: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   videoQuality?: string;
   /** Số biến thể video / job */
   variantCount?: number;

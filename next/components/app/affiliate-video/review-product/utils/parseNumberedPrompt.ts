@@ -1,5 +1,6 @@
-import { uid } from "../../constants";
+import { uid, type AspectRatio } from "../../constants";
 import { ReviewAnalysisData, ReviewScene } from "../constants";
+import { isAspectRatio } from "../../shared/aspect-ratio-utils";
 
 export interface NumberedPromptItem {
   number: number;
@@ -46,7 +47,9 @@ export function buildAnalysisDataFromNumberedPrompt(
 
   return {
     scenes,
-    aspectRatio,
+    aspectRatio: isAspectRatio(String(aspectRatio ?? ""))
+      ? (aspectRatio as AspectRatio)
+      : undefined,
     artStyleId,
     artStyle,
   };

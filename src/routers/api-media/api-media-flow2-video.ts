@@ -22,6 +22,7 @@ import {
 } from "./flow2/video-generation";
 import { Flow2VideoMode } from "./flow2/video-mode";
 import { ApiMediaVideoRequest } from "./api-media-validate";
+import { ApiMediaAspectRatio } from "./api-media-constants";
 
 function looksLikeRawBase64Video(value: string): boolean {
   return looksLikeRawBase64(value, 256);
@@ -52,7 +53,7 @@ async function normalizeVideoToDataUrl(
 
 export type CreateApiMediaFlow2VideoParams = {
   prompt: string;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   videoQuality?: string;
   videoDurationS?: number;
   imageInputs?: Flow2ImageInput[];

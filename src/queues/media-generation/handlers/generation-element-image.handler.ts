@@ -9,12 +9,13 @@ import {
 import { IMediaGenerationJob, MediaGenerationImageResult } from "../../../libs/dal/mediaGenerationJob";
 import { loadMediaJobPayload } from "../media-job-data";
 import { MediaJobEmitter } from "../job-emitter";
+import { ApiMediaAspectRatio } from "../../../routers/api-media/api-media-constants";
 import { runImagePipeline } from "./_image-pipeline";
 
 export type GenerationElementImagePayload = {
   prompt: string;
   images?: Array<string | { imageBytes: string; mimeType?: string }>;
-  aspectRatio?: "16:9" | "9:16";
+  aspectRatio?: ApiMediaAspectRatio;
   noText?: boolean;
   artStyleId?: string;
   artStyle?: string;
