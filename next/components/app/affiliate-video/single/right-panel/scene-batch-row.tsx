@@ -9,15 +9,11 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MdRecordVoiceOver, MdVoiceOverOff } from "react-icons/md";
 import {
-  RiCloseLine,
   RiDeleteBinLine,
   RiEyeLine,
   RiEyeOffLine,
-  RiFileCopyLine,
   RiImageFill,
   RiLoader4Line,
-  RiPencilLine,
-  RiSaveLine,
   RiSearchLine,
   RiText,
 } from "react-icons/ri";
@@ -44,6 +40,7 @@ import { SceneCardExtendVideoTab } from "../../shared/scene-card-extend-video-ta
 import { SceneCardImageTab } from "../../shared/scene-card-image-tab";
 import { SceneCardTabs, SceneTabKey } from "../../shared/scene-card-tabs";
 import { SceneCardVideoTab } from "../../shared/scene-card-video-tab";
+import { SceneEditablePrompt } from "../../shared/scene-editable-prompt";
 import { useAffiliateVideoContext } from "../providers/affiliate-video-provider";
 import { InsertPosition, NewSceneData } from "./add-scene-modal";
 
@@ -54,9 +51,6 @@ export type EditField =
   | "dialogue"
   | "audio"
   | "product_image_prompt";
-
-/** Số ký tự tối đa trước khi cắt */
-const PROMPT_MAX_CHARS = 160;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SceneBatchRow – mỗi hàng scene trong bảng
@@ -108,12 +102,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const Alert = useAlert();
 
   const [rowHovered, setRowHovered] = useState(false);
-  const [editingField, setEditingField] = useState<EditField | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [expandedField, setExpandedField] = useState<EditField | null>(null);
-  const [hoveredField, setHoveredField] = useState<EditField | null>(null);
-  const [copiedField, setCopiedField] = useState<EditField | null>(null);
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [showExtendVideoModal, setShowExtendVideoModal] = useState(false);
   const [showGalleryDialog, setShowGalleryDialog] = useState(false);
@@ -197,37 +185,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
   const isPromptToVideo = storyModeType === StoryModeTypeEnum.prompt_to_video;
 
   const videoPaddingTop = "56.25%";
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const openEdit = (field: EditField) => {
-    setEditingField(field);
-    setEditValue(scene[field] ?? "");
-    // focus textarea on next tick
-    setTimeout(() => textareaRef.current?.focus(), 50);
-  };
-
-  const closeEdit = () => {
-    setEditingField(null);
-    setEditValue("");
-  };
-
-  const handleSave = async () => {
-    if (!editingField) return;
-    setSaving(true);
-    try {
-      onUpdateScene(scene.id, editingField, editValue);
-    } finally {
-      setSaving(false);
-      closeEdit();
-    }
-  };
-
-  const handleCopy = (field: EditField, text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setCopiedField(field);
-      setTimeout(() => setCopiedField(null), 1500);
-    });
-  };
 
   const handleDeleteScene = async () => {
     const confirmed = await Alert.danger(
@@ -237,129 +194,6 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
     if (!confirmed) return;
     onDeleteScene?.(scene.id);
   };
-
-  // auto-resize textarea
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
-    }
-  }, [editValue]);
-
-  /** Renders editable prompt cell content */
-  const renderEditablePrompt = (
-    field: EditField,
-    text: string,
-    textColor: string,
-    labelEl: React.ReactNode
-  ) => (
-    <div
-      className="relative"
-      onMouseEnter={() => setHoveredField(field)}
-      onMouseLeave={() => setHoveredField(null)}
-    >
-      {editingField === field ? (
-        /* ── Edit mode ── */
-        <div>
-          {labelEl}
-          <textarea
-            ref={field === editingField ? textareaRef : undefined}
-            value={editValue}
-            onChange={(e) => setEditValue(e.target.value)}
-            rows={4}
-            className="w-full rounded-lg border border-blue-300 bg-blue-50 text-xs text-gray-700 px-2.5 py-2 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 resize-none transition-colors leading-relaxed"
-          />
-          <div className="flex items-center gap-1.5 mt-1.5 justify-end">
-            <button
-              onClick={closeEdit}
-              disabled={saving}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-gray-500 bg-gray-100 hover:bg-gray-200 cursor-pointer border-0 transition-colors  "
-            >
-              <RiCloseLine className="text-sm" />
-              {t("Đóng")}
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-white bg-blue-500 hover:bg-blue-600 cursor-pointer border-0 transition-colors disabled:opacity-60 shadow-sm"
-            >
-              {saving ? (
-                <RiLoader4Line className="text-sm animate-spin" />
-              ) : (
-                <RiSaveLine className="text-sm" />
-              )}
-              {saving ? `${t("Đang lưu")}...` : `${t("Lưu")}`}
-            </button>
-          </div>
-        </div>
-      ) : (
-        /* ── Display mode ── */
-        <div className="relative">
-          <span
-            className={`text-xs leading-relaxed whitespace-pre-line ${textColor}`}
-            style={
-              expandedField !== field
-                ? {
-                    display: "-webkit-box",
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: "vertical" as any,
-                    overflow: "hidden",
-                  }
-                : {}
-            }
-          >
-            {labelEl}
-            {text}
-          </span>
-          {/* Action icons – always visible on mobile, hover on desktop */}
-          <div
-            className={`absolute -top-3 -right-1.5 sm:-right-2.5 flex items-center gap-0.5 border border-primary shadow-sm bg-gray-50 rounded-md transition-opacity opacity-100 pointer-events-auto ${
-              hoveredField === field
-                ? "md:opacity-100 md:pointer-events-auto"
-                : "md:opacity-0 md:pointer-events-none"
-            }`}
-          >
-            {/* Toggle view prompt button */}
-            <button
-              onClick={() => setExpandedField(expandedField === field ? null : field)}
-              title={expandedField === field ? t("Thu gọn") : t("Xem prompt")}
-              className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer border-0 bg-transparent ${
-                expandedField === field
-                  ? "text-purple-600 bg-purple-50"
-                  : "text-gray-400 hover:text-purple-600 hover:bg-purple-50"
-              }`}
-            >
-              {expandedField === field ? (
-                <RiEyeOffLine className="text-sm" />
-              ) : (
-                <RiEyeLine className="text-sm" />
-              )}
-            </button>
-            {/* Copy prompt button */}
-            <button
-              onClick={() => handleCopy(field, text)}
-              title="Copy prompt"
-              className="flex justify-center items-center w-6 h-6 text-gray-400 bg-transparent rounded-md border-0 transition-all cursor-pointer hover:text-green-600 hover:bg-green-50"
-            >
-              {copiedField === field ? (
-                <span className="text-xs font-bold text-green-500">✓</span>
-              ) : (
-                <RiFileCopyLine className="text-sm" />
-              )}
-            </button>
-            {/* Edit pencil button */}
-            <button
-              onClick={() => openEdit(field)}
-              title={t("Chỉnh sửa")}
-              className="flex justify-center items-center w-6 h-6 text-gray-400 bg-transparent rounded-md border-0 transition-all cursor-pointer hover:text-blue-600 hover:bg-blue-50"
-            >
-              <RiPencilLine className="text-sm" />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   return (
     <div
@@ -576,42 +410,54 @@ export const SceneBatchRow = React.memo(function SceneBatchRow({
         )}
         renderImagePrompt={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-            {renderEditablePrompt(
-              "imageGenPrompt",
-              scene.imageGenPrompt,
-              "text-gray-600",
-              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
-                IMAGE PROMPT
-              </span>
-            )}
+            <SceneEditablePrompt
+              text={scene.imageGenPrompt}
+              textColor="text-gray-600"
+              title="IMAGE PROMPT"
+              labelEl={
+                <span className="mr-1 text-xs font-bold tracking-wide uppercase text-orange">
+                  IMAGE PROMPT
+                </span>
+              }
+              onSave={(value) => onUpdateScene(scene.id, "imageGenPrompt", value)}
+            />
           </div>
         )}
         renderVideoPrompts={() => (
           <div className={`${isDisabled ? "opacity-40 pointer-events-none" : ""}`}>
-            {renderEditablePrompt(
-              "motionPrompt",
-              scene.motionPrompt,
-              "text-teal-700",
-              <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
-                [MOTION]:
-              </span>
-            )}
-            {renderEditablePrompt(
-              "audio",
-              scene.audio ?? "",
-              "text-purple-700",
-              <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
-                [AUDIO]:
-              </span>
-            )}
-            {renderEditablePrompt(
-              "dialogue",
-              scene.dialogue ?? "",
-              "text-green-700 italic",
-              <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
-                [DIALOGUE]:
-              </span>
-            )}
+            <SceneEditablePrompt
+              text={scene.motionPrompt}
+              textColor="text-teal-700"
+              title="[MOTION]"
+              labelEl={
+                <span className="mr-1 text-xs font-bold tracking-wide uppercase text-teal">
+                  [MOTION]:
+                </span>
+              }
+              onSave={(value) => onUpdateScene(scene.id, "motionPrompt", value)}
+            />
+            <SceneEditablePrompt
+              text={scene.audio ?? ""}
+              textColor="text-purple-700"
+              title="[AUDIO]"
+              labelEl={
+                <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
+                  [AUDIO]:
+                </span>
+              }
+              onSave={(value) => onUpdateScene(scene.id, "audio", value)}
+            />
+            <SceneEditablePrompt
+              text={scene.dialogue ?? ""}
+              textColor="text-green-700 italic"
+              title="[DIALOGUE]"
+              labelEl={
+                <span className="inline-block mt-2 mr-1 text-xs font-bold tracking-wide text-green-600 uppercase">
+                  [DIALOGUE]:
+                </span>
+              }
+              onSave={(value) => onUpdateScene(scene.id, "dialogue", value)}
+            />
           </div>
         )}
       />
